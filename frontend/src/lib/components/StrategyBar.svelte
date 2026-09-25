@@ -45,7 +45,11 @@
     isDiverseOverlayAvailable,
     type MethodStatus,
   } from '$lib/strategies';
-  import { formatAppliedSort, type StrategyBar } from '$lib/strategyBar.svelte';
+  import {
+    formatAppliedSort,
+    formatPinnedSortFallback,
+    type StrategyBar,
+  } from '$lib/strategyBar.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
 
   /** Provenance echoed back by a pool-scale overlay ordering (Phase 4 —
@@ -114,6 +118,17 @@
      *  banner, so the "what did the backend actually order by, and why"
      *  story lives in one place. `null`/omitted renders nothing. */
     fallbackReason?: string | null;
+    /** The deployment's pinned `sort` default (`GET {API_PREFIX}/settings`'s
+     *  `defaults.sort`), when it's resolved and applies to the caller's
+     *  active tab — the caller decides applicability (see
+     *  `tabHonorsPinnedSortDefault`, `reviewTabs.ts`) and passes `null`
+     *  otherwise. Visual-audit S1's last bullet: when this pinned entry's
+     *  `/methods` `field_coverage` is confirmed zero and the operator
+     *  hasn't picked their own override, the summary chip says so and
+     *  names the backend's real `sort_applied` instead of the plain
+     *  requested-vs-applied mismatch text. Omit on a route that has no
+     *  concept of a pinned deployment default (`/clusters/[id]`). */
+    pinnedSortId?: string | null;
   }
 
   let {
@@ -127,6 +142,7 @@
     diverseMeta = null,
     appliedSort = null,
     fallbackReason = null,
+    pinnedSortId = null,
   }: Props = $props();
 
   // getMethods()/init() never throws (404 or any error degrades to
@@ -224,6 +240,26 @@
     formatAppliedSort(bar.sort, appliedSort, strategiesStore.methods.review_sorts),
   );
 
+  // Visual-audit S1's last bullet: the pinned deployment default (when the
+  // caller resolved one for this tab) failing field coverage. Computed
+  // from the same `strategiesStore.methods.review_sorts` list every other
+  // sort-label lookup on this component already reads — no second fetch.
+  const pinnedSortEntry = $derived(
+    pinnedSortId
+      ? (strategiesStore.methods.review_sorts.find((s) => s.id === pinnedSortId) ?? null)
+      : null,
+  );
+  const pinnedFallbackLabel = $derived(
+    formatPinnedSortFallback({
+      requestedSort: bar.sort,
+      sentinelSortId,
+      pinnedSortId,
+      pinnedSortEntry,
+      appliedSort,
+      appliedLabel,
+    }),
+  );
+
   // The k stepper only renders once 'diverse' is both selected AND
   // actually offered. isDiverseOverlayAvailable is the same predicate
   // `/clusters/[id]` uses to decide whether to widen allowedIds in the
@@ -284,7 +320,20 @@
     >
       <span class="text-zinc-500">sort:</span>
       <span>{currentLabel}</span>
-      {#if appliedLabel}
+      {#if pinnedFallbackLabel}
+        <!-- S1 (visual audit 2026-09-24): merges with, never doubles up
+             alongside, the plain "→ applied" mismatch chip below — a
+             zero-coverage pinned default is exactly why applied differs
+             from requested here, so only this more specific message
+             renders. -->
+        <span
+          data-testid="pinned-sort-fallback-chip"
+          class="inline-block max-w-[20rem] truncate rounded border border-amber-500/60 bg-amber-500/15 px-1 align-middle text-[10px] text-amber-200 md:max-w-[32rem]"
+          title={`The deployment's pinned default review-queue sort has no data yet, so this tab is using the backend's own fallback order instead. ${pinnedFallbackLabel}`}
+        >
+          {pinnedFallbackLabel}
+        </span>
+      {:else if appliedLabel}
         <span
           class="text-zinc-500"
           title="The backend applied this sort — a tab default, or a fallback from what was requested."
@@ -325,7 +374,11 @@
           {/each}
         </select>
       </label>
-      {#if appliedLabel}
+      {#if pinnedFallbackLabel}
+        <span data-testid="pinned-sort-fallback-chip" class="text-amber-300"
+          >{pinnedFallbackLabel}</span
+        >
+      {:else if appliedLabel}
         <span class="text-zinc-500">applied: {appliedLabel}</span>
       {/if}
       {#if fallbackReason}

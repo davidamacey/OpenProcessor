@@ -57,6 +57,7 @@
     REVIEW_PRESETS,
     REVIEW_TABS,
     resolveEffectiveTab,
+    tabHonorsPinnedSortDefault,
     type ReviewPresetId,
     reviewDeepLink,
   } from '$lib/reviewTabs';
@@ -84,6 +85,7 @@
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
+  import { curationSettingsStore } from '$stores/curationSettings.svelte';
   import { undoStore } from '$stores/undo.svelte';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
@@ -162,6 +164,22 @@
   // `sort=diverse` to {API_PREFIX}/review/{tab}, which 400s on it — diverse mode
   // is a wholly separate call (selectDiverse), not a sort param.
   const strategyBar = createStrategyBar({ overlayIds: ['diverse'] });
+  // S1 (visual audit 2026-09-24, corrected status): needed so StrategyBar
+  // can tell the operator when the deployment's pinned review-sort
+  // default has no coverage yet. init() never throws and is idempotent —
+  // safe to call unconditionally alongside strategiesStore's own $effect.
+  $effect(() => {
+    void curationSettingsStore.init();
+  });
+  // The deployment's pinned `sort` default, only when the active tab has
+  // no tuned default of its own (see `tabHonorsPinnedSortDefault`) — every
+  // other tab ignores the pinned default entirely, so passing it there
+  // would be misleading even if StrategyBar's own gating would no-op it.
+  const pinnedSortId = $derived(
+    tabHonorsPinnedSortDefault(effectiveTab)
+      ? (curationSettingsStore.settings.defaults.sort ?? null)
+      : null,
+  );
   // Set from the review-queue response whenever the requested `?sort=`
   // couldn't be honored server-side (e.g. the field isn't backfilled
   // yet). Rendered as a small inline note, never a toast — this isn't a
@@ -1751,6 +1769,7 @@
       offerDiverse={diverseAvailable}
       appliedSort={sortApplied}
       fallbackReason={sortFallbackReason}
+      {pinnedSortId}
       diverseKDefault={DIVERSE_K_DEFAULT}
       diverseKMax={DIVERSE_K_MAX}
       diverseMeta={diverseSelection

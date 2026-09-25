@@ -397,6 +397,18 @@ curation-settings-ui-plan-2026-09-21.md` §1.5/§2). Production default
   `strategyBar.svelte.ts`) whenever it differs — e.g. "sort: Default
   order → atypicality" when no override was picked and the tab fell
   back to its own default, or when a requested sort itself fell back.
+  On `/review`'s `all` and `new_class_proposals` tabs — the only two
+  with no tuned default of their own (`tabHonorsPinnedSortDefault`,
+  `reviewTabs.ts`; see `/settings`'s `sort` axis blurb above) — when the
+  deployment's pinned `sort` default has confirmed-zero `/methods`
+  coverage (`hasFieldCoverage`) and the operator hasn't picked their own
+  override, the chip instead reads "pinned default `<label>` has no
+  coverage yet — using `<sort_applied>`" (`formatPinnedSortFallback`,
+  `strategyBar.svelte.ts`) — merged with, never doubled up alongside,
+  the plain mismatch text above, since both describe the same event.
+  (Visual-audit S1's last bullet — that doc's "deferred, BACKEND" status
+  was wrong: the coverage signal was already served, just not wired into
+  this chip.)
 - **Score chips** (`ScoreChip.svelte`) — render inline when a crop carries
   an `axis=score` value (`mistakenness_score`, uniqueness); invisible when
   absent, so an un-backfilled pool renders identically to today.

@@ -153,6 +153,31 @@ export function urlIdForTab(tab: ReviewTab): string {
   return REVIEW_TABS.find((t) => t.id === tab)?.urlId ?? 'all';
 }
 
+/**
+ * Tabs with no tuned default sort of their own — the ONLY tabs where the
+ * deployment's pinned `sort` default (`GET {API_PREFIX}/settings`,
+ * `SETTINGS_AXES`'s `sort` blurb in `curationSettings.ts`) actually
+ * applies. Every other core tab (Uncertainty / Model Disagreements /
+ * Classifier Blind Spots) and every slot tab keeps applying its own
+ * `review_sorts.py`-tuned default regardless of this setting. A preset
+ * chip's own endpoint id (`mismatches` / `vlm_low_conf` /
+ * `primary_low_conf`) is never in this set either — each reuses its
+ * former top-level tab's own tuned default, not All's absence of one —
+ * so gating on `resolveEffectiveTab`'s result (not the raw nav tab)
+ * already excludes them for free.
+ */
+export const TABS_WITH_PINNED_SORT_FALLBACK: ReadonlySet<ReviewTab> = new Set([
+  'all',
+  'new_class_proposals',
+]);
+
+/** True when the deployment's pinned `sort` default can apply to `tab`
+ *  (see `TABS_WITH_PINNED_SORT_FALLBACK`). Pass the *effective* tab
+ *  (`resolveEffectiveTab`'s result), not the raw nav tab. */
+export function tabHonorsPinnedSortDefault(tab: ReviewTab): boolean {
+  return TABS_WITH_PINNED_SORT_FALLBACK.has(tab);
+}
+
 /** What a `/review?tab=…&crop_id=…&preset=…` link asks for. An unknown or
  *  absent `tab` opens All; `cropId` is null when absent or empty.
  *  `preset` (m31, 2026-09-24 interactive pass) is only meaningful when

@@ -26,7 +26,16 @@
  * `order` for `/clusters/[id]`), which is why `toQueryParams()` only
  * covers the `/review` shape and the cluster page reads `.sort` directly
  * (see `src/routes/clusters/[id]/+page.svelte`'s `cropQuery()`).
+ *
+ * `formatAppliedSort`/`formatPinnedSortFallback` below are the one
+ * exception to "deliberately dumb" above — both are pure functions the
+ * component calls to turn `{API_PREFIX}/methods` state it already looked
+ * up (a served label, a served `field_coverage`) into display text, kept
+ * here rather than inline in the `.svelte` file so they're unit-testable
+ * without mounting anything (`strategyBar.svelte.test.ts`).
  */
+
+import { hasFieldCoverage } from './strategies';
 
 export interface StrategyBarOptions {
   /** The id treated as "no explicit sort requested" — omitted from
@@ -158,4 +167,69 @@ export function formatAppliedSort(
   // raw id ("atypicality" → "Atypicality (outlier-first)"); the id only when
   // the backend serves no label for it.
   return sorts.find((s) => s.id === applied)?.label ?? applied;
+}
+
+/**
+ * What the StrategyBar summary chip should show when the deployment's
+ * *pinned* review-sort default (`GET {API_PREFIX}/settings`'s
+ * `defaults.sort`) has zero field coverage — visual-audit S1's last
+ * bullet (`docs/design/visual-audit-2026-09-24.md`). That doc's
+ * "deferred, BACKEND" status note was wrong: `GET {API_PREFIX}/methods`
+ * already serves real `field_coverage`/`field_coverage_total` on every
+ * `sort` entry with a `requires_field`, and `hasFieldCoverage`
+ * (`strategies.ts`) is already the single gate that turns that into
+ * "safe to offer" — this reuses it rather than re-deriving the
+ * null-vs-zero rule a second time.
+ *
+ * Returns `null` unless ALL of:
+ *  - a pinned sort id was resolved for the active tab (the caller has
+ *    already gated this on `tabHonorsPinnedSortDefault`, `reviewTabs.ts`
+ *    — this function has no tab awareness of its own);
+ *  - the operator hasn't picked their own override yet (`requestedSort`
+ *    is still the "no override" sentinel — an explicit pick, even one
+ *    that happens to equal the pinned id, means the operator asked for
+ *    it, not the deployment default silently applying);
+ *  - the pinned entry's `field_coverage` is confirmed zero (not merely
+ *    unknown — see `hasFieldCoverage`'s own doc comment);
+ *  - the backend actually reported a `sort_applied` (never guessed
+ *    client-side — `appliedLabel` is `null` whenever `appliedSort` is
+ *    absent).
+ *
+ * Deliberately returns ONE merged string, not a second chip alongside
+ * the plain "requested → applied" mismatch text `formatAppliedSort`
+ * already produces: in this exact scenario `formatAppliedSort` would
+ * also fire (the pinned default failing coverage is *why* `applied`
+ * differs from the sentinel `requested`), so a caller must render only
+ * one of the two — this one, when it returns non-null — never both.
+ */
+export function formatPinnedSortFallback(params: {
+  /** `bar.sort` — the operator's current selection (or the sentinel). */
+  requestedSort: string;
+  /** `strategyBar.svelte.ts`'s "no override" sentinel id for this bar. */
+  sentinelSortId: string;
+  /** The deployment's pinned `sort` axis id for the active tab, or
+   *  `null` when unpinned or the active tab doesn't honor it. */
+  pinnedSortId: string | null | undefined;
+  /** The `/methods` `review_sorts` entry for `pinnedSortId`, or `null`
+   *  when it isn't (yet) in the served list. */
+  pinnedSortEntry: { label: string; field_coverage?: number | null } | null | undefined;
+  /** The server's `sort_applied`, verbatim — never computed here. */
+  appliedSort: string | null | undefined;
+  /** `formatAppliedSort(requestedSort, appliedSort, …)`'s own result —
+   *  already resolves the served `/methods` label for `appliedSort`. */
+  appliedLabel: string | null;
+}): string | null {
+  const {
+    requestedSort,
+    sentinelSortId,
+    pinnedSortId,
+    pinnedSortEntry,
+    appliedSort,
+    appliedLabel,
+  } = params;
+  if (!pinnedSortId || !pinnedSortEntry) return null;
+  if (requestedSort !== sentinelSortId) return null;
+  if (hasFieldCoverage(pinnedSortEntry)) return null;
+  if (!appliedSort || !appliedLabel) return null;
+  return `pinned default ${pinnedSortEntry.label} has no coverage yet — using ${appliedLabel}`;
 }

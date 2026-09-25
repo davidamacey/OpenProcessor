@@ -13,6 +13,7 @@ import {
   slotTabId,
   reviewDeepLink,
   tabFromUrlId,
+  tabHonorsPinnedSortDefault,
   urlIdForTab,
   type ReviewPresetId,
 } from './reviewTabs';
@@ -191,6 +192,35 @@ describe('REVIEW_PRESETS (All-tab quick-filter chips)', () => {
     const labels = REVIEW_PRESETS.map((p) => p.label);
     expect(new Set(labels).size).toBe(labels.length);
     for (const label of labels) expect(label.trim().length).toBeGreaterThan(0);
+  });
+});
+
+// S1 (visual audit 2026-09-24): only these two tabs have no tuned default
+// sort of their own — CurationSettings.ts's `sort` axis blurb names them
+// explicitly (curationSettings.test.ts pins that prose). Every other core
+// tab, every slot tab, and every preset id must return false.
+describe('tabHonorsPinnedSortDefault', () => {
+  it('is true for all and new_class_proposals', () => {
+    expect(tabHonorsPinnedSortDefault('all')).toBe(true);
+    expect(tabHonorsPinnedSortDefault('new_class_proposals')).toBe(true);
+  });
+
+  it('is false for every tab with its own tuned default', () => {
+    expect(tabHonorsPinnedSortDefault('uncertainty')).toBe(false);
+    expect(tabHonorsPinnedSortDefault('model_disagreements')).toBe(false);
+    expect(tabHonorsPinnedSortDefault('classifier_blind_spots')).toBe(false);
+  });
+
+  it('is false for a slot tab', () => {
+    for (const t of queueSlots) {
+      expect(tabHonorsPinnedSortDefault(slotTabId(t.key))).toBe(false);
+    }
+  });
+
+  it('is false for a preset id — a preset reuses its own former tab default, not All', () => {
+    for (const p of REVIEW_PRESETS) {
+      expect(tabHonorsPinnedSortDefault(p.id as never)).toBe(false);
+    }
   });
 });
 

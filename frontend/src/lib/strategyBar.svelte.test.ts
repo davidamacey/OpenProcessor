@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createStrategyBar, formatAppliedSort } from './strategyBar.svelte';
+import {
+  createStrategyBar,
+  formatAppliedSort,
+  formatPinnedSortFallback,
+} from './strategyBar.svelte';
 
 // 2026-09-24 logic-moves W5, item 10: `sort_applied` on {API_PREFIX}/review/{tab}
 // is what the StrategyBar summary chip surfaces next to the operator's
@@ -22,6 +26,63 @@ describe('formatAppliedSort', () => {
 
   it('returns the applied id when the requested sort fell back to a different one', () => {
     expect(formatAppliedSort('mistakenness', 'atypicality')).toBe('atypicality');
+  });
+});
+
+// Visual-audit S1's last bullet: the pinned deployment sort default
+// (GET {API_PREFIX}/settings) having zero field coverage.
+describe('formatPinnedSortFallback', () => {
+  const base = {
+    requestedSort: 'default',
+    sentinelSortId: 'default',
+    pinnedSortId: 'uncertainty_entropy',
+    pinnedSortEntry: { label: 'Uncertainty (probe entropy)', field_coverage: 0 },
+    appliedSort: 'atypicality',
+    appliedLabel: 'Atypicality (outlier-first)',
+  };
+
+  it('merges the pinned label and the served applied sort into one message', () => {
+    expect(formatPinnedSortFallback(base)).toBe(
+      'pinned default Uncertainty (probe entropy) has no coverage yet — using Atypicality (outlier-first)',
+    );
+  });
+
+  it('returns null when no pinned sort id was resolved for this tab', () => {
+    expect(formatPinnedSortFallback({ ...base, pinnedSortId: null })).toBeNull();
+  });
+
+  it("returns null when the pinned id isn't (yet) a known /methods entry", () => {
+    expect(formatPinnedSortFallback({ ...base, pinnedSortEntry: null })).toBeNull();
+  });
+
+  it('returns null once the operator has picked their own override', () => {
+    expect(
+      formatPinnedSortFallback({ ...base, requestedSort: 'mistakenness' }),
+    ).toBeNull();
+  });
+
+  it('returns null when the pinned entry has real (non-zero) coverage', () => {
+    expect(
+      formatPinnedSortFallback({
+        ...base,
+        pinnedSortEntry: { label: 'Uncertainty (probe entropy)', field_coverage: 450 },
+      }),
+    ).toBeNull();
+  });
+
+  it('returns null when coverage is merely unknown, not confirmed zero', () => {
+    expect(
+      formatPinnedSortFallback({
+        ...base,
+        pinnedSortEntry: { label: 'Uncertainty (probe entropy)', field_coverage: null },
+      }),
+    ).toBeNull();
+  });
+
+  it('returns null when the backend reported no sort_applied yet', () => {
+    expect(
+      formatPinnedSortFallback({ ...base, appliedSort: null, appliedLabel: null }),
+    ).toBeNull();
   });
 });
 

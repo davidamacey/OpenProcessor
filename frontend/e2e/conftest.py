@@ -184,6 +184,17 @@ class Stub:
         self.on("GET", r"/crops/[^/]+/image(/|$|\?)", self._image)
         self.on("GET", r"(/events|/stream)(/|$|\?)", (204, "", "text/plain"))
         self.on("GET", r"/methods(\?|$)", {"strategies": [], "flags": {}})
+        # S1 fix (visual audit 2026-09-24): `/review` now reads the
+        # deployment's pinned curation defaults (`curationSettingsStore`)
+        # so StrategyBar can flag a zero-coverage pinned sort — fired on
+        # every `/review` mount, same "every test needs this default"
+        # rationale as `/methods` above. `getCurationSettings` (api.ts)
+        # requests the UNPREFIXED `/settings` path, not `/curation/settings`
+        # — matches `test_curation_settings.py`'s own stub pattern
+        # (`r"/settings(\?|$)"`), which is deliberately looser than most
+        # patterns here to also match that bare path under `{api_prefix}`.
+        # `test_curation_settings.py` overrides this per-test.
+        self.on("GET", r"/settings(\?|$)", {"defaults": {}, "updated_at": None, "updated_by": None})
         self.on("GET", r"/class_sources(\?|$)", {"class_sources": []})
         self.on(
             "GET",

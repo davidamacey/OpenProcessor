@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`StrategyBar` now says when a pinned review-sort default has no
+  coverage yet** (visual-audit S1's last bullet, `docs/design/
+visual-audit-2026-09-24.md` — that doc's "deferred, BACKEND" status was
+  wrong: `GET {API_PREFIX}/methods` already serves real `field_coverage`
+  on every `sort` entry, and `hasFieldCoverage` (`src/lib/strategies.ts`)
+  already gates on it elsewhere; this just wires the existing signal
+  into the summary chip). On `/review`'s `all` and `new_class_proposals`
+  tabs — the only two tabs with no tuned default sort of their own,
+  `tabHonorsPinnedSortDefault` in `src/lib/reviewTabs.ts` — when the
+  deployment's pinned `sort` default (`GET {API_PREFIX}/settings`) has
+  confirmed-zero coverage and the operator hasn't picked their own
+  override, the collapsed summary chip now reads "pinned default
+  `<label>` has no coverage yet — using `<sort_applied>`"
+  (`formatPinnedSortFallback`, `src/lib/strategyBar.svelte.ts`) instead
+  of the plain "→ applied" mismatch text — merged, not doubled up
+  alongside it. Every other tab and every slot tab is unaffected.
+
 ### Changed
 
 - **OSS install prep: independent second instance + public-ready README**
