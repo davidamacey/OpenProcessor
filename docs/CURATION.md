@@ -267,13 +267,19 @@ trainer. A deployment supplies:
 
   ```bash
   curl -s -X POST "$API/curation/train/start" -H 'content-type: application/json' -d '{
-    "dataset_export_dir": "/app/data/exports/<ts>",
     "model_family": "yolo26", "model_size": "s", "profile": "small",
     "cuda_visible_devices": "0",
     "hyperparameters": {"epochs": 70, "imgsz": 640, "batch": 16, "optimizer": "MuSGD"},
     "mlflow_run_name": "my-run"
   }'
   ```
+
+  (F-73: `dataset_export_dir` is optional -- omitted/null defaults to
+  the current export, `data/exports/current`'s target. Pass it
+  explicitly only to train against a different, non-current export.
+  With no export at all yet, preflight reports a single clear blocking
+  check telling you to run `POST /export/yolo` first, instead of a bare
+  422 with no explanation.)
 
 ## Class-registry schema
 

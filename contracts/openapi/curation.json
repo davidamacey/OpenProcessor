@@ -7217,9 +7217,16 @@
             "type": "string"
           },
           "dataset_export_dir": {
-            "description": "Absolute path (inside the trainer container) to a frozen export. The API typically passes the host's ``current/`` symlink target.",
-            "title": "Dataset Export Dir",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absolute path (inside the trainer container) to a frozen export. Null/omitted defaults to the current export (the host's data/exports/current symlink target).",
+            "title": "Dataset Export Dir"
           },
           "dataset_sha": {
             "anyOf": [
@@ -7424,9 +7431,6 @@
             "title": "Trainer Image Revision"
           }
         },
-        "required": [
-          "dataset_export_dir"
-        ],
         "title": "TrainJobSpec",
         "type": "object"
       },

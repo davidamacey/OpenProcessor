@@ -116,6 +116,20 @@ async def test_write_job_rejects_duplicate(jobs_dir: Path) -> None:
         await train_jobs.write_job(spec)
 
 
+@pytest.mark.asyncio
+async def test_write_job_refuses_a_missing_dataset_export_dir_clearly(jobs_dir: Path) -> None:
+    """F-73: dataset_export_dir is optional on the wire (defaults to the
+    current export via _run_preflight), but write_job must still refuse
+    clearly if it's still unset here -- e.g. a force=True /start call
+    that bypassed a blocking preflight with no current export -- instead
+    of an opaque TypeError from deep inside read_export_identity(None)."""
+    spec = TrainJobSpec(model_size='m', profile='medium')
+    assert spec.dataset_export_dir is None
+
+    with pytest.raises(ValueError, match='dataset_export_dir'):
+        await train_jobs.write_job(spec)
+
+
 # =============================================================================
 # cuda_visible_devices GPU allowlist
 # =============================================================================
