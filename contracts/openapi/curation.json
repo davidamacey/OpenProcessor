@@ -3401,6 +3401,10 @@
             "title": "Display Name",
             "type": "string"
           },
+          "display_name_singular": {
+            "title": "Display Name Singular",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -3417,6 +3421,7 @@
         "required": [
           "name",
           "display_name",
+          "display_name_singular",
           "region_class_name",
           "text_reader"
         ],

@@ -52,6 +52,7 @@ class RegionProfileSummary(BaseModel):
 
     name: str
     display_name: str
+    display_name_singular: str
     region_class_name: str
     text_reader: str
 

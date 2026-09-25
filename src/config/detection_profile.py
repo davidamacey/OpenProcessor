@@ -136,6 +136,9 @@ class DetectionProfile:
     # (e.g. the review-queue tab title). '' (default) means the caller
     # falls back to a generic label such as "Regions".
     display_name: str = ''
+    # The same label for one region (e.g. "Plate" for "Confirm Plate").
+    # '' (default) means the caller falls back to "Region".
+    display_name_singular: str = ''
 
     @classmethod
     def from_env(

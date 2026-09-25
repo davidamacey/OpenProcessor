@@ -460,6 +460,7 @@ def test_health_region_profile_reflects_the_active_profile(
     assert region_profile == {
         'name': 'license_plate',
         'display_name': 'Plates',
+        'display_name_singular': 'Plate',
         'region_class_name': 'license_plate',
         'text_reader': 'both',
     }
