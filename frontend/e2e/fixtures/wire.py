@@ -79,7 +79,7 @@ _EXPLICIT: dict[str, Any] = {
     "class_detector": "v6_model",
     "class_detector_version": "6.2.1",
     "class_labeled_at": "2026-01-02T03:04:05Z",
-    "class_labeler": "user@example.com",
+    "class_labeler": "labeler@example.com",
     "vlm_confidence": "high",
     # Backend main 6a1f350 (VLM class-answer fix): when did the VLM last
     # attempt a class answer, and why it came back empty if it did.

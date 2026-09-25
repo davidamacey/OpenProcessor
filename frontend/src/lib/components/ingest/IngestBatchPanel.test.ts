@@ -100,11 +100,13 @@ describe('IngestBatchPanel', () => {
     vi.mocked(ingestBatch).mockResolvedValue(servedResponse());
     instance = mount(IngestBatchPanel, {
       target,
-      props: { config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data'] } },
+      props: {
+        config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data/archive'] },
+      },
     });
     flushSync();
     const ta = textarea();
-    ta.value = '/data/a.jpg\n/data/b.jpg';
+    ta.value = '/data/archive/a.jpg\n/data/archive/b.jpg';
     ta.dispatchEvent(new Event('input'));
     flushSync();
     const submitBtn = [...target.querySelectorAll('button')].find((b) =>
@@ -116,7 +118,10 @@ describe('IngestBatchPanel', () => {
       expect(ingestBatch).toHaveBeenCalled();
     });
     const call = vi.mocked(ingestBatch).mock.calls[0]![0];
-    expect(call.items.map((i) => i.path)).toEqual(['/data/a.jpg', '/data/b.jpg']);
+    expect(call.items.map((i) => i.path)).toEqual([
+      '/data/archive/a.jpg',
+      '/data/archive/b.jpg',
+    ]);
     flushSync();
     await vi.waitFor(() => {
       flushSync();
@@ -129,10 +134,12 @@ describe('IngestBatchPanel', () => {
     vi.mocked(ingestBatch).mockResolvedValue(servedResponse());
     instance = mount(IngestBatchPanel, {
       target,
-      props: { config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data'] } },
+      props: {
+        config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data/archive'] },
+      },
     });
     flushSync();
-    textarea().value = '/data/b.jpg';
+    textarea().value = '/data/archive/b.jpg';
     textarea().dispatchEvent(new Event('input'));
     flushSync();
     const submitBtn = [...target.querySelectorAll('button')].find((b) =>
@@ -152,13 +159,13 @@ describe('IngestBatchPanel', () => {
       props: {
         config: {
           ...resolveIngestConfig(null),
-          batchSourceRoots: ['/data'],
+          batchSourceRoots: ['/data/archive'],
           batchMaxItems: 1,
         },
       },
     });
     flushSync();
-    textarea().value = '/data/a.jpg\n/data/b.jpg';
+    textarea().value = '/data/archive/a.jpg\n/data/archive/b.jpg';
     textarea().dispatchEvent(new Event('input'));
     flushSync();
     expect(target.textContent).toContain('exceeds');
@@ -180,10 +187,12 @@ describe('IngestBatchPanel', () => {
     });
     instance = mount(IngestBatchPanel, {
       target,
-      props: { config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data'] } },
+      props: {
+        config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data/archive'] },
+      },
     });
     flushSync();
-    textarea().value = '/data/a.jpg';
+    textarea().value = '/data/archive/a.jpg';
     textarea().dispatchEvent(new Event('input'));
     flushSync();
     [...target.querySelectorAll('button')]
@@ -203,7 +212,9 @@ describe('IngestBatchPanel', () => {
   it('the submit button is disabled with no paths (never sends an empty items list)', () => {
     instance = mount(IngestBatchPanel, {
       target,
-      props: { config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data'] } },
+      props: {
+        config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data/archive'] },
+      },
     });
     flushSync();
     const btn = [...target.querySelectorAll('button')].find((b) =>
