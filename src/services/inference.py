@@ -120,7 +120,7 @@ class InferenceService:
         # Run inference via Triton
         client = get_triton_client(self.settings.triton_url)
         result = client.infer_yolo_end2end(img, model_name)
-        detections = client.format_detections(result)
+        detections = client.format_detections(result, model_name=model_name)
 
         return build_response(
             detections=detections,
@@ -171,7 +171,7 @@ class InferenceService:
         # Format responses
         responses = []
         for result, shape in zip(results, image_shapes, strict=False):
-            detections = client.format_detections(result)
+            detections = client.format_detections(result, model_name=model_name)
             responses.append(
                 build_response(
                     detections=detections,
@@ -332,7 +332,7 @@ class InferenceService:
             }
 
         # Format YOLO detections
-        detections = client.format_detections(yolo_result)
+        detections = client.format_detections(yolo_result, model_name=TritonModelConfig.YOLO_MODEL)
 
         orig_h, orig_w = face_result.get('orig_shape', (0, 0))
 
@@ -508,7 +508,7 @@ class InferenceService:
             }
 
         # Format YOLO detections
-        detections = client.format_detections(yolo_result)
+        detections = client.format_detections(yolo_result, model_name=TritonModelConfig.YOLO_MODEL)
 
         orig_h, orig_w = face_result.get('orig_shape', (0, 0))
 

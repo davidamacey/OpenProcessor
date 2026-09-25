@@ -779,3 +779,36 @@ async def test_reload_promoted_models_is_best_effort_on_unreachable_triton(
 
     assert result['status'] == 'error'
     assert result['reloaded'] == []
+
+
+@pytest.mark.asyncio
+async def test_unloaded_model_is_never_resurrected_by_reload_promoted_models(
+    scratch_models_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item 3 (fresh-start E2E findings, round 2): unload must remove the
+    model from reload_promoted_models' record, not just from Triton's
+    live index -- otherwise the next reconcile tick (or a Triton
+    restart) would silently reload something an operator deliberately
+    unloaded. unload() rmtree's the whole model dir, which is exactly
+    what strands promote.json for the discovery scan below."""
+    from src.services.training.triton_promote import reload_promoted_models
+
+    name = 'op_deliberately_unloaded_v1'
+    model_dir = _make_promoted_model_dir(scratch_models_dir, name)
+    promoter = _promoter(scratch_models_dir)
+
+    monkeypatch.setattr(TritonPromoter, '_trigger_unload', AsyncMock(return_value=True))
+    await promoter.unload(name)
+    assert not model_dir.exists()
+
+    # Even if Triton still (implausibly) reports it UNAVAILABLE in the
+    # index, there's no promote.json left to discover -- no load call.
+    fake_client = _FakeIndexAndLoadClient(
+        index_response=[{'name': name, 'state': 'UNAVAILABLE'}], load_ok={name}
+    )
+    monkeypatch.setattr('src.services.training.triton_promote.httpx.AsyncClient', fake_client)
+
+    result = await reload_promoted_models(promoter)
+
+    assert result == {'status': 'ok', 'reloaded': [], 'failed': []}
+    assert fake_client.load_calls == []

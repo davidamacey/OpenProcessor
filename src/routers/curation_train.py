@@ -1910,6 +1910,46 @@ async def promote_run(
 
 
 # =============================================================================
+# /reload_promoted
+# =============================================================================
+
+
+class ReloadPromotedResponse(BaseModel):
+    status: str
+    reloaded: list[str] = []
+    failed: list[str] = []
+
+
+@router.post('/reload_promoted', response_model=ReloadPromotedResponse)
+async def reload_promoted() -> ReloadPromotedResponse:
+    """Re-``/load`` every promoted model Triton doesn't report READY.
+
+    Triton in explicit-control mode only loads its ``--load-model`` list
+    at startup, so a bare Triton restart (``make restart-triton``, or any
+    ``docker compose restart``/recreate of the Triton service) silently
+    strands every previously-promoted model at UNAVAILABLE until someone
+    POSTs ``/load`` again. The API already runs this once at its own
+    startup and on its periodic reconcile tick (see ``src/main.py``); this
+    route lets an operator trigger it on demand right after bouncing
+    Triton, without needing a full API restart. ``make reload-promoted``
+    calls this.
+
+    A model that's been through ``DELETE {api_prefix}/models/{name}`` is
+    never resurrected here -- that route removes the whole model
+    directory, ``promote.json`` included, which is exactly what this
+    scan keys off.
+    """
+    from src.services.training.triton_promote import reload_promoted_models
+
+    result = await reload_promoted_models()
+    return ReloadPromotedResponse(
+        status=result.get('status', 'ok'),
+        reloaded=result.get('reloaded', []),
+        failed=result.get('failed', []),
+    )
+
+
+# =============================================================================
 # /manifest/{job_id}
 # =============================================================================
 

@@ -203,14 +203,17 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
     print('=' * 60)
 
     # Best-effort headroom for the build; a plain HTTP call, harmless
-    # (and a no-op) if Triton isn't reachable.
+    # (and a no-op) if Triton isn't reachable. This only frees Triton's
+    # in-memory model instances -- it never touches model.plan on disk,
+    # so a build failure below still leaves whatever plan already exists.
     unload_models_for_memory()
 
-    if plan_path.exists():
-        plan_path.unlink()
-        print(f'Removed old plan: {plan_path}')
-    plan_path.parent.mkdir(parents=True, exist_ok=True)
-
+    # F-17(b) (fresh-start E2E findings 2026-09-25, round 2): this used to
+    # unlink the existing plan_path before attempting the build, so a
+    # failed rebuild left the model with NO plan at all -- destroying a
+    # working install. Build to a temp file, validate it, then swap it
+    # into place atomically (see trt_utils.atomic_write_plan); the old
+    # plan is only ever replaced by a plan that's confirmed to work.
     min_shape = (MIN_BATCH, 3, REC_HEIGHT, MIN_WIDTH)
     opt_shape = (OPT_BATCH, 3, REC_HEIGHT, OPT_WIDTH)
     max_shape = (MAX_BATCH, 3, REC_HEIGHT, MAX_WIDTH)
@@ -223,6 +226,7 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
 
     try:
         import tensorrt as trt
+        from trt_utils import atomic_write_plan, create_explicit_network
 
         trt_logger = trt.Logger(trt.Logger.INFO)
         trt.init_libnvinfer_plugins(trt_logger, '')
@@ -230,8 +234,14 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
         config = builder.create_builder_config()
         config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 8192 * (1 << 20))
 
-        network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
-        network = builder.create_network(network_flags)
+        # F-17(a) (fresh-start E2E findings 2026-09-25, round 2):
+        # NetworkDefinitionCreationFlag.EXPLICIT_BATCH was removed in
+        # TRT 11 (networks are always explicit-batch now); the hardcoded
+        # flag lookup raised AttributeError on the image's TRT 11.1,
+        # regressing the F-17 fix. create_explicit_network passes the
+        # flag only where it still exists (TRT <= 10.x) -- same helper
+        # export_models.py uses, which already works on TRT 11.1.
+        network = create_explicit_network(builder)
         parser = trt.OnnxParser(network, trt_logger)
         with open(onnx_path, 'rb') as f:
             if not parser.parse(f.read()):
@@ -251,15 +261,15 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
             print('\nERROR: TensorRT engine build failed (see log above)')
             return None
 
-        with open(plan_path, 'wb') as f:
-            f.write(serialized_engine)
+        try:
+            atomic_write_plan(bytes(serialized_engine), plan_path)
+        except ValueError as e:
+            print(f'\nERROR: built engine failed validation, keeping existing plan: {e}')
+            return None
 
-        if plan_path.exists() and plan_path.stat().st_size > 0:
-            print('\nTensorRT conversion successful!')
-            print(f'  Engine size: {plan_path.stat().st_size / 1024 / 1024:.2f} MB')
-            return plan_path
-        print('\nERROR: engine serialized but model.plan is missing/empty')
-        return None
+        print('\nTensorRT conversion successful!')
+        print(f'  Engine size: {plan_path.stat().st_size / 1024 / 1024:.2f} MB')
+        return plan_path
 
     except Exception as e:
         print(f'\nERROR: TensorRT conversion failed: {e}')

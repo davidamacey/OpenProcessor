@@ -536,9 +536,16 @@ class TritonClient:
     # =========================================================================
 
     @staticmethod
-    def format_detections(result: dict[str, Any]) -> list:
-        """Format detections with coordinates normalized to original image dimensions."""
-        return format_detections_from_triton(result, input_size=640)
+    def format_detections(result: dict[str, Any], model_name: str | None = None) -> list:
+        """Format detections with coordinates normalized to original image dimensions.
+
+        F-42 (fresh-start E2E findings 2026-09-25, round 2): ``model_name``
+        resolves ``class_name`` from that model's own labels instead of
+        always assuming the stock COCO vocabulary -- pass the same
+        ``model_name`` the detection came from (see
+        :func:`src.utils.affine.format_detections_from_triton`).
+        """
+        return format_detections_from_triton(result, input_size=640, model_name=model_name)
 
     # =========================================================================
     # Optimized Batched Inference Methods (Bypass Python BLS)

@@ -46,6 +46,12 @@ services:
       # near-dup/uniqueness item scorers -- CURATION.md calls it required,
       # not optional, so it belongs in the default load list.
       - --load-model=pe_image_encoder
+      # F-07 remainder (fresh-start E2E findings 2026-09-25): serving the
+      # text tower here means every uvicorn worker shares ONE CPU instance
+      # instead of each loading its own ~1.4 GB ONNX Runtime session --
+      # src/clients/pe_encoder.py's auto backend selection prefers this
+      # over the in-process path whenever Triton reports it ready.
+      - --load-model=pe_text_encoder
       # ===================================================================
       - --log-verbose=1
       - --log-info=true

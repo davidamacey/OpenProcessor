@@ -18,6 +18,7 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
+from src.config.settings import TritonModelConfig
 from src.schemas.detection import ImageMetadata
 from src.services.inference import InferenceService
 from src.services.ocr_service import get_ocr_service
@@ -312,7 +313,9 @@ def analyze_image(
             # Parse detections immediately
             detections: list[DetectionResult] = []
             if yolo_clip_result.get('num_dets', 0) > 0:
-                formatted = format_detections_from_triton(yolo_clip_result, input_size=640)
+                formatted = format_detections_from_triton(
+                    yolo_clip_result, input_size=640, model_name=TritonModelConfig.YOLO_MODEL
+                )
                 detections.extend(
                     DetectionResult(
                         box=[det['x1'], det['y1'], det['x2'], det['y2']],
@@ -539,7 +542,9 @@ def analyze_batch(
                 # Detections
                 detections: list[DetectionResult] = []
                 if num_dets > 0:
-                    formatted = format_detections_from_triton(yolo_clip_result, input_size=640)
+                    formatted = format_detections_from_triton(
+                        yolo_clip_result, input_size=640, model_name=TritonModelConfig.YOLO_MODEL
+                    )
                     detections.extend(
                         DetectionResult(
                             box=[det['x1'], det['y1'], det['x2'], det['y2']],

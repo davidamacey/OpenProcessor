@@ -580,6 +580,12 @@ heavy face-search load, for example) benefit most from more instances.
 Curation-only deployments that don't need the core face/vehicle path at
 all can `unload` those 3 models entirely instead of exporting them.
 
+`pe_text_encoder` (semantic-search query embeddings, added to the default
+load list alongside `pe_image_encoder`) is `KIND_CPU` with one instance —
+it adds **0 GB of GPU VRAM**, only host RAM, and is what
+`OP_PE_TEXT_BACKEND=auto` now prefers over loading its own copy in every
+uvicorn worker (see `export/README.md#pe-core-encoders-curation-embeddings`).
+
 ### GPU sizing — segmenter (curation region cascade)
 
 The optional `segmenter` service (`--profile segmenter`) is the single
