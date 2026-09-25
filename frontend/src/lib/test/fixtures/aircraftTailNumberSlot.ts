@@ -1,19 +1,20 @@
 /**
- * Example second slot — proves the capability model generalizes beyond
- * license_plate (docs/genericization-plan-2026-09-13.md §5.4, Slot A).
+ * Test fixture: a second slot that proves the capability model
+ * generalizes beyond the served region slot
+ * (docs/genericization-plan-2026-09-13.md §5.4, Slot A).
  *
- * Stresses every capability license_plate uses, with deliberately
- * DIFFERENT values everywhere, so any place a plate-shaped default or
- * assumption leaked into the (not-yet-built) generic components would
- * be caught immediately: `storedFrame: 'parent'` (plates use `'source'`),
- * `showChainOnCard: false` (plates: true), and no `falsePositiveState`
- * (plates have one).
+ * Uses every capability the region slot uses, with deliberately
+ * DIFFERENT values everywhere, so a region-shaped default or assumption
+ * in the generic components is caught immediately: `storedFrame:
+ * 'parent'` (the region slot uses `'source'`), `showChainOnCard: false`
+ * (region: true), and no `falsePositiveState` (region has one).
  *
- * Not bound to any real class or route — this is a proof-of-concept
- * profile, not a shipped deployment.
+ * Not bound to any real class or route. Its operator-facing JSON form is
+ * `examples/annotation-profiles/aircraft-tail-number.json`, which
+ * `roundTrip.test.ts` proves parses to exactly this spec.
  */
 
-import type { SlotSpec } from '../types';
+import type { SlotSpec } from '$lib/annotations/types';
 
 export const aircraftTailNumberSlot: SlotSpec = {
   key: 'aircraft_tail_number',
@@ -23,7 +24,7 @@ export const aircraftTailNumberSlot: SlotSpec = {
   capabilities: {
     subBox: {
       bboxField: 'tail_bbox_norm',
-      // Different from plates on purpose: proves storedFrame is read,
+      // Different from the region slot on purpose: proves storedFrame is read,
       // not assumed.
       storedFrame: 'parent',
       scoreField: 'tail_score',
@@ -54,7 +55,7 @@ export const aircraftTailNumberSlot: SlotSpec = {
       detectorField: 'tail_detector',
       chainField: 'tail_detector_chain',
       verifierField: 'tail_verifier',
-      showChainOnCard: false, // differs from plates
+      showChainOnCard: false, // differs from the region slot
     },
     lifecycle: {
       statusField: 'tail_status',

@@ -57,8 +57,11 @@ describe('reviewTabsVocabularyStore.init', () => {
     expect(reviewTabsVocabularyStore.labelFor('regions', 'Regions')).toBe('Widget tags');
     // Not present in the served list at all — static fallback.
     expect(
-      reviewTabsVocabularyStore.labelFor('coco_blind_spots', 'COCO Blind Spots'),
-    ).toBe('COCO Blind Spots');
+      reviewTabsVocabularyStore.labelFor(
+        'classifier_blind_spots',
+        'Classifier Blind Spots',
+      ),
+    ).toBe('Classifier Blind Spots');
   });
 
   it('descriptionFor returns the served description or null', async () => {

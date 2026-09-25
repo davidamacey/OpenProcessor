@@ -36,7 +36,7 @@ export interface ReviewTabDef {
  * `{API_PREFIX}/review/outliers` endpoint is untouched (still reachable, just no
  * longer linked from this UI).
  *
- * Uncertainty, Model Disagreements, and COCO Blind Spots stay as
+ * Uncertainty, Model Disagreements, and Classifier Blind Spots stay as
  * top-level tabs unchanged — each is a real, distinct signal the live
  * counts backed up (100 / 12 / 1,000 respectively).
  */
@@ -56,13 +56,13 @@ export const CORE_REVIEW_TABS: ReviewTabDef[] = [
     urlId: 'model_disagreements',
     endpointId: 'model_disagreements',
   },
-  // Primary-subject active-learning queue — COCO-confirmed vehicles v6
-  // missed entirely. Genuinely distinct failure mode from the rest.
+  // Primary-subject active-learning queue — items a proposal detector
+  // found that the classifier missed entirely. A distinct failure mode.
   {
-    id: 'coco_blind_spots',
+    id: 'classifier_blind_spots',
     label: 'Classifier Blind Spots',
-    urlId: 'coco_blind_spots',
-    endpointId: 'coco_blind_spots',
+    urlId: 'classifier_blind_spots',
+    endpointId: 'classifier_blind_spots',
   },
   // New-class-proposal queue (2026-09-24 logic-moves W5) — crops the VLM
   // flagged as needing a class the registry doesn't have yet
@@ -229,7 +229,7 @@ export function isReviewPresetId(value: string): value is ReviewPresetId {
 /**
  * What `getReviewQueue` should actually be called with. Presets only ever
  * apply while the operator is on the `all` tab — every other screen
- * (Uncertainty / Model Disagreements / COCO Blind Spots / slot tabs) ignores
+ * (Uncertainty / Model Disagreements / Classifier Blind Spots / slot tabs) ignores
  * `preset` entirely, and navigating to one of those tabs clears it (see
  * the tab-click handler in `+page.svelte`) so a stale preset can never
  * leak into an unrelated tab's query.

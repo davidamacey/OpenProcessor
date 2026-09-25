@@ -43,10 +43,4 @@ describe('/bakeoff availability gate', () => {
     );
     expect(anchorMatch).not.toBeNull();
   });
-
-  it('the page title no longer contains LPR', () => {
-    const titleMatch = pageSrc.match(/<h1[^>]*>([^<]*)<\/h1>/);
-    expect(titleMatch).not.toBeNull();
-    expect(titleMatch?.[1]).not.toMatch(/LPR/);
-  });
 });

@@ -606,7 +606,7 @@ describe('isSemanticSearchAvailable', () => {
  */
 describe('isDatasetExportAvailable', () => {
   it('is false when dataset_exports is empty', () => {
-    expect(isDatasetExportAvailable([], 'lpr')).toBe(false);
+    expect(isDatasetExportAvailable([], 'single_class')).toBe(false);
   });
 
   it('is true when the kind is reported stable', () => {
@@ -637,12 +637,12 @@ describe('isDatasetExportAvailable', () => {
     expect(isDatasetExportAvailable(exports, 'single_class')).toBe(false);
   });
 
-  // Absence, not a status. OpenProcessor omits `lpr` entirely from the
+  // Absence, not a status. OpenProcessor omits an unservable kind entirely from the
   // export axis rather than advertising it disabled, because a proprietary
   // overlay the repo doesn't contain isn't "not yet, but could be later"
   // (curation_api_contract.md's `export` axis section). A consumer must
   // treat "no entry" identically to "entry at shadow/disabled".
-  it('is false when the kind is absent entirely (the real lpr-on-OpenProcessor case)', () => {
+  it('is false when the kind is absent entirely (an export kind this backend does not serve)', () => {
     const exports: DatasetExportInfo[] = [
       { id: 'yolo', label: 'YOLO detection dataset export', status: 'stable' },
     ];
@@ -657,7 +657,9 @@ describe('isDatasetExportAvailable', () => {
   });
 
   it('never throws on FALLBACK_METHODS.dataset_exports (empty today)', () => {
-    expect(isDatasetExportAvailable(FALLBACK_METHODS.dataset_exports, 'lpr')).toBe(false);
+    expect(
+      isDatasetExportAvailable(FALLBACK_METHODS.dataset_exports, 'single_class'),
+    ).toBe(false);
   });
 });
 

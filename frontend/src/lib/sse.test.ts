@@ -18,7 +18,7 @@ import {
   installDeploymentSlots,
   resetDeploymentSlots,
 } from './annotations/registeredSlots';
-import { aircraftTailNumberSlot } from './annotations/profiles/aircraftTailNumber';
+import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
 
 afterEach(() => {
   resetDeploymentSlots();

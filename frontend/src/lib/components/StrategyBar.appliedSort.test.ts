@@ -60,7 +60,7 @@ describe('StrategyBar — applied-sort summary', () => {
   });
 
   // R4 (docs/design/visual-audit-2026-09-24.md): the chip showed raw ids
-  // ("→ coco_blind_spots_default") though /methods serves a label for each.
+  // ("→ classifier_blind_spots_default") though /methods serves a label for each.
   it('shows the served /methods label for the applied sort, not its raw id', () => {
     strategiesStore.methods = {
       ...FALLBACK_METHODS,

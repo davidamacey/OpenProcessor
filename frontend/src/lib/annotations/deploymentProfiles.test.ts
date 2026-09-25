@@ -148,7 +148,7 @@ describe('loadDeploymentProfiles — propagation and memoization', () => {
     for (const s of builtinQueues) {
       expect(tabFromUrlId(s.capabilities.queue!.urlId)).toBe(`slot:${s.key}`);
     }
-    expect(endpointForTab('slot:pallet_label')).toBe('pallet_labels');
+    expect(endpointForTab('slot:pallet_label')).toBe('regions');
   });
 
   it('11. calling loadDeploymentProfiles twice performs exactly one fetch', async () => {

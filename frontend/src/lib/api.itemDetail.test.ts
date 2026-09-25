@@ -43,7 +43,7 @@ describe('getCropContext', () => {
       image_path: '/nas/img-1.jpg',
       width: 640,
       height: 427,
-      source: 'lpr_frozen_test_sample',
+      source: 'tag_holdout_sample',
       indexed_at: '2026-09-24T00:00:00Z',
     };
     const raw = makeItem({ crop_id: 'sibling-1' });

@@ -88,7 +88,7 @@
    * only handles the click. Force-required models (active vehicle model
    * / other core pipeline models) get a second, stronger confirmation on
    * top of the normal one before ever sending `force=true`; the server
-   * is the real guard (LPR models 403 unconditionally) but the double
+   * is the real guard (region-protected models 403 unconditionally) but the double
    * confirm here matches CLAUDE.md's "bulk ops show a confirmation
    * dialog" pattern for a destructive single-model action.
    */

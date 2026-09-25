@@ -73,6 +73,12 @@ describe('getRegionVocabulary', () => {
           label_template: null,
         },
       ],
+      region_profile: {
+        name: 'widget_tag',
+        display_name: 'Widget tags',
+        region_class_name: 'widget_tag',
+        text_reader: 'ocr',
+      },
     };
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(payload));
     vi.stubGlobal('fetch', fetchMock);
@@ -96,6 +102,7 @@ describe('getRegionVocabulary', () => {
       text_choices: [],
       text_rules: null,
       rejection_reasons: [],
+      region_profile: null,
     });
   });
 });

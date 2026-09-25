@@ -10,11 +10,25 @@
  *  - R11: embedded under /review, the panel repeated the Class / Detector
  *    score / VLM confidence rows sitting directly above it.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import CropMetaPanel from './CropMetaPanel.svelte';
 import { mapCropSlots } from '$lib/annotations/cropSlots';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+import {
+  installServedRegionProfile,
+  resetDeploymentSlots,
+} from '$lib/annotations/registeredSlots';
+import { WIDGET_TAG_PROFILE } from '$lib/test/fixtures/regionSlot';
 import type { Crop } from '$lib/types';
 
 let target: HTMLDivElement;
@@ -100,7 +114,16 @@ describe('R11: embedded Details drops rows the review panel already shows', () =
   });
 });
 
+const REGION_RAW = {
+  region_bbox_norm: [0.4, 0.4, 0.6, 0.6],
+  region_status: 'detected',
+  region_score: 0.9,
+};
+
 describe('R7: region Status uses the served status vocabulary', () => {
+  beforeAll(() => installServedRegionProfile(WIDGET_TAG_PROFILE));
+  afterAll(() => resetDeploymentSlots());
+
   it('renders the served /regions/statuses label, not the slot profile label', () => {
     regionStatusesStore.list = [
       {
@@ -113,14 +136,23 @@ describe('R7: region Status uses the served status vocabulary', () => {
         wants_reason: false,
       },
     ] as never;
-    const raw = {
-      region_bbox_norm: [0.4, 0.4, 0.6, 0.6],
-      region_status: 'detected',
-      region_score: 0.9,
-    };
-    const slots = mapCropSlots(raw, [0, 0, 1, 1]);
+    const slots = mapCropSlots(REGION_RAW, [0, 0, 1, 1]);
     expect(Object.keys(slots).length).toBeGreaterThan(0);
     const el = render({ crop: crop({ slots } as Partial<Crop>) });
+    expect(el.textContent).toContain('Region');
     expect(rowValue(el, 'Status')).toBe('served-label-for-detected');
+  });
+});
+
+describe('no region profile (domain-neutral audit §5.4)', () => {
+  beforeAll(() => installServedRegionProfile(null));
+  afterAll(() => resetDeploymentSlots());
+
+  it('renders no region section, even for an item whose wire carries region_* values', () => {
+    const slots = mapCropSlots(REGION_RAW, [0, 0, 1, 1]);
+    expect(slots).toEqual({});
+    const el = render({ crop: crop({ slots } as Partial<Crop>) });
+    expect(rowValue(el, 'Status')).toBeNull();
+    expect(el.textContent).not.toContain('Region');
   });
 });

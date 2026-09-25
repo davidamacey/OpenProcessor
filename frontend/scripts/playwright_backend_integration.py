@@ -710,18 +710,11 @@ def step11_export_gating(api: Api, page: Any, front: str) -> bool:
     strategies = methods.get("strategies", [])
     export_entries = [s for s in strategies if s.get("axis") == "export"]
     has_yolo = any(s.get("id") == "yolo" for s in export_entries)
-    has_lpr = any(s.get("id") == "lpr" for s in export_entries)
     ok = check(
-        "step 11: /methods has axis=export id=yolo and no id=lpr",
-        has_yolo and not has_lpr,
+        "step 11: /methods has axis=export id=yolo",
+        has_yolo,
         f"entries={export_entries}",
     )
-    page.goto(f"{front}/train", wait_until="domcontentloaded")
-    _wait_for_main_rendered(page)
-    lpr_panel_present = page.evaluate(
-        "() => !!document.querySelector('[data-testid=lpr-export-panel]')"
-    )
-    ok2 = check("step 11: /train renders no LPR export panel", not lpr_panel_present)
 
     page.goto(f"{front}/export", wait_until="domcontentloaded")
     _wait_for_main_rendered(page)
@@ -751,13 +744,12 @@ def step11_export_gating(api: Api, page: Any, front: str) -> bool:
         [
             {
                 "export_entries": export_entries,
-                "lpr_panel_present": lpr_panel_present,
                 "yolo_control_present": yolo_control_present,
                 "export_status_code": export_status_code,
             }
         ],
     )
-    return ok and ok2 and ok3 and ok4
+    return ok and ok3 and ok4
 
 
 def step12_train_read_path(api: Api, page: Any, front: str) -> bool:

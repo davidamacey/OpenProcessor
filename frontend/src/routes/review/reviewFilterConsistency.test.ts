@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
  * Regression test for the "tabs are inconsistent" bug (2026-09): the
  * SubjectScopeToggle (rank-scope) and BlurSlider (clarity) controls used to
  * be gated behind `{#if PRIMARY_TABS.includes(effectiveTab)}`, so they
- * appeared only on the Primary·Low-Conf preset chip and the COCO Blind Spots
+ * appeared only on the Primary·Low-Conf preset chip and the Classifier Blind Spots
  * tab and silently vanished everywhere else (All, Uncertainty, Model
  * Disagreements, Regions, Gemma-mismatches chip, Gemma-low-conf chip) — even
  * though the backend (`review.py`) always treats `max_rank` /

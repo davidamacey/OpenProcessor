@@ -11,7 +11,12 @@ describe('isSlotSuppressedTab', () => {
   });
 
   it('does not suppress core review tabs', () => {
-    for (const tab of ['all', 'uncertainty', 'model_disagreements', 'coco_blind_spots']) {
+    for (const tab of [
+      'all',
+      'uncertainty',
+      'model_disagreements',
+      'classifier_blind_spots',
+    ]) {
       expect(isSlotSuppressedTab(tab)).toBe(false);
     }
   });

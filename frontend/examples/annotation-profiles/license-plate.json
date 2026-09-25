@@ -1,0 +1,285 @@
+{
+  "version": 1,
+  "slots": [
+    {
+      "key": "license_plate",
+      "bind": {
+        "className": "license_plate"
+      },
+      "label": {
+        "singular": "plate",
+        "plural": "plates",
+        "title": "Plate"
+      },
+      "capabilities": {
+        "subBox": {
+          "bboxField": "region_bbox_norm",
+          "storedFrame": "source",
+          "frameField": "region_bbox_frame",
+          "scoreField": "region_score",
+          "visibleField": "region_visible",
+          "bboxInParentField": "region_bbox_in_parent",
+          "candidateBboxField": "region_candidate_bbox_norm",
+          "candidateBboxInParentField": "region_candidate_bbox_in_parent",
+          "candidateScoreField": "region_candidate_score",
+          "candidateDetectorField": "region_candidate_detector",
+          "candidateDetectorVersionField": "region_candidate_detector_version",
+          "candidateSourceField": "region_candidate_source",
+          "thumbnail": {
+            "path": "/crops/{cropId}/region_thumbnail?size={size}",
+            "aspect": "2 / 1",
+            "defaultSize": 160
+          },
+          "ring": "default",
+          "editor": {
+            "thumbSize": 512,
+            "viewPadding": 2.5,
+            "nudgeStep": 0.001953125
+          }
+        },
+        "text": {
+          "valueField": "region_text",
+          "rawField": "region_text_raw",
+          "sourceField": "region_text_source",
+          "confidenceField": "region_text_confidence",
+          "engineVersionField": "region_text_engine_version",
+          "vlmValueField": "region_text_vlm",
+          "ocrValueField": "region_text_ocr",
+          "disagreementField": "region_text_disagreement",
+          "choiceField": "region_text_choice",
+          "invalidReasonField": "region_text_vlm_invalid",
+          "label": "Plate text",
+          "placeholder": "type the text…",
+          "transform": "uppercase",
+          "monospace": true
+        },
+        "provenance": {
+          "detectorField": "region_detector",
+          "detectorVersionField": "region_detector_version",
+          "chainField": "region_detector_chain",
+          "verifierField": "region_verifier",
+          "verifierVersionField": "region_verifier_version",
+          "verifiedAtField": "region_verified_at",
+          "detectedAtField": "region_detected_at",
+          "showChainOnCard": true
+        },
+        "lifecycle": {
+          "statusField": "region_status",
+          "verifiedField": "region_verified",
+          "validatedField": "region_validated",
+          "autoConfirmedField": "region_auto_confirmed",
+          "rejectionReasonField": "region_rejection_reason",
+          "boxCorrectField": "region_bbox_correct",
+          "labelSourceField": "region_label_source",
+          "states": [
+            {
+              "value": "pending_detection",
+              "label": "pending detection",
+              "humanWritable": false,
+              "role": "pending"
+            },
+            {
+              "value": "pending_verification",
+              "label": "pending verification",
+              "humanWritable": false,
+              "role": "pending"
+            },
+            {
+              "value": "detected",
+              "label": "detected (plate visible)",
+              "humanWritable": true,
+              "role": "proposed"
+            },
+            {
+              "value": "verify_rejected",
+              "label": "rejected (bad detection)",
+              "humanWritable": true,
+              "role": "rejected"
+            },
+            {
+              "value": "no_region_box",
+              "label": "no box found",
+              "humanWritable": false,
+              "role": "absent"
+            },
+            {
+              "value": "no_region_visible",
+              "label": "no plate visible",
+              "humanWritable": true,
+              "role": "absent"
+            },
+            {
+              "value": "detection_failed",
+              "label": "detection failed",
+              "humanWritable": false,
+              "role": "pending"
+            },
+            {
+              "value": "false_positive",
+              "label": "false positive (keep box)",
+              "humanWritable": true,
+              "role": "falsePositive",
+              "dim": true,
+              "badge": "false pos"
+            }
+          ],
+          "confirmState": "detected",
+          "rejectState": "no_region_visible",
+          "falsePositiveState": "false_positive"
+        },
+        "queue": {
+          "endpointId": "regions",
+          "urlId": "plates",
+          "tabLabel": "Plates",
+          "browsePath": "/regions",
+          "keymap": {
+            "confirm": ["enter"],
+            "reject": ["d"],
+            "markFalsePositive": ["f"],
+            "editBox": ["e"],
+            "back": ["arrowleft", "b"]
+          },
+          "textFilter": {
+            "param": "text",
+            "label": "Text",
+            "placeholder": "e.g. S14"
+          },
+          "alwaysVisible": true
+        },
+        "trainingCohorts": {
+          "suppressDerived": ["blind_spots", "low_conf"],
+          "cohorts": [
+            {
+              "id": "detector_blind_spots",
+              "label": "LPR blind spots",
+              "description": "Segmenter found the plate, verifier confirmed, plate detector missed: high-signal training rows",
+              "query": {
+                "kind": "endpoint",
+                "path": "/regions/training_candidates",
+                "params": {
+                  "mode": "detector_blind_spots",
+                  "class_id": "{classId}"
+                }
+              },
+              "rowKind": "slot",
+              "reviewTarget": "slotQueue"
+            },
+            {
+              "id": "low_conf_correct",
+              "label": "LPR low confidence",
+              "description": "Plate detector and verifier agreed but the detector score was low: high-loss training rows",
+              "query": {
+                "kind": "endpoint",
+                "path": "/regions/training_candidates",
+                "params": {
+                  "mode": "low_conf_correct",
+                  "class_id": "{classId}"
+                }
+              },
+              "rowKind": "slot",
+              "reviewTarget": "slotQueue"
+            },
+            {
+              "id": "disagreement",
+              "label": "Model disagreements",
+              "description": "Plate detector and segmenter both fired; review for IoU disagreement.",
+              "query": {
+                "kind": "endpoint",
+                "path": "/regions/training_candidates",
+                "params": {
+                  "mode": "disagreement",
+                  "class_id": "{classId}"
+                }
+              },
+              "rowKind": "slot",
+              "reviewTarget": "slotQueue"
+            },
+            {
+              "id": "human_corrected",
+              "label": "Human corrected",
+              "description": "A human reviewed and corrected a model output. Gold standard.",
+              "query": {
+                "kind": "endpoint",
+                "path": "/regions/training_candidates",
+                "params": {
+                  "mode": "human_corrected",
+                  "class_id": "{classId}"
+                }
+              },
+              "rowKind": "slot",
+              "reviewTarget": "slotQueue"
+            },
+            {
+              "id": "false_positives",
+              "label": "False positives",
+              "description": "A human marked a detector box as a false positive (box retained).",
+              "query": {
+                "kind": "endpoint",
+                "path": "/regions/training_candidates",
+                "params": {
+                  "mode": "false_positives",
+                  "class_id": "{classId}"
+                }
+              },
+              "rowKind": "slot",
+              "reviewTarget": "slotQueue"
+            }
+          ]
+        }
+      },
+      "extras": {
+        "datasetExport": {
+          "kind": "single_class",
+          "label": "LPR plate dataset",
+          "buildPath": "/export/single_class",
+          "statusPath": "/export/single_class/status",
+          "datasetKind": "license_plate",
+          "profileName": "license_plate",
+          "boxSource": "region",
+          "regionClassName": "license_plate",
+          "classIds": [],
+          "singleClass": true,
+          "blurb": "Single-class plate dataset (positives + human FP hard-negatives + a sample of plate-free backgrounds).",
+          "options": [
+            {
+              "key": "image_mode",
+              "label": "image mode",
+              "kind": "select",
+              "choices": ["whole_frame", "item_crop"],
+              "default": "whole_frame"
+            },
+            {
+              "key": "img_max_side",
+              "label": "image size",
+              "kind": "select",
+              "choices": [640, 1280],
+              "default": 1280
+            },
+            {
+              "key": "max_positive_images",
+              "label": "sample N positives",
+              "kind": "number"
+            },
+            {
+              "key": "dedup_threshold",
+              "label": "dedup near-dup frames",
+              "kind": "toggle",
+              "onValue": 0.98
+            }
+          ]
+        }
+      },
+      "endpoints": {
+        "setBox": "/crops/{cropId}/region",
+        "clearBox": "/crops/{cropId}/region",
+        "patchMeta": "/crops/{cropId}/region_meta",
+        "batchStatus": "/regions/batch_status"
+      },
+      "stats": {
+        "key": "regions",
+        "panelTitle": "Plate detections",
+        "coverageTitle": "Plate coverage"
+      }
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 /**
- * Region lifecycle-status contract: every built-in slot's `lifecycle`
+ * Region lifecycle-status contract: every region slot's `lifecycle`
  * capability must speak the backend's actual `RegionStatus` vocabulary
  * (`contracts/openprocessor/ts/regionStatus.ts`, vendored verbatim from
  * OpenProcessor's `src/config/region_state.py` via `npm run
@@ -11,7 +11,9 @@ import {
   REGION_STATUS_VALUES,
   HUMAN_REGION_STATUSES,
 } from '../../../contracts/openprocessor/ts/regionStatus';
-import { builtinSlots } from '../annotations/registeredSlots';
+import { regionContractSlots } from '$lib/test/fixtures/exampleProfiles';
+
+const regionSlots = regionContractSlots();
 
 describe('vendored region-status snapshot sanity', () => {
   it('loaded a non-trivial status set (guards a vacuous pass)', () => {
@@ -20,8 +22,8 @@ describe('vendored region-status snapshot sanity', () => {
   });
 });
 
-describe('built-in slot lifecycle vs the backend RegionStatus contract', () => {
-  const lifecycleSlots = builtinSlots.filter((s) => s.capabilities.lifecycle);
+describe('region slot lifecycle (served synthesis + region example profiles) vs the backend RegionStatus contract', () => {
+  const lifecycleSlots = regionSlots.filter((s) => s.capabilities.lifecycle);
 
   it('at least one slot declares a lifecycle (guards a vacuous pass)', () => {
     expect(lifecycleSlots.length).toBeGreaterThan(0);

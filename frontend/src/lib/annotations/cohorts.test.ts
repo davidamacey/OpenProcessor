@@ -8,8 +8,8 @@ import {
 } from './cohorts';
 import { resolveSlotRegistry } from './registry';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
-import { aircraftTailNumberSlot } from './profiles/aircraftTailNumber';
-import { defectCodeSlot } from './profiles/defectCode';
+import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
+import { defectCodeSlot } from '$lib/test/fixtures/defectCodeSlot';
 
 describe('compileCohortQuery', () => {
   it('substitutes {classId} in an endpoint query params bag', () => {

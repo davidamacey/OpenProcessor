@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "slots": [
+    {
+      "key": "aircraft_tail_number",
+      "bind": {
+        "className": "aircraft"
+      },
+      "label": {
+        "singular": "tail number",
+        "plural": "tail numbers",
+        "title": "Tail number"
+      },
+      "capabilities": {
+        "subBox": {
+          "bboxField": "tail_bbox_norm",
+          "storedFrame": "parent",
+          "scoreField": "tail_score",
+          "thumbnail": {
+            "path": "/crops/{cropId}/tail_thumbnail?size={size}",
+            "aspect": "1 / 2",
+            "defaultSize": 192
+          },
+          "ring": {
+            "confirmed": "border-green-400 shadow-[0_0_0_1px_rgba(34,197,94,0.45)]",
+            "proposed": "border-yellow-400 shadow-[0_0_0_1px_rgba(250,204,21,0.45)]",
+            "rejected": "border-zinc-600 shadow-none"
+          },
+          "editor": {
+            "thumbSize": 640,
+            "viewPadding": 3.0,
+            "nudgeStep": 0.0015625
+          }
+        },
+        "text": {
+          "valueField": "tail_number",
+          "sourceField": "tail_number_source",
+          "confidenceField": "tail_number_confidence",
+          "label": "Tail number",
+          "placeholder": "N123AB",
+          "transform": "uppercase",
+          "monospace": true,
+          "pattern": {
+            "source": "^[A-Z]\\d{1,5}[A-Z]{0,2}$",
+            "flags": ""
+          },
+          "maxLength": 8
+        },
+        "provenance": {
+          "detectorField": "tail_detector",
+          "chainField": "tail_detector_chain",
+          "verifierField": "tail_verifier",
+          "showChainOnCard": false
+        },
+        "lifecycle": {
+          "statusField": "tail_status",
+          "verifiedField": "tail_verified",
+          "states": [
+            {
+              "value": "detected",
+              "label": "detected",
+              "humanWritable": true,
+              "role": "proposed"
+            },
+            {
+              "value": "not_visible",
+              "label": "no tail number visible",
+              "humanWritable": true,
+              "role": "absent"
+            },
+            {
+              "value": "obscured",
+              "label": "obscured / partial",
+              "humanWritable": true,
+              "role": "rejected"
+            }
+          ],
+          "confirmState": "detected",
+          "rejectState": "not_visible"
+        },
+        "queue": {
+          "endpointId": "tail_numbers",
+          "urlId": "tails",
+          "tabLabel": "Tail numbers",
+          "browsePath": "/tail_numbers",
+          "keymap": {
+            "confirm": ["enter"],
+            "reject": ["d"],
+            "editBox": ["e"],
+            "back": ["arrowleft"]
+          },
+          "textFilter": {
+            "param": "text",
+            "label": "Tail #",
+            "placeholder": "N12"
+          },
+          "alwaysVisible": false
+        }
+      },
+      "endpoints": {
+        "setBox": "/crops/{cropId}/tail",
+        "clearBox": "/crops/{cropId}/tail",
+        "patchMeta": "/crops/{cropId}/tail_meta"
+      },
+      "stats": {
+        "key": "tail_numbers",
+        "panelTitle": "Tail-number detections",
+        "coverageTitle": "Tail-number coverage"
+      }
+    }
+  ]
+}

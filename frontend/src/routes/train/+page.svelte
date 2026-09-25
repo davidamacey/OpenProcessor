@@ -135,7 +135,7 @@
    * the dataset-kind toggle that selects it are not rendered at all —
    * absent, not disabled — and `refreshSingleClassExportStatus()` is never
    * called, so
-   * a deployment that never ported the LPR exporter produces zero 404s
+   * a deployment whose backend does not serve this export produces zero 404s
    * on this route. Never probe the export endpoint to find out; see
    * `isDatasetExportAvailable`.
    */

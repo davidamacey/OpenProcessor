@@ -14,7 +14,13 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { parseProfileDocument } from './parseSlotConfig';
 import { resolveSlotRegistry } from '../registry';
-import { builtinSlots } from '../registeredSlots';
+import { applyRegionProfileRule, builtinSlots } from '../registeredSlots';
+import { regionSlotFromServedProfile } from '../servedRegionSlot';
+import type { ServedRegionProfile } from '$lib/types';
+import {
+  exampleProfileFiles,
+  loadExampleProfile,
+} from '$lib/test/fixtures/exampleProfiles';
 import { buildReviewTabs } from '../../reviewTabs';
 import { buildSlotKeymap } from '../../review/slotKeymap';
 import { reservedHotkeyLetters } from '../../classHotkey';
@@ -37,24 +43,40 @@ describe('the shipped annotation-profiles.example.json — integration gate', ()
     expect(slots).toHaveLength(1);
   });
 
+  // The example customizes the region slot of a backend whose served
+  // region profile is named `pallet_label` (its key must equal the served
+  // profile name, or the region-profile rule drops it).
+  const servedProfile: ServedRegionProfile = {
+    name: 'pallet_label',
+    display_name: 'Pallet labels',
+    region_class_name: 'pallet_label',
+    text_reader: 'ocr',
+  };
+  const servedSlot = regionSlotFromServedProfile(servedProfile);
+
+  it('2a. the region-profile rule keeps it for a backend serving that profile, drops it otherwise', () => {
+    expect(applyRegionProfileRule(slots, servedProfile).kept).toEqual(slots);
+    expect(applyRegionProfileRule(slots, null).kept).toEqual([]);
+    expect(
+      applyRegionProfileRule(slots, { ...servedProfile, name: 'other' }).kept,
+    ).toEqual([]);
+  });
+
   const { registry, warnings: mergeWarnings } = resolveSlotRegistry({
-    builtins: builtinSlots,
+    builtins: [...builtinSlots, servedSlot],
     deployment: slots,
   });
 
-  it('2. merges over the built-in without disturbing it (identity, not equality)', () => {
+  it('2. replaces the served region slot wholesale (per-key REPLACE)', () => {
     expect(mergeWarnings).toEqual([]);
     expect(registry.all).toHaveLength(builtinSlots.length + 1);
-    for (const builtin of builtinSlots) {
-      expect(registry.byKey(builtin.key)).toBe(builtin);
-    }
-    expect(registry.byKey('pallet_label')).toBeDefined();
+    expect(registry.byKey('pallet_label')).toBe(slots[0]);
   });
 
   const palletSlot = registry.byKey('pallet_label')!;
 
   it('3. forClass resolves the pallet slot case-insensitively', () => {
-    const found = registry.forClass(42, new Map([[42, 'Wooden_Pallet']]));
+    const found = registry.forClass(42, new Map([[42, 'Pallet_Label']]));
     expect(found).toContain(palletSlot);
   });
 
@@ -67,7 +89,7 @@ describe('the shipped annotation-profiles.example.json — integration gate', ()
     const palletTab = tabs.find((t) => t.id === 'slot:pallet_label');
     expect(palletTab).toBeDefined();
     expect(palletTab!.urlId).toBe('pallet_labels');
-    expect(palletTab!.endpointId).toBe('pallet_labels');
+    expect(palletTab!.endpointId).toBe('regions');
     expect(palletTab!.label).toBe('Pallet labels');
   });
 
@@ -99,16 +121,16 @@ describe('the shipped annotation-profiles.example.json — integration gate', ()
     expect(entries.map((e) => e.combo)).toEqual(['enter', 'escape']);
   });
 
-  it('7. reservedHotkeyLetters grows to cover r/f/e/b/d with zero code change', () => {
+  it('7. reservedHotkeyLetters grows to cover r/f/e/b with zero code change', () => {
     const reserved = reservedHotkeyLetters(registry);
-    for (const letter of ['r', 'f', 'e', 'b', 'd']) {
+    for (const letter of ['r', 'f', 'e', 'b']) {
       expect(reserved.has(letter)).toBe(true);
     }
   });
 
   it('8. cohortsForClass includes the declared cohort with a compiled query', () => {
-    const classesById = new Map([[42, 'wooden_pallet']]);
-    const cohorts = cohortsForClass(42, 'wooden_pallet', registry, classesById, false);
+    const classesById = new Map([[42, 'pallet_label']]);
+    const cohorts = cohortsForClass(42, 'pallet_label', registry, classesById, false);
     const validated = cohorts.find((c) => c.id === 'validated_labels');
     expect(validated).toBeDefined();
     expect(validated!.query).toMatchObject({
@@ -121,16 +143,16 @@ describe('the shipped annotation-profiles.example.json — integration gate', ()
 
   it('9. readSlot() renders the SlotCard-consumed data shape correctly', () => {
     const raw = {
-      label_bbox_norm: [0.4, 0.4, 0.52, 0.52],
-      label_bbox_frame: 'source',
-      label_score: 0.81,
-      label_visible: true,
-      label_text: '000123456700000000',
-      label_text_source: 'gemma',
-      label_detector: 'sam3',
-      label_detector_chain: ['tag_detector_v1:miss', 'sam3:hit'],
-      label_status: 'false_positive',
-      label_verified: false,
+      region_bbox_norm: [0.4, 0.4, 0.52, 0.52],
+      region_bbox_frame: 'source',
+      region_score: 0.81,
+      region_visible: true,
+      region_text: '000123456700000000',
+      region_text_source: 'vlm',
+      region_detector: 'tag_segmenter',
+      region_detector_chain: ['tag_detector_v1:miss', 'tag_segmenter:hit'],
+      region_status: 'false_positive',
+      region_verified: false,
     };
     const d = readSlot(raw, palletSlot, [0.2, 0.2, 0.8, 0.8]);
     expect(d.subBox!.parent!.w).toBeCloseTo(0.2, 5);
@@ -163,4 +185,18 @@ describe('the shipped annotation-profiles.example.json — integration gate', ()
     }
     expect(offenders).toEqual([]);
   });
+});
+
+describe('every example profile under examples/annotation-profiles/', () => {
+  it('there is at least one (guards a vacuous pass)', () => {
+    expect(exampleProfileFiles().length).toBeGreaterThan(0);
+  });
+
+  for (const file of exampleProfileFiles()) {
+    it(`${file} parses as a deployment document with zero warnings`, () => {
+      const { slots, warnings } = loadExampleProfile(file);
+      expect(warnings).toEqual([]);
+      expect(slots.length).toBeGreaterThan(0);
+    });
+  }
 });

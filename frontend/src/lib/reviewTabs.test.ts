@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { API_PREFIX, getReviewQueue } from './api';
-import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
+import { WIDGET_TAG_PROFILE, widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { registeredSlots } from './annotations/registeredSlots';
 import {
   buildReviewTabs,
@@ -27,12 +27,12 @@ describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
     expect(REVIEW_TABS).toHaveLength(5 + queueSlots.length);
   });
 
-  it('is exactly all / uncertainty / model_disagreements / coco_blind_spots / new_class_proposals / slot:<key>...', () => {
+  it('is exactly all / uncertainty / model_disagreements / classifier_blind_spots / new_class_proposals / slot:<key>...', () => {
     expect(REVIEW_TABS.map((t) => t.id)).toEqual([
       'all',
       'uncertainty',
       'model_disagreements',
-      'coco_blind_spots',
+      'classifier_blind_spots',
       'new_class_proposals',
       ...queueSlots.map((s) => `slot:${s.key}`),
     ]);
@@ -49,6 +49,45 @@ describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
       urlId: 'new_class_proposals',
       endpointId: 'new_class_proposals',
     });
+  });
+
+  it('no region profile: exactly the core tabs (audit §5.4)', async () => {
+    const reg = await import('./annotations/registeredSlots');
+    const tabs = await import('./reviewTabs');
+    reg.installServedRegionProfile(null);
+    try {
+      expect(tabs.REVIEW_TABS).toEqual(CORE_REVIEW_TABS);
+      expect(tabs.tabFromUrlId('regions')).toBeUndefined();
+    } finally {
+      reg.resetDeploymentSlots();
+    }
+  });
+
+  it('a served region profile adds one region tab labelled by its display_name', async () => {
+    const reg = await import('./annotations/registeredSlots');
+    const tabs = await import('./reviewTabs');
+    reg.installServedRegionProfile(WIDGET_TAG_PROFILE);
+    try {
+      expect(tabs.REVIEW_TABS).toHaveLength(CORE_REVIEW_TABS.length + 1);
+      expect(tabs.REVIEW_TABS.at(-1)).toMatchObject({
+        id: `slot:${WIDGET_TAG_PROFILE.name}`,
+        label: WIDGET_TAG_PROFILE.display_name,
+        urlId: 'regions',
+        endpointId: 'regions',
+      });
+      expect(tabs.tabFromUrlId('regions')).toBe(`slot:${WIDGET_TAG_PROFILE.name}`);
+    } finally {
+      reg.resetDeploymentSlots();
+    }
+  });
+
+  it('every core tab uses the served tab id for its id, urlId and endpointId (naming-w2 F7: classifier_blind_spots)', () => {
+    for (const t of CORE_REVIEW_TABS) {
+      expect(t.urlId, t.id).toBe(t.id);
+      expect(t.endpointId, t.id).toBe(t.id);
+    }
+    expect(tabFromUrlId('classifier_blind_spots')).toBe('classifier_blind_spots');
+    expect(tabFromUrlId('coco_blind_spots')).not.toBe('classifier_blind_spots');
   });
 
   it('never renders Outliers as a tab', () => {
@@ -159,8 +198,8 @@ describe('resolveEffectiveTab', () => {
   it('passes non-all tabs straight through, ignoring any stale preset', () => {
     expect(resolveEffectiveTab('uncertainty', null)).toBe('uncertainty');
     expect(resolveEffectiveTab('slot:widget_tag', 'mismatches')).toBe('slot:widget_tag');
-    expect(resolveEffectiveTab('coco_blind_spots', 'vlm_low_conf')).toBe(
-      'coco_blind_spots',
+    expect(resolveEffectiveTab('classifier_blind_spots', 'vlm_low_conf')).toBe(
+      'classifier_blind_spots',
     );
   });
 

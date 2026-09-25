@@ -6,19 +6,33 @@
  * Tests that need "a region slot" use this rather than a specific example
  * profile, so they exercise the generic slot path, not one domain.
  *
- * The `region_*` wire capability map (field names, endpoints, thumbnail
- * path) is reused from the built-in example profile rather than copied —
- * it is the one place those wire names live until the served-profile
- * synthesis (`regionSlotFromServedProfile`, audit step 8) replaces this
- * hand-built spec. Everything user-visible (labels, tab, cohorts, export,
- * stats) is the widget domain.
+ * - `WIDGET_TAG_PROFILE` is what a backend configured for this domain
+ *   serves on `/health.region_profile`.
+ * - `widgetTagServedSlot` is the slot the app synthesizes from it — the
+ *   production path (`regionSlotFromServedProfile`), untouched.
+ * - `widgetTagSlot` is that slot as a deployment would customize it with a
+ *   tier-2 entry keyed on the profile name: domain copy (a singular noun,
+ *   text label and placeholder), hand-declared training cohorts and stats
+ *   titles. Its wire half is the served slot's, by construction.
  */
-import { licensePlateSlot as regionWireSource } from '$lib/annotations/profiles/licensePlate';
+import { regionSlotFromServedProfile } from '$lib/annotations/servedRegionSlot';
 import type { SlotSpec } from '$lib/annotations/types';
-
-const wire = regionWireSource.capabilities;
+import type { ServedRegionProfile } from '$lib/types';
 
 export const WIDGET_TAG_CLASS = 'widget_tag';
+
+export const WIDGET_TAG_PROFILE: ServedRegionProfile = {
+  name: 'widget_tag',
+  display_name: 'Widget tags',
+  region_class_name: WIDGET_TAG_CLASS,
+  text_reader: 'ocr',
+};
+
+export const widgetTagServedSlot: SlotSpec =
+  regionSlotFromServedProfile(WIDGET_TAG_PROFILE);
+
+const served = widgetTagServedSlot;
+const wire = served.capabilities;
 
 function trainingCohort(id: string, label: string, description: string) {
   return {
@@ -36,18 +50,16 @@ function trainingCohort(id: string, label: string, description: string) {
 }
 
 export const widgetTagSlot: SlotSpec = {
-  key: 'widget_tag',
-  bind: { className: WIDGET_TAG_CLASS },
+  ...served,
   label: { singular: 'tag', plural: 'tags', title: 'Tag' },
 
   capabilities: {
-    subBox: wire.subBox,
+    ...wire,
     text: {
       ...wire.text!,
       label: 'Tag text',
       placeholder: 'TAG-001',
     },
-    provenance: wire.provenance,
     lifecycle: {
       ...wire.lifecycle!,
       states: wire.lifecycle!.states.map((s) => ({
@@ -57,9 +69,6 @@ export const widgetTagSlot: SlotSpec = {
     },
     queue: {
       ...wire.queue!,
-      endpointId: 'regions',
-      urlId: 'regions',
-      tabLabel: 'Widget tags',
       textFilter: { param: 'text', label: 'Tag text', placeholder: 'e.g. TAG-001' },
     },
     trainingCohorts: {
@@ -96,17 +105,12 @@ export const widgetTagSlot: SlotSpec = {
 
   extras: {
     datasetExport: {
-      ...regionWireSource.extras!.datasetExport!,
+      ...(served.extras!.datasetExport as Record<string, unknown>),
       label: 'Widget tag dataset',
-      datasetKind: WIDGET_TAG_CLASS,
-      profileName: WIDGET_TAG_CLASS,
-      regionClassName: WIDGET_TAG_CLASS,
       blurb:
         'Single-class widget-tag dataset (positives + hard negatives + backgrounds).',
     },
   },
-
-  endpoints: regionWireSource.endpoints,
 
   stats: {
     key: 'regions',

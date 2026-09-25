@@ -18,6 +18,7 @@
   import Toast from '$components/Toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { classSourcesStore } from '$stores/classSources.svelte';
+  import { regionProfileStore } from '$stores/regionProfile.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
@@ -43,8 +44,12 @@
     const releaseHealth = healthStore.acquire();
     const releaseClasses = classesStore.acquire();
     void classSourcesStore.init();
-    void regionStatusesStore.init();
-    void regionVocabularyStore.init();
+    // Region vocabularies only exist with a served region profile; without
+    // one no region route is called at all.
+    if (regionProfileStore.configured) {
+      void regionStatusesStore.init();
+      void regionVocabularyStore.init();
+    }
     void reviewTabsVocabularyStore.init();
     return () => {
       releaseHealth();
@@ -87,7 +92,7 @@
     if (slotRegistryWarnings.length === 0) return;
     untrack(() => {
       toastStore.error(
-        `Deployment annotation profile: ${slotRegistryWarnings.length} problem(s) — see the browser console. Using built-in slots.`,
+        `Deployment annotation profile: ${slotRegistryWarnings.length} problem(s) — see the browser console.`,
       );
     });
   });

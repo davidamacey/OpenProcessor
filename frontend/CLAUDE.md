@@ -5,11 +5,13 @@ SvelteKit + TypeScript image-crop annotation web app (product name
 `legacy-labeler` pending a physical rename). Generalized via a
 capability-model / annotation-slot mechanism (see
 `docs/genericization-plan-2026-09-13.md`) so it is no longer
-hardcoded to vehicles or license plates — this deployment is
-currently configured for a vehicle + license-plate dataset construction via
-`src/lib/annotations/registeredSlots.ts` and `profiles/licensePlate.ts`,
-but a new domain is added by registering a new slot profile, not by
-editing app code. Sister project to `legacy_sorter` (v2 Tauri app for
+hardcoded to vehicles or license plates. The build ships with no domain
+built in: the region slot is synthesized from the backend's served
+region profile (`GET {API_PREFIX}/health` `region_profile`, see
+"Served region profile" below), and example domain profiles (license
+plate, aircraft tail number, defect code) live under `examples/` as
+tier-2 JSON, never bundled. A new domain is a backend region profile
+plus, optionally, a tier-2 profile, not an app-code edit. Sister project to `legacy_sorter` (v2 Tauri app for
 the actual sort UX) and `openprocessor` (server-side inference + OpenSearch
 
 - clustering).
@@ -44,14 +46,14 @@ here is a stub.
 | Route            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `/dashboard`     | Current pipeline dashboard — live `DatasetStats` (polls every 10s) + `AutoLabelPanel` ("Run Clustering Now" with stage progress), shared with the daemon-fired auto-label run. `AutoLabelPanel` also hosts an optional per-class assist scope (`AssistScopeBar`, absent unless `/methods` advertises a usable `prompt_pack` — see "Curation-strategy selector bar" below) that lets an operator point the VLM-assisted sweep at a single class instead of the whole pool.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `/ingest`        | Bring images into the pool. Offers browser upload (files, folders and drag-drop) to `POST {API_PREFIX}/ingest/upload`, chunked to the served per-request cap with bounded concurrency. It shows a per-file result (ingested / duplicate / failed + served reason), supports pause/resume/cancel, and pre-filters already-indexed identifiers via `POST {API_PREFIX}/ingest/path_lookup`. An optional server-path mode uses `POST {API_PREFIX}/ingest/batch` and is shown only when the backend advertises it (not yet — see "Ingest" below). The page also has an ingest status table by source (`GET {API_PREFIX}/ingest/status`), a region-drain panel (`GET {API_PREFIX}/ingest/region_drain`), and a clustering handoff that reuses `AutoLabelPanel`. The route is gated by `ingestAvailability`: when the backend lacks the ingest router, the page is absent, not disabled.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `/clusters`      | Cluster grid view, sidebar filter, **strategy bar** (review-sort dropdown + score chips, see below — no cluster-method picker here; that lives on `/settings`). When the class filter is a slot-bound class (in this deployment `class=license_plate`), replaces the cluster grid with that slot's **region gallery** (`SlotGallery`, driven by `createSlotGalleryController(slot)` in `src/routes/clusters/slotGalleryController.svelte.ts`, one controller per slot bound through `slotForClassName`, browsing the slot's `queue.browsePath`, i.e. `{API_PREFIX}/regions`; detector / verified / status / score / text filters, all copy templated over `slot.label`). The unfiltered grid pins one synthetic inventory card per registered slot with a browse endpoint. Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below). An **Ignored** toggle (2026-09-24, logic-moves W7) swaps the grid for the excluded/`cluster_id=-2` bucket with a "Restore selected" action, and an **item-text search** box (`{API_PREFIX}/crops?item_text=`) swaps it for a literal OCR-text search over `item_text_lines` — both mode-swaps mirror the existing dataset-wide semantic search's pattern, and neither is the same endpoint as the semantic (embedding) search box.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `/ingest`        | Bring images into the pool. Offers browser upload (files, folders and drag-drop) to `POST {API_PREFIX}/ingest/upload`, chunked to the served per-request cap with bounded concurrency. It shows a per-file result (ingested / duplicate / failed + served reason), supports pause/resume/cancel, and pre-filters already-indexed identifiers via `POST {API_PREFIX}/ingest/path_lookup`. An optional server-path mode uses `POST {API_PREFIX}/ingest/batch` and is shown only when the backend advertises it (not yet — see "Ingest" below). The page also has an ingest status table by source (`GET {API_PREFIX}/ingest/status`), a region-drain panel (`GET {API_PREFIX}/ingest/region_drain`, only with a served region profile), and a clustering handoff that reuses `AutoLabelPanel`. The route is gated by `ingestAvailability`: when the backend lacks the ingest router, the page is absent, not disabled.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `/clusters`      | Cluster grid view, sidebar filter, **strategy bar** (review-sort dropdown + score chips, see below — no cluster-method picker here; that lives on `/settings`). When the class filter is a slot-bound class (the served region profile's `region_class_name`), replaces the cluster grid with that slot's **region gallery** (`SlotGallery`, driven by `createSlotGalleryController(slot)` in `src/routes/clusters/slotGalleryController.svelte.ts`, one controller per slot bound through `slotForClassName`, browsing the slot's `queue.browsePath`, i.e. `{API_PREFIX}/regions`; detector / verified / status / score / text filters, all copy templated over `slot.label`). The unfiltered grid pins one synthetic inventory card per registered slot with a browse endpoint. Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below). An **Ignored** toggle (2026-09-24, logic-moves W7) swaps the grid for the excluded/`cluster_id=-2` bucket with a "Restore selected" action, and an **item-text search** box (`{API_PREFIX}/crops?item_text=`) swaps it for a literal OCR-text search over `item_text_lines` — both mode-swaps mirror the existing dataset-wide semantic search's pattern, and neither is the same endpoint as the semantic (embedding) search box.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `/clusters/[id]` | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `/review`        | 6 top-level review tabs (2026-09 consolidation, down from 9, plus `new_class_proposals` added 2026-09-24 — see below): **All** / **Uncertainty** / **Model Disagreements** / **COCO Blind Spots** / **New Class Proposals** / one tab per registered queue-capable slot (today: **Plates**, for `license_plate`), each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays — the bar's summary chip also shows the server's `sort_applied` next to whatever was requested. The All tab additionally offers a row of **quick-filter preset chips** (VLM mismatches / VLM low-conf / Primary · low-conf) that layer the former Mismatches / Gemma Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. Class/Source/Conf filter controls (`class_id`/`source`/`conf_min`/`conf_max`) are live against `GET {API_PREFIX}/review/{tab}`. `/review?crop_id=` deep links resolve via `GET {API_PREFIX}/review/{tab}/locate` — jumps straight to the crop's served page/rank, or shows the backend's `reason` when it isn't in the queue. A slot tab (Plates today) carries provenance chips + VLM-read plate text, driven by the active slot's capabilities rather than a hardcoded `'plates'` check (see "Slot-generic review tabs" below).                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `/review`        | 6 top-level review tabs (2026-09 consolidation, down from 9, plus `new_class_proposals` added 2026-09-24 — see below): **All** / **Uncertainty** / **Model Disagreements** / **Classifier Blind Spots** / **New Class Proposals** / one tab per registered queue-capable slot (in practice the one region tab, present only when the backend serves a region profile and labelled by its `display_name`, `?tab=regions`), each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays — the bar's summary chip also shows the server's `sort_applied` next to whatever was requested. The All tab additionally offers a row of **quick-filter preset chips** (VLM mismatches / VLM low-conf / Primary · low-conf) that layer the former Mismatches / Gemma Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. Class/Source/Conf filter controls (`class_id`/`source`/`conf_min`/`conf_max`) are live against `GET {API_PREFIX}/review/{tab}`. `/review?crop_id=` deep links resolve via `GET {API_PREFIX}/review/{tab}/locate` — jumps straight to the crop's served page/rank, or shows the backend's `reason` when it isn't in the queue. A slot tab carries provenance chips + the region text reading, driven by the active slot's capabilities rather than a hardcoded tab check (see "Slot-generic review tabs" below).                                                                                                                                                                                                                                                                                                                                  |
 | `/classes`       | Add / rename / merge classes, per-class hotkey binding, and a **Proposals** section (`GET {API_PREFIX}/review/new_class_proposals/summary`) for creating a class from — or mapping onto an existing class — a VLM-proposed term the registry doesn't have yet, bulk-resolving _every_ pending crop proposing that term (`POST {API_PREFIX}/review/new_class_proposals/resolve`), not just the summary's sample thumbnails.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `/export`        | Trigger YOLO export, view balance gap, freeze test holdout, download the frozen export's `class_registry.json`/`data.yaml`/`manifest.json` (via `{API_PREFIX}/export/registry/{artifact}`). Since OpenProcessor 6c77deb, `GET {API_PREFIX}/export/status` also serves `image_count`/`class_count`/`group_key`/`split_counts`/`class_split_counts` — the page shows the served train/val/test totals and a collapsible per-class table (any class at 0 train or 0 val highlighted, served numbers only). The freeze modal has no Seed field: `POST {API_PREFIX}/test_holdout/freeze`'s body is `{percent}` only (selection is deterministic, SHA1 of each crop id per class — an extra `seed` key is a 422); the success toast shows the served `selection`/`min_per_class` when present. Since OpenProcessor d5343cb (one image + one label file per source image), `ExportStatus` also carries `object_count`/`split_object_counts` (label lines, distinct from `image_count`/`split_counts`) — the page reads "N objects in M images" and separate images:/objects: split badges, never one ambiguous number. An opt-in "Only images whose every object is labeled" checkbox sends `require_fully_labeled_images` on `POST {API_PREFIX}/export/yolo`; the served partial-frame counts (`unlabeled_items_on_exported_images`/`images_with_unlabeled_items`/`images_dropped_not_fully_labeled`) render when present. Every one of these fields is `null` (not `0`) on an export written before it was recorded — rendered via `formatCount()` (`src/lib/formatCount.ts`) as "—". All of the above is optional/nullable on `ExportStatus`/`TestHoldoutFreezeResult` so a pre-6c77deb/pre-d5343cb backend (missing every new field) renders exactly as before. |
 | `/models`        | Triton model registry browser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `/train`         | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Training cohorts picker** (class-agnostic `CORE_COHORTS` for every class + `license_plate`'s 5 hand-tuned server-side modes — see "Training cohorts" below). The dataset card shows the _current export's own_ `image_count`/`class_count`/`split_counts`/per-class `class_split_counts` (from `GET {API_PREFIX}/export/status`, OpenProcessor 6c77deb) rather than the dataset-wide validated total — the old global number (which double-counted `test_holdout` crops) survives only as a clearly-labelled "(global pool)" fallback for a pre-6c77deb backend or an explicitly-picked past export version. `AugmentationPanel`'s preset picker is served from `GET {API_PREFIX}/train/augmentation_presets` (id/label/description/orientation-sensitive), defaulting to the served `default`; a pre-6c77deb backend 404s that endpoint and the panel falls back to a read-only display of the current value. `/train/start`/`/start_campaign`'s 422 on an unknown `augmentation.preset` (`{detail: {message, field, valid_presets}}`) surfaces `valid_presets` in the toast alongside the message. Since OpenProcessor d5343cb, the card also shows the export's `object_count`/`split_object_counts` (label lines) alongside `image_count`/`split_counts` — "N objects in M images" plus separate images:/objects: split badges — and its per-class table is objects, not an ambiguous count; a `null` field (an export written before d5343cb recorded it) renders via `formatCount()` as "—", never 0.                                                                                                                                          |
+| `/train`         | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Training cohorts picker** (class-agnostic `CORE_COHORTS` for every class + the region profile's 5 server-side modes when one is configured — see "Training cohorts" below). The dataset card shows the _current export's own_ `image_count`/`class_count`/`split_counts`/per-class `class_split_counts` (from `GET {API_PREFIX}/export/status`, OpenProcessor 6c77deb) rather than the dataset-wide validated total — the old global number (which double-counted `test_holdout` crops) survives only as a clearly-labelled "(global pool)" fallback for a pre-6c77deb backend or an explicitly-picked past export version. `AugmentationPanel`'s preset picker is served from `GET {API_PREFIX}/train/augmentation_presets` (id/label/description/orientation-sensitive), defaulting to the served `default`; a pre-6c77deb backend 404s that endpoint and the panel falls back to a read-only display of the current value. `/train/start`/`/start_campaign`'s 422 on an unknown `augmentation.preset` (`{detail: {message, field, valid_presets}}`) surfaces `valid_presets` in the toast alongside the message. Since OpenProcessor d5343cb, the card also shows the export's `object_count`/`split_object_counts` (label lines) alongside `image_count`/`split_counts` — "N objects in M images" plus separate images:/objects: split badges — and its per-class table is objects, not an ambiguous count; a `null` field (an export written before d5343cb recorded it) renders via `formatCount()` as "—", never 0.                                                                                                                           |
 | `/bakeoff`       | LPR model × frozen-dataset bake-off cockpit — scores every selected model against every selected dataset in the on-demand `curation-evaluator` container, renders a model × dataset matrix (best cell per dataset bolded). Gated on backend availability via a one-shot probe of `GET {API_PREFIX}/bakeoff/runs` (`src/lib/bakeoffAvailability.svelte.ts`) — absent, not disabled: the nav link and page body don't render at all when the backend's `{API_PREFIX}/bakeoff/*` router isn't mounted, and no discovery request fires unconditionally on mount. Provisional until the backend ships an `evaluation` axis on `/methods`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `/settings`      | Deployment-defaults admin page for the shared curation-strategy defaults (`GET,PUT {API_PREFIX}/settings`) — one place to pin the deployment's clustering method, review-queue sort and VLM prompt pack (the latter honored by the always-on VLM labeler and by auto-label runs that don't pick their own), plus a read-only "Set by the backend's startup config" section for `detection_profile` (the backend picks it from startup config; nothing that runs reads a shared or per-run selection). Which axes get a control is decided solely by the server's per-entry `settable` flag on `/methods` (`settableAxes` in `src/lib/curationSettings.ts`). Deployment-wide — see `docs/design/curation-settings-ui-plan-2026-09-21.md` — so it is its own route rather than a `StrategyBar` chip, with an explicit confirm dialog before every save. Also hosts the **Curation scores card** (`ScoresCard.svelte`, G10, 2026-09-24) — per-scorer coverage from `GET {API_PREFIX}/scores/coverage`, confirm-gated "Compute all"/"Compute selected" (`POST {API_PREFIX}/scores/compute {scorers}`, ids always sourced from the served coverage keys), a progress poll of `GET {API_PREFIX}/scores/status` following `EmbeddingPlot`'s rebuild-job pattern, and "Cancel" (`POST {API_PREFIX}/scores/cancel`). Absent, not broken, when `/scores/coverage` 404s; a failed compute (e.g. mistakenness lacking probe predictions) shows the backend's error verbatim. A completed compute reloads coverage and resets `strategiesStore` so `StrategyBar`'s sort/score options pick up the new coverage without a full page reload — see "Curation-strategy selector bar" below.                                                                                   |
 
@@ -184,8 +186,9 @@ the strategy bar below.
 preset)` is the single place that decides which queue actually gets
   fetched — every other tab ignores `preset` outright, and clicking any
   nav tab resets it.
-- **Uncertainty / Model Disagreements / COCO Blind Spots / Plates**
-  are unchanged — still real top-level tabs with their existing default
+- **Uncertainty / Model Disagreements / Classifier Blind Spots
+  (`classifier_blind_spots`, `coco_blind_spots` before OpenProcessor
+  naming-w2 F7) / the region tab** are unchanged — still real top-level tabs with their existing default
   sorts and keyboard shortcuts.
 - **New Class Proposals** (added 2026-09-24, logic-moves W5) is a 6th
   real tab, not a preset — `GET {API_PREFIX}/review/new_class_proposals`
@@ -240,7 +243,7 @@ preset)` is the single place that decides which queue actually gets
   `$stores/reviewTabsVocabulary.svelte`, loaded once from the root
   layout) when the served vocabulary has an entry for that endpoint id —
   every core tab and slot tab keyed by its `endpointId` (core tabs:
-  `id === endpointId`; the Plates tab: `'regions'`), every preset keyed
+  `id === endpointId`; the region tab: `'regions'`), every preset keyed
   by its own id. Absent or missing an id ⇒ the tab's/preset's existing
   static label, no tooltip — a missing endpoint never breaks the tab bar.
 - **Served per-tab filters (dq-queues cutover, 2026-09-24).** The same
@@ -266,7 +269,7 @@ preset)` is the single place that decides which queue actually gets
 [{value, label}]}`. `/review` renders one `<select>` per entry in
   `activeFilterSpecs` (`reviewTabsVocabularyStore.filterSpecsFor(activeTabEndpointId)`)
   generically — no tab- or param-specific markup in the page, so a
-  future spec on any tab (not just Plates) just works. Picking a value
+  future spec on any tab (not just the region tab) just works. Picking a value
   calls `setEnumFilter(param, value)`, which writes `enumFilterValues`
   (sent verbatim as its own query param by `_filter()` to both
   `GET {API_PREFIX}/review/{tab}` and its `/locate` route — the backend
@@ -274,7 +277,7 @@ preset)` is the single place that decides which queue actually gets
   no client-side default to fall back to) and persists it in the URL the
   same way `?preset=` does. Resets (state + URL) on every tab click — a
   spec is per-tab, so a param from the previous tab never leaks into the
-  next. The Plates tab's `region_status` (`all` / `detected` /
+  next. The region tab's `region_status` (`all` / `detected` /
   `verify_rejected`, defaulting to `all`) is the first live spec —
   choosing "Verifier-rejected candidates only" sends
   `region_status=verify_rejected` to `GET {API_PREFIX}/review/regions`.
@@ -336,7 +339,7 @@ curation-settings-ui-plan-2026-09-21.md` §1.5/§2). Production default
   `recent`, `representativeness`, `atypicality`, `uncertainty_entropy`,
   `mistakenness`, `uniqueness`, `region_score`, `disagreement_entropy_asc`,
   plus each tab's own legacy default (`primary_low_conf_default`,
-  `coco_blind_spots_default`). Never replaces a tab's default — it's an
+  `classifier_blind_spots_default`). Never replaces a tab's default — it's an
   additional option layered on top. The bar's collapsed summary chip
   (2026-09-24) also shows the response's served `sort_applied` next to
   the operator's own selection (`formatAppliedSort`,
@@ -529,7 +532,7 @@ already resolved for the requested class (`params` carries a real
 (`validated`/`needs_labeling`/`low_confidence`/`model_disagreements`, on
 `GET {API_PREFIX}/crops` / `GET {API_PREFIX}/review/model_disagreements`)
 plus, only when the backend has a region profile configured,
-`license_plate`'s 5 region-training-candidate modes
+the region profile's 5 region-training-candidate modes
 (`detector_blind_spots`/`low_conf_correct`/`disagreement`/
 `human_corrected`/`false_positives`, on
 `GET {API_PREFIX}/regions/training_candidates?mode=`). A cohort's numeric
@@ -553,8 +556,9 @@ server's, not a client constant.
   cohort) for any id the server's response didn't already send, via the
   pre-existing `cohortsForClass()` (`src/lib/annotations/cohorts.ts`,
   `predicateCohortsAvailable=false`). The server wins on an id collision
-  — for `license_plate` today the server already sends all 5 region
-  modes, so its hand-declared copy in `licensePlate.ts` never actually
+  — with a backend region profile the server already sends all 5 region
+  modes, so a hand-declared copy (e.g. in
+  `examples/annotation-profiles/license-plate.json`) never actually
   fires, but is kept (not deleted) because `cohorts.ts`'s `CORE_COHORTS`/
   `derivedCohorts`/`cohortsForClass` and this fallback path are exactly
   what a genuinely backend-unknown tier-2 slot needs — see
@@ -584,7 +588,7 @@ here?" friction. On `/clusters/[id]` a class letter labels the current
 selection (or the just-dragged set); on `/review` it labels the current item.
 
 Reserved single-char action keys (`g n d z x u a m /`, plus `b f e` from the
-`license_plate` slot's keymap — server-served today as `/abdefgmnuxz`)
+region slot's keymap — server-served today as `/abdefgmnuxz`)
 cannot be bound to a class — `setClassHotkey` (`src/lib/classHotkey.ts`)
 rejects them, validating against `reservedHotkeyLetters()`. As of the
 2026-09-24 OpenProcessor `logic-moves` cutover, the base set is no longer a
@@ -595,7 +599,7 @@ single-character combo any registered queue-capable slot's
 `QueueCapability.keymap` declares** (P2.8c, closing Finding C.2
 structurally). The registry union is redundant against the server's set
 today — verified live, the server's `/abdefgmnuxz` already includes
-`license_plate`'s `d`/`f`/`e`/`b` — but is what keeps a _second_,
+the region slot's `d`/`f`/`e`/`b` — but is what keeps a _second_,
 backend-unaware slot's letters safe without a human re-auditing every class
 hotkey, since a tier-2 deployment profile can register a slot the backend
 has never heard of. `setClassHotkey` shows the server's 400/409/422 detail
@@ -652,7 +656,7 @@ Global:
 
 panel body generalized by C6, docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §6)
 
-The ~12 `tab === 'plates'` call sites that used to gate the Plates-tab-only
+The ~12 hardcoded tab-id call sites that used to gate the region-tab-only
 behavior above are gone. `review/+page.svelte` derives one value,
 `activeSlot` (`REVIEW_TABS.find((t) => t.id === tab)?.slot`), and every
 site above reads from its capabilities instead: the keymap comes from
@@ -664,16 +668,18 @@ only renders when `activeSlot.capabilities.lifecycle?.falsePositiveState`
 is set, and the text-filter input reads its label/placeholder from
 `activeSlot.capabilities.queue.textFilter`. The internal tab id is the
 structural `slot:${key}` template (`ReviewTab` = `CoreReviewTab |
-SlotReviewTab`), not `'plates'` — `'plates'` survives only as the
-`license_plate` slot's `urlId` bookmark value (`tabFromUrlId('plates')`
-→ `'slot:license_plate'`, in `src/lib/reviewTabs.ts`).
+SlotReviewTab`). The served region slot's `urlId` (the `?tab=`
+bookmark value) is the backend's own tab id, `regions`
+(`tabFromUrlId('regions')` → `'slot:<profile name>'`, in
+`src/lib/reviewTabs.ts`); a tier-2 override may declare its own, e.g.
+the license-plate example keeps `plates`.
 
 The inline review panel body (score / status / detector / OCR text /
 rejection reason / confirm-reject-FP-back buttons) is now generic too —
 this was Finding D, a real gap through 2026-09-21: the tab shell, keymap
 and gating were already slot-generic, but the panel body underneath
-still read `current.plate_*` fields and a directly-imported
-`licensePlateSlot` regardless of the active tab. It now reads every
+still read the old per-domain item fields and a directly-imported
+built-in slot regardless of the active tab. It now reads every
 value through `slotOf(current, activeSlot)` (`src/lib/annotations/
 cropSlots.ts`, off `Crop.slots` — populated by `mapRawCrop` via
 `mapCropSlots`/`readSlot`), and every label/status-vocabulary/copy
@@ -739,8 +745,9 @@ render via the shared chip components.
   `'paddleocr_det_trt'` / `'human'`)
 - `region_detector_version`, `region_bbox_frame` (always `'source'`)
 - `region_bbox_in_parent` — the region box already projected into the
-  parent crop's frame, server-computed. `licensePlateSlot` declares it
-  as `subBox.bboxInParentField`; `readSlot` renders from it directly
+  parent crop's frame, server-computed. The region slot declares it
+  as `subBox.bboxInParentField` (`REGION_SUB_BOX`,
+  `src/lib/annotations/servedRegionSlot.ts`); `readSlot` renders from it directly
   when present, falling back to the client-side projection only when
   it isn't (2026-09-24, logic-moves W2).
 - `region_detector_chain` — string array, every step of the cascade:
@@ -986,6 +993,53 @@ replacement — same downscaled-image URL, honest naming.
 crop's own thumbnail via `getThumbUrl`, never the full source image, so
 never depended on the burn-in).
 
+## Served region profile (OpenProcessor naming-w2, 2026-09-25)
+
+The backend serves at most one region profile, on
+`GET {API_PREFIX}/health` (and `GET {API_PREFIX}/regions/vocabulary`) as
+`region_profile: {name, display_name, region_class_name, text_reader} |
+null`. **It is the only gate for region features.** With `null`, every
+region route (`/regions`, `/crops/{id}/region*`, region undo, the VLM
+verify routes, `/regions/clusters`) answers 409, so the UI renders no
+region surface at all and calls none of them.
+
+- `regionProfileStore` / `loadRegionProfile()`
+  (`src/lib/stores/regionProfile.svelte.ts`) reads the prefixed
+  `{API_PREFIX}/health` once in the root layout's `load()` (bounded at
+  2 s, alongside the tier-2 load). A failure, a timeout, or a backend
+  that predates the field counts as not configured (fail closed). The
+  UI is built from that one reading; if a later `healthStore` poll (or
+  a region route's 409) disagrees, one sticky "reload to apply" notice
+  shows. Tabs are never hot-swapped.
+- `regionSlotFromServedProfile()` (`src/lib/annotations/servedRegionSlot.ts`)
+  builds the region `SlotSpec`: `key` = profile `name`, `bind.className`
+  = `region_class_name` (falls back to `name`), tab label / plural noun /
+  stats panel title = `display_name` (falls back to "Regions"),
+  singular = "region", title = "Region" (it reads in singular contexts),
+  `?tab=` id and review endpoint = `regions`, browse path `/regions`,
+  text capability only when `text_reader` is non-empty, no client
+  cohorts (served by `/training_cohorts`), and a `single_class` dataset
+  export whose `profileName`/`datasetKind` is the profile `name` (so the
+  export's output root, e.g. `/exports/license_plate/`, is unchanged).
+  **This file is the only place region wire names live**
+  (`REGION_WIRE_CAPABILITIES`, `REGION_ENDPOINTS`).
+- With no profile: no region review tab, no `/clusters` region gallery
+  or pinned inventory card, no `CropCard` ✎, no region section in
+  `CropMetaPanel`, no detections panel on `/dashboard`, no region drain
+  panel on `/ingest`, no region keymap letters in the reserved hotkey
+  set, and the root layout skips `regionStatusesStore`/
+  `regionVocabularyStore`. Proved by the no-profile unit tests
+  (`registeredSlots.noProfile.test.ts` and the no-profile cases in
+  `CropCard`/`CropMetaPanel.visualAudit`/`DatasetStats`/`reviewTabs`/
+  `classHotkey`/`classPicker` tests) and `e2e/stubbed/
+test_no_region_profile.py` (every route mounts with zero requests to
+  a region route).
+- A region route's 409 `no region profile is configured` becomes
+  `RegionProfileUnavailableError` in `apiFetch`
+  (`src/lib/regionProfileUnavailable.ts`); `toastStore` drops any toast
+  carrying its message, so a call site's generic "X failed: …" toast
+  never shows it raw.
+
 ## Deployment annotation profiles (tier 2, 2026-09-20)
 
 A deployment configures its own annotation slots by placing
@@ -994,60 +1048,82 @@ A deployment configures its own annotation slots by placing
 `/usr/share/nginx/html/annotation-profiles.json` in the running
 container. It is fetched once, in the root layout's `load()`, parsed by
 `src/lib/annotations/config/parseSlotConfig.ts`, and merged over the
-built-in profiles per-key REPLACE. **Absent or malformed ⇒ built-in
-slots only, with a console warning and one toast — never a crash.** The
-file is untrusted operator input: template paths, Tailwind ring classes,
-regex flags and hotkeys all validate against closed allow-lists in
-`src/lib/annotations/config/allowLists.ts`. See
-`static/annotation-profiles.example.json` for a worked example and
-`docs/annotation-slots-contract-draft.md` §4 for the schema, and
-`docs/design/tier2-annotation-profile-config-plan-2026-09-20.md` for the
-full design.
+built-in and served slots per-key REPLACE. **Absent or malformed ⇒ no
+deployment slots, with a console warning and one toast — never a
+crash.** The file is untrusted operator input: template paths, Tailwind
+ring classes, regex flags and hotkeys all validate against closed
+allow-lists in `src/lib/annotations/config/allowLists.ts`. See
+`static/annotation-profiles.example.json` (customizes a served
+`pallet_label` profile) and `examples/annotation-profiles/` (license
+plate, aircraft tail number, defect code; `examples/README.md`) for
+worked examples, `docs/annotation-slots-contract-draft.md` §4 for the
+schema, and `docs/design/tier2-annotation-profile-config-plan-2026-09-20.md`
+for the full design.
 
-`registeredSlots.ts` (referenced earlier in this file, and by
-`docs/genericization-plan-2026-09-13.md`) is the **tier-1**, build-time
-registration point — "register a new domain by adding a line there" is
-still true for a developer with a checkout. It is no longer the _only_
-registration point: a deployment operator with no checkout at all
-registers a domain via the JSON file above instead, through the same
-`resolveSlotRegistry`/merge-by-replace mechanism.
+**Region-profile rule** (`applyRegionProfileRule`,
+`registeredSlots.ts`): a tier-2 slot that declares any region route
+(browse path, endpoints, thumbnail or cohort path under `/regions` or
+`/crops/{id}/region*`) is kept only when its `key` equals the served
+profile's `name`, in which case it replaces the synthesized slot
+wholesale (how a deployment restores domain copy, a keymap or
+hand-declared cohorts — e.g. mount `examples/annotation-profiles/
+license-plate.json` on a backend running the `license_plate` profile).
+Any other region slot, and every region slot when the backend has no
+profile, is dropped with a warning. A slot that touches no region route
+is kept either way.
 
-## Domain-neutral source (2026-09-24)
+`registeredSlots.ts` composes, in order, `builtinSlots` (tier 1, empty),
+the served region slot, and the tier-2 slots, through
+`resolveSlotRegistry`'s merge-by-replace. It still exports the live
+bindings (`registeredSlots`, `slotRegistry`, `slotRegistryWarnings`)
+every consumer reads.
+
+## Domain-neutral source (2026-09-24, completed 2026-09-25)
 
 Cropwright must work for any data domain
-(`docs/design/domain-neutral-audit-2026-09-24.md`). Steps 1-6 of that
-audit are done; steps 7-11 (served region profile, profiles moved to
-`examples/`) wait on the backend's naming-w2.
+(`docs/design/domain-neutral-audit-2026-09-24.md`). All 11 steps of that
+audit are done; its status section records the deviations.
 
 - **Naming:** `api.ts` wrappers of `/regions` endpoints use `Region`
   (`getRegions`, `RegionBrowseItem`, `batchRegionStatus`); the view layer
   uses `Slot` or no prefix (`SlotGallery`, `slotGalleryController`,
   `pager`/`sel`/`statusFilter` inside it). No rename ever crosses the
   wire — paths and JSON keys are the backend's.
-- **No profile imports in generic code.** `createSlotGalleryController(slot)`
-  reads browse path, lifecycle states and slot key from its `SlotSpec`
-  (served `/regions/statuses` first). The false-positive bucket id is
-  one constant, `FALSE_POSITIVE_REGION_CLUSTER_ID` (TODO: served
-  `cluster_kind === 'false_positive'` after naming-w2). `CropCard` picks
-  its sub-box slot by the crop's region evidence (`subBoxSlotFor`,
-  `cropSlots.ts`) and renders ✎ only when there is one. `SlotCard` /
-  `SlotBboxEditor` require their `slot` prop.
+- **No profile in product code.** `src/lib/annotations/profiles/` holds
+  only `builtinDetectors.ts`; domain profiles live under `examples/`.
+  `createSlotGalleryController(slot)` reads browse path, lifecycle
+  states and slot key from its `SlotSpec` (served `/regions/statuses`
+  first). The false-positive bucket id is one constant,
+  `FALSE_POSITIVE_REGION_CLUSTER_ID` (TODO: the served
+  `cluster_kind === 'false_positive'`, which OpenProcessor now serves on
+  `/regions/clusters` cards). `CropCard` picks its sub-box slot by the
+  crop's region evidence (`subBoxSlotFor`, `cropSlots.ts`) and renders ✎
+  only when there is one. `SlotCard` / `SlotBboxEditor` require their
+  `slot` prop.
 - **UI copy** names the region by `slot.label` (singular/plural/title),
   the served tab label, or `datasetExportSpec.blurb` — never a fixed noun.
 - **Tests use the neutral fixture domain:** widgets with a tag region
-  (`TAG-001`, `tag_detector_v1`), built from
-  `src/lib/test/fixtures/regionSlot.ts`'s `widgetTagSlot`. Tests bound to
-  the live registry assert over `registeredSlots`/`builtinSlots`
-  generically. e2e names the region slot's class and `?tab=` id once, in
-  `e2e/fixtures/wire.py` (`REGION_CLASS`/`REGION_TAB_URL_ID`), and clicks
-  the region tab by its served label (`REGION_TAB_LABEL`, conftest's
-  default `/review/tabs`).
+  (`TAG-001`, `tag_detector_v1`). `src/lib/test/fixtures/regionSlot.ts`
+  exports `WIDGET_TAG_PROFILE` (the served profile), `widgetTagServedSlot`
+  (the production synthesis, untouched) and `widgetTagSlot` (that slot
+  with tier-2-style domain copy and cohorts). Tests that need the live
+  registry call `installServedRegionProfile(WIDGET_TAG_PROFILE)` /
+  `resetDeploymentSlots()`. The aircraft and defect demo slots are test
+  fixtures (`src/lib/test/fixtures/*Slot.ts`); `roundTrip.test.ts` pins
+  the aircraft one to its `examples/` JSON, and `exampleProfile.test.ts`
+  parses every `examples/annotation-profiles/*.json`
+  (`src/lib/test/fixtures/exampleProfiles.ts`). e2e: `conftest.py`
+  serves `REGION_PROFILE` (widget_tag) on `/health` by default;
+  `e2e/fixtures/wire.py` derives `REGION_CLASS`/`REGION_TAB_URL_ID`
+  (`regions`)/`REGION_TAB_LABEL` from it. The live tier reads the class
+  and label from the live `/health` (`live_region_profile`).
 - **Ratchet:** `src/lib/domainNeutral.scan.test.ts` fails on any plate
-  noun, `legacy`, `/curation` or private dataset number anywhere under
-  `src/` (code, strings, comments, tests) outside its per-file
-  allow-list, each entry naming the audit step that removes it. Fix the
-  file; don't widen the allow-list. `LPR`/vehicle/Gemma/SAM3 literals are
-  a separate sweep (audit §8) and not scanned yet.
+  noun, `LPR`/`lpr_`, `legacy`, `/curation` or private dataset number
+  anywhere under `src/` (code, strings, comments, tests). Its allow-list
+  is only itself and `profiles.falsification.test.ts` (the one test
+  that exercises `examples/`). Fix the file; don't widen the allow-list.
+  Vehicle/Gemma/SAM3 literals are a separate sweep (audit §8) and not
+  scanned yet.
 
 ## Development
 
@@ -1215,10 +1291,10 @@ Three test modules, 24 tests total against this deployment's live
 dataset:
 
 - **`test_route_sweep.py`** — every top-level route mounts: `/dashboard`,
-  `/ingest`, `/clusters` (plain and `?class=license_plate`), `/review`
+  `/ingest`, `/clusters` (plain and `?class=<served region_class_name>`), `/review`
   with each tab's `?tab=<urlId>` (`all`/`uncertainty`/
-  `model_disagreements`/`coco_blind_spots`/`new_class_proposals`/
-  `plates`), `/classes`, `/export`, `/train`, `/models`, `/bakeoff`,
+  `model_disagreements`/`classifier_blind_spots`/`new_class_proposals`/
+  `regions`), `/classes`, `/export`, `/train`, `/models`, `/bakeoff`,
   `/settings`. `/ingest` fails against any backend that predates
   `docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md` (this
   currently deployed build 404s it) — that's expected until the next
@@ -1235,7 +1311,7 @@ dataset:
   described above.
 - **`test_data_agreement.py`** — the UI shows what the API serves:
   the dashboard's "Clusters (total now)" vs `GET {API_PREFIX}/stats/
-dataset` `clusters.cluster_count`; `/review?tab=plates`'s queue-counter
+dataset` `clusters.cluster_count`; `/review?tab=regions`'s queue-counter
   total vs `GET {API_PREFIX}/review/regions` `total`, both unfiltered
   and with `?region_status=verify_rejected`; every `filter_specs` entry
   `GET {API_PREFIX}/review/tabs` serves for the `regions` tab renders a
@@ -1262,7 +1338,7 @@ dataset` `clusters.cluster_count`; `/review?tab=plates`'s queue-counter
   case does.
 - **`test_deep_link.py`** — takes the first crop id off `GET
 {API_PREFIX}/review/regions?region_status=verify_rejected&page_size=1`
-  (skips if none), opens `/review?tab=plates&region_status=
+  (skips if none), opens `/review?tab=regions&region_status=
 verify_rejected&crop_id=<id>`, and asserts it actually lands: "Locating
   crop…" clears, the queue counter reports a real `rank / loaded`
   position, and no "not in this review queue" toast appears.

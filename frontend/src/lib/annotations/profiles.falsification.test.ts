@@ -2,11 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { resolveSlotRegistry } from './registry';
 import { readSlot } from './readSlot';
 import { slotIsPresent } from './types';
-import { licensePlateSlot } from './profiles/licensePlate';
-import { aircraftTailNumberSlot } from './profiles/aircraftTailNumber';
-import { defectCodeSlot } from './profiles/defectCode';
+import { loadExampleProfile } from '$lib/test/fixtures/exampleProfiles';
+import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
+import { defectCodeSlot } from '$lib/test/fixtures/defectCodeSlot';
 import { cohortsForClass, derivedCohorts } from './cohorts';
 import type { XYXY } from './types';
+
+// The license-plate example (examples/annotation-profiles/, never
+// bundled), parsed the way a deployment's tier-2 file would be.
+const licensePlateSlot = loadExampleProfile('license-plate.json').slots[0]!;
 
 /**
  * Phase 3 falsification test (docs/genericization-plan-2026-09-13.md

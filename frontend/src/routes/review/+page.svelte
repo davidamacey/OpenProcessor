@@ -461,7 +461,7 @@
     replaceState(url, {});
   }
 
-  // Primary-subject controls (primary_low_conf / coco_blind_spots tabs).
+  // Primary-subject controls (primary_low_conf / classifier_blind_spots tabs).
   // subjectScope: 1 = largest only, 2 = largest + 2nd (the tabs default to 2
   // server-side when unset). Clarity slider commits on release.
   let subjectScope = $state<0 | 1 | 2>(0);
@@ -490,7 +490,7 @@
     // max_rank / min_blur_ratio apply across every tab and preset — the
     // backend's own review.py comment says so explicitly ("Both apply
     // across tabs"). These used to be gated to only primary_low_conf /
-    // coco_blind_spots, which meant the rank-scope and clarity controls
+    // classifier_blind_spots, which meant the rank-scope and clarity controls
     // silently appeared/disappeared depending on which tab or quick-filter
     // chip was active — confusing and inconsistent with Conf/Class/Source,
     // which were never gated. Always available now, like those.
@@ -1886,7 +1886,7 @@
     <!-- Always available, on every tab and preset — matches Conf/Class/HDD
          source below/above, and the backend's own query builder already
          treats max_rank/min_blur_ratio as tab-agnostic. Used to be gated to
-         only primary_low_conf/coco_blind_spots, which made these controls
+         only primary_low_conf/classifier_blind_spots, which made these controls
          appear and disappear depending on which tab or chip was active.
          Disabled (not hidden) while diverseMode is active — scope.filters
          on POST {API_PREFIX}/select/diverse doesn't support max_rank/min_blur_ratio

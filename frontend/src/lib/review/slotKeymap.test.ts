@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { buildSlotKeymap, rejectKeyGlyph, singleCharCombos } from './slotKeymap';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
-import { aircraftTailNumberSlot } from '../annotations/profiles/aircraftTailNumber';
+import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
 import type { SlotSpec } from '../annotations/types';
 
 const slotHandlers = {

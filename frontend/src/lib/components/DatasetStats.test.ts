@@ -12,6 +12,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import type { DatasetStats as DatasetStatsType } from '$lib/api';
+import {
+  installServedRegionProfile,
+  resetDeploymentSlots,
+} from '$lib/annotations/registeredSlots';
+import { WIDGET_TAG_PROFILE } from '$lib/test/fixtures/regionSlot';
 
 type PipelineOpts = {
   onSnapshot?: (state: Record<string, unknown>, stats: Record<string, unknown>) => void;
@@ -63,6 +68,7 @@ afterEach(() => {
   }
   target?.remove();
   capturedOpts = null;
+  resetDeploymentSlots();
 });
 
 describe('DatasetStats', () => {
@@ -111,6 +117,7 @@ describe('DatasetStats', () => {
   });
 
   it('D4 (visual audit 2026-09-24): no hardcoded model/vendor names or HDD copy, verifier count named as such', () => {
+    installServedRegionProfile(WIDGET_TAG_PROFILE);
     target = document.createElement('div');
     document.body.appendChild(target);
     instance = mount(DatasetStats, { target, props: {} });
@@ -139,6 +146,36 @@ describe('DatasetStats', () => {
     expect(text).toContain('Distinct sources');
     expect(text).toContain('Pending detection');
     expect(text).toContain('verifier-confirmed');
+    // The panel is titled by the served profile's display name.
+    expect(text).toContain(WIDGET_TAG_PROFILE.display_name);
+  });
+
+  it('no region profile: no detections panel at all (domain-neutral audit §5.4)', () => {
+    installServedRegionProfile(null);
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(DatasetStats, { target, props: {} });
+    flushSync();
+
+    capturedOpts?.onSnapshot?.(
+      {},
+      goodStats({
+        regions: {
+          total_detected: 30,
+          boxed: 30,
+          confirmed: 30,
+          by_detector: 20,
+          by_segmenter: 10,
+          by_human: 0,
+        },
+      } as Partial<DatasetStatsType>) as unknown as Record<string, unknown>,
+    );
+    flushSync();
+
+    const text = target.textContent ?? '';
+    expect(text).toContain('Distinct sources');
+    expect(text).not.toContain('verifier-confirmed');
+    expect(text).not.toContain('No detections yet');
   });
 
   it('shows "Stats unavailable" on an {error} payload and keeps the last good values', () => {

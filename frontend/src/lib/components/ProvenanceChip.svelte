@@ -3,17 +3,18 @@
    * Provenance chip for ML detector outputs.
    *
    * Used on the /review slot panel and the /clusters slot gallery to
-   * tell an operator at a glance whether a bbox came from LPR, SAM3,
-   * PaddleOCR, Gemma, or a human — and whether a particular step in
-   * the cascade hit, missed, was rejected by Gemma, etc.
+   * tell an operator at a glance whether a bbox came from a detector, a
+   * segmenter, OCR, a verifier or a human — and whether a particular step
+   * in the cascade hit, missed, was rejected by the verifier, etc.
+   * Labels and colors come from the served region vocabulary.
    *
    * Two forms:
    *
-   *   <ProvenanceChip detector="lpr_nanov11_640" />
-   *     → blue "LPR" chip
+   *   <ProvenanceChip detector="tag_detector_v1" />
+   *     → blue "Tag detector" chip (served label, `detector` role)
    *
-   *   <ProvenanceChip raw="lpr_nanov11_640:miss" />
-   *     → blue "LPR miss" chip with muted opacity
+   *   <ProvenanceChip raw="tag_detector_v1:miss" />
+   *     → blue "Tag detector miss" chip with muted opacity
    *
    * The `raw` form parses entries from `region_detector_chain` so the
    * meta panel can render the full cascade story as a chip strip.
@@ -39,7 +40,7 @@
     detector?: string | null;
     /** Optional outcome suffix — 'hit' / 'miss' / 'gemma_ok' / 'gemma_reject' / etc. */
     tag?: string | null;
-    /** Convenience for chain entries like 'lpr_nanov11_640:miss'. Parses to detector+tag. */
+    /** Convenience for chain entries like 'tag_detector_v1:miss'. Parses to detector+tag. */
     raw?: string | null;
     /** Model version, shown as a small subtitle when set. */
     version?: string | null;
