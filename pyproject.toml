@@ -69,12 +69,18 @@ dependencies = [
     "umap-learn",
     "hdbscan",
     "joblib",
-    "perception_models @ git+https://github.com/facebookresearch/perception_models.git",
+    "einops",
+    "regex",
     "paddleocr",
     "docker>=7,<8",
 ]
 
 [project.optional-dependencies]
+# Install with `pip install --no-deps` (see Dockerfile): its own requirements
+# exact-pin research packages that conflict with open-clip-torch>=3.2.
+pe = [
+    "perception_models @ git+https://github.com/facebookresearch/perception_models.git@3e352cca660658d4b5c90f42a7808b11469e4c66",
+]
 dev = [
     "pre-commit>=4.0.0",
     "ruff>=0.8.4",

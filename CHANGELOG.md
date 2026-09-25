@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **API image builds again.** `perception_models` is installed with `--no-deps`
+  at a pinned commit (its requirements exact-pin `timm==1.0.15`, which
+  conflicts with `open-clip-torch>=3.2`'s `timm>=1.0.17`); the PE encoder's
+  real runtime deps (`einops`, `regex`) are declared in `requirements.txt`.
 - **Triton serves a partial model set.** `triton-server` now runs with
   `--exit-on-error=false --strict-readiness=false`, so one missing or failed
   engine (the minimal setup profile skips OCR; setup continues past a failed
