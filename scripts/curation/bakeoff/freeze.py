@@ -81,9 +81,9 @@ def verify(root: Path, *, split: str = 'test') -> tuple[bool, str]:
     comparisons stay on identical data.
 
     Reads the current key ``test_label_sha``, falling back to the legacy
-    ``frozen_test_sha`` key so a lock file written before the W1 lineage
-    rename (e.g. the live plate set) still verifies -- this is stored-data
-    tolerance, not a code shim.
+    ``frozen_test_sha`` key so a lock file written before this rename (an
+    existing frozen dataset from an older deployment) still verifies --
+    this is stored-data tolerance, not a code shim.
     """
     lock_path = root / LOCK_NAME
     if not lock_path.is_file():
