@@ -36,6 +36,16 @@ const OP_REF = process.env.OPENPROCESSOR_REF || 'main';
 /** [backend-relative path (under contracts/), vendored-relative path]. Same
  *  subpath on both sides — only the `contracts/` vs `contracts/openprocessor/`
  *  root differs — so adding a new vendored file is a one-line change. */
+// A git hook runs with GIT_DIR/GIT_INDEX_FILE/GIT_WORK_TREE pointing at
+// THIS repo (always, in a worktree), and `git -C` does not override them,
+// so without this every call below silently reads the frontend repo.
+const GIT_ENV = Object.fromEntries(
+  Object.entries(process.env).filter(
+    ([k]) =>
+      !['GIT_DIR', 'GIT_INDEX_FILE', 'GIT_WORK_TREE', 'GIT_COMMON_DIR'].includes(k),
+  ),
+);
+
 const FILES = [
   'json/item_wire.json',
   'ts/itemWire.ts',
@@ -46,7 +56,10 @@ const FILES = [
 
 function backendAvailable() {
   try {
-    execFileSync('git', ['-C', OP_REPO, 'rev-parse', '--git-dir'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', OP_REPO, 'rev-parse', '--git-dir'], {
+      stdio: 'ignore',
+      env: GIT_ENV,
+    });
     return true;
   } catch {
     return false;
@@ -57,12 +70,14 @@ function readBackendFile(relPath) {
   return execFileSync('git', ['-C', OP_REPO, 'show', `${OP_REF}:contracts/${relPath}`], {
     encoding: 'utf-8',
     maxBuffer: 1024 * 1024 * 16,
+    env: GIT_ENV,
   });
 }
 
 function backendSha() {
   return execFileSync('git', ['-C', OP_REPO, 'rev-parse', OP_REF], {
     encoding: 'utf-8',
+    env: GIT_ENV,
   }).trim();
 }
 
