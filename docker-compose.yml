@@ -56,6 +56,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     # CFG-5: previously the ONLY var reaching this container from .env was
     # OP_API_PREFIX (explicitly interpolated below) -- everything else in
     # .env (see env.template) was silently unreachable. env_file loads the
@@ -164,6 +166,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     restart: unless-stopped
@@ -214,6 +218,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     restart: unless-stopped
@@ -250,6 +256,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     restart: unless-stopped
@@ -290,6 +298,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     restart: unless-stopped
@@ -328,6 +338,8 @@ services:
     build:
       context: .
       dockerfile: docker/evaluator/Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     env_file:
@@ -422,6 +434,8 @@ services:
     build:
       context: .
       dockerfile: docker/trainer/Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - training
     restart: unless-stopped

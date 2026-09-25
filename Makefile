@@ -95,12 +95,12 @@ restart-api: ## Restart only API service
 .PHONY: build
 build: ## Build all containers
 	@echo "Building containers..."
-	$(COMPOSE) build
+	OP_BUILD_SHA=$$(git rev-parse HEAD) $(COMPOSE) build
 
 .PHONY: rebuild
 rebuild: ## Rebuild containers without cache
 	@echo "Rebuilding containers (no cache)..."
-	$(COMPOSE) build --no-cache
+	OP_BUILD_SHA=$$(git rev-parse HEAD) $(COMPOSE) build --no-cache
 
 # ==================================================================================
 # Logs and Monitoring

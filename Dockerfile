@@ -62,6 +62,15 @@ LABEL org.opencontainers.image.title="OpenProcessor FastAPI Service" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor" \
       org.opencontainers.image.documentation="https://github.com/davidamacey/OpenProcessor/blob/main/README.md"
 
+# Build identity: the commit this image was built from, baked in so every
+# manifest's code_versions.api_sha reflects the running image rather than a
+# dev checkout's live `git rev-parse` fallback (docker-compose.yml passes
+# this as a build arg; empty stays "unknown" via _code_sha()). A runtime
+# OP_BUILD_SHA still overrides -- see env.template.
+ARG OP_BUILD_SHA=""
+ENV OP_BUILD_SHA=${OP_BUILD_SHA}
+LABEL org.opencontainers.image.revision=${OP_BUILD_SHA}
+
 # Runtime-only system packages (no build tools); upgrade first for
 # Debian point-release security fixes.
 # procps -> pgrep, used by the curation worker services' healthchecks
