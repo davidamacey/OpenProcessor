@@ -59,6 +59,12 @@ import type {
   SelectDiverseScope,
   SelectJobStatus,
   UnloadModelResponse,
+  IngestStatus,
+  RegionDrain,
+  IngestPathLookupResponse,
+  IngestBatchRequest,
+  IngestUploadRequest,
+  BatchIngestResponse,
 } from './types';
 import type {
   AugmentationPresetsResponse,
@@ -286,7 +292,13 @@ export async function apiFetch<T>(
         signal: signal ?? init.signal ?? null,
         headers: {
           Accept: 'application/json',
-          ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+          // A multipart body (ingestUpload) must let the browser set its
+          // own `Content-Type: multipart/form-data; boundary=...` — a
+          // hardcoded `application/json` here breaks the boundary and the
+          // backend can't parse the parts at all.
+          ...(init.body && !(init.body instanceof FormData)
+            ? { 'Content-Type': 'application/json' }
+            : {}),
           ...(init.headers ?? {}),
         },
       });
@@ -3599,6 +3611,67 @@ export function cancelAutoLabel(
     signal,
   );
 }
+
+// ===========================================================================
+// Ingest ({API_PREFIX}/ingest/*) — bring images into the pool.
+// docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.2.
+
+export function getIngestStatus(signal?: AbortSignal): Promise<IngestStatus> {
+  return apiFetch<IngestStatus>(`${API_PREFIX}/ingest/status`, {}, signal);
+}
+
+export function getRegionDrain(signal?: AbortSignal): Promise<RegionDrain> {
+  return apiFetch<RegionDrain>(`${API_PREFIX}/ingest/region_drain`, {}, signal);
+}
+
+export function ingestPathLookup(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<IngestPathLookupResponse> {
+  return apiFetch<IngestPathLookupResponse>(
+    `${API_PREFIX}/ingest/path_lookup`,
+    { method: 'POST', body: JSON.stringify({ image_paths: ids }) },
+    signal,
+  );
+}
+
+/**
+ * `POST {API_PREFIX}/ingest/upload` — multipart. The browser must set its
+ * own `Content-Type` boundary; see the `apiFetch` FormData carve-out above.
+ */
+export function ingestUpload(
+  req: IngestUploadRequest,
+  signal?: AbortSignal,
+): Promise<BatchIngestResponse> {
+  const fd = new FormData();
+  for (const f of req.files) fd.append('images', f, f.name);
+  fd.append('image_paths', JSON.stringify(req.identifiers));
+  fd.append('source', req.source);
+  return apiFetch<BatchIngestResponse>(
+    `${API_PREFIX}/ingest/upload`,
+    { method: 'POST', body: fd },
+    signal,
+  );
+}
+
+export function ingestBatch(
+  req: IngestBatchRequest,
+  signal?: AbortSignal,
+): Promise<BatchIngestResponse> {
+  return apiFetch<BatchIngestResponse>(
+    `${API_PREFIX}/ingest/batch`,
+    { method: 'POST', body: JSON.stringify(req) },
+    signal,
+  );
+}
+
+// getIngestConfig (BA-2, GET {API_PREFIX}/ingest/config) is intentionally
+// NOT wrapped here yet: the route doesn't exist in the vendored OpenAPI,
+// and endpointCatalog.test.ts would (correctly) fail on an unresolvable
+// call site. Add the wrapper only once `npm run contract:sync` picks up
+// the route. ingestConfig.ts's `resolveIngestConfig` already accepts
+// `IngestConfig | null` so the caller side needs no rework — every call
+// site just passes `null` until then.
 
 // ===========================================================================
 // Detector bake-off ({API_PREFIX}/bakeoff) — model comparison runs + results.

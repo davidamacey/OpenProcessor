@@ -1028,3 +1028,96 @@ export interface UndoEntry {
    */
   kind?: 'label' | 'region' | 'vlm_dismiss';
 }
+
+// -- ingest --
+// docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.1. Wire
+// shapes for OpenProcessor's `{API_PREFIX}/ingest/*` router
+// (`src/routers/curation/ingest.py`, `_common.py:288-322,586-596` on the
+// backend). `IngestConfig` is provisional (BA-2) — every field optional,
+// since the endpoint doesn't exist yet.
+
+export type IngestItemStatus = 'success' | 'duplicate' | 'failed';
+
+export interface IngestImageResult {
+  status: IngestItemStatus;
+  image_id: string;
+  image_path: string;
+  imohash: string;
+  n_crops: number;
+  n_regions: number;
+  error: string | null;
+}
+
+export interface BatchIngestSummary {
+  successful: number;
+  duplicates: number;
+  failed: number;
+  mismatches: number;
+  missed_labels: number;
+  unmatched_detections: number;
+  labels_imported: number;
+  crops_indexed: number;
+}
+
+export interface BatchIngestResponse {
+  status: 'success' | 'partial' | 'error';
+  summary: BatchIngestSummary;
+  results: IngestImageResult[];
+  disagreements: Record<string, unknown>[];
+}
+
+export interface IngestStatusBucket {
+  key: string;
+  doc_count: number;
+  key_as_string?: string;
+}
+
+export interface IngestStatus {
+  total: number;
+  by_source: IngestStatusBucket[];
+  by_day: IngestStatusBucket[];
+}
+
+export interface RegionDrain {
+  pending_detection: number;
+  pending_verification: number;
+  total_unfinished: number;
+  /** BA-3, not served today. */
+  drained?: boolean;
+  stable_for_s?: number;
+  observed_at?: string;
+}
+
+export interface IngestPathLookupResponse {
+  known_paths: Record<string, string>;
+}
+
+export interface IngestBatchItem {
+  path: string;
+  source?: string;
+  label_txt_path?: string | null;
+}
+
+export interface IngestBatchRequest {
+  items: IngestBatchItem[];
+  label_source?: string;
+  detect_mismatches?: boolean;
+}
+
+export interface IngestUploadRequest {
+  files: File[];
+  identifiers: string[];
+  source: string;
+}
+
+/** BA-2, provisional until served — every field optional. */
+export interface IngestConfig {
+  upload?: {
+    enabled?: boolean;
+    max_images_per_request?: number;
+    accepted_extensions?: string[];
+    persists_bytes?: boolean;
+  };
+  batch?: { enabled?: boolean; max_items_per_request?: number; source_roots?: string[] };
+  region_drain?: { poll_interval_s?: number; stable_polls?: number };
+}
