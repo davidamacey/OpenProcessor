@@ -626,6 +626,10 @@ export interface ServedRegionProfile {
   /** The region noun shown to operators (tab label, gallery copy). May be
    *  empty when the profile doesn't set one. */
   display_name: string;
+  /** The singular form of the region noun, for a singular-context label
+   *  ("Confirm Plate", "Plate score"). May be empty — falls back to the
+   *  generic "Region" (OpenProcessor #36 item 10, 2026-09-25). */
+  display_name_singular: string;
   /** The class whose items ARE regions (e.g. the class a region export
    *  writes). May be empty. */
   region_class_name: string;

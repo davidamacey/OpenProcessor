@@ -45,6 +45,7 @@ _BBOX = [0.1, 0.2, 0.6, 0.8]
 REGION_PROFILE: dict[str, Any] = {
     "name": "widget_tag",
     "display_name": "Widget tags",
+    "display_name_singular": "Widget tag",
     "region_class_name": "widget_tag",
     "text_reader": "ocr",
 }
@@ -54,6 +55,7 @@ REGION_PROFILE: dict[str, Any] = {
 REGION_CLASS = REGION_PROFILE["region_class_name"]
 REGION_TAB_URL_ID = "regions"
 REGION_TAB_LABEL = REGION_PROFILE["display_name"]
+REGION_SINGULAR_LABEL = REGION_PROFILE["display_name_singular"]
 
 # Every non-default value below is distinct on purpose (same rationale as
 # makeItem.ts): a mapping bug that drops a field to a hardcoded default is

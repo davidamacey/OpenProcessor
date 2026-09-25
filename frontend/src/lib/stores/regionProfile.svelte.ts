@@ -36,6 +36,8 @@ function normalize(
   return {
     name: p.name,
     display_name: typeof p.display_name === 'string' ? p.display_name : '',
+    display_name_singular:
+      typeof p.display_name_singular === 'string' ? p.display_name_singular : '',
     region_class_name: typeof p.region_class_name === 'string' ? p.region_class_name : '',
     text_reader: typeof p.text_reader === 'string' ? p.text_reader : '',
   };
@@ -46,6 +48,7 @@ function same(a: ServedRegionProfile | null, b: ServedRegionProfile | null): boo
   return (
     a.name === b.name &&
     a.display_name === b.display_name &&
+    a.display_name_singular === b.display_name_singular &&
     a.region_class_name === b.region_class_name &&
     a.text_reader === b.text_reader
   );

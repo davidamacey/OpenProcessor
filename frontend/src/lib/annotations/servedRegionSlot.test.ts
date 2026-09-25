@@ -44,10 +44,22 @@ describe('regionSlotFromServedProfile', () => {
     const noun = WIDGET_TAG_PROFILE.display_name;
     expect(slot.capabilities.queue?.tabLabel).toBe(noun);
     expect(slot.label.plural).toBe(noun);
-    // The singular-context title stays generic ("Confirm Region").
-    expect(slot.label.title).toBe('Region');
-    expect(slot.label.singular).toBe('region');
+    // The singular-context title uses the served singular noun
+    // ("Confirm Widget tag", #36 item 10) rather than a hardcoded "Region".
+    expect(slot.label.title).toBe(WIDGET_TAG_PROFILE.display_name_singular);
+    expect(slot.label.singular).toBe(
+      WIDGET_TAG_PROFILE.display_name_singular.toLowerCase(),
+    );
     expect(slot.stats?.panelTitle).toBe(noun);
+  });
+
+  it('falls back to the generic singular title when display_name_singular is empty', () => {
+    const s = regionSlotFromServedProfile({
+      ...WIDGET_TAG_PROFILE,
+      display_name_singular: '  ',
+    });
+    expect(s.label.title).toBe('Region');
+    expect(s.label.singular).toBe('region');
   });
 
   it('serves its review queue under the backend region tab id and browse route', () => {

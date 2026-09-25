@@ -119,6 +119,7 @@ describe('observe (later /health polls)', () => {
   it.each([
     ['name', { name: 'other_tag' }],
     ['display_name', { display_name: 'Other' }],
+    ['display_name_singular', { display_name_singular: 'Other' }],
     ['region_class_name', { region_class_name: 'other_class' }],
     ['text_reader', { text_reader: 'vlm' }],
   ])('a change to %s alone is a change', (_field, over) => {

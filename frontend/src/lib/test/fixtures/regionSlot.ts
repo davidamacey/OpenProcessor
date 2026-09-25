@@ -24,6 +24,7 @@ export const WIDGET_TAG_CLASS = 'widget_tag';
 export const WIDGET_TAG_PROFILE: ServedRegionProfile = {
   name: 'widget_tag',
   display_name: 'Widget tags',
+  display_name_singular: 'Widget tag',
   region_class_name: WIDGET_TAG_CLASS,
   text_reader: 'ocr',
 };
