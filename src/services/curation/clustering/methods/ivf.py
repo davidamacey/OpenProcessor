@@ -26,7 +26,7 @@ Limitations (documented so we don't re-litigate them later):
   split a tight visual group across two centroids if they happen to
   fall near the boundary.
 * Cluster IDs are not interpretable: bucket #173 is "things near
-  centroid 173", not "sportbikes".
+  centroid 173", not a class name.
 * Retraining changes the centroid positions, so the cluster_id of a
   given crop can shift. We re-run only when the residual pool has
   grown substantially.
@@ -121,7 +121,7 @@ class IVFMethod:
 
         if n < IVF_MIN_TRAIN_VECTORS:
             logger.info(
-                'legacy_ivf_too_few_vectors_single_bucket', n=n, threshold=IVF_MIN_TRAIN_VECTORS
+                'curation_ivf_too_few_vectors_single_bucket', n=n, threshold=IVF_MIN_TRAIN_VECTORS
             )
             labels = np.zeros(n, dtype=np.int64)
             return ClusterResult(
@@ -144,7 +144,7 @@ class IVFMethod:
             self._fit, embeddings, n_clusters, prefer_gpu
         )
         logger.info(
-            'legacy_ivf_done',
+            'curation_ivf_done',
             n=n,
             n_clusters=extra.get('n_clusters'),
             backend=used_backend,
@@ -222,7 +222,7 @@ class IVFMethod:
                     },
                 )
             except Exception as exc:
-                logger.warning('legacy_ivf_persist_failed', error=str(exc))
+                logger.warning('curation_ivf_persist_failed', error=str(exc))
 
         labels, distances = store.assign_batch_with_distances(x)
         backend = 'faiss_gpu' if use_gpu else 'faiss_cpu'

@@ -148,7 +148,7 @@ class TestCombinedClassAnswer:
         reply = self._reply(class_id='zeppelin')
         assert (reply.class_id, reply.class_raw) == (None, 'zeppelin')
         # The region half of the reply survives a non-index class answer.
-        assert reply.plate_visible is True
+        assert reply.region_visible is True
 
     def test_class_key_is_read_when_class_id_absent(self) -> None:
         assert self._reply(**{'class': 'sprocket'}).class_id == 2
@@ -195,8 +195,8 @@ class TestCombinedNestedEntryUnwrap:
         reply = _combined_reply_from_entry(
             entry, img_id='c1', fields=get_region_fields(), class_names=None
         )
-        assert reply.plate_visible is True
-        assert reply.plate_text == '782CCB'
+        assert reply.region_visible is True
+        assert reply.region_text_reply == '782CCB'
 
     def test_a_different_invented_key_name_is_also_unwrapped(self) -> None:
         entry = {
@@ -214,7 +214,7 @@ class TestCombinedNestedEntryUnwrap:
             fields=get_region_fields(),
             class_names=[f'c{i}' for i in range(20)],
         )
-        assert reply.plate_visible is True
+        assert reply.region_visible is True
         assert reply.class_id == 11
 
     def test_two_nested_candidates_is_ambiguous_stays_no_verdict(self) -> None:
@@ -258,7 +258,7 @@ class TestCombinedNestedEntryUnwrap:
             raw, chunk, get_region_fields(), class_names=['widget']
         )
         assert out['c1'] is not None
-        assert out['c1'].plate_text == '782CCB'
+        assert out['c1'].region_text_reply == '782CCB'
         assert out['c2'] is not None
         assert out['c2'].class_id == 0
 

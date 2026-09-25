@@ -51,7 +51,7 @@ async def post_umap_rebuild(client: Any = Depends(_get_os_client)) -> dict[str, 
     """
     result = await umap_rebuild(client)
     logger.info(
-        'legacy_umap_rebuild_done',
+        'curation_umap_rebuild_done',
         n_residuals=result.get('n_residuals'),
         n_clusters=result.get('n_clusters'),
         refit=result.get('refit'),

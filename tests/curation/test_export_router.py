@@ -372,9 +372,9 @@ async def test_single_class_handler_builds_the_profile_from_the_request(
     payload = ExportSingleClassRequest(
         version_tag='subset-v1',
         class_ids=[7, 3],
-        profile_name='plates',
+        profile_name='regions',
         box_source='region',
-        region_class_name='license_plate',
+        region_class_name='region',
         seed=99,
         max_positive_images=250,
         img_max_side=640,
@@ -383,9 +383,9 @@ async def test_single_class_handler_builds_the_profile_from_the_request(
 
     profile = captured['profile']
     assert profile.class_ids == (7, 3)
-    assert profile.name == 'plates'
+    assert profile.name == 'regions'
     assert profile.box_source == 'region'
-    assert profile.region_class_name == 'license_plate'
+    assert profile.region_class_name == 'region'
     assert captured['seed'] == 99
     assert captured['max_positive_images'] == 250
     assert captured['img_max_side'] == 640
@@ -448,7 +448,7 @@ def test_single_class_status_reports_the_manifest(
                 'frozen_test_sha': 'beef5678',
                 'finished_at': '2026-09-21T00:00:05+00:00',
                 'class_count': 1,
-                'class_names': ['license_plate'],
+                'class_names': ['region'],
                 'image_count': 42,
                 'positive_images': 40,
                 'background_images': 2,
@@ -463,13 +463,13 @@ def test_single_class_status_reports_the_manifest(
         lambda _profile_name: export_dir,
     )
 
-    body = app_client.get('/curation/export/single_class/status?profile_name=plates').json()
+    body = app_client.get('/curation/export/single_class/status?profile_name=regions').json()
 
     assert body['status'] == 'success'
-    assert body['profile_name'] == 'plates'
+    assert body['profile_name'] == 'regions'
     assert body['dataset_sha'] == 'cafe1234'
     assert body['frozen_test_sha'] == 'beef5678'
-    assert body['class_names'] == ['license_plate']
+    assert body['class_names'] == ['region']
     assert body['split_counts'] == {'train': 34, 'val': 4, 'test': 4}
 
 

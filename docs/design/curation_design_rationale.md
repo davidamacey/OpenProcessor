@@ -455,9 +455,10 @@ CoreML leg drove a macOS host through a private driver and is not shipped:
 file that asks for it anyway gets a `coreml` failed stage.
 
 **What moved out.** Scripts that existed to produce one paper's tables and
-figures are not part of the harness: the dedup-threshold sweep and the
-LaTeX-number generator live under `examples/bakeoff_lpr_paper/`; the
-lean-angle sampling and deskew-figure prototypes were removed (their
+figures are not part of the harness and are not shipped in this tree: the
+dedup-threshold sweep and the LaTeX-number generator were removed (they
+hardcoded a private Triton model id and a live-deployment URL); the
+lean-angle sampling and deskew-figure prototypes were removed too (their
 reusable core, `src/services/detection/region_lean.py`, stays).
 `tests/curation/test_bakeoff_harness.py` guards the harness core against
 domain vocabulary creeping back in.

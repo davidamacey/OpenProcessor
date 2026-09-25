@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 from PIL import Image
 
 from src.config import DetectionProfile
@@ -13,7 +14,6 @@ from src.services.detection.cascade_detect import (
     frame_for_ocr,
     ocr_det_input_size,
 )
-from src.services.detection.reference_profiles import REFERENCE_LICENSE_PLATE_PROFILE
 from src.services.detection.region_text import (
     DominantTextConfig,
     OcrLine,
@@ -27,7 +27,7 @@ from src.services.detection.region_text import (
 )
 
 
-REF = DominantTextConfig.from_profile(REFERENCE_LICENSE_PLATE_PROFILE)
+REF = DominantTextConfig.from_profile(NEUTRAL_REGION_PROFILE)
 GENERIC = DominantTextConfig.from_profile(DetectionProfile(name='generic'))
 
 
@@ -208,10 +208,7 @@ class TestReaderModes:
         assert texts_disagree('--', 'A', REF.normalizer) is None
 
     def test_engine_id(self) -> None:
-        assert (
-            ocr_engine_id(REFERENCE_LICENSE_PLATE_PROFILE)
-            == 'paddleocr_det_trt:1+paddleocr_rec_trt:1'
-        )
+        assert ocr_engine_id(NEUTRAL_REGION_PROFILE) == 'paddleocr_det_trt:1+paddleocr_rec_trt:1'
 
 
 class TestOcrFraming:

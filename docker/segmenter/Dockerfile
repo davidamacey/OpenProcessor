@@ -12,7 +12,7 @@
 #     --build-arg SAM3_SHA=<sha> segmenter      # re-pin upstream SAM 3
 #
 # Run (needs a GPU and a HuggingFace token for the gated weights):
-#   SAM3_URL=http://segmenter:8000 \
+#   OP_SEGMENTER_URL=http://segmenter:8000 \
 #     docker compose --profile curation --profile segmenter up -d
 # =============================================================================
 

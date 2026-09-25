@@ -28,6 +28,7 @@ from src.config.region_state import RegionStatus
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
+    RegionProfileDep,
     _ensure_indexes,
     config,
     logger,
@@ -108,6 +109,7 @@ async def region_cluster_status() -> dict[str, Any]:
 async def refine_region_cluster_endpoint(
     cluster_id: int,
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
 ) -> dict[str, Any]:
     """Per-bucket AHC refine; writes RegionFields.cluster_subid so outliers split out."""
     from src.services.curation.clustering.orchestrator import (
@@ -133,11 +135,12 @@ async def refine_region_cluster_endpoint(
 @router.get('/regions/clusters')
 async def list_region_clusters(
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
     max_clusters: int = Query(500, ge=1, le=2000),
     per_cluster: int = Query(4, ge=1, le=20),
     max_rank: int | None = Query(None, ge=1),
 ) -> dict[str, Any]:
-    """Cluster cards for the region buckets (mirrors /legacy/clusters' shape).
+    """Cluster cards for the region buckets (mirrors /curation/clusters' shape).
 
     Most cards are ``candidate`` (regions are one class); the permanent
     false-positive bucket is tagged ``cluster_kind='false_positive'`` and

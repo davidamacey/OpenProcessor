@@ -39,6 +39,7 @@ from src.config.region_state import HUMAN_WRITABLE_STATUSES
 from src.core.dependencies import get_opensearch
 from src.core.logging import get_logger
 from src.routers.curation._item_models import CropsPageResponse, ItemDoc  # noqa: F401 - re-export
+from src.routers.curation._region_vocabulary_models import RegionProfileSummary  # noqa: TC001
 
 # Runtime import: pydantic resolves the Literal annotation from module globals.
 from src.services.curation.class_sources import HumanLabelSource  # noqa: TC001
@@ -128,6 +129,21 @@ async def _raw_opensearch_dep() -> Any:
 
 
 OpenSearchDep = Annotated[Any, Depends(_raw_opensearch_dep)]
+
+
+def _require_region_profile_dep() -> Any:
+    """No-profile gating contract: region data/write routes 409 with a
+    clear detail when no region profile is configured, rather than
+    quietly operating on a region concept that cannot exist yet."""
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    profile = get_active_region_profile()
+    if profile is None:
+        raise HTTPException(status_code=409, detail='no region profile is configured')
+    return profile
+
+
+RegionProfileDep = Annotated[Any, Depends(_require_region_profile_dep)]
 
 
 async def warm_knn_indexes(opensearch: Any) -> None:
@@ -358,7 +374,7 @@ class CropExcludeRequest(BaseModel):
     the training set. ``reason`` defaults to ``'ignore'``; the UI can
     pass a more specific tag (``'blurry'``, ``'unidentifiable'``,
     ``'not_a_vehicle'``, ``'partial_crop'``) when the operator wants to
-    record why (e.g. a whole cluster of blurry cruisers).
+    record why (e.g. a whole cluster of blurry items).
     """
 
     crop_ids: list[str] = Field(..., max_length=5000)
@@ -505,6 +521,13 @@ class HealthResponse(BaseModel):
     opensearch: dict[str, Any]
     vlm: dict[str, Any]
     registry: dict[str, Any]
+    region_profile: RegionProfileSummary | None = Field(
+        description=(
+            'The active region profile, or null when none is configured -- '
+            'THE signal a client checks to decide whether region-scoped '
+            'UI/routes are available.'
+        )
+    )
 
 
 class ExportYoloRequest(BaseModel):

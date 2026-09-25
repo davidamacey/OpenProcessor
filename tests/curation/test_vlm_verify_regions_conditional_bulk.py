@@ -49,7 +49,7 @@ class _FakeVerdict:
 
 
 class _Labeler:
-    async def verify_plate(self, _crop: Any) -> _FakeVerdict:
+    async def verify_region(self, _crop: Any) -> _FakeVerdict:
         return _FakeVerdict()
 
 
@@ -62,7 +62,7 @@ class _RacingLabeler:
     def __init__(self, fake: QueryFakeOpenSearch) -> None:
         self._fake = fake
 
-    async def verify_plate(self, crop: Any) -> _FakeVerdict:
+    async def verify_region(self, crop: Any) -> _FakeVerdict:
         if crop.crop_id == 'raced':
             self._fake.docs(ITEMS)['raced'].update(
                 **{F.verifier: 'human', F.verified: False, F.reason: 'not a real region'}
@@ -101,7 +101,7 @@ async def test_verify_regions_never_overwrites_a_doc_a_human_verified_mid_flight
     _setup(monkeypatch, _RacingLabeler(fake))
 
     resp = await vlm_mod.vlm_verify_regions(
-        VlmVerifyRegionsRequest(crop_ids=['raced', 'plain']), fake
+        VlmVerifyRegionsRequest(crop_ids=['raced', 'plain']), fake, object()
     )
 
     docs = fake.docs(ITEMS)
@@ -129,7 +129,7 @@ async def test_verify_regions_writes_normally_when_no_conflict(
     fake = QueryFakeOpenSearch({ITEMS: {'plain': _item('plain')}})
     _setup(monkeypatch, _Labeler())
 
-    await vlm_mod.vlm_verify_regions(VlmVerifyRegionsRequest(crop_ids=['plain']), fake)
+    await vlm_mod.vlm_verify_regions(VlmVerifyRegionsRequest(crop_ids=['plain']), fake, object())
 
     assert fake.bulk_calls == 1
     docs = fake.docs(ITEMS)

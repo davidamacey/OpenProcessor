@@ -1,7 +1,7 @@
 """DQ-M6: ``max_rank`` (subject size) is honoured on every review tab that
 serves it, and ``GET /review/tabs`` says which filters each tab applies.
 
-Before the fix only ``primary_low_conf`` / ``coco_blind_spots`` applied
+Before the fix only ``primary_low_conf`` / ``classifier_blind_spots`` applied
 ``crop_rank_in_image <= max_rank``; every other tab silently ignored it,
 so a client's "largest subject only" control changed nothing.
 """
@@ -38,7 +38,7 @@ _QUALIFYING: dict[str, dict[str, Any]] = {
     'regions': {F.bbox_norm: [0.1, 0.1, 0.2, 0.2]},
     'new_class_proposals': {'needs_new_class': True},
     'primary_low_conf': {'class_source': sorted(unlabeled_proposal_class_sources())[0]},
-    'coco_blind_spots': {'class_source': sorted(unlabeled_proposal_class_sources())[0]},
+    'classifier_blind_spots': {'class_source': sorted(unlabeled_proposal_class_sources())[0]},
 }
 
 
@@ -86,14 +86,16 @@ def test_max_rank_limits_every_tab(tab: str, monkeypatch: pytest.MonkeyPatch) ->
     assert {i['crop_id'] for i in r3.json()['items']} == {'rank1', 'rank2', 'rank3'}
 
 
-@pytest.mark.parametrize('tab', sorted(set(_QUALIFYING) - {'primary_low_conf', 'coco_blind_spots'}))
+@pytest.mark.parametrize(
+    'tab', sorted(set(_QUALIFYING) - {'primary_low_conf', 'classifier_blind_spots'})
+)
 def test_no_max_rank_serves_every_rank(tab: str, monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs(tab)}), monkeypatch)
     r = client.get(f'/curation/review/{tab}', params={'page_size': 50})
     assert r.json()['total'] == 4
 
 
-@pytest.mark.parametrize('tab', ['primary_low_conf', 'coco_blind_spots'])
+@pytest.mark.parametrize('tab', ['primary_low_conf', 'classifier_blind_spots'])
 def test_primary_tabs_keep_their_served_default(tab: str, monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs(tab)}), monkeypatch)
     r = client.get(f'/curation/review/{tab}', params={'page_size': 50})
@@ -112,6 +114,7 @@ def test_locate_uses_the_same_max_rank(monkeypatch: pytest.MonkeyPatch) -> None:
     assert body['total'] == 2
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_tabs_catalog_serves_filters_per_tab(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: {}}), monkeypatch)
     tabs = {t['id']: t for t in client.get('/curation/review/tabs').json()['tabs']}

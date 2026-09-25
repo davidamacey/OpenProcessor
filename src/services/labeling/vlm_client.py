@@ -1,12 +1,12 @@
 """Transport layer for an OpenAI-compatible vision-language-model endpoint.
 
-Split out of the reference ``gemma_labeler.py`` (see
+Split out of the reference VLM labeler (see
 ``docs/design/curation_design_rationale.md`` §5 for why this split
 exists — vlm_labeler.py is one of the ratchet-exempt oversize files)
 — this half owns
 "how do I reliably POST to a ``/chat/completions`` endpoint", not "what
 do I ask it". Generic: works against any OpenAI-shaped vision chat API
-(the reference deployment happens to be ``vllm-gemma4-e4b`` behind
+(the reference deployment happens to run behind
 OpenWebUI, but nothing here names that model).
 
 Design notes
@@ -79,16 +79,13 @@ DEFAULT_MAX_IMAGES_PER_CALL = _env_max_images_per_call()
 
 # Open-vocab labeling chunk size (label_or_propose_batch). The open-vocab
 # prompt is denser than closed-vocab so a smaller default chunk avoids
-# empty responses from smaller VLMs. Tunable via the GEMMA_IMAGES_PER_CALL
-# env var (default 3; clamped to the labeler's max_images_per_call, i.e.
-# OP_VLM_MAX_IMAGES_PER_CALL). Governs ONLY the open-vocab chunk size.
+# empty responses from smaller VLMs. Tunable via the
+# OP_VLM_OPEN_IMAGES_PER_CALL env var (default 3; clamped to the
+# labeler's max_images_per_call, i.e. OP_VLM_MAX_IMAGES_PER_CALL).
+# Governs ONLY the open-vocab chunk size.
 def _env_open_images_per_call(default: int = 3) -> int:
     try:
-        v = int(
-            os.environ.get('VLM_IMAGES_PER_CALL')
-            or os.environ.get('GEMMA_IMAGES_PER_CALL')
-            or str(default)
-        )
+        v = int(os.environ.get('OP_VLM_OPEN_IMAGES_PER_CALL') or str(default))
     except (TypeError, ValueError):
         return default
     return max(1, v)
@@ -157,18 +154,12 @@ def build_http_client(
 
     The default pool (``max_connections=100``) is too small for a
     high-concurrency worker; callers that need more than the default
-    should size it via env (``VLM_HTTPX_MAX_CONNECTIONS`` /
-    ``VLM_HTTPX_KEEPALIVE``; the ``GEMMA_*`` names are accepted aliases) or pass explicit values.
+    should size it via env (``OP_VLM_HTTPX_MAX_CONNECTIONS`` /
+    ``OP_VLM_HTTPX_KEEPALIVE``) or pass explicit values.
     """
 
-    max_conn = max_connections or int(
-        os.environ.get('VLM_HTTPX_MAX_CONNECTIONS')
-        or os.environ.get('GEMMA_HTTPX_MAX_CONNECTIONS')
-        or '512'
-    )
-    keepalive = max_keepalive_connections or int(
-        os.environ.get('VLM_HTTPX_KEEPALIVE') or os.environ.get('GEMMA_HTTPX_KEEPALIVE') or '128'
-    )
+    max_conn = max_connections or int(os.environ.get('OP_VLM_HTTPX_MAX_CONNECTIONS') or '512')
+    keepalive = max_keepalive_connections or int(os.environ.get('OP_VLM_HTTPX_KEEPALIVE') or '128')
     limits = httpx.Limits(max_connections=max_conn, max_keepalive_connections=keepalive)
     return httpx.AsyncClient(timeout=timeout_s, limits=limits)
 

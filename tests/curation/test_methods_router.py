@@ -43,7 +43,7 @@ def _reset_field_coverage_cache() -> Iterator[None]:
 
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    from src.routers.curation import _raw_opensearch_dep, router as legacy_router
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     fake_os = AsyncMock()
     fake_os.count = AsyncMock(return_value={'count': 0})
@@ -55,7 +55,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.delenv('OP_SEMANTIC_SEARCH_ENABLED', raising=False)
 
     app = FastAPI()
-    app.include_router(legacy_router)
+    app.include_router(curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     client = TestClient(app)
     client.fake_os = fake_os  # type: ignore[attr-defined]
@@ -87,7 +87,7 @@ def test_score_entries_disabled_by_default(app_client: TestClient) -> None:
     for entry in score_entries.values():
         assert entry['status'] == 'disabled'
         assert entry['default'] is False
-    assert body['flags']['legacy_scores_enabled'] is False
+    assert body['flags']['scores_enabled'] is False
 
 
 def test_score_entries_shadow_when_enabled_and_shadow(
@@ -118,11 +118,11 @@ def test_score_entries_shadow_when_enabled_and_shadow(
     # OP_VIZ_PROJECTION_ENABLED, OP_SEMANTIC_SEARCH_ENABLED) joined this
     # envelope; unset here so this test's env matches its own setup above.
     assert body['flags'] == {
-        'legacy_scores_enabled': True,
-        'legacy_scores_shadow': True,
-        'legacy_select_diverse_enabled': False,
-        'legacy_viz_projection_enabled': False,
-        'legacy_semantic_search_enabled': False,
+        'scores_enabled': True,
+        'scores_shadow': True,
+        'select_diverse_enabled': False,
+        'viz_projection_enabled': False,
+        'semantic_search_enabled': False,
     }
 
 
@@ -160,7 +160,7 @@ def test_diverse_overlay_entry_present_and_disabled_by_default(app_client: TestC
     assert entry['status'] == 'disabled'
     assert entry['default'] is False
     assert entry['writes'] == []
-    assert body['flags']['legacy_select_diverse_enabled'] is False
+    assert body['flags']['select_diverse_enabled'] is False
 
 
 def test_diverse_overlay_experimental_when_flag_on_but_never_stable(
@@ -176,7 +176,7 @@ def test_diverse_overlay_experimental_when_flag_on_but_never_stable(
     entry = next(s for s in body['strategies'] if s['id'] == 'diverse')
     assert entry['status'] == 'experimental'
     assert entry['status'] != 'stable'
-    assert body['flags']['legacy_select_diverse_enabled'] is True
+    assert body['flags']['select_diverse_enabled'] is True
 
 
 def test_viz_projection_entry_present_and_disabled_by_default(app_client: TestClient) -> None:
@@ -188,7 +188,7 @@ def test_viz_projection_entry_present_and_disabled_by_default(app_client: TestCl
     assert entry['default'] is False
     assert set(entry['writes']) == {'viz_x', 'viz_y', 'viz_projection_version'}
     assert entry['requires_field'] == 'viz_x'
-    assert body['flags']['legacy_viz_projection_enabled'] is False
+    assert body['flags']['viz_projection_enabled'] is False
 
 
 def test_viz_projection_experimental_when_flag_on_but_never_stable(
@@ -205,7 +205,7 @@ def test_viz_projection_experimental_when_flag_on_but_never_stable(
     entry = next(s for s in body['strategies'] if s['id'] == 'viz_projection')
     assert entry['status'] == 'experimental'
     assert entry['status'] != 'stable'
-    assert body['flags']['legacy_viz_projection_enabled'] is True
+    assert body['flags']['viz_projection_enabled'] is True
 
 
 def test_viz_projection_carries_measured_purity_and_banner_flag(app_client: TestClient) -> None:
@@ -262,10 +262,12 @@ def test_detection_profile_axis_is_empty_by_default(app_client: TestClient) -> N
 def test_detection_profile_axis_advertises_the_selected_profile(
     app_client: TestClient,
 ) -> None:
-    """``OP_REGION_PROFILE=license_plate`` selects the built-in reference
-    profile; the axis lists it, keyed by its ``name``, as the sole
-    stable/default entry."""
-    from src.services.detection.reference_profiles import REFERENCE_LICENSE_PLATE_PROFILE
+    """``reference_region_profile`` (``OP_REGION_PROFILE_PATH`` pointed at
+    the ``license_plate`` example file) selects that profile; the axis
+    lists it, keyed by its ``name``, as the sole stable/default entry."""
+    from _region_profile_fixture import (
+        EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE,
+    )
 
     r = app_client.get('/curation/methods')
     assert r.status_code == 200

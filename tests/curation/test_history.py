@@ -259,7 +259,7 @@ class _FakeAutoPromoteOS:
                                 'key': {'cluster_id': 1},
                                 'doc_count': 5,
                                 'top_class': {
-                                    'buckets': [{'key': 'honda', 'doc_count': 5}],
+                                    'buckets': [{'key': 'class_a', 'doc_count': 5}],
                                 },
                             },
                         ],
@@ -298,7 +298,7 @@ class _FakeAutoPromoteOS:
 
 _AUTO_PROMOTE_SOURCE: dict[str, Any] = {
     'class_id': 7,
-    'class_name': 'honda',
+    'class_name': 'class_a',
     'class_source': 'item_model',
     'class_validated': False,
     'test_holdout': False,
@@ -355,7 +355,7 @@ async def _run_curation_worker_case() -> list[dict[str, Any]]:
         crop_id='crop-1',
         image_path='/dev/null/never-read',
         vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
-        plate_status='pending',
+        region_status='pending',
         class_name='audi',
         group='cars',
     )
@@ -371,7 +371,7 @@ async def _run_curation_worker_case() -> list[dict[str, Any]]:
 
     source = {
         'class_id': 5,
-        'class_name': 'honda',
+        'class_name': 'class_a',
         'class_source': 'item_model',
         'class_validated': False,
         # Still in the pending state the task was fetched in.

@@ -18,10 +18,10 @@ from __future__ import annotations
 import math
 
 import pytest
+from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 
 from src.config import get_region_fields
 from src.services.detection.cascade_detect import (
-    REFERENCE_LICENSE_PLATE_PROFILE,
     class_provenance,
     is_plausible_region_bbox,
     region_provenance,
@@ -98,11 +98,11 @@ class TestRegionProvenance:
     def test_minimal_fields(self) -> None:
         F = get_region_fields()
         doc = region_provenance(
-            REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
-            REFERENCE_LICENSE_PLATE_PROFILE.detector_version,
+            NEUTRAL_REGION_PROFILE.detector_model,
+            NEUTRAL_REGION_PROFILE.detector_version,
         )
-        assert doc[F.detector] == REFERENCE_LICENSE_PLATE_PROFILE.detector_model
-        assert doc[F.detector_version] == REFERENCE_LICENSE_PLATE_PROFILE.detector_version
+        assert doc[F.detector] == NEUTRAL_REGION_PROFILE.detector_model
+        assert doc[F.detector_version] == NEUTRAL_REGION_PROFILE.detector_version
         assert doc[F.bbox_frame] == 'source'
         assert F.detected_at in doc
         assert F.verifier not in doc
@@ -110,25 +110,25 @@ class TestRegionProvenance:
     def test_with_verifier(self) -> None:
         F = get_region_fields()
         doc = region_provenance(
-            REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
-            REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
-            verifier=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
-            verifier_version=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
+            NEUTRAL_REGION_PROFILE.human_detector_name,
+            NEUTRAL_REGION_PROFILE.human_detector_version,
+            verifier=NEUTRAL_REGION_PROFILE.human_detector_name,
+            verifier_version=NEUTRAL_REGION_PROFILE.human_detector_version,
         )
-        assert doc[F.verifier] == REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name
-        assert doc[F.verifier_version] == REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version
+        assert doc[F.verifier] == NEUTRAL_REGION_PROFILE.human_detector_name
+        assert doc[F.verifier_version] == NEUTRAL_REGION_PROFILE.human_detector_version
         assert F.verified_at in doc
 
 
 class TestClassProvenance:
     def test_basic(self) -> None:
         doc = class_provenance(
-            detector='vehicle_classifier_v6_trt',
+            detector='item_classifier_trt',
             detector_version='1',
-            labeler='ingest_v6',
+            labeler='ingest_classifier',
         )
-        assert doc['class_detector'] == 'vehicle_classifier_v6_trt'
-        assert doc['class_labeler'] == 'ingest_v6'
+        assert doc['class_detector'] == 'item_classifier_trt'
+        assert doc['class_labeler'] == 'ingest_classifier'
         assert 'class_labeled_at' in doc
 
 

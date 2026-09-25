@@ -2,7 +2,7 @@
 
 Pins:
 
-* Every ``segment_plate`` call observes a sample in each of the three
+* Every ``segment`` call observes a sample in each of the three
   histograms (wait, inflight, response), regardless of outcome.
 * The ``outcome`` label tracks the call result accurately —
   ``hit`` when a candidate is returned, ``miss`` when SAM3 returned no
@@ -17,11 +17,11 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from scripts.curation.worker.client import Sam3Client
+from scripts.curation.worker.client import SegmenterClient
 from src.services.curation.metrics import (
-    LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS,
-    LEGACY_SAM3_REQUEST_RESPONSE_SECONDS,
-    LEGACY_SAM3_REQUEST_WAIT_SECONDS,
+    OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS,
+    OP_SEGMENTER_REQUEST_RESPONSE_SECONDS,
+    OP_SEGMENTER_REQUEST_WAIT_SECONDS,
 )
 
 
@@ -45,7 +45,7 @@ def _hist_obs_count(hist, *, host: str, outcome: str) -> float:
 def _build_client(handler):
     transport = httpx.MockTransport(handler)
     httpx_client = httpx.AsyncClient(transport=transport, timeout=5.0)
-    return Sam3Client(base_url=_HOST, client=httpx_client)
+    return SegmenterClient(base_url=_HOST, client=httpx_client)
 
 
 async def test_wait_inflight_response_histograms_observed():
@@ -59,19 +59,27 @@ async def test_wait_inflight_response_histograms_observed():
 
     sam = _build_client(handler)
     before = {
-        'wait': _hist_obs_count(LEGACY_SAM3_REQUEST_WAIT_SECONDS, host=_HOST, outcome='hit'),
-        'inflight': _hist_obs_count(LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS, host=_HOST, outcome='hit'),
-        'response': _hist_obs_count(LEGACY_SAM3_REQUEST_RESPONSE_SECONDS, host=_HOST, outcome='hit'),
+        'wait': _hist_obs_count(OP_SEGMENTER_REQUEST_WAIT_SECONDS, host=_HOST, outcome='hit'),
+        'inflight': _hist_obs_count(
+            OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS, host=_HOST, outcome='hit'
+        ),
+        'response': _hist_obs_count(
+            OP_SEGMENTER_REQUEST_RESPONSE_SECONDS, host=_HOST, outcome='hit'
+        ),
     }
 
-    candidate = await sam.segment_plate(_CROP_BYTES)
+    candidate = await sam.segment(_CROP_BYTES)
     assert candidate is not None
     assert candidate.source == 'sam3'
 
     after = {
-        'wait': _hist_obs_count(LEGACY_SAM3_REQUEST_WAIT_SECONDS, host=_HOST, outcome='hit'),
-        'inflight': _hist_obs_count(LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS, host=_HOST, outcome='hit'),
-        'response': _hist_obs_count(LEGACY_SAM3_REQUEST_RESPONSE_SECONDS, host=_HOST, outcome='hit'),
+        'wait': _hist_obs_count(OP_SEGMENTER_REQUEST_WAIT_SECONDS, host=_HOST, outcome='hit'),
+        'inflight': _hist_obs_count(
+            OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS, host=_HOST, outcome='hit'
+        ),
+        'response': _hist_obs_count(
+            OP_SEGMENTER_REQUEST_RESPONSE_SECONDS, host=_HOST, outcome='hit'
+        ),
     }
     assert after['wait'] == before['wait'] + 1
     assert after['inflight'] == before['inflight'] + 1
@@ -109,23 +117,23 @@ async def test_outcome_label_correct_on_hit_miss_error():
 
     transport = httpx.MockTransport(handler)
     httpx_client = httpx.AsyncClient(transport=transport, timeout=5.0)
-    sam = Sam3Client(base_url=host, client=httpx_client)
+    sam = SegmenterClient(base_url=host, client=httpx_client)
 
     before = {
-        outcome: _hist_obs_count(LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS, host=host, outcome=outcome)
+        outcome: _hist_obs_count(OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS, host=host, outcome=outcome)
         for outcome in ('hit', 'miss', 'error')
     }
 
-    hit = await sam.segment_plate(_CROP_BYTES)
-    miss = await sam.segment_plate(_CROP_BYTES)
-    err = await sam.segment_plate(_CROP_BYTES)
+    hit = await sam.segment(_CROP_BYTES)
+    miss = await sam.segment(_CROP_BYTES)
+    err = await sam.segment(_CROP_BYTES)
 
     assert hit is not None
     assert miss is None
     assert err is None
 
     after = {
-        outcome: _hist_obs_count(LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS, host=host, outcome=outcome)
+        outcome: _hist_obs_count(OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS, host=host, outcome=outcome)
         for outcome in ('hit', 'miss', 'error')
     }
     assert after['hit'] == before['hit'] + 1

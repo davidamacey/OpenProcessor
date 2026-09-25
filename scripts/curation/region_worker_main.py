@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Compatibility shim — the detection worker lives in ``scripts/curation/worker/``.
 
-Existing call sites that do ``python -m scripts.curation.sam_worker_main``
-or import ``scripts.curation.sam_worker_main`` continue to work via the
+Existing call sites that do ``python -m scripts.curation.region_worker_main``
+or import ``scripts.curation.region_worker_main`` continue to work via the
 re-exports below.
 """
 

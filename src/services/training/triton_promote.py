@@ -1,6 +1,6 @@
 """Promote a trained YOLO26 checkpoint into the Triton model repo.
 
-Ported from a private reference vehicle/license-plate curation stack's
+Ported from a reference curation stack's
 training pipeline (Phase 4). The workflow:
 
 1. The user clicks "Promote to Triton" on a finished training run in

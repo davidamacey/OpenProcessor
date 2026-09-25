@@ -1,14 +1,15 @@
 """Detection-cascade heuristics and Triton model wiring, as data.
 
-Replaces hardcoded per-domain constants in the reference license-plate
-detection cascade and verification modules (see
-``docs/design/curation_design_rationale.md`` §2.3 for the design
-rationale, including known gaps in how generic the shipped defaults
-are today). A ``DetectionProfile`` instance
-describes one detectable "region of interest" type (e.g. a license
-plate on a vehicle); a deployment with a different region type (a box,
-a tractor, …) constructs its own instance instead of forking the
-detection-cascade code.
+Replaces hardcoded per-domain constants in the detection cascade and
+verification modules (see ``docs/design/curation_design_rationale.md``
+§2.3 for the design rationale, including known gaps in how generic the
+shipped defaults are today). A ``DetectionProfile`` instance describes
+one detectable "region of interest" type (a license plate, a barcode, a
+defect on a manufactured part, …); a deployment constructs its own
+instance — or loads one from a profile file (see
+``examples/region_profiles/``) — instead of forking the
+detection-cascade code. No region type ships built in: with no active
+profile configured, region detection stays off.
 """
 
 from __future__ import annotations
@@ -108,7 +109,7 @@ class DetectionProfile:
     text_format: str = ''
     text_placeholders: frozenset[str] = field(default_factory=frozenset)
     text_reject_sequences: bool = False
-    sam_text_prompt: str = ''
+    segmenter_text_prompt: str = ''
     secondary_shape_groups: frozenset[str] = field(default_factory=frozenset)
     # Item (ingest) detectors only: the model class ids whose detections
     # become items. Empty = every class. Lets a generic proposer (e.g. an
@@ -124,6 +125,17 @@ class DetectionProfile:
     # Ingest primary only: labels.txt-style file naming the model's own
     # classes (line index = class id), recorded as the proposal name.
     labels_path: str = ''
+    # The registry class name this profile's detections should be treated
+    # as (e.g. 'license_plate'), so generic code (class merge guards,
+    # training presets, export pairing scans) can special-case "the
+    # region class" without hardcoding a domain name. '' (default) means
+    # no region class name is configured -- callers must degrade to "not
+    # applicable" rather than assume any particular class.
+    region_class_name: str = ''
+    # Human-readable label for UI surfaces that mention "the region type"
+    # (e.g. the review-queue tab title). '' (default) means the caller
+    # falls back to a generic label such as "Regions".
+    display_name: str = ''
 
     @classmethod
     def from_env(

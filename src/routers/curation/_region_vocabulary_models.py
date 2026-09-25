@@ -45,7 +45,21 @@ class RejectionReasonEntry(BaseModel):
     )
 
 
+class RegionProfileSummary(BaseModel):
+    """The active region profile's identity, served on ``GET /health`` and
+    ``GET /regions/vocabulary`` -- THE signal a client keys on to decide
+    whether region-scoped UI/routes are available at all."""
+
+    name: str
+    display_name: str
+    region_class_name: str
+    text_reader: str
+
+
 class RegionVocabularyResponse(BaseModel):
+    region_profile: RegionProfileSummary | None = Field(
+        description='The active region profile, or null when none is configured.'
+    )
     detectors: list[VocabularyDetector]
     region_sources: list[VocabularyEntry]
     chain_actors: list[VocabularyEntry]
@@ -57,6 +71,7 @@ class RegionVocabularyResponse(BaseModel):
 
 
 __all__ = [
+    'RegionProfileSummary',
     'RegionVocabularyResponse',
     'RejectionReasonEntry',
     'VocabularyDetector',

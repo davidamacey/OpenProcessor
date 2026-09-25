@@ -38,12 +38,12 @@ KNOWN_TABS: tuple[str, ...] = (
     'model_disagreements',
     'regions',
     'primary_low_conf',
-    'coco_blind_spots',
+    'classifier_blind_spots',
     'new_class_proposals',
 )
 
 # W0: a display label + description per tab, so the frontend stops
-# hardcoding them (F7's "Classifier blind spots" for coco_blind_spots in
+# hardcoding them (F7's "Classifier blind spots" for classifier_blind_spots in
 # particular -- the id itself is renamed in a later wave). Served by
 # ``GET {prefix}/review/tabs``.
 TAB_LABELS: dict[str, tuple[str, str]] = {
@@ -64,7 +64,7 @@ TAB_LABELS: dict[str, tuple[str, str]] = {
         'Primary low confidence',
         'Largest subject — classifier unsure or missed',
     ),
-    'coco_blind_spots': (
+    'classifier_blind_spots': (
         'Classifier blind spots',
         'Detector proposed an item the classifier missed entirely',
     ),
@@ -96,7 +96,7 @@ TAB_EXTRA_FILTERS: dict[str, tuple[str, ...]] = {'regions': ('text', 'region_sta
 PRIMARY_SUBJECT_MAX_RANK = 2
 TAB_FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
     'primary_low_conf': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
-    'coco_blind_spots': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
+    'classifier_blind_spots': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
     'regions': {'region_status': 'all'},
 }
 
@@ -136,7 +136,10 @@ def tab_filters(tab: str) -> tuple[str, ...]:
 
 def review_tab_catalog() -> list[dict[str, Any]]:
     """``[{id, label, description, filters, filter_defaults,
-    filter_specs}, ...]`` for every ``KNOWN_TABS`` entry.
+    filter_specs}, ...]`` for every ``KNOWN_TABS`` entry, EXCEPT
+    ``regions`` when no region profile is active (no-profile gating
+    contract: a client must not offer a tab for data that can never
+    exist).
 
     ``filters`` lists the query parameters the tab honours (anything else
     is accepted but ignored); ``filter_defaults`` the value a tab applies
@@ -148,12 +151,20 @@ def review_tab_catalog() -> list[dict[str, Any]]:
     Fails loudly (``KeyError``) if a tab is added to ``KNOWN_TABS`` without
     a matching ``TAB_LABELS`` entry -- the same "one source of truth"
     contract ``test_class_sources.py`` enforces for ``class_source``.
+
+    The ``regions`` tab's label/description come from the active region
+    profile's ``display_name`` when one is configured (e.g. "Plates"),
+    falling back to the generic ``TAB_LABELS`` entry ("Regions") when it
+    set no ``display_name``.
     """
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    has_region_profile = get_active_region_profile() is not None
     return [
         {
             'id': tab,
-            'label': TAB_LABELS[tab][0],
-            'description': TAB_LABELS[tab][1],
+            'label': _tab_label(tab),
+            'description': _tab_description(tab),
             'filters': list(tab_filters(tab)),
             'filter_defaults': dict(TAB_FILTER_DEFAULTS.get(tab, {})),
             'filter_specs': [
@@ -163,7 +174,22 @@ def review_tab_catalog() -> list[dict[str, Any]]:
             ],
         }
         for tab in KNOWN_TABS
+        if tab != 'regions' or has_region_profile
     ]
+
+
+def _tab_label(tab: str) -> str:
+    if tab == 'regions':
+        from src.services.detection.profile_registry import get_active_region_profile
+
+        profile = get_active_region_profile()
+        if profile is not None and profile.display_name:
+            return profile.display_name
+    return TAB_LABELS[tab][0]
+
+
+def _tab_description(tab: str) -> str:
+    return TAB_LABELS[tab][1]
 
 
 def mismatch_reason(src: dict[str, Any], registry_names: frozenset[str], default: str) -> str:
@@ -239,7 +265,7 @@ def build_tab_query(
     ``region_status`` (``regions`` tab only, ignored elsewhere): one of
     :data:`REGION_STATUS_FILTER_VALUES`. Raises ``HTTPException(400, ...)``
     for an unrecognized ``tab`` or an unrecognized ``region_status`` — same
-    behavior ``legacy_review.py`` had inline before this split.
+    behavior the reference review router had inline before this split.
     """
     fields = get_region_fields()
     must: list[dict[str, Any]] = []
@@ -425,7 +451,7 @@ def build_tab_query(
                     'script': {
                         # Both fields are mapped `keyword` directly on the
                         # live index — no `.keyword` subfield exists (see
-                        # legacy_clusters.py's top_class agg for the full story
+                        # the reference clusters router's top_class agg for the full story
                         # on why this repo's code assumed one).
                         'source': (
                             "doc.containsKey('probe_pred_class') && "
@@ -475,13 +501,13 @@ def build_tab_query(
         )
         # Default sort: 'primary_low_conf_default' — see review_sorts.py.
         reason = 'largest subject — classifier unsure or missed'
-    elif tab == 'coco_blind_spots':
+    elif tab == 'classifier_blind_spots':
         # The cleanest blind spot: the item detector proposed an item that the classifier
         # missed entirely, on a primary subject. class_source is the exact
         # signal: an ingest proposal nothing classified. The stored
         # proposal score lives in ``confidence``.
         must.append({'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}})
-        # Default sort: 'coco_blind_spots_default' — see review_sorts.py.
+        # Default sort: 'classifier_blind_spots_default' — see review_sorts.py.
         reason = 'detector proposed an item the classifier missed (blind spot)'
     elif tab == 'new_class_proposals':
         # Items that need a class the registry doesn't have yet: flagged by

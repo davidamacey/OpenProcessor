@@ -62,10 +62,10 @@ SEG_BOX = RegionCandidate(bbox_norm=(0.3, 0.6, 0.6, 0.75), score=0.5, source='se
 def _reply(bbox_correct: bool | None) -> VlmCombinedReply:
     return VlmCombinedReply(
         img_id='c1',
-        plate_visible=True,
-        plate_bbox_correct=bbox_correct,
-        plate_text='DNV20',
-        plate_confidence='high',
+        region_visible=True,
+        region_bbox_correct=bbox_correct,
+        region_text_reply='DNV20',
+        region_confidence='high',
         make='Chevrolet',
     )
 
@@ -269,8 +269,8 @@ class TestVisibilityNoVerdictIsCapped:
             visible=lambda _crops, **_kw: {},
         )
         F = get_region_fields()
-        assert mocks['vlm'].plate_visible_batch.await_count == DEFAULT_MAX_NO_VERDICT_ATTEMPTS
-        mocks['seg'].segment_plate.assert_awaited_once()
+        assert mocks['vlm'].region_visible_batch.await_count == DEFAULT_MAX_NO_VERDICT_ATTEMPTS
+        mocks['seg'].segment.assert_awaited_once()
         doc = fake_os.writes[0][1]
         assert doc[F.status] == 'detected'
         assert 'vlm_visible:no_verdict' in doc[F.detector_chain]
@@ -290,8 +290,8 @@ class TestVisibilityNoVerdictIsCapped:
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         mocks = await _run(tmp_path, monkeypatch, fake_os, primary=None, visible=visible)
         F = get_region_fields()
-        assert mocks['vlm'].plate_visible_batch.await_count == 2
-        mocks['seg'].segment_plate.assert_not_awaited()
+        assert mocks['vlm'].region_visible_batch.await_count == 2
+        mocks['seg'].segment.assert_not_awaited()
         assert fake_os.writes[0][1][F.status] == 'no_region_visible'
 
 
@@ -305,7 +305,7 @@ class TestLabelerSeparatesTransportFromNoVerdict:
     @pytest.mark.parametrize('n_crops', [1, 3])
     async def test_batch_http_failure_raises_transport_failure(self, n_crops: int) -> None:
         crops = [
-            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=b'x', plate_bbox_norm=None)
+            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=b'x', region_bbox_norm=None)
             for i in range(n_crops)
         ]
         with pytest.raises(CombinedTransportError):
@@ -324,7 +324,7 @@ class TestLabelerSeparatesTransportFromNoVerdict:
             return_value={'choices': [{'message': {'content': 'no json'}}]}
         )
         crops = [
-            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=b'x', plate_bbox_norm=None) for i in range(2)
+            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=b'x', region_bbox_norm=None) for i in range(2)
         ]
         assert await lab.label_combined_batch(crops, draw_overlay=False) == {
             'c0': None,
@@ -397,7 +397,7 @@ class TestRejectionReasonVocabulary:
             crop_id='c1',
             image_path='',
             vehicle_bbox_norm=(0.1, 0.1, 0.9, 0.9),
-            plate_status='pending_detection',
+            region_status='pending_detection',
             class_name='sedan',
         )
         t.crop_jpeg = b'x'

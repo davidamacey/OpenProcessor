@@ -16,7 +16,7 @@ reference file's seven) per-writer ``test_holdout``-exclusion checks
 ``TestShouldClassifyHoldoutGuard`` above, and the reference's
 label-import lookup-query check targets a module never ported anywhere
 in this plan (out of Wave 5's scope — that's Wave 2 territory). The
-reference's two one-off-migration-script checks (``cleanup_low_conf_v6_labels``
+reference's two one-off-migration-script checks (``cleanup_low_conf_classifier_labels``
 / class-id-realign) target operator tooling this plan never ports;
 their live equivalents on this tree are the two ``must_not`` clauses in
 ``src/services/curation/probe_predictions.py``'s
@@ -53,7 +53,7 @@ def _make_task(
         crop_id='crop-1',
         image_path='/dev/null/never-read',
         vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
-        plate_status='pending',
+        region_status='pending',
         class_name='audi',
         group='cars',
         class_source=class_source,
@@ -85,17 +85,17 @@ class TestShouldClassifyHumanGuard:
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_skips_class_validated_true_regardless_of_source(self) -> None:
-        t = _make_task(class_source='v6_model', class_confidence=0.2, class_validated=True)
+        t = _make_task(class_source='classifier_model', class_confidence=0.2, class_validated=True)
         assert _should_classify(t, registry_loaded=True) is False
 
-    def test_still_classifies_low_conf_v6_non_human_non_holdout(self) -> None:
+    def test_still_classifies_low_conf_classifier_non_human_non_holdout(self) -> None:
         # Non-regression: the fix must not swallow the legitimate cohort
         # the worker exists to serve.
-        t = _make_task(class_source='v6_model', class_confidence=0.3, class_validated=False)
+        t = _make_task(class_source='classifier_model', class_confidence=0.3, class_validated=False)
         assert _should_classify(t, registry_loaded=True) is True
 
-    def test_still_skips_high_conf_v6_cohort(self) -> None:
-        t = _make_task(class_source='v6_model', class_confidence=0.9, class_validated=False)
+    def test_still_skips_high_conf_classifier_cohort(self) -> None:
+        t = _make_task(class_source='classifier_model', class_confidence=0.9, class_validated=False)
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_registry_not_loaded_always_skips(self) -> None:
@@ -110,7 +110,7 @@ class TestShouldClassifyHumanGuard:
 
 class TestShouldClassifyHoldoutGuard:
     def test_skips_test_holdout_crop(self) -> None:
-        t = _make_task(class_source='v6_model', class_confidence=0.2, test_holdout=True)
+        t = _make_task(class_source='classifier_model', class_confidence=0.2, test_holdout=True)
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_holdout_crop_with_coco_source_also_skipped(self) -> None:
@@ -118,7 +118,7 @@ class TestShouldClassifyHoldoutGuard:
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_non_holdout_crop_unaffected(self) -> None:
-        t = _make_task(class_source='v6_model', class_confidence=0.2, test_holdout=False)
+        t = _make_task(class_source='classifier_model', class_confidence=0.2, test_holdout=False)
         assert _should_classify(t, registry_loaded=True) is True
 
 
@@ -160,20 +160,20 @@ class TestCombinedClassUpdateResetsProvenance:
 
     def test_plate_fields_stay_unconditional_when_class_write_suppressed(self) -> None:
         """Region-write non-regression guard: proves the human/holdout
-        guards did not leak into region data. make/model/plate_visible
+        guards did not leak into region data. make/model/region_visible
         must still be written even when class fields are suppressed."""
         reply = VlmCombinedReply(
             img_id='crop-1',
             class_id=0,
             class_confidence='high',
-            plate_visible=True,
-            make='Honda',
-            model='CBR',
+            region_visible=True,
+            make='Acme',
+            model='X100',
         )
         update = _combined_class_update(reply, None)
         assert update[get_region_fields().visible] is True
-        assert update['vlm_item_make'] == 'Honda'
-        assert update['vlm_item_model'] == 'CBR'
+        assert update['vlm_item_make'] == 'Acme'
+        assert update['vlm_item_model'] == 'X100'
         assert 'class_source' not in update
 
 
@@ -342,7 +342,7 @@ class TestIsHumanOwnedClassPredicate:
         from src.clients.occ import is_human_owned_class
 
         assert is_human_owned_class({'class_source': 'vlm'}) is False
-        assert is_human_owned_class({'class_source': 'v6_model'}) is False
+        assert is_human_owned_class({'class_source': 'classifier_model'}) is False
         assert is_human_owned_class({}) is False
 
 
@@ -383,7 +383,7 @@ class TestVlmLabelBatchHumanGuard:
 
         from PIL import Image
 
-        monkeypatch.setenv('GEMMA_CROP_CACHE_DIR', str(tmp_path))
+        monkeypatch.setenv('OP_CROP_CACHE_DIR', str(tmp_path))
         crop_id = 'human-crop-1'
         buf = io.BytesIO()
         Image.new('RGB', (64, 64), (10, 20, 30)).save(buf, format='JPEG')
@@ -458,7 +458,7 @@ class TestDetectionWorkerBulkWriterHumanGuard:
             crop_id='crop-1',
             image_path='/dev/null/never-read',
             vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
-            plate_status='pending',
+            region_status='pending',
             class_name='audi',
             group='cars',
         )
@@ -508,12 +508,16 @@ class TestDetectionWorkerBulkWriterHumanGuard:
             crop_id='crop-1',
             image_path='/dev/null/never-read',
             vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
-            plate_status='pending',
+            region_status='pending',
             class_name='audi',
             group='cars',
         )
         t.update_doc = {'class_id': 9, 'class_source': 'vlm', 'region_status': 'detected'}
-        current = {'class_source': 'v6_model', 'class_validated': False, 'region_status': 'pending'}
+        current = {
+            'class_source': 'classifier_model',
+            'class_validated': False,
+            'region_status': 'pending',
+        }
         # Fetched in the same class state it is written onto.
         t.class_token = class_state_token(current)
 

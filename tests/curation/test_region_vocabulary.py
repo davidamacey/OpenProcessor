@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE_PATH
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -31,12 +32,14 @@ def client() -> Any:
 
 
 def test_regions_vocabulary_has_no_active_profile_by_default(client: TestClient) -> None:
-    """The neutral default (no OP_REGION_PROFILE) still serves a vocabulary
-    -- just without a detector/segmenter, only the fixed 'human' entry."""
+    """No-profile gating contract: with no active region profile, the
+    endpoint still 200s (never 404s) and serves `region_profile: null`
+    plus every list empty -- not a degraded-but-populated catalog."""
     resp = client.get('/curation/regions/vocabulary')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert set(body) == {
+        'region_profile',
         'detectors',
         'region_sources',
         'chain_actors',
@@ -44,18 +47,13 @@ def test_regions_vocabulary_has_no_active_profile_by_default(client: TestClient)
         'text_choices',
         'rejection_reasons',
     }
-    # No region profile: no region text, so no rules.
+    assert body['region_profile'] is None
     assert body['text_rules'] is None
-    assert 'vlm_invalid' in body['text_choices']
-    detector_ids = {d['id'] for d in body['detectors']}
-    assert 'human' in detector_ids
-    human_entry = next(d for d in body['detectors'] if d['id'] == 'human')
-    assert human_entry['role'] == 'human'
-    assert human_entry['filterable'] is True
-    # No hardcoded private model id ever appears.
-    assert 'lpr_nanov11_640' not in detector_ids
-    assert 'sam3' not in detector_ids
-    assert 'gemma-4-e4b' not in detector_ids
+    assert body['detectors'] == []
+    assert body['region_sources'] == []
+    assert body['chain_actors'] == []
+    assert body['text_choices'] == []
+    assert body['rejection_reasons'] == []
 
 
 def test_regions_vocabulary_reflects_the_active_profile(
@@ -63,7 +61,7 @@ def test_regions_vocabulary_reflects_the_active_profile(
 ) -> None:
     from src.services.detection import profile_registry
 
-    monkeypatch.setenv('OP_REGION_PROFILE', 'license_plate')
+    monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     profile_registry._reset_registry_for_tests()
     try:
         resp = client.get('/curation/regions/vocabulary')
@@ -94,7 +92,7 @@ def test_regions_vocabulary_env_configured_detector_reflected(
     vocabulary follows, proving nothing is hardcoded."""
     from src.services.detection import profile_registry
 
-    monkeypatch.setenv('OP_REGION_PROFILE', 'license_plate')
+    monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     monkeypatch.setenv('OP_REGION_DETECTION_DETECTOR_MODEL', 'my_custom_region_yolo')
     profile_registry._reset_registry_for_tests()
     try:
@@ -108,6 +106,7 @@ def test_regions_vocabulary_env_configured_detector_reflected(
         profile_registry._reset_registry_for_tests()
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_regions_vocabulary_covers_every_s3_region_source_value(client: TestClient) -> None:
     resp = client.get('/curation/regions/vocabulary')
     assert resp.status_code == 200, resp.text
@@ -118,18 +117,54 @@ def test_regions_vocabulary_covers_every_s3_region_source_value(client: TestClie
 
 
 def test_review_tabs_has_a_label_for_every_known_tab(client: TestClient) -> None:
+    """No region profile is active in this fixture -- 'regions' is
+    omitted entirely (no-profile gating contract)."""
     resp = client.get('/curation/review/tabs')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     served_ids = {t['id'] for t in body['tabs']}
-    assert served_ids == set(KNOWN_TABS)
+    assert served_ids == set(KNOWN_TABS) - {'regions'}
     for tab in body['tabs']:
         assert tab['label']
         assert tab['description']
     by_id = {t['id']: t for t in body['tabs']}
-    assert by_id['coco_blind_spots']['label'] == 'Classifier blind spots'
+    assert by_id['classifier_blind_spots']['label'] == 'Classifier blind spots'
 
 
+def test_review_tabs_omits_regions_tab_without_a_profile(client: TestClient) -> None:
+    resp = client.get('/curation/review/tabs')
+    assert resp.status_code == 200, resp.text
+    served_ids = {t['id'] for t in resp.json()['tabs']}
+    assert 'regions' not in served_ids
+
+
+@pytest.mark.usefixtures('reference_region_profile')
+def test_review_tabs_includes_regions_tab_with_a_profile(client: TestClient) -> None:
+    resp = client.get('/curation/review/tabs')
+    assert resp.status_code == 200, resp.text
+    served_ids = {t['id'] for t in resp.json()['tabs']}
+    assert served_ids == set(KNOWN_TABS)
+
+
+def test_review_tabs_regions_label_uses_the_active_profiles_display_name(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The active region profile's ``display_name`` (e.g. 'Plates') becomes
+    the 'regions' tab's label, not the generic fallback."""
+    from src.services.detection import profile_registry
+
+    monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
+    profile_registry._reset_registry_for_tests()
+    try:
+        resp = client.get('/curation/review/tabs')
+        assert resp.status_code == 200, resp.text
+        by_id = {t['id']: t for t in resp.json()['tabs']}
+        assert by_id['regions']['label'] == 'Plates'
+    finally:
+        profile_registry._reset_registry_for_tests()
+
+
+@pytest.mark.usefixtures('reference_region_profile')
 def test_review_tabs_serves_region_status_filter_spec(client: TestClient) -> None:
     """DQ-B2 follow-up: the regions tab's ``region_status`` filter is served
     as a self-describing enum spec (param, kind, label, value/label options)
@@ -183,6 +218,7 @@ def test_regions_vocabulary_serves_the_region_text_rules(client: TestClient) -> 
     assert isinstance(rules['placeholders'], list)
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_regions_vocabulary_serves_the_rejection_reasons(client: TestClient) -> None:
     from src.config.region_rejection import (
         REJECT_REASON_NO_VERDICT,
@@ -220,6 +256,7 @@ def test_regions_vocabulary_response_is_typed_in_openapi(client: TestClient) -> 
     schemas = spec['components']['schemas']
     props = schemas[ref]['properties']
     assert set(props) == {
+        'region_profile',
         'detectors',
         'region_sources',
         'chain_actors',

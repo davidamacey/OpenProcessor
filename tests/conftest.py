@@ -37,17 +37,23 @@ collect_ignore = [
 
 @pytest.fixture
 def reference_region_profile(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Activate the built-in ``license_plate`` reference region profile.
+    """Activate the example ``license_plate`` region profile
+    (``examples/region_profiles/license_plate.json``).
 
     The neutral default has no region profile, so the detection worker's
     cascade refuses to run. Tests that exercise the cascade opt in to the
-    reference profile the same way a deployment does: ``OP_REGION_PROFILE``.
+    example profile the same way a deployment does: ``OP_REGION_PROFILE_PATH``
+    pointed at a profile file. No profile ships built in.
     """
     import sys
+    from pathlib import Path
 
     from src.services.detection import profile_registry
 
-    monkeypatch.setenv('OP_REGION_PROFILE', 'license_plate')
+    example_path = (
+        Path(__file__).resolve().parents[1] / 'examples' / 'region_profiles' / 'license_plate.json'
+    )
+    monkeypatch.setenv('OP_REGION_PROFILE_PATH', str(example_path))
     profile_registry._reset_registry_for_tests()
     # The cascade's no-verdict count is process-wide; a test must not
     # inherit another test's count for the same crop id.
@@ -67,9 +73,10 @@ def reference_region_profile(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 def reference_ingest_profiles(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ingest profiles named like the reference deployment: a generic
     proposer named ``coco_yolo11`` (items it leaves unlabeled carry
-    ``coco_yolo11_proposal``) and a secondary classifier named ``v6``
-    (``v6_model``). The class_source vocabulary the worker and clustering
-    code filter on is derived from these names."""
+    ``coco_yolo11_proposal``) and a secondary classifier named
+    ``classifier`` (``classifier_model``). The class_source vocabulary
+    the worker and clustering code filter on is derived from these
+    names."""
     monkeypatch.setenv('OP_INGEST_PRIMARY_NAME', 'coco_yolo11')
     monkeypatch.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'classifier')
-    monkeypatch.setenv('OP_INGEST_SECONDARY_NAME', 'v6')
+    monkeypatch.setenv('OP_INGEST_SECONDARY_NAME', 'classifier')

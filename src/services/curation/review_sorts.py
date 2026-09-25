@@ -288,7 +288,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             description='Legacy default for the primary_low_conf tab.',
         ),
         ReviewSort(
-            id='coco_blind_spots_default',
+            id='classifier_blind_spots_default',
             label='Largest COCO blind spot',
             clause=[
                 {
@@ -308,7 +308,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             ],
             requires_field='crop_area_norm',
             status='stable',
-            description='Legacy default for the coco_blind_spots tab.',
+            description='Legacy default for the classifier_blind_spots tab.',
         ),
     ]
     return {rs.id: rs for rs in entries}
@@ -334,11 +334,11 @@ _TAB_DEFAULTS: dict[str, str] = {
     'regions': 'region_score',
     'model_disagreements': 'disagreement_entropy_asc',
     'primary_low_conf': 'primary_low_conf_default',
-    'coco_blind_spots': 'coco_blind_spots_default',
+    'classifier_blind_spots': 'classifier_blind_spots_default',
 }
 """The literal legacy ``sort = [...]`` each of the 9 ``GET /curation/review/{tab}``
 tabs hardcoded before this registry existed, keyed by the sort id whose
-``clause`` byte-matches it. Read directly off ``legacy_review.py`` — do not
+``clause`` byte-matches it. Read directly off the reference review-queries module — do not
 edit without re-checking the router against this table."""
 
 
@@ -389,7 +389,7 @@ async def _first_covered(
 def default_sort_for_tab(tab: str) -> str:
     """The legacy default sort id for ``tab``. Raises :class:`ValueError`
     for a tab this registry doesn't know about (should never happen in
-    practice — ``legacy_review.py`` validates ``tab`` against its own known
+    practice — the reference review-queries module validates ``tab`` against its own known
     set before this is ever called)."""
     try:
         return _TAB_DEFAULTS[tab]

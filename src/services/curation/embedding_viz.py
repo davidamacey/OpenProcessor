@@ -377,7 +377,7 @@ async def _fetch_pool(
 
 
 def _build_reducer() -> Any:
-    """Lazy ``import umap`` -- mirrors ``legacy_embedding_reduce._build_cpu_reducer``
+    """Lazy ``import umap`` -- mirrors ``clustering.embedding_reduce._build_cpu_reducer``
     so importing this module (or running its non-fit tests) never requires
     ``umap-learn`` to be installed. CPU-only (no cuML branch): the plan's
     compute budget already treats 2-d UMAP as job-only/background
@@ -412,7 +412,7 @@ def _save_reducer_to_disk(reducer: Any) -> None:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(_serialize_reducer(reducer))
     except Exception as exc:
-        logger.warning('legacy_umap_viz_state_disk_save_failed', error=str(exc))
+        logger.warning('curation_umap_viz_state_disk_save_failed', error=str(exc))
 
 
 async def _save_run_metadata(
@@ -423,10 +423,10 @@ async def _save_run_metadata(
     n_points: int,
     fitted_at: str,
 ) -> None:
-    """Own metadata slot (``legacy_umap_viz_state``, state_id='current') --
-    distinct from the retired clustering reducer's ``legacy_umap_state`` index.
+    """Own metadata slot (a dedicated viz-state index, state_id='current') --
+    distinct from the retired clustering reducer's own umap-state index.
     Metadata only (no pickled reducer blob) so this never risks the 100 MB
-    OpenSearch request-body ceiling ``legacy_embedding_reduce.py`` had to work
+    OpenSearch request-body ceiling the reference embedding_reduce module had to work
     around for the (much larger, per-crop) clustering reducer blob."""
     body = {
         'state_id': 'current',
@@ -441,14 +441,14 @@ async def _save_run_metadata(
     try:
         await opensearch.index(index=UMAP_VIZ_STATE_INDEX, id='current', body=body, refresh=False)
     except Exception as exc:
-        logger.warning('legacy_umap_viz_state_metadata_save_failed', error=str(exc))
+        logger.warning('curation_umap_viz_state_metadata_save_failed', error=str(exc))
 
 
 async def _load_run_metadata(opensearch: AsyncOpenSearch) -> dict[str, Any] | None:
     try:
         resp = await opensearch.get(index=UMAP_VIZ_STATE_INDEX, id='current')
     except Exception as exc:
-        logger.debug('legacy_umap_viz_state_metadata_not_found', error=str(exc))
+        logger.debug('curation_umap_viz_state_metadata_not_found', error=str(exc))
         return None
     return resp.get('_source') or None
 
@@ -492,7 +492,7 @@ async def fit_projection(embeddings: np.ndarray) -> tuple[np.ndarray, str]:
     despite the module writing coordinates elsewhere, this function does
     not itself touch OpenSearch; :func:`_bulk_write_coordinates` does that
     separately). Only ever called from :func:`run_projection_job` (module
-    docstring point 2) -- never from ``legacy_viz.py``'s GET handler."""
+    docstring point 2) -- never from the reference embedding-viz router's GET handler."""
     from datetime import UTC, datetime
 
     reducer = _build_reducer()
@@ -569,7 +569,7 @@ async def run_projection_job(
         _atomic_write(state)
         raise
     except Exception as exc:
-        logger.error('legacy_viz_projection_job_failed', job_id=job_id, error=str(exc))
+        logger.error('curation_viz_projection_job_failed', job_id=job_id, error=str(exc))
         state.status = 'failed'
         state.error = str(exc)
         state.finished_at = time.time()
@@ -602,7 +602,7 @@ async def get_cached_projection(
     """Serve **cached coordinates only** — imports nothing UMAP-related,
     calls no fit function, does one plain ``search`` over already-written
     ``viz_x``/``viz_y`` fields. This is the entire GET
-    ``/legacy/viz/projection`` contract (module docstring point 2).
+    ``/curation/viz/projection`` contract (module docstring point 2).
 
     Returns ``{'status': 'not_built'}`` when no projection has ever been
     fit. Otherwise ``{points, projection_version, fitted_at, stale}`` where
@@ -610,7 +610,7 @@ async def get_cached_projection(
     (embedding present, not test_holdout) whose cached
     ``viz_projection_version`` doesn't match the latest fit's version --
     i.e. some in-scope crops are missing/outdated coordinates, the same
-    "partial coverage is visible" philosophy ``/legacy/scores/coverage`` uses.
+    "partial coverage is visible" philosophy ``/curation/scores/coverage`` uses.
     """
     meta = await _load_run_metadata(opensearch)
     if meta is None:
@@ -665,7 +665,7 @@ async def get_cached_projection(
         count_resp = await opensearch.count(index=ITEMS_INDEX, body={'query': missing_query})
         stale = int(count_resp.get('count', 0)) > 0
     except Exception as exc:
-        logger.warning('legacy_viz_projection_staleness_check_failed', error=str(exc))
+        logger.warning('curation_viz_projection_staleness_check_failed', error=str(exc))
 
     return {
         'points': points,

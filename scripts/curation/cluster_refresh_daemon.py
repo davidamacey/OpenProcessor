@@ -71,7 +71,7 @@ def _parse_args() -> argparse.Namespace:
         help='POST /curation/pipeline/auto_label after auto_promote so freshly-'
         'CNN-labeled crops get assigned to their named class clusters '
         '(force_cluster_id_equals_class_id) and unlabeled residuals are '
-        'fed through Gemma/SAM3. Default on; pass --no-auto-label to '
+        'fed through the VLM/segmenter. Default on; pass --no-auto-label to '
         'skip.',
     )
     p.add_argument(

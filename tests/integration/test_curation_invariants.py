@@ -108,7 +108,7 @@ async def test_invariant_1_no_silent_overwrite_via_occ() -> None:
     # genuine interleaving, not two sequential no-ops.
     results = await asyncio.gather(
         writer(10, 'human'),
-        writer(20, 'sam_worker'),
+        writer(20, 'region_worker'),
         return_exceptions=True,
     )
     successes = [r for r in results if not isinstance(r, BaseException)]
@@ -145,7 +145,7 @@ async def test_invariant_1_conflict_is_the_fakes_own_conflict_type() -> None:
 
 async def test_invariant_2_lone_vlm_signal_does_not_validate_class() -> None:
     """No production merger flips ``class_validated=True`` off a single
-    VLM (``class_source='vlm'``/``'gemma'``-style) write alone — it takes
+    VLM (``class_source='vlm'``-style) write alone — it takes
     a second, independent signal (human confirmation, or a cluster
     majority-agreement merge) to validate a class.
 
@@ -337,7 +337,7 @@ async def test_invariant_4_history_preserved_across_two_relabels() -> None:
     assert doc['class_id'] == 3
     history = doc.get('class_id_history') or []
     prior_class_ids = [h['class_id'] for h in history]
-    assert 1 in prior_class_ids, f'lost the original v6 label: {history!r}'
+    assert 1 in prior_class_ids, f'lost the original classifier label: {history!r}'
     assert 2 in prior_class_ids, f'lost the first relabel: {history!r}'
     for entry in history:
         assert 'at' in entry

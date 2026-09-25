@@ -61,9 +61,9 @@ async def review_unmatched_terms(
 
     Returns the top-N most common raw labels the VLM produced for crops the
     registry could not resolve. This is the main input to growing the
-    registry: high-count labels are obvious candidates for new
-    :py:class:`LegacyClassEntry` entries (or new ``SYNONYMS`` mappings if the
-    raw label is just a phrasing of an existing class).
+    registry: high-count labels are obvious candidates for new class
+    entries (or new ``SYNONYMS`` mappings if the raw label is just a
+    phrasing of an existing class).
 
     Once the registry (or the prompt pack's synonyms) has grown, run
     ``scripts/curation/reclassify_after_registry_growth.py`` with
@@ -174,7 +174,7 @@ async def review_raw_label_clusters(
                         # live index — no ``.keyword`` subfield exists (the
                         # migration that assumed a ``text`` mapping has been
                         # failing silently on every startup; see
-                        # legacy_clusters.py's top_class agg for the full story).
+                        # the reference clusters router's top_class agg for the full story).
                         'terms': {'field': 'class_name', 'size': 1},
                     },
                 },
@@ -540,7 +540,7 @@ async def freeze_test_holdout(
         except HTTPException:
             raise
         except Exception as exc:
-            logger.warning('legacy_test_holdout_count_failed', error=str(exc))
+            logger.warning('curation_test_holdout_count_failed', error=str(exc))
 
     cohort_query = build_cohort_query()
     try:

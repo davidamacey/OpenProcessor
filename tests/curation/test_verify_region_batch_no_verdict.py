@@ -19,7 +19,7 @@ class _Labeler:
     def __init__(self, verdicts: list[VlmRegionVerdict]) -> None:
         self._verdicts = verdicts
 
-    async def verify_plate_batch(self, _crops: list[Any]) -> list[VlmRegionVerdict]:
+    async def verify_region_batch(self, _crops: list[Any]) -> list[VlmRegionVerdict]:
         return self._verdicts
 
 
@@ -51,6 +51,7 @@ async def test_no_verdict_crop_is_omitted_not_a_reject(monkeypatch: pytest.Monke
             ]
         ),
         object(),  # opensearch is unused on this path
+        object(),  # profile dependency, unused on this path
     )
 
     result_ids = {r.crop_id for r in resp.results}
@@ -69,6 +70,7 @@ async def test_all_no_verdict_returns_empty_results(monkeypatch: pytest.MonkeyPa
         VlmVerifyRegionBatchRequest(
             items=[VlmVerifyRegionBatchItem(crop_id='a', region_image_b64=_IMG)]
         ),
+        object(),
         object(),
     )
 

@@ -1,8 +1,8 @@
 """Curation /health + /models/status + /models/{name} (unload) endpoints.
 
 The reference implementation this was ported from hardcodes a fixed
-vehicle/license-plate model roster (a COCO region proposer, an 80-class
-vehicle classifier, an LPR detector, …) with vehicle-domain friendly
+domain-specific model roster (a COCO region proposer, an 80-class
+secondary classifier, a region detector, …) with domain-friendly
 names. This port drives the equivalent roster off the already-generic
 config this plan built: :class:`~src.config.detection_profile.DetectionProfile`
 (the configured region detector + OCR det/rec models) and
@@ -124,12 +124,19 @@ async def curation_health(
     else:
         overall = 'down'
 
+    from src.services.curation.region_vocabulary import region_profile_summary
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    active_profile = get_active_region_profile()
+    region_profile = region_profile_summary(active_profile) if active_profile is not None else None
+
     return HealthResponse(
         status=overall,
         triton=triton_status,
         opensearch=os_status,
         vlm=vlm_status,
         registry=registry_status,
+        region_profile=region_profile,
     )
 
 
@@ -205,9 +212,10 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
 # unload endpoint, not even with force=true. "Never touch the configured
 # detection pipeline's models" is the standing constraint; which models
 # that means is driven by the active DetectionProfile, not a hardcoded
-# domain name. S8: the 'lpr_' prefix is dropped -- the code never names
-# the deployed region-detector id; a name is protected only via the
-# active profile's detector_model (or the fixed paddleocr_ OCR prefix).
+# domain-specific prefix. S8: no hardcoded detector-name prefix is
+# dropped -- the code never names the deployed region-detector id; a
+# name is protected only via the active profile's detector_model (or
+# the fixed paddleocr_ OCR prefix).
 _REGION_PROTECTED_PREFIXES = ('paddleocr_',)
 
 

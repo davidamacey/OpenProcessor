@@ -1,6 +1,6 @@
 """Tests for src.services.training.preflight_scan (P2-8).
 
-The empty_labels + plate_pairing preflight checks were hardcoded to always
+The empty_labels + region_pairing preflight checks were hardcoded to always
 report 'ok' with no scan ever run. These tests build a small temp export
 fixture (labels dir + class_registry.json) and exercise the real scan.
 """
@@ -10,7 +10,23 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+from src.services.detection import profile_registry
 from src.services.training.preflight_scan import scan_export_labels
+
+
+@pytest.fixture
+def region_class_env(monkeypatch: pytest.MonkeyPatch):
+    """Activate a region profile whose region_class_name is 'license_plate'
+    -- the pairing scan is 'not applicable' (region_boxes stays 0) without
+    an active profile naming a region class."""
+    monkeypatch.setenv(
+        f'{profile_registry.REGION_DETECTION_ENV_PREFIX}REGION_CLASS_NAME', 'license_plate'
+    )
+    profile_registry._reset_registry_for_tests()
+    yield
+    profile_registry._reset_registry_for_tests()
 
 
 def _write_registry(export_dir: Path) -> None:
@@ -52,17 +68,17 @@ def test_scan_counts_empty_labeled_image(tmp_path: Path) -> None:
     assert result.empty_label_images == 1
 
 
-def test_scan_paired_and_orphan_plate_boxes(tmp_path: Path) -> None:
+def test_scan_paired_and_orphan_region_boxes(tmp_path: Path, region_class_env: None) -> None:
     export_dir = tmp_path / 'export'
     _write_registry(export_dir)
-    # sedan box covering the middle of the image; plate box sits inside it -> paired.
+    # sedan box covering the middle of the image; region box sits inside it -> paired.
     _write_label(
         export_dir,
         'train',
         'paired',
         ['0 0.5 0.5 0.6 0.6', '2 0.5 0.5 0.1 0.05'],
     )
-    # plate box far outside any vehicle box -> orphan.
+    # region box far outside any vehicle box -> orphan.
     _write_label(
         export_dir,
         'train',
@@ -71,8 +87,63 @@ def test_scan_paired_and_orphan_plate_boxes(tmp_path: Path) -> None:
     )
 
     result = scan_export_labels(export_dir)
-    assert result.plate_boxes == 2
-    assert result.unpaired_plate_boxes == 1
+    assert result.region_boxes == 2
+    assert result.unpaired_region_boxes == 1
+
+
+def test_scan_region_pairing_is_not_applicable_without_an_active_profile(
+    tmp_path: Path,
+) -> None:
+    """No region profile configured -> the pairing scan reports 0/0
+    (not applicable) even though the export's registry has a
+    'license_plate' class and the label files carry its dense id."""
+    export_dir = tmp_path / 'export'
+    _write_registry(export_dir)
+    _write_label(
+        export_dir,
+        'train',
+        'paired',
+        ['0 0.5 0.5 0.6 0.6', '2 0.5 0.5 0.1 0.05'],
+    )
+
+    result = scan_export_labels(export_dir)
+    assert result.region_boxes == 0
+    assert result.unpaired_region_boxes == 0
+
+
+def test_scan_region_pairing_follows_a_differently_named_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A deployment whose region_class_name is NOT 'license_plate' pairs
+    against its own class, proving the lookup isn't hardcoded."""
+    export_dir = tmp_path / 'export'
+    export_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        'classes': [
+            {'class_id': 1, 'class_name': 'sedan'},
+            {'class_id': 90, 'class_name': 'widget_label'},
+        ],
+        'export_id_map': {'1': 0, '90': 1},
+    }
+    (export_dir / 'class_registry.json').write_text(json.dumps(payload))
+    (export_dir / 'manifest.json').write_text(json.dumps({'dataset_kind': 'vehicle'}))
+    _write_label(
+        export_dir,
+        'train',
+        'paired',
+        ['0 0.5 0.5 0.6 0.6', '1 0.5 0.5 0.1 0.05'],
+    )
+
+    monkeypatch.setenv(
+        f'{profile_registry.REGION_DETECTION_ENV_PREFIX}REGION_CLASS_NAME', 'widget_label'
+    )
+    profile_registry._reset_registry_for_tests()
+    try:
+        result = scan_export_labels(export_dir)
+        assert result.region_boxes == 1
+        assert result.unpaired_region_boxes == 0
+    finally:
+        profile_registry._reset_registry_for_tests()
 
 
 def test_scan_whole_dataset_empty_reports_empty_for_every_image(tmp_path: Path) -> None:

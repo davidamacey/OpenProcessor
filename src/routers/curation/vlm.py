@@ -1,4 +1,4 @@
-"""VLM-based labeling endpoints — ported from ``legacy_gemma.py`` (§5 Chunk 7).
+"""VLM-based labeling endpoints — ported from the reference VLM router (§5 Chunk 7).
 
 ``POST /curation/vlm/label_batch`` classifies item crops via the shared
 :class:`~src.services.labeling.vlm_labeler.VlmLabeler` singleton;
@@ -6,9 +6,9 @@
 verify (and, for the first two, read) the crop's sub-region-of-interest
 (e.g. a printed label, a license plate).
 
-Deviation from the plan's file-for-file mapping: the reference
-``legacy_gemma.py`` derives its class-label provenance dict from
-``plate_detect.class_provenance``, which lives in
+Deviation from the plan's file-for-file mapping: the reference router
+derives its class-label provenance dict from the reference cascade
+module's ``class_provenance``, which lives in
 ``src.services.detection.cascade_detect`` — not ported until Chunk 8.
 Importing it here would either forward-reference a module that doesn't
 exist yet (breaking ``import src.main`` for every wave between Chunk 7
@@ -35,6 +35,7 @@ from src.config import get_curation_config, get_region_fields
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
+    RegionProfileDep,
     _now_iso,
     get_class_registry,
     logger,
@@ -236,8 +237,8 @@ async def vlm_label_batch(
 
     # Same OP_CROP_CACHE_DIR / CurationConfig.crop_cache_dir the worker
     # (scripts/curation/worker/state.py) writes into -- this used to read a
-    # different env var with a different default (GEMMA_CROP_CACHE_DIR),
-    # which meant a 100% cache miss out of the box (CFG-2).
+    # different env var with a different default, which meant a 100% cache
+    # miss out of the box (CFG-2).
     crop_cache_dir = str(get_curation_config().crop_cache_dir)
 
     def _vlm_jpeg_for(crop_id: str, image_path: str, bbox: tuple) -> bytes | None:
@@ -411,6 +412,7 @@ async def vlm_label_batch(
 async def vlm_verify_regions(
     payload: VlmVerifyRegionsRequest,
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
 ) -> dict[str, Any]:
     """Verify whether each crop's region-of-interest contains a real region.
 
@@ -462,7 +464,7 @@ async def vlm_verify_regions(
         except Exception as exc:
             logger.warning('curation_vlm_region_thumb_failed', crop_id=crop_id, error=str(exc))
             continue
-        verdict = await labeler.verify_plate(RegionCrop(crop_id=crop_id, jpeg_bytes=jpeg))
+        verdict = await labeler.verify_region(RegionCrop(crop_id=crop_id, jpeg_bytes=jpeg))
         if verdict is None:
             # No usable answer at all -- leave this crop's verify state
             # untouched for a retry rather than writing a verified=False
@@ -506,6 +508,7 @@ async def vlm_verify_regions(
 async def vlm_verify_region_batch(
     payload: VlmVerifyRegionBatchRequest,
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
 ) -> VlmVerifyRegionBatchResponse:
     """Verify region crops in batches of ``max_images_per_call`` per upstream VLM call.
 
@@ -517,7 +520,7 @@ async def vlm_verify_region_batch(
     chunked-fan-out pattern from ``/curation/vlm/label_batch``: pack
     several region JPEGs per upstream call (the deployment's
     images-per-prompt cap), fire chunks in parallel via
-    :py:meth:`VlmLabeler.verify_plate_batch`, and return verdicts
+    :py:meth:`VlmLabeler.verify_region_batch`, and return verdicts
     ordered by input ``crop_id``.
 
     Unlike ``/curation/vlm/verify_regions`` (which re-derives the region
@@ -562,9 +565,9 @@ async def vlm_verify_region_batch(
         candidate_text_by_id[item.crop_id] = item.candidate_text
 
     labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
-    verdicts = await labeler.verify_plate_batch(crops)
+    verdicts = await labeler.verify_region_batch(crops)
 
-    # Re-order to input order (verify_plate_batch already preserves it,
+    # Re-order to input order (verify_region_batch already preserves it,
     # but the explicit reorder defends against future implementation
     # changes and gives a deterministic contract).
     by_id = {v.crop_id: v for v in verdicts}
@@ -592,6 +595,7 @@ async def vlm_verify_region_batch(
 async def vlm_region_visible_batch(
     payload: VlmRegionVisibleBatchRequest,
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
 ) -> VlmRegionVisibleBatchResponse:
     """Pre-filter item crops by asking the VLM whether a sub-region is visible.
 
@@ -642,7 +646,7 @@ async def vlm_region_visible_batch(
         crops.append(RegionCrop(crop_id=item.crop_id, jpeg_bytes=jpeg_bytes))
 
     labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
-    visible = await labeler.plate_visible_batch(crops)
+    visible = await labeler.region_visible_batch(crops)
     return VlmRegionVisibleBatchResponse(visible=visible)
 
 

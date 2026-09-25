@@ -2,13 +2,13 @@
 
 Ported from the reference detection-worker package (9 files,
 3458 LOC). The top-level shim file is preserved as a re-export so
-legacy invocation shapes (``python -m scripts.curation.sam_worker_main``
+legacy invocation shapes (``python -m scripts.curation.region_worker_main``
 and direct file runs) keep working — see
-``scripts/curation/sam_worker_main.py``.
+``scripts/curation/region_worker_main.py``.
 
 Sub-modules:
     state        — constants, ``_ItemTask`` dataclass, crop IO helpers
-    cascade      — pending fetch, ``Sam3Client``, geometry helpers, ``_process_crop``
+    cascade      — pending fetch, ``SegmenterClient``, geometry helpers, ``_process_crop``
     verify       — VLM verify + region doc builders + auto-confirm
     bulk_writer  — ``_bulk_update`` + ``_publish_region_events``
     combined     — B-PR5 combined class+region+OCR cohort routing
@@ -27,26 +27,26 @@ helpers like ``_ItemTask`` / ``_process_crop`` / ``_bulk_update``.
 from __future__ import annotations
 
 # Public, top-level re-exports. These are needed because:
-#   1. ``scripts/curation/sam_worker_main.py`` does ``from ... import *`` —
+#   1. ``scripts/curation/region_worker_main.py`` does ``from ... import *`` —
 #      these names are what ``*`` picks up.
-#   2. ``tests/curation/test_sam_worker.py`` monkeypatches the heavy-IO
+#   2. ``tests/curation/test_region_worker.py`` monkeypatches the heavy-IO
 #      constructors (``AsyncTritonPool``, ``AsyncOpenSearch``,
-#      ``Sam3Client``, ``VlmLabeler``) on the shim module; the runner
+#      ``SegmenterClient``, ``VlmLabeler``) on the shim module; the runner
 #      looks them up via the shim (``from scripts.curation import
-#      sam_worker_main as _wkr; _wkr.AsyncTritonPool(...)``), so the
+#      region_worker_main as _wkr; _wkr.AsyncTritonPool(...)``), so the
 #      patch must reach the shim's namespace.
 from opensearchpy import AsyncOpenSearch  # noqa: F401
 
-from scripts.curation.worker.cascade import Sam3Client  # noqa: F401
+from scripts.curation.worker.cascade import SegmenterClient  # noqa: F401
 from scripts.curation.worker.runner import run  # noqa: F401
 from scripts.curation.worker.state import (  # noqa: F401
     CURATION_ITEMS_INDEX,
-    DEFAULT_GEMMA,
     DEFAULT_OPENSEARCH,
     DEFAULT_PAUSE_SENTINEL,
-    DEFAULT_SAM3,
-    DEFAULT_SAM3_URLS,
+    DEFAULT_SEGMENTER_URL,
+    DEFAULT_SEGMENTER_URLS,
     DEFAULT_TRITON,
+    DEFAULT_VLM_URL,
     JPEG_QUALITY,
     STATUS_PENDING_DETECTION,
     STATUS_PENDING_VERIFICATION,

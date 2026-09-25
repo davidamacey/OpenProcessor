@@ -162,6 +162,12 @@ async def lifespan(app: FastAPI):
     # =========================================================================
     logger.info('startup_begin', phase='initialization')
 
+    # Fail loudly on any retired env-var name (naming-sweep D4) before
+    # anything else initializes.
+    from src.config.retired_env import reject_retired_env
+
+    reject_retired_env()
+
     # Create shared ThreadPoolExecutor for CPU-bound tasks
     # (JPEG decode, resize, preprocessing)
     AppResources.shared_executor = ThreadPoolExecutor(

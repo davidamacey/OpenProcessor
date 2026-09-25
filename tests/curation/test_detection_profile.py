@@ -111,11 +111,13 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'TEXT_FORMAT': '[A-Z]{3}[0-9]{3}',
         'TEXT_PLACEHOLDERS': 'XX11, YY22',
         'TEXT_REJECT_SEQUENCES': 'true',
-        'SAM_TEXT_PROMPT': 'env prompt',
+        'SEGMENTER_TEXT_PROMPT': 'env prompt',
         'SECONDARY_SHAPE_GROUPS': 'group_a,group_b',
         'CLASS_IDS': '2, 3,7',
         'ASSIGNS_CLASS': 'true',
         'LABELS_PATH': '/models/proposer/labels.txt',
+        'REGION_CLASS_NAME': 'env_region_class',
+        'DISPLAY_NAME': 'Env Regions',
     }
     prefix = 'OP_TEST_DETECTION_'
     for suffix, value in env_values.items():
@@ -173,11 +175,19 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
     assert profile.text_format == '[A-Z]{3}[0-9]{3}'
     assert profile.text_placeholders == frozenset({'XX11', 'YY22'})
     assert profile.text_reject_sequences is True
-    assert profile.sam_text_prompt == 'env prompt'
+    assert profile.segmenter_text_prompt == 'env prompt'
     assert profile.secondary_shape_groups == frozenset({'group_a', 'group_b'})
     assert profile.class_ids == frozenset({2, 3, 7})
     assert profile.assigns_class is True
     assert profile.labels_path == '/models/proposer/labels.txt'
+    assert profile.region_class_name == 'env_region_class'
+    assert profile.display_name == 'Env Regions'
+
+
+def test_region_class_name_and_display_name_default_empty() -> None:
+    profile = DetectionProfile(name='region')
+    assert profile.region_class_name == ''
+    assert profile.display_name == ''
 
 
 def test_from_env_overrides_only_set_vars_others_default(monkeypatch) -> None:
@@ -196,9 +206,9 @@ def test_from_env_name_kwarg_used_when_name_env_unset() -> None:
 
 
 def test_two_distinct_profiles_are_independent() -> None:
-    """A second, non-plate profile through the same cascade must not
+    """A second, distinct profile through the same cascade must not
     share mutable state with the first (§6.1 wave-8 coverage note)."""
-    plate = DetectionProfile(name='license_plate', detector_model='lpr_nanov11_640')
+    region_a = DetectionProfile(name='license_plate', detector_model='region_det_test')
     box = DetectionProfile(
         name='box',
         detector_model='box_detector_v1',
@@ -206,7 +216,7 @@ def test_two_distinct_profiles_are_independent() -> None:
         aspect_max=2.0,
         secondary_shape_groups=frozenset({'small_box', 'large_box'}),
     )
-    assert plate.detector_model != box.detector_model
-    assert plate.aspect_min != box.aspect_min
+    assert region_a.detector_model != box.detector_model
+    assert region_a.aspect_min != box.aspect_min
     assert box.secondary_shape_groups == frozenset({'small_box', 'large_box'})
-    assert plate.secondary_shape_groups == frozenset()
+    assert region_a.secondary_shape_groups == frozenset()

@@ -1,6 +1,6 @@
 """On-the-fly outlier ranking for a cluster, by distance from its centroid.
 
-Vehicle CLASS clusters (cluster_id == class_id) are populated from v6/human
+CLASS clusters (cluster_id == class_id) are populated from classifier/human
 labels, not from a FAISS centroid, so they carry no ``cluster_distance``.
 To let operators cherry-pick the worst offenders (a car sitting in the
 "pickup" cluster, a mislabel, a junk crop), we compute the class centroid as
@@ -108,10 +108,10 @@ async def compute_centroid_distances(
         try:
             await client.clear_scroll(scroll_id=scroll_id)
         except Exception as exc:
-            logger.warning('legacy_outlier_clear_scroll_failed', error=str(exc))
+            logger.warning('curation_outlier_clear_scroll_failed', error=str(exc))
 
     if too_large:
-        logger.info('legacy_outlier_skip_too_large', index=index, n_seen=len(ids))
+        logger.info('curation_outlier_skip_too_large', index=index, n_seen=len(ids))
         return None
     if not ids:
         return {}

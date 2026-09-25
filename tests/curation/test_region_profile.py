@@ -2,8 +2,10 @@
 
 An unconfigured deployment has *no* region profile: nothing is advertised
 on ``GET /methods``' ``detection_profile`` axis and the detection worker's
-region cascade stays off. ``OP_REGION_PROFILE`` selects a registered or
-built-in reference profile by name; ``OP_REGION_DETECTION_<FIELD>``
+region cascade stays off. ``OP_REGION_PROFILE_PATH`` loads a profile
+from a file (e.g. ``examples/region_profiles/license_plate.json``);
+``OP_REGION_PROFILE`` selects a profile a deployment's own startup code
+already registered. ``OP_REGION_DETECTION_<FIELD>``
 overrides fields on top of it. Whatever resolves is registered, so it is
 exactly what ``GET /methods`` advertises.
 """
@@ -16,11 +18,14 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _region_profile_fixture import (
+    EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE,
+    EXAMPLE_LICENSE_PLATE_PROFILE_PATH,
+)
 
-import scripts.curation.sam_worker_main as worker
+import scripts.curation.region_worker_main as worker
 from src.config import DetectionProfile
 from src.services.detection import profile_registry
-from src.services.detection.reference_profiles import REFERENCE_LICENSE_PLATE_PROFILE
 
 
 if TYPE_CHECKING:
@@ -37,6 +42,7 @@ def region_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
     import os
 
     monkeypatch.delenv('OP_REGION_PROFILE', raising=False)
+    monkeypatch.delenv('OP_REGION_PROFILE_PATH', raising=False)
     for key in [k for k in os.environ if k.startswith(_ENV_PREFIX)]:
         monkeypatch.delenv(key)
     profile_registry._reset_registry_for_tests()
@@ -72,7 +78,8 @@ def test_importing_cascade_detect_registers_nothing_by_default(
     env = {
         k: v
         for k, v in os.environ.items()
-        if k != 'OP_REGION_PROFILE' and not k.startswith(_ENV_PREFIX)
+        if k not in ('OP_REGION_PROFILE', 'OP_REGION_PROFILE_PATH')
+        and not k.startswith(_ENV_PREFIX)
     }
     out = subprocess.run(  # nosec B603
         [sys.executable, '-c', snippet],
@@ -89,12 +96,12 @@ def test_region_profile_or_neutral_has_no_detector(region_env: pytest.MonkeyPatc
     neutral = profile_registry.region_profile_or_neutral()
     assert neutral.name == 'region'
     assert neutral.detector_model == ''
-    assert neutral.sam_text_prompt == ''
+    assert neutral.segmenter_text_prompt == ''
     assert neutral.secondary_shape_groups == frozenset()
 
 
 def test_select_builtin_reference_profile_by_name(region_env: pytest.MonkeyPatch) -> None:
-    region_env.setenv('OP_REGION_PROFILE', 'license_plate')
+    region_env.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     active = profile_registry.get_active_region_profile()
     assert active == REFERENCE_LICENSE_PLATE_PROFILE
     assert profile_registry.get_default_profile_name() == 'license_plate'
@@ -102,14 +109,14 @@ def test_select_builtin_reference_profile_by_name(region_env: pytest.MonkeyPatch
 
 
 def test_env_overrides_layer_on_selected_profile(region_env: pytest.MonkeyPatch) -> None:
-    region_env.setenv('OP_REGION_PROFILE', 'license_plate')
+    region_env.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     region_env.setenv(f'{_ENV_PREFIX}SECONDARY_SHAPE_GROUPS', 'group_a, group_b')
-    region_env.setenv(f'{_ENV_PREFIX}SAM_TEXT_PROMPT', 'a custom prompt')
+    region_env.setenv(f'{_ENV_PREFIX}SEGMENTER_TEXT_PROMPT', 'a custom prompt')
     active = profile_registry.get_active_region_profile()
     assert active is not None
     assert active.name == 'license_plate'
     assert active.secondary_shape_groups == frozenset({'group_a', 'group_b'})
-    assert active.sam_text_prompt == 'a custom prompt'
+    assert active.segmenter_text_prompt == 'a custom prompt'
     # Everything not overridden comes from the selected base.
     assert active.detector_model == REFERENCE_LICENSE_PLATE_PROFILE.detector_model
     assert active.aspect_min == REFERENCE_LICENSE_PLATE_PROFILE.aspect_min
@@ -176,7 +183,7 @@ def test_models_roster_skips_region_models_when_unconfigured(
     assert REFERENCE_LICENSE_PLATE_PROFILE.detector_model not in names
     assert REFERENCE_LICENSE_PLATE_PROFILE.detector_model not in _region_protected_models()
 
-    region_env.setenv('OP_REGION_PROFILE', 'license_plate')
+    region_env.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     profile_registry._reset_registry_for_tests()
     names = {name for name, *_ in _core_models()}
     assert REFERENCE_LICENSE_PLATE_PROFILE.detector_model in names
@@ -197,15 +204,15 @@ def _patch_worker_io(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
     os_client.search = AsyncMock(return_value={'hits': {'hits': []}})
     os_client.bulk = AsyncMock()
     os_client.close = AsyncMock()
-    sam3 = MagicMock()
-    sam3.aclose = AsyncMock()
-    gemma = MagicMock()
-    gemma.aclose = AsyncMock()
+    segmenter = MagicMock()
+    segmenter.aclose = AsyncMock()
+    vlm = MagicMock()
+    vlm.aclose = AsyncMock()
     mocks = {
         'AsyncTritonPool': MagicMock(return_value=pool),
         'AsyncOpenSearch': MagicMock(return_value=os_client),
-        'Sam3Client': MagicMock(return_value=sam3),
-        'VlmLabeler': MagicMock(return_value=gemma),
+        'SegmenterClient': MagicMock(return_value=segmenter),
+        'VlmLabeler': MagicMock(return_value=vlm),
     }
     for name, mock in mocks.items():
         monkeypatch.setattr(worker, name, mock)
@@ -219,17 +226,19 @@ def _patch_worker_io(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
         _noop_signal_handler,
         raising=False,
     )
-    monkeypatch.setenv('SAM_WORKER_METRICS_PORT', '0')
+    monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
     return mocks
 
 
-def _worker_args(tmp_path: Path, sam3_url: str = 'http://sam3.local:8000') -> argparse.Namespace:
+def _worker_args(
+    tmp_path: Path, segmenter_url: str = 'http://segmenter.local:8000'
+) -> argparse.Namespace:
     return worker.parse_args(
         [
             '--opensearch=http://os.local:9200',
             '--triton=triton:8001',
-            f'--sam3-url={sam3_url}',
-            '--gemma-url=http://gemma.local:8000',
+            f'--segmenter-url={segmenter_url}',
+            '--vlm-url=http://vlm.local:8000',
             f'--pause-sentinel={tmp_path / "pause.sentinel"}',
             '--max-iterations=1',
         ]
@@ -245,19 +254,19 @@ async def test_worker_is_a_noop_without_a_region_profile(
     assert rc == 0
     mocks['AsyncTritonPool'].assert_not_called()
     mocks['AsyncOpenSearch'].assert_not_called()
-    mocks['Sam3Client'].assert_not_called()
+    mocks['SegmenterClient'].assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_worker_sends_the_profile_segmenter_prompt(
     region_env: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    region_env.setenv('OP_REGION_PROFILE', 'license_plate')
-    region_env.setenv(f'{_ENV_PREFIX}SAM_TEXT_PROMPT', 'shipping label')
+    region_env.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
+    region_env.setenv(f'{_ENV_PREFIX}SEGMENTER_TEXT_PROMPT', 'shipping label')
     mocks = _patch_worker_io(region_env)
     assert await worker.run(_worker_args(tmp_path)) == 0
-    mocks['Sam3Client'].assert_called_once_with(
-        'http://sam3.local:8000', text_prompt='shipping label'
+    mocks['SegmenterClient'].assert_called_once_with(
+        'http://segmenter.local:8000', text_prompt='shipping label'
     )
 
 
@@ -268,7 +277,7 @@ async def test_worker_disables_segmenter_when_profile_has_no_prompt(
     region_env.setenv(f'{_ENV_PREFIX}NAME', 'shipping_label')
     mocks = _patch_worker_io(region_env)
     assert await worker.run(_worker_args(tmp_path)) == 0
-    mocks['Sam3Client'].assert_called_once_with('', text_prompt='')
+    mocks['SegmenterClient'].assert_called_once_with('', text_prompt='')
 
 
 def test_secondary_shape_routing_follows_env_groups(
@@ -278,18 +287,18 @@ def test_secondary_shape_routing_follows_env_groups(
     (class_name -> group), not the dead ``_ItemTask.group`` field."""
     import scripts.curation.worker.state as worker_state
 
-    region_env.setenv('OP_REGION_PROFILE', 'license_plate')
+    region_env.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     region_env.setenv(f'{_ENV_PREFIX}SECONDARY_SHAPE_GROUPS', 'tall_things')
     task = worker._ItemTask(
         crop_id='c',
         image_path='/x',
         vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
-        plate_status=None,
+        region_status=None,
         class_name='audi',
     )
     monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'tall_things')
     assert worker._is_secondary_shape(task)
-    monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'sportbikes')
+    monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'unrelated_group')
     assert not worker._is_secondary_shape(task)
 
 
@@ -303,8 +312,8 @@ def test_no_secondary_shape_routing_when_profile_has_no_groups(
         crop_id='c',
         image_path='/x',
         vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
-        plate_status=None,
-        class_name='cruiserbike',
+        region_status=None,
+        class_name='class_b',
     )
     monkeypatch.setattr(worker_state, '_class_group', lambda _name: None)
     assert not worker._is_secondary_shape(task)

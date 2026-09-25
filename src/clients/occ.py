@@ -134,7 +134,7 @@ async def occ_update_one(
             Workers use ``occ_skip_on_conflict_bulk`` (max_retries=0).
         refresh: OpenSearch refresh policy. ``True`` for immediate
             visibility (human PUTs), ``False`` for batch writes.
-        writer_id: Identifier for structured logs (``human``, ``sam_worker``,
+        writer_id: Identifier for structured logs (``human``, ``region_worker``,
             ``vlm_pipeline``, etc.).
 
     Raises:
@@ -165,7 +165,7 @@ async def occ_update_one(
                 # Non-conflict error — surface immediately, don't retry.
                 raise
             logger.info(
-                'legacy_occ_retry',
+                'curation_occ_retry',
                 doc_id=doc_id,
                 writer_id=writer_id,
                 attempt=attempt,
@@ -175,7 +175,7 @@ async def occ_update_one(
                 await asyncio.sleep(_RETRY_BACKOFF_SEC[min(attempt, len(_RETRY_BACKOFF_SEC) - 1)])
                 continue
     logger.warning(
-        'legacy_occ_final_conflict',
+        'curation_occ_final_conflict',
         doc_id=doc_id,
         writer_id=writer_id,
         retries=max_retries,
@@ -221,15 +221,14 @@ async def occ_skip_on_conflict_bulk(
       409 / ``version_conflict_engine_exception`` -> skipped (the
       human's write stays in place; the worker sees the updated state
       on its next poll) — logs the same structured
-      ``legacy_worker_skip_human_won`` event, pulling
+      ``curation_worker_skip_human_won`` event, pulling
       ``human_class_validated``/``human_region_validated`` from the
       mget'd source for the audit trail; anything else -> ``errors``
       with ``phase: 'update'``.
-    - A ``client.bulk()`` failure (transport/connection error) degrades
-      to per-doc ``phase: 'update'`` error entries for that page rather
-      than raising — callers already bare-except wrap this function
-      (legacy_gemma.py, legacy_classes.py, legacy_auto_promote.py, bulk_writer.py),
-      but a raise here would still lose partial progress on other pages.
+    - A ``client.bulk()`` failure (transport/connection error) degrades to
+      per-doc ``phase: 'update'`` error entries for that page rather than
+      raising — callers already bare-except wrap this function, but a
+      raise here would still lose partial progress on other pages.
     - ``refresh`` is forwarded to ``client.bulk(refresh=refresh)``
       unchanged (``True``/``False``/``'wait_for'``).
 
@@ -314,7 +313,7 @@ async def occ_skip_on_conflict_bulk(
             is_conflict = status == 409 or 'version_conflict' in err_type
             if is_conflict:
                 logger.info(
-                    'legacy_worker_skip_human_won',
+                    'curation_worker_skip_human_won',
                     doc_id=doc_id,
                     writer_id=writer_id,
                     human_class_validated=source.get('class_validated'),
@@ -332,9 +331,10 @@ def _is_human_marker(value: Any) -> bool:
     containing the substring ``human``.
 
     Matches the in-codebase markers ``human``, ``human_move``, and
-    ``vlm_human_confirmed`` (legacy_crops, legacy_plates, legacy_clustering).
+    ``vlm_human_confirmed`` (used across the crops, regions, and
+    clustering write paths).
     Non-human writers use ``ingest``, ``item_model``, ``coco_yolo11``,
-    ``gemma``, ``cluster_majority_agreement``, etc.
+    ``vlm``, ``cluster_majority_agreement``, etc.
     """
     return isinstance(value, str) and 'human' in value
 
@@ -391,10 +391,10 @@ CLASS_WRITE_FIELDS = frozenset(
 def strip_class_write_fields(update: dict[str, Any]) -> dict[str, Any]:
     """Drop every ``CLASS_WRITE_FIELDS`` key from an update doc.
 
-    Used by writers that may carry both class and plate fields in the
-    same update (the SAM worker's combined path) so a human-label guard
-    never leaks into suppressing an unrelated plate write — the
-    LPR-scope requirement from Phase 1.
+    Used by writers that may carry both class and region fields in the
+    same update (the region worker's combined path) so a human-label guard
+    never leaks into suppressing an unrelated region write — the
+    region-detector-scope requirement from Phase 1.
     """
     return {k: v for k, v in update.items() if k not in CLASS_WRITE_FIELDS}
 
@@ -451,11 +451,11 @@ async def occ_upsert_bulk(
     3. Present, no human-write field set on the existing doc → OCC update
        with ``if_seq_no``/``if_primary_term``. On 409, retry once with a
        fresh fetch; a second 409 increments
-       ``LEGACY_INGEST_OCC_FINAL_CONFLICT`` and the doc is skipped.
+       ``OP_INGEST_OCC_FINAL_CONFLICT`` and the doc is skipped.
     4. Present, at least one human-guard field set → client-side merge:
        for each guarded field, if the existing doc already has it set
        (non-empty / non-None), keep the existing value; otherwise apply
-       the new value. Increments ``LEGACY_INGEST_PRESERVED_HUMAN_LABEL``
+       the new value. Increments ``OP_INGEST_PRESERVED_HUMAN_LABEL``
        (labelled by which guard field fired) per preserved field — the
        Grafana proof-of-fix metric.
     5. Independently of 2-4, every ``fill_if_absent`` field is only a
@@ -489,8 +489,8 @@ async def occ_upsert_bulk(
     # Local import: metrics module imports prometheus_client at top
     # level and we keep occ.py prometheus-free for unit-test ergonomics.
     from src.services.curation.metrics import (
-        LEGACY_INGEST_OCC_FINAL_CONFLICT,
-        LEGACY_INGEST_PRESERVED_HUMAN_LABEL,
+        OP_INGEST_OCC_FINAL_CONFLICT,
+        OP_INGEST_PRESERVED_HUMAN_LABEL,
     )
 
     result = {
@@ -545,7 +545,7 @@ async def occ_upsert_bulk(
                 create_conflict_ids.add(doc_id)
             else:
                 logger.warning(
-                    'legacy_ingest_upsert_create_error',
+                    'curation_ingest_upsert_create_error',
                     doc_id=doc_id,
                     status=status,
                     error=create_item.get('error'),
@@ -601,7 +601,7 @@ async def occ_upsert_bulk(
             )
         except Exception as exc:
             logger.warning(
-                'legacy_ingest_upsert_bulk_update_failed',
+                'curation_ingest_upsert_bulk_update_failed',
                 writer_id=writer_id,
                 n=len(new_doc_by_id),
                 error=str(exc),
@@ -614,22 +614,22 @@ async def occ_upsert_bulk(
                 preserved_fields, filled = merge_effects.get(doc_id, ([], False))
                 result['updated'] += 1
                 for field in preserved_fields:
-                    # Per-field counter — Grafana panels can break down
-                    # which guard fired (e.g. RegionFields.label_source vs
-                    # class_source) so operators see the fix in action.
-                    LEGACY_INGEST_PRESERVED_HUMAN_LABEL.labels(field=field).inc()
+                    # Per-field counter — Grafana panels can break down which guard fired
+                    # (e.g. RegionFields.label_source vs class_source) so operators see the fix.
+                    OP_INGEST_PRESERVED_HUMAN_LABEL.labels(field=field).inc()
                 result['preserved_human'] += len(preserved_fields)
                 if filled:
                     result['filled_absent'] += 1
             elif status == 'conflict-exhausted':
-                # occ_update_bulk folds genuine (non-conflict) item errors
-                # into this same status — logged distinctly there via
-                # curation_occ_update_bulk_item_error.
-                LEGACY_INGEST_OCC_FINAL_CONFLICT.inc()
+                # occ_update_bulk folds genuine (non-conflict) item errors into this
+                # same status — logged distinctly there via curation_occ_update_bulk_item_error.
+                OP_INGEST_OCC_FINAL_CONFLICT.inc()
                 result['final_conflicts'] += 1
-                logger.info('legacy_ingest_upsert_final_conflict', doc_id=doc_id, writer_id=writer_id)
+                logger.info(
+                    'curation_ingest_upsert_final_conflict', doc_id=doc_id, writer_id=writer_id
+                )
             else:
-                logger.warning('legacy_ingest_upsert_refetch_failed', doc_id=doc_id, error=status)
+                logger.warning('curation_ingest_upsert_refetch_failed', doc_id=doc_id, error=status)
 
     return result
 
@@ -663,7 +663,7 @@ def _merge_preserving_human(
 
     A guard "fires" only when the existing doc's value matches the
     ``_is_human_marker`` predicate — i.e. a string containing ``human``.
-    Non-human source values (``ingest``, ``item_model``, ``gemma``, etc.)
+    Non-human source values (``ingest``, ``item_model``, ``vlm``, etc.)
     do not trip preservation; ingest is free to overwrite them with its
     fresh-pass value.
 

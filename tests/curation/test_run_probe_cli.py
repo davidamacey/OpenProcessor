@@ -232,7 +232,7 @@ def test_cli_apply_calls_the_service_with_resume(monkeypatch, tmp_path) -> None:
             '--model',
             str(model),
             '--architecture',
-            'v6',
+            'yolov5_objectness',
             '--model-version',
             'run-7',
             '--resume',
@@ -248,7 +248,7 @@ def test_cli_apply_calls_the_service_with_resume(monkeypatch, tmp_path) -> None:
     assert len(calls) == 1
     call = calls[0]
     assert call['client'] is fake
-    assert call['architecture'] == 'v6'
+    assert call['architecture'] == 'yolov5_objectness'
     assert call['model_version'] == 'run-7'
     assert call['resume'] is True
     assert call['page_size'] == 64

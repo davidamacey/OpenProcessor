@@ -24,7 +24,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from PIL import Image
 
-import scripts.curation.sam_worker_main as worker
+import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import runner as runner_mod
 from src.config import get_region_fields
 from src.services.detection.cascade_detect import RegionCandidate
@@ -99,11 +99,11 @@ class TestCombinedSingle:
     @pytest.mark.asyncio
     async def test_region_text_is_the_transcribed_text(self) -> None:
         reply = await _labeler(_combined()).label_combined(
-            'c1', _jpeg(), class_names=CLASS_NAMES, plate_bbox_norm=(0.2, 0.6, 0.5, 0.8)
+            'c1', _jpeg(), class_names=CLASS_NAMES, region_bbox_norm=(0.2, 0.6, 0.5, 0.8)
         )
-        assert reply.plate_text == 'DNV20'
-        assert reply.plate_visible is True
-        assert reply.plate_bbox_correct is True
+        assert reply.region_text_reply == 'DNV20'
+        assert reply.region_visible is True
+        assert reply.region_bbox_correct is True
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -112,9 +112,9 @@ class TestCombinedSingle:
     )
     async def test_class_or_attribute_echo_is_not_region_text(self, echo: str) -> None:
         reply = await _labeler(_combined(region_text=echo)).label_combined(
-            'c1', _jpeg(), class_names=CLASS_NAMES, plate_bbox_norm=(0.2, 0.6, 0.5, 0.8)
+            'c1', _jpeg(), class_names=CLASS_NAMES, region_bbox_norm=(0.2, 0.6, 0.5, 0.8)
         )
-        assert reply.plate_text is None
+        assert reply.region_text_reply is None
         # The class side still resolves — only the text slot is dropped.
         assert reply.class_id == 1
 
@@ -122,24 +122,24 @@ class TestCombinedSingle:
     @pytest.mark.parametrize('sentinel', [None, '', 'unknown', 'N/A', 'null'])
     async def test_no_text_is_null(self, sentinel: str | None) -> None:
         reply = await _labeler(_combined(region_text=sentinel)).label_combined(
-            'c1', _jpeg(), class_names=CLASS_NAMES, plate_bbox_norm=(0.2, 0.6, 0.5, 0.8)
+            'c1', _jpeg(), class_names=CLASS_NAMES, region_bbox_norm=(0.2, 0.6, 0.5, 0.8)
         )
-        assert reply.plate_text is None
+        assert reply.region_text_reply is None
 
     @pytest.mark.asyncio
     async def test_quoted_false_booleans_do_not_accept(self) -> None:
         reply = await _labeler(
             _combined(region_visible='false', region_bbox_correct='false')
-        ).label_combined('c1', _jpeg(), class_names=CLASS_NAMES, plate_bbox_norm=(0, 0, 1, 1))
-        assert reply.plate_visible is False
-        assert reply.plate_bbox_correct is False
+        ).label_combined('c1', _jpeg(), class_names=CLASS_NAMES, region_bbox_norm=(0, 0, 1, 1))
+        assert reply.region_visible is False
+        assert reply.region_bbox_correct is False
 
     @pytest.mark.asyncio
     async def test_unrecognized_bbox_answer_is_not_an_accept(self) -> None:
         reply = await _labeler(_combined(region_bbox_correct='maybe')).label_combined(
-            'c1', _jpeg(), class_names=CLASS_NAMES, plate_bbox_norm=(0, 0, 1, 1)
+            'c1', _jpeg(), class_names=CLASS_NAMES, region_bbox_norm=(0, 0, 1, 1)
         )
-        assert reply.plate_bbox_correct is None
+        assert reply.region_bbox_correct is None
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -153,7 +153,7 @@ class TestCombinedSingle:
     async def test_missing_or_garbled_visible_answer_is_a_parse_failure(self, content: str) -> None:
         with pytest.raises(CombinedParseFailure):
             await _labeler(content).label_combined(
-                'c1', _jpeg(), class_names=CLASS_NAMES, plate_bbox_norm=(0, 0, 1, 1)
+                'c1', _jpeg(), class_names=CLASS_NAMES, region_bbox_norm=(0, 0, 1, 1)
             )
 
 
@@ -161,7 +161,7 @@ class TestCombinedBatch:
     def _crops(self, n: int) -> list[CombinedCrop]:
         return [
             CombinedCrop(
-                crop_id=f'c{i}', jpeg_bytes=b'', plate_bbox_norm=(0, 0, 1, 1), classify=True
+                crop_id=f'c{i}', jpeg_bytes=b'', region_bbox_norm=(0, 0, 1, 1), classify=True
             )
             for i in range(1, n + 1)
         ]
@@ -181,9 +181,9 @@ class TestCombinedBatch:
             ],
             3,
         )
-        assert out['c1'].plate_text == 'DNV20'
-        assert out['c2'].plate_text == 'XYZ789'
-        assert out['c3'].plate_text is None
+        assert out['c1'].region_text_reply == 'DNV20'
+        assert out['c2'].region_text_reply == 'XYZ789'
+        assert out['c3'].region_text_reply is None
 
     def test_zero_based_indices_are_shifted_not_misassigned(self) -> None:
         out = self._parse(
@@ -193,9 +193,9 @@ class TestCombinedBatch:
             ],
             2,
         )
-        assert out['c1'].plate_text == 'AAA111'
-        assert out['c1'].plate_bbox_correct is True
-        assert out['c2'].plate_bbox_correct is False
+        assert out['c1'].region_text_reply == 'AAA111'
+        assert out['c1'].region_bbox_correct is True
+        assert out['c2'].region_bbox_correct is False
 
     @pytest.mark.parametrize(
         'entries',
@@ -225,7 +225,7 @@ class TestCombinedBatch:
         bad = {k: v for k, v in _combined().items() if k != 'region_visible'}
         out = self._parse([{'img': 1, **bad}, {'img': 2, **_combined()}], 2)
         assert out['c1'] is None
-        assert out['c2'].plate_visible is True
+        assert out['c2'].region_visible is True
 
 
 class TestStandaloneVerify:
@@ -239,14 +239,14 @@ class TestStandaloneVerify:
                 'text_confidence': 'high',
             }
         )
-        v = VlmLabeler._parse_plate_response(raw, RegionCrop(crop_id='c1', jpeg_bytes=b''))
+        v = VlmLabeler._parse_region_response(raw, RegionCrop(crop_id='c1', jpeg_bytes=b''))
         assert v is not None
         assert v.is_region is True
         assert v.text == 'DNV20'
 
     def test_single_quoted_false_is_a_reject(self) -> None:
         raw = json.dumps({'is_region': 'false', 'confidence': 'high', 'text': 'X'})
-        v = VlmLabeler._parse_plate_response(raw, RegionCrop(crop_id='c1', jpeg_bytes=b''))
+        v = VlmLabeler._parse_region_response(raw, RegionCrop(crop_id='c1', jpeg_bytes=b''))
         assert v is not None
         assert v.is_region is False
         assert v.text is None
@@ -259,20 +259,20 @@ class TestStandaloneVerify:
                 {'img': 1, 'is_region': True, 'confidence': 'high', 'text': 'B2'},
             ]
         )
-        out = VlmLabeler._parse_plate_batch_response(raw, crops)
+        out = VlmLabeler._parse_region_batch_response(raw, crops)
         assert out == []
 
     def test_batch_missing_entry_is_omitted_not_a_reject(self) -> None:
         crops = [RegionCrop(crop_id=f'c{i}', jpeg_bytes=b'') for i in (1, 2)]
         raw = json.dumps([{'img': 2, 'is_region': True, 'confidence': 'high', 'text': 'B2'}])
-        out = VlmLabeler._parse_plate_batch_response(raw, crops)
+        out = VlmLabeler._parse_region_batch_response(raw, crops)
         by_id = {v.crop_id: v for v in out}
         assert 'c1' not in by_id
         assert by_id['c2'].is_region is True
 
     def test_batch_empty_reply_yields_no_verdicts(self) -> None:
         crops = [RegionCrop(crop_id=f'c{i}', jpeg_bytes=b'') for i in (1, 2)]
-        assert VlmLabeler._parse_plate_batch_response('', crops) == []
+        assert VlmLabeler._parse_region_batch_response('', crops) == []
 
     def test_batch_aligned_by_index(self) -> None:
         crops = [RegionCrop(crop_id=f'c{i}', jpeg_bytes=b'') for i in (1, 2)]
@@ -282,7 +282,7 @@ class TestStandaloneVerify:
                 {'img': 1, 'is_region': True, 'confidence': 'high', 'text': 'A1'},
             ]
         )
-        out = VlmLabeler._parse_plate_batch_response(raw, crops)
+        out = VlmLabeler._parse_region_batch_response(raw, crops)
         assert (out[0].crop_id, out[0].is_region, out[0].text) == ('c1', True, 'A1')
         assert (out[1].crop_id, out[1].is_region) == ('c2', False)
 
@@ -429,7 +429,7 @@ async def _drive_worker(
     ``until_writes`` writes landed (or a timeout); ``on_write(n)`` is
     called as the n-th write is seen."""
     handlers = _capture_signal_handler(monkeypatch)
-    monkeypatch.setenv('SAM_WORKER_METRICS_PORT', '0')
+    monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
 
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
     monkeypatch.setattr(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
@@ -440,20 +440,20 @@ async def _drive_worker(
     monkeypatch.setattr(runner_mod, 'RegionDetector', MagicMock(return_value=primary_det))
     ocr = MagicMock()
     ocr.detect_regions = AsyncMock(return_value=[])
-    ocr.pick_best_plate_region = MagicMock(return_value=None)
+    ocr.pick_best_text_region = MagicMock(return_value=None)
     monkeypatch.setattr(runner_mod, 'PaddleOcrTextRecognizer', MagicMock(return_value=ocr))
     monkeypatch.setattr(runner_mod, '_crop_jpeg_for_task', lambda *_a: _jpeg())
 
     seg = MagicMock(aclose=AsyncMock())
-    seg.segment_plate = AsyncMock(return_value=segmenter)
-    monkeypatch.setattr(worker, 'Sam3Client', MagicMock(return_value=seg))
+    seg.segment = AsyncMock(return_value=segmenter)
+    monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=seg))
 
     vlm = MagicMock(aclose=AsyncMock())
     vlm.class_names = []
     vlm.label_combined_batch = AsyncMock(
         side_effect=combined_side_effect or (lambda crops, **_kw: {c.crop_id: reply for c in crops})
     )
-    vlm.plate_visible_batch = AsyncMock(
+    vlm.region_visible_batch = AsyncMock(
         side_effect=visible_side_effect
         or (lambda crops, **_kw: {} if visible is None else {c.crop_id: visible for c in crops})
     )
@@ -473,8 +473,8 @@ async def _drive_worker(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
-            '--sam3-url=http://seg.invalid:8000',
-            '--gemma-url=http://vlm.invalid:8000',
+            '--segmenter-url=http://seg.invalid:8000',
+            '--vlm-url=http://vlm.invalid:8000',
             f'--pause-sentinel={tmp_path / "absent.sentinel"}',
             '--continuous',
             '--poll-interval=0.01',
@@ -507,10 +507,10 @@ async def _drive_worker(
 def _accept(text: str = 'DNV20') -> VlmCombinedReply:
     return VlmCombinedReply(
         img_id='c1',
-        plate_visible=True,
-        plate_bbox_correct=True,
-        plate_text=text,
-        plate_confidence='high',
+        region_visible=True,
+        region_bbox_correct=True,
+        region_text_reply=text,
+        region_confidence='high',
     )
 
 
@@ -597,7 +597,7 @@ class TestOnePassPerItem:
             crop_id='c1',
             image_path='',
             vehicle_bbox_norm=(0.1, 0.1, 0.9, 0.9),
-            plate_status='pending_detection',
+            region_status='pending_detection',
             class_name='sedan',
             group='cars',
         )

@@ -22,7 +22,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
-from src.routers.curation._common import OpenSearchDep, _now_iso, logger, router
+from src.routers.curation._common import OpenSearchDep, RegionProfileDep, _now_iso, logger, router
 from src.routers.curation.label_undo import _items_by_ids
 from src.services.curation.edit_history import (
     EDIT_HISTORY_FIELD,
@@ -81,7 +81,9 @@ async def undo_edit(opensearch: Any, crop_id: str, kind: EditKind, writer: str) 
 
 
 @router.post('/crops/{crop_id}/region/undo')
-async def undo_crop_region(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
+async def undo_crop_region(
+    crop_id: str, opensearch: OpenSearchDep, _profile: RegionProfileDep
+) -> dict[str, Any]:
     """Restore the crop's region to its state before its most recent human
     region write (confirm, reject, false positive, box edit, status or text
     change). Repeated calls step back through successive writes. Returns
@@ -101,7 +103,7 @@ async def undo_crop_region(crop_id: str, opensearch: OpenSearchDep) -> dict[str,
 
 @router.post('/crops/region/undo_batch')
 async def undo_crop_regions(
-    payload: CropRegionUndoBatchRequest, opensearch: OpenSearchDep
+    payload: CropRegionUndoBatchRequest, opensearch: OpenSearchDep, _profile: RegionProfileDep
 ) -> dict[str, Any]:
     """Batch form of ``POST /crops/{crop_id}/region/undo`` — undo a bulk
     region write by passing the same ``crop_ids``. Each crop is restored

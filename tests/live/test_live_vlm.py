@@ -48,12 +48,12 @@ def sample_jpeg_b64() -> str:
 
 
 def test_vlm_label_batch_persists_the_exact_fake_answer(
-    client: Any, opensearch: Any, fake_vlm: Any
+    api_client: Any, opensearch: Any, fake_vlm: Any
 ) -> None:
     crop_ids = crop_ids_in(opensearch, 'cnd10001', limit=4)
     assert len(crop_ids) == 4
 
-    resp = client.post('/vlm/label_batch', json={'crop_ids': crop_ids})
+    resp = api_client.post('/vlm/label_batch', json={'crop_ids': crop_ids})
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['predicted'] == len(crop_ids), body
@@ -78,7 +78,7 @@ def test_vlm_label_batch_persists_the_exact_fake_answer(
     assert counts.get('class_open', 0) >= 1, counts
 
 
-def test_vlm_label_batch_leaves_human_owned_crops_alone(client: Any, opensearch: Any) -> None:
+def test_vlm_label_batch_leaves_human_owned_crops_alone(api_client: Any, opensearch: Any) -> None:
     human_ids = [
         h['_id']
         for h in opensearch.post(
@@ -93,7 +93,7 @@ def test_vlm_label_batch_leaves_human_owned_crops_alone(client: Any, opensearch:
     assert human_ids, 'precondition: human-labelled crops must exist'
     before = {cid: _source(opensearch, cid)['class_id'] for cid in human_ids}
 
-    resp = client.post('/vlm/label_batch', json={'crop_ids': human_ids})
+    resp = api_client.post('/vlm/label_batch', json={'crop_ids': human_ids})
     assert resp.status_code == 200, resp.text
     assert resp.json()['updated'] == 0, resp.text
 
@@ -101,15 +101,17 @@ def test_vlm_label_batch_leaves_human_owned_crops_alone(client: Any, opensearch:
         assert _source(opensearch, cid)['class_id'] == class_id
 
 
-def test_vlm_label_batch_caps_the_request_size(client: Any) -> None:
-    resp = client.post('/vlm/label_batch', json={'crop_ids': [f'x{i}' for i in range(65)]})
+def test_vlm_label_batch_caps_the_request_size(api_client: Any) -> None:
+    resp = api_client.post('/vlm/label_batch', json={'crop_ids': [f'x{i}' for i in range(65)]})
     assert resp.status_code == 400, resp.text
 
 
-def test_vlm_verify_regions_persists_the_verdict(client: Any, opensearch: Any, fake_vlm: Any) -> None:
+def test_vlm_verify_regions_persists_the_verdict(
+    api_client: Any, opensearch: Any, fake_vlm: Any
+) -> None:
     crop_ids = crop_ids_in(opensearch, 'rgn', limit=40)[-3:]
 
-    resp = client.post('/vlm/verify_regions', json={'crop_ids': crop_ids})
+    resp = api_client.post('/vlm/verify_regions', json={'crop_ids': crop_ids})
     assert resp.status_code == 200, resp.text
     assert resp.json()['verified'] == len(crop_ids), resp.text
 
@@ -121,7 +123,7 @@ def test_vlm_verify_regions_persists_the_verdict(client: Any, opensearch: Any, f
 
 
 def test_vlm_verify_region_batch_returns_ordered_verdicts(
-    client: Any, opensearch: Any, fake_vlm: Any, sample_jpeg_b64: str
+    api_client: Any, opensearch: Any, fake_vlm: Any, sample_jpeg_b64: str
 ) -> None:
     crop_ids = crop_ids_in(opensearch, 'rgnfp', limit=3)
     payload = {
@@ -134,7 +136,7 @@ def test_vlm_verify_region_batch_returns_ordered_verdicts(
             for i, crop_id in enumerate(crop_ids)
         ]
     }
-    resp = client.post('/vlm/verify_region_batch', json=payload)
+    resp = api_client.post('/vlm/verify_region_batch', json=payload)
     assert resp.status_code == 200, resp.text
     results = resp.json()['results']
     assert [r['crop_id'] for r in results] == crop_ids
@@ -145,16 +147,16 @@ def test_vlm_verify_region_batch_returns_ordered_verdicts(
 
 
 def test_vlm_verify_region_batch_rejects_bad_input(
-    client: Any, opensearch: Any, sample_jpeg_b64: str
+    api_client: Any, opensearch: Any, sample_jpeg_b64: str
 ) -> None:
     crop_id = crop_ids_in(opensearch, 'rgnfp', limit=1)[0]
-    bad_b64 = client.post(
+    bad_b64 = api_client.post(
         '/vlm/verify_region_batch',
         json={'items': [{'crop_id': crop_id, 'region_image_b64': 'not base64!!'}]},
     )
     assert bad_b64.status_code == 400, bad_b64.text
 
-    duplicate = client.post(
+    duplicate = api_client.post(
         '/vlm/verify_region_batch',
         json={
             'items': [
@@ -167,7 +169,7 @@ def test_vlm_verify_region_batch_rejects_bad_input(
 
 
 def test_vlm_verdict_key_matches_the_shipped_prompt(
-    client: Any, opensearch: Any, fake_vlm: Any, sample_jpeg_b64: str
+    api_client: Any, opensearch: Any, fake_vlm: Any, sample_jpeg_b64: str
 ) -> None:
     """The built-in prompt pack asks the model to answer with `is_region`
     (vlm_prompts.GENERIC_ITEM_PACK.region_user / region_batch_user), and
@@ -179,7 +181,7 @@ def test_vlm_verdict_key_matches_the_shipped_prompt(
     """
     fake_vlm.post('/__control', json={'region_verdict_key': 'is_region'})
     crop_ids = crop_ids_in(opensearch, 'rgnfp', limit=2)
-    resp = client.post(
+    resp = api_client.post(
         '/vlm/verify_region_batch',
         json={
             'items': [
@@ -193,7 +195,7 @@ def test_vlm_verdict_key_matches_the_shipped_prompt(
 
 
 def test_vlm_region_visible_batch_honours_an_explicit_negative(
-    client: Any, opensearch: Any, fake_vlm: Any, sample_jpeg_b64: str
+    api_client: Any, opensearch: Any, fake_vlm: Any, sample_jpeg_b64: str
 ) -> None:
     """The visibility endpoint fails *open* to True on any RPC/parse
     failure, so only an explicit negative distinguishes "the fake was
@@ -201,7 +203,7 @@ def test_vlm_region_visible_batch_honours_an_explicit_negative(
     fake_vlm.post('/__control', json={'region_visible': False})
     crop_ids = crop_ids_in(opensearch, 'cnd10002', limit=3)
 
-    resp = client.post(
+    resp = api_client.post(
         '/vlm/region_visible_batch',
         json={
             'items': [{'crop_id': crop_id, 'image_b64': sample_jpeg_b64} for crop_id in crop_ids]
@@ -213,14 +215,14 @@ def test_vlm_region_visible_batch_honours_an_explicit_negative(
     assert all(v is False for v in visible.values()), visible
 
     fake_vlm.post('/__control', json={'region_visible': True})
-    resp = client.post(
+    resp = api_client.post(
         '/vlm/region_visible_batch',
         json={'items': [{'crop_id': crop_ids[0], 'image_b64': sample_jpeg_b64}]},
     )
     assert resp.json()['visible'][crop_ids[0]] is True
 
 
-def test_state_survives_an_api_container_restart(client: Any, opensearch: Any) -> None:
+def test_state_survives_an_api_container_restart(api_client: Any, opensearch: Any) -> None:
     """Recreate ONLY the API container and re-read everything.
 
     Every write this suite made lives in OpenSearch or on a mounted
@@ -229,9 +231,9 @@ def test_state_survives_an_api_container_restart(client: Any, opensearch: Any) -
     """
     labelled = crop_ids_in(opensearch, 'cnd10001', limit=4)
     before_docs = {cid: _source(opensearch, cid)['class_name'] for cid in labelled}
-    before_classes = client.get('/classes').json()['classes']
-    before_holdout = client.get('/test_holdout/stats').json()['total']
-    before_exports = client.get('/export/datasets').json()['count']
+    before_classes = api_client.get('/classes').json()['classes']
+    before_holdout = api_client.get('/test_holdout/stats').json()['total']
+    before_exports = api_client.get('/export/datasets').json()['count']
 
     compose('up', '-d', '--force-recreate', '--no-deps', 'api', timeout=600)
 
@@ -242,13 +244,13 @@ def test_state_survives_an_api_container_restart(client: Any, opensearch: Any) -
     )
     assert ready, 'the API container did not come back up'
 
-    after_classes = client.get('/classes').json()['classes']
+    after_classes = api_client.get('/classes').json()['classes']
     assert [c['class_id'] for c in after_classes] == [c['class_id'] for c in before_classes]
     assert [c['class_name'] for c in after_classes] == [c['class_name'] for c in before_classes]
-    assert client.get('/test_holdout/stats').json()['total'] == before_holdout
-    assert client.get('/export/datasets').json()['count'] == before_exports
+    assert api_client.get('/test_holdout/stats').json()['total'] == before_holdout
+    assert api_client.get('/export/datasets').json()['count'] == before_exports
     for crop_id, class_name in before_docs.items():
-        assert client.get(f'/crops/{crop_id}').json()['class_name'] == class_name
+        assert api_client.get(f'/crops/{crop_id}').json()['class_name'] == class_name
 
 
 def _probe(httpx_module: Any, url: str) -> bool:

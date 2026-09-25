@@ -330,7 +330,7 @@ async def list_clusters(
         is_unlabeled = labelled_total == 0
         validated_count = int(bucket.get('validated', {}).get('doc_count') or 0)
         n_subclusters = int(bucket.get('subclusters', {}).get('value') or 0)
-        # The dominant class id is the v6 registry id for top_name when the
+        # The dominant class id is the classifier registry id for top_name when the
         # cluster is a class cluster (cluster_id == class_id by invariant);
         # candidate clusters have no class id yet so it stays None.
         dominant_class_id: int | None = cid if ck == 'class' and top_name else None

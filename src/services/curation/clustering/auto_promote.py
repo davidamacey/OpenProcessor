@@ -1,19 +1,19 @@
 """Auto-promote stage for the curation auto-label pipeline.
 
 Extracted from the orchestrator module alongside the disable-by-default
-change in the ingest pipeline. Disabled because the v6-confidence-
+change in the ingest pipeline. Disabled because the classifier-confidence-
 floor-less rule contaminated class clusters with visually wrong crops
 via ``class_source='cluster_majority_agreement'``. Kept here as an
 opt-in path so the eventual confidence-gated rewrite has a home.
 
-A crop is promoted only when v6's class call already matches the
+A crop is promoted only when the classifier's class call already matches the
 cluster's dominant class (supervised classifier + sibling-embedding
 majority agree). Earlier behaviour propagated the dominant label onto
-every member of a high-purity cluster (including crops v6 never saw),
+every member of a high-purity cluster (including crops the classifier never saw),
 which silently poisoned a large historical cohort of rows. A
 backfill demoted that cohort; this function no longer creates that
 pollution shape going forward, but the unsolved problem — promoting
-low-confidence v6 predictions — is why the pipeline now defaults to
+low-confidence classifier predictions — is why the pipeline now defaults to
 skipping this stage.
 """
 
@@ -98,7 +98,7 @@ async def _scroll_hits(
         try:
             await client.clear_scroll(scroll_id=scroll_id)
         except Exception as exc:  # nosec B110 — advisory cleanup only
-            logger.info('legacy_auto_promote_clear_scroll_failed', error=str(exc))
+            logger.info('curation_auto_promote_clear_scroll_failed', error=str(exc))
     return found
 
 
@@ -136,7 +136,7 @@ async def _scroll_cluster_buckets(client: AsyncOpenSearch, *, index: str) -> lis
                         'top_class': {
                             # class_name is mapped keyword directly on the
                             # live index — no .keyword subfield exists. See
-                            # legacy_clusters.py's top_class agg for the full
+                            # the reference clusters router's top_class agg for the full
                             # story.
                             'terms': {
                                 'field': 'class_name',
@@ -174,13 +174,13 @@ async def auto_promote_clusters(
     min_members: int = PROMOTE_MIN_MEMBERS,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Auto-validate crops in high-purity clusters where v6 agrees.
+    """Auto-validate crops in high-purity clusters where the classifier agrees.
 
     Returns a summary keyed by ``promoted``, ``skipped``, ``clusters``.
     """
     # Per-cluster top class, paged (F-29). Purity is computed across ALL
     # labelled members (validated + unvalidated) so a cluster with 99
-    # v6 honda + 1 unvalidated cruiserbike isn't deemed 100% cruiserbike.
+    # classifier class A + 1 unvalidated class B isn't deemed 100% class B.
     #
     # CM-1: restrict to candidate clusters (cluster_id >= the residual
     # offset). Class clusters (0..RESIDUAL_CLUSTER_ID_OFFSET-1) have
@@ -252,7 +252,7 @@ async def auto_promote_clusters(
             total_skipped += members
             continue
 
-        # WARNING: this rule has no v6-confidence floor; even v6 @ 61%
+        # WARNING: this rule has no classifier-confidence floor; even classifier @ 61%
         # passes if its prediction matches the cluster majority. That's
         # why the pipeline defaults to skipping this stage. A
         # confidence-gated rewrite is the prerequisite to enabling
@@ -298,7 +298,9 @@ async def auto_promote_clusters(
         try:
             read = await _scroll_hits(client, index=ITEMS_INDEX, query=promote_query)
         except Exception as exc:
-            logger.warning('legacy_auto_promote_cluster_failed', cluster_id=cluster_id, error=str(exc))
+            logger.warning(
+                'curation_auto_promote_cluster_failed', cluster_id=cluster_id, error=str(exc)
+            )
             total_skipped += members
             continue
         if not read:
@@ -312,8 +314,8 @@ async def auto_promote_clusters(
         ) -> dict[str, Any]:
             # Phase 3 (b): this used to be a bare update_by_query painless
             # script with no class_id_history append. Converting to a
-            # per-doc OCC bulk pass (same shape as legacy_gemma.py's
-            # gemma_label_batch) both lets us reuse record_class_history
+            # per-doc OCC bulk pass (same shape as the reference VLM router's
+            # label_batch) both lets us reuse record_class_history
             # (so dedupe (c) and the class_validated cap exemption (d)
             # apply uniformly) and re-checks the human/holdout guards
             # against the freshest doc state at write time, not just at
@@ -347,14 +349,16 @@ async def auto_promote_clusters(
                 writer_id='auto_promote',
             )
         except Exception as exc:
-            logger.warning('legacy_auto_promote_cluster_failed', cluster_id=cluster_id, error=str(exc))
+            logger.warning(
+                'curation_auto_promote_cluster_failed', cluster_id=cluster_id, error=str(exc)
+            )
             total_skipped += members
             continue
         total_promoted += int(result.get('updated', 0))
         total_skipped += int(result.get('skipped_due_to_conflict', 0))
         if result.get('errors'):
             logger.warning(
-                'legacy_auto_promote_bulk_partial_errors',
+                'curation_auto_promote_bulk_partial_errors',
                 cluster_id=cluster_id,
                 errors=len(result['errors']),
             )

@@ -81,7 +81,7 @@ def fake() -> QueryFakeOpenSearch:
             cluster_id=RESIDUAL_CLUSTER_ID_OFFSET + 42,
             class_id=1,
             class_name='gadget',
-            class_source='v6_model',
+            class_source='classifier_model',
         )
     images = {'imp': {'image_id': 'imp', 'image_path': '/data/imp.jpg'}}
     return QueryFakeOpenSearch({ITEMS: items, IMAGES: images})

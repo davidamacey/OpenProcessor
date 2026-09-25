@@ -2,14 +2,14 @@
 # executable HTTP call sites, as of wt-cropwright-integration commit
 # 90baa9b on branch feat/backend-integration.
 #
-# Paths here are PREFIX-STRIPPED (the frontend's literal `/legacy/...` prefix
-# is removed -- the app-side comparison strips the backend's configured
-# `api_prefix` the same way, see test_labeler_route_parity.py) and
-# PARAM-NORMALIZED (any `${...}`-interpolated URL segment is written as
+# Paths here are PREFIX-STRIPPED (the frontend's literal `/curation/...`
+# prefix is removed -- the app-side comparison strips the backend's
+# configured `api_prefix` the same way, see test_labeler_route_parity.py)
+# and PARAM-NORMALIZED (any `${...}`-interpolated URL segment is written as
 # the literal token `{param}`). Deduplicated and sorted.
 #
 # Regenerate the raw candidate list with:
-#   rg -o "/legacy/[A-Za-z0-9_./{}$-]+" \
+#   rg -o "/curation/[A-Za-z0-9_./{}$-]+" \
 #     <cropwright-checkout>/src/lib/api.ts \
 #     <cropwright-checkout>/src/lib/sse.ts \
 #     <cropwright-checkout>/src/routes/export/+page.svelte \
@@ -18,19 +18,19 @@
 # That one-liner over-matches comments and JSDoc (rg doesn't know Cropwright's
 # comment syntax) -- hand-filter against the executable/comment-only split
 # audited in docs/design/cropwright_backend_integration_plan.md §1.2 before
-# updating this file, then strip the `/legacy` prefix, collapse `${...}`
+# updating this file, then strip the `/curation` prefix, collapse `${...}`
 # interpolations to `{param}`, dedupe, and sort. Update this header's commit
 # hash when you do.
 #
 # Excluded on purpose (see KNOWN_GAPS in test_labeler_route_parity.py for
 # the authoritative list + reasons -- do not re-add these without removing
 # the matching KNOWN_GAPS entry):
-#   /export/lpr                    -- proprietary LPR export, never ported
-#   /export/lpr/status             -- ditto
+#   /export/<proprietary>            -- proprietary single-class export, never ported
+#   /export/<proprietary>/status     -- ditto
 #
 # Two more exclusions were removed once their paired frontend fixes landed:
 # /crops/{param}/plate_thumbnail (T-B2, now /crops/{param}/region_thumbnail
-# below) and /gemma/label_batch (T-C1, now /vlm/label_batch below).
+# below) and /vlm-vendor/label_batch (T-C1, now /vlm/label_batch below).
 #
 # Work item B2 (LPR vocabulary off the public API) renamed the ten
 # /plates/... call sites below to /regions/..., plus /crops/{param}/plate ->

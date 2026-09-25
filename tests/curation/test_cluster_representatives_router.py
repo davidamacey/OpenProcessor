@@ -85,8 +85,8 @@ def test_cluster_representatives_returns_keyed_dict(
                 {
                     'hits': {
                         'hits': [
-                            _msearch_hit('c1-a', 0.10, 'cruiserbike'),
-                            _msearch_hit('c1-b', 0.12, 'cruiserbike'),
+                            _msearch_hit('c1-a', 0.10, 'class_b'),
+                            _msearch_hit('c1-b', 0.12, 'class_b'),
                             _msearch_hit('c1-c', 0.15, None),
                         ],
                     },
@@ -115,7 +115,7 @@ def test_cluster_representatives_returns_keyed_dict(
 
     crops_1 = clusters['1']
     assert [c['crop_id'] for c in crops_1] == ['c1-a', 'c1-b', 'c1-c']
-    assert [c['class_name'] for c in crops_1] == ['cruiserbike', 'cruiserbike', None]
+    assert [c['class_name'] for c in crops_1] == ['class_b', 'class_b', None]
     assert crops_1[0]['cluster_distance'] == 0.10
 
     crops_42 = clusters['42']

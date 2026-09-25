@@ -87,16 +87,16 @@ class TestLabelCombined:
             'crop-1',
             _make_jpeg(),
             class_names=['widget', 'gadget'],
-            plate_bbox_norm=(0.1, 0.7, 0.9, 0.95),
+            region_bbox_norm=(0.1, 0.7, 0.9, 0.95),
         )
         assert isinstance(reply, VlmCombinedReply)
         assert reply.img_id == 'crop-1'
         assert reply.class_id == 12
         assert reply.class_confidence == 'high'
-        assert reply.plate_visible is True
-        assert reply.plate_bbox_correct is True
-        assert reply.plate_text == 'ABC1234'
-        assert reply.plate_confidence == 'medium'
+        assert reply.region_visible is True
+        assert reply.region_bbox_correct is True
+        assert reply.region_text_reply == 'ABC1234'
+        assert reply.region_confidence == 'medium'
         # JSON-mode flag must be set so the upstream server grammar-
         # constrains output.
         sent = labeler._client.post.await_args.kwargs['json']
@@ -116,12 +116,12 @@ class TestLabelCombined:
             'crop-2',
             _make_jpeg(),
             class_names=None,
-            plate_bbox_norm=(0.1, 0.7, 0.9, 0.95),
+            region_bbox_norm=(0.1, 0.7, 0.9, 0.95),
         )
         assert reply.class_id is None
-        assert reply.plate_visible is True
-        assert reply.plate_bbox_correct is False
-        assert reply.plate_text is None
+        assert reply.region_visible is True
+        assert reply.region_bbox_correct is False
+        assert reply.region_text_reply is None
 
     @pytest.mark.asyncio
     async def test_invalid_json_raises_combined_parse_failure(self) -> None:
@@ -152,8 +152,8 @@ class TestLabelCombined:
             }
         )
         reply = await labeler.label_combined('crop-6', _make_jpeg(), class_names=['widget'])
-        assert reply.plate_text is not None
-        assert len(reply.plate_text) == 32
+        assert reply.region_text_reply is not None
+        assert len(reply.region_text_reply) == 32
 
 
 class TestLabelCombinedBatch:
@@ -207,7 +207,7 @@ class TestLabelCombinedBatch:
         )
         crops = [
             CombinedCrop(
-                crop_id=f'c{i}', jpeg_bytes=_make_jpeg(), plate_bbox_norm=(0.1, 0.7, 0.9, 0.95)
+                crop_id=f'c{i}', jpeg_bytes=_make_jpeg(), region_bbox_norm=(0.1, 0.7, 0.9, 0.95)
             )
             for i in range(1, 4)
         ]
@@ -215,16 +215,16 @@ class TestLabelCombinedBatch:
         assert set(out.keys()) == {'c1', 'c2', 'c3'}
         # Happy path: detected.
         assert out['c1'] is not None
-        assert out['c1'].plate_bbox_correct is True
-        assert out['c1'].plate_text == 'ABC123'
+        assert out['c1'].region_bbox_correct is True
+        assert out['c1'].region_text_reply == 'ABC123'
         assert out['c1'].make == 'Ford'
         # Bbox-wrong-but-region-visible.
         assert out['c2'] is not None
-        assert out['c2'].plate_visible is True
-        assert out['c2'].plate_bbox_correct is False
+        assert out['c2'].region_visible is True
+        assert out['c2'].region_bbox_correct is False
         # No-region-visible.
         assert out['c3'] is not None
-        assert out['c3'].plate_visible is False
+        assert out['c3'].region_visible is False
 
     @pytest.mark.asyncio
     async def test_payload_is_multi_image_with_per_image_directives(self) -> None:
@@ -238,11 +238,11 @@ class TestLabelCombinedBatch:
             CombinedCrop(
                 crop_id='a',
                 jpeg_bytes=_make_jpeg(),
-                plate_bbox_norm=(0.1, 0.7, 0.9, 0.95),
+                region_bbox_norm=(0.1, 0.7, 0.9, 0.95),
                 classify=True,
             ),
             CombinedCrop(
-                crop_id='b', jpeg_bytes=_make_jpeg(), plate_bbox_norm=None, classify=False
+                crop_id='b', jpeg_bytes=_make_jpeg(), region_bbox_norm=None, classify=False
             ),
         ]
         await labeler.label_combined_batch(crops, class_names=['widget'])
@@ -265,10 +265,10 @@ class TestLabelCombinedBatch:
         )
         crops = [
             CombinedCrop(
-                crop_id='c1', jpeg_bytes=_make_jpeg(), plate_bbox_norm=(0.1, 0.7, 0.9, 0.95)
+                crop_id='c1', jpeg_bytes=_make_jpeg(), region_bbox_norm=(0.1, 0.7, 0.9, 0.95)
             ),
             CombinedCrop(
-                crop_id='c2', jpeg_bytes=_make_jpeg(), plate_bbox_norm=(0.1, 0.7, 0.9, 0.95)
+                crop_id='c2', jpeg_bytes=_make_jpeg(), region_bbox_norm=(0.1, 0.7, 0.9, 0.95)
             ),
         ]
         out = await labeler.label_combined_batch(crops, class_names=['widget'])
@@ -281,7 +281,7 @@ class TestLabelCombinedBatch:
         # caller can leave them in pending for the next poll.
         labeler = _make_labeler('')
         crops = [
-            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=_make_jpeg(), plate_bbox_norm=None)
+            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=_make_jpeg(), region_bbox_norm=None)
             for i in range(1, 4)
         ]
         out = await labeler.label_combined_batch(crops, class_names=['widget'])
@@ -294,8 +294,8 @@ class TestLabelCombinedBatch:
         labeler = _make_labeler({})
         labeler._client.post = AsyncMock(side_effect=httpx.ConnectError('boom'))
         crops = [
-            CombinedCrop(crop_id='c1', jpeg_bytes=_make_jpeg(), plate_bbox_norm=None),
-            CombinedCrop(crop_id='c2', jpeg_bytes=_make_jpeg(), plate_bbox_norm=None),
+            CombinedCrop(crop_id='c1', jpeg_bytes=_make_jpeg(), region_bbox_norm=None),
+            CombinedCrop(crop_id='c2', jpeg_bytes=_make_jpeg(), region_bbox_norm=None),
         ]
         with pytest.raises(CombinedTransportError):
             await labeler.label_combined_batch(crops, class_names=['widget'])
@@ -315,12 +315,12 @@ class TestLabelCombinedBatch:
         )
         crops = [
             CombinedCrop(
-                crop_id='only', jpeg_bytes=_make_jpeg(), plate_bbox_norm=(0.1, 0.7, 0.9, 0.95)
+                crop_id='only', jpeg_bytes=_make_jpeg(), region_bbox_norm=(0.1, 0.7, 0.9, 0.95)
             ),
         ]
         out = await labeler.label_combined_batch(crops, class_names=['widget'])
         assert out['only'] is not None
-        assert out['only'].plate_text == 'XYZ789'
+        assert out['only'].region_text_reply == 'XYZ789'
         sent = labeler._client.post.await_args.kwargs['json']
         # Single-image path uses response_format json_object.
         assert sent.get('response_format') == {'type': 'json_object'}
@@ -336,7 +336,7 @@ class TestLabelCombinedBatch:
         )
         labeler.max_images_per_call = 4
         crops = [
-            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=_make_jpeg(), plate_bbox_norm=None)
+            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=_make_jpeg(), region_bbox_norm=None)
             for i in range(8)
         ]
         out = await labeler.label_combined_batch(crops, class_names=['widget'])

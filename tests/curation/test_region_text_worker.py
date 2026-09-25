@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import scripts.curation.sam_worker_main as worker
+import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import runner as runner_mod
 from src.config import get_region_fields
 from src.services.detection.cascade_detect import RegionCandidate
@@ -62,7 +62,7 @@ async def _drive(
     text_reader: str | None = None,
 ) -> dict[str, Any]:
     handlers = _capture_signal_handler(monkeypatch)
-    monkeypatch.setenv('SAM_WORKER_METRICS_PORT', '0')
+    monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
     if text_reader is not None:
         profile = dataclasses.replace(_profile(), text_reader=text_reader)
         monkeypatch.setattr(runner_mod, 'get_active_region_profile', lambda: profile)
@@ -80,20 +80,20 @@ async def _drive(
     ocr.read_region_lines = AsyncMock(return_value=REGION_LINES)
     ocr.regions_from_lines = MagicMock(return_value=[])
     ocr.detect_regions = AsyncMock(return_value=[])
-    ocr.pick_best_plate_region = MagicMock(return_value=None)
+    ocr.pick_best_text_region = MagicMock(return_value=None)
     monkeypatch.setattr(runner_mod, 'PaddleOcrTextRecognizer', MagicMock(return_value=ocr))
     monkeypatch.setattr(runner_mod, '_crop_jpeg_for_task', lambda *_a: _jpeg())
 
     seg = MagicMock(aclose=AsyncMock())
-    seg.segment_plate = AsyncMock(return_value=segmenter)
-    monkeypatch.setattr(worker, 'Sam3Client', MagicMock(return_value=seg))
+    seg.segment = AsyncMock(return_value=segmenter)
+    monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=seg))
 
     vlm = MagicMock(aclose=AsyncMock())
     vlm.class_names = []
     vlm.label_combined_batch = AsyncMock(
         side_effect=lambda crops, **_kw: {c.crop_id: reply for c in crops}
     )
-    vlm.plate_visible_batch = AsyncMock(
+    vlm.region_visible_batch = AsyncMock(
         side_effect=lambda crops, **_kw: dict.fromkeys((c.crop_id for c in crops), True)
     )
     vlm_cls = MagicMock(return_value=vlm)
@@ -111,8 +111,8 @@ async def _drive(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
-            '--sam3-url=http://seg.invalid:8000',
-            f'--gemma-url={vlm_url}',
+            '--segmenter-url=http://seg.invalid:8000',
+            f'--vlm-url={vlm_url}',
             f'--pause-sentinel={tmp_path / "absent.sentinel"}',
             '--continuous',
             '--poll-interval=0.01',
@@ -197,10 +197,10 @@ class TestBothReaders:
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         reply = VlmCombinedReply(
             img_id='c1',
-            plate_visible=True,
-            plate_bbox_correct=True,
-            plate_text='ABC 1284',
-            plate_confidence='high',
+            region_visible=True,
+            region_bbox_correct=True,
+            region_text_reply='ABC 1284',
+            region_confidence='high',
         )
         mocks = await _drive(
             tmp_path,
@@ -230,10 +230,10 @@ class TestBothReaders:
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         reply = VlmCombinedReply(
             img_id='c1',
-            plate_visible=True,
-            plate_bbox_correct=True,
-            plate_text=None,
-            plate_confidence='high',
+            region_visible=True,
+            region_bbox_correct=True,
+            region_text_reply=None,
+            region_confidence='high',
         )
         await _drive(
             tmp_path,
@@ -258,10 +258,10 @@ class TestBothReaders:
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         reply = VlmCombinedReply(
             img_id='c1',
-            plate_visible=True,
-            plate_bbox_correct=True,
-            plate_text='ABC1234',
-            plate_confidence='medium',
+            region_visible=True,
+            region_bbox_correct=True,
+            region_text_reply='ABC1234',
+            region_confidence='medium',
         )
         mocks = await _drive(
             tmp_path,

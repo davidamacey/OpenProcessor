@@ -69,7 +69,7 @@ def test_secondary_profile_from_ingest_secondary_namespace(clean_env: pytest.Mon
 
 def test_ingest_and_region_profiles_are_independent(clean_env: pytest.MonkeyPatch) -> None:
     clean_env.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'item_proposer')
-    clean_env.setenv('OP_REGION_PROFILE', 'license_plate')
+    clean_env.setenv('OP_REGION_DETECTION_DETECTOR_MODEL', 'region_detector_test')
     region = profile_registry.get_active_region_profile()
     assert region is not None
     assert region.detector_model != 'item_proposer'

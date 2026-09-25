@@ -118,15 +118,41 @@ def _text_rules() -> dict[str, Any] | None:
     return None if profile is None else region_text_rules(profile).catalog()
 
 
+def region_profile_summary(profile: Any) -> dict[str, Any]:
+    """``{name, display_name, region_class_name, text_reader}`` for one
+    ``DetectionProfile`` -- served on ``GET /health`` and
+    ``GET /regions/vocabulary``. THE signal a client keys on to decide
+    whether region-scoped UI/routes are available."""
+    return {
+        'name': profile.name,
+        'display_name': profile.display_name,
+        'region_class_name': profile.region_class_name,
+        'text_reader': profile.text_reader,
+    }
+
+
 def region_vocabulary_catalog() -> dict[str, Any]:
-    """``{detectors, region_sources, chain_actors, text_rules,
-    text_choices, rejection_reasons}`` for the active deployment config.
-    Never hardcodes a private model id. ``text_rules`` says which readings
-    count as region text (``null`` without a region profile);
-    ``text_choices`` lists the ``region_text_choice`` values;
-    ``rejection_reasons`` the pipeline-written ``region_rejection_reason``
-    values (``[{id, label, kind, match, label_template}]``, see
-    :mod:`src.config.region_rejection`)."""
+    """``{region_profile, detectors, region_sources, chain_actors,
+    text_rules, text_choices, rejection_reasons}`` for the active
+    deployment config. Never hardcodes a private model id.
+
+    No-profile gating contract: with no active region profile, every
+    list is empty, ``text_rules`` and ``region_profile`` are ``None`` --
+    this endpoint still 200s (never 404s); ``region_profile`` is the
+    signal a client checks first.
+    """
+    profile = get_active_region_profile()
+    if profile is None:
+        return {
+            'region_profile': None,
+            'detectors': [],
+            'region_sources': [],
+            'chain_actors': [],
+            'text_rules': None,
+            'text_choices': [],
+            'rejection_reasons': [],
+        }
+
     from src.services.detection.region_text import TEXT_CHOICES
 
     vlm_model = os.environ.get('OP_VLM_MODEL', '')
@@ -138,6 +164,7 @@ def region_vocabulary_catalog() -> dict[str, Any]:
     # region_detector filter value).
     chain_actors = [{'id': d['id'], 'label': d['label'], 'role': d['role']} for d in detectors]
     return {
+        'region_profile': region_profile_summary(profile),
         'detectors': detectors,
         'region_sources': region_sources,
         'chain_actors': chain_actors,
@@ -147,4 +174,4 @@ def region_vocabulary_catalog() -> dict[str, Any]:
     }
 
 
-__all__ = ['VOCABULARY_ROLES', 'region_vocabulary_catalog']
+__all__ = ['VOCABULARY_ROLES', 'region_profile_summary', 'region_vocabulary_catalog']

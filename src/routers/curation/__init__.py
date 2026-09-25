@@ -65,8 +65,8 @@ from src.clients.curation_opensearch import get_class_registry
 # curation_images/curation_umap and is registered directly in
 # src/main.py). Chunk 7 adds `vlm` (registers on this package's shared
 # `router`; re-exports `_get_vlm_labeler` because the ported tests
-# patch it by string, mirroring the reference package's
-# `_get_gemma_labeler` re-export). Chunk 8 adds `regions` and
+# patch it by string, mirroring the reference package's own
+# VLM-labeler accessor re-export). Chunk 8 adds `regions` and
 # `regions_fp` (both register on this package's shared `router`);
 # `regions_fp` imports helpers from `regions` directly (not through
 # this package's `__init__`), so there is no import-order requirement

@@ -23,23 +23,23 @@ def _sample_value(collector, **labels) -> float:
 
 
 def test_counters_increment_by_exactly_one() -> None:
-    before = _sample_value(metrics.LEGACY_OCC_FINAL_CONFLICT, endpoint='/curation/test-metrics')
-    metrics.LEGACY_OCC_FINAL_CONFLICT.labels(endpoint='/curation/test-metrics').inc()
-    after = _sample_value(metrics.LEGACY_OCC_FINAL_CONFLICT, endpoint='/curation/test-metrics')
+    before = _sample_value(metrics.OP_OCC_FINAL_CONFLICT, endpoint='/curation/test-metrics')
+    metrics.OP_OCC_FINAL_CONFLICT.labels(endpoint='/curation/test-metrics').inc()
+    after = _sample_value(metrics.OP_OCC_FINAL_CONFLICT, endpoint='/curation/test-metrics')
     assert after == before + 1
 
-    before_unlabeled = _sample_value(metrics.LEGACY_GEMMA_CALL_COMBINED_COUNT)
-    metrics.LEGACY_GEMMA_CALL_COMBINED_COUNT.inc()
-    after_unlabeled = _sample_value(metrics.LEGACY_GEMMA_CALL_COMBINED_COUNT)
+    before_unlabeled = _sample_value(metrics.OP_VLM_CALL_COMBINED_COUNT)
+    metrics.OP_VLM_CALL_COMBINED_COUNT.inc()
+    after_unlabeled = _sample_value(metrics.OP_VLM_CALL_COMBINED_COUNT)
     assert after_unlabeled == before_unlabeled + 1
 
 
 def test_worker_skip_human_won_tracks_per_writer_id() -> None:
-    before_a = _sample_value(metrics.LEGACY_WORKER_SKIP_HUMAN_WON, writer_id='test-writer-a')
-    before_b = _sample_value(metrics.LEGACY_WORKER_SKIP_HUMAN_WON, writer_id='test-writer-b')
-    metrics.LEGACY_WORKER_SKIP_HUMAN_WON.labels(writer_id='test-writer-a').inc()
-    after_a = _sample_value(metrics.LEGACY_WORKER_SKIP_HUMAN_WON, writer_id='test-writer-a')
-    after_b = _sample_value(metrics.LEGACY_WORKER_SKIP_HUMAN_WON, writer_id='test-writer-b')
+    before_a = _sample_value(metrics.OP_WORKER_SKIP_HUMAN_WON, writer_id='test-writer-a')
+    before_b = _sample_value(metrics.OP_WORKER_SKIP_HUMAN_WON, writer_id='test-writer-b')
+    metrics.OP_WORKER_SKIP_HUMAN_WON.labels(writer_id='test-writer-a').inc()
+    after_a = _sample_value(metrics.OP_WORKER_SKIP_HUMAN_WON, writer_id='test-writer-a')
+    after_b = _sample_value(metrics.OP_WORKER_SKIP_HUMAN_WON, writer_id='test-writer-b')
     # Only the incremented label combination moved.
     assert after_a == before_a + 1
     assert after_b == before_b
@@ -55,7 +55,7 @@ def _histogram_count_and_sum(collector) -> tuple[float, float]:
 
 
 def test_histogram_observe_updates_count_and_sum() -> None:
-    hist = metrics.LEGACY_OCC_RETRY_COUNT.labels(endpoint='/curation/test-histogram')
+    hist = metrics.OP_OCC_RETRY_COUNT.labels(endpoint='/curation/test-histogram')
     before_count, before_sum = _histogram_count_and_sum(hist)
     for v in (0, 1, 2, 3):
         hist.observe(v)
@@ -66,22 +66,22 @@ def test_histogram_observe_updates_count_and_sum() -> None:
 
 def test_registry_sees_expected_metric_names_and_label_sets() -> None:
     expected_labeled = {
-        'legacy_occ_retry_count': ('endpoint',),
-        'legacy_occ_final_conflict': ('endpoint',),
-        'legacy_worker_skip_human_won': ('writer_id',),
+        'op_occ_retry_count': ('endpoint',),
+        'op_occ_final_conflict': ('endpoint',),
+        'op_worker_skip_human_won': ('writer_id',),
     }
     expected_unlabeled = {
-        'legacy_gemma_call_combined_count',
-        'legacy_gemma_call_separate_count',
-        'legacy_gemma_combined_parse_failure',
-        'legacy_shm_crop_cache_hits',
-        'legacy_shm_crop_cache_misses',
-        'legacy_shm_crop_cache_evictions',
-        'legacy_source_image_prefetch_hits',
-        'legacy_source_image_prefetch_misses',
-        'legacy_source_image_decode_count',
-        'legacy_thumbnail_cache_hits',
-        'legacy_thumbnail_cache_misses',
+        'op_vlm_call_combined_count',
+        'op_vlm_call_separate_count',
+        'op_vlm_combined_parse_failure',
+        'op_shm_crop_cache_hits',
+        'op_shm_crop_cache_misses',
+        'op_shm_crop_cache_evictions',
+        'op_source_image_prefetch_hits',
+        'op_source_image_prefetch_misses',
+        'op_source_image_decode_count',
+        'op_thumbnail_cache_hits',
+        'op_thumbnail_cache_misses',
     }
 
     collected: set[str] = set()
@@ -112,11 +112,11 @@ def test_metrics_exposition_contains_curation_counters_after_increment() -> None
     increment, proving the whole collection -> render path works."""
     from src.main import app
 
-    metrics.LEGACY_SHM_CROP_CACHE_HITS.inc()
-    metrics.LEGACY_OCC_FINAL_CONFLICT.labels(endpoint='/curation/exposition-test').inc()
+    metrics.OP_SHM_CROP_CACHE_HITS.inc()
+    metrics.OP_OCC_FINAL_CONFLICT.labels(endpoint='/curation/exposition-test').inc()
 
     client = TestClient(app)
     body = client.get('/metrics').text
-    assert 'legacy_shm_crop_cache_hits' in body
-    assert 'legacy_occ_final_conflict' in body
+    assert 'op_shm_crop_cache_hits' in body
+    assert 'op_occ_final_conflict' in body
     assert 'endpoint="/curation/exposition-test"' in body

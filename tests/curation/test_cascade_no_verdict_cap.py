@@ -19,7 +19,7 @@ import httpx
 import pytest
 from PIL import Image
 
-import scripts.curation.sam_worker_main as worker
+import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import combined as combined_mod, no_verdict
 from src.config import get_region_fields
 from src.config.region_rejection import REJECT_REASON_NO_VERDICT
@@ -57,11 +57,11 @@ def _task(**kw: Any) -> Any:
         'crop_id': 'crop-1',
         'image_path': '/dev/null/never-read',
         'vehicle_bbox_norm': (0.0, 0.0, 1.0, 1.0),
-        'plate_status': 'pending_verify',
+        'region_status': 'pending_verify',
         'class_name': 'audi',
         'group': 'cars',
-        'lpr_plate_in_source': EXISTING_BOX,
-        'lpr_score': 0.7,
+        'detector_region_in_source': EXISTING_BOX,
+        'detector_score': 0.7,
         'crop_jpeg': _jpeg(),
     }
     base.update(kw)
@@ -69,18 +69,18 @@ def _task(**kw: Any) -> Any:
 
 
 def _vlm(*answers: Any) -> MagicMock:
-    """``verify_plate`` answering ``answers`` in turn (an exception type is
+    """``verify_region`` answering ``answers`` in turn (an exception type is
     raised), then the last answer forever."""
     seq = list(answers)
 
-    async def verify_plate(_crop: RegionCrop, **_kw: Any) -> Any:
+    async def verify_region(_crop: RegionCrop, **_kw: Any) -> Any:
         a = seq.pop(0) if len(seq) > 1 else seq[0]
         if isinstance(a, type) and issubclass(a, Exception):
             raise a('upstream down')
         return a
 
     g = MagicMock()
-    g.verify_plate = AsyncMock(side_effect=verify_plate)
+    g.verify_region = AsyncMock(side_effect=verify_region)
     g.aclose = AsyncMock()
     return g
 
@@ -90,19 +90,19 @@ def _accept() -> VlmRegionVerdict:
 
 
 def _mocks() -> dict[str, Any]:
-    sam3 = MagicMock()
-    sam3.segment_plate = AsyncMock(return_value=None)
+    segmenter = MagicMock()
+    segmenter.segment = AsyncMock(return_value=None)
     ocr = MagicMock()
     ocr.detect_regions = AsyncMock(return_value=[])
-    ocr.pick_best_plate_region = MagicMock(return_value=None)
-    lpr = MagicMock()
-    lpr.detect_batch = AsyncMock(return_value=[])
-    return {'sam3': sam3, 'ocr_recognizer': ocr, 'lpr': lpr}
+    ocr.pick_best_text_region = MagicMock(return_value=None)
+    detector = MagicMock()
+    detector.detect_batch = AsyncMock(return_value=[])
+    return {'segmenter': segmenter, 'ocr_recognizer': ocr, 'detector': detector}
 
 
-async def _pass(gemma: MagicMock, **task_kw: Any) -> Any:
+async def _pass(vlm: MagicMock, **task_kw: Any) -> Any:
     task = _task(**task_kw)
-    await worker._process_crop(task, gemma=gemma, **_mocks())
+    await worker._process_crop(task, vlm=vlm, **_mocks())
     return task
 
 
@@ -110,10 +110,10 @@ class TestCascadeVerifyNoVerdictIsCapped:
     @pytest.mark.asyncio
     async def test_parks_the_existing_box_after_the_cap(self) -> None:
         F = get_region_fields()
-        gemma = _vlm(None)
+        vlm = _vlm(None)
         for _ in range(no_verdict.DEFAULT_MAX_NO_VERDICT_ATTEMPTS - 1):
-            assert (await _pass(gemma)).update_doc == {}
-        task = await _pass(gemma)
+            assert (await _pass(vlm)).update_doc == {}
+        task = await _pass(vlm)
         doc = task.update_doc
         assert doc[F.status] == 'verify_rejected'
         assert doc[F.rejection_reason] == REJECT_REASON_NO_VERDICT
@@ -131,12 +131,12 @@ class TestCascadeVerifyNoVerdictIsCapped:
     async def test_fresh_detector_box_is_parked_the_same_way(self) -> None:
         F = get_region_fields()
         cand = RegionCandidate(bbox_norm=(0.3, 0.4, 0.5, 0.45), score=0.82, source='det')
-        gemma = _vlm(None)
+        vlm = _vlm(None)
         m = _mocks()
-        m['lpr'].detect_batch = AsyncMock(return_value=[cand])
+        m['detector'].detect_batch = AsyncMock(return_value=[cand])
         for i in range(no_verdict.DEFAULT_MAX_NO_VERDICT_ATTEMPTS):
-            task = _task(plate_status='pending', lpr_plate_in_source=None)
-            await worker._process_crop(task, gemma=gemma, **m)
+            task = _task(region_status='pending', detector_region_in_source=None)
+            await worker._process_crop(task, vlm=vlm, **m)
             if i < no_verdict.DEFAULT_MAX_NO_VERDICT_ATTEMPTS - 1:
                 assert task.update_doc == {}
         assert task.update_doc[F.rejection_reason] == REJECT_REASON_NO_VERDICT
@@ -146,35 +146,37 @@ class TestCascadeVerifyNoVerdictIsCapped:
     @pytest.mark.asyncio
     async def test_real_verdict_clears_the_count(self) -> None:
         F = get_region_fields()
-        gemma = _vlm(None, None, _accept(), None)
-        assert (await _pass(gemma)).update_doc == {}
-        assert (await _pass(gemma)).update_doc == {}
-        assert (await _pass(gemma)).update_doc[F.status] == 'detected'
+        vlm = _vlm(None, None, _accept(), None)
+        assert (await _pass(vlm)).update_doc == {}
+        assert (await _pass(vlm)).update_doc == {}
+        assert (await _pass(vlm)).update_doc[F.status] == 'detected'
         # Requeued later: a fresh count, not the stale two.
-        assert (await _pass(gemma)).update_doc == {}
-        assert (await _pass(gemma)).update_doc == {}
-        assert (await _pass(gemma)).update_doc[F.rejection_reason] == REJECT_REASON_NO_VERDICT
+        assert (await _pass(vlm)).update_doc == {}
+        assert (await _pass(vlm)).update_doc == {}
+        assert (await _pass(vlm)).update_doc[F.rejection_reason] == REJECT_REASON_NO_VERDICT
 
     @pytest.mark.asyncio
     async def test_transport_failure_is_never_capped(self) -> None:
-        gemma = _vlm(VlmTransportError)
+        vlm = _vlm(VlmTransportError)
         for _ in range(no_verdict.DEFAULT_MAX_NO_VERDICT_ATTEMPTS * 3):
-            task = await _pass(gemma)
+            task = await _pass(vlm)
             assert task.update_doc == {}
-        assert gemma.verify_plate.await_args.kwargs == {'raise_on_transport': True}
+        assert vlm.verify_region.await_args.kwargs == {'raise_on_transport': True}
 
 
 class TestCombinedCohortNoVerdictIsCapped:
     @pytest.mark.asyncio
     async def test_null_box_verdict_is_parked_after_the_cap(self) -> None:
         F = get_region_fields()
-        reply = VlmCombinedReply(img_id='c1', plate_visible=True, plate_bbox_correct=None)
+        reply = VlmCombinedReply(img_id='c1', region_visible=True, region_bbox_correct=None)
         vlm = MagicMock()
         vlm.class_names = []
         vlm.label_combined = AsyncMock(return_value=reply)
         det = worker.region_profile().detector_model
         for i in range(no_verdict.DEFAULT_MAX_NO_VERDICT_ATTEMPTS):
-            task = _task(crop_id='c1', plate_status='pending_detection', lpr_plate_in_source=None)
+            task = _task(
+                crop_id='c1', region_status='pending_detection', detector_region_in_source=None
+            )
             resolved = await combined_mod._try_combined_class_region(
                 task,
                 candidate_in_crop=(0.3, 0.6, 0.6, 0.75),
@@ -183,7 +185,7 @@ class TestCombinedCohortNoVerdictIsCapped:
                 detector=det,
                 detector_version='1',
                 detector_chain_tag=det,
-                gemma=vlm,
+                vlm=vlm,
                 candidate_source=CANDIDATE_DETECTOR,
             )
             assert resolved is True
@@ -207,13 +209,15 @@ class TestVerifyPlateTransportSignal:
     @pytest.mark.asyncio
     async def test_opt_in_raises_on_transport_failure(self) -> None:
         with pytest.raises(VlmTransportError):
-            await self._labeler().verify_plate(
+            await self._labeler().verify_region(
                 RegionCrop(crop_id='r1', jpeg_bytes=b'x'), raise_on_transport=True
             )
 
     @pytest.mark.asyncio
     async def test_default_still_returns_no_verdict(self) -> None:
-        assert await self._labeler().verify_plate(RegionCrop(crop_id='r1', jpeg_bytes=b'x')) is None
+        assert (
+            await self._labeler().verify_region(RegionCrop(crop_id='r1', jpeg_bytes=b'x')) is None
+        )
 
     @pytest.mark.asyncio
     async def test_unparseable_reply_is_no_verdict_even_with_opt_in(self) -> None:
@@ -222,7 +226,7 @@ class TestVerifyPlateTransportSignal:
             return_value={'choices': [{'message': {'content': 'not json'}}]}
         )
         crop = RegionCrop(crop_id='r1', jpeg_bytes=b'x')
-        assert await lab.verify_plate(crop, raise_on_transport=True) is None
+        assert await lab.verify_region(crop, raise_on_transport=True) is None
 
     def test_combined_transport_failure_is_a_transport_error(self) -> None:
         from src.services.labeling.vlm_labeler import CombinedTransportError

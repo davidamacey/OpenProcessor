@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_curation_config, get_region_fields
@@ -13,13 +14,12 @@ from src.services.curation.region_text_repair import (
     plan_region_text_repair,
     rederive,
 )
-from src.services.detection.reference_profiles import REFERENCE_LICENSE_PLATE_PROFILE
 from src.services.detection.region_text_rules import RegionTextRules
 
 
 F = get_region_fields()
 INDEX = get_curation_config().items_index
-PROFILE = REFERENCE_LICENSE_PLATE_PROFILE
+PROFILE = NEUTRAL_REGION_PROFILE
 RULES = RegionTextRules.from_profile(PROFILE, prompt_examples=('ABC1234',))
 
 

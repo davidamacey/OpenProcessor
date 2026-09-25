@@ -83,12 +83,13 @@ allowlist — new files aren't retroactively checked until you add them.
 path to `PORTED_PATHS` in the same commit.** This makes the guard a
 ratchet: once a module is clean, it can never regress.
 
-Two files are permanently exempted (they legitimately name `plate_*` as
-illustrative example text, not a live bug): `src/config/region_fields.py`'s
-docstrings and `tests/curation/test_region_fields.py`'s overridability
-fixture. See the script's module docstring for the frozen-wire-contract
-exemptions too (`plate_status` etc. are legitimate on the HTTP JSON
-contract; see `docs/design/curation_api_contract.md`).
+`src/config/region_fields.py`'s docstrings and
+`tests/curation/test_region_fields.py`'s overridability fixture use
+`roi_*` as their illustrative "existing deployment" example name, so
+neither needs an exemption from the `plate_*` guard. See the script's
+module docstring for the frozen-wire-contract exemptions
+(`plate_status` etc. are legitimate on the HTTP JSON contract; see
+`docs/design/curation_api_contract.md`).
 
 ## Commit conventions
 

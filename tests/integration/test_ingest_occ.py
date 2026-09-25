@@ -189,7 +189,7 @@ async def test_existing_crop_with_human_label_preserved_on_reingest() -> None:
     preserved-label counter.
     """
     from src.clients.occ import occ_upsert_bulk
-    from src.services.curation.metrics import LEGACY_INGEST_PRESERVED_HUMAN_LABEL
+    from src.services.curation.metrics import OP_INGEST_PRESERVED_HUMAN_LABEL
 
     client = FakeUpsertOpenSearch()
     index = 'op_items_test'
@@ -221,8 +221,8 @@ async def test_existing_crop_with_human_label_preserved_on_reingest() -> None:
         if_primary_term=1,
     )
 
-    before = _counter_value(LEGACY_INGEST_PRESERVED_HUMAN_LABEL, field='region_label_source')
-    before_text = _counter_value(LEGACY_INGEST_PRESERVED_HUMAN_LABEL, field='region_text_source')
+    before = _counter_value(OP_INGEST_PRESERVED_HUMAN_LABEL, field='region_label_source')
+    before_text = _counter_value(OP_INGEST_PRESERVED_HUMAN_LABEL, field='region_text_source')
 
     reingest_doc = {
         'crop_id': crop_id,
@@ -248,8 +248,8 @@ async def test_existing_crop_with_human_label_preserved_on_reingest() -> None:
     assert result['preserved_human'] >= 2
     assert result['final_conflicts'] == 0
 
-    after = _counter_value(LEGACY_INGEST_PRESERVED_HUMAN_LABEL, field='region_label_source')
-    after_text = _counter_value(LEGACY_INGEST_PRESERVED_HUMAN_LABEL, field='region_text_source')
+    after = _counter_value(OP_INGEST_PRESERVED_HUMAN_LABEL, field='region_label_source')
+    after_text = _counter_value(OP_INGEST_PRESERVED_HUMAN_LABEL, field='region_text_source')
     assert after == before + 1
     assert after_text == before_text + 1
 
@@ -312,7 +312,7 @@ async def test_non_human_doc_overwritten_normally() -> None:
     preserved-label counter should increment.
     """
     from src.clients.occ import occ_upsert_bulk
-    from src.services.curation.metrics import LEGACY_INGEST_PRESERVED_HUMAN_LABEL
+    from src.services.curation.metrics import OP_INGEST_PRESERVED_HUMAN_LABEL
 
     client = FakeUpsertOpenSearch()
     index = 'op_items_test'
@@ -330,7 +330,7 @@ async def test_non_human_doc_overwritten_normally() -> None:
         },
     )
 
-    before = _counter_value(LEGACY_INGEST_PRESERVED_HUMAN_LABEL, field='region_label_source')
+    before = _counter_value(OP_INGEST_PRESERVED_HUMAN_LABEL, field='region_label_source')
 
     reingest_doc = {
         'crop_id': crop_id,
@@ -349,7 +349,7 @@ async def test_non_human_doc_overwritten_normally() -> None:
     assert result['updated'] == 1
     assert result['preserved_human'] == 0
 
-    after = _counter_value(LEGACY_INGEST_PRESERVED_HUMAN_LABEL, field='region_label_source')
+    after = _counter_value(OP_INGEST_PRESERVED_HUMAN_LABEL, field='region_label_source')
     assert after == before
 
     got = await client.get(index=index, id=crop_id)

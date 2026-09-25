@@ -106,7 +106,7 @@ async def test_vlm_worker_fetch_pending_ids_query_shape() -> None:
         _FakeClient(),
         opensearch_url='http://os:9200',
         batch_size=64,
-        v6_skip_conf=0.8,
+        classifier_skip_conf=0.8,
         exclude_ids=['x1', 'x2'],
     )
     assert ids == ['c1', 'c2']

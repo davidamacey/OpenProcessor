@@ -1,6 +1,6 @@
 """Training-job control protocol (file-based).
 
-Ported from a private reference vehicle/license-plate curation stack's
+Ported from a reference curation stack's
 training pipeline — see ``docs/design/curation_design_rationale.md``
 for the genericization rationale. This module encapsulates the API <-> trainer protocol:
 
@@ -724,7 +724,7 @@ def _pin_registry_snapshot_sync(job_id: str) -> tuple[str | None, str | None]:
         registry = get_class_registry().load()
         content = registry.model_dump_json(indent=2)
     except Exception as exc:
-        logger.warning('legacy_train_registry_pin_read_failed', job_id=job_id, error=str(exc))
+        logger.warning('curation_train_registry_pin_read_failed', job_id=job_id, error=str(exc))
         return None, None
     sha = hashlib.sha256(content.encode('utf-8')).hexdigest()
     snapshot_path = _registry_snapshot_path(job_id)
@@ -735,7 +735,7 @@ def _pin_registry_snapshot_sync(job_id: str) -> tuple[str | None, str | None]:
         tmp.replace(snapshot_path)
     except OSError as exc:
         logger.warning(
-            'legacy_train_registry_pin_write_failed',
+            'curation_train_registry_pin_write_failed',
             job_id=job_id,
             path=str(snapshot_path),
             error=str(exc),
@@ -786,7 +786,7 @@ async def write_job(job: TrainJobSpec) -> str:
 
     await _atomic_write_json(target, payload)
     logger.info(
-        'legacy_train_job_written',
+        'curation_train_job_written',
         job_id=spec.job_id,
         campaign_id=spec.campaign_id,
         family=spec.model_family,
@@ -812,7 +812,7 @@ async def write_cancel(job_id: str) -> None:
         target.open('a', encoding='utf-8').close()
 
     await asyncio.to_thread(_do)
-    logger.info('legacy_train_cancel_written', job_id=job_id, path=str(target))
+    logger.info('curation_train_cancel_written', job_id=job_id, path=str(target))
 
 
 def _maybe_lost(status: TrainJobStatus) -> TrainJobStatus:
@@ -824,7 +824,7 @@ def _maybe_lost(status: TrainJobStatus) -> TrainJobStatus:
     try:
         hb = datetime.fromisoformat(status.heartbeat_at)
     except ValueError:
-        logger.debug('legacy_train_heartbeat_unparseable', job_id=status.job_id)
+        logger.debug('curation_train_heartbeat_unparseable', job_id=status.job_id)
         return status
     if hb.tzinfo is None:
         hb = hb.replace(tzinfo=UTC)
@@ -858,7 +858,7 @@ async def read_status(job_id: str) -> TrainJobStatus | None:
         status = TrainJobStatus.model_validate(raw)
     except Exception as exc:
         logger.warning(
-            'legacy_train_status_invalid',
+            'curation_train_status_invalid',
             job_id=job_id,
             error=str(exc),
         )
@@ -944,7 +944,7 @@ async def list_runs(limit: int = 50, offset: int = 0) -> list[TrainJobStatus]:
             try:
                 status = TrainJobStatus.model_validate(raw)
             except Exception as exc:
-                logger.warning('legacy_train_status_invalid', error=str(exc))
+                logger.warning('curation_train_status_invalid', error=str(exc))
                 continue
             # If the trainer didn't carry through ``campaign_id`` in the
             # status, re-hydrate it from the matching job.json so the
@@ -1027,7 +1027,7 @@ async def tail_run_log(job_id: str, lines: int = 200) -> list[str]:
                     count = b''.join(blocks).count(b'\n')
                 buf = b''.join(blocks)
         except OSError as exc:
-            logger.warning('legacy_train_log_read_failed', job_id=job_id, error=str(exc))
+            logger.warning('curation_train_log_read_failed', job_id=job_id, error=str(exc))
             return []
 
         text = buf.decode('utf-8', errors='replace').splitlines()
@@ -1085,7 +1085,7 @@ async def write_campaign(campaign: TrainCampaignSpec) -> tuple[str, list[str]]:
         job_ids.append(jid)
 
     logger.info(
-        'legacy_train_campaign_written',
+        'curation_train_campaign_written',
         campaign_id=spec.campaign_id,
         n_runs=len(job_ids),
     )
@@ -1109,5 +1109,5 @@ async def cancel_campaign(campaign_id: str) -> int:
             continue
         await write_cancel(run.job_id)
         cancelled += 1
-    logger.info('legacy_train_campaign_cancelled', campaign_id=campaign_id, n=cancelled)
+    logger.info('curation_train_campaign_cancelled', campaign_id=campaign_id, n=cancelled)
     return cancelled

@@ -23,10 +23,10 @@ is for "find this point's 16 nearest neighbours", so introducing faiss
 here would add complexity without a speed win.
 
 **Compute shape:** O(n·k·d) — n full-pool distance updates, k times.
-When ``k == n`` (a full-pool ranking, as ``legacy_select.py`` needs for
+When ``k == n`` (a full-pool ranking, as the reference select router needs for
 ``GET /curation/crops?order=diverse`` pagination) this degrades to O(n²·d),
 which is why that caller uses a much smaller inline-pool cap than the
-POST endpoint's k-bounded selection — see ``legacy_select.py`` module
+POST endpoint's k-bounded selection — see the reference select router's module
 docstring for the exact budget derivation.
 """
 

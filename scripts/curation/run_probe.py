@@ -14,7 +14,7 @@ stay empty.
 Operator-triggered on purpose: nothing in the stack tracks "which trained
 checkpoint is the current probe", so run it once after a probe-profile
 training job exports its ONNX (or when you want to reuse an already
-deployed detector as the probe via ``--architecture v6``).
+deployed detector as the probe via ``--architecture yolov5_objectness``).
 
     # Count what would be scored — no model load, no writes.
     python3 scripts/curation/run_probe.py --model /runs/probe-1/weights/best.onnx
@@ -25,7 +25,7 @@ deployed detector as the probe via ``--architecture v6``).
     # Resume an interrupted pass (skips items already stamped with this
     # --model-version), with smaller scroll pages for a slow CPU probe.
     python3 scripts/curation/run_probe.py --model /models/detector.onnx \\
-        --architecture v6 --model-version detector-v6 --resume --page-size 200 --apply
+        --architecture yolov5_objectness --model-version detector-v2 --resume --page-size 200 --apply
 
 Without ``--resume`` every run re-scores every item: probe fields are
 meant to reflect the most recently promoted probe, not a mix of versions.
@@ -54,7 +54,7 @@ from src.services.curation.probe_predictions import count_probe_candidates, run_
 
 
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
-ARCHITECTURES = ('yolo11', 'v6')
+ARCHITECTURES = ('yolo11', 'yolov5_objectness')
 
 logging.basicConfig(
     level=logging.INFO,
@@ -126,7 +126,7 @@ def main() -> int:
         default='yolo11',
         help=(
             "'yolo11' (default): ultralytics-loadable ONNX from a probe training run. "
-            "'v6': a non-ultralytics YOLOv5-family ONNX with an objectness channel "
+            "'yolov5_objectness': a non-ultralytics YOLOv5-family ONNX with an objectness channel "
             '(reuse an already deployed detector instead of training a probe).'
         ),
     )

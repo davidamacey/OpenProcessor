@@ -107,3 +107,76 @@ def test_get_class_returns_the_same_entry_as_the_list(app_client: TestClient) ->
 
 def test_get_class_unknown_id_is_404(app_client: TestClient) -> None:
     assert app_client.get('/curation/classes/9999').status_code == 404
+
+
+# =============================================================================
+# Region-class count override (was hardcoded to the literal 'license_plate';
+# now reads the active region profile's region_class_name)
+# =============================================================================
+
+
+def test_region_class_override_uses_the_active_profiles_region_class_name(
+    app_client: TestClient,
+    registry: ClassRegistry,
+    fake_opensearch: AsyncMock,
+    reference_region_profile: None,
+) -> None:
+    """The example license_plate profile is active (region_class_name=
+    'license_plate'); a registry class of that name gets its counts
+    overridden with the region inventory total."""
+    registry.add_class('license_plate', group='region')
+    fake_opensearch.count = AsyncMock(side_effect=[{'count': 7}, {'count': 3}])
+
+    resp = app_client.get('/curation/classes')
+    assert resp.status_code == 200, resp.text
+    entry = next(c for c in resp.json()['classes'] if c['class_name'] == 'license_plate')
+    assert entry['sample_count'] == 7
+    assert entry['validated_count'] == 3
+    assert entry['cluster_size'] == 7
+
+
+def test_region_class_override_is_a_noop_without_an_active_profile(
+    app_client: TestClient,
+    registry: ClassRegistry,
+    fake_opensearch: AsyncMock,
+) -> None:
+    """No region profile configured -- a class happening to be named
+    'license_plate' must NOT get the region-inventory override (it isn't
+    hardcoded to that literal anymore)."""
+    registry.add_class('license_plate', group='region')
+    fake_opensearch.count = AsyncMock(return_value={'count': 999})
+
+    resp = app_client.get('/curation/classes')
+    assert resp.status_code == 200, resp.text
+    entry = next(c for c in resp.json()['classes'] if c['class_name'] == 'license_plate')
+    assert entry['sample_count'] == 0
+    assert entry['validated_count'] == 0
+
+
+def test_region_class_override_uses_a_differently_named_profiles_region_class(
+    app_client: TestClient,
+    registry: ClassRegistry,
+    fake_opensearch: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deployment with a different region_class_name overrides THAT
+    class, not 'license_plate' -- proves the lookup isn't secretly still
+    hardcoded to the example's name."""
+    from src.services.detection import profile_registry
+
+    monkeypatch.setenv(f'{profile_registry.REGION_DETECTION_ENV_PREFIX}NAME', 'widget')
+    monkeypatch.setenv(
+        f'{profile_registry.REGION_DETECTION_ENV_PREFIX}REGION_CLASS_NAME', 'widget_label'
+    )
+    profile_registry._reset_registry_for_tests()
+    try:
+        registry.add_class('widget_label', group='region')
+        fake_opensearch.count = AsyncMock(side_effect=[{'count': 5}, {'count': 1}])
+
+        resp = app_client.get('/curation/classes')
+        assert resp.status_code == 200, resp.text
+        entry = next(c for c in resp.json()['classes'] if c['class_name'] == 'widget_label')
+        assert entry['sample_count'] == 5
+        assert entry['validated_count'] == 1
+    finally:
+        profile_registry._reset_registry_for_tests()

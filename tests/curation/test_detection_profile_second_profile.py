@@ -19,11 +19,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
+from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE
 from PIL import Image
 
 from src.config import DetectionProfile
 from src.services.detection.cascade_detect import (
-    REFERENCE_LICENSE_PLATE_PROFILE,
     OcrRegion,
     RegionCandidate,
     RegionDetector,
@@ -104,10 +104,10 @@ async def test_region_detector_uses_profile_model_name_and_floor() -> None:
     assert result is not None
     assert isinstance(result, RegionCandidate)
     # Source is stamped with the profile's own model name, not the
-    # reference LPR default.
+    # reference region-detector default.
     assert result.source == 'box_detector_v1'
 
-    # A score that clears the LPR default floor (0.4) but not the box
+    # A score that clears the reference detector's default floor (0.4) but not the box
     # profile's stricter 0.6 floor must be dropped — proves the floor
     # really is profile-driven, not the old hardcoded constant.
     raw_low = raw.copy()
@@ -141,8 +141,8 @@ def test_ocr_region_shape_checks_use_the_bound_profile() -> None:
         rec_score=0.95,
         profile=BOX_PROFILE,
     )
-    assert not square_region_default.is_plate_shaped
-    assert square_region_box.is_plate_shaped
+    assert not square_region_default.is_region_shaped
+    assert square_region_box.is_region_shaped
 
 
 def test_ocr_region_text_candidate_gate_is_profile_scoped() -> None:
@@ -155,9 +155,9 @@ def test_ocr_region_text_candidate_gate_is_profile_scoped() -> None:
         rec_score=0.95,
         profile=BOX_PROFILE,
     )
-    assert region.is_plate_text_candidate
+    assert region.is_region_text_candidate
 
-    # Same bbox + text bound to the LPR default profile fails on both
+    # Same bbox + text bound to the reference detector's default profile fails on both
     # counts: aspect 1.0 is outside the default's 1.5-7.0 band, and
     # length 2 is below the default's text_hint_len_min=4. Proves the
     # gate reads the bound profile rather than a module constant.
@@ -169,4 +169,4 @@ def test_ocr_region_text_candidate_gate_is_profile_scoped() -> None:
         rec_score=region.rec_score,
         profile=REFERENCE_LICENSE_PLATE_PROFILE,
     )
-    assert not default_equivalent.is_plate_text_candidate
+    assert not default_equivalent.is_region_text_candidate

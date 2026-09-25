@@ -101,18 +101,18 @@ class Cohort:
 # tests/live/ addresses one of these prefixes. Keep the comments accurate.
 COHORTS: tuple[Cohort, ...] = (
     # Class cluster 0: pure, half human-validated and half unvalidated
-    # v6-model rows -> the auto-promote positive case.
-    Cohort('cls0', 0, 40, 3, class_id=0, class_source='v6_model', class_validated=False),
+    # secondary-model rows -> the auto-promote positive case.
+    Cohort('cls0', 0, 40, 3, class_id=0, class_source='secondary_model', class_validated=False),
     # Class cluster 1: 60/40 class mix -> purity 0.6, below the 0.85 gate,
     # so auto-promote must leave it alone. Also the labels-scenario cohort
-    # (v6-sourced rows are never part of the human holdout cohort).
+    # (secondary-sourced rows are never part of the human holdout cohort).
     Cohort(
         'cls1',
         1,
         40,
         2,
         class_id=1,
-        class_source='v6_model',
+        class_source='secondary_model',
         class_validated=False,
         minority_class_id=2,
         minority_count=16,
@@ -125,7 +125,7 @@ COHORTS: tuple[Cohort, ...] = (
     Cohort('cls6', 6, 20, 1, class_id=6, class_source='human', class_validated=True),
     # Merge-target cohort: never human-validated, so it never acquires a
     # frozen holdout row and stays mergeable.
-    Cohort('cls7', 7, 20, 1, class_id=7, class_source='v6_model', class_validated=False),
+    Cohort('cls7', 7, 20, 1, class_id=7, class_source='secondary_model', class_validated=False),
     # Residual / candidate band.
     Cohort('cnd10000', 10000, 30, 3),
     Cohort('cnd10001', 10001, 20, 2),
@@ -265,7 +265,7 @@ def _build_items(
                 class_id = cohort.minority_class_id if is_minority else cohort.class_id
                 class_name = CLASS_NAMES[class_id] if class_id is not None else None
                 # Half of the pure class cluster is a settled human label;
-                # the rest stays v6-sourced so auto-promote has candidates.
+                # the rest stays secondary-sourced so auto-promote has candidates.
                 validated = cohort.class_validated
                 class_source = cohort.class_source
                 if cohort.prefix == 'cls0' and member_index % 5 < 2:

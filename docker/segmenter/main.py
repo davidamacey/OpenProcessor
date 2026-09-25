@@ -15,15 +15,10 @@ class, dataset or directory.
 Wire contract (the shipped client's expectations, which this server is
 built to match):
 
-* ``POST /sam3/segment_plate`` — request ``{crop_jpeg_b64, text_prompt,
+* ``POST /segment`` — request ``{crop_jpeg_b64, text_prompt,
   max_candidates}``, response ``{candidates: [{bbox_norm, score,
-  mask_iou}], ...}``. The path is frozen: it is what
-  ``scripts/curation/worker/client.py`` posts to, and renaming it would
-  break every already-deployed worker. ``POST /segment`` is an alias on
-  the same handler under a name that matches what the service actually
-  does — new callers should prefer it.
-* ``POST /sam3/segment_plate_batch`` / ``POST /segment/batch`` — the
-  same thing for N images in one round trip.
+  mask_iou}], ...}``.
+* ``POST /segment/batch`` — the same thing for N images in one round trip.
 * ``GET /health`` — ``loaded`` flips true once the model pool is up.
 
 Coordinate frame: ``bbox_norm`` is normalized to the **submitted image**.
@@ -245,7 +240,6 @@ async def health() -> HealthResponse:
 
 
 @app.post('/segment', response_model=SegmentResponse)
-@app.post('/sam3/segment_plate', response_model=SegmentResponse)
 async def segment(req: SegmentRequest) -> SegmentResponse:
     """Segment ``text_prompt`` instances in one image. Returns top-K boxes."""
     _require_ready()
@@ -262,7 +256,6 @@ async def segment(req: SegmentRequest) -> SegmentResponse:
 
 
 @app.post('/segment/batch', response_model=BatchSegmentResponse)
-@app.post('/sam3/segment_plate_batch', response_model=BatchSegmentResponse)
 async def segment_batch(req: BatchSegmentRequest) -> BatchSegmentResponse:
     """Segment N images under a single processor lock.
 

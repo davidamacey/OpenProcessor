@@ -26,6 +26,7 @@ from src.routers.curation._common import (
     ItemRegionMetaRequest,
     ItemRegionRequest,
     OpenSearchDep,
+    RegionProfileDep,
     _now_iso,
     logger,
     router,
@@ -125,6 +126,7 @@ async def set_crop_region(
     crop_id: str,
     payload: ItemRegionRequest,
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
 ) -> dict[str, Any]:
     """Set or clear the region sub-bbox on a single crop.
 
@@ -152,6 +154,7 @@ async def patch_crop_region_meta(
     crop_id: str,
     payload: ItemRegionMetaRequest,
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
 ) -> dict[str, Any]:
     """Patch region metadata (text / status / rejection reason).
 
@@ -319,6 +322,7 @@ async def _batch_write(
 async def batch_set_crop_region(
     payload: ItemBatchRegionRequest,
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
 ) -> dict[str, Any]:
     """Bulk variant of ``PUT /crops/{crop_id}/region`` (typically
     ``region_bbox_norm=null``: "no region visible on these N crops").
@@ -337,6 +341,7 @@ async def batch_set_crop_region(
 async def batch_set_region_status(
     payload: CropBatchStatusRequest,
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
 ) -> dict[str, Any]:
     """Bulk-set region status over many crops — the cluster-view triage op.
 

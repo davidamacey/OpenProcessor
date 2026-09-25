@@ -138,12 +138,13 @@ trainer. A deployment supplies:
   detection worker's cascade looks for *inside* each item crop.
   **Neutral by default:** with nothing configured no region profile is
   active, `GET /methods` advertises an empty `detection_profile` axis,
-  and the worker idles instead of running the cascade. Select one with
-  `OP_REGION_PROFILE=<name>` (a profile your startup code registered via
-  `src.services.detection.profile_registry.register_profile()`, or a
-  built-in reference profile — today `license_plate`, which reproduces
-  the original reference deployment's constants and is an example, not a
-  suggested starting point), and/or override individual fields with
+  and the worker idles instead of running the cascade. No profile ships
+  built in. Select one with `OP_REGION_PROFILE_PATH=<path>` (a JSON
+  profile file — see `examples/region_profiles/` for a worked example,
+  not a suggested starting point) or `OP_REGION_PROFILE=<name>` (a
+  profile your startup code registered via
+  `src.services.detection.profile_registry.register_profile()`), and/or
+  override individual fields with
   `OP_REGION_DETECTION_<FIELD>` (e.g. `OP_REGION_DETECTION_SAM_TEXT_PROMPT`,
   `OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS`). The resolved profile is
   registered automatically, so it is exactly what `GET /methods`
@@ -415,7 +416,7 @@ be changed at runtime once the app has started.
 | Embedding / HNSW tuning | `OP_EMBEDDING_DIM`, `OP_ENCODER_EMBEDDING_DIM`, `OP_BACKBONE_EMBEDDING_DIM`, `OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M` |
 | Region field-name overrides | `OP_REGION_FIELD_<ATTR>` (e.g. `OP_REGION_FIELD_STATUS`, `OP_REGION_FIELD_BBOX_NORM`) — see `RegionFields` for the full attribute list |
 | Ingest item detectors | `OP_INGEST_PRIMARY_<FIELD>` (e.g. `OP_INGEST_PRIMARY_DETECTOR_MODEL`, `OP_INGEST_PRIMARY_INPUT_SIZE`, `OP_INGEST_PRIMARY_CLASS_IDS`), optional secondary `OP_INGEST_SECONDARY_<FIELD>` (e.g. `OP_INGEST_SECONDARY_DETECTOR_MODEL`, `OP_INGEST_SECONDARY_NAME`) — tuple/frozenset fields take a comma-separated value. Replaces the retired `OP_DETECTION_*` |
-| Region detection profile (off by default) | `OP_REGION_PROFILE` (select by name, e.g. `license_plate`), `OP_REGION_DETECTION_<FIELD>` (per-field overrides, e.g. `OP_REGION_DETECTION_SAM_TEXT_PROMPT`, `OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS`) |
+| Region detection profile (off by default; no profile ships built in) | `OP_REGION_PROFILE_PATH` (load a profile file, e.g. `examples/region_profiles/license_plate.json`), `OP_REGION_PROFILE` (select a profile a deployment registered by name), `OP_REGION_DETECTION_<FIELD>` (per-field overrides, e.g. `OP_REGION_DETECTION_SAM_TEXT_PROMPT`, `OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS`) |
 | Ingest | `OP_MAX_INGEST_CONCURRENCY` |
 | PE text encoder (semantic-search queries) | `OP_PE_TEXT_BACKEND` (`auto`/`onnx`/`triton`/`torch`), `OP_PE_TEXT_ONNX_PATH` (default `/app/pytorch_models/pe_text_encoder.onnx`), `OP_PE_TEXT_TRITON_MODEL`, `OP_PE_TEXT_ORT_THREADS` |
 | Feature flags (off by default) | `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW` |

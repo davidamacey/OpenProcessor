@@ -14,14 +14,14 @@ so tests can override with ``monkeypatch.setenv`` + ``tmp_path`` without
 reimporting — same convention as ``train_jobs._resolve_jobs_dir``.
 
 **Single-fetch design (load-bearing, plan §3.3):** embeddings are fetched
-ONCE via :func:`legacy_embedding_reduce.fetch_residual_embeddings_parallel`
+ONCE via :func:`clustering.embedding_reduce.fetch_residual_embeddings_parallel`
 and the same matrix is handed to every enabled scorer — the OpenSearch read
 is the dominant cost (350k crops x 1024-d f32 = 1.43 GB), not the math.
 ``test_holdout=true`` crops are excluded via an explicit ``must_not`` (belt
 and suspenders — they're also implicitly excluded because
 ``fetch_residual_embeddings_parallel`` already drops ``class_validated:
 true`` crops, and a crop can only be ``test_holdout=true`` if it was
-``class_validated=true`` at freeze time; see ``legacy_review.freeze_test_holdout``).
+``class_validated=true`` at freeze time; see the reference review module's ``freeze_test_holdout``).
 """
 
 from __future__ import annotations
@@ -289,7 +289,7 @@ async def run_scoring_job(
         _atomic_write(state)
         raise
     except Exception as exc:
-        logger.error('legacy_scores_job_failed', job_id=job_id, error=str(exc))
+        logger.error('curation_scores_job_failed', job_id=job_id, error=str(exc))
         state.status = 'failed'
         state.error = str(exc)
         state.finished_at = time.time()
@@ -314,7 +314,9 @@ async def compute_coverage(opensearch: AsyncOpenSearch) -> dict[str, Any]:
             )
             n = int(resp.get('count', 0))
         except Exception as exc:
-            logger.warning('legacy_scores_coverage_count_failed', scorer=scorer_id, error=str(exc))
+            logger.warning(
+                'curation_scores_coverage_count_failed', scorer=scorer_id, error=str(exc)
+            )
             n = 0
         coverage[scorer_id] = {
             'field': field_name,

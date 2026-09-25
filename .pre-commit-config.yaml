@@ -196,6 +196,19 @@ repos:
         # (PORTED_PATHS) — starts empty in Chunk 0; each later wave
         # appends its newly-ported paths there in the same commit.
 
+      - id: check-naming-leaks
+        name: Ban private-company and domain-vendor naming leaks (naming sweep)
+        entry: python3 scripts/codegen/check_naming_leaks.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        # Scans the whole tracked tree (not just changed files) for the
+        # company/product name, retired vendor-model vocabulary, and the
+        # private class-registry vocabulary (see the checker script's
+        # module docstring for the exact patterns). Allowlist of
+        # deliberate, reviewed exceptions lives in
+        # scripts/codegen/naming_leak_allowlist.txt.
+
       - id: region-status-ts-drift
         name: RegionStatus TypeScript contract is in sync
         entry: python3 scripts/codegen/export_region_status_to_ts.py --check

@@ -5,7 +5,7 @@ then asserts on what actually landed in OpenSearch — never on the
 endpoint's own response alone, which is what makes these different from
 the offline router tests.
 
-Cohort: ``cls1_*`` (v6-sourced, never human-validated), chosen so these
+Cohort: ``cls1_*`` (classifier-sourced, never human-validated), chosen so these
 writes can never collide with the human-validated holdout cohort the
 class-merge scenarios freeze.
 """
@@ -35,13 +35,13 @@ def label_cohort(opensearch: Any) -> list[str]:
 
 
 def test_single_label_writes_class_and_grows_history(
-    client: Any, opensearch: Any, label_cohort: list[str]
+    api_client: Any, opensearch: Any, label_cohort: list[str]
 ) -> None:
     crop_id = label_cohort[0]
     before = _source(opensearch, crop_id)
     history_before = len(before.get('class_id_history') or [])
 
-    resp = client.put(f'/crops/{crop_id}/label', json={'class_id': 3, 'label_source': 'human'})
+    resp = api_client.put(f'/crops/{crop_id}/label', json={'class_id': 3, 'label_source': 'human'})
     assert resp.status_code == 200, resp.text
     assert resp.json()['class_name'] == CLASS_NAMES[3]
 
@@ -62,11 +62,11 @@ def test_single_label_writes_class_and_grows_history(
 
 
 def test_second_label_appends_another_history_entry(
-    client: Any, opensearch: Any, label_cohort: list[str]
+    api_client: Any, opensearch: Any, label_cohort: list[str]
 ) -> None:
     crop_id = label_cohort[0]
     before = _source(opensearch, crop_id)
-    client.put(f'/crops/{crop_id}/label', json={'class_id': 4}).raise_for_status()
+    api_client.put(f'/crops/{crop_id}/label', json={'class_id': 4}).raise_for_status()
     after = _source(opensearch, crop_id)
     assert after['class_id'] == 4
     assert len(after['class_id_history']) == len(before['class_id_history']) + 1
@@ -74,12 +74,12 @@ def test_second_label_appends_another_history_entry(
 
 
 def test_unknown_class_is_rejected_and_leaves_the_doc_untouched(
-    client: Any, opensearch: Any, label_cohort: list[str]
+    api_client: Any, opensearch: Any, label_cohort: list[str]
 ) -> None:
     crop_id = label_cohort[1]
     doc_before = get_doc(opensearch, INDEXES['items'], crop_id)
 
-    resp = client.put(f'/crops/{crop_id}/label', json={'class_id': 9999})
+    resp = api_client.put(f'/crops/{crop_id}/label', json={'class_id': 9999})
     assert resp.status_code == 400, resp.text
     assert 'unknown class_id' in resp.text
 
@@ -88,9 +88,11 @@ def test_unknown_class_is_rejected_and_leaves_the_doc_untouched(
     assert doc_after['_seq_no'] == doc_before['_seq_no']
 
 
-def test_batch_label_updates_every_crop(client: Any, opensearch: Any, label_cohort: list[str]) -> None:
+def test_batch_label_updates_every_crop(
+    api_client: Any, opensearch: Any, label_cohort: list[str]
+) -> None:
     batch = label_cohort[2:8]
-    resp = client.put('/crops/batch_label', json={'crop_ids': batch, 'class_id': 5})
+    resp = api_client.put('/crops/batch_label', json={'crop_ids': batch, 'class_id': 5})
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['updated'] == len(batch), body
@@ -104,9 +106,11 @@ def test_batch_label_updates_every_crop(client: Any, opensearch: Any, label_coho
         assert src['cluster_id'] == 5
 
 
-def test_unlabel_resets_class_provenance(client: Any, opensearch: Any, label_cohort: list[str]) -> None:
+def test_unlabel_resets_class_provenance(
+    api_client: Any, opensearch: Any, label_cohort: list[str]
+) -> None:
     crop_id = label_cohort[2]
-    resp = client.delete(f'/crops/{crop_id}/label')
+    resp = api_client.delete(f'/crops/{crop_id}/label')
     assert resp.status_code == 200, resp.text
 
     src = _source(opensearch, crop_id)
@@ -118,9 +122,11 @@ def test_unlabel_resets_class_provenance(client: Any, opensearch: Any, label_coh
     assert src['class_id_history'][-1]['writer'] == 'human:unlabel_crop'
 
 
-def test_review_dismiss_is_recorded(client: Any, opensearch: Any, label_cohort: list[str]) -> None:
+def test_review_dismiss_is_recorded(
+    api_client: Any, opensearch: Any, label_cohort: list[str]
+) -> None:
     crop_id = label_cohort[9]
-    resp = client.post(f'/crops/{crop_id}/review_dismiss')
+    resp = api_client.post(f'/crops/{crop_id}/review_dismiss')
     assert resp.status_code == 200, resp.text
     src = _source(opensearch, crop_id)
     assert src['review_dismissed_by'] == 'human'
@@ -128,10 +134,10 @@ def test_review_dismiss_is_recorded(client: Any, opensearch: Any, label_cohort: 
 
 
 def test_exclude_then_unexclude_round_trip(
-    client: Any, opensearch: Any, label_cohort: list[str]
+    api_client: Any, opensearch: Any, label_cohort: list[str]
 ) -> None:
     batch = label_cohort[10:13]
-    resp = client.post('/crops/batch_exclude', json={'crop_ids': batch, 'reason': 'blurry'})
+    resp = api_client.post('/crops/batch_exclude', json={'crop_ids': batch, 'reason': 'blurry'})
     assert resp.status_code == 200, resp.text
     assert resp.json()['excluded'] == len(batch)
     for crop_id in batch:
@@ -142,7 +148,7 @@ def test_exclude_then_unexclude_round_trip(
         assert src['cluster_id'] == -2
         assert src['class_validated'] is False
 
-    resp = client.post('/crops/batch_unexclude', json={'crop_ids': batch})
+    resp = api_client.post('/crops/batch_unexclude', json={'crop_ids': batch})
     assert resp.status_code == 200, resp.text
     assert resp.json()['unexcluded'] == len(batch)
     for crop_id in batch:
@@ -153,10 +159,10 @@ def test_exclude_then_unexclude_round_trip(
 
 
 def test_move_relabels_into_the_destination_cluster(
-    client: Any, opensearch: Any, label_cohort: list[str]
+    api_client: Any, opensearch: Any, label_cohort: list[str]
 ) -> None:
     batch = label_cohort[14:17]
-    resp = client.post('/crops/move', json={'crop_ids': batch, 'cluster_id': 6})
+    resp = api_client.post('/crops/move', json={'crop_ids': batch, 'cluster_id': 6})
     assert resp.status_code == 200, resp.text
     assert resp.json()['updated'] == len(batch)
     for crop_id in batch:
@@ -170,10 +176,12 @@ def test_move_relabels_into_the_destination_cluster(
 
 
 def test_flag_new_class_queues_for_the_curator(
-    client: Any, opensearch: Any, label_cohort: list[str]
+    api_client: Any, opensearch: Any, label_cohort: list[str]
 ) -> None:
     batch = label_cohort[18:20]
-    resp = client.post('/crops/flag_new_class', json={'crop_ids': batch, 'note': 'live-harness probe'})
+    resp = api_client.post(
+        '/crops/flag_new_class', json={'crop_ids': batch, 'note': 'live-harness probe'}
+    )
     assert resp.status_code == 200, resp.text
     assert resp.json()['flagged'] == len(batch)
     refresh(opensearch, INDEXES['items'])
@@ -184,7 +192,7 @@ def test_flag_new_class_queues_for_the_curator(
 
 
 def test_parallel_labels_of_one_item_do_not_tear_the_history(
-    client: Any, opensearch: Any, label_cohort: list[str]
+    api_client: Any, opensearch: Any, label_cohort: list[str]
 ) -> None:
     """Two concurrent human labels on the same doc.
 
@@ -198,7 +206,7 @@ def test_parallel_labels_of_one_item_do_not_tear_the_history(
     n_history_before = len(before.get('class_id_history') or [])
 
     def label(class_id: int) -> int:
-        return client.put(f'/crops/{crop_id}/label', json={'class_id': class_id}).status_code
+        return api_client.put(f'/crops/{crop_id}/label', json={'class_id': class_id}).status_code
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         statuses = list(pool.map(label, (2, 3)))

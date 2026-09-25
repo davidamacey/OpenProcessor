@@ -3,7 +3,7 @@
 Split out of :mod:`scripts.curation.worker.cascade` to keep
 ``cascade.py`` under the 700-LOC project ceiling. Public surface
 re-exports unchanged via :mod:`scripts.curation.worker.cascade`
-(``Sam3AllHostsDown``, ``Sam3Client``).
+(``SegmenterAllHostsDown``, ``SegmenterClient``).
 
 Failure model:
 
@@ -12,7 +12,7 @@ Failure model:
 - Round-robin picks healthy hosts only. After 60s a host enters
   HALF_OPEN — the next caller probes it; success closes the circuit,
   failure re-opens for another 60s.
-- ``Sam3AllHostsDown`` is raised when every host is UNHEALTHY so the
+- ``SegmenterAllHostsDown`` is raised when every host is UNHEALTHY so the
   caller can park the crop in ``pending_detection`` rather than
   promoting it to a terminal status on infrastructure noise.
 - ``httpx.ReadTimeout`` and ``httpx.ConnectTimeout`` retry up to 2
@@ -21,14 +21,14 @@ Failure model:
   failure with no retry budget.
 
 The segmenter leg is optional (D5): passing an empty/``None``
-``base_url`` (e.g. ``SAM3_URL=''``) constructs a *disabled* client
-instead of raising. A disabled client's :meth:`Sam3Client.segment_plate`
+``base_url`` (e.g. ``OP_SEGMENTER_URL=''``) constructs a *disabled* client
+instead of raising. A disabled client's :meth:`SegmenterClient.segment`
 always returns ``None`` — the same "no candidate" result an unhealthy
 or empty-response segmenter already produces — without attempting any
 HTTP call, so callers that already treat ``None`` as "fall through to
 the next cascade step" degrade cleanly with zero code changes. A
 deployment with no segmentation service of its own simply leaves
-``SAM3_URL`` unset/empty and documents that behavior; see
+``OP_SEGMENTER_URL`` unset/empty and documents that behavior; see
 ``docs/design/curation_design_rationale.md``.
 """
 
@@ -45,11 +45,11 @@ import httpx
 
 from src.core.logging import get_logger
 from src.services.curation.metrics import (
-    LEGACY_SAM3_CIRCUIT_OPEN_TOTAL,
-    LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS,
-    LEGACY_SAM3_REQUEST_RESPONSE_SECONDS,
-    LEGACY_SAM3_REQUEST_RETRIES_TOTAL,
-    LEGACY_SAM3_REQUEST_WAIT_SECONDS,
+    OP_SEGMENTER_CIRCUIT_OPEN_TOTAL,
+    OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS,
+    OP_SEGMENTER_REQUEST_RESPONSE_SECONDS,
+    OP_SEGMENTER_REQUEST_RETRIES_TOTAL,
+    OP_SEGMENTER_REQUEST_WAIT_SECONDS,
 )
 from src.services.detection.cascade_detect import RegionCandidate
 
@@ -57,7 +57,7 @@ from src.services.detection.cascade_detect import RegionCandidate
 logger = get_logger('curation_worker')
 
 
-class Sam3AllHostsDown(RuntimeError):  # noqa: N818  # name pinned by Phase 4e plan
+class SegmenterAllHostsDown(RuntimeError):  # noqa: N818
     """Raised when every SAM3 host is marked UNHEALTHY by the circuit breaker.
 
     Distinct from "SAM3 returned no candidate" — this is an
@@ -77,7 +77,7 @@ _RETRY_BACKOFFS = (1.0, 2.0)
 
 
 class _HostState:
-    """Per-host failure tracker used by :class:`Sam3Client`.
+    """Per-host failure tracker used by :class:`SegmenterClient`.
 
     States:
       - CLOSED      : normal operation; failures are recorded.
@@ -99,8 +99,8 @@ class _HostState:
         self.half_open_in_flight: bool = False
 
 
-class Sam3Client:
-    """Thin async wrapper around ``POST /sam3/segment_plate``.
+class SegmenterClient:
+    """Thin async wrapper around ``POST /segment``.
 
     Owns the underlying ``httpx.AsyncClient`` so the worker can share
     connections across calls. Returns the **highest-scoring** candidate
@@ -121,7 +121,7 @@ class Sam3Client:
         urls = [u.strip().rstrip('/') for u in (base_url or '').split(',') if u.strip()]
         # D5: no segmenter configured is a supported deployment shape, not
         # an error. Disabled clients skip the HTTP leg entirely (see
-        # segment_plate) rather than raising at construction time.
+        # segment) rather than raising at construction time.
         self.enabled = bool(urls)
         self.base_urls = urls
         self._rr_lock = asyncio.Lock()
@@ -129,8 +129,8 @@ class Sam3Client:
         self.timeout_s = timeout_s
         self.max_candidates = max_candidates
         self.text_prompt = text_prompt
-        _max_conn = int(os.environ.get('SAM3_HTTPX_MAX_CONNECTIONS', '512'))
-        _keepalive = int(os.environ.get('SAM3_HTTPX_KEEPALIVE', '128'))
+        _max_conn = int(os.environ.get('OP_SEGMENTER_HTTPX_MAX_CONNECTIONS', '512'))
+        _keepalive = int(os.environ.get('OP_SEGMENTER_HTTPX_KEEPALIVE', '128'))
         _limits = httpx.Limits(
             max_connections=_max_conn,
             max_keepalive_connections=_keepalive,
@@ -145,12 +145,12 @@ class Sam3Client:
 
         if not self.enabled:
             logger.info(
-                'sam3_disabled',
+                'segmenter_disabled',
                 reason='no segmenter_url configured; segmenter leg skipped',
             )
 
         if len(urls) > 1:
-            logger.info('sam3_multi_url', urls=urls, count=len(urls))
+            logger.info('segmenter_multi_url', urls=urls, count=len(urls))
 
     @property
     def base_url(self) -> str:
@@ -170,7 +170,7 @@ class Sam3Client:
         return url
 
     async def _pick_healthy_url(self) -> str:
-        """Round-robin a healthy host. Raises :class:`Sam3AllHostsDown`.
+        """Round-robin a healthy host. Raises :class:`SegmenterAllHostsDown`.
 
         Half-open semantics: when a host's ``open_until`` has passed,
         one caller probes the host (latches ``half_open_in_flight``);
@@ -191,7 +191,7 @@ class Sam3Client:
                         # Another caller is already probing — keep skipping.
                         continue
                     return url
-        raise Sam3AllHostsDown(f'all SAM3 hosts unhealthy ({self.base_urls})')
+        raise SegmenterAllHostsDown(f'all segmenter hosts unhealthy ({self.base_urls})')
 
     async def _on_success(self, url: str) -> None:
         async with self._cb_lock:
@@ -214,14 +214,14 @@ class Sam3Client:
                 state.half_open_in_flight = False
                 state.open_until = now + _OPEN_DURATION_S
                 state.failures.clear()
-                LEGACY_SAM3_CIRCUIT_OPEN_TOTAL.labels(host=url).inc()
-                logger.warning('sam3_circuit_reopen', url=url, open_for_s=_OPEN_DURATION_S)
+                OP_SEGMENTER_CIRCUIT_OPEN_TOTAL.labels(host=url).inc()
+                logger.warning('segmenter_circuit_reopen', url=url, open_for_s=_OPEN_DURATION_S)
                 return
             if len(state.failures) >= _FAILURE_THRESHOLD:
                 state.open_until = now + _OPEN_DURATION_S
                 state.failures.clear()
-                LEGACY_SAM3_CIRCUIT_OPEN_TOTAL.labels(host=url).inc()
-                logger.warning('sam3_circuit_open', url=url, open_for_s=_OPEN_DURATION_S)
+                OP_SEGMENTER_CIRCUIT_OPEN_TOTAL.labels(host=url).inc()
+                logger.warning('segmenter_circuit_open', url=url, open_for_s=_OPEN_DURATION_S)
 
     async def aclose(self) -> None:
         if self._owns_client:
@@ -253,7 +253,7 @@ class Sam3Client:
                 if timing is not None:
                     timing['post_started'] = self._now()
                 resp = await self._client.post(
-                    f'{url}/sam3/segment_plate',
+                    f'{url}/segment',
                     json=payload,
                     timeout=self.timeout_s,
                 )
@@ -267,7 +267,7 @@ class Sam3Client:
                 if attempt < _MAX_ATTEMPTS - 1:
                     backoff = _RETRY_BACKOFFS[attempt]
                     logger.warning(
-                        'sam3_retry',
+                        'segmenter_retry',
                         url=url,
                         attempt=attempt + 1,
                         backoff_s=backoff,
@@ -275,11 +275,11 @@ class Sam3Client:
                     )
                     await asyncio.sleep(backoff)
                     continue
-                LEGACY_SAM3_REQUEST_RETRIES_TOTAL.labels(
+                OP_SEGMENTER_REQUEST_RETRIES_TOTAL.labels(
                     host=url, outcome='failed_after_all_retries'
                 ).inc()
                 logger.warning(
-                    'sam3_http_error',
+                    'segmenter_http_error',
                     error=str(exc),
                     error_type=type(exc).__name__,
                     url=url,
@@ -291,7 +291,7 @@ class Sam3Client:
                 if timing is not None:
                     timing['post_returned'] = self._now()
                 logger.warning(
-                    'sam3_http_error',
+                    'segmenter_http_error',
                     error=str(exc),
                     error_type=type(exc).__name__,
                     url=url,
@@ -299,12 +299,12 @@ class Sam3Client:
                 return None
             else:
                 if attempt > 0:
-                    LEGACY_SAM3_REQUEST_RETRIES_TOTAL.labels(
+                    OP_SEGMENTER_REQUEST_RETRIES_TOTAL.labels(
                         host=url, outcome='success_after_retry'
                     ).inc()
                 return resp
         if last_exc is not None:  # pragma: no cover
-            logger.warning('sam3_retry_unreachable', error=str(last_exc))
+            logger.warning('segmenter_retry_unreachable', error=str(last_exc))
         return None
 
     def _record_timings(
@@ -337,14 +337,14 @@ class Sam3Client:
             response = max(0.0, t_end - post_returned)
         else:
             response = 0.0
-        LEGACY_SAM3_REQUEST_WAIT_SECONDS.labels(host=url, outcome=outcome).observe(wait)
-        LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS.labels(host=url, outcome=outcome).observe(inflight)
-        LEGACY_SAM3_REQUEST_RESPONSE_SECONDS.labels(host=url, outcome=outcome).observe(response)
+        OP_SEGMENTER_REQUEST_WAIT_SECONDS.labels(host=url, outcome=outcome).observe(wait)
+        OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS.labels(host=url, outcome=outcome).observe(inflight)
+        OP_SEGMENTER_REQUEST_RESPONSE_SECONDS.labels(host=url, outcome=outcome).observe(response)
 
-    async def segment_plate(self, crop_jpeg: bytes) -> RegionCandidate | None:
+    async def segment(self, crop_jpeg: bytes) -> RegionCandidate | None:
         """Segment one crop. Returns the top candidate in crop frame.
 
-        Raises :class:`Sam3AllHostsDown` if every host is UNHEALTHY.
+        Raises :class:`SegmenterAllHostsDown` if every host is UNHEALTHY.
         Returns ``None`` on a single-host failure (recorded against
         the circuit breaker), when SAM3 returned no candidate, or
         (D5) when this client is disabled — no segmenter configured.
@@ -352,7 +352,7 @@ class Sam3Client:
         """
         if not self.enabled:
             return None
-        # t0 = entry to segment_plate (before any client-side work).
+        # t0 = entry to segment (before any client-side work).
         # See module docstring + metrics.py for the wait/inflight/response
         # decomposition rationale.
         t0 = self._now()
@@ -375,7 +375,7 @@ class Sam3Client:
         except ValueError:
             t_end = self._now()
             self._record_timings(url, t0, timing, outcome='error', t_end=t_end)
-            logger.warning('sam3_bad_json')
+            logger.warning('segmenter_bad_json')
             await self._on_failure(url)
             return None
 
@@ -407,4 +407,4 @@ class Sam3Client:
         )
 
 
-__all__ = ['Sam3AllHostsDown', 'Sam3Client']
+__all__ = ['SegmenterAllHostsDown', 'SegmenterClient']

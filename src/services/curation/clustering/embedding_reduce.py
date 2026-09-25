@@ -3,7 +3,7 @@
 Two genuinely separate things live in this module, and only one of
 them touches real clustering:
 
-1. :func:`fetch_residual_embeddings_parallel` — pulls v6/PE
+1. :func:`fetch_residual_embeddings_parallel` — pulls classifier/PE
    embeddings for residual crops (no ``cluster_id`` assigned). This
    part IS shared with the real clustering path:
    :func:`~src.services.curation.clustering.orchestrator.cluster_residuals`
@@ -82,7 +82,7 @@ UMAP_RANDOM_STATE = 42
 # Embedding field to reduce. ``pe_embedding`` is PE-Core-L14-336's
 # foundation visual encoder (1024-d), trained on broad web imagery —
 # better at grouping out-of-distribution vehicles by semantic similarity
-# than ``backbone_embedding`` (the v6 classifier's penultimate layer, which
+# than ``backbone_embedding`` (the secondary classifier's penultimate layer, which
 # clusters by framing/lighting outside its confident range). The
 # 2026-05-18 visual audit picked pe_embedding as the residual default.
 RESIDUAL_EMBEDDING_FIELD = os.environ.get('OP_RESIDUAL_EMBEDDING_FIELD', 'pe_embedding')
@@ -145,14 +145,14 @@ async def fetch_residual_embeddings(
       OR a ``cluster_id`` below ``candidate_cluster_id_min``. The intent
       is "everything unvalidated that isn't already in a candidate
       cluster" — fresh items (no cluster_id) plus items still sitting
-      in v6 class buckets (cluster_id < candidate_cluster_id_min).
+      in classifier class buckets (cluster_id < candidate_cluster_id_min).
       Existing candidate clusters are left alone so they aren't churned
       every run.
     * **Broad (True)** — same, but candidate-bucketed crops are also
       included. Use this when the operator wants to re-pool candidate
       clusters so smaller ones can merge into bigger ones.
 
-    Despite the name's ``v6_`` prefix (kept for back-compat with the
+    Despite the name's historical prefix (kept for back-compat with the
     pipeline stages), the actual field read is governed by
     :py:data:`RESIDUAL_EMBEDDING_FIELD` — defaults to PE embeddings.
 
@@ -164,7 +164,7 @@ async def fetch_residual_embeddings(
     filt: list[dict[str, Any]] = [{'exists': {'field': RESIDUAL_EMBEDDING_FIELD}}]
     # Exclude confidently-labeled crops from the residual pool. The
     # previous filter (class_validated != true) only caught the 102
-    # human-validated rows because item_model and gemma writers don't
+    # human-validated rows because item_model and vlm writers don't
     # set class_validated; the 2026-05-23 IVF run pulled all 347k
     # crops including 219k labeled ones and started overwriting their
     # cluster_id=class_id mappings before cancel. CONFIDENT_CLASS_SOURCES
@@ -210,7 +210,7 @@ async def fetch_residual_embeddings(
             total_estimate = int(count_resp.get('count', 0))
             progress.update(processed=0, total=total_estimate)
         except Exception as exc:
-            logger.debug('legacy_embedding_count_failed', error=str(exc))
+            logger.debug('curation_embedding_count_failed', error=str(exc))
 
     body: dict[str, Any] = {
         'size': 1000,
@@ -248,7 +248,7 @@ async def fetch_residual_embeddings(
             try:
                 await client.clear_scroll(scroll_id=scroll_id)
             except Exception as exc:
-                logger.debug('legacy_embedding_clear_scroll_failed', error=str(exc))
+                logger.debug('curation_embedding_clear_scroll_failed', error=str(exc))
 
     if not embs:
         return [], np.zeros((0, 0), dtype=np.float32)
@@ -328,7 +328,7 @@ async def fetch_residual_embeddings_parallel(
             total_estimate = int(count_resp.get('count', 0))
             progress.update(processed=0, total=total_estimate)
         except Exception as exc:
-            logger.debug('legacy_embedding_count_failed', error=str(exc))
+            logger.debug('curation_embedding_count_failed', error=str(exc))
 
     # Create a Point-In-Time. Without PIT we'd need scroll cursors per
     # slice -- PIT is the supported pattern for sliced parallel reads.
@@ -341,7 +341,7 @@ async def fetch_residual_embeddings_parallel(
         if not pit_id:
             raise RuntimeError(f'create_pit returned no pit_id: {pit_resp!r}')
     except Exception as exc:
-        logger.warning('legacy_embedding_pit_unavailable_fallback_scroll', error=str(exc))
+        logger.warning('curation_embedding_pit_unavailable_fallback_scroll', error=str(exc))
         return await fetch_residual_embeddings(
             client,
             include_candidate_clusters=include_candidate_clusters,
@@ -412,7 +412,7 @@ async def fetch_residual_embeddings_parallel(
         try:
             await client.delete_pit(body={'pit_id': [pit_id]})
         except Exception as exc:
-            logger.debug('legacy_embedding_pit_delete_failed', error=str(exc))
+            logger.debug('curation_embedding_pit_delete_failed', error=str(exc))
 
     ids: list[str] = []
     embs: list[np.ndarray] = []
@@ -455,7 +455,7 @@ def _load_umap_state_from_disk(path: str) -> Any | None:
         # Stale or backend-incompatible pickle — log + refit. Don't
         # crash the run because last week's reducer can't unpickle in
         # the new container.
-        logger.warning('legacy_umap_state_disk_load_failed', path=path, error=str(exc))
+        logger.warning('curation_umap_state_disk_load_failed', path=path, error=str(exc))
         return None
 
 
@@ -473,7 +473,7 @@ async def _save_umap_state_to_opensearch(
     blob = _serialize_reducer(reducer)
     if len(blob) > _OPENSEARCH_PERSIST_MAX_BYTES:
         logger.info(
-            'legacy_umap_state_skip_opensearch_persist',
+            'curation_umap_state_skip_opensearch_persist',
             reason='blob_too_large',
             blob_bytes=len(blob),
             limit_bytes=_OPENSEARCH_PERSIST_MAX_BYTES,
@@ -493,7 +493,7 @@ async def _load_umap_state_from_opensearch(client: AsyncOpenSearch, *, state_id:
     try:
         resp = await client.get(index=UMAP_STATE_INDEX, id=state_id)
     except Exception as exc:
-        logger.debug('legacy_umap_state_not_found', state_id=state_id, error=str(exc))
+        logger.debug('curation_umap_state_not_found', state_id=state_id, error=str(exc))
         return None
     src = resp.get('_source') or {}
     blob_b64 = src.get('reducer_b64')
@@ -502,7 +502,7 @@ async def _load_umap_state_from_opensearch(client: AsyncOpenSearch, *, state_id:
     try:
         return _deserialize_reducer(base64.b64decode(blob_b64))
     except Exception as exc:
-        logger.warning('legacy_umap_state_os_load_failed', state_id=state_id, error=str(exc))
+        logger.warning('curation_umap_state_os_load_failed', state_id=state_id, error=str(exc))
         return None
 
 
@@ -554,7 +554,7 @@ def _to_numpy_float32(arr: Any) -> np.ndarray:
         try:
             return np.asarray(fn(), dtype=np.float32)
         except Exception as exc:  # nosec B110 — try alternates
-            logger.debug('legacy_to_numpy_method_failed', method=meth, error=str(exc))
+            logger.debug('curation_to_numpy_method_failed', method=meth, error=str(exc))
     return np.asarray(arr, dtype=np.float32)
 
 
@@ -604,14 +604,14 @@ async def get_or_fit_reducer(
         if backend.name == 'gpu' and backend.build_algo is not None:
             reducer = _build_gpu_reducer(backend.build_algo)
             logger.info(
-                'legacy_umap_fit_gpu',
+                'curation_umap_fit_gpu',
                 build_algo=backend.build_algo,
                 free_vram_mb=backend.free_vram_mb,
                 n=len(embeddings),
             )
         else:
             reducer = _build_cpu_reducer()
-            logger.info('legacy_umap_fit_cpu', n=len(embeddings))
+            logger.info('curation_umap_fit_cpu', n=len(embeddings))
         try:
             reduced_raw = await asyncio.to_thread(reducer.fit_transform, embeddings)
         finally:
@@ -626,7 +626,7 @@ async def get_or_fit_reducer(
         try:
             await _save_umap_state_to_opensearch(client, reducer, state_id=os_state_id)
         except Exception as exc:
-            logger.warning('legacy_umap_state_persist_failed', error=str(exc))
+            logger.warning('curation_umap_state_persist_failed', error=str(exc))
         refit_happened = True
     else:
         try:

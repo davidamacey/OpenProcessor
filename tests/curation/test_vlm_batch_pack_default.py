@@ -41,10 +41,10 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient,
     requested: list[Any] = []
 
     class _Labeler:
-        async def verify_plate_batch(self, _crops: list[Any]) -> list[Any]:
+        async def verify_region_batch(self, _crops: list[Any]) -> list[Any]:
             return []
 
-        async def plate_visible_batch(self, crops: list[Any]) -> dict[str, bool]:
+        async def region_visible_batch(self, crops: list[Any]) -> dict[str, bool]:
             return {c.crop_id: True for c in crops}
 
     def _fake_get(pack_name: str | None = None) -> _Labeler:
@@ -61,6 +61,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient,
 _IMG = base64.b64encode(b'\xff\xd8\xff\xd9').decode()
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_region_visible_batch_uses_settings_default_pack(
     client: tuple[TestClient, list[Any]],
 ) -> None:
@@ -73,6 +74,7 @@ def test_region_visible_batch_uses_settings_default_pack(
     assert requested == ['food_v2']
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_verify_region_batch_uses_settings_default_pack(
     client: tuple[TestClient, list[Any]],
 ) -> None:

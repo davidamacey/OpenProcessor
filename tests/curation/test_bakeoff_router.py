@@ -35,7 +35,7 @@ _HARNESS_SUFFIXES = {'.py', '.json', '.txt', '.md'}
 
 def _bakeoff_harness_files() -> list[str]:
     files = ['src/routers/curation/bakeoff.py']
-    for root in ('scripts/curation/bakeoff', 'examples/bakeoff_lpr_paper'):
+    for root in ('scripts/curation/bakeoff',):
         files += [
             p.relative_to(REPO_ROOT).as_posix()
             for p in sorted((REPO_ROOT / root).rglob('*'))
@@ -62,10 +62,10 @@ def test_bakeoff_harness_has_no_owner_private_absolute_path_defaults() -> None:
 
 @pytest.fixture
 def app_client() -> TestClient:
-    from src.routers.curation import router as legacy_router
+    from src.routers.curation import router as curation_router
 
     app = FastAPI()
-    app.include_router(legacy_router)
+    app.include_router(curation_router)
     return TestClient(app)
 
 

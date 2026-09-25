@@ -1,6 +1,6 @@
 """Auto-split sub-module of the curation detection worker.
 
-See ``scripts/curation/sam_worker_main.py`` for the entry point and
+See ``scripts/curation/region_worker_main.py`` for the entry point and
 the ``scripts/curation/worker/`` package for the rest of the split.
 """
 
@@ -64,13 +64,13 @@ async def _verify_with_vlm(
     threads into :func:`_region_write_doc`.
 
     Returns ``None`` when the VLM answered with no usable verdict (see
-    :py:meth:`VlmLabeler.verify_plate`) so the cascade can leave the
+    :py:meth:`VlmLabeler.verify_region`) so the cascade can leave the
     crop pending for a retry instead of treating "no answer" as a
     rejection and falling through to the next detector. Raises
     :class:`VlmTransportError` when the call itself failed, so an outage
     is never counted as a no-verdict reply.
     """
-    verdict = await vlm.verify_plate(
+    verdict = await vlm.verify_region(
         RegionCrop(crop_id=crop_id, jpeg_bytes=region_jpeg), raise_on_transport=True
     )
     if verdict is None:
@@ -100,11 +100,7 @@ async def _verify_with_vlm(
 # ``DetectionProfile.auto_confirm_aspect`` / ``.auto_confirm_area_frac``)
 # are intentionally loose to admit near-square regions, angled / partial
 # regions, and small far-away regions.
-_SKIP_VLM_VERIFY_SECONDARY_SCORE = float(
-    os.environ.get('SAM3_SKIP_VLM_VERIFY_SCORE')
-    or os.environ.get('SAM3_SKIP_GEMMA_VERIFY_SCORE')
-    or '0.95'
-)
+_SKIP_VLM_VERIFY_SECONDARY_SCORE = float(os.environ.get('OP_SEGMENTER_SKIP_VERIFY_SCORE') or '0.95')
 # Skip the VLM verify roundtrip when the secondary segmenter is very
 # confident AND the bbox passes the same shape sanity check the VLM
 # would do anyway. The VLM verify in this pipeline catches detector
@@ -118,7 +114,7 @@ _SKIP_VLM_VERIFY_SECONDARY_SCORE = float(
 # load from this worker substantially and lets the shared VLM serve
 # other queues (e.g. class labeling) instead.
 #
-# Override at runtime: SAM3_SKIP_VLM_VERIFY_SCORE=0.99 to be more
+# Override at runtime: OP_SEGMENTER_SKIP_VERIFY_SCORE=0.99 to be more
 # conservative, or 0.90 for more aggressive skipping. Set to 1.01 to
 # disable the skip entirely (everything still goes through the VLM).
 
@@ -146,19 +142,19 @@ _VLM_TEXT_CONFIDENCE_MAP = {'high': 0.92, 'medium': 0.70, 'low': 0.40}
 
 def _region_write_doc(
     *,
-    plate_in_source: tuple[float, float, float, float],
+    region_in_source: tuple[float, float, float, float],
     score: float,
     detector: str,
     detector_version: str,
     chain: list[str],
-    plate_status: str = RegionStatus.DETECTED,
-    plate_verified: bool = True,
+    region_status: str = RegionStatus.DETECTED,
+    region_verified: bool = True,
     auto_confirmed: bool = False,
     verifier: str | None = VLM_MODEL_ID,
     verifier_version: str | None = '1',
-    plate_text: str | None = None,
-    plate_text_confidence: str | None = None,
-    plate_text_source: str | None = None,
+    region_text_reply: str | None = None,
+    region_text_confidence: str | None = None,
+    region_text_source: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compose the ``update_doc`` for a successful region-detection write.
@@ -170,10 +166,10 @@ def _region_write_doc(
     """
     F = get_region_fields()
     doc: dict[str, Any] = {
-        F.bbox_norm: list(plate_in_source),
+        F.bbox_norm: list(region_in_source),
         F.score: score,
-        F.status: plate_status,
-        F.verified: plate_verified,
+        F.status: region_status,
+        F.verified: region_verified,
         F.validated: False,
         F.auto_confirmed: auto_confirmed,
     }
@@ -182,8 +178,8 @@ def _region_write_doc(
             detector=detector,
             detector_version=detector_version,
             bbox_frame='source',
-            verifier=verifier if plate_verified else None,
-            verifier_version=verifier_version if plate_verified else None,
+            verifier=verifier if region_verified else None,
+            verifier_version=verifier_version if region_verified else None,
         )
     )
     if chain:
@@ -192,24 +188,24 @@ def _region_write_doc(
     doc.update(dict.fromkeys(candidate_fields(F)))
     doc[F.rejection_reason] = None
     invalid = (
-        region_text_rules(region_profile_or_neutral()).invalid_reason(plate_text)
-        if plate_text
+        region_text_rules(region_profile_or_neutral()).invalid_reason(region_text_reply)
+        if region_text_reply
         else None
     )
-    if plate_text and invalid:
+    if region_text_reply and invalid:
         # Not text (a prompt placeholder, a "can't read it" answer, ...):
         # keep the reading for audit, write no region text.
-        doc[F.text_vlm] = plate_text
+        doc[F.text_vlm] = region_text_reply
         doc[F.text_vlm_invalid] = invalid
         doc[F.text_choice] = TEXT_CHOICE_NONE
-    elif plate_text:
-        doc[F.text] = plate_text
-        doc[F.text_raw] = plate_text
-        doc[F.text_source] = plate_text_source or VLM_MODEL_ID
+    elif region_text_reply:
+        doc[F.text] = region_text_reply
+        doc[F.text_raw] = region_text_reply
+        doc[F.text_source] = region_text_source or VLM_MODEL_ID
         doc[F.text_engine_version] = '1'
         doc[F.text_choice] = TEXT_CHOICE_VLM_ONLY
-        if plate_text_confidence:
-            doc[F.text_confidence] = _VLM_TEXT_CONFIDENCE_MAP.get(plate_text_confidence, 0.70)
+        if region_text_confidence:
+            doc[F.text_confidence] = _VLM_TEXT_CONFIDENCE_MAP.get(region_text_confidence, 0.70)
     if extra:
         doc.update(extra)
     return doc
@@ -308,7 +304,7 @@ def _combined_class_update(
 ) -> dict[str, Any]:
     """Build the class-side update dict from a combined VLM reply.
 
-    Always-applicable fields (make/model/plate_visible/vlm_verify_completed_at)
+    Always-applicable fields (make/model/region_visible/vlm_verify_completed_at)
     are written regardless of whether a class was resolved. ``class_id`` /
     ``class_name`` only land when the reply contains a usable index into
     ``class_names``. A reply that *named* a label outside the catalog
@@ -327,7 +323,7 @@ def _combined_class_update(
 
     Pass ``class_names=None`` (or an empty list) when the caller already
     has a trusted class label and the reply was generated with
-    ``classify=False``; only the make/model/plate_visible fields are
+    ``classify=False``; only the make/model/region_visible fields are
     persisted in that case so the class column is preserved.
     """
     update: dict[str, Any] = {}
@@ -387,7 +383,7 @@ def _combined_class_update(
         update['vlm_item_make'] = reply.make
     if reply.model:
         update['vlm_item_model'] = reply.model
-    update[get_region_fields().visible] = bool(reply.plate_visible)
+    update[get_region_fields().visible] = bool(reply.region_visible)
     update['updated_at'] = ts
     # Marker: class + region resolved in one VLM call. Downstream
     # pipeline stages read this to skip a redundant class call.
@@ -417,14 +413,14 @@ def _combined_write_doc(
     """
     ts = _now_iso()
     region_doc = _region_write_doc(
-        plate_in_source=candidate_in_source,
+        region_in_source=candidate_in_source,
         score=candidate_score,
         detector=detector,
         detector_version=detector_version,
         chain=chain,
         auto_confirmed=auto_confirmed,
-        plate_text=reply.plate_text,
-        plate_text_confidence=reply.plate_confidence,
+        region_text_reply=reply.region_text_reply,
+        region_text_confidence=reply.region_confidence,
     )
     region_doc.update(_combined_class_update(reply, class_names, now=ts, name_to_id=name_to_id))
     return region_doc

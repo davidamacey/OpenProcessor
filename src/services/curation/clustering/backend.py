@@ -116,7 +116,7 @@ def detect_cluster_backend() -> BackendInfo:
     try:
         device_count = int(cupy.cuda.runtime.getDeviceCount())
     except Exception as exc:
-        logger.info('legacy_cluster_backend_cuda_unavailable', error=str(exc))
+        logger.info('curation_cluster_backend_cuda_unavailable', error=str(exc))
         return BackendInfo(
             name='cpu',
             detail=_cpu_detail(),
@@ -142,7 +142,7 @@ def detect_cluster_backend() -> BackendInfo:
     try:
         free_bytes, total_bytes = cupy.cuda.runtime.memGetInfo()
     except Exception as exc:
-        logger.warning('legacy_cluster_backend_memgetinfo_failed', error=str(exc))
+        logger.warning('curation_cluster_backend_memgetinfo_failed', error=str(exc))
         return BackendInfo(
             name='cpu',
             detail=_cpu_detail(),
@@ -155,7 +155,7 @@ def detect_cluster_backend() -> BackendInfo:
 
     if free_mb < int(MIN_FREE_VRAM_GB_NN_DESCENT * 1024):
         logger.info(
-            'legacy_cluster_backend_low_vram_fallback',
+            'curation_cluster_backend_low_vram_fallback',
             free_mb=free_mb,
             min_required_mb=int(MIN_FREE_VRAM_GB_NN_DESCENT * 1024),
         )
@@ -196,7 +196,7 @@ def free_gpu_blocks() -> None:
     try:
         cupy.get_default_memory_pool().free_all_blocks()
     except Exception as exc:
-        logger.debug('legacy_cluster_backend_free_blocks_failed', error=str(exc))
+        logger.debug('curation_cluster_backend_free_blocks_failed', error=str(exc))
 
 
 def gpu_used_vram_mb() -> int | None:

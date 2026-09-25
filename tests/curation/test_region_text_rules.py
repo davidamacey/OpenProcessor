@@ -13,11 +13,11 @@ import dataclasses
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 
 from scripts.curation.worker.verify import _region_write_doc
 from src.config import DetectionProfile, get_region_fields
 from src.services.detection.cascade_detect import RegionCandidate
-from src.services.detection.reference_profiles import REFERENCE_LICENSE_PLATE_PROFILE
 from src.services.detection.region_text import (
     DominantTextConfig,
     OcrLine,
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
 
 F = get_region_fields()
-REF = REFERENCE_LICENSE_PLATE_PROFILE
+REF = NEUTRAL_REGION_PROFILE
 REF_RULES = RegionTextRules.from_profile(REF, prompt_examples=('ABC1234', 'DNV20'))
 REF_CFG = DominantTextConfig.from_profile(REF)
 
@@ -180,13 +180,13 @@ class TestWriters:
     @pytest.mark.usefixtures('reference_region_profile')
     def test_direct_vlm_text_write_drops_a_non_reading(self) -> None:
         doc = _region_write_doc(
-            plate_in_source=(0.1, 0.1, 0.2, 0.2),
+            region_in_source=(0.1, 0.1, 0.2, 0.2),
             score=0.9,
             detector='det',
             detector_version='1',
             chain=[],
-            plate_text='999',
-            plate_text_confidence='high',
+            region_text_reply='999',
+            region_text_confidence='high',
         )
         assert F.text not in doc
         assert doc[F.text_vlm] == '999'
@@ -206,10 +206,10 @@ class TestWriters:
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         reply = VlmCombinedReply(
             img_id='c1',
-            plate_visible=True,
-            plate_bbox_correct=True,
-            plate_text='XYZ987',
-            plate_confidence='high',
+            region_visible=True,
+            region_bbox_correct=True,
+            region_text_reply='XYZ987',
+            region_confidence='high',
         )
         await _drive(
             tmp_path,
@@ -229,6 +229,7 @@ class TestWriters:
         assert doc[F.text_choice] == 'vlm_invalid'
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_human_typed_text_records_the_human_choice() -> None:
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

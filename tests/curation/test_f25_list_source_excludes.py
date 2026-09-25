@@ -87,6 +87,7 @@ def test_review_queue_excludes_class_id_history(client: TestClient, fake_os: _Re
     assert all('class_id_history' not in item for item in r.json()['items'])
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_regions_list_excludes_class_id_history(client: TestClient, fake_os: _RecordingOS) -> None:
     r = client.get(f'{P}/regions')
     assert r.status_code == 200, r.text

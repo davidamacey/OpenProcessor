@@ -48,14 +48,14 @@ def _ids(catalog: list[dict[str, str]]) -> list[str]:
 def test_proposer_primary_with_secondary(clean_env: pytest.MonkeyPatch) -> None:
     clean_env.setenv('OP_INGEST_PRIMARY_NAME', 'coco_yolo11')
     clean_env.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'yolov11_small_trt_end2end')
-    clean_env.setenv('OP_INGEST_SECONDARY_NAME', 'v6')
+    clean_env.setenv('OP_INGEST_SECONDARY_NAME', 'classifier')
     clean_env.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'item_classifier_trt')
     catalog = class_source_catalog()
     by_id = {e['id']: e for e in catalog}
     assert by_id['coco_yolo11_proposal']['role'] == 'proposal'
     assert 'yolov11_small_trt_end2end' in by_id['coco_yolo11_proposal']['label']
-    assert by_id['v6_model']['role'] == 'model'
-    assert 'item_classifier_trt' in by_id['v6_model']['label']
+    assert by_id['classifier_model']['role'] == 'model'
+    assert 'item_classifier_trt' in by_id['classifier_model']['label']
     # A non-assigning primary never writes these.
     assert 'coco_yolo11_model' not in by_id
     assert 'coco_yolo11_low_conf' not in by_id
@@ -73,8 +73,8 @@ def test_assigning_primary_writes_model_and_low_conf(clean_env: pytest.MonkeyPat
 
 
 def test_secondary_requires_a_detector_model(clean_env: pytest.MonkeyPatch) -> None:
-    clean_env.setenv('OP_INGEST_SECONDARY_NAME', 'v6')
-    assert 'v6_model' not in _ids(class_source_catalog())
+    clean_env.setenv('OP_INGEST_SECONDARY_NAME', 'classifier')
+    assert 'classifier_model' not in _ids(class_source_catalog())
 
 
 def test_fixed_writer_values_and_roles(clean_env: pytest.MonkeyPatch) -> None:
@@ -105,7 +105,7 @@ def test_catalog_entries_are_well_formed(clean_env: pytest.MonkeyPatch) -> None:
 
 def test_class_sources_endpoint(clean_env: pytest.MonkeyPatch) -> None:
     clean_env.setenv('OP_INGEST_PRIMARY_NAME', 'coco_yolo11')
-    clean_env.setenv('OP_INGEST_SECONDARY_NAME', 'v6')
+    clean_env.setenv('OP_INGEST_SECONDARY_NAME', 'classifier')
     clean_env.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'item_classifier_trt')
     from src.routers.curation import router as curation_router
 
@@ -115,7 +115,7 @@ def test_class_sources_endpoint(clean_env: pytest.MonkeyPatch) -> None:
         r = client.get(f'{_common.config.api_prefix}/class_sources')
     assert r.status_code == 200, r.text
     assert r.json() == {'class_sources': class_source_catalog()}
-    assert 'v6_model' in _ids(r.json()['class_sources'])
+    assert 'classifier_model' in _ids(r.json()['class_sources'])
 
 
 # ---------------------------------------------------------------------------

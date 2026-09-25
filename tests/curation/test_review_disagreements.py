@@ -24,7 +24,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """Mount the real curation router with OpenSearch stubbed."""
-    from src.routers.curation import _raw_opensearch_dep, router as legacy_router
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     fake_os = AsyncMock()
 
@@ -64,7 +64,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     )
 
     app = FastAPI()
-    app.include_router(legacy_router)
+    app.include_router(curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
 
     client = TestClient(app)
@@ -124,7 +124,7 @@ def test_disagreements_overrides_default_must_not(app_client: TestClient) -> Non
     """The default must_not excludes class_validated=true; this tab inverts it.
 
     Plan §1.3, A-PR2: review tabs filter on class_validated (class side)
-    or plate_validated (plate tab); model_disagreements wants validated
+    or region_validated (regions tab); model_disagreements wants validated
     class rows so it drops the must_not.
     """
     r = app_client.get('/curation/review/model_disagreements')

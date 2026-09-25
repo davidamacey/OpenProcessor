@@ -52,27 +52,27 @@ class TestNullIsNoVerdict:
     @pytest.mark.parametrize('bbox_answer', [None, 'null', 'none', ''])
     async def test_combined_reply_keeps_null_bbox_answer_as_none(self, bbox_answer: Any) -> None:
         reply = await _labeler(_combined(region_bbox_correct=bbox_answer)).label_combined(
-            'c1', b'x', plate_bbox_norm=(0.1, 0.1, 0.5, 0.5), draw_overlay=False
+            'c1', b'x', region_bbox_norm=(0.1, 0.1, 0.5, 0.5), draw_overlay=False
         )
-        assert reply.plate_bbox_correct is None
+        assert reply.region_bbox_correct is None
 
     @pytest.mark.asyncio
     async def test_absent_bbox_answer_is_none(self) -> None:
         entry = _combined()
         del entry['region_bbox_correct']
         reply = await _labeler(json.dumps(entry)).label_combined(
-            'c1', b'x', plate_bbox_norm=(0.1, 0.1, 0.5, 0.5), draw_overlay=False
+            'c1', b'x', region_bbox_norm=(0.1, 0.1, 0.5, 0.5), draw_overlay=False
         )
-        assert reply.plate_bbox_correct is None
+        assert reply.region_bbox_correct is None
 
 
 def _reply(bbox_correct: bool | None) -> VlmCombinedReply:
     return VlmCombinedReply(
         img_id='c1',
-        plate_visible=True,
-        plate_bbox_correct=bbox_correct,
-        plate_text='DNV20',
-        plate_confidence='high',
+        region_visible=True,
+        region_bbox_correct=bbox_correct,
+        region_text_reply='DNV20',
+        region_confidence='high',
     )
 
 
@@ -132,7 +132,7 @@ class TestCascadeCombinedPath:
             crop_id='c1',
             image_path='',
             vehicle_bbox_norm=(0.1, 0.1, 0.9, 0.9),
-            plate_status='pending_detection',
+            region_status='pending_detection',
             class_name='sedan',
         )
         task.crop_jpeg = b'x'
@@ -145,7 +145,7 @@ class TestCascadeCombinedPath:
             detector=det,
             detector_version='1',
             detector_chain_tag=det,
-            gemma=_Vlm(_reply(None)),  # type: ignore[arg-type]
+            vlm=_Vlm(_reply(None)),  # type: ignore[arg-type]
         )
         assert resolved is True
         assert task.update_doc == {}

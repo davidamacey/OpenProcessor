@@ -1,6 +1,6 @@
 """Unit tests for ``src.services.labeling.vlm_labeler.VlmLabeler``.
 
-Ported from the reference ``tests/test_gemma_labeler.py`` (§5 Chunk 7 —
+Ported from the reference VLM labeler's test suite (§5 Chunk 7 —
 see ``docs/design/curation_design_rationale.md`` for the genericization
 approach). Mechanism only — the reference file used generic placeholder
 class names ('acura', 'bmw', 'porsche') purely as opaque strings for the
@@ -408,7 +408,7 @@ def test_verify_plate_parses_well_formed_json():
             client=client,
             requests_per_second=1000.0,
         ) as labeler:
-            return await labeler.verify_plate(
+            return await labeler.verify_region(
                 RegionCrop(crop_id='region-1', jpeg_bytes=_make_jpeg())
             )
 
@@ -434,7 +434,7 @@ def test_verify_plate_returns_no_verdict_on_garbage():
             client=client,
             requests_per_second=1000.0,
         ) as labeler:
-            return await labeler.verify_plate(
+            return await labeler.verify_region(
                 RegionCrop(crop_id='region-1', jpeg_bytes=_make_jpeg())
             )
 
@@ -453,7 +453,7 @@ def test_verify_plate_returns_no_verdict_on_empty_reply():
             client=client,
             requests_per_second=1000.0,
         ) as labeler:
-            return await labeler.verify_plate(
+            return await labeler.verify_region(
                 RegionCrop(crop_id='region-1', jpeg_bytes=_make_jpeg())
             )
 
@@ -472,7 +472,7 @@ def test_verify_plate_returns_no_verdict_on_upstream_error():
             client=client,
             requests_per_second=1000.0,
         ) as labeler:
-            return await labeler.verify_plate(
+            return await labeler.verify_region(
                 RegionCrop(crop_id='region-1', jpeg_bytes=_make_jpeg())
             )
 

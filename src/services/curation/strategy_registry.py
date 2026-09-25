@@ -69,7 +69,7 @@ def _scores_shadow() -> bool:
 
 
 def _select_diverse_enabled() -> bool:
-    """Mirrors ``legacy_select.py``'s own flag check — kept independent (not
+    """Mirrors the reference select router's own flag check — kept independent (not
     imported from there) so this dependency-light module never needs to
     import a router module just to read one env var."""
     return os.environ.get('OP_SELECT_DIVERSE_ENABLED', '').strip().lower() in {
@@ -81,7 +81,7 @@ def _select_diverse_enabled() -> bool:
 
 
 def _semantic_search_enabled() -> bool:
-    """Mirrors ``legacy_semantic.py``'s own flag check — same "don't import a
+    """Mirrors the reference semantic-search module's own flag check — same "don't import a
     router module just to read one env var" reasoning as
     ``_select_diverse_enabled``/``_viz_projection_enabled``."""
     return os.environ.get('OP_SEMANTIC_SEARCH_ENABLED', '').strip().lower() in {
@@ -93,7 +93,7 @@ def _semantic_search_enabled() -> bool:
 
 
 def _viz_projection_enabled() -> bool:
-    """Mirrors ``legacy_viz.py``'s own flag check — same "don't import a
+    """Mirrors the reference embedding-viz module's own flag check — same "don't import a
     router module just to read one env var" reasoning as
     ``_select_diverse_enabled``."""
     return os.environ.get('OP_VIZ_PROJECTION_ENABLED', '').strip().lower() in {
@@ -135,7 +135,7 @@ VIZ_PROJECTION_REQUIRES_BANNER = VIZ_PROJECTION_SHIP_MODE == 'ship_with_banner'
 ``requires_banner`` — the field a future frontend reads to decide whether
 to render the plan's required persistent "projection is approximate"
 banner. Named to match this file's existing boolean-flag vocabulary
-(``default``, ``legacy_scores_enabled``, ...) rather than inventing a
+(``default``, ``scores_enabled``, ...) rather than inventing a
 banner/message-string convention with no other precedent in this response
 shape. False today because the measured purity landed in the "ship plain"
 tier, not the banner tier — flip only by re-running
@@ -319,7 +319,7 @@ def _overlay_strategies() -> list[dict[str, Any]]:
 
 
 def _semantic_search_strategy() -> list[dict[str, Any]]:
-    """P2-14 ``legacy_semantic.py`` overlay — PE-Core text-to-image kNN search.
+    """P2-14 reference semantic-search overlay — PE-Core text-to-image kNN search.
     Same "flag on -> experimental, flag off -> disabled, never stable
     without a full validation gate" shape ``diverse`` uses above: no
     real-usage go/no-go protocol has run yet, so it can never surface as
@@ -390,17 +390,17 @@ def _export_strategies() -> list[dict[str, Any]]:
 
     Advertises which export *kinds* ``POST {prefix}/export/{kind}`` can
     actually produce on this deployment, so a consumer gates an export UI
-    on capability rather than probing a write endpoint (``POST
-    /export/lpr`` would kick off a real dataset build) with a throwaway
-    request just to see whether it 404s.
+    on capability rather than probing a write endpoint (a proprietary
+    single-class export route would kick off a real dataset build) with
+    a throwaway request just to see whether it 404s.
 
     ``single_class`` is the generic replacement for the reference
     implementation's proprietary single-class license-plate export: it
     takes the target class ids from the request rather than hardcoding a
     domain vocabulary, so it covers that use case and any other narrowed
     export without this repo carrying a deployment-specific overlay.
-    There is deliberately no ``lpr`` id — a domain-named export kind
-    would be exactly the hardcoding this axis exists to avoid.
+    There is deliberately no domain-named export kind id — that would be
+    exactly the hardcoding this axis exists to avoid.
     """
     return [
         {
@@ -497,11 +497,11 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
     denominator) but keyed by raw field name across every axis, not just
     the three ``crop_scores`` scorer fields -- ``/curation/scores/coverage`` has
     no answer for ``probe_pred_entropy``/``cluster_distance``/
-    ``plate_score``/``crop_area_norm``, which is exactly where the inert
+    ``region_score``/``crop_area_norm``, which is exactly where the inert
     sorts live (see this module's Phase 6 note above).
 
     TTL-cached at module scope (``_COVERAGE_CACHE`` / ``time.monotonic()``
-    freshness check), the same pattern ``legacy_select.py``'s ``_ORDER_CACHE``
+    freshness check), the same pattern the reference select router's ``_ORDER_CACHE``
     and ``cluster_outliers.py``'s ``_CACHE`` use -- ``GET /curation/methods``
     must stay an O(1)-per-request endpoint (its own docstring promises it
     "never fails or blocks"), not an O(distinct-fields) OpenSearch round
@@ -555,7 +555,7 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
             bucket = aggs.get(field)
             counts[field] = int(bucket['doc_count']) if bucket is not None else None
     except Exception as exc:
-        logger.warning('legacy_methods_field_coverage_failed', error=str(exc))
+        logger.warning('curation_methods_field_coverage_failed', error=str(exc))
         if need_total:
             counts[_COVERAGE_TOTAL_KEY] = None
         for field in missing:
@@ -611,7 +611,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
 
             settings_doc = await get_curation_settings(opensearch)
         except Exception as exc:
-            logger.warning('legacy_methods_settings_lookup_failed', error=str(exc))
+            logger.warning('curation_methods_settings_lookup_failed', error=str(exc))
             settings_doc = None
 
     cluster_default = await resolve_effective_default('cluster', settings_doc=settings_doc)
@@ -644,7 +644,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
             # "GET /curation/methods never fails or blocks" -- honor that even
             # against a totally broken client (e.g. one whose .count
             # attribute isn't even callable).
-            logger.warning('legacy_methods_field_coverage_failed', error=str(exc))
+            logger.warning('curation_methods_field_coverage_failed', error=str(exc))
             coverage = {}
 
     total = coverage.get(_COVERAGE_TOTAL_KEY)
@@ -663,11 +663,11 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
     return {
         'strategies': strategies,
         'flags': {
-            'legacy_scores_enabled': _scores_enabled(),
-            'legacy_scores_shadow': _scores_shadow(),
-            'legacy_select_diverse_enabled': _select_diverse_enabled(),
-            'legacy_viz_projection_enabled': _viz_projection_enabled(),
-            'legacy_semantic_search_enabled': _semantic_search_enabled(),
+            'scores_enabled': _scores_enabled(),
+            'scores_shadow': _scores_shadow(),
+            'select_diverse_enabled': _select_diverse_enabled(),
+            'viz_projection_enabled': _viz_projection_enabled(),
+            'semantic_search_enabled': _semantic_search_enabled(),
         },
     }
 

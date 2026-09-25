@@ -161,7 +161,7 @@ async def _count_validated_and_test_per_class(
     two sibling ``filter`` aggs, each with its own ``by_class`` terms
     sub-agg, since both share the same base document set.
 
-    The ``legacy_vehicle_crops`` schema uses a boolean ``label_validated``
+    The reference deployment's items-index schema uses a boolean ``label_validated``
     field (set true by both human-confirmation and auto-promotion). The
     design doc's earlier reference to ``label_state == 'confirmed'``
     predated the schema settling on the boolean -- we keep the boolean
@@ -405,7 +405,9 @@ def _single_class_label(manifest: dict[str, Any]) -> str:
     return 'target class'
 
 
-def _append_lpr_data_checks(checks: list[PreflightCheck], manifest: dict[str, Any]) -> None:
+def _append_single_class_data_checks(
+    checks: list[PreflightCheck], manifest: dict[str, Any]
+) -> None:
     """Single-class data-sufficiency checks read from the export manifest.
 
     A narrowed export's labels live on disk, and the multi-class
@@ -665,21 +667,21 @@ async def _run_preflight(
                 )
             )
 
-    # ---- 4 & 5. data sufficiency (LPR-aware) ---------------------------------
-    # A single-class LPR export validates from its own manifest (disk dataset),
+    # ---- 4 & 5. data sufficiency (single-class-aware) ---------------------------------
+    # A single-class export validates from its own manifest (disk dataset),
     # not the multi-class registry's class_validated counts.
-    _lpr_manifest = _read_export_manifest(spec.dataset_export_dir)
-    _is_lpr = _lpr_manifest.get('dataset_kind') in SINGLE_CLASS_DATASET_KINDS
-    target_classes = [] if _is_lpr else _resolve_target_classes(spec)
+    _single_class_manifest = _read_export_manifest(spec.dataset_export_dir)
+    _is_single_class = _single_class_manifest.get('dataset_kind') in SINGLE_CLASS_DATASET_KINDS
+    target_classes = [] if _is_single_class else _resolve_target_classes(spec)
 
     # ---- 3b. include_classes resolvable against this export (P2-8) ----------
     # Previously an unresolvable include_classes id (deprecated, typo, or a
     # class this export never had) surfaced as either a 500 or a job that
     # failed deep inside the trainer container (subset_dataset.py's own
     # ValueError, minutes into a run). Catch it here instead, at the API
-    # boundary, with a structured preflight check. Skipped entirely for LPR
+    # boundary, with a structured preflight check. Skipped entirely for single-class
     # jobs (single-class, no include_classes concept).
-    if not _is_lpr and spec.include_classes:
+    if not _is_single_class and spec.include_classes:
         unresolvable = _unresolvable_include_classes(spec.dataset_export_dir, spec.include_classes)
         if unresolvable:
             checks.append(
@@ -702,8 +704,8 @@ async def _run_preflight(
                     message=f'All {len(spec.include_classes)} include_classes ids resolve in this export',
                 )
             )
-    if _is_lpr:
-        _append_lpr_data_checks(checks, _lpr_manifest)
+    if _is_single_class:
+        _append_single_class_data_checks(checks, _single_class_manifest)
     elif not target_classes:
         checks.append(
             PreflightCheck(
@@ -806,17 +808,17 @@ async def _run_preflight(
             )
 
     # ---- 6. empty-label / plate-pairing (P2-8: real scan, not a stub) --------
-    # Both used to be hardcoded to 'ok' with no scan ever run. LPR
+    # Both used to be hardcoded to 'ok' with no scan ever run. Single-class
     # (single-class plate exports) is handled by its own additive branch —
     # background/negative frames are a legitimate, expected empty-label
     # case there (accounted for via the manifest's own counts), and there
     # are no parent vehicle boxes to pair against by construction.
-    if _is_lpr:
-        positive = int(_lpr_manifest.get('positive_images') or 0)
-        total_lpr_images = int(_lpr_manifest.get('total_images') or 0) or None
+    if _is_single_class:
+        positive = int(_single_class_manifest.get('positive_images') or 0)
+        total_single_class_images = int(_single_class_manifest.get('total_images') or 0) or None
         background_note = (
-            f' ({total_lpr_images - positive} background/negative frames)'
-            if total_lpr_images is not None
+            f' ({total_single_class_images - positive} background/negative frames)'
+            if total_single_class_images is not None
             else ''
         )
         checks.append(
@@ -905,7 +907,7 @@ async def _run_preflight(
                     )
                 )
 
-            if scan.plate_boxes == 0:
+            if scan.region_boxes == 0:
                 checks.append(
                     PreflightCheck(
                         name='region_pairing',
@@ -913,18 +915,18 @@ async def _run_preflight(
                         message='no region boxes in this export/subset',
                     )
                 )
-            elif scan.unpaired_plate_boxes > 0:
+            elif scan.unpaired_region_boxes > 0:
                 checks.append(
                     PreflightCheck(
                         name='region_pairing',
                         severity='warn',
                         message=(
-                            f'{scan.unpaired_plate_boxes}/{scan.plate_boxes} region '
+                            f'{scan.unpaired_region_boxes}/{scan.region_boxes} region '
                             'boxes have no matching parent item box in the same image'
                         ),
                         detail={
-                            'region_boxes': scan.plate_boxes,
-                            'unpaired_region_boxes': scan.unpaired_plate_boxes,
+                            'region_boxes': scan.region_boxes,
+                            'unpaired_region_boxes': scan.unpaired_region_boxes,
                         },
                     )
                 )
@@ -933,7 +935,7 @@ async def _run_preflight(
                     PreflightCheck(
                         name='region_pairing',
                         severity='ok',
-                        message=f'all {scan.plate_boxes} region boxes are paired',
+                        message=f'all {scan.region_boxes} region boxes are paired',
                     )
                 )
 
@@ -1088,7 +1090,7 @@ async def start_train(
             status_code=422,
             detail={'message': 'preflight blocked', 'preflight': report.model_dump()},
         )
-    # GPU arbiter — pause Gemma worker (single-GPU) or stop the container
+    # GPU arbiter — pause the VLM worker (single-GPU) or stop the container
     # (dual-GPU) BEFORE the trainer picks the job up, and BEFORE job.json
     # is written. S-5: fails closed -- claim_gpus_for_training raises
     # GpuArbiterStopFailedError when a claim needs to stop a configured
@@ -1559,7 +1561,7 @@ async def _resolve_full_registry_for_promote(job_id: str) -> dict[int, str]:
             }
         except Exception as exc:
             logger.warning(
-                'legacy_promote_registry_pin_unreadable',
+                'curation_promote_registry_pin_unreadable',
                 job_id=job_id,
                 snapshot_path=snapshot_path,
                 error=str(exc),
@@ -1568,11 +1570,11 @@ async def _resolve_full_registry_for_promote(job_id: str) -> dict[int, str]:
             if pinned:
                 return pinned
             logger.warning(
-                'legacy_promote_registry_pin_empty', job_id=job_id, snapshot_path=snapshot_path
+                'curation_promote_registry_pin_empty', job_id=job_id, snapshot_path=snapshot_path
             )
     else:
         logger.warning(
-            'legacy_promote_registry_pin_missing',
+            'curation_promote_registry_pin_missing',
             job_id=job_id,
             note=(
                 'no registry_snapshot_path on this job — falling back to the LIVE '
@@ -1702,7 +1704,7 @@ async def promote_run(
                 detail=str(ClassRemapMissingError(job_id)),
             )
         logger.warning(
-            'legacy_promote_class_remap_missing_force_bypass',
+            'curation_promote_class_remap_missing_force_bypass',
             job_id=job_id,
             note='subset/single_cls run promoted with force=true and no resolvable class_remap',
         )

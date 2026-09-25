@@ -27,6 +27,11 @@ from src.services.labeling.vlm_labeler import VlmCombinedReply
 from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch, _item, _profile
 
 
+# No-profile gating contract: this file exercises region routes, which
+# require an active region profile (409 otherwise).
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -118,7 +123,7 @@ class TestWorkerKeepsTheCandidate:
 
     def test_an_accepted_write_clears_a_stale_candidate(self) -> None:
         doc = _region_write_doc(
-            plate_in_source=(0.1, 0.1, 0.2, 0.2),
+            region_in_source=(0.1, 0.1, 0.2, 0.2),
             score=0.9,
             detector='det_model',
             detector_version='3',
@@ -140,7 +145,7 @@ class TestWorkerKeepsTheCandidate:
             fake_os=fake,
             primary=RegionCandidate(bbox_norm=(0.3, 0.6, 0.6, 0.75), score=0.77, source='det'),
             segmenter=None,
-            reply=VlmCombinedReply(img_id='c1', plate_visible=True, plate_bbox_correct=False),
+            reply=VlmCombinedReply(img_id='c1', region_visible=True, region_bbox_correct=False),
         )
         doc = fake.live['c1']
         det = _profile().detector_model

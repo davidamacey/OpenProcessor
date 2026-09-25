@@ -854,7 +854,7 @@
         "type": "object"
       },
       "CropExcludeRequest": {
-        "description": "Exclude crops from training + clustering (reversible).\n\nBlurry / unidentifiable / partial crops the human doesn't want in\nthe training set. ``reason`` defaults to ``'ignore'``; the UI can\npass a more specific tag (``'blurry'``, ``'unidentifiable'``,\n``'not_a_vehicle'``, ``'partial_crop'``) when the operator wants to\nrecord why (e.g. a whole cluster of blurry cruisers).",
+        "description": "Exclude crops from training + clustering (reversible).\n\nBlurry / unidentifiable / partial crops the human doesn't want in\nthe training set. ``reason`` defaults to ``'ignore'``; the UI can\npass a more specific tag (``'blurry'``, ``'unidentifiable'``,\n``'not_a_vehicle'``, ``'partial_crop'``) when the operator wants to\nrecord why (e.g. a whole cluster of blurry items).",
         "properties": {
           "crop_ids": {
             "items": {
@@ -1635,6 +1635,17 @@
             "title": "Opensearch",
             "type": "object"
           },
+          "region_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RegionProfileSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The active region profile, or null when none is configured -- THE signal a client checks to decide whether region-scoped UI/routes are available."
+          },
           "registry": {
             "additionalProperties": true,
             "title": "Registry",
@@ -1665,7 +1676,8 @@
           "triton",
           "opensearch",
           "vlm",
-          "registry"
+          "registry",
+          "region_profile"
         ],
         "title": "HealthResponse",
         "type": "object"
@@ -3382,6 +3394,35 @@
         "title": "PromoteResponse",
         "type": "object"
       },
+      "RegionProfileSummary": {
+        "description": "The active region profile's identity, served on ``GET /health`` and\n``GET /regions/vocabulary`` -- THE signal a client keys on to decide\nwhether region-scoped UI/routes are available at all.",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "region_class_name": {
+            "title": "Region Class Name",
+            "type": "string"
+          },
+          "text_reader": {
+            "title": "Text Reader",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "region_class_name",
+          "text_reader"
+        ],
+        "title": "RegionProfileSummary",
+        "type": "object"
+      },
       "RegionVocabularyResponse": {
         "properties": {
           "chain_actors": {
@@ -3397,6 +3438,17 @@
             },
             "title": "Detectors",
             "type": "array"
+          },
+          "region_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RegionProfileSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The active region profile, or null when none is configured."
           },
           "region_sources": {
             "items": {
@@ -3434,6 +3486,7 @@
           }
         },
         "required": [
+          "region_profile",
           "detectors",
           "region_sources",
           "chain_actors",
@@ -7965,7 +8018,7 @@
     },
     "/curation/events/publish": {
       "post": {
-        "description": "Publish one event into the in-process hub.\n\nUsed by external publishers like ``scripts/curation/sam_worker_main.py``\nthat don't share the API process. Events from in-process callers\n(ingest, VLM label_batch) skip this endpoint and call the hub directly.",
+        "description": "Publish one event into the in-process hub.\n\nUsed by external publishers like ``scripts/curation/region_worker_main.py``\nthat don't share the API process. Events from in-process callers\n(ingest, VLM label_batch) skip this endpoint and call the hub directly.",
         "operationId": "curation_events_publish_curation_events_publish_post",
         "requestBody": {
           "content": {
@@ -8748,14 +8801,14 @@
     "/curation/methods": {
       "get": {
         "description": "Every strategy across every axis (cluster / score / sort / overlay),\nplus the feature flags that gated each entry's status and a real\n``field_coverage`` (exists-count) / ``field_coverage_total`` (pool\nsize) per entry that declares a ``requires_field``. Frontend renders\nonly ``stable``/``experimental`` entries; ``shadow``/``disabled`` are\ncomputed+logged (or not computed at all) but never offered as a\n``?sort=`` value. Frontend also hides an entry whose ``field_coverage``\nis exactly ``0`` (genuinely inert — no data has ever been backfilled)\nwhile still showing one whose coverage is ``None`` (unknown, e.g. a\ntransient OpenSearch failure) — see ``StrategyBar.svelte``'s\n``hasFieldCoverage``.",
-        "operationId": "legacy_methods_curation_methods_get",
+        "operationId": "get_methods_curation_methods_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Legacy Methods Curation Methods Get",
+                  "title": "Response Get Methods Curation Methods Get",
                   "type": "object"
                 }
               }
@@ -8763,7 +8816,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Legacy Methods",
+        "summary": "Get Methods",
         "tags": [
           "Curation"
         ]
@@ -9990,7 +10043,7 @@
     },
     "/curation/regions/clusters": {
       "get": {
-        "description": "Cluster cards for the region buckets (mirrors /legacy/clusters' shape).\n\nMost cards are ``candidate`` (regions are one class); the permanent\nfalse-positive bucket is tagged ``cluster_kind='false_positive'`` and\npinned first. Reps are the regions closest to the centroid, shown as\nregion close-up thumbnails.",
+        "description": "Cluster cards for the region buckets (mirrors /curation/clusters' shape).\n\nMost cards are ``candidate`` (regions are one class); the permanent\nfalse-positive bucket is tagged ``cluster_kind='false_positive'`` and\npinned first. Reps are the regions closest to the centroid, shown as\nregion close-up thumbnails.",
         "operationId": "list_region_clusters_curation_regions_clusters_get",
         "parameters": [
           {
@@ -10569,7 +10622,7 @@
     },
     "/curation/review/unmatched_terms": {
       "get": {
-        "description": "Aggregate the VLM's raw labels across every ``vlm_unmatched`` crop.\n\nReturns the top-N most common raw labels the VLM produced for crops the\nregistry could not resolve. This is the main input to growing the\nregistry: high-count labels are obvious candidates for new\n:py:class:`LegacyClassEntry` entries (or new ``SYNONYMS`` mappings if the\nraw label is just a phrasing of an existing class).\n\nOnce the registry (or the prompt pack's synonyms) has grown, run\n``scripts/curation/reclassify_after_registry_growth.py`` with\n``--label-prefix`` set to the prefix of the ``class_source`` /\nraw-label pair aggregated here; it promotes every ``<prefix>_unmatched``\nitem whose raw label now resolves to ``<prefix>_reclassified`` (never\nsetting ``class_validated``).\n\nArgs:\n    size: Maximum number of distinct raw labels to return. Capped at\n        1000; default 100 (the long tail past 100 is usually noise).\n\nReturns:\n    ``{\"total_unmatched\": <int>, \"top_terms\": [{\"label\": str, \"count\": int}, ...]}``",
+        "description": "Aggregate the VLM's raw labels across every ``vlm_unmatched`` crop.\n\nReturns the top-N most common raw labels the VLM produced for crops the\nregistry could not resolve. This is the main input to growing the\nregistry: high-count labels are obvious candidates for new class\nentries (or new ``SYNONYMS`` mappings if the raw label is just a\nphrasing of an existing class).\n\nOnce the registry (or the prompt pack's synonyms) has grown, run\n``scripts/curation/reclassify_after_registry_growth.py`` with\n``--label-prefix`` set to the prefix of the ``class_source`` /\nraw-label pair aggregated here; it promotes every ``<prefix>_unmatched``\nitem whose raw label now resolves to ``<prefix>_reclassified`` (never\nsetting ``class_validated``).\n\nArgs:\n    size: Maximum number of distinct raw labels to return. Capped at\n        1000; default 100 (the long tail past 100 is usually noise).\n\nReturns:\n    ``{\"total_unmatched\": <int>, \"top_terms\": [{\"label\": str, \"count\": int}, ...]}``",
         "operationId": "review_unmatched_terms_curation_review_unmatched_terms_get",
         "parameters": [
           {
@@ -10621,12 +10674,12 @@
         "operationId": "review_queue_curation_review__tab__get",
         "parameters": [
           {
-            "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots | new_class_proposals",
+            "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | classifier_blind_spots | new_class_proposals",
             "in": "path",
             "name": "tab",
             "required": true,
             "schema": {
-              "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots | new_class_proposals",
+              "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | classifier_blind_spots | new_class_proposals",
               "title": "Tab",
               "type": "string"
             }
@@ -10900,12 +10953,12 @@
         "operationId": "review_locate_curation_review__tab__locate_get",
         "parameters": [
           {
-            "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots | new_class_proposals",
+            "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | classifier_blind_spots | new_class_proposals",
             "in": "path",
             "name": "tab",
             "required": true,
             "schema": {
-              "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots | new_class_proposals",
+              "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | classifier_blind_spots | new_class_proposals",
               "title": "Tab",
               "type": "string"
             }
@@ -12853,7 +12906,7 @@
     },
     "/curation/vlm/verify_region_batch": {
       "post": {
-        "description": "Verify region crops in batches of ``max_images_per_call`` per upstream VLM call.\n\nWhy this endpoint exists\n------------------------\nThe single-crop ``/curation/vlm/verify_regions`` path bottlenecks a\nhigh-throughput worker because every verify pins an upstream slot\nfor the whole prompt+decode round-trip. This endpoint mirrors the\nchunked-fan-out pattern from ``/curation/vlm/label_batch``: pack\nseveral region JPEGs per upstream call (the deployment's\nimages-per-prompt cap), fire chunks in parallel via\n:py:meth:`VlmLabeler.verify_plate_batch`, and return verdicts\nordered by input ``crop_id``.\n\nUnlike ``/curation/vlm/verify_regions`` (which re-derives the region\nJPEG from OpenSearch), this endpoint expects the caller to supply\nthe region JPEG directly — cheap for a worker that already holds\nthe cropped JPEG in memory.\n\nA ``crop_id`` the VLM gave no verdict for is omitted from\n``results`` — never emitted as a synthesized ``is_region=False``\nreject. The caller must diff the response against its request\n``crop_id``s and retry whatever is missing.",
+        "description": "Verify region crops in batches of ``max_images_per_call`` per upstream VLM call.\n\nWhy this endpoint exists\n------------------------\nThe single-crop ``/curation/vlm/verify_regions`` path bottlenecks a\nhigh-throughput worker because every verify pins an upstream slot\nfor the whole prompt+decode round-trip. This endpoint mirrors the\nchunked-fan-out pattern from ``/curation/vlm/label_batch``: pack\nseveral region JPEGs per upstream call (the deployment's\nimages-per-prompt cap), fire chunks in parallel via\n:py:meth:`VlmLabeler.verify_region_batch`, and return verdicts\nordered by input ``crop_id``.\n\nUnlike ``/curation/vlm/verify_regions`` (which re-derives the region\nJPEG from OpenSearch), this endpoint expects the caller to supply\nthe region JPEG directly — cheap for a worker that already holds\nthe cropped JPEG in memory.\n\nA ``crop_id`` the VLM gave no verdict for is omitted from\n``results`` — never emitted as a synthesized ``is_region=False``\nreject. The caller must diff the response against its request\n``crop_id``s and retry whatever is missing.",
         "operationId": "vlm_verify_region_batch_curation_vlm_verify_region_batch_post",
         "requestBody": {
           "content": {

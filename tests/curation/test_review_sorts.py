@@ -50,7 +50,7 @@ LEGACY_TAB_CLAUSES: dict[str, list[dict]] = {
             }
         },
     ],
-    'coco_blind_spots': [
+    'classifier_blind_spots': [
         {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
         {'confidence': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
     ],
@@ -68,7 +68,7 @@ EXPECTED_DEFAULT_IDS: dict[str, str] = {
     'regions': 'region_score',
     'model_disagreements': 'disagreement_entropy_asc',
     'primary_low_conf': 'primary_low_conf_default',
-    'coco_blind_spots': 'coco_blind_spots_default',
+    'classifier_blind_spots': 'classifier_blind_spots_default',
 }
 
 

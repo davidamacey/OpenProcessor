@@ -5,7 +5,7 @@ Northcutt/Jiang/Chuang, "Confident Learning" (JAIR 2021 / cleanlab):
 ``mistakenness = p(ŷ) - p(y_stored)`` for a crop where the probe's top-1
 prediction ``ŷ`` disagrees with the stored label ``y_stored``. This is the
 published formulation behind the existing (hand-rolled) "sort
-model_disagreements by entropy ascending" heuristic in ``legacy_review.py`` —
+model_disagreements by entropy ascending" heuristic in the reference review-queries module —
 Phase 1 doesn't touch that tab (plan §8 non-goal #6); this scorer feeds the
 *new* additive ``/curation/scores/*`` surface instead.
 

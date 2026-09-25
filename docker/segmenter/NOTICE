@@ -34,7 +34,7 @@ Use:      The shape of this service — a FastAPI process that loads
           async-correct (inference runs in a thread executor behind a
           per-processor lock), structured logging, HuggingFace-token
           aware, and matched to this project's request/response shape
-          (``POST /sam3/segment_plate`` with ``crop_jpeg_b64`` +
+          (``POST /segment`` with ``crop_jpeg_b64`` +
           ``text_prompt`` returning crop-frame normalized bboxes).
 
 If the Labely project later adds a LICENSE file or changes terms, the
