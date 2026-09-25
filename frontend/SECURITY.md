@@ -2,33 +2,44 @@
 
 ## Reporting a vulnerability
 
-This repo is currently private; if you have access and find a security
-issue, please **do not open a public issue**. Instead, report it
-privately to the maintainers (David Macey / example-org LLC) so it can be
-assessed and fixed before disclosure.
+Please **do not open a public issue** for a security problem. Report it
+privately through GitHub's private vulnerability reporting: on the
+repository's **Security** tab, choose **Report a vulnerability**. The
+maintainers (example-org LLC) will assess it and coordinate a fix before
+disclosure.
 
 Include:
 
 - A description of the vulnerability and its potential impact.
-- Steps to reproduce (minimal repro if possible).
-- Which version/commit you tested against.
+- Steps to reproduce (a minimal repro if possible).
+- The version or commit you tested against.
+
+## The API has no authentication
+
+**The curation API that Cropwright talks to has no request
+authentication.** Anyone who can reach Cropwright's nginx origin can
+label, discard, ingest (including server-path ingest), export, freeze a
+test holdout and start training. There is no login and no token.
+
+- **Never expose Cropwright, or the OpenProcessor API it proxies, to the
+  public internet.** Run it only on a trusted LAN or VPN, or put it
+  behind an authenticating reverse proxy (for example `oauth2-proxy` or
+  nginx basic auth).
+- "Anyone who can reach the URL has full edit rights" is documented,
+  expected behavior, not a vulnerability to report on its own. A way to
+  bypass an operator's chosen authenticating front end would be.
 
 ## Scope notes
 
-- Cropwright is a pure frontend SPA with **no local database and
-  no authentication of its own** — see `README.md`'s "Limits" section.
-  It is designed to be deployed behind a trusted network boundary (LAN)
-  or fronted by an auth proxy (oauth2-proxy, nginx basic auth) before
-  exposure beyond that. "Anyone who can reach the URL has full edit
-  rights" is documented, expected behavior, not a vulnerability to
-  report on its own — but a way to bypass an operator's chosen auth
-  front-end would be.
-- The actual data/model backend is the OpenProcessor API (separate repo)
-  — most security-relevant surface (auth, data validation, injection
-  risks) lives there, not in this frontend.
+- Cropwright is a static single-page app served by nginx, with no
+  database and no authentication of its own. The container runs nginx as
+  a non-root user (uid 101).
+- The data and model backend is [OpenProcessor](https://github.com/davidamacey/OpenProcessor),
+  a separate project. Most security-relevant surface (authentication,
+  input validation, file access) lives there; report backend issues to
+  that project.
 
 ## Supported versions
 
-This project does not yet follow semantic versioning with maintained
-release branches — security fixes land on `master` and should be
-pulled from there.
+Cropwright does not yet maintain release branches. Security fixes land on
+`main` and ship in the next release.

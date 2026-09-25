@@ -67,6 +67,8 @@ docker compose up -d --build
 ```
 
 Open `http://localhost:5184` (or whatever `CROPWRIGHT_PORT` you set).
+The image runs nginx as a non-root user (uid 101) listening on port 8080
+inside the container; compose maps `CROPWRIGHT_PORT` to it.
 
 **Verify it's connected:**
 
@@ -150,8 +152,8 @@ configuration, not a Cropwright rebuild**:
 
 ## Routes and keyboard shortcuts
 
-See [docs/FEATURES.md](docs/FEATURES.md) for a full route-by-route walkthrough with
-screenshots, and [CLAUDE.md](CLAUDE.md)'s Routes and Keyboard shortcuts
+See [docs/FEATURES.md](docs/FEATURES.md) for a full route-by-route walkthrough,
+and [CLAUDE.md](CLAUDE.md)'s Routes and Keyboard shortcuts
 sections for the authoritative, current tables (kept in lockstep with
 the code, not duplicated here to avoid drift). Highlights: `/dashboard`
 (pipeline health), `/ingest` (bring images in), `/clusters` +
@@ -178,7 +180,9 @@ key a registered region slot's own keymap declares.
 | `CROPWRIGHT_PORT`                      | `5184`                     | Docker        | Host port nginx is published on.                                                                                                                                            |
 | `CROPWRIGHT_CONTAINER_NAME`            | `cropwright`               | Docker        | Container name — set uniquely for a second instance (see above).                                                                                                            |
 | `CROPWRIGHT_INGEST_MAX_REQUEST_MB`     | `256`                      | Docker        | Upload cap for `/ingest` (nginx `client_max_body_size`); kept in lockstep with the client-side chunk planner.                                                               |
-| `PUBLIC_APP_NAME` / `PUBLIC_APP_BADGE` | `Cropwright` / `CW`        | both          | Top-bar wordmark/badge, for a white-labeled deployment.                                                                                                                     |
+| `PUBLIC_APP_NAME` / `PUBLIC_APP_BADGE` | `Cropwright` / `CW`        | build time    | Top-bar wordmark/badge, for a white-labeled deployment.                                                                                                                     |
+| `PUBLIC_CROPWRIGHT_INGEST_UPLOAD`      | _(unset)_                  | build time    | Set to `1` to hide the "uploads aren't browsable" banner against a backend too old to report whether it persists uploaded bytes.                                            |
+| `PUBLIC_MLFLOW_URL` and friends        | _(unset)_                  | build time    | `PUBLIC_MLFLOW_URL`, `PUBLIC_GRAFANA_URL`, `PUBLIC_PROMETHEUS_URL`, `PUBLIC_OPENSEARCH_DASHBOARDS_URL`: override the monitoring links when the backend doesn't serve them.  |
 
 The app is a pure SPA consumer of the OpenProcessor API — there is
 **no** local database. State is reconstructed from API calls;
@@ -209,7 +213,7 @@ just that it passes.
 
 **Vendored API contract:** `npm run contract:sync` / `contract:check`
 pull the wire-format snapshot from a local OpenProcessor checkout
-(`OPENPROCESSOR_REPO`, default `../openprocessor`; `OPENPROCESSOR_REF`,
+(`OPENPROCESSOR_REPO`, default `../OpenProcessor`; `OPENPROCESSOR_REF`,
 default `main`) and diff it against what's checked in, so a backend
 rename fails a frontend test instead of silently rendering blanks.
 
@@ -224,11 +228,21 @@ rename fails a frontend test instead of silently rendering blanks.
 | Empty cluster grid / review queues                    | The backend's index isn't populated yet — ingest some images first                                                                   |
 | Build fails: `Cannot find module 'svelte-dnd-action'` | `npm install` wasn't run, or `node_modules` is stale — `rm -rf node_modules && npm install`                                          |
 
+## Screenshots policy
+
+Every image published in `docs/` comes from a fresh-start run on public
+datasets only (COCO val2017, and license-checked Open Images images for
+the region example), fetched by the backend and never bundled here.
+Contributions that add screenshots must follow the same rule: no private
+dataset, photograph or deployment detail.
+
 ## License
 
-MIT. See [LICENSE](LICENSE). Cropwright is the frontend companion to
-[OpenProcessor](https://github.com/davidamacey/OpenProcessor), which handles inference,
-search and clustering server-side.
+MIT, Copyright (c) 2026 example-org LLC. See [LICENSE](LICENSE). Cropwright
+is the frontend companion to
+[OpenProcessor](https://github.com/davidamacey/OpenProcessor) (by David
+Macey, also MIT), which handles inference, search and clustering
+server-side.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow and
 [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
