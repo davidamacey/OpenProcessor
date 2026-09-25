@@ -165,8 +165,8 @@ repos:
         # Chunk 6 entries.
         # src/services/labeling/vlm_labeler.py (~1870 LOC) — Chunk 7, one
         # of the original five pre-approved files. The reference
-        # gemma_labeler.py (2329 LOC) is deliberately split THREE ways
-        # (vlm_client.py / vlm_labeler.py / vlm_prompts.py) specifically
+        # reference VLM labeler (2329 LOC) is deliberately split THREE
+        # ways (vlm_client.py / vlm_labeler.py / vlm_prompts.py) specifically
         # so the transport and prompt-data halves clear the cap honestly;
         # vlm_labeler.py's ~1500-line VlmLabeler class body is a genuine
         # cohesive orchestration unit and is NOT further split in this
@@ -175,8 +175,8 @@ repos:
         # docs/design/curation_design_rationale.md §5, not silently
         # ignored).
         # src/services/detection/cascade_detect.py (~1100 LOC) — Chunk 8.
-        # NOT in the original five-file list, but the reference
-        # plate_detect.py is 1124 LOC before any port work — that earlier
+        # NOT in the original five-file list, but the reference cascade
+        # module is 1124 LOC before any port work — that earlier
         # audit undercounted this chunk too (same gap class as jobs.py
         # above). Splitting the DetectionProfile-parameterized cascade
         # mid-port would make the diff unreviewable; grandfathered here for

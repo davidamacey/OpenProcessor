@@ -190,10 +190,10 @@ trainer. A deployment supplies:
   (`DetectionProfile.ocr_rec_model`) — optional, only used by the
   text-hint heuristics.
 - **A segmenter, if you want the cascade's segmenter leg** — any
-  service reachable at `SAM3_URL` (the env var name is legacy but the
-  wire protocol is a generic segment-request/response; see
+  service reachable at `OP_SEGMENTER_URL` (a generic
+  segment-request/response wire protocol; see
   `scripts/curation/worker/client.py`). This leg is optional: with
-  `SAM3_URL` empty the cascade runs without it. A reference
+  `OP_SEGMENTER_URL` empty the cascade runs without it. A reference
   implementation **does** ship — `docker/segmenter/` wraps SAM 3 behind
   that wire protocol — but it is opt-in (its own compose profile: it
   needs a GPU and a HuggingFace token) and it is BYO-weights like
@@ -292,7 +292,7 @@ The segmenter is a **second, separate profile** because unlike the
 workers above it does need a GPU of its own and a HuggingFace token:
 
 ```bash
-SAM3_URL=http://segmenter:8000 \
+OP_SEGMENTER_URL=http://segmenter:8000 \
   docker compose --profile curation --profile segmenter up -d
 ```
 
@@ -300,8 +300,9 @@ SAM3_URL=http://segmenter:8000 \
 |---|---|
 | `segmenter` | Promptable segmentation (SAM 3) serving the cascade's segmenter leg. See [`docker/segmenter/README.md`](../docker/segmenter/README.md). |
 
-Without `SAM3_URL` the detection worker constructs a disabled client and
-the segmenter leg is skipped entirely — no HTTP call, no failure.
+Without `OP_SEGMENTER_URL` the detection worker constructs a disabled
+client and the segmenter leg is skipped entirely — no HTTP call, no
+failure.
 
 ## Seed / bootstrap path for a fresh install
 
@@ -428,28 +429,18 @@ be changed at runtime once the app has started.
 | Export | `OP_BUILD_SHA` |
 | Bake-off harness | `OP_BAKEOFF_JOBS_DIR` (default `$OP_STATE_DIR/bakeoff_jobs`, shared by the router and the GPU arbiter), `OP_BAKEOFF_OUT_DIR`, `OP_BAKEOFF_EVAL_ROOT`, `OP_BAKEOFF_CONCURRENCY`, `OP_BAKEOFF_GPUS`, `OP_BAKEOFF_BASELINES_PATH`, `OP_BAKEOFF_PROFILE` (registered name or profile `.json` path; examples load by path), `OP_BAKEOFF_PROFILE_<FIELD>` |
 | Worker / pipeline flags | `OP_API`, `OP_AUTO_LABEL_STATE_DIR`, `OP_EVENT_API_URL`, `OP_ITEMS_INDEX_OVERRIDE`, `OP_PAUSE_SENTINEL`, `OP_WORKER_PAUSE_SENTINEL`, `OP_VIZ_JOBS_DIR`, `OP_VIZ_MAX_N` |
-| VLM connection | `OP_VLM_URL`, `OP_VLM_MODEL` (required whenever `OP_VLM_URL` is set — no default), `OP_VLM_API_KEY`, `OP_VLM_MAX_IMAGES_PER_CALL` (per-request image cap, default 8 — keep <= the engine's per-prompt image limit), `GEMMA_IMAGES_PER_CALL` (open-vocab chunk only, default 3), `GEMMA_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_KEEPALIVE` |
-| Segmenter connection | `SAM3_URL`, `SAM3_URLS`, `SAM3_HTTPX_MAX_CONNECTIONS`, `SAM3_HTTPX_KEEPALIVE` |
+| VLM connection | `OP_VLM_URL`, `OP_VLM_MODEL` (required whenever `OP_VLM_URL` is set — no default), `OP_VLM_API_KEY`, `OP_VLM_MAX_IMAGES_PER_CALL` (per-request image cap, default 8 — keep <= the engine's per-prompt image limit), `OP_VLM_OPEN_IMAGES_PER_CALL` (open-vocab chunk only, default 3), `OP_VLM_HTTPX_MAX_CONNECTIONS`, `OP_VLM_HTTPX_KEEPALIVE` |
+| Segmenter connection | `OP_SEGMENTER_URL`, `OP_SEGMENTER_URLS`, `OP_SEGMENTER_HTTPX_MAX_CONNECTIONS`, `OP_SEGMENTER_HTTPX_KEEPALIVE` |
 
 ## Naming you'll notice
 
-A handful of wire-level field and env-var names predate this
-subsystem's generalization and are frozen (renaming them would be a
-breaking wire-format change for zero functional benefit — see
-`docs/design/curation_api_contract.md`'s "key invariant" section):
-
-- The VLM connection vars (`OPENWEBUI_*`, `GEMMA_*`) and the
-  `HealthResponse.gemma` field name predate the vendor-neutral `vlm_*`
-  abstraction; they report whichever OpenAI-compatible backend you've
-  actually configured, not literally Google's Gemma.
-- The segmenter env vars (`SAM3_URL`, `SAM3_URLS`) and
-  `DetectionProfile.segmenter_name` default describe the reference
-  deployment's segmenter; any HTTP service speaking the same
-  request/response shape works.
-- A small number of OpenSearch document fields keep a `plate_*`
-  prefix by default; `RegionFields` lets you rename them per-deployment
-  with no reindex.
-
-None of this affects correctness — it is purely a naming residue from
-where the subsystem came from, called out here so it doesn't look like
-an accident.
+Every OpenSearch document field defaults to a `region_*` / `vlm_*` /
+`classifier_*` name, and the wire is frozen to the same generic
+vocabulary regardless of storage overrides — see
+`docs/design/curation_api_contract.md`'s "key invariant" section. A
+deployment with existing data under other field names (for example, an
+older deployment's own field-naming convention) can construct its own
+`RegionFields` instance to match, via `OP_REGION_FIELD_<ATTR>`, with no
+reindex. There are no retired vendor- or company-prefixed env-var
+fallbacks — see `src/config/retired_env.py` for the guard that fails
+loudly if one is still set.

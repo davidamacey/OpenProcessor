@@ -40,9 +40,11 @@ interface.**
   plugin before any production or multi-tenant deployment.
 
 None of this is a bug to be reported — it's the current, deliberate
-state of the project, tracked as follow-up work. Authentication is
-explicitly out of scope for this release; see
-`docs/design/oss_main_completion_plan.md` Appendix A.4.
+state of the project, tracked internally as follow-up work.
+Authentication is explicitly out of scope for this release: this is a
+local tool meant to run on a trusted machine or private network behind
+your own reverse proxy / auth layer, not to be exposed to a network you
+don't trust.
 
 ## Reporting a vulnerability
 

@@ -40,8 +40,8 @@ OpenSearch indexes back images/items/labels/classes/clusters, where the
 class registry and exported datasets live on disk, the crop-cache
 directory, the API mount prefix, and embedding-dimension/HNSW tuning.
 
-Before genericization, these were a hardcoded `LegacyIndex(str, Enum)` and a
-scatter of module-level path constants. Two deployments never share
+Before genericization, these were a hardcoded, company-prefixed index
+enum and a scatter of module-level path constants. Two deployments never share
 index names, cache paths, or a mount prefix by coincidence — they're
 deployment data, not code — so they moved onto a dataclass with an
 `IndexRole` + `index_name()` lookup (typo-proof; a role can't resolve to
@@ -243,11 +243,11 @@ unfinished in these specific ways* lives somewhere durable.
   reference server (`docker/segmenter/`, SAM 3, its own `segmenter`
   compose profile), but it stays opt-in for the same reason everything
   else here is: it needs a GPU and model weights you provide, and with
-  `SAM3_URL` empty the leg is a documented no-op.
+  `OP_SEGMENTER_URL` empty the leg is a documented no-op.
 - **Environment-variable and metric-name prefixes are fully
-  reconciled on the `OP_`/`op_` convention** — the `LEGACY_*` env vars and
-  `legacy_*` metric names from the original port have been renamed. See
-  `env.template` for the current, complete surface.
+  reconciled on the `OP_`/`op_` convention** — every company- and
+  vendor-prefixed env var and metric name from the original port has
+  been renamed. See `env.template` for the current, complete surface.
 - **`DetectionProfile`'s shipped defaults are domain-tuned, not
   domain-neutral** (§2.3) — a new deployment should construct its own
   instance (or override via `OP_REGION_DETECTION_*` /
@@ -375,9 +375,9 @@ end to end:**
    `prompt_pack` axis now reports your pack's `name` instead of
    `generic_item_v1`.
 5. Trigger `POST {prefix}/pipeline/auto_label/start?class_id=<pallet
-   class id>&run_gemma=true` — the run scopes its unvalidated-item
+   class id>&run_vlm=true` — the run scopes its unvalidated-item
    query to that one class (a `term` filter on `class_id`, added
-   alongside the existing `class_validated`/`gemma_verify_completed_at`
+   alongside the existing `class_validated`/`vlm_verify_completed_at`
    exclusions in `src/routers/curation/pipeline.py`) instead of
    labeling the entire pool.
 
@@ -394,8 +394,9 @@ request into a job spec (`src/services/curation/bakeoff_jobs.py`) and drops
 scoring and writes `status.json`, one `comparison.json` per dataset and a
 `matrix.json` back. The harness lives under `scripts/` rather than `src/`
 because it needs a newer detection stack than the API image pins and never
-runs inside the API process. Full design:
-`docs/design/generic_model_comparison_plan.md`.
+runs inside the API process. The rest of this section covers the shipped
+design; see [`docs/design/curation_api_contract.md`](curation_api_contract.md)
+for the exact `/bakeoff/*` wire shapes.
 
 **The flow.** Eval datasets are the exports themselves: every export under
 `CurationConfig.export_root` with a labelled test split is listed by

@@ -88,7 +88,7 @@ ratchet: once a module is clean, it can never regress.
 `roi_*` as their illustrative "existing deployment" example name, so
 neither needs an exemption from the `plate_*` guard. See the script's
 module docstring for the frozen-wire-contract exemptions
-(`plate_status` etc. are legitimate on the HTTP JSON contract; see
+(`region_status` etc. are legitimate on the HTTP JSON contract; see
 `docs/design/curation_api_contract.md`).
 
 ## Commit conventions

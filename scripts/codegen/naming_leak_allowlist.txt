@@ -16,23 +16,7 @@ tests/test_naming_leaks.py # feeds synthetic 'legacy_stuff'-style leak fixtures 
 # Scan A (hard leak: reference/legacy_/company terms/private paths)
 # ---------------------------------------------------------------------------
 
-# Internal cutover-plan docs (docs/design/*_plan.md convention). All name
-# forbidden patterns on purpose as part of documenting the sweep itself, or
-# predate it and reference the private deployment/company by design. W9
-# removes or privately-relocates all of these; until then they are excluded
-# here rather than scrubbed, per the coordinator's explicit "do not do W9"
-# instruction for this session.
-docs/design/curation_api_contract.md # design/rename-history doc, extensively documents old wire names on purpose; scrubbed in W9
-docs/design/curation_design_rationale.md # design-rationale doc, documents the LEGACY_*/legacy_* rename narrative on purpose; scrubbed in W9
-docs/CURATION.md # user-facing curation doc; still documents pre-rename env vars/fields; scrubbed in W9 (plan C10)
-docs/design/new_class_proposal_resolve_plan.md # internal cutover-plan doc; removed in W9 (plan D6, docs/design/*_plan.md)
-docs/design/oss_main_completion_plan.md # internal cutover-plan doc; removed in W9 (plan D6, docs/design/*_plan.md)
-docs/design/train_gpu_options_plan.md # internal cutover-plan doc; removed in W9 (plan D6, docs/design/*_plan.md); also in C7's leak-scan-terms list
-docs/design/full_stack_audit.md # internal cutover-plan doc; removed in W9 (plan D6)
-docs/design/curation_query_performance_audit.md # internal audit doc added by cutover/db-perf; W9 removal candidate (plan §7 re-inventory note)
-docs/design/segmenter_triton_feasibility.md # internal design doc; W9 scrub/removal candidate, same character as the other docs/design/*_plan.md artifacts
-docs/design/generic_model_comparison_plan.md # internal cutover-plan doc (#34 waves); names the example license-plate bake-off profile and the retired OP_BAKEOFF_PROFILE value on purpose; removed in W9 (plan D6)
-CHANGELOG.md # documents every rename with the actual old->new literals throughout; CHANGELOG rewrite is explicitly W9 scope
+CHANGELOG.md # documents every rename with the actual old->new literals throughout; this is the historical record of the naming sweep itself, kept intentionally
 
 # Negative/historical test docstrings (describe a retired literal or a past
 # bug by name; not a live leak).
@@ -51,7 +35,7 @@ scripts/codegen/check_no_literal_region_fields.py # the plate_* literal guard it
 # The retired-env guard and its test spell every retired name on purpose
 # (D4): that IS the mechanism that makes a stale env var fail loudly instead
 # of silently doing nothing.
-src/config/retired_env.py # spells every retired env-var name on purpose (D4 guard); see docs/design/naming_sweep_plan.md §3
+src/config/retired_env.py # spells every retired env-var name on purpose (clean-break guard with no aliases); see src/main.py's lifespan for where it is invoked
 tests/config/test_retired_env.py # exercises every retired env-var name in src/config/retired_env.py
 
 # docker/segmenter run examples use the retired SAM3_URL name nowhere after
@@ -90,14 +74,14 @@ tests/curation/test_training_class_subset_presets.py:plates_only|all_vehicles|ve
 tests/curation/test_region_vocabulary.py:lpr_nanov11_640|sam3|gemma # historical: names the vendor ids a frontend used to hardcode, motivating this endpoint
 src/services/curation/region_vocabulary.py:lpr_nanov11_640|sam3|gemma # historical: names the vendor ids a frontend used to hardcode, motivating this module
 tests/fixtures/labeler_call_sites.txt:plate|LPR # historical header prose describing prior renames (plate_thumbnail bug, LPR vocabulary work item)
-tests/integration/test_labeler_route_parity.py:plate|lpr|LPR # KNOWN_GAPS documents a real, not-yet-ported proprietary frontend route by its actual path; rewriting the literal would break the check it performs (see docs/design/naming_sweep_plan.md §9 step 5 note)
+tests/integration/test_labeler_route_parity.py:plate|lpr|LPR # KNOWN_GAPS documents a real, not-yet-ported proprietary frontend route by its actual path; rewriting the literal would break the check it performs
 
 # .pre-commit-config.yaml / CONTRIBUTING.md: describe the plate_* literal
-# guard's purpose and name the (large, pre-port) reference files it was
-# split from. Reworded fully in W9; keep the guard description itself.
-.pre-commit-config.yaml:gemma_labeler|plate_detect # historical file-size-split rationale naming reference-implementation files; reworded in W9
+# guard's purpose itself (the hook exists to ban that literal, so it has
+# to spell it to say so). All other file-size-split rationale text was
+# reworded off vendor/reference-file names in W9.
 .pre-commit-config.yaml:plate # the check-no-literal-region-fields hook's own name/purpose
-CONTRIBUTING.md # describes the plate_* literal guard and its roi_* illustrative example; guard description, kept per plan C13
+CONTRIBUTING.md:plate # describes the plate_* literal guard and its roi_* illustrative example; guard description, kept per plan C13
 
 # ---------------------------------------------------------------------------
 # The public `license_plate` reference region profile (plan §0's explicit
@@ -111,6 +95,9 @@ CONTRIBUTING.md # describes the plate_* literal guard and its roi_* illustrative
 examples/ # the example-domain directory; license_plate profile + bakeoff baseline configs live here on purpose
 env.template # OP_REGION_PROFILE_PATH example value; the public worked example
 docs/ARCHITECTURE.md # example prose illustrating a region sub-annotation
+docs/CURATION.md # user guide; references the public license_plate example profile/export/OCR wiring throughout
+docs/design/curation_api_contract.md # API contract; documents the public license_plate example profile's wire values (detector chain, OCR text-reject sequences, cluster card example)
+docs/design/curation_design_rationale.md # design rationale; documents the subsystem's license-plate origin and the license_plate bake-off example
 tests/curation/test_region_worker.py # uses the example profile's real detector_model id ('license_plate_detector') as a realistic detector-source literal
 CLAUDE.md # names the public license_plate example profile in the curation-subsystem summary
 scripts/README.md # example prose for eval_regions_vs_gt.py's cohort description
