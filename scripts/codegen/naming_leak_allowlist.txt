@@ -1,4 +1,4 @@
-# Allowlist for scripts/codegen/check_naming_leaks.py (naming sweep W8).
+# Allowlist for scripts/codegen/check_naming_leaks.py.
 #
 # One entry per line: `path # reason` (whole-file exemption) or
 # `path:regex # reason` (only lines in `path` matching `regex` are allowed —
@@ -32,39 +32,39 @@ tests/curation/test_feature_flag_consistency.py:LEGACY_ # historical prose about
 # pattern throughout (docstring, regexes, PORTED_PATHS comments).
 scripts/codegen/check_no_literal_region_fields.py # the plate_* literal guard itself; spells the pattern by definition
 
-# The retired-env guard and its test spell every retired name on purpose
-# (D4): that IS the mechanism that makes a stale env var fail loudly instead
+# The retired-env guard and its test spell every retired name on purpose:
+# that IS the mechanism that makes a stale env var fail loudly instead
 # of silently doing nothing.
 src/config/retired_env.py # spells every retired env-var name on purpose (clean-break guard with no aliases); see src/main.py's lifespan for where it is invoked
 tests/config/test_retired_env.py # exercises every retired env-var name in src/config/retired_env.py
 
-# docker/segmenter run examples use the retired SAM3_URL name nowhere after
-# the pre-W8 leftover-sweep fix; the Dockerfile/README hits left are the
-# already-corrected OP_SEGMENTER_URL lines matching scan B's SAM3_* pattern
-# only via the surrounding comment text -- none remain as of this commit.
+# docker/segmenter run examples use the retired SAM3_URL name nowhere; the
+# Dockerfile/README hits left are the already-corrected OP_SEGMENTER_URL
+# lines matching scan B's SAM3_* pattern only via the surrounding comment
+# text -- none remain as of this commit.
 
 # The `check_no_literal_region_fields.py` guard's own tests feed `plate_*`
 # fixtures into it on purpose (that is the guard's entire test surface).
 tests/test_region_field_guard.py # feeds plate_* literal fixtures into the guard under test, on purpose
 
 # Guard-test vendor regexes (built as literal regexes rather than by string
-# concatenation; C2 permits either) and other negative/guard assertions that
-# must spell a retired or vendor name to prove it is absent/rejected.
+# concatenation -- either is permitted) and other negative/guard assertions
+# that must spell a retired or vendor name to prove it is absent/rejected.
 tests/curation/test_vlm_vocabulary.py # guard test: pins gemma_*->vlm_* / v6_*->classifier_* renames via a literal vendor regex
 tests/curation/test_wire_contract.py:plate|gemma # negative assertions that these retired-name literals are absent / rejected on the wire
 tests/integration/test_stats_router.py:by_lpr|by_sam3|gemma # negative test: asserts these retired stats-key literals are absent
 tests/curation/test_bakeoff_harness.py # guard test + its own DOMAIN_WORDS regex scanning bakeoff harness files for domain words
 tests/curation/test_bakeoff_router.py # negative test: asserts the retired lpr_nanov11_640 id is absent from served baselines
-tests/curation/test_models_unload.py # S8 guard tests: prove there is no hardcoded 'lpr_' prefix special-case
+tests/curation/test_models_unload.py # guard tests: prove there is no hardcoded 'lpr_' prefix special-case
 tests/curation/test_candidate_source_values.py # negative test: asserts retired sam3/sam3_text_hint/lpr/lpr_existing values never resolve specially
 tests/curation/test_methods_router.py # negative test: asserts the retired 'lpr' export id is omitted from served entries
 tests/curation/test_curation_opensearch.py # negative tests: assert v6_embedding / hardcoded plate_* literals are absent from the mapping
-tests/curation/test_train_router.py:lpr # S6 negative test: the retired lpr_single_class alias must be rejected, by name
-src/routers/curation_train.py:lpr_single_class # comment explaining the retired S6 alias by name, for the reader's benefit
+tests/curation/test_train_router.py:lpr # negative test: the retired lpr_single_class alias must be rejected, by name
+src/routers/curation_train.py:lpr_single_class # comment explaining the retired alias by name, for the reader's benefit
 
 # Historical/provenance docstrings describing what a field or alias used to
 # be (not a live hardcoded value).
-tests/curation/test_gpu_arbiter.py:gemma # historical: documents the removed needs_gemma_stop alias and reference-suite fact by name
+tests/curation/test_gpu_arbiter.py:(?i)gemma # historical: documents the removed needs_gemma_stop alias, and this deployment's real GPU-to-service placement, by name
 tests/curation/test_crop_cache_dir_consistency.py:GEMMA_CROP_CACHE_DIR # historical: documents the pre-fix env-var mismatch this test guards against
 tests/curation/test_crops_browse_params.py:hdd_source # negative test: asserts the retired hdd_source query param is gone
 tests/curation/test_router_wireup.py:plate_meta # historical: names the reference test file's pre-port route name
@@ -79,14 +79,13 @@ tests/integration/test_labeler_route_parity.py:plate|lpr|LPR # KNOWN_GAPS docume
 # .pre-commit-config.yaml / CONTRIBUTING.md: describe the plate_* literal
 # guard's purpose itself (the hook exists to ban that literal, so it has
 # to spell it to say so). All other file-size-split rationale text was
-# reworded off vendor/reference-file names in W9.
+# reworded off vendor/reference-file names.
 .pre-commit-config.yaml:plate # the check-no-literal-region-fields hook's own name/purpose
-CONTRIBUTING.md:plate # describes the plate_* literal guard and its roi_* illustrative example; guard description, kept per plan C13
+CONTRIBUTING.md:plate # describes the plate_* literal guard and its roi_* illustrative example; guard description, kept deliberately
 
 # ---------------------------------------------------------------------------
-# The public `license_plate` reference region profile (plan §0's explicit
-# "allowed to stay" list + the coordinator's F1 decision + owner directive
-# item 6): domain content is allowed under examples/, and the profile's
+# The public `license_plate` reference region profile: domain content is
+# allowed under examples/, and the profile's
 # `name='license_plate'` / `region_class_name='license_plate'` is the public
 # worked example every deployment can point OP_REGION_PROFILE_PATH at. Every
 # entry below is matched ONLY by the `license[ _-]?plate` scan-B extension —
@@ -124,19 +123,15 @@ src/services/training/preflight_scan.py # docstring example value
 tests/conftest.py # reference_region_profile fixture: loads the public example profile
 tests/_region_profile_fixture.py # defines EXAMPLE_LICENSE_PLATE_PROFILE(_PATH) -- the public example profile fixture itself
 tests/curation/test_auto_label_selection.py # exercises the example profile via the reference_region_profile fixture
-tests/curation/test_cascade_detect.py # exercises the real example profile incl. its real secondary_shape_groups (also a C14/scan-C exemption, see below)
+tests/curation/test_cascade_detect.py # exercises the real example profile incl. its real secondary_shape_groups (also a scan-C exemption, see below)
 tests/curation/test_classes_router.py # exercises the example profile's region_class_name
-tests/curation/test_class_synonyms.py # exercises the example profile; also names the reference stack generically ("private reference vehicle/license-plate curation stack") -- W9/C10 prose cleanup, not yet done
 tests/curation/test_curation_settings_router.py # exercises the example profile
 tests/curation/test_detection_profile.py # DetectionProfile tests use the public example name/shape
 tests/curation/test_detection_profile_second_profile.py # exercises the example profile as the "first profile" in a two-profile test
-tests/curation/test_gpu_arbiter.py # names the reference stack generically ("private reference vehicle/license-plate curation stack") -- W9/C10 prose cleanup, not yet done
 tests/curation/test_models_status_segmenter.py # exercises the segmenter roster entry via the reference_region_profile fixture; comments name its real segmenter_name ('sam3') from license_plate.json
 tests/curation/test_region_profile.py # exercises the example profile via EXAMPLE_LICENSE_PLATE_PROFILE_PATH
-tests/curation/test_region_sanity.py # exercises the example profile ("Ported from the reference license-plate sanity-gate tests")
 tests/curation/test_region_vocabulary.py # exercises the example profile's detector id + historical vendor-id docstring
 tests/curation/test_router_wireup.py # exercises the example profile's name/region_class_name
-tests/curation/test_train_jobs.py # names the reference stack generically ("private reference vehicle/license-plate curation stack") -- W9/C10 prose cleanup, not yet done
 tests/curation/test_train_preflight_scan.py # exercises the example profile
 tests/curation/test_train_router.py # negative assertion that 'license_plate' is NOT hardcoded into the class-balance message
 tests/curation/test_training_class_subset_presets.py # exercises the example profile's region_class_name in preset tests; docstring also names the hardcoded presets it replaces
@@ -151,6 +146,5 @@ tests/examples/test_bakeoff_license_plate_example.py # exercises the opt-in lice
 # No scan-C-only entries needed: every current scan C hit is already covered
 # by a broader entry above -- `examples/` (directory prefix) covers
 # examples/region_profiles/license_plate.json's real secondary_shape_groups,
-# the `tests/curation/test_cascade_detect.py` entry above covers its
-# assertion on those same real groups, and the `docs/design/full_stack_audit.md`
-# entry above (scan A section) covers its quoted raw VLM output.
+# and the `tests/curation/test_cascade_detect.py` entry above covers its
+# assertion on those same real groups.
