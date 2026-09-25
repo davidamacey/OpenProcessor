@@ -124,7 +124,7 @@ async def test_probe_writes_all_seven_fields(
         tmp_path / 'fake_checkpoint.onnx',
         fake_os,  # type: ignore[arg-type]
         model_version=None,
-        architecture='v6',
+        architecture='yolov5_objectness',
     )
 
     assert processed == 1
@@ -181,7 +181,7 @@ async def test_probe_writes_one_bulk_call_per_page_not_per_item(
         tmp_path / 'fake_checkpoint.onnx',
         fake_os,  # type: ignore[arg-type]
         model_version=None,
-        architecture='v6',
+        architecture='yolov5_objectness',
     )
 
     assert processed == 5
@@ -212,7 +212,7 @@ async def test_probe_agreement_is_false_when_prediction_matches_stored_label(
         }
     ]
     fake_os = _FakeOpenSearch(docs)
-    await pp.run_probe_inference(tmp_path / 'fake.onnx', fake_os, architecture='v6')  # type: ignore[arg-type]
+    await pp.run_probe_inference(tmp_path / 'fake.onnx', fake_os, architecture='yolov5_objectness')  # type: ignore[arg-type]
     assert fake_os.updates[0]['doc']['probe_disagreement'] is False
 
 
@@ -255,7 +255,9 @@ async def test_probe_skips_test_holdout_crops(
     ]
     fake_os = _FakeOpenSearch(docs)
 
-    processed = await pp.run_probe_inference(tmp_path / 'fake.onnx', fake_os, architecture='v6')  # type: ignore[arg-type]
+    processed = await pp.run_probe_inference(
+        tmp_path / 'fake.onnx', fake_os, architecture='yolov5_objectness'
+    )  # type: ignore[arg-type]
 
     assert processed == 1
     updated_ids = {u['id'] for u in fake_os.updates}
@@ -285,7 +287,7 @@ async def test_probe_writes_the_registry_id_of_its_prediction(
     await pp.run_probe_inference(
         tmp_path / 'f.onnx',
         fake_os,  # type: ignore[arg-type]
-        architecture='v6',
+        architecture='yolov5_objectness',
         class_ids={'sedan': 12},
     )
     assert fake_os.updates[0]['doc']['probe_pred_class_id'] == 12
@@ -294,7 +296,7 @@ async def test_probe_writes_the_registry_id_of_its_prediction(
     await pp.run_probe_inference(
         tmp_path / 'f.onnx',
         fake_os,  # type: ignore[arg-type]
-        architecture='v6',
+        architecture='yolov5_objectness',
         class_ids={},
     )
     assert fake_os.updates[0]['doc']['probe_pred_class_id'] is None

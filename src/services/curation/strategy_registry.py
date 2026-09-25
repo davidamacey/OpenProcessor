@@ -69,7 +69,7 @@ def _scores_shadow() -> bool:
 
 
 def _select_diverse_enabled() -> bool:
-    """Mirrors ``legacy_select.py``'s own flag check — kept independent (not
+    """Mirrors the reference select router's own flag check — kept independent (not
     imported from there) so this dependency-light module never needs to
     import a router module just to read one env var."""
     return os.environ.get('OP_SELECT_DIVERSE_ENABLED', '').strip().lower() in {
@@ -81,7 +81,7 @@ def _select_diverse_enabled() -> bool:
 
 
 def _semantic_search_enabled() -> bool:
-    """Mirrors ``legacy_semantic.py``'s own flag check — same "don't import a
+    """Mirrors the reference semantic-search module's own flag check — same "don't import a
     router module just to read one env var" reasoning as
     ``_select_diverse_enabled``/``_viz_projection_enabled``."""
     return os.environ.get('OP_SEMANTIC_SEARCH_ENABLED', '').strip().lower() in {
@@ -93,7 +93,7 @@ def _semantic_search_enabled() -> bool:
 
 
 def _viz_projection_enabled() -> bool:
-    """Mirrors ``legacy_viz.py``'s own flag check — same "don't import a
+    """Mirrors the reference embedding-viz module's own flag check — same "don't import a
     router module just to read one env var" reasoning as
     ``_select_diverse_enabled``."""
     return os.environ.get('OP_VIZ_PROJECTION_ENABLED', '').strip().lower() in {
@@ -135,7 +135,7 @@ VIZ_PROJECTION_REQUIRES_BANNER = VIZ_PROJECTION_SHIP_MODE == 'ship_with_banner'
 ``requires_banner`` — the field a future frontend reads to decide whether
 to render the plan's required persistent "projection is approximate"
 banner. Named to match this file's existing boolean-flag vocabulary
-(``default``, ``legacy_scores_enabled``, ...) rather than inventing a
+(``default``, ``scores_enabled``, ...) rather than inventing a
 banner/message-string convention with no other precedent in this response
 shape. False today because the measured purity landed in the "ship plain"
 tier, not the banner tier — flip only by re-running
@@ -319,7 +319,7 @@ def _overlay_strategies() -> list[dict[str, Any]]:
 
 
 def _semantic_search_strategy() -> list[dict[str, Any]]:
-    """P2-14 ``legacy_semantic.py`` overlay — PE-Core text-to-image kNN search.
+    """P2-14 reference semantic-search overlay — PE-Core text-to-image kNN search.
     Same "flag on -> experimental, flag off -> disabled, never stable
     without a full validation gate" shape ``diverse`` uses above: no
     real-usage go/no-go protocol has run yet, so it can never surface as
@@ -501,7 +501,7 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
     sorts live (see this module's Phase 6 note above).
 
     TTL-cached at module scope (``_COVERAGE_CACHE`` / ``time.monotonic()``
-    freshness check), the same pattern ``legacy_select.py``'s ``_ORDER_CACHE``
+    freshness check), the same pattern the reference select router's ``_ORDER_CACHE``
     and ``cluster_outliers.py``'s ``_CACHE`` use -- ``GET /curation/methods``
     must stay an O(1)-per-request endpoint (its own docstring promises it
     "never fails or blocks"), not an O(distinct-fields) OpenSearch round

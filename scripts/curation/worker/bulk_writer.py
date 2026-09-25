@@ -1,6 +1,6 @@
 """Auto-split sub-module of the curation detection worker.
 
-See ``scripts/curation/sam_worker_main.py`` for the entry point and
+See ``scripts/curation/region_worker_main.py`` for the entry point and
 the ``scripts/curation/worker/`` package for the rest of the split.
 """
 
@@ -69,11 +69,11 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
         # has moved on — an earlier pass or a duplicate consumer already
         # wrote it, or a human changed it — drop this write instead of
         # re-stamping the region and re-appending the chain.
-        if current.get(F.status) != task.plate_status:
+        if current.get(F.status) != task.region_status:
             logger.info(
                 'region_write_stale_skip',
                 crop_id=doc_id,
-                fetched_status=task.plate_status,
+                fetched_status=task.region_status,
                 current_status=current.get(F.status),
             )
             return {}

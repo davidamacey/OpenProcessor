@@ -73,9 +73,10 @@ def reference_region_profile(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 def reference_ingest_profiles(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ingest profiles named like the reference deployment: a generic
     proposer named ``coco_yolo11`` (items it leaves unlabeled carry
-    ``coco_yolo11_proposal``) and a secondary classifier named ``v6``
-    (``v6_model``). The class_source vocabulary the worker and clustering
-    code filter on is derived from these names."""
+    ``coco_yolo11_proposal``) and a secondary classifier named
+    ``classifier`` (``classifier_model``). The class_source vocabulary
+    the worker and clustering code filter on is derived from these
+    names."""
     monkeypatch.setenv('OP_INGEST_PRIMARY_NAME', 'coco_yolo11')
     monkeypatch.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'classifier')
-    monkeypatch.setenv('OP_INGEST_SECONDARY_NAME', 'v6')
+    monkeypatch.setenv('OP_INGEST_SECONDARY_NAME', 'classifier')

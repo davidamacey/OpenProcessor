@@ -70,7 +70,7 @@ see [`docs/CURATION.md`](../docs/CURATION.md) for the full guide.
 | `vlm_worker.py` | Long-lived VLM labeling/verification loop (`curation-vlm-worker` service). |
 | `auto_label_worker.py` | Drives the `/curation/pipeline/auto_label` protocol as a long-lived process (`curation-auto-label-worker` service). |
 | `cluster_refresh_daemon.py` | Periodic residual-clustering retrain/refresh (`curation-cluster-refresh` service). |
-| `sam_worker_main.py` | Detection-cascade worker entrypoint (`curation-detection-worker` service). |
+| `region_worker_main.py` | Detection-cascade worker entrypoint (`curation-detection-worker` service). |
 | `worker/` | Shared worker library: cascade runner, HTTP clients (segmenter, VLM), state/checkpoint handling. |
 | `backfill_scores.py` | One-off CLI to backfill item-quality scores onto existing indexed items. |
 | `run_probe.py` | Probe-inference backfill: runs a probe detector ONNX over every non-holdout item and writes the `probe_pred_*` fields behind the `/review` uncertainty + model-disagreement tabs and the `mistakenness` score. Dry-run by default; `--resume` skips items already scored by the same `--model-version`. |

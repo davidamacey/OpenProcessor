@@ -48,7 +48,7 @@ async def test_fetch_pending_ids_returns_ids_without_loading_source() -> None:
         client,  # type: ignore[arg-type]
         opensearch_url='http://os:9200',
         batch_size=2,
-        v6_skip_conf=0.9,
+        classifier_skip_conf=0.9,
     )
     assert ids == ['a', 'b']
     assert client.bodies[0]['_source'] is False

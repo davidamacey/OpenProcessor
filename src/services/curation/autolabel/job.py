@@ -1,4 +1,4 @@
-"""File-backed dispatcher for ``/legacy/pipeline/auto_label``.
+"""File-backed dispatcher for ``/curation/pipeline/auto_label``.
 
 The actual pipeline now runs in a **dedicated long-lived worker
 container** (``curation-auto-label-worker``, entrypoint

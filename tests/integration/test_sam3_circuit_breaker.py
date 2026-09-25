@@ -8,7 +8,7 @@ Pins:
   success closes the circuit again.
 * ``httpx.ReadTimeout`` triggers up to 2 retries with backoff before
   the call counts as a circuit-breaker failure.
-* When every base URL is UNHEALTHY, :class:`Sam3AllHostsDown` is
+* When every base URL is UNHEALTHY, :class:`SegmenterAllHostsDown` is
   raised so the worker can park the crop in ``pending_detection``
   rather than terminating it on infra noise.
 """
@@ -20,7 +20,7 @@ from typing import Any
 import httpx
 import pytest
 
-from scripts.curation.worker.cascade import Sam3AllHostsDown, Sam3Client
+from scripts.curation.worker.cascade import SegmenterAllHostsDown, SegmenterClient
 
 
 pytestmark = pytest.mark.integration
@@ -47,16 +47,16 @@ def _build_client(
     base_urls: str,
     handler: Any,
     now_func: Any,
-) -> Sam3Client:
+) -> SegmenterClient:
     transport = httpx.MockTransport(handler)
     httpx_client = httpx.AsyncClient(transport=transport, timeout=5.0)
-    sam = Sam3Client(base_url=base_urls, client=httpx_client)
+    sam = SegmenterClient(base_url=base_urls, client=httpx_client)
     sam._now = now_func  # type: ignore[assignment]
     return sam
 
 
 class _FakeClock:
-    """Deterministic monotonic clock the Sam3Client can borrow."""
+    """Deterministic monotonic clock the SegmenterClient can borrow."""
 
     def __init__(self, t0: float = 1000.0) -> None:
         self.t = t0
@@ -94,14 +94,14 @@ async def test_three_failures_open_circuit() -> None:
 
     # 3 failures (each one HTTP 500, no retries — 5xx is not retried).
     for _ in range(3):
-        out = await sam.segment_plate(_CROP_BYTES)
+        out = await sam.segment(_CROP_BYTES)
         assert out is None
         clock.advance(0.5)
 
-    # 4th call must short-circuit — Sam3AllHostsDown (single host).
+    # 4th call must short-circuit — SegmenterAllHostsDown (single host).
     n_before_fourth = call_count['n']
-    with pytest.raises(Sam3AllHostsDown):
-        await sam.segment_plate(_CROP_BYTES)
+    with pytest.raises(SegmenterAllHostsDown):
+        await sam.segment(_CROP_BYTES)
     assert call_count['n'] == n_before_fourth, 'expected zero httpx calls past open circuit'
 
     after = _metric_value(OP_SEGMENTER_CIRCUIT_OPEN_TOTAL, host=host)
@@ -129,21 +129,21 @@ async def test_circuit_recovers_after_60s_window() -> None:
 
     # Open the circuit.
     for _ in range(3):
-        await sam.segment_plate(_CROP_BYTES)
+        await sam.segment(_CROP_BYTES)
         clock.advance(0.1)
-    with pytest.raises(Sam3AllHostsDown):
-        await sam.segment_plate(_CROP_BYTES)
+    with pytest.raises(SegmenterAllHostsDown):
+        await sam.segment(_CROP_BYTES)
 
     # Advance past the 60s open window, flip mock to success.
     clock.advance(61.0)
     responses['mode'] = 'ok'
 
-    cand = await sam.segment_plate(_CROP_BYTES)
+    cand = await sam.segment(_CROP_BYTES)
     assert cand is not None, 'HALF_OPEN probe should attempt the host'
 
     # Circuit closed — a subsequent call also goes through with no
     # short-circuit even before any further time advance.
-    cand2 = await sam.segment_plate(_CROP_BYTES)
+    cand2 = await sam.segment(_CROP_BYTES)
     assert cand2 is not None
 
     await sam.aclose()
@@ -183,7 +183,7 @@ async def test_bounded_retry_on_read_timeout() -> None:
 
     _asyncio.sleep = _no_sleep  # type: ignore[assignment]
     try:
-        cand = await sam.segment_plate(_CROP_BYTES)
+        cand = await sam.segment(_CROP_BYTES)
     finally:
         _asyncio.sleep = real_sleep  # type: ignore[assignment]
 
@@ -200,7 +200,7 @@ async def test_bounded_retry_on_read_timeout() -> None:
 
 @pytest.mark.asyncio
 async def test_all_hosts_down_raises() -> None:
-    """Two base URLs both UNHEALTHY → Sam3AllHostsDown."""
+    """Two base URLs both UNHEALTHY → SegmenterAllHostsDown."""
     clock = _FakeClock()
 
     sam = _build_client(
@@ -211,11 +211,11 @@ async def test_all_hosts_down_raises() -> None:
 
     # 6 failures total (3 per host) trip both circuits.
     for _ in range(6):
-        out = await sam.segment_plate(_CROP_BYTES)
+        out = await sam.segment(_CROP_BYTES)
         assert out is None
         clock.advance(0.05)
 
-    with pytest.raises(Sam3AllHostsDown):
-        await sam.segment_plate(_CROP_BYTES)
+    with pytest.raises(SegmenterAllHostsDown):
+        await sam.segment(_CROP_BYTES)
 
     await sam.aclose()

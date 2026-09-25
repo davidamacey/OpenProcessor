@@ -13,7 +13,7 @@ cluster.
 
 Public surface:
 
-1. :py:data:`VEHICLES_CLUSTER_INDEX` — FAISS cluster-index handle.
+1. :py:data:`ITEMS_CLUSTER_INDEX` — FAISS cluster-index handle.
 2. :py:func:`refine_cluster` — per-cluster AHC, called from
    ``POST /curation/clusters/refine/{cluster_id}``.
 3. :py:func:`cluster_residuals` — residual-pool clusterer; dispatches
@@ -71,7 +71,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-VEHICLES_CLUSTER_INDEX: ClusterIndex = ClusterIndex.VEHICLES
+ITEMS_CLUSTER_INDEX: ClusterIndex = ClusterIndex.VEHICLES
 """FAISS cluster-index role for the curation item tenant.
 
 Deliberately reuses the pre-existing, unrelated visual-search
@@ -583,7 +583,7 @@ async def refine_cluster(
 # auto_promote_clusters moved to src.services.curation.clustering.auto_promote
 # on 2026-05-22 — it's opt-in / disabled-by-default in the pipeline
 # pending a v6-confidence-floor rewrite. Re-export the public name here
-# so existing callers (legacy_pipeline, tests/test_legacy_clustering) keep
+# so existing callers keep
 # working without churn.
 from src.services.curation.clustering.auto_promote import auto_promote_clusters  # noqa: E402
 
@@ -592,8 +592,8 @@ async def assign_cluster_to_crop(
     service: ClusteringService,
     embedding: np.ndarray,
 ) -> tuple[int, float]:
-    """Convenience wrapper: assign a single embedding to its legacy_vehicles cluster."""
-    out = service.assign_cluster(VEHICLES_CLUSTER_INDEX, embedding)
+    """Convenience wrapper: assign a single embedding to its items cluster."""
+    out = service.assign_cluster(ITEMS_CLUSTER_INDEX, embedding)
     return int(out.cluster_id), float(out.distance)
 
 
@@ -704,7 +704,7 @@ async def should_retrain_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
     means the growth gate is satisfied permanently after any strict run
     (huge full-pool count vs a tiny narrow-slice training count), with
     only the 24h cooldown preventing constant retriggering. The automatic
-    idle-worker trigger (``legacy_auto_label_worker.py``) always requests
+    idle-worker trigger (the auto-label worker) always requests
     ``recluster_unvalidated=True``, so ``trained_mode`` defaults to
     ``'recluster_unvalidated'`` for centroids persisted before this field
     existed — that matches the common case and preserves prior behavior
@@ -875,7 +875,7 @@ async def _park_gated_residuals(
     try:
         # Polled, not blocking — see run_update_by_query_polled's
         # docstring (cluster_id_normalize.py): wait_for_completion=True
-        # on a large legacy_vehicle_crops query can fail client-side response
+        # on a large items-index query can fail client-side response
         # parsing ("Too many headers received") even when the operation
         # completes successfully server-side, causing the transport to
         # silently retry the whole multi-minute operation from scratch.
@@ -980,7 +980,7 @@ async def cluster_residuals(
                 'gate_min_blur_ratio': gate_min_blur_ratio,
                 'gate_coverage': coverage,
                 'hint': (
-                    'Run legacy_backfill_crop_rank.py and legacy_backfill_blur.py over the '
+                    'Run the crop-rank and blur backfill scripts over the '
                     'residual pool before enabling the clustering gate.'
                 ),
             }
@@ -1269,7 +1269,7 @@ async def assign_only_residuals(
 # ============================================================================
 # Region clustering — coarse partition + per-bucket AHC refine over the
 # RegionFields embedding (a deployment overlay may point this at an
-# existing plate_pe_embedding field). Regions are all one
+# existing region_pe_embedding field). Regions are all one
 # class (e.g. license plate), so this is OUTLIER discovery: similar regions
 # group together and false-positives / bad boxes fall out as sub-cluster
 # outliers under refine. Writes the independent RegionFields cluster fields
@@ -2011,6 +2011,7 @@ __all__ = [
     'AHC_LINKAGE',
     'AHC_METRIC',
     'FALSE_POSITIVE_REGION_CLUSTER_ID',
+    'ITEMS_CLUSTER_INDEX',
     'ITEMS_INDEX',
     'MAX_REFINE_MEMBERS',
     'MIN_REFINE_MEMBERS',
@@ -2018,7 +2019,6 @@ __all__ = [
     'MIN_RESIDUALS_FOR_CLUSTERING',
     'PARKED_CLUSTER_ID',
     'RESIDUAL_CLUSTER_ID_OFFSET',
-    'VEHICLES_CLUSTER_INDEX',
     'assign_cluster_to_crop',
     'assign_only_residuals',
     'auto_assign_fp_from_centroids',

@@ -136,7 +136,7 @@ async def _scroll_cluster_buckets(client: AsyncOpenSearch, *, index: str) -> lis
                         'top_class': {
                             # class_name is mapped keyword directly on the
                             # live index — no .keyword subfield exists. See
-                            # legacy_clusters.py's top_class agg for the full
+                            # the reference clusters router's top_class agg for the full
                             # story.
                             'terms': {
                                 'field': 'class_name',
@@ -180,7 +180,7 @@ async def auto_promote_clusters(
     """
     # Per-cluster top class, paged (F-29). Purity is computed across ALL
     # labelled members (validated + unvalidated) so a cluster with 99
-    # v6 honda + 1 unvalidated cruiserbike isn't deemed 100% cruiserbike.
+    # classifier class A + 1 unvalidated class B isn't deemed 100% class B.
     #
     # CM-1: restrict to candidate clusters (cluster_id >= the residual
     # offset). Class clusters (0..RESIDUAL_CLUSTER_ID_OFFSET-1) have
@@ -314,8 +314,8 @@ async def auto_promote_clusters(
         ) -> dict[str, Any]:
             # Phase 3 (b): this used to be a bare update_by_query painless
             # script with no class_id_history append. Converting to a
-            # per-doc OCC bulk pass (same shape as legacy_gemma.py's
-            # gemma_label_batch) both lets us reuse record_class_history
+            # per-doc OCC bulk pass (same shape as the reference VLM router's
+            # label_batch) both lets us reuse record_class_history
             # (so dedupe (c) and the class_validated cap exemption (d)
             # apply uniformly) and re-checks the human/holdout guards
             # against the freshest doc state at write time, not just at

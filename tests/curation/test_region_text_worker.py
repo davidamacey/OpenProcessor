@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import scripts.curation.sam_worker_main as worker
+import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import runner as runner_mod
 from src.config import get_region_fields
 from src.services.detection.cascade_detect import RegionCandidate
@@ -80,13 +80,13 @@ async def _drive(
     ocr.read_region_lines = AsyncMock(return_value=REGION_LINES)
     ocr.regions_from_lines = MagicMock(return_value=[])
     ocr.detect_regions = AsyncMock(return_value=[])
-    ocr.pick_best_plate_region = MagicMock(return_value=None)
+    ocr.pick_best_text_region = MagicMock(return_value=None)
     monkeypatch.setattr(runner_mod, 'PaddleOcrTextRecognizer', MagicMock(return_value=ocr))
     monkeypatch.setattr(runner_mod, '_crop_jpeg_for_task', lambda *_a: _jpeg())
 
     seg = MagicMock(aclose=AsyncMock())
-    seg.segment_plate = AsyncMock(return_value=segmenter)
-    monkeypatch.setattr(worker, 'Sam3Client', MagicMock(return_value=seg))
+    seg.segment = AsyncMock(return_value=segmenter)
+    monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=seg))
 
     vlm = MagicMock(aclose=AsyncMock())
     vlm.class_names = []

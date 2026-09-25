@@ -1,6 +1,6 @@
 """Auto-split sub-module of the curation detection worker.
 
-See ``scripts/curation/sam_worker_main.py`` for the entry point and
+See ``scripts/curation/region_worker_main.py`` for the entry point and
 the ``scripts/curation/worker/`` package for the rest of the split.
 """
 
@@ -49,7 +49,7 @@ logger = get_logger('curation_worker')
 from scripts.curation.worker import state
 from scripts.curation.worker.bulk_writer import _bulk_update
 from scripts.curation.worker.cascade import (
-    Sam3AllHostsDown,
+    SegmenterAllHostsDown,
     _fetch_pending,
     _resegment_from_text_hint,
     _source_to_crop,
@@ -205,9 +205,9 @@ async def run(args: argparse.Namespace) -> int:
         loop.add_signal_handler(sig, _on_signal)
 
     # Look up heavy-IO constructors through the legacy shim module so
-    # tests that monkeypatch `scripts.curation.sam_worker_main.AsyncTritonPool`
+    # tests that monkeypatch `scripts.curation.region_worker_main.AsyncTritonPool`
     # (and friends) still intercept calls made from this split-out runner.
-    from scripts.curation import sam_worker_main as _wkr
+    from scripts.curation import region_worker_main as _wkr
 
     # Neutral default: with no region profile configured there is no
     # region cascade to run. Idle (continuous/daemon mode, so the container
@@ -228,7 +228,7 @@ async def run(args: argparse.Namespace) -> int:
 
     pool = _wkr.AsyncTritonPool(url=args.triton, pool_size=args.pool_size, max_concurrent=64)
     await pool.initialize()
-    lpr = RegionDetector(pool, profile)
+    detector = RegionDetector(pool, profile)
     # text-hinted re-pass: when the primary detector + secondary
     # segmenter both globally miss but the VLM confirmed the crop has a
     # region of interest, run the OCR pipeline (det + rec) on the whole
@@ -239,7 +239,7 @@ async def run(args: argparse.Namespace) -> int:
     # regions).
     ocr_recognizer = PaddleOcrTextRecognizer(pool, profile)
     # D5: the segmenter leg is optional. An empty ``--sam3-url``/``OP_SEGMENTER_URL``
-    # constructs a disabled Sam3Client — segment_plate() then always
+    # constructs a disabled SegmenterClient — segment() then always
     # returns None (the same "no candidate" result callers already
     # handle) without attempting any HTTP call. A deployment with no
     # segmentation service of its own leaves this unset.
@@ -254,7 +254,7 @@ async def run(args: argparse.Namespace) -> int:
             detail='set OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT to use the segmenter leg',
         )
         sam3_url = ''
-    sam3 = _wkr.Sam3Client(sam3_url, text_prompt=profile.segmenter_text_prompt)
+    sam3 = _wkr.SegmenterClient(sam3_url, text_prompt=profile.segmenter_text_prompt)
     # The deployment's prompt pack (OP_PROMPT_PACK_PATH) tells the VLM what
     # the region IS and that ``region_text`` is its transcribed text. The
     # built-in generic pack describes an unspecified "labeled sub-region",
@@ -281,7 +281,7 @@ async def run(args: argparse.Namespace) -> int:
         text_reader=profile.text_reader,
         item_text_enabled=item_text_enabled,
     )
-    gemma = _wkr.VlmLabeler(base_url=args.vlm_url, pack=pack) if vlm_available else None
+    vlm = _wkr.VlmLabeler(base_url=args.vlm_url, pack=pack) if vlm_available else None
     # B-PR5: populate class_names so ``label_combined`` callers (the
     # primary-detector-missed cohort gate in cascade._process_crop) can
     # classify in the same VLM round-trip as region verify + OCR.
@@ -290,21 +290,21 @@ async def run(args: argparse.Namespace) -> int:
     # class_names just answers the region side).
     name_to_id: dict[str, int] = {}
     # Without a VLM nothing classifies, so the registry is not needed.
-    if gemma is not None:
+    if vlm is not None:
         try:
             from src.clients.curation_opensearch import ClassRegistry
 
             _reg = ClassRegistry().load()
-            # gemma.class_names is the list passed into the VLM prompt;
+            # vlm.class_names is the list passed into the VLM prompt;
             # reply.class_id is the *index* into this list, NOT the
             # registry id. name_to_id maps the resolved name back to the
             # registry's authoritative class_id so writes carry the
             # correct value. Without this remap, a reply of class_id=0
             # lands the registry's first non-deprecated class label on a
             # doc with class_id=0 (deprecated) — historical drift.
-            gemma.class_names = [c.class_name for c in _reg.classes if not c.deprecated]
+            vlm.class_names = [c.class_name for c in _reg.classes if not c.deprecated]
             name_to_id = {c.class_name: int(c.class_id) for c in _reg.classes if not c.deprecated}
-            gemma.name_to_id = name_to_id
+            vlm.name_to_id = name_to_id
         except Exception as _exc:  # nosec B110 — best-effort, registry optional
             logger.warning('class_registry_load_failed', error=str(_exc))
     opensearch = _wkr.AsyncOpenSearch(hosts=[args.opensearch])
@@ -331,9 +331,9 @@ async def run(args: argparse.Namespace) -> int:
     #                       detector Triton call)
     #                       splits into:
     #                         - has candidate         -> combined_q
-    #                         - primary miss / secondary-shape -> gemma_visible_q
+    #                         - primary miss / secondary-shape -> vlm_visible_q
     #
-    #   gemma_visible_q  -> Stage A.gemma_visible (batched yes/no
+    #   vlm_visible_q  -> Stage A.vlm_visible (batched yes/no
     #                       VISIBLE_CHUNK per call, fail-OPEN on parse error)
     #                       splits into:
     #                         - visible=True          -> sam_q
@@ -364,7 +364,7 @@ async def run(args: argparse.Namespace) -> int:
     # the fast side. RAM cost is ~30 KB JPEG per task, so even 2k
     # queued = ~60 MB.
     in_q: asyncio.Queue[_ItemTask | None] = asyncio.Queue(maxsize=args.concurrency * 2)
-    gemma_visible_q: asyncio.Queue[_ItemTask | None] = asyncio.Queue(maxsize=2000)
+    vlm_visible_q: asyncio.Queue[_ItemTask | None] = asyncio.Queue(maxsize=2000)
     sam_q: asyncio.Queue[_ItemTask | None] = asyncio.Queue(maxsize=args.concurrency * 2)
     combined_q: asyncio.Queue[_ItemTask | None] = asyncio.Queue(maxsize=2000)
     out_q: asyncio.Queue[_ItemTask | None] = asyncio.Queue(maxsize=args.concurrency * 8)
@@ -380,9 +380,7 @@ async def run(args: argparse.Namespace) -> int:
     # upstream VLM, well under the combined-call budget of 16 x 6 = 96.
     # The visible filter is fast (~2s/call) so it doesn't need as many
     # consumers as the heavier combined call.
-    gemma_visible_concurrency = int(
-        os.environ.get('OP_REGION_WORKER_VLM_VISIBLE_CONCURRENCY') or '8'
-    )
+    vlm_visible_concurrency = int(os.environ.get('OP_REGION_WORKER_VLM_VISIBLE_CONCURRENCY') or '8')
     # Aligned with the shared VLM's --limit-mm-per-prompt {"image":6}.
     # Per-call work scales worse than linearly past 6 on the reference
     # deployment's GPU for this prompt+image mix.
@@ -394,7 +392,7 @@ async def run(args: argparse.Namespace) -> int:
     # under-full. Keeps tail latency bounded when the queue empties out
     # near end-of-run while still benefiting from batching during
     # steady-state.
-    GEMMA_CHUNK_DRAIN_TIMEOUT = 0.10
+    VLM_CHUNK_DRAIN_TIMEOUT = 0.10
 
     metrics = {
         'total_processed': 0,
@@ -533,7 +531,7 @@ async def run(args: argparse.Namespace) -> int:
         Never calls the VLM or the secondary segmenter directly. Routes:
           - pending_verify (existing primary-detector candidate) -> combined_q
           - pending + non-secondary-shape with primary hit       -> combined_q
-          - pending + secondary-shape OR primary miss             -> gemma_visible_q
+          - pending + secondary-shape OR primary miss             -> vlm_visible_q
             (let the VLM decide if a region is even visible before
             we spend the slow segmenter + combined call on it;
             primary-hit crops already proved a region is present
@@ -566,7 +564,7 @@ async def run(args: argparse.Namespace) -> int:
                     await out_q.put(t)
                     in_q.task_done()
                     continue
-                if t.plate_status in _TERMINAL_STATUSES:
+                if t.region_status in _TERMINAL_STATUSES:
                     async with in_flight_lock:
                         in_flight.discard(t.crop_id)
                     in_q.task_done()
@@ -586,15 +584,15 @@ async def run(args: argparse.Namespace) -> int:
                 # candidate; straight to combined VLM call (no
                 # detection needed).
                 if (
-                    t.plate_status in _PENDING_VERIFICATION_ALIASES
-                    and t.lpr_plate_in_source is not None
+                    t.region_status in _PENDING_VERIFICATION_ALIASES
+                    and t.detector_region_in_source is not None
                 ):
                     t.candidate_source = CANDIDATE_DETECTOR_EXISTING
                     t.candidate_in_crop = _source_to_crop(
-                        t.lpr_plate_in_source, t.vehicle_bbox_norm
+                        t.detector_region_in_source, t.vehicle_bbox_norm
                     )
-                    t.candidate_in_source = t.lpr_plate_in_source
-                    t.candidate_score = t.lpr_score
+                    t.candidate_in_source = t.detector_region_in_source
+                    t.candidate_score = t.detector_score
                     if vlm_available:
                         await combined_q.put(t)
                     else:
@@ -607,19 +605,19 @@ async def run(args: argparse.Namespace) -> int:
 
                 # Path 2: pending + non-secondary-shape — try the
                 # primary detector first (fast Triton call).
-                if t.plate_status in _PENDING_DETECTION_ALIASES and not is_secondary:
-                    _lpr_t0 = time.monotonic()
+                if t.region_status in _PENDING_DETECTION_ALIASES and not is_secondary:
+                    _detector_t0 = time.monotonic()
                     try:
-                        lpr_results = await lpr.detect_batch([t.crop_jpeg])
+                        detector_results = await detector.detect_batch([t.crop_jpeg])
                     except Exception:
                         OP_STAGE_REGION_DETECTOR_DURATION_SECONDS.labels(outcome='error').observe(
-                            time.monotonic() - _lpr_t0
+                            time.monotonic() - _detector_t0
                         )
                         raise
-                    cand = lpr_results[0] if lpr_results else None
+                    cand = detector_results[0] if detector_results else None
                     OP_STAGE_REGION_DETECTOR_DURATION_SECONDS.labels(
                         outcome='hit' if cand is not None else 'miss'
-                    ).observe(time.monotonic() - _lpr_t0)
+                    ).observe(time.monotonic() - _detector_t0)
                     if cand is not None:
                         t.detection_trace.append(f'{region_profile().detector_model}:hit')
                         t.candidate_source = CANDIDATE_DETECTOR
@@ -647,7 +645,7 @@ async def run(args: argparse.Namespace) -> int:
                 # segmenter + combined path is even worth it. Fails
                 # OPEN on parse errors so a flaky VLM never silently
                 # drops a real region. No VLM: straight to the segmenter.
-                await (gemma_visible_q if vlm_available else sam_q).put(t)
+                await (vlm_visible_q if vlm_available else sam_q).put(t)
                 in_q.task_done()
             except Exception as exc:
                 logger.warning(
@@ -717,10 +715,10 @@ async def run(args: argparse.Namespace) -> int:
             q.task_done()
         return tasks, poisoned
 
-    async def stage_a_gemma_visible(consumer_id: int) -> None:
-        """Stage A.gemma_visible: batched yes/no region-visibility filter.
+    async def stage_a_vlm_visible(consumer_id: int) -> None:
+        """Stage A.vlm_visible: batched yes/no region-visibility filter.
 
-        Drains ``gemma_visible_q`` in chunks of ``VISIBLE_CHUNK`` and
+        Drains ``vlm_visible_q`` in chunks of ``VISIBLE_CHUNK`` and
         asks the VLM "is a region of interest visible at all?" per
         crop. Crops that come back ``False`` short-circuit to
         ``no_region_visible`` without ever touching the secondary
@@ -739,28 +737,28 @@ async def run(args: argparse.Namespace) -> int:
 
         while True:
             chunk, poisoned = await _drain_chunk(
-                gemma_visible_q,
+                vlm_visible_q,
                 chunk_size=VISIBLE_CHUNK,
-                drain_timeout=GEMMA_CHUNK_DRAIN_TIMEOUT,
+                drain_timeout=VLM_CHUNK_DRAIN_TIMEOUT,
             )
             if chunk:
                 batch_request_ids = [t.request_id for t in chunk]
-                plate_crops: list[RegionCrop] = []
+                region_crops: list[RegionCrop] = []
                 bad_indices: list[int] = []
                 for i, t in enumerate(chunk):
                     if t.crop_jpeg is None:
                         bad_indices.append(i)
                         continue
-                    plate_crops.append(RegionCrop(crop_id=t.crop_id, jpeg_bytes=t.crop_jpeg))
+                    region_crops.append(RegionCrop(crop_id=t.crop_id, jpeg_bytes=t.crop_jpeg))
 
                 verdicts: dict[str, bool] = {}
-                if plate_crops:
+                if region_crops:
                     _vis_t0 = time.monotonic()
                     try:
-                        if gemma is None:
+                        if vlm is None:
                             msg = 'visibility stage fed without a VLM'
                             raise RuntimeError(msg)
-                        verdicts = await gemma.region_visible_batch(plate_crops)
+                        verdicts = await vlm.region_visible_batch(region_crops)
                         OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS.labels(outcome='ok').observe(
                             time.monotonic() - _vis_t0
                         )
@@ -771,13 +769,13 @@ async def run(args: argparse.Namespace) -> int:
                         logger.warning(
                             'stage_a_vlm_visible_failed',
                             consumer_id=consumer_id,
-                            chunk_size=len(plate_crops),
+                            chunk_size=len(region_crops),
                             request_ids=batch_request_ids,
                             error=str(exc),
                         )
                         # Fail-OPEN: pretend everyone is visible so the
                         # secondary segmenter still gets a crack at them.
-                        verdicts = {c.crop_id: True for c in plate_crops}
+                        verdicts = {c.crop_id: True for c in region_crops}
 
                 F = get_region_fields()
                 for i, t in enumerate(chunk):
@@ -833,7 +831,7 @@ async def run(args: argparse.Namespace) -> int:
 
         Runs on every crop the visibility filter said could contain a
         region of interest (primary-miss / secondary-shape crops that
-        came through ``stage_a_gemma_visible``). High-confidence
+        came through ``stage_a_vlm_visible``). High-confidence
         segmenter hits with a region-shaped bbox short-circuit the VLM
         entirely (zero combined calls — same policy as the pre-collapse
         pipeline; see ``_SKIP_VLM_VERIFY_SECONDARY_SCORE``). Everything
@@ -856,11 +854,11 @@ async def run(args: argparse.Namespace) -> int:
 
                 _sam_t0 = time.monotonic()
                 try:
-                    sam_candidate = await sam3.segment_plate(t.crop_jpeg)
-                except Sam3AllHostsDown as exc:
+                    sam_candidate = await sam3.segment(t.crop_jpeg)
+                except SegmenterAllHostsDown as exc:
                     # Infrastructure failure (every secondary-segmenter
                     # host UNHEALTHY). Do NOT mark the crop terminal —
-                    # leave plate_status unchanged so it stays in
+                    # leave region_status unchanged so it stays in
                     # pending_detection for the next cascade pass once
                     # a host recovers. Drop from in_flight + sleep so
                     # the producer can re-fetch and we don't spin a hot
@@ -909,12 +907,12 @@ async def run(args: argparse.Namespace) -> int:
                             f'{region_profile().segmenter_name}:skip_vlm_verify'
                         )
                         t.update_doc = _region_write_doc(
-                            plate_in_source=projected,
+                            region_in_source=projected,
                             score=sam_candidate.score,
                             detector=region_profile().segmenter_name,
                             detector_version=region_profile().segmenter_version,
                             chain=t.detection_trace,
-                            plate_verified=False,
+                            region_verified=False,
                             verifier=None,
                             verifier_version=None,
                             extra={F.skip_verify: True},
@@ -967,7 +965,7 @@ async def run(args: argparse.Namespace) -> int:
                         logger.warning('text_hint_ocr_failed', crop_id=t.crop_id, error=str(exc))
                         ocr_regions = []
                 ocr_pick = (
-                    ocr_recognizer.pick_best_plate_region(ocr_regions) if ocr_regions else None
+                    ocr_recognizer.pick_best_text_region(ocr_regions) if ocr_regions else None
                 )
                 if ocr_pick is not None:
                     t.detection_trace.append(f'{region_profile().ocr_rec_model}:text_hint:hit')
@@ -1023,7 +1021,7 @@ async def run(args: argparse.Namespace) -> int:
     async def stage_b_combined(consumer_id: int) -> None:
         """Stage B: batched combined VLM call (class + region-verify + OCR).
 
-        Replaces the legacy gemma_visible + gemma_verify two-call
+        Replaces the legacy vlm_visible + vlm_verify two-call
         cascade with ONE VLM round-trip per crop. Each crop's candidate
         bbox (primary or secondary) is drawn as a colored overlay on
         the parent item JPEG before sending so the VLM confirms the
@@ -1045,7 +1043,7 @@ async def run(args: argparse.Namespace) -> int:
             cohort.
           - region_visible=False -> write 'no_region_visible' + class fields.
           - reply missing / parse failure -> drop from in_flight, leave
-            plate_status unchanged so the next producer poll re-fetches;
+            region_status unchanged so the next producer poll re-fetches;
             counts toward the same no-verdict cap.
           - the call itself failed (transport) -> every crop in the chunk
             is retried, never counted toward the cap.
@@ -1056,11 +1054,11 @@ async def run(args: argparse.Namespace) -> int:
             chunk, poisoned = await _drain_chunk(
                 combined_q,
                 chunk_size=COMBINED_CHUNK,
-                drain_timeout=GEMMA_CHUNK_DRAIN_TIMEOUT,
+                drain_timeout=VLM_CHUNK_DRAIN_TIMEOUT,
             )
             if chunk:
                 batch_request_ids = [t.request_id for t in chunk]
-                class_names = list(getattr(gemma, 'class_names', None) or [])
+                class_names = list(getattr(vlm, 'class_names', None) or [])
                 registry_loaded = bool(class_names)
 
                 # Build CombinedCrop payloads (parent item JPEG +
@@ -1086,31 +1084,31 @@ async def run(args: argparse.Namespace) -> int:
 
                 replies_by_id: dict[str, Any] = {}
                 if combined_crops:
-                    _gemma_t0 = time.monotonic()
+                    _vlm_t0 = time.monotonic()
                     try:
-                        if gemma is None:
+                        if vlm is None:
                             msg = 'combined stage fed without a VLM'
                             raise RuntimeError(msg)
-                        replies_by_id = await gemma.label_combined_batch(
+                        replies_by_id = await vlm.label_combined_batch(
                             combined_crops,
                             class_names=class_names or None,
                         )
-                        _gemma_elapsed = time.monotonic() - _gemma_t0
+                        _vlm_elapsed = time.monotonic() - _vlm_t0
                         OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS.labels(outcome='ok').observe(
-                            _gemma_elapsed
+                            _vlm_elapsed
                         )
-                        _gemma_ms = round(_gemma_elapsed * 1000.0, 2)
+                        _vlm_ms = round(_vlm_elapsed * 1000.0, 2)
                         logger.info(
                             'stage_b_combined_took_ms',
                             consumer_id=consumer_id,
                             chunk_size=len(combined_crops),
                             request_ids=batch_request_ids,
-                            ms=_gemma_ms,
-                            per_crop_ms=round(_gemma_ms / max(1, len(combined_crops)), 2),
+                            ms=_vlm_ms,
+                            per_crop_ms=round(_vlm_ms / max(1, len(combined_crops)), 2),
                         )
                     except Exception as exc:
                         OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS.labels(outcome='error').observe(
-                            time.monotonic() - _gemma_t0
+                            time.monotonic() - _vlm_t0
                         )
                         logger.warning(
                             'stage_b_combined_failed',
@@ -1440,8 +1438,8 @@ async def run(args: argparse.Namespace) -> int:
                 'region_worker_metrics',
                 in_q_depth=in_q.qsize(),
                 in_q_max=in_q.maxsize,
-                vlm_visible_q_depth=gemma_visible_q.qsize(),
-                vlm_visible_q_max=gemma_visible_q.maxsize,
+                vlm_visible_q_depth=vlm_visible_q.qsize(),
+                vlm_visible_q_max=vlm_visible_q.maxsize,
                 sam_q_depth=sam_q.qsize(),
                 sam_q_max=sam_q.maxsize,
                 combined_q_depth=combined_q.qsize(),
@@ -1476,12 +1474,12 @@ async def run(args: argparse.Namespace) -> int:
         # instances saturated; secondary-segmenter work has moved to
         # its own pool below.
         stage_a_tasks = [asyncio.create_task(stage_a_consumer(i)) for i in range(args.concurrency)]
-        # Stage A.gemma_visible pool: batched yes/no region-visibility
+        # Stage A.vlm_visible pool: batched yes/no region-visibility
         # filter for primary-miss / secondary-shape crops. Sized
         # smaller than the combined pool because the visibility prompt
         # is cheap.
         stage_a_visible_tasks = [
-            asyncio.create_task(stage_a_gemma_visible(i)) for i in range(gemma_visible_concurrency)
+            asyncio.create_task(stage_a_vlm_visible(i)) for i in range(vlm_visible_concurrency)
         ]
         # Stage A.secondary pool: secondary-segmenter run on every crop
         # the visibility filter said could contain a region. Sized to
@@ -1507,14 +1505,14 @@ async def run(args: argparse.Namespace) -> int:
         )
         logger.info(
             'region_worker_pipeline_ready',
-            stage_a_lpr_consumers=args.concurrency,
-            stage_a_visible_consumers=gemma_visible_concurrency,
+            stage_a_detector_consumers=args.concurrency,
+            stage_a_visible_consumers=vlm_visible_concurrency,
             stage_a_sam_consumers=args.concurrency,
             stage_b_consumers=vlm_concurrency,
             visible_chunk=VISIBLE_CHUNK,
             combined_chunk=COMBINED_CHUNK,
             in_q_max=in_q.maxsize,
-            vlm_visible_q_max=gemma_visible_q.maxsize,
+            vlm_visible_q_max=vlm_visible_q.maxsize,
             sam_q_max=sam_q.maxsize,
             combined_q_max=combined_q.maxsize,
             out_q_max=out_q.maxsize,
@@ -1525,13 +1523,13 @@ async def run(args: argparse.Namespace) -> int:
         # Wait for producer to finish its current iteration.
         await prod_task
         # Drain Stage A.primary first: consumers push to either
-        # combined_q or gemma_visible_q before exiting.
+        # combined_q or vlm_visible_q before exiting.
         for _ in range(args.concurrency):
             await in_q.put(None)
         await asyncio.gather(*stage_a_tasks, return_exceptions=True)
-        # Drain Stage A.gemma_visible: pushes to sam_q or out_q.
-        for _ in range(gemma_visible_concurrency):
-            await gemma_visible_q.put(None)
+        # Drain Stage A.vlm_visible: pushes to sam_q or out_q.
+        for _ in range(vlm_visible_concurrency):
+            await vlm_visible_q.put(None)
         await asyncio.gather(*stage_a_visible_tasks, return_exceptions=True)
         # Drain Stage A.secondary: pushes to combined_q or out_q.
         for _ in range(args.concurrency):
@@ -1554,8 +1552,8 @@ async def run(args: argparse.Namespace) -> int:
             await metrics_server_runner.cleanup()
     finally:
         await sam3.aclose()
-        if gemma is not None:
-            await gemma.aclose()
+        if vlm is not None:
+            await vlm.aclose()
         await opensearch.close()
         await pool.close()
 

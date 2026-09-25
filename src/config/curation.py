@@ -2,11 +2,11 @@
 
 Holds index names, filesystem roots and API-surface constants for the
 `curation` namespace (OpenProcessor's generic port of a private
-reference vehicle/license-plate curation stack — see
+reference curation stack — see
 ``docs/design/curation_design_rationale.md`` §2.1).
 
 ``CurationConfig`` replaces the module-level constants and the
-``LegacyIndex`` string enum that the reference implementation hardcoded.
+private string enum that the reference implementation hardcoded.
 Index *values* are deployment data (a given operator's OpenSearch may
 already have data under different index names), so they live on this
 dataclass rather than in code. ``IndexRole`` + ``index_name()`` give a
@@ -51,7 +51,7 @@ PROBE_ENTROPY_REVIEW_MIN = 1.0
 class IndexRole(str, Enum):
     """Logical role of a curation OpenSearch index.
 
-    Unlike the reference ``LegacyIndex(str, Enum)``, member *values* are
+    Unlike the reference private string enum, member *values* are
     stable role identifiers, not deployment-specific index names — the
     actual index name for a role is resolved via :func:`index_name`
     against a :class:`CurationConfig` instance, so it can be
@@ -300,7 +300,7 @@ _INDEX_ROLE_ATTR: dict[IndexRole, str] = {
 def index_name(cfg: CurationConfig, role: IndexRole) -> str:
     """Resolve the configured OpenSearch index name for a logical role.
 
-    Replaces reference call sites of the shape ``LegacyIndex.X.value`` —
+    Replaces reference call sites of the shape ``<PrivateIndexEnum>.X.value`` —
     those hardcoded a *value*; this looks the value up on ``cfg`` so it
     is deployment-overridable.
     """

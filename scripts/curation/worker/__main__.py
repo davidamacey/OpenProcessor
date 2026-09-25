@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Auto-split sub-module of the curation detection worker.
 
-See ``scripts/curation/sam_worker_main.py`` for the entry point and
+See ``scripts/curation/region_worker_main.py`` for the entry point and
 the ``scripts/curation/worker/`` package for the rest of the split.
 """
 

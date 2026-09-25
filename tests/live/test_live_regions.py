@@ -40,7 +40,7 @@ def test_set_region_bbox_writes_human_provenance(
 
     resp = client.put(f'/crops/{crop_id}/region', json={'bbox_norm': bbox, 'label_source': 'human'})
     assert resp.status_code == 200, resp.text
-    assert resp.json()['plate_status'] == 'detected'
+    assert resp.json()['region_status'] == 'detected'
 
     src = _source(opensearch, crop_id)
     assert src['region_bbox_norm'] == pytest.approx(bbox)
@@ -62,7 +62,7 @@ def test_clear_region_bbox_records_a_deliberate_negative(
     crop_id = region_cohort[1]
     resp = client.put(f'/crops/{crop_id}/region', json={'bbox_norm': None})
     assert resp.status_code == 200, resp.text
-    assert resp.json()['plate_status'] == 'no_region_visible'
+    assert resp.json()['region_status'] == 'no_region_visible'
 
     src = _source(opensearch, crop_id)
     assert src['region_bbox_norm'] is None
@@ -117,7 +117,7 @@ def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
     crop_id = region_cohort[4]
     resp = client.patch(
         f'/crops/{crop_id}/region_meta',
-        json={'plate_status': 'false_positive', 'label_source': 'human'},
+        json={'region_status': 'false_positive', 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
 
@@ -130,7 +130,7 @@ def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
     # Un-marking releases it so the next re-cluster re-absorbs it.
     resp = client.patch(
         f'/crops/{crop_id}/region_meta',
-        json={'plate_status': 'detected', 'label_source': 'human'},
+        json={'region_status': 'detected', 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
     src = _source(opensearch, crop_id)
@@ -143,7 +143,7 @@ def test_patch_region_rejects_a_non_human_status_and_an_empty_body(
 ) -> None:
     crop_id = region_cohort[5]
     bad_status = client.patch(
-        f'/crops/{crop_id}/region_meta', json={'plate_status': 'pending_detection'}
+        f'/crops/{crop_id}/region_meta', json={'region_status': 'pending_detection'}
     )
     assert bad_status.status_code == 400, bad_status.text
 
@@ -171,8 +171,8 @@ def test_bulk_region_status_confirms_many_regions_at_once(
         '/regions/batch_status',
         json={
             'crop_ids': batch,
-            'plate_status': 'detected',
-            'plate_verified': True,
+            'region_status': 'detected',
+            'region_verified': True,
             'label_source': 'human',
         },
     )
@@ -192,7 +192,7 @@ def test_bulk_region_status_rejects_a_pipeline_only_status(
 ) -> None:
     resp = client.post(
         '/regions/batch_status',
-        json={'crop_ids': region_cohort[16:17], 'plate_status': 'detection_failed'},
+        json={'crop_ids': region_cohort[16:17], 'region_status': 'detection_failed'},
     )
     assert resp.status_code == 400, resp.text
 

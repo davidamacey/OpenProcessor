@@ -355,7 +355,7 @@ async def _run_curation_worker_case() -> list[dict[str, Any]]:
         crop_id='crop-1',
         image_path='/dev/null/never-read',
         vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
-        plate_status='pending',
+        region_status='pending',
         class_name='audi',
         group='cars',
     )

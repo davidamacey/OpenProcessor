@@ -31,8 +31,8 @@ def _history_entry(**overrides: Any) -> dict[str, Any]:
     base = {
         'class_id': 3,
         'class_name': 'cruiserbike',
-        'class_source': 'v6_model',
-        'label_source': 'v6_model',
+        'class_source': 'classifier_model',
+        'label_source': 'classifier_model',
         'confidence': 0.62,
         'writer': 'auto_promote',
         'at': '2026-09-01T00:00:00+00:00',
@@ -167,5 +167,5 @@ async def test_apply_reverts_only_class_range_promotions(
     assert written['id'] == 'crop-class-range'
     assert written['doc']['class_id'] == 3
     assert written['doc']['class_name'] == 'cruiserbike'
-    assert written['doc']['class_source'] == 'v6_model'
+    assert written['doc']['class_source'] == 'classifier_model'
     assert written['doc']['class_validated'] is False

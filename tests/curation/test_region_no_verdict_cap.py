@@ -270,7 +270,7 @@ class TestVisibilityNoVerdictIsCapped:
         )
         F = get_region_fields()
         assert mocks['vlm'].region_visible_batch.await_count == DEFAULT_MAX_NO_VERDICT_ATTEMPTS
-        mocks['seg'].segment_plate.assert_awaited_once()
+        mocks['seg'].segment.assert_awaited_once()
         doc = fake_os.writes[0][1]
         assert doc[F.status] == 'detected'
         assert 'vlm_visible:no_verdict' in doc[F.detector_chain]
@@ -291,7 +291,7 @@ class TestVisibilityNoVerdictIsCapped:
         mocks = await _run(tmp_path, monkeypatch, fake_os, primary=None, visible=visible)
         F = get_region_fields()
         assert mocks['vlm'].region_visible_batch.await_count == 2
-        mocks['seg'].segment_plate.assert_not_awaited()
+        mocks['seg'].segment.assert_not_awaited()
         assert fake_os.writes[0][1][F.status] == 'no_region_visible'
 
 
@@ -397,7 +397,7 @@ class TestRejectionReasonVocabulary:
             crop_id='c1',
             image_path='',
             vehicle_bbox_norm=(0.1, 0.1, 0.9, 0.9),
-            plate_status='pending_detection',
+            region_status='pending_detection',
             class_name='sedan',
         )
         t.crop_jpeg = b'x'

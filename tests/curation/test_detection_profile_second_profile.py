@@ -141,8 +141,8 @@ def test_ocr_region_shape_checks_use_the_bound_profile() -> None:
         rec_score=0.95,
         profile=BOX_PROFILE,
     )
-    assert not square_region_default.is_plate_shaped
-    assert square_region_box.is_plate_shaped
+    assert not square_region_default.is_region_shaped
+    assert square_region_box.is_region_shaped
 
 
 def test_ocr_region_text_candidate_gate_is_profile_scoped() -> None:
@@ -155,7 +155,7 @@ def test_ocr_region_text_candidate_gate_is_profile_scoped() -> None:
         rec_score=0.95,
         profile=BOX_PROFILE,
     )
-    assert region.is_plate_text_candidate
+    assert region.is_region_text_candidate
 
     # Same bbox + text bound to the LPR default profile fails on both
     # counts: aspect 1.0 is outside the default's 1.5-7.0 band, and
@@ -169,4 +169,4 @@ def test_ocr_region_text_candidate_gate_is_profile_scoped() -> None:
         rec_score=region.rec_score,
         profile=REFERENCE_LICENSE_PLATE_PROFILE,
     )
-    assert not default_equivalent.is_plate_text_candidate
+    assert not default_equivalent.is_region_text_candidate

@@ -1,6 +1,6 @@
 """Region-text OCR reader + item-text reader for the curation detection worker.
 
-See ``scripts/curation/sam_worker_main.py`` for the entry point.
+See ``scripts/curation/region_worker_main.py`` for the entry point.
 
 Two OCR jobs ride on the region cascade:
 
@@ -210,12 +210,12 @@ async def accept_without_vlm(
         return
     t.detection_trace.append(f'{actor}:{ACCEPTED_UNVERIFIED}')
     doc = _region_write_doc(
-        plate_in_source=t.candidate_in_source,
+        region_in_source=t.candidate_in_source,
         score=t.candidate_score,
         detector=actor,
         detector_version=version,
         chain=t.detection_trace,
-        plate_verified=False,
+        region_verified=False,
         verifier=None,
         verifier_version=None,
     )

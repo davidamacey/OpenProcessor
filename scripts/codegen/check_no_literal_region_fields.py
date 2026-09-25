@@ -180,7 +180,7 @@ PORTED_PATHS: tuple[str, ...] = (
     'src/routers/curation/regions_fp.py',
     # Chunk 8 commit (c) — curation detection worker package.
     'scripts/curation/worker/',
-    'scripts/curation/sam_worker_main.py',
+    'scripts/curation/region_worker_main.py',
     'tests/curation/test_sam_worker.py',
     'tests/curation/test_label_combined_wireup.py',
     'tests/curation/test_sam3_telemetry.py',

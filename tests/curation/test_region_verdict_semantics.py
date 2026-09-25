@@ -132,7 +132,7 @@ class TestCascadeCombinedPath:
             crop_id='c1',
             image_path='',
             vehicle_bbox_norm=(0.1, 0.1, 0.9, 0.9),
-            plate_status='pending_detection',
+            region_status='pending_detection',
             class_name='sedan',
         )
         task.crop_jpeg = b'x'
@@ -145,7 +145,7 @@ class TestCascadeCombinedPath:
             detector=det,
             detector_version='1',
             detector_chain_tag=det,
-            gemma=_Vlm(_reply(None)),  # type: ignore[arg-type]
+            vlm=_Vlm(_reply(None)),  # type: ignore[arg-type]
         )
         assert resolved is True
         assert task.update_doc == {}

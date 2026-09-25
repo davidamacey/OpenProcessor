@@ -42,12 +42,12 @@ hidden one.
 
 This module is intentionally importable in tests **without** ultralytics or
 onnxruntime installed — those heavy imports happen inside
-:py:func:`_build_yolo11_predictor` / :py:func:`_build_v6_predictor`, invoked
+:py:func:`_build_yolo11_predictor` / :py:func:`_build_yolov5_objectness_predictor`, invoked
 lazily from :py:func:`run_probe_inference` only when the function is
 actually called. Tests that just want to exercise
 :py:func:`build_uncertainty_queue` do not need either dependency.
 
-**Second architecture family (``architecture='v6'``):** some deployments
+**Second architecture family (``architecture='yolov5_objectness'``):** some deployments
 already have an alternate (non-ultralytics) detector checkpoint deployed
 in production (e.g. a YOLOv5-fork export) and would rather reuse it as the
 probe than train a fresh ultralytics checkpoint. That family's raw export
@@ -191,11 +191,11 @@ def _summarize_prediction_raw(
 # =============================================================================
 
 
-V6_INPUT_SIZE = 1280
-V6_LETTERBOX_PAD_VALUE = 114
+YOLOV5_OBJ_INPUT_SIZE = 1280
+YOLOV5_OBJ_LETTERBOX_PAD_VALUE = 114
 
 
-def _letterbox_v6(img: Any, target: int = V6_INPUT_SIZE) -> Any:
+def _letterbox_yolov5_objectness(img: Any, target: int = YOLOV5_OBJ_INPUT_SIZE) -> Any:
     """Letterbox (gray-pad) a PIL image to ``target x target`` -> NCHW
     float32 ``[0, 1]``.
 
@@ -215,7 +215,11 @@ def _letterbox_v6(img: Any, target: int = V6_INPUT_SIZE) -> Any:
     canvas = Image.new(
         'RGB',
         (target, target),
-        (V6_LETTERBOX_PAD_VALUE, V6_LETTERBOX_PAD_VALUE, V6_LETTERBOX_PAD_VALUE),
+        (
+            YOLOV5_OBJ_LETTERBOX_PAD_VALUE,
+            YOLOV5_OBJ_LETTERBOX_PAD_VALUE,
+            YOLOV5_OBJ_LETTERBOX_PAD_VALUE,
+        ),
     )
     pad_w = (target - new_w) / 2.0
     pad_h = (target - new_h) / 2.0
@@ -226,7 +230,7 @@ def _letterbox_v6(img: Any, target: int = V6_INPUT_SIZE) -> Any:
     return chw.astype(np.float32, copy=False)
 
 
-def _summarize_prediction_v6_raw(
+def _summarize_prediction_yolov5_objectness_raw(
     raw_output: Any, class_names: dict[int, str]
 ) -> tuple[str | None, float, float, float]:
     """Pull top-1 class, confidence, entropy, and margin from the
@@ -292,7 +296,7 @@ def _build_yolo11_predictor(model_path: Path) -> tuple[_PredictFn, str]:
     return predict, model_path.name
 
 
-def _build_v6_predictor(model_path: Path) -> tuple[_PredictFn, str]:
+def _build_yolov5_objectness_predictor(model_path: Path) -> tuple[_PredictFn, str]:
     """``(predict_fn, default_version_tag)`` for the second (non-ultralytics)
     architecture family."""
     import onnxruntime as ort
@@ -307,15 +311,15 @@ def _build_v6_predictor(model_path: Path) -> tuple[_PredictFn, str]:
     class_names = {c.class_id: c.class_name for c in registry.load().classes}
 
     def predict(crop: Any) -> tuple[str | None, float, float, float]:
-        chw = _letterbox_v6(crop, V6_INPUT_SIZE)
+        chw = _letterbox_yolov5_objectness(crop, YOLOV5_OBJ_INPUT_SIZE)
         raw = session.run([output_name], {input_name: chw})[0]
         raw = raw[0] if raw.ndim == 3 else raw  # strip batch dim -> (num_anchors, 85)
-        return _summarize_prediction_v6_raw(raw, class_names)
+        return _summarize_prediction_yolov5_objectness_raw(raw, class_names)
 
     return predict, model_path.name
 
 
-_PROBE_ARCHITECTURES = ('yolo11', 'v6')
+_PROBE_ARCHITECTURES = ('yolo11', 'yolov5_objectness')
 
 
 def _build_predictor(model_path: Path, architecture: str) -> tuple[_PredictFn, str]:
@@ -326,8 +330,8 @@ def _build_predictor(model_path: Path, architecture: str) -> tuple[_PredictFn, s
     """
     if architecture == 'yolo11':
         return _build_yolo11_predictor(model_path)
-    if architecture == 'v6':
-        return _build_v6_predictor(model_path)
+    if architecture == 'yolov5_objectness':
+        return _build_yolov5_objectness_predictor(model_path)
     raise ValueError(
         f'unknown probe architecture {architecture!r} (expected one of {_PROBE_ARCHITECTURES})'
     )
@@ -368,7 +372,7 @@ async def run_probe_inference(
 
     Args:
         model_path: Path to the probe checkpoint. For ``architecture='yolo11'``
-            an ultralytics-loadable ONNX. For ``architecture='v6'`` an
+            an ultralytics-loadable ONNX. For ``architecture='yolov5_objectness'`` an
             already-deployed second-family ONNX (reused rather than
             training a fresh probe).
         opensearch: AsyncOpenSearch client.
@@ -381,7 +385,7 @@ async def run_probe_inference(
         max_crops: Optional cap (useful in tests + smoke runs).
         model_version: Provenance tag stamped onto ``probe_model_version``.
             Defaults to ``model_path.name``.
-        architecture: ``'yolo11'`` (default) or ``'v6'``.
+        architecture: ``'yolo11'`` (default) or ``'yolov5_objectness'``.
         page_size: Items per scroll page. Every page is fully inferred
             before the next scroll call, so a slow (CPU) probe needs a
             page small enough to finish inside the scroll keep-alive.

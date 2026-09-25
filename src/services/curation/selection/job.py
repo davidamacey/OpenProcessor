@@ -4,7 +4,7 @@
 Mirrors :mod:`src.services.curation.item_scores.job`'s state.json / heartbeat
 / cancel.flag file-backed conventions (itself mirroring
 ``auto_label_job.py``), simplified for a single selection run instead of a
-list of scorers. See ``legacy_select.py``'s module docstring for *when* this
+list of scorers. See the reference select router's module docstring for *when* this
 job path is used instead of answering inline — short version: the plan's
 own compute budget says k-center-greedy at pool scale (n≈128k, k≈1000) is
 ~1-2 min CPU, too slow to block an HTTP request, so anything above a

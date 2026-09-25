@@ -42,7 +42,7 @@ INDEX = get_curation_config().items_index
 class TestWorkerWrites:
     def test_auto_confirm_is_recorded_apart_from_validation(self) -> None:
         doc = _region_write_doc(
-            plate_in_source=(0.1, 0.1, 0.2, 0.2),
+            region_in_source=(0.1, 0.1, 0.2, 0.2),
             score=0.9,
             detector='det_model',
             detector_version='1',

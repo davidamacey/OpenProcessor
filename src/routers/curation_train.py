@@ -142,7 +142,7 @@ async def _count_validated_and_test_per_class(
     two sibling ``filter`` aggs, each with its own ``by_class`` terms
     sub-agg, since both share the same base document set.
 
-    The ``legacy_vehicle_crops`` schema uses a boolean ``label_validated``
+    The reference deployment's items-index schema uses a boolean ``label_validated``
     field (set true by both human-confirmation and auto-promotion). The
     design doc's earlier reference to ``label_state == 'confirmed'``
     predated the schema settling on the boolean -- we keep the boolean
@@ -991,7 +991,7 @@ async def start_train(
             status_code=422,
             detail={'message': 'preflight blocked', 'preflight': report.model_dump()},
         )
-    # GPU arbiter — pause Gemma worker (single-GPU) or stop the container
+    # GPU arbiter — pause the VLM worker (single-GPU) or stop the container
     # (dual-GPU) BEFORE the trainer picks the job up, and BEFORE job.json
     # is written. S-5: fails closed -- claim_gpus_for_training raises
     # GpuArbiterStopFailedError when a claim needs to stop a configured

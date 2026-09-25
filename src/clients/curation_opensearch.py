@@ -314,9 +314,9 @@ def _items_body() -> dict[str, Any]:
                 # applies to a vehicle make/model).
                 'vlm_item_make': {'type': 'keyword'},
                 'vlm_item_model': {'type': 'keyword'},
-                # Region-visibility hint (CFG-8): this WAS a domain-named,
-                # vendor-named field ('gemma_plate_visible') baked into the
-                # otherwise-generic index mapping, unlike its siblings above
+                # Region-visibility hint (CFG-8): this WAS a vendor- and
+                # domain-named field baked into the otherwise-generic
+                # index mapping, unlike its siblings above
                 # it IS a region-of-interest concept and RegionFields
                 # already has an indirection for it -- see
                 # RegionFields.visible (default 'region_visible').

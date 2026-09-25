@@ -22,7 +22,7 @@ def _task() -> _ItemTask:
         crop_id='c1',
         image_path='/missing/frame.jpg',
         vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
-        plate_status='pending_detection',
+        region_status='pending_detection',
         class_name='car',
         request_id='r1',
     )

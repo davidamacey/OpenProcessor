@@ -2,8 +2,8 @@
 Generic vision-language-model (VLM) labeler service.
 
 Talks to any OpenAI-compatible vision ``/chat/completions`` endpoint
-(the reference deployment is ``vllm-gemma4-e4b`` behind OpenWebUI, but
-nothing here names that model) to:
+(the reference deployment runs behind OpenWebUI, but nothing here names
+that model) to:
 
 - batch-classify item crops into one of a caller-supplied set of class
   names (closed- or open-vocabulary)
@@ -11,7 +11,7 @@ nothing here names that model) to:
   on a product photo; a license plate on a vehicle crop) is real, and
   read any text on it
 
-Split out of the reference ``gemma_labeler.py`` (a 3-way split: this
+Split out of the reference VLM labeler (a 3-way split: this
 module is the orchestration half — transport lives in
 ``vlm_client.py``, prompt/vocabulary data lives in ``vlm_prompts.py``).
 This module lands over the 700-LOC pre-commit ratchet cap on arrival;
@@ -296,9 +296,8 @@ def format_class_catalog(classes: list[dict[str, Any]], pack: PromptPack) -> str
 
     Output looks like::
 
-        cruisers: cruiserbike (low-slung Harley...), vintagebike (pre-1980...)
-        sportbikes: sportbike (aggressive forward...)
-        cars: acura, buick, ...
+        tools: hammer (claw head), wrench (open end)
+        containers: bottle, jar, ...
 
     Tokens roughly 2x the flat CSV but the structure plus descriptions sharply
     improves the VLM's ability to pick the right slug for ambiguous/oblique shots.
@@ -1231,7 +1230,7 @@ class VlmLabeler:
             response = await self._post_chat(payload)
         except Exception as exc:
             logger.error(
-                'vlm_labeler.verify_plate_failed',
+                'vlm_labeler.verify_region_failed',
                 crop_id=crop.crop_id,
                 error=str(exc),
                 error_type=type(exc).__name__,
@@ -1340,7 +1339,7 @@ class VlmLabeler:
             response = await self._post_chat(payload)
         except Exception as exc:
             logger.error(
-                'vlm_labeler.verify_plate_chunk_failed',
+                'vlm_labeler.verify_region_chunk_failed',
                 chunk_size=len(chunk),
                 error=str(exc),
                 error_type=type(exc).__name__,
@@ -1360,7 +1359,7 @@ class VlmLabeler:
         from_reasoning = self._parse_region_batch_response(reasoning, chunk, log_failures=False)
         if from_reasoning:
             logger.info(
-                'vlm_labeler.plate_batch_reply_from_reasoning',
+                'vlm_labeler.region_batch_reply_from_reasoning',
                 chunk_size=len(chunk),
                 content_preview=content[:80],
             )
@@ -1789,7 +1788,7 @@ class VlmLabeler:
 
         if not raw:
             if log_failures:
-                logger.warning('vlm_labeler.plate_batch_parse_empty', chunk_size=len(chunk))
+                logger.warning('vlm_labeler.region_batch_parse_empty', chunk_size=len(chunk))
             return []
 
         # Try the bare reply first; fall back to scanning for the first
@@ -1826,7 +1825,7 @@ class VlmLabeler:
         if not isinstance(parsed, list):
             if log_failures:
                 logger.warning(
-                    'vlm_labeler.plate_batch_parse_failed',
+                    'vlm_labeler.region_batch_parse_failed',
                     chunk_size=len(chunk),
                     raw_preview=raw[:200],
                 )
@@ -1952,7 +1951,7 @@ class VlmLabeler:
             response = await self._post_chat(payload)
         except Exception as exc:
             logger.error(
-                'vlm_labeler.plate_visible_chunk_failed',
+                'vlm_labeler.region_visible_chunk_failed',
                 chunk_size=len(chunk),
                 error=str(exc),
                 error_type=type(exc).__name__,
@@ -2031,7 +2030,7 @@ class VlmLabeler:
 
         if not isinstance(parsed, list):
             logger.warning(
-                'vlm_labeler.plate_visible_parse_failed',
+                'vlm_labeler.region_visible_parse_failed',
                 chunk_size=len(chunk),
                 raw_preview=raw[:200],
             )
@@ -2082,7 +2081,7 @@ class VlmLabeler:
         """
 
         if not raw:
-            logger.warning('vlm_labeler.plate_parse_empty', crop_id=crop.crop_id)
+            logger.warning('vlm_labeler.region_parse_empty', crop_id=crop.crop_id)
             return None
         candidates: list[str] = [_strip_markdown_fences(raw)]
         # Scan for the first balanced JSON object in the raw text. A
@@ -2112,7 +2111,7 @@ class VlmLabeler:
             parsed = None
         if parsed is None:
             logger.warning(
-                'vlm_labeler.plate_parse_failed',
+                'vlm_labeler.region_parse_failed',
                 crop_id=crop.crop_id,
                 raw_preview=raw[:200],
             )

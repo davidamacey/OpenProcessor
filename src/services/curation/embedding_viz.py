@@ -377,7 +377,7 @@ async def _fetch_pool(
 
 
 def _build_reducer() -> Any:
-    """Lazy ``import umap`` -- mirrors ``legacy_embedding_reduce._build_cpu_reducer``
+    """Lazy ``import umap`` -- mirrors ``clustering.embedding_reduce._build_cpu_reducer``
     so importing this module (or running its non-fit tests) never requires
     ``umap-learn`` to be installed. CPU-only (no cuML branch): the plan's
     compute budget already treats 2-d UMAP as job-only/background
@@ -423,10 +423,10 @@ async def _save_run_metadata(
     n_points: int,
     fitted_at: str,
 ) -> None:
-    """Own metadata slot (``legacy_umap_viz_state``, state_id='current') --
-    distinct from the retired clustering reducer's ``legacy_umap_state`` index.
+    """Own metadata slot (a dedicated viz-state index, state_id='current') --
+    distinct from the retired clustering reducer's own umap-state index.
     Metadata only (no pickled reducer blob) so this never risks the 100 MB
-    OpenSearch request-body ceiling ``legacy_embedding_reduce.py`` had to work
+    OpenSearch request-body ceiling the reference embedding_reduce module had to work
     around for the (much larger, per-crop) clustering reducer blob."""
     body = {
         'state_id': 'current',
@@ -492,7 +492,7 @@ async def fit_projection(embeddings: np.ndarray) -> tuple[np.ndarray, str]:
     despite the module writing coordinates elsewhere, this function does
     not itself touch OpenSearch; :func:`_bulk_write_coordinates` does that
     separately). Only ever called from :func:`run_projection_job` (module
-    docstring point 2) -- never from ``legacy_viz.py``'s GET handler."""
+    docstring point 2) -- never from the reference embedding-viz router's GET handler."""
     from datetime import UTC, datetime
 
     reducer = _build_reducer()
@@ -602,7 +602,7 @@ async def get_cached_projection(
     """Serve **cached coordinates only** — imports nothing UMAP-related,
     calls no fit function, does one plain ``search`` over already-written
     ``viz_x``/``viz_y`` fields. This is the entire GET
-    ``/legacy/viz/projection`` contract (module docstring point 2).
+    ``/curation/viz/projection`` contract (module docstring point 2).
 
     Returns ``{'status': 'not_built'}`` when no projection has ever been
     fit. Otherwise ``{points, projection_version, fitted_at, stale}`` where
@@ -610,7 +610,7 @@ async def get_cached_projection(
     (embedding present, not test_holdout) whose cached
     ``viz_projection_version`` doesn't match the latest fit's version --
     i.e. some in-scope crops are missing/outdated coordinates, the same
-    "partial coverage is visible" philosophy ``/legacy/scores/coverage`` uses.
+    "partial coverage is visible" philosophy ``/curation/scores/coverage`` uses.
     """
     meta = await _load_run_metadata(opensearch)
     if meta is None:

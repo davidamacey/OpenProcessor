@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""Async Gemma labeling worker — overlaps Gemma (GPU 2) with ingest (GPU 0).
+"""Async VLM labeling worker — overlaps the VLM (GPU 2) with ingest (GPU 0).
 
-Background loop that polls OpenSearch for crops that need Gemma's vision
+Background loop that polls OpenSearch for crops that need the VLM's vision
 verdict and dispatches them to /curation/vlm/label_batch in parallel with
 ongoing image ingestion. This unsticks the pipeline at HDD scale where
-the previous "ingest everything → then Gemma" sequence wasted 50%+ of
+the previous "ingest everything → then VLM" sequence wasted 50%+ of
 elapsed time waiting for one GPU while the other was idle.
 
 Selection criteria match ``pipeline_auto_label``'s skip logic exactly so
-behavior is consistent: process crops where v6 was uncertain, prototype
-assignment was borderline, YOLO11 found a vehicle v6 didn't recognize,
-or HDBSCAN clustered the crop as residual. Skip crops where v6 was
-confident (Gemma adds no signal there) and crops Gemma has already
+behavior is consistent: process crops where the classifier was uncertain, prototype
+assignment was borderline, YOLO11 found an item the classifier didn't recognize,
+or HDBSCAN clustered the crop as residual. Skip crops where the classifier was
+confident (the VLM adds no signal there) and crops the VLM has already
 processed (asking again won't help).
 
 Operations
 ----------
-- Idempotent: every successful Gemma response writes one of the class_source
-  values that the worker's must_not query excludes (``gemma``,
+- Idempotent: every successful VLM response writes one of the class_source
+  values that the worker's must_not query excludes (``vlm``,
   ``classifier_vlm_agreement``, ``vlm_unmatched``, ``vlm_new_class_pending``),
   so the crop drops out of the next poll's query.
 - Auto-exits when ``--idle-stop-after`` consecutive empty polls happen,
@@ -71,14 +71,14 @@ _RELEASED_AT_TTL_S = 300.0
 
 # Default thresholds match ``pipeline_auto_label``'s skip logic so the
 # worker and the on-demand pipeline make the same decisions.
-# Skip Gemma classify when v6 model already labeled the crop with at
+# Skip VLM classify when the classifier already labeled the crop with at
 # least this confidence. Raised 0.70 -> 0.80 to align with
 # pipeline.classifier_confidence_skip_vlm and the detection worker's combined
-# path's own low-confidence threshold. The 0.70-0.80 band was sending high-v6 crops
-# to Gemma and surfacing them in the vlm_low_conf review tab as
-# "v6 95.9 %, gemma medium" — noise the human review queue doesn't need.
+# path's own low-confidence threshold. The 0.70-0.80 band was sending high-confidence classifier crops
+# to the VLM and surfacing them in the vlm_low_conf review tab as
+# "classifier 95.9 %, VLM medium" — noise the human review queue doesn't need.
 # See docs/design/plate_detection_strategy.md Wave 1 chained tuning.
-DEFAULT_V6_CONF_SKIP = 0.80
+DEFAULT_CLASSIFIER_CONF_SKIP = 0.80
 
 
 _classifier_sources_empty_warned = False
@@ -98,7 +98,7 @@ def _warn_classifier_sources_empty_once() -> None:
         )
 
 
-def _build_pending_query(v6_skip_conf: float, exclude_ids: list[str] | None = None) -> dict:
+def _build_pending_query(classifier_skip_conf: float, exclude_ids: list[str] | None = None) -> dict:
     """Crops that need the VLM right now.
 
     Mirrors the ``must_not`` clauses in pipeline_auto_label so the same
@@ -128,7 +128,7 @@ def _build_pending_query(v6_skip_conf: float, exclude_ids: list[str] | None = No
                 'bool': {
                     'filter': [
                         {'terms': {'class_source': classifier_sources}},
-                        {'range': {'confidence': {'gte': v6_skip_conf}}},
+                        {'range': {'confidence': {'gte': classifier_skip_conf}}},
                     ],
                 },
             },
@@ -150,11 +150,11 @@ def _build_pending_query(v6_skip_conf: float, exclude_ids: list[str] | None = No
                     # Surviving auto-validation path is
                     # 'classifier_vlm_agreement' (A-PR2 ensemble writer;
                     # this query excludes already-labeled rows).
-                    # Gemma already labeled successfully:
+                    # VLM already labeled successfully:
                     'vlm',
                     'classifier_vlm_agreement',
                     'cluster_majority_agreement',
-                    # Gemma already failed once — won't help to retry:
+                    # VLM already failed once — won't help to retry:
                     'vlm_unmatched',
                     'vlm_new_class_pending',
                 ],
@@ -196,10 +196,10 @@ async def fetch_pending_ids(
     *,
     opensearch_url: str,
     batch_size: int,
-    v6_skip_conf: float,
+    classifier_skip_conf: float,
     exclude_ids: list[str] | None = None,
 ) -> list[str]:
-    """Pull up to ``batch_size`` crop IDs that need Gemma.
+    """Pull up to ``batch_size`` crop IDs that need the VLM.
 
     ``_source: False`` returns ids only. (Not ``stored_fields: '_none_'``:
     OpenSearch drops the ``_id`` metadata field with it too.)
@@ -212,7 +212,7 @@ async def fetch_pending_ids(
         'size': batch_size,
         '_source': False,
         'track_total_hits': False,
-        'query': _build_pending_query(v6_skip_conf, exclude_ids=exclude_ids),
+        'query': _build_pending_query(classifier_skip_conf, exclude_ids=exclude_ids),
         # Oldest pending first — fairness across crops added across the
         # run; also avoids head-of-line starvation when new crops keep
         # arriving from ingest. crop_id tiebreaker keeps paging stable
@@ -342,7 +342,7 @@ async def run(args: argparse.Namespace) -> int:
                     client,
                     opensearch_url=args.opensearch,
                     batch_size=fetch_n,
-                    v6_skip_conf=args.v6_conf_skip,
+                    classifier_skip_conf=args.classifier_conf_skip,
                     exclude_ids=exclude_ids,
                 )
             except httpx.HTTPError as exc:
@@ -500,7 +500,7 @@ async def run(args: argparse.Namespace) -> int:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description='Async polling worker that drains uncertain crops to Gemma.',
+        description='Async polling worker that drains uncertain crops to the VLM.',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument('--api', default=DEFAULT_API, help='triton-api base URL')
@@ -522,7 +522,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=32,
         help=(
-            'Crops per /curation/vlm/label_batch call. 32 = 8 upstream Gemma calls '
+            'Crops per /curation/vlm/label_batch call. 32 = 8 upstream VLM calls '
             'per HTTP roundtrip; balances per-call overhead against head-of-line '
             'blocking on slow chunks.'
         ),
@@ -536,7 +536,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             'vlm-batch-size=32 + concurrency=8 we keep ~256 crop slots in '
             'flight, which after 4-img chunking lands around 64 in-flight '
             "upstream — close to vLLM's ~42 cps peak (max-num-seqs=64 + "
-            '--enable-prefix-caching). See test_results/gemma_bench/.'
+            '--enable-prefix-caching).'
         ),
     )
     p.add_argument(
@@ -570,16 +570,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument(
         '--classifier-conf-skip',
-        '--v6-conf-skip',
-        dest='v6_conf_skip',
+        '--classifier-conf-skip',
+        dest='classifier_conf_skip',
         type=float,
-        default=DEFAULT_V6_CONF_SKIP,
+        default=DEFAULT_CLASSIFIER_CONF_SKIP,
         help='Skip the VLM for classifier-labeled crops at or above this confidence.',
     )
     # GPU arbiter sentinel — design §14.5. The trainer touches this file
     # before a single-GPU run starts; the worker pauses while it exists
     # so we don't fight the trainer for CPU/RAM. (For dual-GPU runs the
-    # arbiter stops the whole gemma container instead, so this path
+    # arbiter stops the whole VLM container instead, so this path
     # never runs.) See src/services/training/gpu_arbiter.py.
     #
     # S-4: this literal 'vlm_worker/pause.sentinel' path must stay in

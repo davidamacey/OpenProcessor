@@ -53,7 +53,7 @@ from src.services.labeling.vlm_labeler import CombinedParseFailure
 
 
 if TYPE_CHECKING:
-    from scripts.curation.worker.cascade import Sam3Client
+    from scripts.curation.worker.cascade import SegmenterClient
     from src.services.labeling.vlm_labeler import VlmLabeler
 
 
@@ -109,7 +109,7 @@ async def _try_combined_class_region(
     detector: str,
     detector_version: str,
     detector_chain_tag: str,
-    gemma: VlmLabeler,
+    vlm: VlmLabeler,
     candidate_source: str = CANDIDATE_DETECTOR,
 ) -> bool:
     """Run the primary-detector-missed combined VLM call. Returns True on success.
@@ -122,10 +122,10 @@ async def _try_combined_class_region(
     ``update_doc``: nothing is written and the item stays pending -- until
     the no-verdict cap, when the candidate is parked for review instead.
     """
-    class_names = getattr(gemma, 'class_names', None) or []
-    name_to_id = getattr(gemma, 'name_to_id', None) or {}
+    class_names = getattr(vlm, 'class_names', None) or []
+    name_to_id = getattr(vlm, 'name_to_id', None) or {}
     try:
-        reply = await gemma.label_combined(
+        reply = await vlm.label_combined(
             img_id=task.crop_id,
             jpeg_bytes=task.crop_jpeg or b'',
             class_names=list(class_names),
@@ -191,8 +191,8 @@ async def _try_combined_class_region(
 async def _try_combined_on_sam3(
     task: _ItemTask,
     *,
-    sam3: Sam3Client,
-    gemma: VlmLabeler,
+    sam3: SegmenterClient,
+    vlm: VlmLabeler,
 ) -> bool:
     """Run the secondary segmenter on the crop, then a combined VLM call.
 
@@ -200,7 +200,7 @@ async def _try_combined_on_sam3(
     combined call or the terminal no_region_box helper); False means the
     caller should keep going through legacy paths.
     """
-    cand = await sam3.segment_plate(task.crop_jpeg or b'')
+    cand = await sam3.segment(task.crop_jpeg or b'')
     if cand is None:
         task.detection_trace.append(f'{region_profile().segmenter_name}:miss')
         _finalize_no_region(task)
@@ -221,7 +221,7 @@ async def _try_combined_on_sam3(
         detector=region_profile().segmenter_name,
         detector_version=region_profile().segmenter_version,
         detector_chain_tag=region_profile().segmenter_name,
-        gemma=gemma,
+        vlm=vlm,
         candidate_source=CANDIDATE_SEGMENTER,
     )
     if ok:
@@ -233,9 +233,9 @@ async def _try_combined_on_sam3(
 async def _run_combined_cohort_path(
     task: _ItemTask,
     *,
-    lpr: RegionDetector,
-    sam3: Sam3Client,
-    gemma: VlmLabeler,
+    detector: RegionDetector,
+    sam3: SegmenterClient,
+    vlm: VlmLabeler,
 ) -> bool:
     """Route a primary-detector-missed cohort crop through the combined VLM path.
 
@@ -247,27 +247,30 @@ async def _run_combined_cohort_path(
         return False
     is_secondary = _is_secondary_shape(task)
 
-    if task.plate_status in _PENDING_VERIFICATION_ALIASES and task.lpr_plate_in_source is not None:
+    if (
+        task.region_status in _PENDING_VERIFICATION_ALIASES
+        and task.detector_region_in_source is not None
+    ):
         from scripts.curation.worker.cascade import _source_to_crop  # avoid import cycle
 
-        cand_in_crop = _source_to_crop(task.lpr_plate_in_source, task.vehicle_bbox_norm)
+        cand_in_crop = _source_to_crop(task.detector_region_in_source, task.vehicle_bbox_norm)
         # Combined success → True. Bbox-wrong → False so the legacy
         # secondary-segmenter cascade runs and tries to find a
         # different region bbox.
         return await _try_combined_class_region(
             task,
             candidate_in_crop=cand_in_crop,
-            candidate_in_source=task.lpr_plate_in_source,
-            candidate_score=task.lpr_score,
+            candidate_in_source=task.detector_region_in_source,
+            candidate_score=task.detector_score,
             detector=region_profile().detector_model,
             detector_version=region_profile().detector_version,
             detector_chain_tag=region_profile().detector_model,
-            gemma=gemma,
+            vlm=vlm,
             candidate_source=CANDIDATE_DETECTOR_EXISTING,
         )
 
-    if task.plate_status in _PENDING_DETECTION_ALIASES and not is_secondary:
-        return await _run_combined_pending_detection(task, lpr=lpr, sam3=sam3, gemma=gemma)
+    if task.region_status in _PENDING_DETECTION_ALIASES and not is_secondary:
+        return await _run_combined_pending_detection(task, detector=detector, sam3=sam3, vlm=vlm)
 
     return False
 
@@ -275,19 +278,19 @@ async def _run_combined_cohort_path(
 async def _run_combined_pending_detection(
     task: _ItemTask,
     *,
-    lpr: RegionDetector,
-    sam3: Sam3Client,
-    gemma: VlmLabeler,
+    detector: RegionDetector,
+    sam3: SegmenterClient,
+    vlm: VlmLabeler,
 ) -> bool:
     """pending_detection cohort branch — run the primary detector, then
     combined; secondary-segmenter fallback."""
     if task.crop_jpeg is None:
         return False
-    lpr_results = await lpr.detect_batch([task.crop_jpeg])
-    cand = lpr_results[0] if lpr_results else None
+    detector_results = await detector.detect_batch([task.crop_jpeg])
+    cand = detector_results[0] if detector_results else None
     if cand is None:
         task.detection_trace.append(f'{region_profile().detector_model}:miss')
-        return await _try_combined_on_sam3(task, sam3=sam3, gemma=gemma)
+        return await _try_combined_on_sam3(task, sam3=sam3, vlm=vlm)
     gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_norm, task.vehicle_bbox_norm)
     if not gate_ok:
         task.detection_trace.append(f'{region_profile().detector_model}:hit')
@@ -306,10 +309,10 @@ async def _run_combined_pending_detection(
         detector=region_profile().detector_model,
         detector_version=region_profile().detector_version,
         detector_chain_tag=region_profile().detector_model,
-        gemma=gemma,
+        vlm=vlm,
         candidate_source=CANDIDATE_DETECTOR,
     )
     if ok:
         return True
     # Primary-detector bbox combined rejected; try secondary segmenter + combined.
-    return await _try_combined_on_sam3(task, sam3=sam3, gemma=gemma)
+    return await _try_combined_on_sam3(task, sam3=sam3, vlm=vlm)

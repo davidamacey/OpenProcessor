@@ -3,7 +3,7 @@ primitive (curation-strategy plan §2.5).
 
 :func:`src.services.detection.frame_dedup.near_dup_groups` (exact blocked
 cosine + union-find connected components, already validated at threshold
-0.98 for whole-frame ``legacy_images.pe_embedding``) is reused verbatim here,
+0.98 for whole-frame image ``pe_embedding``) is reused verbatim here,
 just applied to crop-level embeddings instead of frame-level ones. No new
 math. New fields only: ``dup_group_id`` / ``dup_group_size`` /
 ``dup_is_representative`` (plan §2.5/§4).

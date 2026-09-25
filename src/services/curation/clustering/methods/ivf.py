@@ -26,7 +26,7 @@ Limitations (documented so we don't re-litigate them later):
   split a tight visual group across two centroids if they happen to
   fall near the boundary.
 * Cluster IDs are not interpretable: bucket #173 is "things near
-  centroid 173", not "sportbikes".
+  centroid 173", not a class name.
 * Retraining changes the centroid positions, so the cluster_id of a
   given crop can shift. We re-run only when the residual pool has
   grown substantially.

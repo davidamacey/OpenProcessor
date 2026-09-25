@@ -119,7 +119,7 @@ async def test_worker_combined_class_write_snapshots_restorable_history() -> Non
         crop_id='crop-1',
         image_path='/dev/null/never-read',
         vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
-        plate_status='pending',
+        region_status='pending',
         class_name='',
         group='',
     )

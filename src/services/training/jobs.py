@@ -1,6 +1,6 @@
 """Training-job control protocol (file-based).
 
-Ported from a private reference vehicle/license-plate curation stack's
+Ported from a reference curation stack's
 training pipeline — see ``docs/design/curation_design_rationale.md``
 for the genericization rationale. This module encapsulates the API <-> trainer protocol:
 

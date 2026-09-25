@@ -3,7 +3,7 @@
 ``docker/segmenter/`` exists to give the detection cascade's segmenter leg
 something to point at. These tests run the real FastAPI app from that
 image in-process (ASGI transport, no container) and drive it with the
-real :class:`Sam3Client` the detection worker uses — so the wire contract
+real :class:`SegmenterClient` the detection worker uses — so the wire contract
 is verified from both ends at once rather than asserted twice.
 
 The only thing faked is SAM 3 itself: a ``_FakeProcessor`` implementing
@@ -33,8 +33,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-import scripts.curation.sam_worker_main as worker
-from scripts.curation.worker.client import Sam3Client
+import scripts.curation.region_worker_main as worker
+from scripts.curation.worker.client import SegmenterClient
 from src.config import get_region_fields
 
 
@@ -170,14 +170,14 @@ def _asgi_client() -> httpx.AsyncClient:
 
 
 class TestClientServerContract:
-    """The worker's ``Sam3Client`` talking to the shipped server."""
+    """The worker's ``SegmenterClient`` talking to the shipped server."""
 
     @pytest.mark.asyncio
     async def test_roundtrip_returns_the_top_candidate(self, served: _FakeProcessor) -> None:
         """The leg is not a no-op: a real client call yields a real candidate."""
         async with _asgi_client() as http:
-            client = Sam3Client(base_url='http://segmenter', client=http, text_prompt=_PROMPT)
-            candidate = await client.segment_plate(_make_jpeg())
+            client = SegmenterClient(base_url='http://segmenter', client=http, text_prompt=_PROMPT)
+            candidate = await client.segment(_make_jpeg())
 
         assert candidate is not None
         assert candidate.source == 'sam3'
@@ -196,8 +196,10 @@ class TestClientServerContract:
         segmenter._pool = sam3_backend.ProcessorPool([empty])
         try:
             async with _asgi_client() as http:
-                client = Sam3Client(base_url='http://segmenter', client=http, text_prompt=_PROMPT)
-                assert await client.segment_plate(_make_jpeg()) is None
+                client = SegmenterClient(
+                    base_url='http://segmenter', client=http, text_prompt=_PROMPT
+                )
+                assert await client.segment(_make_jpeg()) is None
         finally:
             segmenter._pool = previous
 
@@ -218,8 +220,10 @@ class TestClientServerContract:
                 )
                 assert resp.status_code == 503
 
-                client = Sam3Client(base_url='http://segmenter', client=http, text_prompt=_PROMPT)
-                assert await client.segment_plate(_make_jpeg()) is None
+                client = SegmenterClient(
+                    base_url='http://segmenter', client=http, text_prompt=_PROMPT
+                )
+                assert await client.segment(_make_jpeg()) is None
         finally:
             segmenter._pool = previous
 
@@ -231,7 +235,7 @@ class TestWireSurface:
     @pytest.mark.usefixtures('served')
     async def test_generic_path_serves_the_wire_contract(self) -> None:
         """``/segment`` is the shipped client's only path (W3: the
-        ``/sam3/segment_plate`` alias was removed -- no deployed worker
+        ``/sam3/segment`` alias was removed -- no deployed worker
         posts to it anymore)."""
         payload = {
             'crop_jpeg_b64': base64.b64encode(_make_jpeg()).decode('ascii'),
@@ -252,7 +256,7 @@ class TestWireSurface:
             'text_prompt': _PROMPT,
         }
         async with _asgi_client() as http:
-            legacy = await http.post('/sam3/segment_plate', json=payload)
+            legacy = await http.post('/sam3/segment', json=payload)
         assert legacy.status_code == 404
 
     @pytest.mark.asyncio
@@ -367,12 +371,12 @@ class TestWireSurface:
 def _lpr_mock(candidates):
     from unittest.mock import AsyncMock, MagicMock
 
-    lpr = MagicMock()
-    lpr.detect_batch = AsyncMock(return_value=candidates)
-    return lpr
+    detector = MagicMock()
+    detector.detect_batch = AsyncMock(return_value=candidates)
+    return detector
 
 
-def _gemma_mock(*, is_region: bool):
+def _vlm_mock(*, is_region: bool):
     from unittest.mock import AsyncMock, MagicMock
 
     from src.services.labeling.vlm_labeler import VlmRegionVerdict
@@ -392,7 +396,7 @@ def _ocr_recognizer_mock():
 
     r = MagicMock()
     r.detect_regions = AsyncMock(return_value=[])
-    r.pick_best_plate_region = MagicMock(return_value=None)
+    r.pick_best_text_region = MagicMock(return_value=None)
     return r
 
 
@@ -411,26 +415,26 @@ class TestCascadeWithTheShippedSegmenter:
         """
         F = get_region_fields()
         async with _asgi_client() as http:
-            sam3 = Sam3Client(base_url='http://segmenter', client=http, text_prompt=_PROMPT)
+            sam3 = SegmenterClient(base_url='http://segmenter', client=http, text_prompt=_PROMPT)
             assert sam3.enabled is True
 
             task = worker._ItemTask(
                 crop_id='crop-1',
                 image_path='/dev/null/never-read',
                 vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
-                plate_status='pending',
+                region_status='pending',
                 class_name='audi',
                 group='cars',
-                lpr_plate_in_source=None,
-                lpr_score=0.0,
+                detector_region_in_source=None,
+                detector_score=0.0,
                 crop_jpeg=_make_jpeg(),
             )
             await worker._process_crop(
                 task,
-                lpr=_lpr_mock([None]),
+                detector=_lpr_mock([None]),
                 sam3=sam3,
                 ocr_recognizer=_ocr_recognizer_mock(),
-                gemma=_gemma_mock(is_region=True),
+                vlm=_vlm_mock(is_region=True),
             )
 
         assert task.update_doc[F.detector] == 'sam3'

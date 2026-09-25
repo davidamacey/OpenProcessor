@@ -802,7 +802,7 @@
         "type": "object"
       },
       "CropExcludeRequest": {
-        "description": "Exclude crops from training + clustering (reversible).\n\nBlurry / unidentifiable / partial crops the human doesn't want in\nthe training set. ``reason`` defaults to ``'ignore'``; the UI can\npass a more specific tag (``'blurry'``, ``'unidentifiable'``,\n``'not_a_vehicle'``, ``'partial_crop'``) when the operator wants to\nrecord why (e.g. a whole cluster of blurry cruisers).",
+        "description": "Exclude crops from training + clustering (reversible).\n\nBlurry / unidentifiable / partial crops the human doesn't want in\nthe training set. ``reason`` defaults to ``'ignore'``; the UI can\npass a more specific tag (``'blurry'``, ``'unidentifiable'``,\n``'not_a_vehicle'``, ``'partial_crop'``) when the operator wants to\nrecord why (e.g. a whole cluster of blurry items).",
         "properties": {
           "crop_ids": {
             "items": {
@@ -7621,7 +7621,7 @@
     },
     "/curation/events/publish": {
       "post": {
-        "description": "Publish one event into the in-process hub.\n\nUsed by external publishers like ``scripts/curation/sam_worker_main.py``\nthat don't share the API process. Events from in-process callers\n(ingest, VLM label_batch) skip this endpoint and call the hub directly.",
+        "description": "Publish one event into the in-process hub.\n\nUsed by external publishers like ``scripts/curation/region_worker_main.py``\nthat don't share the API process. Events from in-process callers\n(ingest, VLM label_batch) skip this endpoint and call the hub directly.",
         "operationId": "curation_events_publish_curation_events_publish_post",
         "requestBody": {
           "content": {
@@ -9648,7 +9648,7 @@
     },
     "/curation/regions/clusters": {
       "get": {
-        "description": "Cluster cards for the region buckets (mirrors /legacy/clusters' shape).\n\nMost cards are ``candidate`` (regions are one class); the permanent\nfalse-positive bucket is tagged ``cluster_kind='false_positive'`` and\npinned first. Reps are the regions closest to the centroid, shown as\nregion close-up thumbnails.",
+        "description": "Cluster cards for the region buckets (mirrors /curation/clusters' shape).\n\nMost cards are ``candidate`` (regions are one class); the permanent\nfalse-positive bucket is tagged ``cluster_kind='false_positive'`` and\npinned first. Reps are the regions closest to the centroid, shown as\nregion close-up thumbnails.",
         "operationId": "list_region_clusters_curation_regions_clusters_get",
         "parameters": [
           {
@@ -10227,7 +10227,7 @@
     },
     "/curation/review/unmatched_terms": {
       "get": {
-        "description": "Aggregate the VLM's raw labels across every ``vlm_unmatched`` crop.\n\nReturns the top-N most common raw labels the VLM produced for crops the\nregistry could not resolve. This is the main input to growing the\nregistry: high-count labels are obvious candidates for new\n:py:class:`LegacyClassEntry` entries (or new ``SYNONYMS`` mappings if the\nraw label is just a phrasing of an existing class).\n\nOnce the registry (or the prompt pack's synonyms) has grown, run\n``scripts/curation/reclassify_after_registry_growth.py`` with\n``--label-prefix`` set to the prefix of the ``class_source`` /\nraw-label pair aggregated here; it promotes every ``<prefix>_unmatched``\nitem whose raw label now resolves to ``<prefix>_reclassified`` (never\nsetting ``class_validated``).\n\nArgs:\n    size: Maximum number of distinct raw labels to return. Capped at\n        1000; default 100 (the long tail past 100 is usually noise).\n\nReturns:\n    ``{\"total_unmatched\": <int>, \"top_terms\": [{\"label\": str, \"count\": int}, ...]}``",
+        "description": "Aggregate the VLM's raw labels across every ``vlm_unmatched`` crop.\n\nReturns the top-N most common raw labels the VLM produced for crops the\nregistry could not resolve. This is the main input to growing the\nregistry: high-count labels are obvious candidates for new class\nentries (or new ``SYNONYMS`` mappings if the raw label is just a\nphrasing of an existing class).\n\nOnce the registry (or the prompt pack's synonyms) has grown, run\n``scripts/curation/reclassify_after_registry_growth.py`` with\n``--label-prefix`` set to the prefix of the ``class_source`` /\nraw-label pair aggregated here; it promotes every ``<prefix>_unmatched``\nitem whose raw label now resolves to ``<prefix>_reclassified`` (never\nsetting ``class_validated``).\n\nArgs:\n    size: Maximum number of distinct raw labels to return. Capped at\n        1000; default 100 (the long tail past 100 is usually noise).\n\nReturns:\n    ``{\"total_unmatched\": <int>, \"top_terms\": [{\"label\": str, \"count\": int}, ...]}``",
         "operationId": "review_unmatched_terms_curation_review_unmatched_terms_get",
         "parameters": [
           {

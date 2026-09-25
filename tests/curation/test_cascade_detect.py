@@ -444,8 +444,8 @@ class TestCropNormToSourceNorm:
         # Parent occupies the middle 50% of the source image.
         vehicle = (0.25, 0.25, 0.75, 0.75)
         # Region is dead center of the crop.
-        plate_in_crop = (0.4, 0.4, 0.6, 0.6)
-        sx1, sy1, sx2, sy2 = crop_norm_to_source_norm(plate_in_crop, vehicle)
+        region_in_crop = (0.4, 0.4, 0.6, 0.6)
+        sx1, sy1, sx2, sy2 = crop_norm_to_source_norm(region_in_crop, vehicle)
         # Crop is 0.5 wide, region is 0.2 wide in crop → 0.1 wide in source.
         # Region starts at 0.4 of crop → 0.4*0.5 = 0.2 from crop start →
         # 0.25 + 0.2 = 0.45 in source.
@@ -457,15 +457,15 @@ class TestCropNormToSourceNorm:
     def test_full_crop_plate_returns_vehicle_box(self) -> None:
         """A region that fills the entire crop is the parent box."""
         vehicle = (0.10, 0.20, 0.40, 0.60)
-        plate_in_crop = (0.0, 0.0, 1.0, 1.0)
-        result = crop_norm_to_source_norm(plate_in_crop, vehicle)
+        region_in_crop = (0.0, 0.0, 1.0, 1.0)
+        result = crop_norm_to_source_norm(region_in_crop, vehicle)
         assert result == pytest.approx(vehicle)
 
     def test_offset_vehicle_offset_plate(self) -> None:
         """Generic case: parent in lower-right, region in upper-left of crop."""
         vehicle = (0.5, 0.5, 1.0, 1.0)  # bottom-right quadrant
-        plate_in_crop = (0.1, 0.0, 0.3, 0.2)  # upper-left of the crop
-        sx1, sy1, sx2, sy2 = crop_norm_to_source_norm(plate_in_crop, vehicle)
+        region_in_crop = (0.1, 0.0, 0.3, 0.2)  # upper-left of the crop
+        sx1, sy1, sx2, sy2 = crop_norm_to_source_norm(region_in_crop, vehicle)
         # Parent is 0.5 wide x 0.5 tall starting at (0.5, 0.5).
         assert sx1 == pytest.approx(0.5 + 0.1 * 0.5, abs=1e-9)
         assert sy1 == pytest.approx(0.5 + 0.0 * 0.5, abs=1e-9)
@@ -475,8 +475,8 @@ class TestCropNormToSourceNorm:
     def test_clamps_to_unit_interval(self) -> None:
         """Numerical noise that pushes a coord just past 1.0 is clipped."""
         vehicle = (0.0, 0.0, 1.0, 1.0)
-        plate_in_crop = (-0.05, -0.05, 1.05, 1.05)
-        sx1, sy1, sx2, sy2 = crop_norm_to_source_norm(plate_in_crop, vehicle)
+        region_in_crop = (-0.05, -0.05, 1.05, 1.05)
+        sx1, sy1, sx2, sy2 = crop_norm_to_source_norm(region_in_crop, vehicle)
         assert sx1 == 0.0
         assert sy1 == 0.0
         assert sx2 == 1.0
@@ -490,8 +490,8 @@ class TestCropNormToSourceNorm:
         divide-by-zero or raise.
         """
         vehicle = (0.5, 0.2, 0.5, 0.8)
-        plate_in_crop = (0.1, 0.2, 0.9, 0.8)
-        sx1, _, sx2, _ = crop_norm_to_source_norm(plate_in_crop, vehicle)
+        region_in_crop = (0.1, 0.2, 0.9, 0.8)
+        sx1, _, sx2, _ = crop_norm_to_source_norm(region_in_crop, vehicle)
         # Width is 0 → region has no horizontal extent in source.
         assert sx1 == pytest.approx(0.5)
         assert sx2 == pytest.approx(0.5)
@@ -588,7 +588,7 @@ class TestPaddleOcrTextRecognizer:
         )
         rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
-        pick = rec.pick_best_plate_region(regions)
+        pick = rec.pick_best_text_region(regions)
         # Larger plate-shaped region wins despite lower rec_score.
         assert pick is not None
         assert pick.text == 'ABC-1234'
@@ -615,10 +615,10 @@ class TestPaddleOcrTextRecognizer:
         rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
         # Loose plate-shape filter accepts them, but the stricter
-        # is_plate_text_candidate rejects all three because they lack digits.
-        assert all(r.is_plate_shaped for r in regions)
-        assert all(not r.is_plate_text_candidate for r in regions)
-        assert rec.pick_best_plate_region(regions) is None
+        # is_region_text_candidate rejects all three because they lack digits.
+        assert all(r.is_region_shaped for r in regions)
+        assert all(not r.is_region_text_candidate for r in regions)
+        assert rec.pick_best_text_region(regions) is None
 
     @pytest.mark.asyncio
     async def test_f4_rejects_low_rec_score(self) -> None:
@@ -638,8 +638,8 @@ class TestPaddleOcrTextRecognizer:
         rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
         assert len(regions) == 1
-        assert not regions[0].is_plate_text_candidate
-        assert rec.pick_best_plate_region(regions) is None
+        assert not regions[0].is_region_text_candidate
+        assert rec.pick_best_text_region(regions) is None
 
     @pytest.mark.asyncio
     async def test_f4_accepts_vanity_plate(self) -> None:
@@ -658,8 +658,8 @@ class TestPaddleOcrTextRecognizer:
         )
         rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
-        assert regions[0].is_plate_text_candidate
-        assert rec.pick_best_plate_region(regions) is regions[0]
+        assert regions[0].is_region_text_candidate
+        assert rec.pick_best_text_region(regions) is regions[0]
 
     @pytest.mark.asyncio
     async def test_rejects_non_plate_shaped_region(self) -> None:
@@ -679,8 +679,8 @@ class TestPaddleOcrTextRecognizer:
         rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
         assert len(regions) == 1
-        assert not regions[0].is_plate_shaped
-        assert rec.pick_best_plate_region(regions) is None
+        assert not regions[0].is_region_shaped
+        assert rec.pick_best_text_region(regions) is None
 
     @pytest.mark.asyncio
     async def test_read_plate_region_joins_lines(self) -> None:
@@ -700,7 +700,7 @@ class TestPaddleOcrTextRecognizer:
             )
         )
         rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
-        result = await rec.read_plate_region(_jpeg_bytes())
+        result = await rec.read_region_text(_jpeg_bytes())
         assert result is not None
         text, conf = result
         # Top-then-bottom reading order: MOTO before 1234.

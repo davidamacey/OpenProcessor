@@ -76,7 +76,7 @@ async def curation_events(
 async def curation_events_publish(payload: _PublishEvent) -> dict[str, Any]:
     """Publish one event into the in-process hub.
 
-    Used by external publishers like ``scripts/curation/sam_worker_main.py``
+    Used by external publishers like ``scripts/curation/region_worker_main.py``
     that don't share the API process. Events from in-process callers
     (ingest, VLM label_batch) skip this endpoint and call the hub directly.
     """

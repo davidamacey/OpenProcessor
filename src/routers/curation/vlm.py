@@ -1,4 +1,4 @@
-"""VLM-based labeling endpoints — ported from ``legacy_gemma.py`` (§5 Chunk 7).
+"""VLM-based labeling endpoints — ported from the reference VLM router (§5 Chunk 7).
 
 ``POST /curation/vlm/label_batch`` classifies item crops via the shared
 :class:`~src.services.labeling.vlm_labeler.VlmLabeler` singleton;
@@ -6,9 +6,9 @@
 verify (and, for the first two, read) the crop's sub-region-of-interest
 (e.g. a printed label, a license plate).
 
-Deviation from the plan's file-for-file mapping: the reference
-``legacy_gemma.py`` derives its class-label provenance dict from
-``plate_detect.class_provenance``, which lives in
+Deviation from the plan's file-for-file mapping: the reference router
+derives its class-label provenance dict from the reference cascade
+module's ``class_provenance``, which lives in
 ``src.services.detection.cascade_detect`` — not ported until Chunk 8.
 Importing it here would either forward-reference a module that doesn't
 exist yet (breaking ``import src.main`` for every wave between Chunk 7
@@ -237,8 +237,8 @@ async def vlm_label_batch(
 
     # Same OP_CROP_CACHE_DIR / CurationConfig.crop_cache_dir the worker
     # (scripts/curation/worker/state.py) writes into -- this used to read a
-    # different env var with a different default (GEMMA_CROP_CACHE_DIR),
-    # which meant a 100% cache miss out of the box (CFG-2).
+    # different env var with a different default, which meant a 100% cache
+    # miss out of the box (CFG-2).
     crop_cache_dir = str(get_curation_config().crop_cache_dir)
 
     def _vlm_jpeg_for(crop_id: str, image_path: str, bbox: tuple) -> bytes | None:

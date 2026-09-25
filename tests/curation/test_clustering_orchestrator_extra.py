@@ -95,7 +95,7 @@ def _make_client(search_response: dict[str, Any], *, count: int = 0) -> MagicMoc
 _PRE_WRITE_SOURCE: dict[str, Any] = {
     'class_id': 1,
     'class_name': 'cruiserbike',
-    'class_source': 'v6_model',
+    'class_source': 'classifier_model',
     'class_validated': False,
     'test_holdout': False,
 }
@@ -107,7 +107,7 @@ class _FakeAutoPromoteClient:
     ``crop_ids_by_cluster`` maps ``cluster_id -> [doc_id, ...]`` — the ids
     :func:`auto_promote_clusters` should discover via its scroll-for-ids
     helper for that cluster's promote query. Every discovered id reads
-    back as a plausible pre-write v6_model source on ``get`` and its
+    back as a plausible pre-write classifier_model source on ``get`` and its
     write lands in ``update_calls``.
     """
 
@@ -204,12 +204,12 @@ async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
     assert written['class_validated'] is True
     assert written['class_source'] == 'cluster_majority_agreement'
     assert written['label_source'] == 'cluster_majority_agreement'
-    # Every promoted crop now snapshots its pre-write v6_model state into
+    # Every promoted crop now snapshots its pre-write classifier_model state into
     # class_id_history.
     history = written['class_id_history']
     assert len(history) == 1
     assert history[0]['class_id'] == 1
-    assert history[0]['class_source'] == 'v6_model'
+    assert history[0]['class_source'] == 'classifier_model'
     assert history[0]['writer'] == 'auto_promote'
 
     # The scroll-for-ids query targets the right cluster/class/holdout shape.
@@ -217,7 +217,7 @@ async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
     filt = scroll_init_call['query']['bool']['filter']
     must_not = scroll_init_call['query']['bool']['must_not']
     assert {'term': {'cluster_id': 1}} in filt
-    assert {'terms': {'class_source': ['v6_model']}} in filt
+    assert {'terms': {'class_source': ['classifier_model']}} in filt
     assert {'term': {'class_name': 'cruiserbike'}} in filt
     assert {'term': {'class_validated': True}} in must_not
     assert {'term': {'test_holdout': True}} in must_not

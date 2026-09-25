@@ -6,7 +6,7 @@ capped at a caller-supplied ``cap`` — same scroll-then-break shape as
 :func:`src.services.curation.clustering.outliers.compute_outlier_order`'s
 member fetch, generalized to an arbitrary query clause instead of one
 hardcoded to a single cluster. Lives in ``selection/`` (not the
-``legacy_select.py`` router) so both the router's synchronous path and
+reference select router) so both the router's synchronous path and
 :mod:`selection.job`'s backgrounded path import the same code — a router
 module must not be a dependency of a service module (the reverse is the
 normal direction everywhere else in this package).

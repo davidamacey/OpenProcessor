@@ -142,7 +142,7 @@ consumer among anticipated others) is documented in
 | VLM labeling | `src/services/labeling/{vlm_client,vlm_labeler,vlm_prompts}.py` | VLM transport/retry, class-resolution + region-verify orchestration, prompt/vocabulary packs |
 | Training | `src/services/training/` | Job lifecycle, preflight scan, GPU arbiter, Triton promote, bakeoff harness |
 | Routers | `src/routers/curation/` (23 modules) + `curation_images.py`, `curation_train.py`, `curation_umap.py` | HTTP surface — see `curation_api_contract.md` for the full route table |
-| Workers | `scripts/curation/{vlm_worker,auto_label_worker,cluster_refresh_daemon,sam_worker_main}.py`, `scripts/curation/worker/` | Long-lived out-of-process consumers (VLM labeling loop, auto-label dispatcher, periodic cluster refresh, detection cascade worker) |
+| Workers | `scripts/curation/{vlm_worker,auto_label_worker,cluster_refresh_daemon,region_worker_main}.py`, `scripts/curation/worker/` | Long-lived out-of-process consumers (VLM labeling loop, auto-label dispatcher, periodic cluster refresh, detection cascade worker) |
 
 ### Runtime-companion topology
 

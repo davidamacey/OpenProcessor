@@ -164,7 +164,7 @@ async def fetch_residual_embeddings(
     filt: list[dict[str, Any]] = [{'exists': {'field': RESIDUAL_EMBEDDING_FIELD}}]
     # Exclude confidently-labeled crops from the residual pool. The
     # previous filter (class_validated != true) only caught the 102
-    # human-validated rows because item_model and gemma writers don't
+    # human-validated rows because item_model and vlm writers don't
     # set class_validated; the 2026-05-23 IVF run pulled all 347k
     # crops including 219k labeled ones and started overwriting their
     # cluster_id=class_id mappings before cancel. CONFIDENT_CLASS_SOURCES

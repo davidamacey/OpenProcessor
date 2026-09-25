@@ -221,15 +221,14 @@ async def occ_skip_on_conflict_bulk(
       409 / ``version_conflict_engine_exception`` -> skipped (the
       human's write stays in place; the worker sees the updated state
       on its next poll) — logs the same structured
-      ``legacy_worker_skip_human_won`` event, pulling
+      ``curation_worker_skip_human_won`` event, pulling
       ``human_class_validated``/``human_region_validated`` from the
       mget'd source for the audit trail; anything else -> ``errors``
       with ``phase: 'update'``.
-    - A ``client.bulk()`` failure (transport/connection error) degrades
-      to per-doc ``phase: 'update'`` error entries for that page rather
-      than raising — callers already bare-except wrap this function
-      (legacy_gemma.py, legacy_classes.py, legacy_auto_promote.py, bulk_writer.py),
-      but a raise here would still lose partial progress on other pages.
+    - A ``client.bulk()`` failure (transport/connection error) degrades to
+      per-doc ``phase: 'update'`` error entries for that page rather than
+      raising — callers already bare-except wrap this function, but a
+      raise here would still lose partial progress on other pages.
     - ``refresh`` is forwarded to ``client.bulk(refresh=refresh)``
       unchanged (``True``/``False``/``'wait_for'``).
 
@@ -332,9 +331,10 @@ def _is_human_marker(value: Any) -> bool:
     containing the substring ``human``.
 
     Matches the in-codebase markers ``human``, ``human_move``, and
-    ``vlm_human_confirmed`` (legacy_crops, legacy_plates, legacy_clustering).
+    ``vlm_human_confirmed`` (used across the crops, regions, and
+    clustering write paths).
     Non-human writers use ``ingest``, ``item_model``, ``coco_yolo11``,
-    ``gemma``, ``cluster_majority_agreement``, etc.
+    ``vlm``, ``cluster_majority_agreement``, etc.
     """
     return isinstance(value, str) and 'human' in value
 
@@ -663,7 +663,7 @@ def _merge_preserving_human(
 
     A guard "fires" only when the existing doc's value matches the
     ``_is_human_marker`` predicate — i.e. a string containing ``human``.
-    Non-human source values (``ingest``, ``item_model``, ``gemma``, etc.)
+    Non-human source values (``ingest``, ``item_model``, ``vlm``, etc.)
     do not trip preservation; ingest is free to overwrite them with its
     fresh-pass value.
 

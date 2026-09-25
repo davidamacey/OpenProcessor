@@ -768,7 +768,7 @@ class OcrRegion:
     profile: DetectionProfile
 
     @property
-    def is_plate_shaped(self) -> bool:
+    def is_region_shaped(self) -> bool:
         """Aspect-ratio test used by the general region sanity gate."""
         x1, y1, x2, y2 = self.bbox_norm
         w = max(0.0, x2 - x1)
@@ -779,13 +779,13 @@ class OcrRegion:
         return self.profile.aspect_min <= ar <= self.profile.aspect_max
 
     @property
-    def looks_like_plate_text(self) -> bool:
+    def looks_like_region_text(self) -> bool:
         """Surface check: characters are region-text-valid + length plausible."""
         pattern = re.compile(self.profile.text_pattern)
         return bool(pattern.fullmatch(self.text)) and 4 <= len(self.text) <= 10
 
     @property
-    def is_plate_text_candidate(self) -> bool:
+    def is_region_text_candidate(self) -> bool:
         """Stricter test for text-hint detection promotion.
 
         Real plate-like text regions almost always contain BOTH letters
@@ -967,7 +967,7 @@ class PaddleOcrTextRecognizer:
 
     Used for two distinct jobs:
 
-    * **Region-text reader** (``read_plate_region``): given an already-
+    * **Region-text reader** (``read_region_text``): given an already-
       cropped region JPEG, return the concatenated recognized text and
       confidence. Backstop / cross-check for the VLM's verify-and-read.
     * **Text-driven detector** (``detect_regions``): given a full item
@@ -1085,7 +1085,7 @@ class PaddleOcrTextRecognizer:
             return []
         return self.regions_from_lines(lines)
 
-    async def read_plate_region(self, plate_jpeg: bytes) -> tuple[str, float] | None:
+    async def read_region_text(self, region_jpeg: bytes) -> tuple[str, float] | None:
         """Concatenate every recognized line on an already-cropped region.
 
         Returns ``(canonical_text, mean_rec_score)`` or ``None`` when
@@ -1094,7 +1094,7 @@ class PaddleOcrTextRecognizer:
         main); we join with a single space in reading order from the
         pipeline.
         """
-        regions = await self.detect_regions(plate_jpeg)
+        regions = await self.detect_regions(region_jpeg)
         if not regions:
             return None
         # Sort top-to-bottom, left-to-right by bbox center.
@@ -1105,10 +1105,10 @@ class PaddleOcrTextRecognizer:
         avg_rec = sum(r.rec_score for r in regions) / len(regions)
         return text, avg_rec
 
-    def pick_best_plate_region(self, regions: list[OcrRegion]) -> OcrRegion | None:
+    def pick_best_text_region(self, regions: list[OcrRegion]) -> OcrRegion | None:
         """Pick a region good enough to promote as a text-hint candidate.
 
-        Uses ``OcrRegion.is_plate_text_candidate`` (tighter than the
+        Uses ``OcrRegion.is_region_text_candidate`` (tighter than the
         general sanity gate): both letters AND digits in the canonical
         text, tightened aspect range, OCR confidence floor. Drops
         bumper-sticker / window-decal / dealer-frame matches that would
@@ -1122,8 +1122,8 @@ class PaddleOcrTextRecognizer:
         tie-break (higher-confidence read wins when two regions are
         similar in area).
         """
-        plate_like = [r for r in regions if r.is_plate_text_candidate]
-        if not plate_like:
+        region_like = [r for r in regions if r.is_region_text_candidate]
+        if not region_like:
             return None
 
         def _key(r: OcrRegion) -> tuple[float, float]:
@@ -1131,7 +1131,7 @@ class PaddleOcrTextRecognizer:
             area = max(0.0, x2 - x1) * max(0.0, y2 - y1)
             return (area, r.rec_score)
 
-        return max(plate_like, key=_key)
+        return max(region_like, key=_key)
 
     def _preprocess(
         self, img: Image.Image, det_size: tuple[int, int] | None = None

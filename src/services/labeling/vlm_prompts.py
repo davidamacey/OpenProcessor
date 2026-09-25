@@ -1,16 +1,15 @@
 """``PromptPack`` — the domain half of the VLM labeler split (§3.4).
 
-The reference ``gemma_labeler.py`` hardcodes ~180 lines of vehicle /
-plate prompt prose (system + user templates, a vehicle-class
-description table, a synonym table) as module constants. That prose is
-domain content for a proprietary dataset family and is **not** shipped
-here — only the generic *shape* (this dataclass) plus one small, neutral
-example instance so the OSS product works out of the box and has test
+The reference VLM labeler hardcodes ~180 lines of domain-specific
+prompt prose (system + user templates, a class description table, a
+synonym table) as module constants. That prose is domain content for a
+proprietary dataset family and is **not** shipped here — only the
+generic *shape* (this dataclass) plus one small, neutral example
+instance so the OSS product works out of the box and has test
 coverage.
 
-A future deployment-specific pack (e.g. a ``VEHICLE_PROMPT_PACK`` in a
-proprietary-dataset config overlay, see Appendix A of the plan) would
-carry the same field set with the real vehicle/plate prose.
+A future deployment-specific pack (in a proprietary-dataset config
+overlay) would carry the same field set with the real domain prose.
 
 Field-naming note: the *wire* keys a pack's prompts ask the VLM to
 return for the region-of-interest sub-annotation (``region_visible``,
@@ -39,7 +38,7 @@ logger = get_logger(__name__)
 class PromptPack:
     """Prompt templates + domain vocabulary for one VLM labeling deployment.
 
-    Mirrors the field set the reference ``gemma_labeler.py`` carried as
+    Mirrors the field set the reference VLM labeler carried as
     inline module constants (§3.4): closed- and open-vocabulary item
     classification, a combined single-call classify+region-verify+text
     prompt (single crop and numbered-batch variants), a region-only
@@ -129,7 +128,7 @@ class PromptPack:
 # ---------------------------------------------------------------------------
 # Neutral example pack — generic "product photo" domain.
 #
-# Mirrors the reference vehicle+plate structure (item to classify + a
+# Mirrors the reference domain-specific structure (item to classify + a
 # text-bearing sub-region-of-interest to verify/read) without any
 # proprietary vocabulary: classify a package photo into a shipping-type
 # class, then verify/read its shipping-label sub-region.

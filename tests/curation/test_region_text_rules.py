@@ -180,13 +180,13 @@ class TestWriters:
     @pytest.mark.usefixtures('reference_region_profile')
     def test_direct_vlm_text_write_drops_a_non_reading(self) -> None:
         doc = _region_write_doc(
-            plate_in_source=(0.1, 0.1, 0.2, 0.2),
+            region_in_source=(0.1, 0.1, 0.2, 0.2),
             score=0.9,
             detector='det',
             detector_version='1',
             chain=[],
             region_text_reply='999',
-            plate_text_confidence='high',
+            region_text_confidence='high',
         )
         assert F.text not in doc
         assert doc[F.text_vlm] == '999'

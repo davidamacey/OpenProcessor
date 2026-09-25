@@ -23,7 +23,7 @@ from _region_profile_fixture import (
     EXAMPLE_LICENSE_PLATE_PROFILE_PATH,
 )
 
-import scripts.curation.sam_worker_main as worker
+import scripts.curation.region_worker_main as worker
 from src.config import DetectionProfile
 from src.services.detection import profile_registry
 
@@ -206,13 +206,13 @@ def _patch_worker_io(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
     os_client.close = AsyncMock()
     sam3 = MagicMock()
     sam3.aclose = AsyncMock()
-    gemma = MagicMock()
-    gemma.aclose = AsyncMock()
+    vlm = MagicMock()
+    vlm.aclose = AsyncMock()
     mocks = {
         'AsyncTritonPool': MagicMock(return_value=pool),
         'AsyncOpenSearch': MagicMock(return_value=os_client),
-        'Sam3Client': MagicMock(return_value=sam3),
-        'VlmLabeler': MagicMock(return_value=gemma),
+        'SegmenterClient': MagicMock(return_value=sam3),
+        'VlmLabeler': MagicMock(return_value=vlm),
     }
     for name, mock in mocks.items():
         monkeypatch.setattr(worker, name, mock)
@@ -236,7 +236,7 @@ def _worker_args(tmp_path: Path, sam3_url: str = 'http://sam3.local:8000') -> ar
             '--opensearch=http://os.local:9200',
             '--triton=triton:8001',
             f'--sam3-url={sam3_url}',
-            '--vlm-url=http://gemma.local:8000',
+            '--vlm-url=http://vlm.local:8000',
             f'--pause-sentinel={tmp_path / "pause.sentinel"}',
             '--max-iterations=1',
         ]
@@ -252,7 +252,7 @@ async def test_worker_is_a_noop_without_a_region_profile(
     assert rc == 0
     mocks['AsyncTritonPool'].assert_not_called()
     mocks['AsyncOpenSearch'].assert_not_called()
-    mocks['Sam3Client'].assert_not_called()
+    mocks['SegmenterClient'].assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -263,7 +263,7 @@ async def test_worker_sends_the_profile_segmenter_prompt(
     region_env.setenv(f'{_ENV_PREFIX}SEGMENTER_TEXT_PROMPT', 'shipping label')
     mocks = _patch_worker_io(region_env)
     assert await worker.run(_worker_args(tmp_path)) == 0
-    mocks['Sam3Client'].assert_called_once_with(
+    mocks['SegmenterClient'].assert_called_once_with(
         'http://sam3.local:8000', text_prompt='shipping label'
     )
 
@@ -275,7 +275,7 @@ async def test_worker_disables_segmenter_when_profile_has_no_prompt(
     region_env.setenv(f'{_ENV_PREFIX}NAME', 'shipping_label')
     mocks = _patch_worker_io(region_env)
     assert await worker.run(_worker_args(tmp_path)) == 0
-    mocks['Sam3Client'].assert_called_once_with('', text_prompt='')
+    mocks['SegmenterClient'].assert_called_once_with('', text_prompt='')
 
 
 def test_secondary_shape_routing_follows_env_groups(
@@ -291,7 +291,7 @@ def test_secondary_shape_routing_follows_env_groups(
         crop_id='c',
         image_path='/x',
         vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
-        plate_status=None,
+        region_status=None,
         class_name='audi',
     )
     monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'tall_things')
@@ -310,7 +310,7 @@ def test_no_secondary_shape_routing_when_profile_has_no_groups(
         crop_id='c',
         image_path='/x',
         vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
-        plate_status=None,
+        region_status=None,
         class_name='cruiserbike',
     )
     monkeypatch.setattr(worker_state, '_class_group', lambda _name: None)

@@ -1,6 +1,6 @@
 """Auto-split sub-module of the curation detection worker.
 
-See ``scripts/curation/sam_worker_main.py`` for the entry point and
+See ``scripts/curation/region_worker_main.py`` for the entry point and
 the ``scripts/curation/worker/`` package for the rest of the split.
 """
 
@@ -142,19 +142,19 @@ _VLM_TEXT_CONFIDENCE_MAP = {'high': 0.92, 'medium': 0.70, 'low': 0.40}
 
 def _region_write_doc(
     *,
-    plate_in_source: tuple[float, float, float, float],
+    region_in_source: tuple[float, float, float, float],
     score: float,
     detector: str,
     detector_version: str,
     chain: list[str],
-    plate_status: str = RegionStatus.DETECTED,
-    plate_verified: bool = True,
+    region_status: str = RegionStatus.DETECTED,
+    region_verified: bool = True,
     auto_confirmed: bool = False,
     verifier: str | None = VLM_MODEL_ID,
     verifier_version: str | None = '1',
     region_text_reply: str | None = None,
-    plate_text_confidence: str | None = None,
-    plate_text_source: str | None = None,
+    region_text_confidence: str | None = None,
+    region_text_source: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compose the ``update_doc`` for a successful region-detection write.
@@ -166,10 +166,10 @@ def _region_write_doc(
     """
     F = get_region_fields()
     doc: dict[str, Any] = {
-        F.bbox_norm: list(plate_in_source),
+        F.bbox_norm: list(region_in_source),
         F.score: score,
-        F.status: plate_status,
-        F.verified: plate_verified,
+        F.status: region_status,
+        F.verified: region_verified,
         F.validated: False,
         F.auto_confirmed: auto_confirmed,
     }
@@ -178,8 +178,8 @@ def _region_write_doc(
             detector=detector,
             detector_version=detector_version,
             bbox_frame='source',
-            verifier=verifier if plate_verified else None,
-            verifier_version=verifier_version if plate_verified else None,
+            verifier=verifier if region_verified else None,
+            verifier_version=verifier_version if region_verified else None,
         )
     )
     if chain:
@@ -201,11 +201,11 @@ def _region_write_doc(
     elif region_text_reply:
         doc[F.text] = region_text_reply
         doc[F.text_raw] = region_text_reply
-        doc[F.text_source] = plate_text_source or VLM_MODEL_ID
+        doc[F.text_source] = region_text_source or VLM_MODEL_ID
         doc[F.text_engine_version] = '1'
         doc[F.text_choice] = TEXT_CHOICE_VLM_ONLY
-        if plate_text_confidence:
-            doc[F.text_confidence] = _VLM_TEXT_CONFIDENCE_MAP.get(plate_text_confidence, 0.70)
+        if region_text_confidence:
+            doc[F.text_confidence] = _VLM_TEXT_CONFIDENCE_MAP.get(region_text_confidence, 0.70)
     if extra:
         doc.update(extra)
     return doc
@@ -413,14 +413,14 @@ def _combined_write_doc(
     """
     ts = _now_iso()
     region_doc = _region_write_doc(
-        plate_in_source=candidate_in_source,
+        region_in_source=candidate_in_source,
         score=candidate_score,
         detector=detector,
         detector_version=detector_version,
         chain=chain,
         auto_confirmed=auto_confirmed,
         region_text_reply=reply.region_text_reply,
-        plate_text_confidence=reply.region_confidence,
+        region_text_confidence=reply.region_confidence,
     )
     region_doc.update(_combined_class_update(reply, class_names, now=ts, name_to_id=name_to_id))
     return region_doc

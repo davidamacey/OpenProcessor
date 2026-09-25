@@ -1,6 +1,6 @@
 """Auto-split sub-module of the curation detection worker.
 
-See ``scripts/curation/sam_worker_main.py`` for the entry point and
+See ``scripts/curation/region_worker_main.py`` for the entry point and
 the ``scripts/curation/worker/`` package for the rest of the split.
 """
 
@@ -101,7 +101,7 @@ class _ItemTask:
     crop_id: str
     image_path: str
     vehicle_bbox_norm: tuple[float, float, float, float]
-    plate_status: str | None
+    region_status: str | None
     class_name: str
     # F-11: dead field -- nothing writes or maps a ``group`` item field, so
     # this was always empty in production. Kept (default '', never read by
@@ -140,8 +140,8 @@ class _ItemTask:
     class_token: tuple[Any, ...] | None = None
     # Existing primary-detector candidate (already in source frame) for
     # pending_verify.
-    lpr_plate_in_source: tuple[float, float, float, float] | None = None
-    lpr_score: float = 0.0
+    detector_region_in_source: tuple[float, float, float, float] | None = None
+    detector_score: float = 0.0
     # Cropped JPEG bytes — built lazily so we don't load images we'd skip.
     crop_jpeg: bytes | None = None
     # Two-stage pipeline state — Stage A (primary/secondary/OCR-det)
@@ -298,12 +298,10 @@ def _is_secondary_shape(task: _ItemTask) -> bool:
     group = _class_group(task.class_name)
     if group:
         return group in groups
-    # No registry entry for this class_name (e.g. a stale/renamed class).
-    # Narrow best-effort fallback: a name suffix of ``bike`` is a strong
-    # signal under the reference naming convention (cruiserbike,
-    # sportbike, dirtbike, etc.). False positives just shift more crops
-    # to the secondary segmenter unnecessarily.
-    return task.class_name.endswith('bike')
+    # No registry entry for this class_name (e.g. a stale/renamed class,
+    # or a deployment that hasn't backfilled `group` yet). No fallback:
+    # a group-less item is simply not routed to the secondary-shape path.
+    return False
 
 
 def _class_group(class_name: str) -> str | None:

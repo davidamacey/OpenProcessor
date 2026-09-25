@@ -140,7 +140,7 @@ async def list_region_clusters(
     per_cluster: int = Query(4, ge=1, le=20),
     max_rank: int | None = Query(None, ge=1),
 ) -> dict[str, Any]:
-    """Cluster cards for the region buckets (mirrors /legacy/clusters' shape).
+    """Cluster cards for the region buckets (mirrors /curation/clusters' shape).
 
     Most cards are ``candidate`` (regions are one class); the permanent
     false-positive bucket is tagged ``cluster_kind='false_positive'`` and

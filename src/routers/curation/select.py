@@ -24,7 +24,7 @@ Gated end-to-end by ``OP_SELECT_DIVERSE_ENABLED`` (default off, inline
 
 * ``GET /curation/crops?order=diverse`` with the flag off behaves exactly like
   today's handling of any other unrecognized ``order`` value — silently
-  ignored, default sort — because ``legacy_crops.py``'s ``order`` branch simply
+  ignored, default sort — because the reference crops router's ``order`` branch simply
   never matches when this module reports "not enabled" (see
   :func:`compute_diverse_order` — same early-return shape
   ``compute_outlier_order`` uses for "too large", just for "disabled").
@@ -48,7 +48,7 @@ different budgets:
    cap (``_get_diverse_inline_max()`` below) — at the 3,000,000-op default
    that's ~1,732 crops, comfortably "a few thousand" and a couple of
    seconds of BLAS matvecs on CPU. Above that cap, the endpoint returns
-   ``None`` and ``legacy_crops.py`` falls through to its default sort — the
+   ``None`` and the reference crops router falls through to its default sort — the
    *exact* same fallback contract ``order=outliers`` already uses above
    its own cap (mirrored, not reinvented).
 2. ``POST /curation/select/diverse`` is user-``k``-bounded (O(n*k*d), linear in
@@ -188,7 +188,7 @@ async def compute_diverse_order(
 
     Returns ``None`` when diversity selection is disabled, the pool
     exceeds the inline cap, or there are no embeddings to rank — callers
-    (``legacy_crops.py``) fall back to their default sort in every ``None``
+    (the reference crops router) fall back to their default sort in every ``None``
     case, exactly mirroring ``compute_outlier_order``'s contract.
     """
     if not _diverse_enabled():

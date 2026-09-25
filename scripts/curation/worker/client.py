@@ -3,7 +3,7 @@
 Split out of :mod:`scripts.curation.worker.cascade` to keep
 ``cascade.py`` under the 700-LOC project ceiling. Public surface
 re-exports unchanged via :mod:`scripts.curation.worker.cascade`
-(``Sam3AllHostsDown``, ``Sam3Client``).
+(``SegmenterAllHostsDown``, ``SegmenterClient``).
 
 Failure model:
 
@@ -12,7 +12,7 @@ Failure model:
 - Round-robin picks healthy hosts only. After 60s a host enters
   HALF_OPEN — the next caller probes it; success closes the circuit,
   failure re-opens for another 60s.
-- ``Sam3AllHostsDown`` is raised when every host is UNHEALTHY so the
+- ``SegmenterAllHostsDown`` is raised when every host is UNHEALTHY so the
   caller can park the crop in ``pending_detection`` rather than
   promoting it to a terminal status on infrastructure noise.
 - ``httpx.ReadTimeout`` and ``httpx.ConnectTimeout`` retry up to 2
@@ -22,7 +22,7 @@ Failure model:
 
 The segmenter leg is optional (D5): passing an empty/``None``
 ``base_url`` (e.g. ``OP_SEGMENTER_URL=''``) constructs a *disabled* client
-instead of raising. A disabled client's :meth:`Sam3Client.segment_plate`
+instead of raising. A disabled client's :meth:`SegmenterClient.segment`
 always returns ``None`` — the same "no candidate" result an unhealthy
 or empty-response segmenter already produces — without attempting any
 HTTP call, so callers that already treat ``None`` as "fall through to
@@ -57,7 +57,7 @@ from src.services.detection.cascade_detect import RegionCandidate
 logger = get_logger('curation_worker')
 
 
-class Sam3AllHostsDown(RuntimeError):  # noqa: N818  # name pinned by Phase 4e plan
+class SegmenterAllHostsDown(RuntimeError):  # noqa: N818
     """Raised when every SAM3 host is marked UNHEALTHY by the circuit breaker.
 
     Distinct from "SAM3 returned no candidate" — this is an
@@ -77,7 +77,7 @@ _RETRY_BACKOFFS = (1.0, 2.0)
 
 
 class _HostState:
-    """Per-host failure tracker used by :class:`Sam3Client`.
+    """Per-host failure tracker used by :class:`SegmenterClient`.
 
     States:
       - CLOSED      : normal operation; failures are recorded.
@@ -99,7 +99,7 @@ class _HostState:
         self.half_open_in_flight: bool = False
 
 
-class Sam3Client:
+class SegmenterClient:
     """Thin async wrapper around ``POST /segment``.
 
     Owns the underlying ``httpx.AsyncClient`` so the worker can share
@@ -121,7 +121,7 @@ class Sam3Client:
         urls = [u.strip().rstrip('/') for u in (base_url or '').split(',') if u.strip()]
         # D5: no segmenter configured is a supported deployment shape, not
         # an error. Disabled clients skip the HTTP leg entirely (see
-        # segment_plate) rather than raising at construction time.
+        # segment) rather than raising at construction time.
         self.enabled = bool(urls)
         self.base_urls = urls
         self._rr_lock = asyncio.Lock()
@@ -170,7 +170,7 @@ class Sam3Client:
         return url
 
     async def _pick_healthy_url(self) -> str:
-        """Round-robin a healthy host. Raises :class:`Sam3AllHostsDown`.
+        """Round-robin a healthy host. Raises :class:`SegmenterAllHostsDown`.
 
         Half-open semantics: when a host's ``open_until`` has passed,
         one caller probes the host (latches ``half_open_in_flight``);
@@ -191,7 +191,7 @@ class Sam3Client:
                         # Another caller is already probing — keep skipping.
                         continue
                     return url
-        raise Sam3AllHostsDown(f'all SAM3 hosts unhealthy ({self.base_urls})')
+        raise SegmenterAllHostsDown(f'all segmenter hosts unhealthy ({self.base_urls})')
 
     async def _on_success(self, url: str) -> None:
         async with self._cb_lock:
@@ -341,10 +341,10 @@ class Sam3Client:
         OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS.labels(host=url, outcome=outcome).observe(inflight)
         OP_SEGMENTER_REQUEST_RESPONSE_SECONDS.labels(host=url, outcome=outcome).observe(response)
 
-    async def segment_plate(self, crop_jpeg: bytes) -> RegionCandidate | None:
+    async def segment(self, crop_jpeg: bytes) -> RegionCandidate | None:
         """Segment one crop. Returns the top candidate in crop frame.
 
-        Raises :class:`Sam3AllHostsDown` if every host is UNHEALTHY.
+        Raises :class:`SegmenterAllHostsDown` if every host is UNHEALTHY.
         Returns ``None`` on a single-host failure (recorded against
         the circuit breaker), when SAM3 returned no candidate, or
         (D5) when this client is disabled — no segmenter configured.
@@ -352,7 +352,7 @@ class Sam3Client:
         """
         if not self.enabled:
             return None
-        # t0 = entry to segment_plate (before any client-side work).
+        # t0 = entry to segment (before any client-side work).
         # See module docstring + metrics.py for the wait/inflight/response
         # decomposition rationale.
         t0 = self._now()
@@ -407,4 +407,4 @@ class Sam3Client:
         )
 
 
-__all__ = ['Sam3AllHostsDown', 'Sam3Client']
+__all__ = ['SegmenterAllHostsDown', 'SegmenterClient']

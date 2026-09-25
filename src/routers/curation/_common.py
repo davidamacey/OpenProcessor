@@ -374,7 +374,7 @@ class CropExcludeRequest(BaseModel):
     the training set. ``reason`` defaults to ``'ignore'``; the UI can
     pass a more specific tag (``'blurry'``, ``'unidentifiable'``,
     ``'not_a_vehicle'``, ``'partial_crop'``) when the operator wants to
-    record why (e.g. a whole cluster of blurry cruisers).
+    record why (e.g. a whole cluster of blurry items).
     """
 
     crop_ids: list[str] = Field(..., max_length=5000)

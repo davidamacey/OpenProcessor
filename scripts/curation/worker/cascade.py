@@ -1,6 +1,6 @@
 """Auto-split sub-module of the curation detection worker.
 
-See ``scripts/curation/sam_worker_main.py`` for the entry point and
+See ``scripts/curation/region_worker_main.py`` for the entry point and
 the ``scripts/curation/worker/`` package for the rest of the split.
 """
 
@@ -30,8 +30,8 @@ logger = get_logger('curation_worker')
 
 
 from scripts.curation.worker.client import (
-    Sam3AllHostsDown,  # noqa: F401  # back-compat re-export for runner/tests
-    Sam3Client,  # noqa: TC001  # runtime back-compat re-export for shim + tests
+    SegmenterAllHostsDown,  # noqa: F401  # back-compat re-export for runner/tests
+    SegmenterClient,  # noqa: TC001  # runtime back-compat re-export for shim + tests
 )
 from scripts.curation.worker.combined import _finalize_no_region, _run_combined_cohort_path
 from scripts.curation.worker.no_verdict import cascade_counter, cascade_no_verdict
@@ -159,14 +159,14 @@ async def _fetch_pending(
         bbox = src.get('bbox_norm')
         if not bbox or len(bbox) != 4:
             continue
-        plate_bbox = src.get(F.bbox_norm)
-        lpr_in_source: tuple[float, float, float, float] | None = None
-        if isinstance(plate_bbox, list) and len(plate_bbox) == 4:
-            lpr_in_source = (
-                float(plate_bbox[0]),
-                float(plate_bbox[1]),
-                float(plate_bbox[2]),
-                float(plate_bbox[3]),
+        region_bbox = src.get(F.bbox_norm)
+        detector_region_in_source: tuple[float, float, float, float] | None = None
+        if isinstance(region_bbox, list) and len(region_bbox) == 4:
+            detector_region_in_source = (
+                float(region_bbox[0]),
+                float(region_bbox[1]),
+                float(region_bbox[2]),
+                float(region_bbox[3]),
             )
         tasks.append(
             _ItemTask(
@@ -178,14 +178,14 @@ async def _fetch_pending(
                     float(bbox[2]),
                     float(bbox[3]),
                 ),
-                plate_status=src.get(F.status),
+                region_status=src.get(F.status),
                 class_name=str(src.get('class_name') or ''),
                 class_source=str(src.get('class_source') or ''),
                 class_confidence=float(src.get('confidence') or 0.0),
                 class_validated=bool(src.get('class_validated') or False),
                 test_holdout=bool(src.get('test_holdout') or False),
-                lpr_plate_in_source=lpr_in_source,
-                lpr_score=float(src.get(F.score) or 0.0),
+                detector_region_in_source=detector_region_in_source,
+                detector_score=float(src.get(F.score) or 0.0),
                 request_id=str(src.get('request_id') or '-'),
                 class_token=class_state_token(src),
             )
@@ -198,14 +198,14 @@ async def _fetch_pending(
 # =============================================================================
 
 
-def _crop_region_jpeg(crop_jpeg: bytes, plate_in_crop: tuple[float, float, float, float]) -> bytes:
+def _crop_region_jpeg(crop_jpeg: bytes, region_in_crop: tuple[float, float, float, float]) -> bytes:
     """Extract just the region of interest from a crop's JPEG bytes for VLM verify."""
     img = Image.open(io.BytesIO(crop_jpeg))
     img.load()
     if img.mode != 'RGB':
         img = img.convert('RGB')
     cw, ch = img.size
-    px1, py1, px2, py2 = plate_in_crop
+    px1, py1, px2, py2 = region_in_crop
     x1 = max(0, round(px1 * cw))
     y1 = max(0, round(py1 * ch))
     x2 = max(x1 + 1, round(px2 * cw))
@@ -217,7 +217,7 @@ def _crop_region_jpeg(crop_jpeg: bytes, plate_in_crop: tuple[float, float, float
 
 
 def _source_to_crop(
-    plate_in_source: tuple[float, float, float, float],
+    region_in_source: tuple[float, float, float, float],
     vehicle_in_source: tuple[float, float, float, float],
 ) -> tuple[float, float, float, float]:
     """Inverse of :func:`crop_norm_to_source_norm` — needed to verify a
@@ -231,7 +231,7 @@ def _source_to_crop(
     vx1, vy1, vx2, vy2 = vehicle_in_source
     vw = max(vx2 - vx1, 1e-6)
     vh = max(vy2 - vy1, 1e-6)
-    sx1, sy1, sx2, sy2 = plate_in_source
+    sx1, sy1, sx2, sy2 = region_in_source
     return (
         max(0.0, min(1.0, (sx1 - vx1) / vw)),
         max(0.0, min(1.0, (sy1 - vy1) / vh)),
@@ -290,7 +290,7 @@ def _project_subcrop_box_to_parent(
 async def _resegment_from_text_hint(
     crop_jpeg: bytes,
     hint_in_crop: tuple[float, float, float, float],
-    sam3: Sam3Client,
+    sam3: SegmenterClient,
 ) -> tuple[RegionCandidate | None, tuple[float, float, float, float]]:
     """Run the secondary segmenter on a tight sub-crop around an OCR text hint.
 
@@ -301,7 +301,7 @@ async def _resegment_from_text_hint(
     """
     sub_box = _expand_bbox(hint_in_crop, _TEXT_HINT_SUBCROP_MARGIN)
     sub_jpeg = _crop_region_jpeg(crop_jpeg, sub_box)
-    sub_cand = await sam3.segment_plate(sub_jpeg)
+    sub_cand = await sam3.segment(sub_jpeg)
     if sub_cand is None:
         return None, sub_box
     projected = _project_subcrop_box_to_parent(sub_cand.bbox_norm, sub_box)
@@ -355,16 +355,16 @@ def _no_verdict_done(
 async def _process_crop(
     task: _ItemTask,
     *,
-    lpr: RegionDetector,
-    sam3: Sam3Client,
+    detector: RegionDetector,
+    sam3: SegmenterClient,
     ocr_recognizer: PaddleOcrTextRecognizer,
-    gemma: VlmLabeler,
+    vlm: VlmLabeler,
 ) -> None:
     """Run the routing logic for one crop and populate ``task.update_doc``.
 
     See module docstring for the routing rules.
     """
-    if task.plate_status in _TERMINAL_STATUSES:
+    if task.region_status in _TERMINAL_STATUSES:
         # Defensive — query already filters these out.
         return
 
@@ -393,25 +393,25 @@ async def _process_crop(
         # region candidate exists or can be cheaply produced. One VLM call
         # returns class + region verify + OCR instead of two/three round-trips.
         # Implementation lives in ``combined._run_combined_cohort_path``.
-        if await _run_combined_cohort_path(task, lpr=lpr, sam3=sam3, gemma=gemma):
+        if await _run_combined_cohort_path(task, detector=detector, sam3=sam3, vlm=vlm):
             raise _CascadeDoneError
         # Non-cohort or cohort fell back — legacy cascade resumes.
 
         # ---- Step 1: pending_verify path. ----
         if (
-            task.plate_status in _PENDING_VERIFICATION_ALIASES
-            and task.lpr_plate_in_source is not None
+            task.region_status in _PENDING_VERIFICATION_ALIASES
+            and task.detector_region_in_source is not None
         ):
-            plate_in_crop = _source_to_crop(task.lpr_plate_in_source, task.vehicle_bbox_norm)
-            plate_jpeg = _crop_region_jpeg(task.crop_jpeg, plate_in_crop)
-            outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
+            region_in_crop = _source_to_crop(task.detector_region_in_source, task.vehicle_bbox_norm)
+            region_jpeg = _crop_region_jpeg(task.crop_jpeg, region_in_crop)
+            outcome = await _verify_with_vlm(vlm, task.crop_id, region_jpeg)
             if outcome is None:
                 _no_verdict_done(
                     task,
                     actor=det_model,
                     version=det_version,
-                    box=task.lpr_plate_in_source,
-                    score=task.lpr_score,
+                    box=task.detector_region_in_source,
+                    score=task.detector_score,
                     source=CANDIDATE_DETECTOR_EXISTING,
                 )
             ok, conf = outcome.ok, outcome.confidence
@@ -422,28 +422,28 @@ async def _process_crop(
                 # detector + reason and fall through to the secondary
                 # segmenter anyway (the trace captures both).
                 gate_ok, gate_reason = is_plausible_region_bbox(
-                    plate_in_crop, task.vehicle_bbox_norm
+                    region_in_crop, task.vehicle_bbox_norm
                 )
                 if not gate_ok:
                     task.detection_trace.append(f'{det_model}:sanity_reject:{gate_reason}')
                     # Fall through to the secondary segmenter.
                 else:
                     auto = await _auto_confirm_or_pending(
-                        sam_score=task.lpr_score,
-                        bbox_in_crop=plate_in_crop,
+                        sam_score=task.detector_score,
+                        bbox_in_crop=region_in_crop,
                         vlm_high_conf=conf == 'high',
                     )
                     task.detection_trace.append(f'{det_model}:hit')
                     task.detection_trace.append(f'{det_model}:vlm_verify_ok')
                     task.update_doc = _region_write_doc(
-                        plate_in_source=task.lpr_plate_in_source,
-                        score=task.lpr_score,
+                        region_in_source=task.detector_region_in_source,
+                        score=task.detector_score,
                         detector=det_model,
                         detector_version=det_version,
                         chain=task.detection_trace,
                         auto_confirmed=bool(auto),
                         region_text_reply=outcome.text,
-                        plate_text_confidence=outcome.text_confidence,
+                        region_text_confidence=outcome.text_confidence,
                     )
                     raise _CascadeDoneError
             else:
@@ -451,9 +451,9 @@ async def _process_crop(
             # Verify rejected — fall through to the secondary segmenter.
 
         # ---- Step 2: primary detector (only if pending + non-secondary-shape). ----
-        elif task.plate_status in _PENDING_DETECTION_ALIASES and not is_secondary:
-            lpr_results = await lpr.detect_batch([task.crop_jpeg])
-            cand = lpr_results[0] if lpr_results else None
+        elif task.region_status in _PENDING_DETECTION_ALIASES and not is_secondary:
+            detector_results = await detector.detect_batch([task.crop_jpeg])
+            cand = detector_results[0] if detector_results else None
             if cand is None:
                 task.detection_trace.append(f'{det_model}:miss')
             else:
@@ -466,8 +466,8 @@ async def _process_crop(
                     task.detection_trace.append(f'{det_model}:sanity_reject:{gate_reason}')
                     # Fall through to the secondary segmenter.
                 else:
-                    plate_jpeg = _crop_region_jpeg(task.crop_jpeg, cand.bbox_norm)
-                    outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
+                    region_jpeg = _crop_region_jpeg(task.crop_jpeg, cand.bbox_norm)
+                    outcome = await _verify_with_vlm(vlm, task.crop_id, region_jpeg)
                     if outcome is None:
                         _no_verdict_done(
                             task,
@@ -488,14 +488,14 @@ async def _process_crop(
                         task.detection_trace.append(f'{det_model}:hit')
                         task.detection_trace.append(f'{det_model}:vlm_verify_ok')
                         task.update_doc = _region_write_doc(
-                            plate_in_source=projected,
+                            region_in_source=projected,
                             score=cand.score,
                             detector=det_model,
                             detector_version=det_version,
                             chain=task.detection_trace,
                             auto_confirmed=bool(auto),
                             region_text_reply=outcome.text,
-                            plate_text_confidence=outcome.text_confidence,
+                            region_text_confidence=outcome.text_confidence,
                         )
                         raise _CascadeDoneError
                     task.detection_trace.append(f'{det_model}:hit')
@@ -506,7 +506,7 @@ async def _process_crop(
         # ---- Step 3: secondary segmenter (always — secondary-shape pending,
         #              non-secondary primary-detector miss/reject, or
         #              pending_verify reject). ----
-        sam_candidate = await sam3.segment_plate(task.crop_jpeg)
+        sam_candidate = await sam3.segment(task.crop_jpeg)
         if sam_candidate is None:
             task.detection_trace.append(f'{seg_name}:miss')
         else:
@@ -532,20 +532,20 @@ async def _process_crop(
                     task.detection_trace.append(f'{seg_name}:hit')
                     task.detection_trace.append(f'{seg_name}:skip_vlm_verify')
                     task.update_doc = _region_write_doc(
-                        plate_in_source=projected,
+                        region_in_source=projected,
                         score=sam_candidate.score,
                         detector=seg_name,
                         detector_version=seg_version,
                         chain=task.detection_trace,
-                        plate_verified=False,
+                        region_verified=False,
                         verifier=None,
                         verifier_version=None,
                         extra={get_region_fields().skip_verify: True},
                     )
                     raise _CascadeDoneError
 
-                plate_jpeg = _crop_region_jpeg(task.crop_jpeg, sam_candidate.bbox_norm)
-                outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
+                region_jpeg = _crop_region_jpeg(task.crop_jpeg, sam_candidate.bbox_norm)
+                outcome = await _verify_with_vlm(vlm, task.crop_id, region_jpeg)
                 if outcome is None:
                     _no_verdict_done(
                         task,
@@ -570,14 +570,14 @@ async def _process_crop(
                     task.detection_trace.append(f'{seg_name}:hit')
                     task.detection_trace.append(f'{seg_name}:vlm_verify_ok')
                     task.update_doc = _region_write_doc(
-                        plate_in_source=projected,
+                        region_in_source=projected,
                         score=sam_candidate.score,
                         detector=seg_name,
                         detector_version=seg_version,
                         chain=task.detection_trace,
                         auto_confirmed=bool(auto),
                         region_text_reply=outcome.text,
-                        plate_text_confidence=outcome.text_confidence,
+                        region_text_confidence=outcome.text_confidence,
                     )
                     raise _CascadeDoneError
                 task.detection_trace.append(f'{seg_name}:hit')
@@ -597,7 +597,7 @@ async def _process_crop(
         except Exception as exc:
             logger.warning('text_hint_ocr_failed', crop_id=task.crop_id, error=str(exc))
             ocr_regions = []
-        ocr_pick = ocr_recognizer.pick_best_plate_region(ocr_regions) if ocr_regions else None
+        ocr_pick = ocr_recognizer.pick_best_text_region(ocr_regions) if ocr_regions else None
         if ocr_pick is not None:
             task.detection_trace.append(f'{ocr_det_model}:text_hint:hit')
             sub_cand, _sub_box = await _resegment_from_text_hint(
@@ -613,8 +613,8 @@ async def _process_crop(
                     task.detection_trace.append(f'{seg_name}:text_hint:hit')
                     task.detection_trace.append(f'{seg_name}:text_hint:sanity_reject:{gate_reason}')
                 else:
-                    plate_jpeg = _crop_region_jpeg(task.crop_jpeg, sub_cand.bbox_norm)
-                    outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
+                    region_jpeg = _crop_region_jpeg(task.crop_jpeg, sub_cand.bbox_norm)
+                    outcome = await _verify_with_vlm(vlm, task.crop_id, region_jpeg)
                     if outcome is None:
                         _no_verdict_done(
                             task,
@@ -648,14 +648,14 @@ async def _process_crop(
                                 'high' if rc >= 0.8 else 'medium' if rc >= 0.5 else 'low'
                             )
                         task.update_doc = _region_write_doc(
-                            plate_in_source=projected,
+                            region_in_source=projected,
                             score=sub_cand.score,
                             detector=seg_name,
                             detector_version=seg_version,
                             chain=task.detection_trace,
                             auto_confirmed=bool(auto),
                             region_text_reply=text_out,
-                            plate_text_confidence=text_conf_out,
+                            region_text_confidence=text_conf_out,
                         )
                         raise _CascadeDoneError
                     task.detection_trace.append(f'{seg_name}:text_hint:hit')

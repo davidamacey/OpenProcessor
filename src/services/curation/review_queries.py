@@ -265,7 +265,7 @@ def build_tab_query(
     ``region_status`` (``regions`` tab only, ignored elsewhere): one of
     :data:`REGION_STATUS_FILTER_VALUES`. Raises ``HTTPException(400, ...)``
     for an unrecognized ``tab`` or an unrecognized ``region_status`` — same
-    behavior ``legacy_review.py`` had inline before this split.
+    behavior the reference review router had inline before this split.
     """
     fields = get_region_fields()
     must: list[dict[str, Any]] = []
@@ -451,7 +451,7 @@ def build_tab_query(
                     'script': {
                         # Both fields are mapped `keyword` directly on the
                         # live index — no `.keyword` subfield exists (see
-                        # legacy_clusters.py's top_class agg for the full story
+                        # the reference clusters router's top_class agg for the full story
                         # on why this repo's code assumed one).
                         'source': (
                             "doc.containsKey('probe_pred_class') && "

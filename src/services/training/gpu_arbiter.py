@@ -1,6 +1,6 @@
 """GPU arbiter — coordinate GPU-resident services around training runs.
 
-Ported from a private reference vehicle/license-plate curation stack's
+Ported from a reference curation stack's
 training pipeline (Phase 3a). Two regimes:
 
 * **Single-GPU training**: the trainer takes one configured GPU-resident
