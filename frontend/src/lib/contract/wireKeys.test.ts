@@ -52,7 +52,7 @@ describe('vendored item-wire snapshot sanity', () => {
  * here with a one-line reason instead of silently excluding it.
  */
 const KNOWN_STALE: readonly string[] = [
-  // Dropped from item_wire.json by openprocessor's OpenSearch perf/
+  // Dropped from item_wire.json by OpenProcessor's OpenSearch perf/
   // correctness merge (main f7dd620, 2026-09-24) — out of scope for this
   // frontend pass. `mapRawCrop` already defaults it to null and every
   // reader treats it as optional, so this is inert, not a crash risk.

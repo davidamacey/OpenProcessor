@@ -13,7 +13,7 @@ CLASSES = [
 GPU_OPTIONS = {
     "options": [
         {"value": "1", "gpu_ids": [1], "label": "GPU 1 (RTX 3080 Ti)", "advisory": None, "stops_containers": [], "default": False},
-        {"value": "2", "gpu_ids": [2], "label": "GPU 2 (RTX A6000)", "advisory": "stops the openprocessor container", "stops_containers": ["openprocessor"], "default": True},
+        {"value": "2", "gpu_ids": [2], "label": "GPU 2 (RTX A6000)", "advisory": "stops the op-api container", "stops_containers": ["op-api"], "default": True},
     ],
     "allowed_ids": [1, 2],
     "unrestricted": False,
@@ -79,7 +79,7 @@ def test_train_gpu_options(stub, page, app_url):
         "the server's default:true option (GPU 2) should be preselected"
     )
 
-    assert page.get_by_text("stops the openprocessor container").count() > 0, (
+    assert page.get_by_text("stops the op-api container").count() > 0, (
         "the selected option's advisory text should render"
     )
 

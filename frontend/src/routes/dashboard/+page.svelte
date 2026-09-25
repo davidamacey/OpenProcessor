@@ -70,7 +70,7 @@
   // M13 (2026-09-24 interactive pass): "Export Dataset (YOLO)" used to
   // fire POST {API_PREFIX}/export/yolo with no confirmation and toast
   // "job started" — but that endpoint is synchronous (verified live and
-  // against openprocessor's export_yolo handler: it `await`s the full
+  // against OpenProcessor's export_yolo handler: it `await`s the full
   // 5-step export pipeline before returning), so the toast lied about
   // what had actually happened by the time it appeared. A confirm step
   // now gates the click (the export can take a while and touches the

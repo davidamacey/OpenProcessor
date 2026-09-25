@@ -8,7 +8,7 @@ export default defineConfig({
   // Vite's default envPrefix is 'VITE_' only, which silently drops
   // PUBLIC_TRITON_API_URL (api.ts reads import.meta.env.PUBLIC_TRITON_API_URL
   // directly) even though CLAUDE.md documents it as the way to point local
-  // dev at a remote openprocessor.
+  // dev at a remote OpenProcessor.
   envPrefix: ['VITE_', 'PUBLIC_'],
   server: { port: 5173, host: '0.0.0.0' },
   preview: { port: 5181, host: '0.0.0.0' },

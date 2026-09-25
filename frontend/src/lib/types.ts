@@ -1,6 +1,6 @@
 /**
  * TypeScript types mirroring the OpenSearch indexes defined in Wave 1d
- * (the items, classes and clusters indexes) and the openprocessor
+ * (the items, classes and clusters indexes) and the OpenProcessor
  * `{API_PREFIX}/...` endpoint responses defined in Phase 2D.
  *
  * These shapes are forward-tolerant: we accept extra fields silently so a
@@ -221,7 +221,7 @@ export interface ExportSkippedItems {
 
 /**
  * Server response from `POST {API_PREFIX}/export/yolo` — synchronous
- * (verified live against openprocessor's `export_yolo`, `op_export.py`:
+ * (verified live against OpenProcessor's `export_yolo`, `src/routers/curation/export.py`:
  * `service.export_yolo(...)` is `await`ed before the handler returns).
  * There is no `job_id`/queued state on this endpoint at all — the
  * response already carries the finished export's own fields. M13
@@ -509,7 +509,7 @@ export interface Crop {
   // Provenance quad mirroring the region_detector/region_detector_version
   // pattern (docs/curation-strategy-plan-2026-09.md §4). `mistakenness`
   // is the only curation score that cleared the full validation gate as
-  // of openprocessor/docs/design/curation_scores.md — representativeness/
+  // of OpenProcessor docs/design/curation_scores.md — representativeness/
   // atypicality/uncertainty_entropy are pre-existing fields (cluster
   // distance, probe entropy) exposed as named sorts, not new score
   // fields, so they don't need their own Crop fields. Everything else

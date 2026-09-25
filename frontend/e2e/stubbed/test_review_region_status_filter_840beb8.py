@@ -59,7 +59,7 @@ REVIEW_TABS = {
     ]
 }
 
-# openprocessor fix #29 / 840beb8: labeled region_rejection_reason vocabulary.
+# OpenProcessor 840beb8: labeled region_rejection_reason vocabulary.
 REJECTION_REASONS = [
     {
         "id": "region_visible_elsewhere",

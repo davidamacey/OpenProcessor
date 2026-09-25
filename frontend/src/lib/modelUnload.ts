@@ -7,7 +7,7 @@
  * no `@testing-library/svelte` (see `StrategyBar.test.ts`).
  *
  * The real guard lives server-side (`DELETE {API_PREFIX}/models/{name}` in
- * openprocessor's `models.py`) — this module only decides what the button
+ * OpenProcessor's `models.py`) — this module only decides what the button
  * *looks like* from the `is_region_protected` / `requires_force_to_unload` flags the
  * server already computed and sent back on `{API_PREFIX}/models/status`. It must
  * never invent its own notion of "is this protected / is this active" — that

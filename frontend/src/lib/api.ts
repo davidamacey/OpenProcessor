@@ -488,7 +488,7 @@ export async function putCurationDefaults(
 // -- embedding projection (2-d visualization overlay, Phase 5) -----------
 //
 // docs/curation-strategy-plan-2026-09.md §2.7/§5.6/§7 — `embedding_viz.py`
-// + `viz.py` (openprocessor). UMAP-as-a-visualization-only overlay is the
+// + `viz.py` (OpenProcessor). UMAP-as-a-visualization-only overlay is the
 // one method in the whole curation-strategy plan that was NOT validated
 // in Phase 2 before implementation started; its own §6 acceptance bar
 // (2-d neighborhood purity vs. the real IVF cluster_id) decides whether
@@ -2153,7 +2153,7 @@ export interface RegionTextRules {
   invalid_reasons: string[];
 }
 
-/** What kind of thing rejected a region candidate (openprocessor fix #29,
+/** What kind of thing rejected a region candidate (OpenProcessor 840beb8,
  *  2026-09-24) — drives both the label lookup and the styling: a
  *  `model_verdict` is the verifier judging the box wrong, `automatic` is
  *  a geometry sanity gate, and `needs_human` means no verdict was given
@@ -2161,7 +2161,7 @@ export interface RegionTextRules {
 export type RejectionReasonKind = 'model_verdict' | 'automatic' | 'needs_human';
 
 /** One pipeline-written `region_rejection_reason` value
- *  (`GET {API_PREFIX}/regions/vocabulary`, openprocessor fix #29). `match: 'exact'`
+ *  (`GET {API_PREFIX}/regions/vocabulary`, OpenProcessor 840beb8). `match: 'exact'`
  *  entries match the stored value verbatim; `match: 'prefix'` entries
  *  match a stored-value prefix (e.g. `sanity_reject:`) with
  *  `label_template`'s `{detail}` filled from whatever follows the
@@ -2188,7 +2188,7 @@ export interface RegionVocabularyResponse {
   /** The active profile's region-text validity rules, or `null` without
    *  a region profile. */
   text_rules: RegionTextRules | null;
-  /** Labeled `region_rejection_reason` vocabulary (openprocessor fix #29). */
+  /** Labeled `region_rejection_reason` vocabulary (OpenProcessor 840beb8). */
   rejection_reasons: RejectionReasonEntry[];
   /** The active region profile (same value `/health` serves), or `null`
    *  when none is configured, in which case every list above is empty. */
@@ -2956,12 +2956,12 @@ export async function cancelSelect(signal?: AbortSignal): Promise<void> {
 // (Uncertainty, Model Disagreements, and the `uniqueness`/`mistakenness`
 // StrategyBar sorts) are empty not because nothing's wrong but because
 // no scorer has ever run — `/scores/*` had no frontend caller at all.
-// Scorers stay operator-triggered by design (openprocessor's
-// `op_scores.py` docstring); this is a deployment-level operation, so it
+// Scorers stay operator-triggered by design (OpenProcessor's
+// `src/routers/curation/scores.py` docstring); this is a deployment-level operation, so it
 // lives on `/settings`, not a StrategyBar chip, following the same
 // confirm-before-write convention as the rest of that page.
 //
-// Wire shapes confirmed 2026-09-24 against openprocessor `main`'s scores
+// Wire shapes confirmed 2026-09-24 against OpenProcessor `main`'s scores
 // job module (`compute_coverage`/`_JobState`) — the vendored OpenAPI
 // spec only declares
 // `additionalProperties: true` for these four routes, so there is
@@ -3104,7 +3104,7 @@ export function getScoresStatus(signal?: AbortSignal): Promise<ScoresJob> {
 }
 
 /** Cancel a running scoring job. Real backend returns `{cancelled, ...job
- *  state}` (`op_scores.py::scores_cancel`), same shape as
+ *  state}` (`src/routers/curation/scores.py::scores_cancel`), same shape as
  *  `cancelVizProjection` — `cancelled` is false when nothing was running. */
 export async function cancelScores(
   signal?: AbortSignal,
@@ -3164,7 +3164,7 @@ export async function searchCrops(
     const base = mapRawCrop(it);
     return {
       ...base,
-      // The backend's `_hydrate_item` (openprocessor semantic_search.py) sends
+      // The backend's `_hydrate_item` (OpenProcessor semantic_search.py) sends
       // the match score as `semantic_score` — `similarity_score`/`score`
       // are legacy/defensive fallbacks that the live endpoint has never
       // actually populated. Without the semantic_score read here every

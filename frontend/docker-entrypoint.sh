@@ -1,7 +1,7 @@
 #!/bin/sh
 # Replaces __RUNTIME__ placeholder in built JS files with the actual
 # PUBLIC_TRITON_API_URL at container start. Lets us bake one image and
-# point it at any openprocessor URL via env var.
+# point it at any OpenProcessor URL via env var.
 #
 # Default is empty — that makes the JS issue *relative* fetches, which
 # the labeler's nginx then proxies to API_UPSTREAM over the docker network.
@@ -9,7 +9,7 @@
 # the labeler. The previous `http://localhost:4603` default broke any
 # browser not running on the host (LAN IPs hit their own localhost,
 # which has no API). Override the env var only when the labeler needs
-# to call a openprocessor on a different origin.
+# to call a OpenProcessor on a different origin.
 #
 # Also replaces __API_PREFIX__ (from PUBLIC_API_PREFIX) with the backend
 # path prefix, in both the bundled JS/HTML and nginx.conf's proxy

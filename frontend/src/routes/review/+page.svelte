@@ -297,7 +297,7 @@
           // event loop long enough that the heartbeat goes stale and
           // get_state() reports 'failed' mid-computation, even though the
           // job goes on to finish and overwrite its own state to
-          // 'completed' moments later — a openprocessor timing quirk, out of
+          // 'completed' moments later — a OpenProcessor timing quirk, out of
           // scope to fix here, but the frontend must still stop treating
           // this job as "ours" once it reports terminal).
           diverseError = st.error ?? `Diverse selection ${st.status}.`;

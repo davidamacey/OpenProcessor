@@ -108,7 +108,7 @@ describe('regionVocabularyStore.init', () => {
   });
 });
 
-// openprocessor fix #29 / 840beb8 adoption: region_rejection_reason gets a
+// OpenProcessor 840beb8 adoption: region_rejection_reason gets a
 // real labeled vocabulary — exact matches, prefix matches (with
 // {detail} substitution), and an unmatched value rendering verbatim
 // (never titlecased — that placeholder only ever covered text_choices/
