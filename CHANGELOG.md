@@ -160,7 +160,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   curation background workers (detection, VLM, auto-label,
   cluster-refresh) now write a heartbeat file on their main loop —
   including while idle — checked by
-  `python -m src.services.curation.worker_liveness check <name>
+  `python src/services/curation/worker_liveness.py check <name>
   --max-age 120`, replacing `pgrep -f <module>` (which can't see a
   deadlocked-but-still-running event loop). `yolo-api` gained its own
   `/health`-based healthcheck so `curation-vlm-worker` /

@@ -226,7 +226,7 @@ services:
       # S-2: heartbeat file the worker touches every 15s on its main
       # loop (including while idle) — pgrep can't see a deadlocked but
       # still-running event loop.
-      test: ["CMD-SHELL", "python -m src.services.curation.worker_liveness check detection_worker --max-age 120"]
+      test: ["CMD-SHELL", "python /app/src/services/curation/worker_liveness.py check detection_worker --max-age 120"]
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -264,7 +264,7 @@ services:
       - scripts.curation.vlm_worker
       - --continuous
     healthcheck:
-      test: ["CMD-SHELL", "python -m src.services.curation.worker_liveness check vlm_worker --max-age 120"]
+      test: ["CMD-SHELL", "python /app/src/services/curation/worker_liveness.py check vlm_worker --max-age 120"]
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -311,7 +311,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "python -m src.services.curation.worker_liveness check auto_label_worker --max-age 120",
+          "python /app/src/services/curation/worker_liveness.py check auto_label_worker --max-age 120",
         ]
       interval: 30s
       timeout: 5s
@@ -348,7 +348,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "python -m src.services.curation.worker_liveness check cluster_refresh --max-age 120",
+          "python /app/src/services/curation/worker_liveness.py check cluster_refresh --max-age 120",
         ]
       interval: 30s
       timeout: 5s
