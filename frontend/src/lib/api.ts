@@ -1249,7 +1249,14 @@ function _rawClusterToCluster(
     validated_count: c.validated_count,
     dominant_class_id: c.dominant_class_id,
     dominant_class_name: c.dominant_class_name,
-    dominant_pct: c.purity,
+    // C1 (visual audit 2026-09-24): the subtitle's "dominant share" is
+    // the served label-based share (largest class among labelled
+    // members), never the nearest-centroid geometry `purity` below —
+    // mapping `purity` here rendered "class_b · 3%" for a cluster that
+    // is 616/616 class_b.
+    dominant_pct: c.label_purity ?? null,
+    dominant_count: c.dominant_count ?? null,
+    labelled_count: c.labelled_count ?? null,
     purity: c.purity,
     purity_n: c.purity_n ?? null,
     purity_basis: c.purity_basis ?? null,

@@ -17,6 +17,7 @@
     buildExportRows,
     hasCurrentMulticlassExport,
     isNothingExportable,
+    splitExportClasses,
     type ExportRow,
   } from '$lib/export/exportDatasetRows';
   import { formatCount } from '$lib/formatCount';
@@ -37,8 +38,15 @@
   let error = $state<string | null>(null);
 
   // Sort
-  type SortKey = 'class_name' | 'class_id' | 'total' | 'validated' | 'aug_target' | 'gap';
-  let sortKey = $state<SortKey>('gap');
+  type SortKey =
+    | 'class_name'
+    | 'class_id'
+    | 'total'
+    | 'validated'
+    | 'trainable'
+    | 'aug_target'
+    | 'trainableGap';
+  let sortKey = $state<SortKey>('trainableGap');
   let sortDir = $state<'asc' | 'desc'>('desc');
 
   // Export
@@ -108,6 +116,12 @@
     });
     return list;
   });
+  // Classes with any validated or held-out crop come first; the rest (often
+  // most of the registry) fold into one expandable row, so the classes that
+  // actually have data are never buried under empty ones.
+  const activeRows = $derived(rows.filter((r) => r.validated > 0 || r.test_count > 0));
+  const emptyRows = $derived(rows.filter((r) => !(r.validated > 0 || r.test_count > 0)));
+  let showEmptyClasses = $state(false);
 
   // DQ-M9 frontend half (docs/design/data-quality-pass-2026-09-24.md): the
   // Export button used to be enabled unconditionally — the audit's repro
@@ -116,6 +130,10 @@
   // `POST /export/yolo` itself has no readiness gate. `loading` guards the
   // window before `stats` has ever arrived, where `rows` is legitimately
   // `[]` — don't flash "nothing to export" before the served data is in.
+  const exportClassSplit = $derived(
+    splitExportClasses(exportState?.class_split_counts ?? []),
+  );
+
   const nothingExportable = $derived(!loading && isNothingExportable(rows));
 
   function setSort(k: SortKey): void {
@@ -361,8 +379,8 @@
     <header class="mb-2 flex flex-wrap items-center gap-3">
       <h2 class="text-sm font-semibold text-zinc-300">Test holdout</h2>
       <span class="text-xs text-zinc-500">
-        red badge on a class the server flags deficient (below {holdout?.min_test_per_class ??
-          '…'} test crops)
+        red badge: a class with frozen test crops that the server flags deficient (below {holdout?.min_test_per_class ??
+          '…'}). Classes with no validated crops have no test crops and are not flagged.
       </span>
       <span class="grow"></span>
       {#if !testFrozen}
@@ -408,7 +426,7 @@
     </section>
   {:else if hddSources.length > 0}
     <section class="surface p-4">
-      <h2 class="mb-2 text-sm font-semibold text-zinc-300">HDD source distribution</h2>
+      <h2 class="mb-2 text-sm font-semibold text-zinc-300">Source distribution</h2>
       <ul class="flex flex-wrap gap-2 text-xs">
         {#each hddSources as src (src.key)}
           <li class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1">
@@ -420,8 +438,65 @@
     </section>
   {/if}
 
+  {#snippet classRow(row: ExportRow)}
+    <tr class="border-b border-zinc-900 hover:bg-zinc-900/40">
+      <td class="px-3 py-1.5 text-zinc-200">{row.class_name}</td>
+      <td class="px-3 py-1.5 font-mono text-xs text-zinc-500">{row.class_id}</td>
+      <td class="px-3 py-1.5 text-right font-mono text-zinc-400">
+        {row.total.toLocaleString()}
+      </td>
+      <td class="px-3 py-1.5 text-right font-mono text-zinc-400">
+        {row.validated.toLocaleString()}
+      </td>
+      <td class="px-3 py-1.5 text-right font-mono text-zinc-200">
+        {row.trainable.toLocaleString()}
+      </td>
+      <td class="px-3 py-1.5 text-right font-mono text-zinc-300">
+        {row.aug_target.toLocaleString()}
+      </td>
+      <td class="px-3 py-1.5 text-right">
+        {#if row.trainableGap == null}
+          <span class="font-mono text-xs text-zinc-500">—</span>
+        {:else}
+          <span
+            class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(
+              row.trainableGap,
+            )}"
+            title={row.trainableGap <= 0
+              ? 'on target'
+              : `${row.trainableGap} more trainable crops needed`}
+          >
+            {row.trainableGap > 0 ? '+' : ''}{row.trainableGap.toLocaleString()}
+          </span>
+        {/if}
+      </td>
+      <td class="px-3 py-1.5 text-right">
+        <span
+          class="rounded-md border px-1.5 py-0.5 font-mono text-xs {testBadge(
+            row.testDeficient,
+          )}"
+        >
+          {row.test_count}
+        </span>
+      </td>
+      <td class="px-3 py-1.5 text-right">
+        {#if row.adequacy == null}
+          <span class="font-mono text-xs text-zinc-500">—</span>
+        {:else}
+          <span
+            class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyClass(
+              row.adequacy,
+            )}"
+          >
+            {row.adequacy}
+          </span>
+        {/if}
+      </td>
+    </tr>
+  {/snippet}
+
   <!-- Dataset table -->
-  <section class="surface min-h-0 flex-1 overflow-auto">
+  <section class="surface max-h-[70vh] shrink-0 overflow-auto">
     {#if loading && rows.length === 0}
       <div class="p-6 text-sm text-zinc-500">Loading dataset stats…</div>
     {:else if error}
@@ -460,9 +535,19 @@
               title="Crops with this class_id (GET {API_PREFIX}/stats/classes) — not the same as the class-cluster bucket size shown in the sidebar and on /classes."
               >Total (labelled)</th
             >
+            <!-- E1 (visual audit 2026-09-24): Validated counts the frozen
+                 test crops too; Trainable is validated minus the served
+                 test holdout, and Gap is measured against Trainable. -->
             <th
               class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
-              onclick={() => setSort('validated')}>Validated</th
+              onclick={() => setSort('validated')}
+              title="Validated crops, including any frozen as test holdout">Validated</th
+            >
+            <th
+              class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
+              onclick={() => setSort('trainable')}
+              title="Validated minus the frozen test holdout (GET {API_PREFIX}/test_holdout/stats) — what training can actually use"
+              >Trainable</th
             >
             <th
               class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
@@ -470,64 +555,40 @@
             >
             <th
               class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
-              onclick={() => setSort('gap')}>Gap</th
+              onclick={() => setSort('trainableGap')}
+              title="Aug target minus trainable crops">Gap</th
             >
-            <th class="px-3 py-2 text-right font-medium">Test</th>
+            <th class="px-3 py-2 text-right font-medium" title="Frozen test holdout crops"
+              >Test (held out)</th
+            >
             <th class="px-3 py-2 text-right font-medium">Adequacy</th>
           </tr>
         </thead>
         <tbody>
-          {#each rows as row (row.class_id)}
-            <tr class="border-b border-zinc-900 hover:bg-zinc-900/40">
-              <td class="px-3 py-1.5 text-zinc-200">{row.class_name}</td>
-              <td class="px-3 py-1.5 font-mono text-xs text-zinc-500">{row.class_id}</td>
-              <td class="px-3 py-1.5 text-right font-mono text-zinc-400">
-                {row.total.toLocaleString()}
-              </td>
-              <td class="px-3 py-1.5 text-right font-mono text-zinc-200">
-                {row.validated.toLocaleString()}
-              </td>
-              <td class="px-3 py-1.5 text-right font-mono text-zinc-300">
-                {row.aug_target.toLocaleString()}
-              </td>
-              <td class="px-3 py-1.5 text-right">
-                {#if row.gap == null}
-                  <span class="font-mono text-xs text-zinc-500">—</span>
-                {:else}
-                  <span
-                    class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(
-                      row.gap,
-                    )}"
-                    title={row.gap <= 0 ? 'on target' : `${row.gap} more crops needed`}
-                  >
-                    {row.gap > 0 ? '+' : ''}{row.gap.toLocaleString()}
-                  </span>
-                {/if}
-              </td>
-              <td class="px-3 py-1.5 text-right">
-                <span
-                  class="rounded-md border px-1.5 py-0.5 font-mono text-xs {testBadge(
-                    row.testDeficient,
-                  )}"
+          {#each activeRows as row (row.class_id)}
+            {@render classRow(row)}
+          {/each}
+          {#if emptyRows.length > 0}
+            <tr class="border-b border-zinc-900">
+              <td colspan="9" class="px-3 py-1.5">
+                <button
+                  type="button"
+                  class="text-xs text-zinc-400 hover:text-zinc-200"
+                  aria-expanded={showEmptyClasses}
+                  data-testid="export-empty-classes-toggle"
+                  onclick={() => (showEmptyClasses = !showEmptyClasses)}
                 >
-                  {row.test_count}
-                </span>
-              </td>
-              <td class="px-3 py-1.5 text-right">
-                {#if row.adequacy == null}
-                  <span class="font-mono text-xs text-zinc-500">—</span>
-                {:else}
-                  <span
-                    class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyClass(
-                      row.adequacy,
-                    )}"
-                  >
-                    {row.adequacy}
-                  </span>
-                {/if}
+                  {showEmptyClasses ? '▾' : '▸'}
+                  {emptyRows.length} classes with no validated crops
+                </button>
               </td>
             </tr>
-          {/each}
+            {#if showEmptyClasses}
+              {#each emptyRows as row (row.class_id)}
+                {@render classRow(row)}
+              {/each}
+            {/if}
+          {/if}
         </tbody>
       </table>
     {/if}
@@ -663,9 +724,25 @@
             </span>
           {/if}
           {#if exportState.class_count != null}
-            <span class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1">
-              <span class="text-zinc-500">classes</span>
-              <span class="ml-1 font-mono text-zinc-200">{exportState.class_count}</span>
+            <!-- E2 (visual audit 2026-09-24): the served class_count is the
+                 registry size; say how many classes actually have objects. -->
+            <span
+              class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1"
+              data-testid="export-class-count"
+            >
+              {#if exportState.class_split_counts}
+                <span class="font-mono text-zinc-200"
+                  >{exportClassSplit.withObjects.length}</span
+                >
+                <span class="text-zinc-500">classes with objects</span>
+                <span class="ml-1 text-zinc-500"
+                  >({exportState.class_count} in registry)</span
+                >
+              {:else}
+                <span class="text-zinc-500">classes in registry</span>
+                <span class="ml-1 font-mono text-zinc-200">{exportState.class_count}</span
+                >
+              {/if}
             </span>
           {/if}
           {#if exportState.split_counts}
@@ -748,7 +825,7 @@
       {#if exportState.class_split_counts && exportState.class_split_counts.length > 0}
         <details class="mt-3 text-xs">
           <summary class="cursor-pointer text-zinc-400 hover:text-zinc-200">
-            Per-class object counts ({exportState.class_split_counts.length})
+            Per-class object counts ({exportClassSplit.withObjects.length} classes with objects)
           </summary>
           <div class="mt-2 max-h-64 overflow-auto rounded border border-zinc-800">
             <table class="w-full text-xs">
@@ -763,7 +840,7 @@
                 </tr>
               </thead>
               <tbody>
-                {#each exportState.class_split_counts as c (c.class_id)}
+                {#each exportClassSplit.withObjects as c (c.class_id)}
                   {@const missing = c.train === 0 || c.val === 0}
                   <tr
                     class="border-b border-zinc-900 {missing
@@ -785,6 +862,13 @@
               </tbody>
             </table>
           </div>
+          {#if exportClassSplit.empty.length > 0}
+            <p class="mt-1 text-zinc-500" data-testid="export-empty-classes">
+              {exportClassSplit.empty.length} class{exportClassSplit.empty.length === 1
+                ? ''
+                : 'es'} with no objects in this export
+            </p>
+          {/if}
         </details>
       {/if}
     {/if}

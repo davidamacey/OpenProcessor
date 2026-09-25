@@ -21,8 +21,8 @@ describe('DQ-p2: the status bar reads the pager that actually backs the visible 
   it('branches on slotGallery to read its pager in gallery mode', () => {
     const idx = src.indexOf('DQ-p2 (docs/design/data-quality-pass-2026-09-24.md)');
     expect(idx).toBeGreaterThan(-1);
-    const slice = src.slice(idx, idx + 1200);
-    expect(slice).toMatch(/\{#if slotGallery\}/);
+    const slice = src.slice(idx, idx + 1800);
+    expect(slice).toMatch(/\{(#|:else )if slotGallery\}/);
     expect(slice).toMatch(
       /\{slotGallery\.pager\.items\.length\} \/ \{slotGallery\.pager\.total\}/,
     );

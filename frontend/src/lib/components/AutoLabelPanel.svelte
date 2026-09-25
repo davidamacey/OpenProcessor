@@ -41,6 +41,7 @@
   import { classesStore } from '$stores/classes.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
+  import { summarizeRunStages } from '$lib/autoLabelRunSummary';
 
   // Additive, optional (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md
   // §A.5): `/ingest`'s ClusteringHandoff passes a gate computed from the
@@ -119,7 +120,7 @@
   const STAGE_LABEL: Record<string, string> = {
     '': 'preparing…',
     cluster_id_normalize: 'aligning cluster_id with class_id',
-    cluster_residuals: 'clustering residual pool (AHC)',
+    cluster_residuals: 'clustering residual pool',
     auto_promote: 'promoting high-purity clusters',
     vlm: 'VLM sweep over unvalidated crops',
     finalize: 'final normalization and accounting',
@@ -282,8 +283,14 @@
 </script>
 
 <section class="rounded-md border border-zinc-800 bg-zinc-950 p-4">
-  <div class="flex items-center justify-between gap-3">
-    <div>
+  <!-- D3 (visual audit 2026-09-24): at 800px the description was squeezed
+       into a ~60px column beside the controls (one word per line). It now
+       stacks above the controls until there's room for a side-by-side row. -->
+  <div
+    class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between"
+    data-testid="recluster-header"
+  >
+    <div class="min-w-0 xl:max-w-md" data-testid="recluster-description">
       <h2 class="text-base font-semibold">Data integrity — recluster</h2>
       <!-- m27 (2026-09-24 interactive pass): this used to say "AHC"
            (the deployment's live clustering method is IVF, with AHC
@@ -296,8 +303,8 @@
         <code class="text-zinc-300">class_id</code>, re-clusters unlabeled residuals (IVF
         + AHC refine), and promotes high-purity clusters. Optionally also runs the VLM
         over remaining unvalidated crops (off by default — see "Run VLM labeling stage"
-        below). v6's confident labels and human validations are never overwritten. Hours
-        at 350k-crop scale. Safe to cancel.
+        below). The classifier's confident labels and human validations are never
+        overwritten. Safe to cancel.
       </p>
     </div>
     {#if !isRunning}
@@ -358,7 +365,7 @@
         {/if}
       </div>
     {/if}
-    <div class="flex items-center gap-3">
+    <div class="flex flex-wrap items-center gap-3">
       {#if !isRunning}
         {#if scopeAvailable}
           <AssistScopeBar {scope} classes={classesStore.classes} disabled={busy} />
@@ -564,12 +571,52 @@
             <summary class="cursor-pointer text-zinc-400 hover:text-zinc-200">
               Last run summary
             </summary>
-            <pre
-              class="mt-2 max-h-64 overflow-auto rounded bg-zinc-900 p-2 font-mono text-[10px] text-zinc-300">{JSON.stringify(
-                job.result,
-                null,
-                2,
-              )}</pre>
+            <!-- D5 (visual audit 2026-09-24): a per-stage table of the
+                 served result instead of a raw JSON dump; the JSON stays
+                 one click away for the nested details. -->
+            <table
+              class="mt-2 w-full text-left text-[11px]"
+              data-testid="last-run-stages"
+            >
+              <thead class="text-zinc-500">
+                <tr>
+                  <th class="py-1 pr-3 font-medium">Stage</th>
+                  <th class="py-1 pr-3 font-medium">Status</th>
+                  <th class="py-1 font-medium">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each summarizeRunStages(job.result) as row (row.key)}
+                  <tr class="border-t border-zinc-800 align-top">
+                    <td class="py-1 pr-3 text-zinc-200" title={row.key}>
+                      {STAGE_LABEL[row.key] ?? row.key}
+                    </td>
+                    <td class="py-1 pr-3 font-mono text-zinc-300">{row.status}</td>
+                    <td class="py-1 text-zinc-400">
+                      {#if row.reason}<span class="mr-2">{row.reason}</span>{/if}
+                      {#each row.fields as f (f.name)}
+                        <span class="mr-2 inline-block font-mono text-[10px]"
+                          ><span class="text-zinc-500">{f.name}</span> {f.value}</span
+                        >
+                      {/each}
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+            <details class="mt-2">
+              <summary
+                class="cursor-pointer text-[10px] text-zinc-500 hover:text-zinc-300"
+              >
+                Raw JSON
+              </summary>
+              <pre
+                class="mt-1 max-h-64 overflow-auto rounded bg-zinc-900 p-2 font-mono text-[10px] text-zinc-300">{JSON.stringify(
+                  job.result,
+                  null,
+                  2,
+                )}</pre>
+            </details>
           </details>
         {/if}
       {/if}

@@ -15,11 +15,69 @@
  * happened to sort first alphabetically.
  */
 
+import { trainableCount } from '$lib/holdoutCounts';
+
 export interface ClassBalanceRow {
   class_id: number;
   class_name: string;
   count: number;
   validated_count: number;
+}
+
+export interface ClassBalanceBar {
+  class_id: number;
+  class_name: string;
+  validated: number;
+  test: number;
+  trainable: number;
+  /** Bar width, 0..100, of `trainable` against the largest trainable count. */
+  pct: number;
+  tier: string;
+}
+
+export interface ClassBalanceView {
+  bars: ClassBalanceBar[];
+  /** Classes with 0 validated crops, collapsed to one line. */
+  zeroCount: number;
+  /** Classes with validated crops beyond `limit`, shown as "+N more". */
+  moreCount: number;
+}
+
+/**
+ * D2 (visual audit 2026-09-24): the balance chart drew a 2% bar for every
+ * class at 0 (a wall of identical red "0" bars), silently dropped every
+ * class past the first 30, and counted frozen test crops as validated.
+ * Bars are now only the classes with validated crops, sized by trainable
+ * (validated minus served holdout) with the test count shown alongside;
+ * zero classes collapse into one count and the overflow into "+N more".
+ */
+export function buildClassBalance<T extends ClassBalanceRow & { adequacy?: string }>(
+  rows: readonly T[],
+  holdout: Map<number, number>,
+  limit = 30,
+): ClassBalanceView {
+  const sorted = sortClassBalance(rows);
+  const nonZero = sorted.filter((r) => r.validated_count > 0);
+  const zeroCount = sorted.length - nonZero.length;
+  const shown = nonZero.slice(0, limit);
+  const withTrainable = shown.map((r) => {
+    const test = holdout.get(r.class_id) ?? 0;
+    return { r, test, trainable: trainableCount(r.validated_count, test) };
+  });
+  const max = Math.max(1, ...withTrainable.map((x) => x.trainable));
+  return {
+    bars: withTrainable.map(({ r, test, trainable }) => ({
+      class_id: r.class_id,
+      class_name: r.class_name,
+      validated: r.validated_count,
+      test,
+      trainable,
+      pct: Math.round((trainable / max) * 100),
+      tier: r.adequacy ?? 'block',
+    })),
+    zeroCount,
+    moreCount: nonZero.length - shown.length,
+  };
 }
 
 export function sortClassBalance<T extends ClassBalanceRow>(rows: readonly T[]): T[] {

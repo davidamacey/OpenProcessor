@@ -340,7 +340,7 @@
             <dd class="font-mono">{fmt(stats.test_holdout)}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Distinct HDD sources</dt>
+            <dt class="text-zinc-400">Distinct sources</dt>
             <dd class="font-mono">{stats.by_source.length}</dd>
           </div>
         </dl>
@@ -396,7 +396,12 @@
           </div>
           {#if stats.clusters.last_run_cluster_count != null}
             <div class="flex justify-between">
-              <dt class="text-zinc-400">Made by last run</dt>
+              <dt
+                class="text-zinc-400"
+                title="Clusters the most recent run created. A run only clusters the residual pool (crops not already in a class cluster), so this is usually far smaller than the total."
+              >
+                Made by last run
+              </dt>
               <dd class="font-mono">{fmt(stats.clusters.last_run_cluster_count)}</dd>
             </div>
           {/if}
@@ -437,7 +442,9 @@
             <h3 class="text-sm font-semibold text-zinc-300">{statsSpec.panelTitle}</h3>
             <span class="text-xs text-zinc-500">
               {fmt(p?.boxed ?? 0)} with a box ·
-              {fmt(p?.confirmed ?? 0)} confirmed
+              <span title="Accepted by the automatic verifier; not a human review">
+                {fmt(p?.confirmed ?? 0)} verifier-confirmed
+              </span>
             </span>
           </header>
           {#if slotRows.length === 0}
@@ -490,11 +497,11 @@
                attempt on this deployment — not a confident inclusion
                claim. -->
           <p class="mt-2 text-xs text-zinc-500">
-            {fmt(p?.boxed ?? 0)} crops carry a box ({fmt(p?.confirmed ?? 0)} Gemma-confirmed).
-            The remaining
-            {fmt(stats.total_crops - (p?.boxed ?? 0))} either had no visible detection (Gemma
-            pre-filter said no), were rejected after detection, or the detectors haven't reached
-            them yet.
+            {fmt(p?.boxed ?? 0)} crops carry a box ({fmt(p?.confirmed ?? 0)} verifier-confirmed,
+            not human-reviewed). The remaining
+            {fmt(stats.total_crops - (p?.boxed ?? 0))} either had no visible detection (the
+            visibility pre-filter said no), were rejected after detection, or the detectors
+            haven't reached them yet.
             {fmt(p?.total_detected ?? 0)} crops carry detector credit (<code
               class="font-mono">regions.total_detected</code
             >) — this may not cover every rejected or box-less attempt.
@@ -512,13 +519,13 @@
         </header>
         <dl class="space-y-1.5 text-sm">
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Pending detection (SAM)</dt>
+            <dt class="text-zinc-400">Pending detection</dt>
             <dd class="font-mono text-orange-300">
               {fmt(stats.unlabeled.pending_detection)}
             </dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Pending verification (Gemma)</dt>
+            <dt class="text-zinc-400">Pending verification</dt>
             <dd class="font-mono text-orange-300">
               {fmt(stats.unlabeled.pending_verification)}
             </dd>
@@ -592,9 +599,7 @@
         {/if}
         <p class="mt-3 text-xs text-zinc-500">
           Matches the API's <code class="font-mono">ingest/region_drain</code> total. While
-          &gt; 0 the ingest walker waits before triggering the next clustering pass. SAM3 only
-          runs on crops that pass the Gemma visible-filter — most time is spent in Gemma, not
-          SAM3.
+          &gt; 0 the ingest walker waits before triggering the next clustering pass.
         </p>
       </div>
     </div>

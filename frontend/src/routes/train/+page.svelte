@@ -312,7 +312,8 @@
       const bg = r.background_images ?? '?';
       singleClassExportMessage = `${spec.label} done — ${r.image_count} images (${pos} positives, ${bg} backgrounds), ${singleClassImageMode} @ ${singleClassImgSize}px${singleClassDedup ? ', dedup 0.98' : ''}. dataset_sha ${r.dataset_sha.slice(0, 12)}`;
       if (r.positives_zero_warning) {
-        singleClassExportMessage += ' ⚠ zero positives — check labeling for this slot.';
+        singleClassExportMessage +=
+          ' Warning: zero positives — check labeling for this slot.';
       }
       toastStore.success(`${spec.label} complete`);
     } catch (e) {
@@ -797,6 +798,7 @@
   const cohortGroupSplit = $derived(splitCohortGroups(cohortGroups, cohortCounts));
   const visibleCohortGroups = $derived(cohortGroupSplit.visible);
   const zeroCandidateGroups = $derived(cohortGroupSplit.zero);
+  const cohortGroupsPending = $derived(cohortGroupSplit.pending);
 
   /** Dispatches a cohort's `endpoint`/`params` (served verbatim by
    *  `{API_PREFIX}/training_cohorts`, or a tier-2 declared fallback
@@ -964,7 +966,7 @@
         curation-trainer container and tails progress until it finishes.
       </p>
       <div class="mt-2">
-        <MonitoringLinks />
+        <MonitoringLinks mlflowRunUrls={runs.map((r) => r.mlflow_run_url)} />
       </div>
     </div>
     <button
@@ -1409,7 +1411,10 @@
       <details class="border-b border-zinc-800 p-3 last:border-b-0">
         <summary class="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
           {zeroCandidateGroups.length} class{zeroCandidateGroups.length === 1 ? '' : 'es'} with
-          no candidates
+          no candidates{#if cohortGroupsPending > 0}
+            <span class="text-zinc-600" data-testid="zero-cohorts-so-far"
+              >{` so far (${cohortGroupsPending} still loading)`}</span
+            >{/if}
         </summary>
         <div class="mt-2 space-y-2">
           {#each zeroCandidateGroups as group (group.classId)}

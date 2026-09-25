@@ -85,6 +85,9 @@ def test_dashboard_run_vlm_polls_the_per_job_status_endpoint(stub, page, app_url
 
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on("GET", r"/stats/classes(\?|$)", {"classes": []})
+    # D2 (visual audit 2026-09-24): the dashboard balance chart reads the
+    # served per-class test holdout.
+    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
     stub.on("GET", r"/methods(\?|$)", METHODS)
     stub.on("GET", r"/stats/dataset(\?|$)", DATASET_STATS)
     stub.on("GET", r"/crops(\?|$)", {"total": 0, "page": 1, "page_size": 30, "crops": []})

@@ -45,6 +45,11 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
   import { undoStore } from '$stores/undo.svelte';
+  import {
+    dominantShareText,
+    dominantShareTitle,
+    geometryPurityText,
+  } from '$lib/clusters/clusterCardText';
 
   // m7 (2026-09-24 interactive pass): the served purity_thresholds this
   // response carries, so the border-color legend can render the real
@@ -875,10 +880,14 @@
     <ShortcutsButton />
 
     {#if classFilter != null}
+      <!-- C2 (visual audit 2026-09-24): name the class, not its id. -->
       <span
         class="rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-xs text-blue-200"
+        title="class id {classFilter}"
+        data-testid="class-filter-chip"
       >
-        class filter: #{classFilter}
+        class: {classesStore.classes.find((c) => c.id === classFilter)?.name ??
+          `#${classFilter}`}
       </span>
     {/if}
 
@@ -952,96 +961,108 @@
 
     <span class="grow"></span>
 
-    <!-- Color legend for the card border. The cluster grid uses border
+    <!-- C5 (visual audit 2026-09-24): the cluster-grid controls below
+         (purity legend, unlabeled filter, embedding plot, sort, subject,
+         clarity) don't apply to the Ignored bucket's crop list, so they
+         are hidden in that mode rather than left live and inert. -->
+    {#if !ignoredModeActive}
+      <!-- Color legend for the card border. The cluster grid uses border
          color to encode purity at a glance; without this strip the user
          has to mouse over each card to figure out what the colors mean. -->
-    <div
-      class="flex items-center gap-2 text-[10px] text-zinc-500"
-      title="Card border color encodes cluster purity — nearest-centroid geometry purity (DQ-M2), not label agreement. See each card's purity chip tooltip for n and label_purity/labelled_share."
-    >
-      <span class="flex items-center gap-1">
-        <span class="inline-block h-2 w-3 rounded-sm border-2 border-green-500/60"></span>
-        {purityThresholds ? `≥${Math.round(purityThresholds.pure_min * 100)}%` : 'pure'}
-      </span>
-      <span class="flex items-center gap-1">
-        <span class="inline-block h-2 w-3 rounded-sm border-2 border-orange-500/60"
-        ></span>
-        {purityThresholds ? `≥${Math.round(purityThresholds.mixed_min * 100)}%` : 'mixed'}
-      </span>
-      <span class="flex items-center gap-1">
-        <span class="inline-block h-2 w-3 rounded-sm border-2 border-red-500/60"></span>
-        {purityThresholds ? `<${Math.round(purityThresholds.mixed_min * 100)}%` : 'noisy'}
-      </span>
-      <span class="flex items-center gap-1">
-        <span class="inline-block h-2 w-3 rounded-sm border-2 border-blue-500/60"></span>
-        sub-clustered
-      </span>
-    </div>
+      <div
+        class="flex items-center gap-2 text-[10px] text-zinc-500"
+        title="Card border color encodes cluster purity — nearest-centroid geometry purity (DQ-M2), not label agreement. See each card's purity chip tooltip for n and label_purity/labelled_share."
+      >
+        <span class="flex items-center gap-1">
+          <span class="inline-block h-2 w-3 rounded-sm border-2 border-green-500/60"
+          ></span>
+          {purityThresholds ? `≥${Math.round(purityThresholds.pure_min * 100)}%` : 'pure'}
+        </span>
+        <span class="flex items-center gap-1">
+          <span class="inline-block h-2 w-3 rounded-sm border-2 border-orange-500/60"
+          ></span>
+          {purityThresholds
+            ? `≥${Math.round(purityThresholds.mixed_min * 100)}%`
+            : 'mixed'}
+        </span>
+        <span class="flex items-center gap-1">
+          <span class="inline-block h-2 w-3 rounded-sm border-2 border-red-500/60"></span>
+          {purityThresholds
+            ? `<${Math.round(purityThresholds.mixed_min * 100)}%`
+            : 'noisy'}
+        </span>
+        <span class="flex items-center gap-1">
+          <span class="inline-block h-2 w-3 rounded-sm border-2 border-blue-500/60"
+          ></span>
+          sub-clustered
+        </span>
+      </div>
 
-    <!-- Unlabeled-only filter: AHC clusters that didn't reach class-majority
+      <!-- Unlabeled-only filter: AHC clusters that didn't reach class-majority
          consensus surface as "Unlabeled #N". This toggle narrows the grid
          to just those, so operators can drain the unlabeled backlog in
          one pass (drag a cluster's reps into a class on the sidebar). -->
-    <button
-      type="button"
-      onclick={() => {
-        unlabeledOnly = !unlabeledOnly;
-        if (unlabeledOnly) sort = 'size_desc';
-      }}
-      class="btn-sm border text-xs transition-colors {unlabeledOnly
-        ? 'border-amber-500/60 bg-amber-500/20 text-amber-200'
-        : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-amber-500/40'}"
-      title="Show only clusters without a dominant class (need labeling)"
-    >
-      {unlabeledOnly ? '✓ ' : ''}Unlabeled only
-      <span class="ml-1 font-mono text-[10px] text-zinc-500">({unlabeledCount})</span>
-    </button>
+      <button
+        type="button"
+        onclick={() => {
+          unlabeledOnly = !unlabeledOnly;
+          if (unlabeledOnly) sort = 'size_desc';
+        }}
+        class="btn-sm border text-xs transition-colors {unlabeledOnly
+          ? 'border-amber-500/60 bg-amber-500/20 text-amber-200'
+          : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-amber-500/40'}"
+        title="Show only clusters without a dominant class (need labeling)"
+      >
+        {unlabeledOnly ? '✓ ' : ''}Unlabeled only
+        <span class="ml-1 font-mono text-[10px] text-zinc-500">({unlabeledCount})</span>
+      </button>
 
-    <!-- Embedding-plot toggle (curation-strategy plan §5.6): fully absent
+      <!-- Embedding-plot toggle (curation-strategy plan §5.6): fully absent
          unless {API_PREFIX}/methods actually reports the overlay, same convention
          as the diverse overlay in <StrategyBar>. Replaces the card grid
          when active (never overlays it) — see the {#if showEmbeddingViz}
          branch below. Hidden on the slot-gallery view, which has its own
          grid + toolbar and no per-crop cluster_id to color by. -->
-    {#if embeddingVizAvailable && !isSlotFilter}
-      <button
-        type="button"
-        onclick={() => (showEmbeddingViz = !showEmbeddingViz)}
-        class="btn-sm border text-xs transition-colors {showEmbeddingViz
-          ? 'border-blue-500/60 bg-blue-500/20 text-blue-200'
-          : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-blue-500/40'}"
-        title="Toggle a 2-d embedding-projection scatter plot (replaces the grid); lasso-select feeds the same label/move actions as the grid"
-      >
-        {showEmbeddingViz ? '✓ ' : ''}Embedding plot
-      </button>
-    {/if}
+      {#if embeddingVizAvailable && !isSlotFilter}
+        <button
+          type="button"
+          onclick={() => (showEmbeddingViz = !showEmbeddingViz)}
+          class="btn-sm border text-xs transition-colors {showEmbeddingViz
+            ? 'border-blue-500/60 bg-blue-500/20 text-blue-200'
+            : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-blue-500/40'}"
+          title="Toggle a 2-d embedding-projection scatter plot (replaces the grid); lasso-select feeds the same label/move actions as the grid"
+        >
+          {showEmbeddingViz ? '✓ ' : ''}Embedding plot
+        </button>
+      {/if}
 
-    <label class="flex items-center gap-2 text-xs text-zinc-400">
-      Sort
-      <select bind:value={sort} class="select-sm">
-        <option value="purity_asc">purity asc</option>
-        <option value="purity_desc">purity desc</option>
-        <option value="size_desc">size desc</option>
-        <option value="size_asc">size asc</option>
-        <option value="dominant_class">dominant class</option>
-      </select>
-    </label>
+      <label class="flex items-center gap-2 text-xs text-zinc-400">
+        Sort
+        <select bind:value={sort} class="select-sm">
+          <option value="purity_asc">purity asc</option>
+          <option value="purity_desc">purity desc</option>
+          <option value="size_desc">size desc</option>
+          <option value="size_asc">size asc</option>
+          <option value="dominant_class">dominant class</option>
+        </select>
+      </label>
 
-    <!-- Primary-subject grid filters: scope cards to the largest / clear
+      <!-- Primary-subject grid filters: scope cards to the largest / clear
          crops. Card size + reps reflect only passing crops, so a filtered
          grid is ready to drag-drop + AHC-refine on the subjects that matter. -->
-    <div class="text-xs">
-      <SubjectScopeToggle bind:value={subjectScope} />
-    </div>
-    <div class="text-xs">
-      <BlurSlider
-        bind:value={blurSlider}
-        oncommit={commitClusterBlur}
-        max={BLUR_MAX}
-        width="w-28"
-        title="Hide crops blurrier than this (blur_lap_ratio)"
-      />
-    </div>
+      <div class="text-xs">
+        <SubjectScopeToggle bind:value={subjectScope} />
+      </div>
+      <div class="text-xs">
+        <BlurSlider
+          bind:value={blurSlider}
+          oncommit={commitClusterBlur}
+          max={BLUR_MAX}
+          width="w-28"
+          title="Hide crops blurrier than this (blur_lap_ratio)"
+        />
+      </div>
+    {/if}
   </div>
 
   <!-- Grid -->
@@ -1244,7 +1265,7 @@
                           : '—'}"
                       >
                         {pb.text}
-                        {((c.purity ?? 0) * 100).toFixed(0)}
+                        {geometryPurityText(c) ?? '—'}
                         {#if c.purity_n != null}
                           <span class="opacity-70">· n={c.purity_n}</span>
                         {/if}
@@ -1267,7 +1288,16 @@
                     </span>
                   {/if}
                   <span class="grow"></span>
-                  <span class="font-mono text-xs text-zinc-400">{c.size}</span>
+                  {#if c.isSlotCard}
+                    <!-- C4: the inventory count's scope, see SlotGallery. -->
+                    <span
+                      class="font-mono text-xs text-zinc-400"
+                      title="Regions the browse endpoint lists: test-holdout items and active filters excluded. The sidebar's class count and the dashboard total include test-holdout items, and the review queue applies its own queue filters, so those can differ."
+                      >{c.size.toLocaleString()} listed</span
+                    >
+                  {:else}
+                    <span class="font-mono text-xs text-zinc-400">{c.size}</span>
+                  {/if}
                 </div>
                 <div
                   class="truncate text-sm text-zinc-300"
@@ -1282,9 +1312,11 @@
                     {c.dominant_class_name}
                   {:else if c.dominant_class_name && !unlabeledOnly}
                     {c.dominant_class_name}
-                    <span class="text-zinc-500">
-                      · {((c.dominant_pct ?? 0) * 100).toFixed(0)}%
-                    </span>
+                    {#if dominantShareText(c)}
+                      <span class="text-zinc-500" title={dominantShareTitle(c)}>
+                        · {dominantShareText(c)}
+                      </span>
+                    {/if}
                   {:else}
                     <span class="text-amber-300">Unlabeled #{c.id}</span>
                     <span class="text-zinc-500">· needs label</span>
@@ -1321,7 +1353,14 @@
   <div
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
-    {#if slotGallery}
+    {#if ignoredModeActive}
+      <span class="font-mono text-xs text-zinc-500" data-testid="clusters-footer-count">
+        {ignoredItems.length} / {ignoredTotal} ignored crops
+      </span>
+      <span class="font-mono text-xs text-zinc-400">
+        {ignoredLoading ? 'loading…' : 'ignored bucket'}
+      </span>
+    {:else if slotGallery}
       <span class="font-mono text-xs text-zinc-500">
         {slotGallery.pager.items.length} / {slotGallery.pager.total}
       </span>
@@ -1330,7 +1369,7 @@
           for more{:else}all loaded{/if}
       </span>
     {:else}
-      <span class="font-mono text-xs text-zinc-500">
+      <span class="font-mono text-xs text-zinc-500" data-testid="clusters-footer-count">
         {gridItems.length} / {clusterPager.total +
           (classFilter == null ? slotInventoryCards.length : 0)}
       </span>

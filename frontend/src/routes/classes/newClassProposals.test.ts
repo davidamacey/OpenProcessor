@@ -96,29 +96,10 @@ describe('/classes Proposals section', () => {
  * create over 89 "motorcycle" crops making a super-class.
  */
 describe('/classes Proposals section — flagged_terms (DQ-M11)', () => {
-  it('renders flagged terms in a collapsed <details> section, separate from the actionable list', () => {
-    const idx = src.indexOf('Flagged terms (');
-    expect(idx).toBeGreaterThan(-1);
-    const detailsIdx = src.lastIndexOf('<details', idx);
-    expect(detailsIdx).toBeGreaterThan(-1);
-    expect(idx - detailsIdx).toBeLessThan(400);
-  });
-
-  it('never offers "Create class & assign" for a flagged term', () => {
-    const start = src.indexOf('proposalsSummary.flagged_terms as term');
-    const end = src.indexOf('</details>', start);
-    const block = src.slice(start, end);
-    expect(block).not.toMatch(/Create class & assign/);
-    expect(block).not.toMatch(/createClassAndAssign/);
-  });
-
-  it('offers a map-to-class_id action only for existing_class-flagged terms', () => {
-    const start = src.indexOf('proposalsSummary.flagged_terms as term');
-    const end = src.indexOf('</details>', start);
-    const block = src.slice(start, end);
-    expect(block).toMatch(/term\.flag === 'existing_class' && term\.class_id != null/);
-    expect(block).toMatch(/mapFlaggedTermToClass\(term\)/);
-  });
+  // Rendering (one list sorted by count, no Create for a flagged term, the
+  // one-click map for existing_class, map-to-existing for the rest) is
+  // mount-tested in visualAudit.test.ts (visual audit 2026-09-24, L2) —
+  // the old <details> source scans here pinned the layout L2 replaced.
 
   it('flagReason renders the served flag as a human reason: generic parent / not an object / existing class → map to X', () => {
     const fn = src.match(/function flagReason\([\s\S]*?\n {2}\}/)?.[0];

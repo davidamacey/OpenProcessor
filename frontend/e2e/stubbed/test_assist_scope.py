@@ -104,6 +104,9 @@ def register_base(stub, methods_body):
     starts: list[str] = []
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on("GET", r"/stats/classes(\?|$)", {"classes": []})
+    # D2 (visual audit 2026-09-24): the dashboard balance chart reads the
+    # served per-class test holdout.
+    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
     stub.on("GET", r"/methods(\?|$)", methods_body)
     stub.on("GET", r"/pipeline/auto_label/status", IDLE_JOB)
     stub.on("GET", r"/stats/dataset(\?|$)", DATASET_STATS)

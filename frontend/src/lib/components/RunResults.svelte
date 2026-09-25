@@ -114,6 +114,11 @@
 
   {#if open}
     <div class="space-y-4 border-t border-zinc-800 bg-zinc-950/40 px-3 py-3 text-xs">
+      <!-- T5 (visual audit 2026-09-24): the sticky table header can cover
+           the run's own row while this panel is open, so name the run here. -->
+      <p class="font-mono text-[11px] text-zinc-300" data-testid="run-results-title">
+        Results for {status.job_id}
+      </p>
       {#if status.error}
         <p
           class="rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-red-200"

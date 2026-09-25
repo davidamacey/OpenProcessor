@@ -18,6 +18,7 @@
  * showed a red "below N test crops" badge on `/export`).
  */
 import type { ExportDataset, StatsSummary, TestHoldoutStats } from '$lib/types';
+import { trainableCount } from '$lib/holdoutCounts';
 
 export interface ExportRow {
   class_id: number;
@@ -28,6 +29,12 @@ export interface ExportRow {
   /** Served `aug_gap`; null when the server didn't send one. */
   gap: number | null;
   test_count: number;
+  /** E1 (visual audit 2026-09-24): validated minus frozen test crops. */
+  trainable: number;
+  /** Served `aug_gap` with the frozen test crops added back, i.e. the gap
+   *  measured against trainable crops; null when `aug_gap` wasn't served.
+   *  TODO(backend): serve a holdout-excluded gap on `/stats/classes`. */
+  trainableGap: number | null;
   testDeficient: boolean;
   /** Served adequacy tier (`block`/`warn`/`ok`); null when unserved (m16). */
   adequacy: string | null;
@@ -47,6 +54,7 @@ export function buildExportRows(
     const validated = c.validated_count ?? 0;
     const target = c.aug_target ?? 0;
     const test = testMap.get(c.class_id);
+    const testCount = test?.count ?? 0;
     return {
       class_id: c.class_id,
       class_name: c.class_name,
@@ -54,7 +62,9 @@ export function buildExportRows(
       validated,
       aug_target: target,
       gap: c.aug_gap ?? null,
-      test_count: test?.count ?? 0,
+      test_count: testCount,
+      trainable: trainableCount(validated, testCount),
+      trainableGap: c.aug_gap == null ? null : c.aug_gap + testCount,
       testDeficient: test
         ? (test.deficient ?? (minTest != null && test.count < minTest))
         : false,
@@ -95,4 +105,18 @@ export function isNothingExportable(rows: ExportRow[]): boolean {
  */
 export function hasCurrentMulticlassExport(datasets: ExportDataset[]): boolean {
   return datasets.some((d) => d.kind === 'yolo' && d.is_current);
+}
+
+/**
+ * E2 (visual audit 2026-09-24): the export summary said "classes 84" when
+ * only 5 classes had any exported object. Splits the served
+ * `class_split_counts` into classes with at least one object and the rest.
+ */
+export function splitExportClasses<
+  T extends { train: number; val: number; test: number },
+>(counts: readonly T[]): { withObjects: T[]; empty: T[] } {
+  const withObjects: T[] = [];
+  const empty: T[] = [];
+  for (const c of counts) (c.train + c.val + c.test > 0 ? withObjects : empty).push(c);
+  return { withObjects, empty };
 }

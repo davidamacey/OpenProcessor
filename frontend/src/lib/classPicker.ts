@@ -18,7 +18,7 @@
  * unit-testable with plain arrays.
  */
 
-import { isAssignableClass } from '$lib/classVisibility';
+import { isAssignableClass, isItemClassTarget } from '$lib/classVisibility';
 import type { RegistryClass } from '$lib/types';
 
 /** Rank buckets, lowest = best match. Exact match beats prefix beats
@@ -56,16 +56,20 @@ export function searchClasses(
   classes: RegistryClass[],
   query: string,
   limit?: number,
+  prefer: ReadonlyArray<number | null | undefined> = [],
 ): RegistryClass[] {
   const pool = classes.filter(isAssignableClass);
   const q = query.trim().toLowerCase();
 
   let ranked: RegistryClass[];
   if (!q) {
-    ranked = [...pool].sort(
-      (a, b) =>
-        (b.validated_count ?? 0) - (a.validated_count ?? 0) ||
-        a.name.localeCompare(b.name),
+    ranked = preferFirst(
+      [...pool].sort(
+        (a, b) =>
+          (b.validated_count ?? 0) - (a.validated_count ?? 0) ||
+          a.name.localeCompare(b.name),
+      ),
+      prefer,
     );
   } else {
     ranked = pool
@@ -81,6 +85,62 @@ export function searchClasses(
   }
 
   return limit != null ? ranked.slice(0, limit) : ranked;
+}
+
+/** Moves every class whose id is in `prefer` to the front, in `prefer`'s
+ *  order (first occurrence wins), keeping the rest in their given order. */
+function preferFirst(
+  ranked: RegistryClass[],
+  prefer: ReadonlyArray<number | null | undefined>,
+): RegistryClass[] {
+  const ids = [...new Set(prefer.filter((id): id is number => id != null))];
+  if (ids.length === 0) return ranked;
+  const front = ids
+    .map((id) => ranked.find((c) => c.id === id))
+    .filter((c): c is RegistryClass => c != null);
+  return [...front, ...ranked.filter((c) => !ids.includes(c.id))];
+}
+
+/** The served class ids an item already points at — what it is proposed
+ *  as, what it currently is, what the VLM and the model suggest — in
+ *  that order. Used to rank the picker/quick-assign row for THIS item
+ *  instead of by global validated count (visual audit 2026-09-24, R1). */
+export function itemHintClassIds(
+  item:
+    | {
+        proposed_class_id?: number | null;
+        class_id?: number | null;
+        vlm_suggested_class_id?: number | null;
+        probe_pred_class_id?: number | null;
+      }
+    | null
+    | undefined,
+): number[] {
+  if (!item) return [];
+  return [
+    item.proposed_class_id,
+    item.class_id,
+    item.vlm_suggested_class_id,
+    item.probe_pred_class_id,
+  ].filter((id): id is number => id != null);
+}
+
+/** Every class an item may be labeled as — see `isItemClassTarget`. */
+export function itemClassTargets(classes: RegistryClass[]): RegistryClass[] {
+  return classes.filter(isItemClassTarget);
+}
+
+/**
+ * The `/review` quick-assign row: item-class targets only (never a
+ * slot-bound region class — `isItemClassTarget`), with the item's own
+ * hinted classes first and the most-validated classes filling the rest.
+ */
+export function quickAssignClasses(
+  classes: RegistryClass[],
+  prefer: ReadonlyArray<number | null | undefined>,
+  n = 10,
+): RegistryClass[] {
+  return searchClasses(itemClassTargets(classes), '', undefined, prefer).slice(0, n);
 }
 
 /**

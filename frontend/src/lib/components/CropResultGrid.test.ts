@@ -55,6 +55,8 @@ describe('CropResultGrid.svelte', () => {
     // (scoreOf?.(crop) != null || cornerBadge), not a narrower one that
     // would leave a chip unscrimmed.
     expect(src).toMatch(/\{#if scoreOf\?\.\(crop\) != null \|\| cornerBadge\}/);
-    expect(src).toMatch(/bg-gradient-to-b from-black\/55 to-transparent/);
+    // C6 (visual audit 2026-09-24): a flat scrim, never a gradient.
+    expect(src).toMatch(/top-0 h-7 rounded-t-md bg-black\/55/);
+    expect(src).not.toMatch(/bg-gradient/);
   });
 });

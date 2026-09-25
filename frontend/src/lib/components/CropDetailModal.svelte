@@ -31,6 +31,9 @@
   <div
     class="relative grid max-h-[92vh] w-full max-w-6xl grid-cols-1 gap-4 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 p-4 md:grid-cols-[1fr_320px]"
   >
+    <!-- K5 (visual audit 2026-09-24): the close button sits inside the
+         panel's padding (it was half outside the top-right corner) and the
+         meta column is min-w-0 so its chips wrap instead of clipping. -->
     <!-- Source image with burned-in bbox. Same endpoint as the review
          page so the rendering matches across surfaces. -->
     <div class="flex min-h-0 flex-col gap-2">
@@ -55,13 +58,13 @@
       </div>
     </div>
 
-    <div class="min-h-0 overflow-y-auto">
+    <div class="min-h-0 min-w-0 overflow-y-auto pr-6">
       <CropMetaPanel {crop} />
     </div>
 
     <button
       type="button"
-      class="absolute -top-3 -right-3 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white shadow-lg hover:bg-zinc-800"
+      class="absolute top-2 right-2 z-10 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white shadow-lg hover:bg-zinc-800"
       onclick={onclose}
       aria-label="Close"
     >

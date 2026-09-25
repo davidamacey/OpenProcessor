@@ -92,4 +92,18 @@ class HealthStore {
   }
 }
 
+export type HealthChip = 'checking' | 'ok' | 'down';
+
+/** Before the first poll settles there's no evidence either way, so the chip must not claim "down". */
+export function healthChip(ok: boolean, lastChecked: number | null): HealthChip {
+  if (lastChecked === null) return 'checking';
+  return ok ? 'ok' : 'down';
+}
+
+export const HEALTH_CHIP_TEXT: Record<HealthChip, string> = {
+  checking: 'API …',
+  ok: 'API OK',
+  down: 'API down',
+};
+
 export const healthStore = new HealthStore();

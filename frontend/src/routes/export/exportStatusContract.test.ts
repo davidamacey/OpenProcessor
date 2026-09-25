@@ -383,3 +383,61 @@ describe('/export — freeze modal (OpenProcessor 6c77deb: no seed)', () => {
     expect(successToast?.text).toContain('sha1_per_class');
   });
 });
+
+describe('/export — class table puts classes with data first', () => {
+  it('lists validated classes, folds empty ones behind a toggle that reveals them', async () => {
+    vi.stubGlobal(
+      'fetch',
+      makeFetchMock([], EXPORT_STATUS_SUCCESS, [], {
+        classes: [
+          {
+            class_id: 1,
+            class_name: 'alpha_empty',
+            count: 38,
+            validated_count: 0,
+            aug_target: 500,
+          },
+          {
+            class_id: 2,
+            class_name: 'beta_empty',
+            count: 5,
+            validated_count: 0,
+            aug_target: 500,
+          },
+          {
+            class_id: 3,
+            class_name: 'gamma_full',
+            count: 120,
+            validated_count: 35,
+            aug_target: 500,
+          },
+        ],
+      }),
+    );
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(ExportPage, { target } as never);
+    flushSync();
+    await flushMicrotasks();
+    flushSync();
+
+    const rowNames = () =>
+      Array.from(target.querySelectorAll('tbody tr td:first-child')).map((td) =>
+        td.textContent?.trim(),
+      );
+    expect(rowNames()).toContain('gamma_full');
+    expect(rowNames()).not.toContain('alpha_empty');
+    const toggle = target.querySelector<HTMLButtonElement>(
+      '[data-testid="export-empty-classes-toggle"]',
+    );
+    expect(toggle?.textContent).toContain('2 classes with no validated crops');
+    toggle!.click();
+    flushSync();
+    expect(rowNames()).toEqual(
+      expect.arrayContaining(['gamma_full', 'alpha_empty', 'beta_empty']),
+    );
+    expect(rowNames().indexOf('gamma_full')).toBeLessThan(
+      rowNames().indexOf('alpha_empty'),
+    );
+  });
+});
