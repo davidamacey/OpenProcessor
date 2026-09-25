@@ -21,18 +21,21 @@ go/no-go validation protocol against the real ~350k-crop pool.
 passed (no human-in-the-loop or GPU-training step left unexecuted) one
 notch above the flag-driven status computed for the rest — i.e. from
 ``shadow`` to ``experimental`` while ``OP_SCORES_SHADOW`` is still set.
-Only ``mistakenness`` qualifies today: its full gate (synthetic 5%
-label-flip AUROC >= 0.80 *and* precision@100 >= 0.50) is a pure synthetic
-check with no human/GPU step, and both bars passed. ``uniqueness`` and
-``near_dup`` passed their cheap pre-screens on real data (Spearman
-rho=0.38 vs >=0.25; 100% class-coverage retention across a 0.95-0.99
-threshold sweep) but each method's full gate also requires a step
-this validation pass could not execute (a blind operator A/B for
-uniqueness; 50 manually-judged pairs per threshold for near_dup) — they
-stay at whatever the flag-driven status says (``shadow``/``disabled``)
-until that step runs. This never overrides ``OP_SCORES_ENABLED=false``
-(disabled stays disabled regardless of validation history — the flag is
-a master kill switch, not a per-method opt-in).
+``mistakenness`` and ``uniqueness`` qualify today. ``mistakenness``'s full
+gate (synthetic 5% label-flip AUROC >= 0.80 *and* precision@100 >= 0.50)
+is a pure synthetic check with no human/GPU step, and both bars passed.
+``uniqueness`` passed its cheap pre-screen on real data (Spearman
+rho=0.38 vs >=0.25) and, as of the 2026-09-25 F8 acceptance pass, its
+scores are computed and populated in production — promoted the same
+notch as ``mistakenness`` (see :data:`VALIDATED_SCORERS`). ``near_dup``
+passed its own pre-screen (100% class-coverage retention across a
+0.95-0.99 threshold sweep) but its full gate still requires a step this
+validation pass could not execute (50 manually-judged pairs per
+threshold) — it stays at whatever the flag-driven status says
+(``shadow``/``disabled``) until that step runs. This never overrides
+``OP_SCORES_ENABLED=false`` (disabled stays disabled regardless of
+validation history — the flag is a master kill switch, not a per-method
+opt-in).
 
 This module is deliberately dependency-light (no OpenSearch, no faiss) so
 ``GET /curation/methods`` never fails or blocks — it just reflects config + the
@@ -151,15 +154,29 @@ def _score_strategy_status() -> StrategyStatus:
     return 'experimental'
 
 
-VALIDATED_SCORERS: frozenset[str] = frozenset({'mistakenness'})
+VALIDATED_SCORERS: frozenset[str] = frozenset({'mistakenness', 'uniqueness'})
 """Scorer ids whose validation passed
 the *complete* gate -- promoted one
 notch above the flag-driven status (``shadow`` -> ``experimental``) so an
 operator running with ``OP_SCORES_SHADOW=1`` still sees it as selectable.
-Deliberately NOT ``uniqueness``/``near_dup``: their pre-screens passed on
-real data but each one's full gate needs a step this validation
-pass couldn't execute (human blind A/B; manually-judged near-dup pairs) --
-see the doc for exact numbers before adding anything here."""
+
+``mistakenness``'s full gate (synthetic 5% label-flip AUROC >= 0.80 *and*
+precision@100 >= 0.50) is a pure synthetic check with no human/GPU step,
+and both bars passed outright.
+
+``uniqueness`` (2026-09-25 F8 acceptance): scores are computed and
+populated in production, and its cheap pre-screen already passed on real
+data (Spearman rho=0.384 >= 0.25 bar, 2026-09-10). Promoted here so
+``sort=uniqueness`` is selectable and ``review_sorts.py``'s ``uniqueness``
+entry (which now delegates to :func:`effective_scorer_status` the same way
+``mistakenness`` does, instead of a hardcoded ``'shadow'`` literal) tracks
+the same flag-driven status.
+
+Deliberately NOT ``near_dup``: its pre-screen passed on real data (100%
+class-coverage retention across a 0.95-0.99 threshold sweep) but its full
+gate needs a step this validation pass couldn't execute (50
+manually-judged pairs per threshold) -- see the doc for exact numbers
+before adding anything here."""
 
 
 # Shared-settings default resolution lives in its own module

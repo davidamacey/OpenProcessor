@@ -103,7 +103,7 @@ async def test_sort_override_naming_a_shadow_id_falls_back_to_none(
     """A shadow/disabled sort id is not "currently advertised" for
     default-application purposes even though GET /methods still lists it
     -- an override naming one must not silently break every tab's queue."""
-    await update_curation_settings(fake_os, {'sort': 'uniqueness'})  # shadow status
+    await update_curation_settings(fake_os, {'sort': 'uniqueness'})  # disabled by default (D2)
     assert await resolve_effective_default('sort', fake_os) is None
 
 

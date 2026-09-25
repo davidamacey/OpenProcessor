@@ -123,7 +123,7 @@ def test_merge_dry_run_reports_counts_without_writing(
         'source_id': 1,
         'target_id': 0,
         'would_relabel': 40,
-        'would_unvalidate': 7,
+        'validations_carried_over': 7,
         'holdout_blocking': 2,
         'blocked': True,
     }

@@ -477,9 +477,9 @@ class _FakeMergeOS:
         return make_bulk_response(items)
 
 
-async def _run_class_merge_case(
+async def _run_class_merge_case_with_os(
     monkeypatch: pytest.MonkeyPatch, *, source_validated: bool = False
-) -> list[dict[str, Any]]:
+) -> tuple[dict[str, Any], _FakeMergeOS]:
     from types import SimpleNamespace
 
     import src.routers.curation.classes as classes_mod
@@ -501,6 +501,13 @@ async def _run_class_merge_case(
     result = await classes_mod.merge_class(ClassMergeRequest(source_id=3, target_id=6), fake_os)
     assert result['deprecated'] is True
     assert len(fake_os.update_calls) == 1
+    return result, fake_os
+
+
+async def _run_class_merge_case(
+    monkeypatch: pytest.MonkeyPatch, *, source_validated: bool = False
+) -> list[dict[str, Any]]:
+    _, fake_os = await _run_class_merge_case_with_os(monkeypatch, source_validated=source_validated)
     return fake_os.update_calls[0].get('class_id_history') or []
 
 
@@ -520,13 +527,31 @@ async def test_merge_class_history_records_pre_merge_validation_state(
     """F-56: a human-validated crop merged into another class must have
     its pre-merge validated=true state on record — not just the class it
     came from — so an audit can tell it apart from a merely-suggested
-    label. class_validated on the doc itself gets cleared by the merge
-    (unrelated to what class_id_history remembers about the past)."""
+    label."""
     history = await _run_class_merge_case(monkeypatch, source_validated=True)
     assert history[-1]['class_validated'] is True
 
     history_unvalidated = await _run_class_merge_case(monkeypatch, source_validated=False)
     assert history_unvalidated[-1]['class_validated'] is False
+
+
+@pytest.mark.asyncio
+async def test_merge_class_carries_over_validation_to_the_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F-56 follow-up (owner-aligned semantics): a merge must KEEP a
+    human validation, not clear it — a human-validated crop of the source
+    class stays validated=true under the target. class_id_history (see
+    test above) separately remembers that the *prior* class was validated;
+    this test is about the doc's own live class_validated field after the
+    merge write, which used to be hardcoded to False regardless."""
+    _, fake_os = await _run_class_merge_case_with_os(monkeypatch, source_validated=True)
+    assert fake_os.update_calls[0]['class_validated'] is True
+
+    _, fake_os_unvalidated = await _run_class_merge_case_with_os(
+        monkeypatch, source_validated=False
+    )
+    assert fake_os_unvalidated.update_calls[0]['class_validated'] is False
 
 
 if __name__ == '__main__':

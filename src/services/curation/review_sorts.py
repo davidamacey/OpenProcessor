@@ -71,6 +71,20 @@ def _mistakenness_status() -> StrategyStatus:
     return effective_scorer_status('mistakenness')
 
 
+def _uniqueness_status() -> StrategyStatus:
+    """``uniqueness``'s status, same "delegate, never hardcode" shape as
+    :func:`_mistakenness_status`. D2 (2026-09-25 F8 acceptance): uniqueness
+    was previously pinned to a hardcoded ``'shadow'`` literal here
+    regardless of the live ``OP_SCORES_ENABLED``/``OP_SCORES_SHADOW`` +
+    ``VALIDATED_SCORERS`` promotion — which meant ``sort=uniqueness`` 400'd
+    even once ``strategy_registry.VALIDATED_SCORERS`` promoted it to
+    ``'experimental'``, and ``GET /curation/methods`` disagreed with this
+    registry about the same scorer's status. Delegating closes that gap."""
+    from src.services.curation.strategy_registry import effective_scorer_status
+
+    return effective_scorer_status('uniqueness')
+
+
 def _build_review_sorts() -> dict[str, ReviewSort]:
     """Construct a fresh registry snapshot. Called by :func:`get_review_sorts`
     on every access (not cached at import) so ``mistakenness``'s env-driven
@@ -197,14 +211,14 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
                 }
             ],
             requires_field='uniqueness_score',
-            status='shadow',
+            status=_uniqueness_status(),
             description=(
                 'k-NN density uniqueness. Spearman pre-screen passed on real data '
-                '(rho=0.384 >= 0.25 bar) but the real gate — a blind 200-vs-200 '
-                'operator A/B — has not run. '
-                'Stays shadow (never selectable via ?sort) until that gate clears; '
-                'unlike mistakenness this is NOT tied to OP_SCORES_ENABLED/SHADOW '
-                '— the validation gap is the reason, not the feature flag.'
+                '(rho=0.384 >= 0.25 bar); scores are computed and populated in '
+                'production. D2 (2026-09-25 F8 acceptance): promoted alongside '
+                'mistakenness in strategy_registry.VALIDATED_SCORERS; status here '
+                "always mirrors strategy_registry.py's live promotion, never "
+                'hardcoded.'
             ),
         ),
         ReviewSort(

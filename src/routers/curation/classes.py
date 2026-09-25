@@ -446,7 +446,11 @@ async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[st
 
     holdout = await _count({'bool': {'filter': [of_source, not_holdout]}})
     relabel = await _count({'bool': {'filter': [of_source], 'must_not': [not_holdout]}})
-    unvalidate = await _count(
+    # F-56 follow-up: a merge no longer clears class_validated — a
+    # human-validated crop of the source class stays validated under the
+    # target. This count is who that carry-over applies to, not
+    # (as the old 'would_unvalidate' name implied) who loses validation.
+    validated = await _count(
         {
             'bool': {
                 'filter': [of_source, {'term': {'class_validated': True}}],
@@ -459,7 +463,7 @@ async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[st
         'source_id': payload.source_id,
         'target_id': payload.target_id,
         'would_relabel': relabel,
-        'would_unvalidate': unvalidate,
+        'validations_carried_over': validated,
         'holdout_blocking': holdout,
         'blocked': holdout > 0,
     }
@@ -474,8 +478,12 @@ async def merge_class(
     """Mark source deprecated; bulk-relabel matching crops + labels.
 
     ``dry_run=true`` returns ``{dry_run, source_id, target_id,
-    would_relabel, would_unvalidate, holdout_blocking, blocked}`` and
-    writes nothing (a real merge 409s when ``holdout_blocking > 0``).
+    would_relabel, validations_carried_over, holdout_blocking, blocked}``
+    and writes nothing (a real merge 409s when ``holdout_blocking > 0``).
+    A human-validated crop of the source class stays validated under the
+    target — ``validations_carried_over`` counts how many crops keep their
+    validation this way, not (unlike the retired ``would_unvalidate``
+    field) how many lose it.
     """
     if dry_run:
         return await _merge_dry_run(payload, opensearch)
@@ -589,7 +597,13 @@ async def merge_class(
         update['cluster_id'] = payload.target_id
         update['cluster_subid'] = None
         update['label_source'] = 'class_merge'
-        update['class_validated'] = False
+        # F-56 follow-up: a human-validated crop of the source class stays
+        # validated under the target — only the class assignment changes,
+        # not the fact a human already confirmed it. class_id_history
+        # (record_class_history below) separately snapshots the pre-merge
+        # class_validated state, so the prior class's validation is on
+        # record either way.
+        update['class_validated'] = bool(current.get('class_validated', False))
         update['class_id_history'] = record_class_history(current, writer='class_merge')
         return update
 

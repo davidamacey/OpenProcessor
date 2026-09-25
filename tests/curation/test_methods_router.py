@@ -94,13 +94,11 @@ def test_score_entries_shadow_when_enabled_and_shadow(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Validation promoted
-    ``mistakenness`` one notch (shadow -> experimental) — its full
-    synthetic gate (AUROC + precision@100)
-    passed outright with no human/GPU step left unexecuted. ``uniqueness``
-    and ``near_dup`` only cleared their cheap pre-screens on real data; each
-    method's full gate still needs a step this pass couldn't
-    run (blind operator A/B; manually-judged near-dup pairs), so they stay
-    ``shadow`` here."""
+    ``mistakenness`` and ``uniqueness`` one notch each (shadow ->
+    experimental) — see ``strategy_registry.VALIDATED_SCORERS``.
+    ``near_dup`` only cleared its cheap pre-screen on real data; its full
+    gate still needs a step this pass couldn't run (manually-judged
+    near-dup pairs), so it stays ``shadow`` here."""
     from src.services.curation.strategy_registry import VALIDATED_SCORERS
 
     monkeypatch.setenv('OP_SCORES_ENABLED', '1')
