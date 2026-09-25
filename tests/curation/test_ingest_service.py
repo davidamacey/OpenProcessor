@@ -1162,3 +1162,114 @@ class TestBackboneEmbedding:
         assert doc['class_id'] == 1  # primary's class, no override
         assert doc['class_detector'] == 'primary_end2end'
         assert len(doc[BACKBONE_EMBEDDING_FIELD]) == _FEATURE_DIM
+
+
+# =============================================================================
+# F-43 — a failing secondary detector call must be visible, not swallowed
+# =============================================================================
+
+
+class _SecondaryFailsTritonPool(FakeDualTritonPool):
+    """Secondary detector raises on every call (e.g. a gRPC
+    DEADLINE_EXCEEDED); the primary detector still succeeds normally."""
+
+    async def infer(self, model_name: str, inputs: list, outputs: list) -> FakeInferResult:
+        if model_name == _SECONDARY_MODEL:
+            self.calls.append(model_name)
+            raise RuntimeError('StatusCode.DEADLINE_EXCEEDED')
+        return await super().infer(model_name, inputs, outputs)
+
+
+def _make_failing_secondary_service() -> tuple[
+    CurationIngestService, FakeIngestOpenSearch, _SecondaryFailsTritonPool
+]:
+    os_fake = FakeIngestOpenSearch()
+    triton = _SecondaryFailsTritonPool(
+        [(0.05, 0.05, 0.55, 0.55, 0.9, 1)],
+        secondary_raw=_secondary_raw(),
+        feature_map=None,
+    )
+    svc = CurationIngestService(
+        opensearch=os_fake,
+        triton_pool=triton,
+        registry=_two_class_registry(),
+        profile=DetectionProfile(
+            name='primary',
+            detector_model='primary_end2end',
+            assigns_class=True,
+            input_size=320,
+            batch_limit=8,
+        ),
+        secondary_profile=DetectionProfile(
+            name='secondary',
+            detector_model=_SECONDARY_MODEL,
+            detector_version='3',
+            input_size=320,
+            confidence_floor=0.5,
+            batch_limit=8,
+        ),
+        pe_encoder=FakePEEncoder(),
+        config=CurationConfig(),
+    )
+    return svc, os_fake, triton
+
+
+class TestSecondaryDetectorFailureVisibility:
+    @pytest.mark.asyncio
+    async def test_ingest_one_still_succeeds_but_reports_the_secondary_error(self) -> None:
+        """F-43: the image ingests fine on the primary detector alone, but
+        the caller must be able to see that the configured secondary
+        detector never ran -- not just a 'warning' log line."""
+        svc, os_fake, _triton = _make_failing_secondary_service()
+
+        result = await svc.ingest_one(_jpeg_bytes(), '/tmp/secondary_fail.jpg')
+
+        assert result.status == 'success'
+        assert result.secondary_detector_error is not None
+        assert 'DEADLINE_EXCEEDED' in result.secondary_detector_error
+        # Primary-only class provenance -- the secondary override never
+        # landed because the secondary call itself failed.
+        [doc] = list(os_fake.items.values())
+        assert doc['class_detector'] == 'primary_end2end'
+
+    @pytest.mark.asyncio
+    async def test_batch_summary_counts_secondary_failures(self) -> None:
+        """F-43: a batch of otherwise-successful ingests must roll up how
+        many of them silently lost their secondary classifier, in the
+        summary the caller actually reads (not just per-item)."""
+        svc, _os_fake, _triton = _make_failing_secondary_service()
+        images = [_jpeg_bytes(seed=900 + s) for s in range(3)]
+        paths = [f'/tmp/secfail{s}.jpg' for s in range(3)]
+
+        batch_result = await svc.ingest_batch(images, paths)
+
+        assert batch_result.summary.successful == 3
+        assert batch_result.summary.secondary_detector_failures == 3
+        assert all(r.secondary_detector_error is not None for r in batch_result.results)
+
+    @pytest.mark.asyncio
+    async def test_router_batch_response_echoes_secondary_failures(self) -> None:
+        """F-43: the wire response (what an operator/CI actually reads)
+        must carry the count and the per-item error, not just the
+        internal service-layer dataclass."""
+        from src.routers.curation.ingest import _batch_response
+        from src.services.curation.ingest_models import (
+            BatchIngestResult,
+            IngestResult,
+            IngestSummary,
+        )
+
+        batch = BatchIngestResult(
+            summary=IngestSummary(successful=1, secondary_detector_failures=1),
+            results=[
+                IngestResult(
+                    status='success',
+                    image_path='/a.jpg',
+                    n_crops=1,
+                    secondary_detector_error='StatusCode.DEADLINE_EXCEEDED',
+                )
+            ],
+        )
+        resp = _batch_response(batch, [])
+        assert resp.summary.secondary_detector_failures == 1
+        assert resp.results[0].secondary_detector_error == 'StatusCode.DEADLINE_EXCEEDED'

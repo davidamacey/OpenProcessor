@@ -10,12 +10,15 @@ buckets.
 
 Schema produced by ``stats._rollup_class_sources`` + ``stats_dataset``:
 
-- ``labeled.{by_human, by_vlm, by_classifier, by_proposal, other}``
+- ``labeled.{by_human, by_vlm, by_classifier, other}``
   — *class-label* provenance. ``by_human`` counts crops whose
   ``class_source`` starts with ``human``; auto-validation
   (a majority-agreement rule) lives in ``by_classifier``, deliberately
   separate from ``by_human`` so the dashboard can distinguish
   "human applied this label" from "any validator approved it".
+  F-23: ``by_proposal`` moved to ``unlabeled`` -- it counts
+  detector-proposed-but-not-yet-classified crops, which never carry a
+  class_id, so it was always 0 here.
 - ``regions.{total_detected, by_detector, by_segmenter, by_human}`` —
   *region-detector* provenance. ``by_detector`` is the primary region
   detector's count and intentionally lives here (not under ``labeled``)
@@ -118,7 +121,8 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
 
     labeled = body.get('labeled')
     assert isinstance(labeled, dict)
-    for k in ('by_human', 'by_vlm', 'by_classifier', 'by_proposal', 'other'):
+    assert 'by_proposal' not in labeled, 'F-23: by_proposal moved to unlabeled'
+    for k in ('by_human', 'by_vlm', 'by_classifier', 'other'):
         assert k in labeled, f'labeled.{k} missing'
         assert isinstance(labeled[k], int)
         assert labeled[k] >= 0
@@ -142,10 +146,21 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
 
     unlabeled = body.get('unlabeled')
     assert isinstance(unlabeled, dict)
-    for k in ('pending_detection', 'pending_verification', 'no_label_source', 'vlm_no_class'):
+    for k in (
+        'pending_detection',
+        'pending_verification',
+        'no_label_source',
+        'vlm_no_class',
+        'by_proposal',
+    ):
         assert k in unlabeled, f'unlabeled.{k} missing'
         assert isinstance(unlabeled[k], int)
         assert unlabeled[k] >= 0
+    # F-23: by_proposal + vlm_no_class are both subsets of no_label_source
+    # (every proposal/vlm_unmatched source is class-less by construction),
+    # never a superset.
+    assert unlabeled['by_proposal'] <= unlabeled['no_label_source']
+    assert unlabeled['vlm_no_class'] <= unlabeled['no_label_source']
 
     in_progress = body.get('in_progress')
     assert isinstance(in_progress, dict)
@@ -258,3 +273,48 @@ def test_cluster_count_query_excludes_noise_ids() -> None:
     agg = _build_dataset_query_body(get_region_fields())['aggs']['distinct_clusters']
     assert agg['filter'] == {'range': {'cluster_id': {'gte': 0}}}
     assert agg['aggs']['n']['cardinality']['field'] == 'cluster_id'
+
+
+# =============================================================================
+# V-1 -- in_progress.region_stall_reason
+# =============================================================================
+
+
+def test_stats_dataset_region_stall_reason_null_by_default(app_client: TestClient) -> None:
+    """No active region profile (the fixture's neutral default) -- the
+    dashboard must never show a false stall."""
+    body = app_client.get('/curation/stats/dataset').json()
+    assert body['in_progress']['region_stall_reason'] is None
+
+
+def test_stats_dataset_surfaces_region_stall_reason(
+    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.config import DetectionProfile
+    from src.routers.curation import _raw_opensearch_dep
+    from src.services.triton_control import TritonControlService
+
+    monkeypatch.setenv('OP_REGION_DRAIN_STATE_DIR', str(tmp_path / 'region_drain'))
+    monkeypatch.setattr(
+        'src.routers.curation.stats.region_profile_or_neutral',
+        lambda: DetectionProfile(name='active', detector_model='det_v1', segmenter_name=''),
+    )
+
+    async def _empty_index(self: TritonControlService) -> list[dict[str, str]]:
+        return []
+
+    monkeypatch.setattr(TritonControlService, 'get_repository_index', _empty_index)
+
+    pending_response = _fake_dataset_search_response()
+    pending_response['aggregations']['region_status'] = {
+        'buckets': [{'key': 'pending_detection', 'doc_count': 42}]
+    }
+    fake_os = AsyncMock()
+    fake_os.search = AsyncMock(return_value=pending_response)
+    app_client.app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
+
+    body = app_client.get('/curation/stats/dataset').json()
+    reason = body['in_progress']['region_stall_reason']
+    assert reason is not None
+    assert 'det_v1' in reason
+    assert '42' in reason

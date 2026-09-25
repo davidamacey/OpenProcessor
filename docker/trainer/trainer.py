@@ -95,25 +95,60 @@ def _gpu_order() -> tuple[int, ...]:
 TRAINER_CAPABILITIES_FILENAME = '.trainer_capabilities.json'
 
 
+def _probe_cuda_device_count() -> int | None:
+    """``torch.cuda.device_count()``, run in an isolated, short-lived
+    subprocess rather than in this process.
+
+    F-47: this trainer runs as a long-lived daemon (``--watch`` never
+    returns) sharing one process for its entire container lifetime.
+    ``write_trainer_capabilities`` used to ``import torch`` and call this
+    in-process, at startup, exactly once -- but that is also the *first*
+    CUDA touch this process ever makes, and on the torch/CUDA-driver
+    combination this image resolves at build time (``torch>=2.6,<3``,
+    unpinned to a minor), that can be enough to lazily initialize a CUDA
+    context that then lives for the rest of the container's uptime. This
+    matches the observed symptom exactly: ~1.1 GB held on an otherwise
+    completely idle curation-trainer between training runs, with nothing
+    else in this module touching CUDA outside of an actual job run.
+
+    Paying for the probe in a subprocess means whatever context it
+    initializes (if any) is released the instant that subprocess exits --
+    the long-lived watcher process itself never calls into CUDA just to
+    answer "how many GPUs do I see". A real training job still imports
+    torch and initializes CUDA in *this* process, same as before, because
+    a job holding VRAM for its own duration is expected; only the idle
+    startup probe changes.
+    """
+    import subprocess  # nosec B404 - only used with a fixed argv, see below
+    import sys
+
+    try:
+        result = subprocess.run(  # nosec B603 - fixed argv (sys.executable), no user input
+            [sys.executable, '-c', 'import torch; print(torch.cuda.device_count())'],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
+        )
+        return int(result.stdout.strip())
+    except Exception:
+        logger.warning('trainer_capabilities_cuda_probe_failed', exc_info=True)
+        return None
+
+
 def write_trainer_capabilities(jobs_dir: Path) -> None:
     """Publish this container's GPU attachment for the API's preflight check.
 
     Writes ``<jobs_dir>/.trainer_capabilities.json`` atomically:
     ``gpu_order`` (:func:`_gpu_order`, empty = unrestricted -- every GPU at
-    its host index), ``visible_count`` (``torch.cuda.device_count()``),
+    its host index), ``visible_count`` (:func:`_probe_cuda_device_count`),
     ``build_sha`` (this image's baked ``OP_BUILD_SHA``), and ``written_at``.
 
     Best-effort: any failure (no CUDA, no write permission) is logged and
     swallowed -- an older trainer image or a probe failure must only
     downgrade the API's check to a warning, never crash trainer startup.
     """
-    try:
-        import torch
-
-        visible_count: int | None = torch.cuda.device_count()
-    except Exception:
-        logger.warning('trainer_capabilities_cuda_probe_failed', exc_info=True)
-        visible_count = None
+    visible_count = _probe_cuda_device_count()
     payload = {
         'gpu_order': list(_gpu_order()),
         'visible_count': visible_count,

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.config import DetectionProfile, RegionStatus, get_region_fields
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
@@ -41,6 +41,7 @@ from src.routers.curation._common import (
     IngestStatusResponse,
     IngestUploadConfig,
     OpenSearchDep,
+    RegionDependencyStatusResponse,
     RegistryDep,
     _ensure_indexes,
     _PathLookupRequest,
@@ -74,7 +75,15 @@ class IngestBatchItem(IngestImageRequest):
 
 
 class IngestBatchRequest(BaseModel):
-    items: list[IngestBatchItem] = Field(default_factory=list)
+    # F-22: extra='forbid' + a required, non-empty items list. Previously a
+    # body with a wrong key (e.g. {'paths': [...]}) validated fine with
+    # items defaulting to [] and the endpoint returned 200 status=success
+    # with all-zero counts -- a silent no-op indistinguishable from "ingested
+    # an empty batch on purpose". Both a stale key and a missing/empty
+    # items list now 422 instead.
+    model_config = ConfigDict(extra='forbid')
+
+    items: list[IngestBatchItem] = Field(..., min_length=1)
     label_source: str = Field(
         default=DEFAULT_LABEL_SOURCE,
         description='label_source recorded on labels imported from label_txt_path',
@@ -159,6 +168,7 @@ async def curation_ingest_image(
         error=result.error,
         error_kind=result.error_kind,
         source_identifier=result.source_identifier,
+        secondary_detector_error=result.secondary_detector_error,
     )
 
 
@@ -269,6 +279,7 @@ def _batch_response(
                 error=r.error,
                 error_kind=r.error_kind,
                 source_identifier=r.source_identifier,
+                secondary_detector_error=r.secondary_detector_error,
             )
             for r in batch_result.results
         )
@@ -280,6 +291,7 @@ def _batch_response(
         summary.mismatches += batch_result.summary.mismatches
         summary.missed_labels += batch_result.summary.missed_labels
         summary.unmatched_detections += batch_result.summary.unmatched_detections
+        summary.secondary_detector_failures += batch_result.summary.secondary_detector_failures
 
     if summary.failed == 0:
         status: Any = 'success'
@@ -464,11 +476,25 @@ async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainRes
                                   polls of this endpoint.
     * ``stable_for_s``         — seconds since the last non-zero reading.
     * ``observed_at``          — this poll's timestamp.
+    * ``region_dependencies``  — (V-1) the active region profile's Triton
+                                  model(s) (detector/segmenter) and
+                                  whether each is READY right now; empty
+                                  when no region profile is configured.
+    * ``stall_reason``         — a human-readable line when items are
+                                  pending AND a dependency is down; null
+                                  otherwise (nothing pending, or the
+                                  worker just hasn't caught up yet).
 
     Re-ingested data can never carry the retired ``'pending'`` /
     ``'pending_verify'`` short names, so there is no legacy rollup.
     """
+    from src.services.curation.region_dependency_health import (
+        check_region_dependencies,
+        stall_reason as _stall_reason,
+    )
     from src.services.curation.region_drain import observe_drain
+    from src.services.detection.profile_registry import region_profile_or_neutral
+    from src.services.triton_control import TritonControlService
 
     await _ensure_indexes(opensearch)
     fields = get_region_fields()
@@ -493,6 +519,22 @@ async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainRes
     pending_verification = raw.get(RegionStatus.PENDING_VERIFICATION, 0)
     total_unfinished = pending_detection + pending_verification
     verdict = observe_drain(total_unfinished)
+
+    control = TritonControlService()
+    dependencies = await check_region_dependencies(
+        control.get_repository_index, region_profile_or_neutral()
+    )
+    dependency_responses = [
+        RegionDependencyStatusResponse(
+            role=d.role,
+            model=d.model,
+            ready=d.ready,
+            unavailable_since=d.unavailable_since,
+            detail=d.detail,
+        )
+        for d in dependencies
+    ]
+
     return IngestRegionDrainResponse(
         pending_detection=pending_detection,
         pending_verification=pending_verification,
@@ -500,6 +542,8 @@ async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainRes
         drained=verdict.drained,
         stable_for_s=verdict.stable_for_s,
         observed_at=verdict.observed_at,
+        region_dependencies=dependency_responses,
+        stall_reason=_stall_reason(dependencies, pending_detection=pending_detection),
     )
 
 

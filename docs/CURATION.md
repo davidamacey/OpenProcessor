@@ -267,13 +267,19 @@ trainer. A deployment supplies:
 
   ```bash
   curl -s -X POST "$API/curation/train/start" -H 'content-type: application/json' -d '{
-    "dataset_export_dir": "/app/data/exports/<ts>",
     "model_family": "yolo26", "model_size": "s", "profile": "small",
     "cuda_visible_devices": "0",
     "hyperparameters": {"epochs": 70, "imgsz": 640, "batch": 16, "optimizer": "MuSGD"},
     "mlflow_run_name": "my-run"
   }'
   ```
+
+  (F-73: `dataset_export_dir` is optional -- omitted/null defaults to
+  the current export, `data/exports/current`'s target. Pass it
+  explicitly only to train against a different, non-current export.
+  With no export at all yet, preflight reports a single clear blocking
+  check telling you to run `POST /export/yolo` first, instead of a bare
+  422 with no explanation.)
 
 ## Class-registry schema
 
@@ -436,6 +442,18 @@ but every stop/start call fails open (no-op) and the API logs one
 `arbiter_docker_unavailable` warning per outage (not per call) so the gap
 is visible instead of silent.
 
+**Trainer reachability (F-72).** `POST /train/preflight` probes whether
+the trainer container is up before letting a job queue forever with no
+error. `OP_GPU_ARBITER_TRAINER_CONTAINER` now defaults to
+`${COMPOSE_PROJECT_NAME:-openprocessor}-trainer` (the `curation-trainer`
+service's own `container_name`), so a deployment running the `training`
+profile gets a working probe with no extra env config. That probe still
+needs Docker socket access from `yolo-api` -- the same
+`docker-compose.gpu-arbiter.yml` overlay above -- so without it the
+preflight message changes from the old, misleading "no trainer
+container configured" to the accurate "docker SDK/socket unavailable in
+the API container", not to a passing probe.
+
 ## Wiring up Cropwright
 
 Cropwright (or any `/curation`-consuming frontend) needs three things to
@@ -503,6 +521,12 @@ sample-clean` removes everything fetched.
    search / near-dup / clustering then have nothing to operate on.
 4. Configure at least an ingest detector model
    (`OP_INGEST_PRIMARY_DETECTOR_MODEL`) — ingest 503s until one is set.
+   **A stock YOLO checkpoint's full label space becomes item proposals
+   by default** (all 80 COCO classes for a stock YOLO11/YOLO26 model,
+   step 2's `seed_class_registry.py` warning above) — set
+   `OP_INGEST_PRIMARY_CLASS_IDS` to a comma-separated allowlist (e.g.
+   `2,3,5,7` for car/motorcycle/bus/truck) to narrow ingest to only the
+   classes you created in step 2, instead of proposing all of them.
 5. Ingest images: `POST /curation/ingest/image` for one image at a
    time, or `scripts/curation/ingest_walker.py` for a bulk directory
    walk with a resumable progress file. If the images are not on storage
@@ -592,6 +616,23 @@ sample-clean` removes everything fetched.
    val). `POST /curation/train/preflight` blocks an export with no train
    or no val images, or with a trained class missing from train or val
    — see the "Export" section of the API contract for the exact rules.
+9. **Train.** `curation-trainer` is a separate compose service, opt-in
+   behind the `training` profile (F-21/F-72) -- it isn't started by
+   `--profile curation` or the base `docker compose up`:
+
+   ```bash
+   docker compose --profile training up -d curation-trainer
+   curl -s -X POST "$API/curation/train/preflight" -H 'content-type: application/json' -d '{}'
+   curl -s -X POST "$API/curation/train/start" -H 'content-type: application/json' -d '{
+     "model_family": "yolo26", "model_size": "s", "profile": "small",
+     "hyperparameters": {"epochs": 70, "imgsz": 640, "batch": 16, "optimizer": "MuSGD"}
+   }'
+   ```
+
+   (`dataset_export_dir` defaults to the current export -- F-73 -- so an
+   empty preflight body works once step 8 has run at least once.)
+   Without the `training` profile up, preflight's `trainer_reachable`
+   check reports the trainer unreachable instead of blocking silently.
 
 ## Environment variables
 

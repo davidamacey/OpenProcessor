@@ -64,26 +64,54 @@ if [ ! -f "$ONNX_PATH" ]; then
 fi
 
 # -----------------------------------------------------------------------------
+# F-16: bake FP16 into the ONNX (TRT 11 typed builds have no --fp16 flag;
+# reduced precision must live in the graph -- trt_utils.bake_fp16_onnx, the
+# same helper export_face_recognition.py / export_scrfd.py /
+# export_mobileclip_image_encoder.py call). PE was shipping FP32-only
+# (~2x the VRAM, slower) because this build script never called it.
+#
+# BAKE_FP16=0 opts out entirely (build straight from the FP32 ONNX, the old
+# behavior). Default on, with an FP32 fallback: if the bake step itself
+# fails (module unavailable, graph rewrite error), trt_utils.py's own CLI
+# already falls back and reports 'fp32'; if the bake *succeeds* but the
+# resulting FP16 ONNX fails to build in trtexec below, this script retries
+# once from the original FP32 ONNX before giving up.
+# -----------------------------------------------------------------------------
+BAKE_FP16="${BAKE_FP16:-1}"
+BUILD_ONNX_PATH="$ONNX_PATH"
+PE_PRECISION="fp32"
+if [ "$BAKE_FP16" = "1" ]; then
+    log "Baking FP16 into the ONNX (trt_utils.bake_fp16_onnx)..."
+    FP16_ONNX_PATH="$(dirname "$ONNX_PATH")/$(basename "$ONNX_PATH" .onnx).fp16.onnx"
+    BAKE_OUT="$(mktemp)"
+    BAKE_ERR="$(mktemp)"
+    if "$PYTHON" "$SCRIPT_DIR/trt_utils.py" "$ONNX_PATH" "$FP16_ONNX_PATH" \
+            >"$BAKE_OUT" 2>"$BAKE_ERR"; then
+        BUILD_ONNX_PATH="$(cat "$BAKE_OUT")"
+        if [ "$(cat "$BAKE_ERR")" = "fp16" ]; then
+            PE_PRECISION="fp16"
+            log "  FP16 ONNX: $BUILD_ONNX_PATH"
+        else
+            log "  bake_fp16_onnx fell back to FP32: $(cat "$BAKE_ERR")"
+        fi
+    else
+        err "  trt_utils.py bake step failed unexpectedly; continuing with FP32: $(cat "$BAKE_ERR")"
+        BUILD_ONNX_PATH="$ONNX_PATH"
+    fi
+    rm -f "$BAKE_OUT" "$BAKE_ERR"
+else
+    log "BAKE_FP16=0 -- building FP32 (as before)"
+fi
+
+# -----------------------------------------------------------------------------
 # Resolve how to call trtexec
 # -----------------------------------------------------------------------------
 if [ -n "${TRTEXEC:-}" ]; then
     TRTEXEC_CMD=("$TRTEXEC")
-    ONNX_ARG="$ONNX_PATH"
-    PLAN_ARG="$PLAN_TMP"
 elif command -v trtexec >/dev/null 2>&1; then
     TRTEXEC_CMD=(trtexec)
-    ONNX_ARG="$ONNX_PATH"
-    PLAN_ARG="$PLAN_TMP"
 elif command -v docker >/dev/null 2>&1; then
-    # The triton-server service mounts ./models at /models; stage the ONNX
-    # there so the container can see it, and write the plan back the same way.
-    STAGE_DIR="$(printf '%s\n' "$MODELS_DIRS" | awk '{print $1}')"
-    log "trtexec not on PATH -- using the triton-server container"
-    cp "$ONNX_PATH" "$STAGE_DIR/$MODEL_NAME.onnx"
     TRTEXEC_CMD=(docker compose run --rm --no-deps -T triton-server trtexec)
-    ONNX_ARG="/models/$MODEL_NAME.onnx"
-    PLAN_ARG="/models/$MODEL_NAME.plan"
-    PLAN_TMP="$STAGE_DIR/$MODEL_NAME.plan"
 else
     err "Neither trtexec nor docker is available."
     err "Run this inside the Triton container, or use Path 2:"
@@ -91,16 +119,38 @@ else
     exit 2
 fi
 
+# _stage_and_resolve_args ONNX_TO_BUILD -- sets ONNX_ARG/PLAN_ARG/PLAN_TMP
+# (and STAGE_DIR when docker-staging) for whichever ONNX path (FP16 or
+# FP32) is about to be built, since the docker path needs the file copied
+# into the mounted models dir under a fixed name each time.
+_stage_and_resolve_args() {
+    local src_onnx="$1"
+    if [ -n "${TRTEXEC:-}" ] || command -v trtexec >/dev/null 2>&1; then
+        ONNX_ARG="$src_onnx"
+        PLAN_ARG="$PLAN_TMP"
+    else
+        STAGE_DIR="$(printf '%s\n' "$MODELS_DIRS" | awk '{print $1}')"
+        cp "$src_onnx" "$STAGE_DIR/$MODEL_NAME.onnx"
+        ONNX_ARG="/models/$MODEL_NAME.onnx"
+        PLAN_ARG="/models/$MODEL_NAME.plan"
+        PLAN_TMP="$STAGE_DIR/$MODEL_NAME.plan"
+    fi
+}
+
+_stage_and_resolve_args "$BUILD_ONNX_PATH"
+
 # -----------------------------------------------------------------------------
 # Build
 # -----------------------------------------------------------------------------
-log "Building the $MODEL_NAME TensorRT engine from $ONNX_PATH"
+log "Building the $MODEL_NAME TensorRT engine from $BUILD_ONNX_PATH ($PE_PRECISION)"
 log "  profile: min=1 opt=$OPT_BATCH max=$MAX_BATCH at ${IMAGE_SIZE}x${IMAGE_SIZE}"
 log "  workspace: $WORKSPACE"
 log "  this typically takes several minutes"
 
-# NOTE: no --fp16. TensorRT 11 builds are strongly typed and follow the ONNX
-# dtypes; the flag was removed (see export/trt_utils.py::enable_fp16).
+# NOTE: no --fp16 flag. TensorRT 11 builds are strongly typed and follow the
+# ONNX dtypes; the flag was removed (see export/trt_utils.py::enable_fp16).
+# Precision comes entirely from which ONNX (FP16-baked or original FP32) is
+# passed in above.
 if ! "${TRTEXEC_CMD[@]}" \
         --onnx="$ONNX_ARG" \
         --saveEngine="$PLAN_ARG" \
@@ -109,18 +159,39 @@ if ! "${TRTEXEC_CMD[@]}" \
         --maxShapes="$INPUT_TENSOR:${MAX_BATCH}x3x${IMAGE_SIZE}x${IMAGE_SIZE}" \
         --memPoolSize=workspace:"$WORKSPACE" \
         --skipInference ; then
-    err ""
-    err "trtexec failed to build the engine. PE's attention pooling may use"
-    err "ops this TensorRT release does not support. Fall back to Path 2:"
-    err "  ONNX_PATH=$ONNX_PATH bash export/build_pe_ort_fallback.sh"
-    exit 3
+    if [ "$PE_PRECISION" = "fp16" ]; then
+        err ""
+        err "trtexec failed to build the FP16 engine. Falling back to FP32 (original ONNX)..."
+        PE_PRECISION="fp32"
+        _stage_and_resolve_args "$ONNX_PATH"
+        if ! "${TRTEXEC_CMD[@]}" \
+                --onnx="$ONNX_ARG" \
+                --saveEngine="$PLAN_ARG" \
+                --minShapes="$INPUT_TENSOR:1x3x${IMAGE_SIZE}x${IMAGE_SIZE}" \
+                --optShapes="$INPUT_TENSOR:${OPT_BATCH}x3x${IMAGE_SIZE}x${IMAGE_SIZE}" \
+                --maxShapes="$INPUT_TENSOR:${MAX_BATCH}x3x${IMAGE_SIZE}x${IMAGE_SIZE}" \
+                --memPoolSize=workspace:"$WORKSPACE" \
+                --skipInference ; then
+            err ""
+            err "trtexec failed on the FP32 fallback too. PE's attention pooling may use"
+            err "ops this TensorRT release does not support. Fall back to Path 2:"
+            err "  ONNX_PATH=$ONNX_PATH bash export/build_pe_ort_fallback.sh"
+            exit 3
+        fi
+    else
+        err ""
+        err "trtexec failed to build the engine. PE's attention pooling may use"
+        err "ops this TensorRT release does not support. Fall back to Path 2:"
+        err "  ONNX_PATH=$ONNX_PATH bash export/build_pe_ort_fallback.sh"
+        exit 3
+    fi
 fi
 
 if [ ! -s "$PLAN_TMP" ]; then
     err "trtexec reported success but produced no engine at $PLAN_TMP"
     exit 3
 fi
-log "Engine built: $PLAN_TMP ($(du -h "$PLAN_TMP" | cut -f1))"
+log "Engine built ($PE_PRECISION): $PLAN_TMP ($(du -h "$PLAN_TMP" | cut -f1))"
 
 # -----------------------------------------------------------------------------
 # Install into every configured model repository

@@ -524,6 +524,39 @@ async def _run_preflight(
     """
     checks: list[PreflightCheck] = []
 
+    # ---- 0. dataset_export_dir defaults to the current export ---------------
+    # F-73: required-with-no-default forced every caller (including
+    # CURATION.md's own worked example) to look up and paste the current
+    # export path by hand. Null/omitted now resolves to the same `current`
+    # symlink target GET /export/status reports, mutating `spec` in place
+    # so every check below (and, on /start, the job.json write) sees the
+    # resolved path -- exactly as if the caller had passed it themselves.
+    if not spec.dataset_export_dir:
+        from src.services.curation.export import resolve_current_export_dir
+
+        try:
+            spec.dataset_export_dir = str(resolve_current_export_dir())
+        except FileNotFoundError:
+            checks.append(
+                PreflightCheck(
+                    name='dataset_export_dir',
+                    severity='block',
+                    message=(
+                        'no dataset_export_dir was given and no export exists yet '
+                        '(data/exports/current). Run POST /export/yolo first, or '
+                        'pass dataset_export_dir explicitly.'
+                    ),
+                )
+            )
+        else:
+            checks.append(
+                PreflightCheck(
+                    name='dataset_export_dir',
+                    severity='ok',
+                    message=f'defaulted to the current export: {spec.dataset_export_dir}',
+                )
+            )
+
     # ---- 1. optimizer != auto -------------------------------------------------
     optimizer = (spec.hyperparameters or {}).get('optimizer')
     if isinstance(optimizer, str) and optimizer.lower() in {

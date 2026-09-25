@@ -338,13 +338,17 @@ class TritonClient:
         orig_h, orig_w = img_array.shape[:2]
         target_size = 256
 
+        # F-28: round() + a max(target_size, ...) floor -- see the matching
+        # fix/comment in src.services.cpu_preprocess.center_crop_cpu. Without
+        # it, float truncation via int() could undershoot target_size by one
+        # px and produce a smaller-than-256 crop instead of erroring.
         scale = target_size / min(orig_h, orig_w)
-        new_w = int(orig_w * scale)
-        new_h = int(orig_h * scale)
+        new_w = max(target_size, round(orig_w * scale))
+        new_h = max(target_size, round(orig_h * scale))
         resized = cv2.resize(img_array, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
 
-        start_x = (new_w - target_size) // 2
-        start_y = (new_h - target_size) // 2
+        start_x = max(0, (new_w - target_size) // 2)
+        start_y = max(0, (new_h - target_size) // 2)
         cropped = resized[start_y : start_y + target_size, start_x : start_x + target_size]
 
         normalized = cropped.astype(np.float32) / 255.0

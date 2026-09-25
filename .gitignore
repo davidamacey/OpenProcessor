@@ -81,16 +81,23 @@ faiss_indexes/
 # ============================================================================
 
 # Test images and videos (use external paths or download separately).
-# `test_images/*` (not `test_images/`) -- a parent-directory exclude can
-# never be re-included, and F-29 needs test_images/.gitkeep tracked (see
-# below) so the directory itself exists, host-user-owned, before compose
-# ever runs.
-test_images/*
-# F-29 (fresh-start E2E findings 2026-09-25): yolo-api bind-mounts
+#
+# F-29/F-71 (fresh-start E2E findings 2026-09-25): yolo-api bind-mounts
 # ./test_images. On a fresh clone that host dir doesn't exist, so Docker
 # auto-creates it root-owned on the first `up`, and `make
 # download-test-images` (running as the host user) can't write into it.
-!test_images/.gitkeep
+# F-29's first fix shipped a tracked `test_images/.gitkeep` placeholder so
+# `git clone` itself created the dir, host-user-owned, before compose
+# ever ran -- but that broke `git pull` on any EXISTING install whose
+# `test_images/` was already root-owned from before this fix (git needs
+# write access to materialize the new tracked file there; the pull
+# aborted half-applied, HEAD unmoved). Fixed properly instead: `make up`
+# / `make up-monitoring` now depend on `ensure-host-bind-mount-dirs`,
+# which `mkdir -p`s this (and the other bind-mount source dirs) as the
+# invoking host user before compose ever runs -- no tracked file needed.
+# Recovery for an install already stuck with a root-owned test_images/:
+#   sudo chown -R $(id -u):$(id -g) test_images
+test_images/
 test_videos/
 sample_data/
 IMGS_TEST/
@@ -100,9 +107,23 @@ IMGS_TEST/
 # manifests under scripts/datasets/manifests/ ARE committed; only the
 # downloaded imagery/CSVs under data/samples/ are ignored here.
 /data/samples/
+# F-15: export_models.py's --generate-config / --save-labels run writes
+# this every invocation, reflecting whichever models/formats *that* run
+# exported (host paths, per-model results) -- a run artifact, not source,
+# and it was previously tracked, so every export run dirtied the tree
+# even when nothing about the repo's own config changed.
+/scripts/export_results.json
 # Class registry generated at runtime (default OP_REGISTRY_PATH); the
 # warehouse example data/class_registry.example.json IS committed.
 /data/class_registry.json
+# F-45: every class-registry write leaves a timestamped backup snapshot
+# (data/class_registry.<ISO8601Z-with-micros>.json) that isn't tracked.
+# The one prior attempt at this (a2abeb9) added only a test and never
+# added a pattern -- `git check-ignore` on a real backup file returned
+# nothing. Match the writer's actual timestamp format (see
+# src/services/curation/registry_backup.py or equivalent): digits, T,
+# more digits, optional micros, Z, .json.
+/data/class_registry.[0-9]*Z.json
 /data/exports/*
 # Anchored at repo root -- an earlier unanchored `backends/` pattern
 # accidentally hid the bake-off harness's source subpackage (see the

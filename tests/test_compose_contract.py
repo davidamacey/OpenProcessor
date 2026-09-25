@@ -582,3 +582,35 @@ def test_triton_serves_partial_model_sets() -> None:
 def test_vlm_image_pinned_by_digest() -> None:
     image = str(_services()['vlm']['image'])
     assert '@sha256:' in image, image
+
+
+def test_yolo_api_default_trainer_container_matches_the_trainer_service_name() -> None:
+    """F-72: /train/preflight's trainer-reachability probe
+    (GpuArbiterConfig.trainer_container, env OP_GPU_ARBITER_TRAINER_CONTAINER)
+    used to default to unset -- reporting the misleading "no trainer
+    container configured" even while curation-trainer was up and healthy,
+    because nothing ever wired the env var to the trainer service's own
+    container_name. yolo-api's environment must default
+    OP_GPU_ARBITER_TRAINER_CONTAINER to that exact value (still
+    overridable), so the probe finds it with no extra config on any
+    deployment running the `training` profile."""
+    services = _services()
+    api_env = services['yolo-api']['environment']
+    trainer_container_name = str(services['curation-trainer']['container_name'])
+
+    env_map = {}
+    for entry in api_env:
+        key, _, value = str(entry).partition('=')
+        env_map[key] = value
+
+    assert 'OP_GPU_ARBITER_TRAINER_CONTAINER' in env_map, (
+        'yolo-api must set a default OP_GPU_ARBITER_TRAINER_CONTAINER'
+    )
+    default_expr = env_map['OP_GPU_ARBITER_TRAINER_CONTAINER']
+    # The env var's own default value (inside the outer ${VAR:-...}) must
+    # be exactly the trainer service's container_name expression -- both
+    # resolve identically off the same COMPOSE_PROJECT_NAME.
+    assert trainer_container_name in default_expr, (
+        f'OP_GPU_ARBITER_TRAINER_CONTAINER default {default_expr!r} does not match '
+        f"curation-trainer's container_name {trainer_container_name!r}"
+    )

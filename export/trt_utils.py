@@ -133,6 +133,31 @@ def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None)
     return out
 
 
+def bake_fp16_onnx_or_fallback(
+    onnx_path: str | Path, output_path: str | Path | None = None
+) -> tuple[Path, bool]:
+    """:func:`bake_fp16_onnx`, but never raises -- for build scripts (like
+    PE's ``build_pe_trt.sh``) that shell out to ``trtexec`` instead of
+    driving the TRT Python builder directly, and so can't just wrap a
+    Python builder call in try/except the way
+    ``export_face_recognition.py`` / ``export_scrfd.py`` /
+    ``export_mobileclip_image_encoder.py`` do.
+
+    Returns ``(path_to_build_from, used_fp16)``. On any failure (missing
+    ``onnxconverter-common``, a graph rewrite error, ...) logs and returns
+    the original ``onnx_path`` unchanged with ``used_fp16=False`` -- an
+    FP32 engine is always buildable from the same graph.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    try:
+        return bake_fp16_onnx(onnx_path, output_path), True
+    except Exception as exc:
+        logger.warning('bake_fp16_onnx failed (%s); falling back to FP32: %s', onnx_path, exc)
+        return Path(onnx_path), False
+
+
 def validate_serialized_engine(engine_bytes: bytes) -> bool:
     """Confirm a serialized TensorRT engine is non-empty and deserializes.
 
@@ -184,3 +209,22 @@ def atomic_write_plan(engine_bytes: bytes, plan_path: str | Path) -> Path:
         Path(tmp_name).unlink(missing_ok=True)
         raise
     return plan_path
+
+
+if __name__ == '__main__':
+    # F-16: a tiny CLI so a bash build script that shells out to `trtexec`
+    # (build_pe_trt.sh) can bake FP16 into an ONNX the same way the
+    # Python-builder exporters (ArcFace/SCRFD/MobileCLIP) do, without
+    # embedding a Python one-liner in the shell script. Prints the status
+    # ('fp16'/'fp32') to stderr and the resolved onnx path — the only
+    # thing callers should capture — as the sole line on stdout.
+    import sys
+
+    if len(sys.argv) < 2:
+        print(f'usage: {sys.argv[0]} <onnx_path> [output_path]', file=sys.stderr)
+        raise SystemExit(2)
+    resolved_path, used_fp16 = bake_fp16_onnx_or_fallback(
+        sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None
+    )
+    print('fp16' if used_fp16 else 'fp32', file=sys.stderr)
+    print(resolved_path)

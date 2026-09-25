@@ -651,6 +651,15 @@ def save_triton_config(
     )
 
     config_path = model_dir / 'config.pbtxt'
+    # F-15: write only on change. This target regenerates a config every
+    # export run, and models/*/config.pbtxt is tracked in git -- writing
+    # unconditionally rewrote the file (touching mtime, and often nothing
+    # else) even when the generated content was byte-identical, dirtying
+    # the tree on every export.
+    if config_path.exists() and config_path.read_text() == config_content:
+        logger.info(f'Triton config unchanged, not rewriting: {config_path}')
+        return config_path
+
     with open(config_path, 'w') as f:
         f.write(config_content)
 

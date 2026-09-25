@@ -1033,6 +1033,11 @@
             "title": "Missed Labels",
             "type": "integer"
           },
+          "secondary_detector_failures": {
+            "default": 0,
+            "title": "Secondary Detector Failures",
+            "type": "integer"
+          },
           "successful": {
             "default": 0,
             "title": "Successful",
@@ -2018,12 +2023,14 @@
         "type": "object"
       },
       "CropRegionUndoBatchRequest": {
+        "additionalProperties": false,
         "description": "Undo the most recent human region write on each crop.",
         "properties": {
           "crop_ids": {
             "items": {
               "type": "string"
             },
+            "minItems": 1,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -3205,11 +3212,13 @@
         "type": "object"
       },
       "ImportLabelsBatchRequest": {
+        "additionalProperties": false,
         "properties": {
           "items": {
             "items": {
               "$ref": "#/components/schemas/ImportLabelsRequest"
             },
+            "minItems": 1,
             "title": "Items",
             "type": "array"
           }
@@ -3221,6 +3230,7 @@
         "type": "object"
       },
       "ImportLabelsRequest": {
+        "additionalProperties": false,
         "properties": {
           "detect_mismatches": {
             "default": false,
@@ -3275,6 +3285,7 @@
         "type": "object"
       },
       "IngestBatchItem": {
+        "additionalProperties": false,
         "description": "One batch entry: an image, and optionally its ground-truth labels.\n\n``label_txt_path`` is what makes an \"ingest an already-labeled\ndataset and compare the detector against ground truth\" pass a single\ncall instead of an ingest followed by a second\n``POST /import_labels/batch`` round trip.",
         "properties": {
           "label_txt_path": {
@@ -3308,6 +3319,7 @@
         "type": "object"
       },
       "IngestBatchRequest": {
+        "additionalProperties": false,
         "properties": {
           "detect_mismatches": {
             "default": false,
@@ -3319,6 +3331,7 @@
             "items": {
               "$ref": "#/components/schemas/IngestBatchItem"
             },
+            "minItems": 1,
             "title": "Items",
             "type": "array"
           },
@@ -3329,6 +3342,9 @@
             "type": "string"
           }
         },
+        "required": [
+          "items"
+        ],
         "title": "IngestBatchRequest",
         "type": "object"
       },
@@ -3353,6 +3369,7 @@
         "type": "object"
       },
       "IngestImageRequest": {
+        "additionalProperties": false,
         "properties": {
           "path": {
             "description": "Absolute path to a JPEG on a mounted volume",
@@ -3420,6 +3437,17 @@
             "title": "N Regions",
             "type": "integer"
           },
+          "secondary_detector_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secondary Detector Error"
+          },
           "source_identifier": {
             "anyOf": [
               {
@@ -3484,9 +3512,27 @@
             "title": "Pending Verification",
             "type": "integer"
           },
+          "region_dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/RegionDependencyStatusResponse"
+            },
+            "title": "Region Dependencies",
+            "type": "array"
+          },
           "stable_for_s": {
             "title": "Stable For S",
             "type": "number"
+          },
+          "stall_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stall Reason"
           },
           "total_unfinished": {
             "title": "Total Unfinished",
@@ -5974,6 +6020,46 @@
         "title": "QuantizeRequest",
         "type": "object"
       },
+      "RegionDependencyStatusResponse": {
+        "description": "One Triton model the active region profile depends on (V-1).",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "unavailable_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Since"
+          }
+        },
+        "required": [
+          "role",
+          "model",
+          "ready",
+          "detail"
+        ],
+        "title": "RegionDependencyStatusResponse",
+        "type": "object"
+      },
       "RegionProfileSummary": {
         "description": "The active region profile's identity, served on ``GET /health`` and\n``GET /regions/vocabulary`` -- THE signal a client keys on to decide\nwhether region-scoped UI/routes are available at all.",
         "properties": {
@@ -7189,9 +7275,16 @@
             "type": "string"
           },
           "dataset_export_dir": {
-            "description": "Absolute path (inside the trainer container) to a frozen export. The API typically passes the host's ``current/`` symlink target.",
-            "title": "Dataset Export Dir",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absolute path (inside the trainer container) to a frozen export. Null/omitted defaults to the current export (the host's data/exports/current symlink target).",
+            "title": "Dataset Export Dir"
           },
           "dataset_sha": {
             "anyOf": [
@@ -7396,9 +7489,6 @@
             "title": "Trainer Image Revision"
           }
         },
-        "required": [
-          "dataset_export_dir"
-        ],
         "title": "TrainJobSpec",
         "type": "object"
       },
@@ -7988,12 +8078,14 @@
         "type": "object"
       },
       "VlmLabelBatchRequest": {
+        "additionalProperties": false,
         "properties": {
           "crop_ids": {
             "items": {
               "type": "string"
             },
             "maxItems": 5000,
+            "minItems": 1,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -8024,12 +8116,14 @@
         "type": "object"
       },
       "VlmRegionVisibleBatchRequest": {
+        "additionalProperties": false,
         "description": "Request body for ``POST /curation/vlm/region_visible_batch``.",
         "properties": {
           "items": {
             "items": {
               "$ref": "#/components/schemas/VlmRegionVisibleBatchItem"
             },
+            "minItems": 1,
             "title": "Items",
             "type": "array"
           }
@@ -8090,12 +8184,14 @@
         "type": "object"
       },
       "VlmVerifyRegionBatchRequest": {
+        "additionalProperties": false,
         "description": "Request body for ``POST /curation/vlm/verify_region_batch``.",
         "properties": {
           "items": {
             "items": {
               "$ref": "#/components/schemas/VlmVerifyRegionBatchItem"
             },
+            "minItems": 1,
             "title": "Items",
             "type": "array"
           }
@@ -8163,12 +8259,14 @@
         "type": "object"
       },
       "VlmVerifyRegionsRequest": {
+        "additionalProperties": false,
         "properties": {
           "crop_ids": {
             "items": {
               "type": "string"
             },
             "maxItems": 5000,
+            "minItems": 1,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -12129,7 +12227,7 @@
     },
     "/curation/ingest/region_drain": {
       "get": {
-        "description": "Region-detection worklog: how many items are still waiting for the\ndetection worker.\n\nUsed by an ingest walker to decide when the asynchronous\ndetect-then-verify chain has caught up after a folder finishes, before\ntriggering ``/curation/pipeline/auto_label``. The walker polls this\nendpoint every ``region_drain.poll_interval_s`` (``GET /ingest/config``)\nand proceeds once ``drained`` is true -- computed server-side\nnow, not invented client-side from ``total_unfinished == 0``.\n\nReturns:\n* ``pending_detection``    — items the detection worker hasn't reached\n                              yet (region status == 'pending_detection').\n* ``pending_verification`` — items where the detector found a\n                              candidate and the verify step is queued.\n* ``total_unfinished``     — sum of the two; what a legacy walker polled.\n* ``drained``              — true once ``total_unfinished`` has read 0\n                              for ``region_drain.stable_polls`` consecutive\n                              polls of this endpoint.\n* ``stable_for_s``         — seconds since the last non-zero reading.\n* ``observed_at``          — this poll's timestamp.\n\nRe-ingested data can never carry the retired ``'pending'`` /\n``'pending_verify'`` short names, so there is no legacy rollup.",
+        "description": "Region-detection worklog: how many items are still waiting for the\ndetection worker.\n\nUsed by an ingest walker to decide when the asynchronous\ndetect-then-verify chain has caught up after a folder finishes, before\ntriggering ``/curation/pipeline/auto_label``. The walker polls this\nendpoint every ``region_drain.poll_interval_s`` (``GET /ingest/config``)\nand proceeds once ``drained`` is true -- computed server-side\nnow, not invented client-side from ``total_unfinished == 0``.\n\nReturns:\n* ``pending_detection``    — items the detection worker hasn't reached\n                              yet (region status == 'pending_detection').\n* ``pending_verification`` — items where the detector found a\n                              candidate and the verify step is queued.\n* ``total_unfinished``     — sum of the two; what a legacy walker polled.\n* ``drained``              — true once ``total_unfinished`` has read 0\n                              for ``region_drain.stable_polls`` consecutive\n                              polls of this endpoint.\n* ``stable_for_s``         — seconds since the last non-zero reading.\n* ``observed_at``          — this poll's timestamp.\n* ``region_dependencies``  — (V-1) the active region profile's Triton\n                              model(s) (detector/segmenter) and\n                              whether each is READY right now; empty\n                              when no region profile is configured.\n* ``stall_reason``         — a human-readable line when items are\n                              pending AND a dependency is down; null\n                              otherwise (nothing pending, or the\n                              worker just hasn't caught up yet).\n\nRe-ingested data can never carry the retired ``'pending'`` /\n``'pending_verify'`` short names, so there is no legacy rollup.",
         "operationId": "ingest_region_drain_curation_ingest_region_drain_get",
         "responses": {
           "200": {
@@ -15280,7 +15378,7 @@
     },
     "/curation/stats/dataset": {
       "get": {
-        "description": "Overall dataset balance + label-source + pipeline breakdown.\n\nSingle ``_search?size=0`` with composite aggregations. Backwards-\ncompatible: legacy callers still see ``total_crops``, ``validated``,\n``test_holdout``, ``by_source``.\n\nNew fields for the dashboard:\n\n- ``as_of`` — ISO8601 timestamp of the query.\n- ``labeled.{by_human, by_vlm, by_classifier, other}`` — rolled-up counts\n  derived from ``class_source`` plus the ``class_validated`` /\n  region-validated flags.\n- ``unlabeled.{pending_detection, pending_verification, no_label_source}`` —\n  the region-status field plus crops with no ``class_id``.\n- ``in_progress.region_drain_total_unfinished`` — matches the value\n  returned by ``/curation/ingest/region_drain``.\n- ``clusters.{last_run_at, cluster_count, residual_count, noise_count, method}`` —\n  sourced from the persisted ``auto_label_job`` state when present;\n  ``cluster_count`` falls back to live ``cluster_id`` cardinality.",
+        "description": "Overall dataset balance + label-source + pipeline breakdown.\n\nSingle ``_search?size=0`` with composite aggregations. Backwards-\ncompatible: legacy callers still see ``total_crops``, ``validated``,\n``test_holdout``, ``by_source``.\n\nNew fields for the dashboard:\n\n- ``as_of`` — ISO8601 timestamp of the query.\n- ``labeled.{by_human, by_vlm, by_classifier, other}`` — rolled-up counts\n  derived from ``class_source`` plus the ``class_validated`` /\n  region-validated flags.\n- ``unlabeled.{pending_detection, pending_verification, no_label_source,\n  vlm_no_class, by_proposal}`` — the region-status field plus crops with\n  no ``class_id``. ``by_proposal`` is F-23's fixed accounting for\n  detector-proposed-but-not-yet-classified crops (moved here from the\n  always-0 ``labeled.by_proposal``, since those class_source values\n  never carry a class_id).\n- ``in_progress.region_drain_total_unfinished`` — matches the value\n  returned by ``/curation/ingest/region_drain``.\n- ``clusters.{last_run_at, cluster_count, residual_count, noise_count, method}`` —\n  sourced from the persisted ``auto_label_job`` state when present;\n  ``cluster_count`` falls back to live ``cluster_id`` cardinality.",
         "operationId": "stats_dataset_curation_stats_dataset_get",
         "responses": {
           "200": {

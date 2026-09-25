@@ -1705,3 +1705,73 @@ def test_reload_promoted_route_defaults_to_empty_lists(
 
     assert r.status_code == 200, r.text
     assert r.json() == {'status': 'ok', 'reloaded': [], 'failed': []}
+
+
+# =============================================================================
+# F-73 -- dataset_export_dir defaults to the current export
+# =============================================================================
+
+
+def test_preflight_defaults_to_the_current_export_when_omitted(
+    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    current = tmp_path / 'exports' / '20260925T000000Z'
+    current.mkdir(parents=True)
+    monkeypatch.setattr('src.services.curation.export.resolve_current_export_dir', lambda: current)
+
+    r = app_client.post(
+        '/curation/train/preflight',
+        json={'model_size': 'm', 'profile': 'medium'},
+    )
+
+    assert r.status_code == 200, r.text
+    out = r.json()
+    check = next(c for c in out['checks'] if c['name'] == 'dataset_export_dir')
+    assert check['severity'] == 'ok'
+    assert str(current) in check['message']
+
+
+def test_preflight_reports_a_clear_block_when_no_export_exists_at_all(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _raise() -> Any:
+        msg = 'no current export symlink found'
+        raise FileNotFoundError(msg)
+
+    monkeypatch.setattr('src.services.curation.export.resolve_current_export_dir', _raise)
+
+    r = app_client.post(
+        '/curation/train/preflight',
+        json={'model_size': 'm', 'profile': 'medium'},
+    )
+
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out['blocked'] is True
+    check = next(c for c in out['checks'] if c['name'] == 'dataset_export_dir')
+    assert check['severity'] == 'block'
+    assert 'export/yolo' in check['message']
+
+
+def test_preflight_still_honors_an_explicit_dataset_export_dir(
+    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An explicit dataset_export_dir must win over the current-export
+    default -- resolve_current_export_dir must not even be consulted."""
+    explicit = tmp_path / 'explicit_export'
+    explicit.mkdir()
+
+    def _boom() -> Any:
+        msg = 'must not be called when dataset_export_dir is explicit'
+        raise AssertionError(msg)
+
+    monkeypatch.setattr('src.services.curation.export.resolve_current_export_dir', _boom)
+
+    r = app_client.post(
+        '/curation/train/preflight',
+        json={'dataset_export_dir': str(explicit), 'model_size': 'm', 'profile': 'medium'},
+    )
+
+    assert r.status_code == 200, r.text
+    names = [c['name'] for c in r.json()['checks']]
+    assert 'dataset_export_dir' not in names

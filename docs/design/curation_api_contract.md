@@ -109,13 +109,14 @@ output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 
 ### Ingest
 
-- `IngestImageRequest`: `path`, `source`
-- `IngestImageResponse`: `status` (`success`/`duplicate`/`failed`), `image_id`, `image_path`, `imohash`, `n_crops`, `n_regions`, `error`
-- `BatchIngestSummaryResponse`: `successful`, `duplicates`, `failed`, `mismatches`, `missed_labels`, `unmatched_detections`, `labels_imported`, `crops_indexed`
+- `IngestImageRequest`: `path`, `source` (F-22: `extra='forbid'` -- an unknown key 422s instead of silently ingesting on defaults)
+- `IngestImageResponse`: `status` (`success`/`duplicate`/`failed`), `image_id`, `image_path`, `imohash`, `n_crops`, `n_regions`, `error`, `secondary_detector_error` (F-43: set when a configured secondary detector call failed for this image -- the image still ingests successfully on the primary detector's output alone)
+- `BatchIngestSummaryResponse`: `successful`, `duplicates`, `failed`, `mismatches`, `missed_labels`, `unmatched_detections`, `labels_imported`, `crops_indexed`, `secondary_detector_failures` (F-43: count of otherwise-successful images where the configured secondary detector call failed, e.g. a Triton `DEADLINE_EXCEEDED` -- previously only a `warning` log line, invisible on the wire)
 - `BatchIngestResponse`: `status` (`success`/`partial`/`error`), `summary`, `results`, `disagreements` (with `detect_mismatches`: one record per model-vs-label disagreement, `kind` = `class_mismatch`/`missed_label`/`unmatched_detection`; also returned by `POST /import_labels/batch`)
 - `POST /ingest/upload` (multipart): `images` (files), `image_paths` (JSON list of identifiers, optional), `source` -> `BatchIngestResponse`
-- `ImportLabelsRequest`: `image_path`, `label_txt_path`, `label_source`
-- `ImportLabelsBatchRequest`: `items`
+- `IngestBatchRequest`: `items` (F-22: required, non-empty; `extra='forbid'` -- a wrong key like `paths` used to 200 with all-zero counts instead of 422)
+- `ImportLabelsRequest`: `image_path`, `label_txt_path`, `label_source` (F-22: `extra='forbid'`)
+- `ImportLabelsBatchRequest`: `items` (F-22: required, non-empty; `extra='forbid'`)
 
 ### Crops
 
@@ -1604,7 +1605,9 @@ active `bus` (`file`/`process`) and `log_path` alongside the existing
 
 ### `GET /stats/dataset`
 
-- `labeled`: `by_human`, `by_vlm`, `by_classifier`, `by_proposal`, `other`
+- `labeled`: `by_human`, `by_vlm`, `by_classifier`, `other` (F-23: `by_proposal`
+  moved to `unlabeled` -- those class_source values never carry a
+  `class_id`, so it was structurally always 0 here)
 - `regions`: `boxed`, `confirmed`, `total_detected`, `by_detector`,
   `by_segmenter`, `by_human`, `by_human_drew`, `verified_by_human`,
   `verified_by_vlm`, `validated_by_human` (`by_detector` /
@@ -1806,7 +1809,7 @@ generic vocabulary used throughout this doc:
   storage field names to the fixed `region_status` / `region_text`
   wire names.
 - **Stats**: `GET /stats/dataset`'s classifier-vendor-named labeled
-  bucket became `labeled.by_classifier` / `labeled.by_proposal`; its
+  bucket became `labeled.by_classifier`; its
   domain-named `plates` block became `regions` with
   `regions.by_detector` / `regions.by_segmenter` /
   `regions.verified_by_vlm`.
@@ -1869,11 +1872,16 @@ that carry a `class_id`; a `class_source` alone (e.g. `vlm_unmatched` /
 `vlm_new_class_pending` with no class) no longer counts as
 `labeled.by_vlm`. New `unlabeled.vlm_no_class`: the subset of
 `no_label_source` where a VLM answered/proposed but never landed a
-class.
+class. F-23: `unlabeled.by_proposal` -- the fixed accounting for
+'detector proposed it, nothing has classified it yet' (moved from the
+always-0 `labeled.by_proposal` above) -- is a second, disjoint subset
+of `no_label_source`. `by_proposal + vlm_no_class` can equal
+`no_label_source` exactly (every unclassified crop happens to be one
+or the other) without either counting the other's docs.
 
 ```json
-{"labeled": {"by_human": 174, "by_vlm": 3200, "by_classifier": 3551, "by_proposal": 0, "other": 0},
- "unlabeled": {"pending_detection": 0, "pending_verification": 0, "no_label_source": 1252, "vlm_no_class": 1036}}
+{"labeled": {"by_human": 174, "by_vlm": 3200, "by_classifier": 3551, "other": 0},
+ "unlabeled": {"pending_detection": 0, "pending_verification": 0, "no_label_source": 1252, "vlm_no_class": 1036, "by_proposal": 216}}
 ```
 
 **`GET /review/new_class_proposals` + `/summary` (R5)** — the queue
@@ -2037,6 +2045,45 @@ consecutive polls of this endpoint — single-process, in-memory; a
 multi-worker deployment polling from different processes tracks
 independent streaks (each worker's own view of "stable", never a
 correctness issue for the raw counts).
+
+**V-1** — the response also carries `region_dependencies` and
+`stall_reason` (`src/services/curation/region_dependency_health.py`),
+so a queue that isn't shrinking has a visible cause instead of reading
+as a flat, unexplained pending count:
+
+```json
+{"pending_detection": 3516, "pending_verification": 0, "total_unfinished": 3516,
+ "drained": false, "stable_for_s": 0.0, "observed_at": "2026-09-25T14:05:00+00:00",
+ "region_dependencies": [
+   {"role": "detector", "model": "region_detector_v1", "ready": true, "unavailable_since": null, "detail": "READY"},
+   {"role": "segmenter", "model": "sam3", "ready": false, "unavailable_since": "2026-09-25T14:02:11+00:00", "detail": "not in Triton repository index (never loaded)"}
+ ],
+ "stall_reason": "3516 item(s) awaiting region detection; segmenter (sam3) unavailable since 2026-09-25T14:02:11+00:00"}
+```
+
+`region_dependencies` is checked directly against Triton's own
+repository index from the API process (which can always reach Triton
+over the network, unlike probing the detection worker container, whose
+heartbeat is written to a container-local path the API can't see) —
+empty when no region profile is configured at all (the neutral/off
+case, not a stall). `stall_reason` is null whenever nothing is pending
+or every dependency is READY (the worker just hasn't caught up to a
+backlog yet, which is not a stall). `GET /stats/dataset`'s
+`in_progress.region_stall_reason` mirrors the same computation for the
+dashboard's "In-flight pipeline" panel.
+
+**Item behavior when a dependency is down (design decision, not a code
+change):** items simply stay in `pending_detection` — by design, the
+detection worker never writes a terminal region status on an infra
+failure (see `scripts/curation/worker/cascade.py`'s `_process_crop`
+docstring), so they're already retryable the moment the dependency
+recovers, with no dequeue/requeue logic needed. A new `region_unavailable`
+terminal-ish status was considered and rejected for this pass: it would
+touch the worker's state machine (`RegionStatus`, `region_state.py`'s
+writable-status set, the cascade's retry path) with no way to exercise
+that change against a live worker in this pass (no GPU/compose
+available) — the observability fix above (surface *why* it's stalled)
+covers the operator-facing gap without that risk.
 
 **BA-4** — `POST /ingest/upload` gained an optional `run_id` form
 field, recorded as `ingest_run_id` on every image doc from that call.

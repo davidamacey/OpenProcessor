@@ -27,6 +27,11 @@ from src.services.curation.label_import import DEFAULT_LABEL_SOURCE as _DEFAULT_
 
 
 class IngestImageRequest(BaseModel):
+    # F-22: extra='forbid' so a wrong-key body (e.g. {'paths': [...]} instead
+    # of the real field) 422s instead of silently validating to defaults and
+    # ingesting nothing. Subclasses (IngestBatchItem) inherit this.
+    model_config = ConfigDict(extra='forbid')
+
     path: str = Field(..., description='Absolute path to a JPEG on a mounted volume')
     source: str = Field(default='unknown', description='Source tag (e.g. hdd01, dataset_a)')
 
@@ -49,6 +54,11 @@ class IngestImageResponse(BaseModel):
     # image_path is now the server-persisted path. Null for a server-path
     # ingest (image_path already IS the client-meaningful identifier).
     source_identifier: str | None = None
+    # F-43: set when a configured secondary detector call failed for this
+    # image (e.g. a Triton DEADLINE_EXCEEDED) -- the image still ingests
+    # successfully on the primary detector's output alone, but a caller
+    # asking for a secondary classifier needs to know it never ran.
+    secondary_detector_error: str | None = None
 
 
 class BatchIngestSummaryResponse(BaseModel):
@@ -60,6 +70,10 @@ class BatchIngestSummaryResponse(BaseModel):
     unmatched_detections: int = 0
     labels_imported: int = 0
     crops_indexed: int = 0
+    # F-43: count of images (among 'successful') where the configured
+    # secondary detector call failed and was silently skipped before this
+    # fix. Previously only a per-image 'warning' log line, invisible here.
+    secondary_detector_failures: int = 0
 
 
 class BatchIngestResponse(BaseModel):
@@ -73,6 +87,8 @@ class BatchIngestResponse(BaseModel):
 
 
 class ImportLabelsRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
     image_path: str
     label_txt_path: str
     # Defaulted from the label importer so the public API carries no
@@ -82,7 +98,9 @@ class ImportLabelsRequest(BaseModel):
 
 
 class ImportLabelsBatchRequest(BaseModel):
-    items: list[ImportLabelsRequest]
+    model_config = ConfigDict(extra='forbid')
+
+    items: list[ImportLabelsRequest] = Field(..., min_length=1)
 
 
 class CropLabelRequest(BaseModel):
@@ -405,6 +423,16 @@ class IngestConfigResponse(BaseModel):
     region_drain: IngestRegionDrainConfig
 
 
+class RegionDependencyStatusResponse(BaseModel):
+    """One Triton model the active region profile depends on (V-1)."""
+
+    role: str
+    model: str
+    ready: bool
+    unavailable_since: str | None = None
+    detail: str
+
+
 class IngestRegionDrainResponse(BaseModel):
     pending_detection: int
     pending_verification: int
@@ -417,6 +445,17 @@ class IngestRegionDrainResponse(BaseModel):
     drained: bool
     stable_for_s: float
     observed_at: str
+    # V-1: which of the active region profile's Triton models (detector /
+    # segmenter) aren't READY right now, and since when. Empty when no
+    # region profile is configured at all (the neutral/off case) -- not
+    # populated as a false "stall".
+    region_dependencies: list[RegionDependencyStatusResponse] = Field(default_factory=list)
+    # A single human-readable line for the dashboard, e.g. "3516 item(s)
+    # awaiting region detection; segmenter (sam3) unavailable since
+    # 2026-09-25T14:02:11+00:00". None when there's nothing pending, or
+    # every dependency is ready (queue is just working through a backlog,
+    # not stalled).
+    stall_reason: str | None = None
 
 
 class IngestStatusResponse(BaseModel):

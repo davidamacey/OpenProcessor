@@ -124,3 +124,36 @@ def test_single_ingest_refuses_a_path_outside_the_source_roots(
     resp = client.post('/curation/ingest/image', json={'path': str(outside), 'source': 't'})
     assert resp.status_code == 422, resp.text
     assert 'source root' in resp.json()['detail']
+
+
+def test_batch_rejects_a_malformed_body_instead_of_a_silent_noop(
+    client: TestClient, served_root: Path
+) -> None:
+    """F-22: {'paths': [...]} previously validated against IngestBatchRequest
+    with `items` defaulting to [], returning 200 status=success with
+    all-zero counts -- a silent no-op indistinguishable from ingesting an
+    empty batch on purpose. The wrong key must now 422."""
+    inside = _jpeg(served_root, 'wrongkey.jpg')
+    resp = client.post(
+        '/curation/ingest/batch',
+        json={'paths': [str(inside)]},
+    )
+    assert resp.status_code == 422, resp.text
+
+
+def test_batch_rejects_an_empty_items_list(client: TestClient) -> None:
+    """F-22: an empty (or omitted) items list is also a no-op that should
+    422 rather than silently returning success with zero results."""
+    resp = client.post('/curation/ingest/batch', json={'items': []})
+    assert resp.status_code == 422, resp.text
+
+    resp = client.post('/curation/ingest/batch', json={})
+    assert resp.status_code == 422, resp.text
+
+
+def test_single_ingest_rejects_a_malformed_body(client: TestClient, served_root: Path) -> None:
+    """F-22: same silent-ignore class of bug on the single-image route --
+    an unknown key like 'image_path' instead of 'path' must 422."""
+    inside = _jpeg(served_root, 'single_wrongkey.jpg')
+    resp = client.post('/curation/ingest/image', json={'image_path': str(inside), 'source': 't'})
+    assert resp.status_code == 422, resp.text

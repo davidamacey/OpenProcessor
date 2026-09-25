@@ -23,7 +23,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from PIL import Image
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_curation_config, get_region_fields
@@ -136,11 +136,15 @@ def _is_frozen_test_holdout(current_source: dict[str, Any]) -> bool:
 
 
 class VlmLabelBatchRequest(BaseModel):
-    crop_ids: list[str] = Field(..., max_length=5000)
+    model_config = ConfigDict(extra='forbid')
+
+    crop_ids: list[str] = Field(..., min_length=1, max_length=5000)
 
 
 class VlmVerifyRegionsRequest(BaseModel):
-    crop_ids: list[str] = Field(..., max_length=5000)
+    model_config = ConfigDict(extra='forbid')
+
+    crop_ids: list[str] = Field(..., min_length=1, max_length=5000)
 
 
 class VlmVerifyRegionBatchItem(BaseModel):
@@ -169,7 +173,9 @@ class VlmVerifyRegionBatchItem(BaseModel):
 class VlmVerifyRegionBatchRequest(BaseModel):
     """Request body for ``POST /curation/vlm/verify_region_batch``."""
 
-    items: list[VlmVerifyRegionBatchItem]
+    model_config = ConfigDict(extra='forbid')
+
+    items: list[VlmVerifyRegionBatchItem] = Field(..., min_length=1)
 
 
 class VlmVerifyRegionBatchResult(BaseModel):
@@ -206,7 +212,9 @@ class VlmRegionVisibleBatchItem(BaseModel):
 class VlmRegionVisibleBatchRequest(BaseModel):
     """Request body for ``POST /curation/vlm/region_visible_batch``."""
 
-    items: list[VlmRegionVisibleBatchItem]
+    model_config = ConfigDict(extra='forbid')
+
+    items: list[VlmRegionVisibleBatchItem] = Field(..., min_length=1)
 
 
 class VlmRegionVisibleBatchResponse(BaseModel):

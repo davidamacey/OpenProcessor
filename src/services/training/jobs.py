@@ -219,11 +219,19 @@ class TrainJobSpec(BaseModel):
     profile: Literal['probe', 'nano', 'small', 'medium', 'large', 'xlarge', 'custom'] = 'medium'
 
     # Data -------------------------------------------------------------------
-    dataset_export_dir: str = Field(
-        ...,
+    # F-73: optional, not required. Null/omitted defaults to the current
+    # export (data/exports/current -- see
+    # src.services.curation.export.resolve_current_export_dir), resolved by
+    # _run_preflight before any check reads this field. When no export has
+    # ever been run, preflight reports a single, clear blocking check
+    # instead of the field forcing a 422 with no explanation of what's
+    # actually missing or how to fix it (run POST /export/yolo).
+    dataset_export_dir: str | None = Field(
+        default=None,
         description=(
             'Absolute path (inside the trainer container) to a frozen export. '
-            "The API typically passes the host's ``current/`` symlink target."
+            'Null/omitted defaults to the current export '
+            "(the host's data/exports/current symlink target)."
         ),
     )
     include_classes: list[int] | None = Field(
@@ -760,6 +768,17 @@ async def write_job(job: TrainJobSpec) -> str:
         spec.job_id = f'{_slug()}_{spec.model_family}{spec.model_size}'
     if not spec.submitted_at:
         spec.submitted_at = _now_iso()
+
+    # F-73: dataset_export_dir is optional on the wire (defaults to the
+    # current export -- resolved by _run_preflight, which every /start
+    # caller runs first). It can still reach here as None if the caller
+    # used force=True to bypass a *blocking* preflight (the block fires
+    # precisely when there's no current export and none was given) --
+    # fail loudly and specifically here rather than an opaque TypeError
+    # a few lines down inside read_export_identity(None).
+    if not spec.dataset_export_dir:
+        msg = 'dataset_export_dir is required (no current export exists to default to)'
+        raise ValueError(msg)
 
     _validate_job_id(spec.job_id)
     target = _job_path(spec.job_id)

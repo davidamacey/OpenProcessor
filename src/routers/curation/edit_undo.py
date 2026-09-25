@@ -19,7 +19,7 @@ import asyncio
 from typing import Any
 
 from fastapi import HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, _now_iso, logger, router
@@ -38,7 +38,9 @@ from src.services.curation.edit_history import (
 class CropRegionUndoBatchRequest(BaseModel):
     """Undo the most recent human region write on each crop."""
 
-    crop_ids: list[str]
+    model_config = ConfigDict(extra='forbid')
+
+    crop_ids: list[str] = Field(..., min_length=1)
 
 
 class NothingToUndoError(Exception):

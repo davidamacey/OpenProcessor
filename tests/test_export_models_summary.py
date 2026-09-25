@@ -159,3 +159,38 @@ class TestCudaVisibleDevicesRepairBeforeTrtBuild:
         monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '0')
         export_models.setup_trt_builder()
         assert export_models.os.environ['CUDA_VISIBLE_DEVICES'] == '0'
+
+
+class TestSaveTritonConfigWriteOnlyOnChange:
+    """F-15: models/*/config.pbtxt is tracked in git. Every export run
+    called save_triton_config unconditionally, rewriting the file (new
+    mtime, often byte-identical content) and dirtying the tree even when
+    nothing about the generated config actually changed."""
+
+    def test_does_not_rewrite_an_identical_config(self, tmp_path: Path) -> None:
+        model_dir = tmp_path / 'yolov11_small_trt_end2end'
+        model_dir.mkdir()
+        path1 = export_models.save_triton_config(
+            model_dir, 'yolov11_small_trt_end2end', 'trt_end2end', max_batch=64, has_nms=True
+        )
+        mtime_before = path1.stat().st_mtime_ns
+        content_before = path1.read_text()
+
+        path2 = export_models.save_triton_config(
+            model_dir, 'yolov11_small_trt_end2end', 'trt_end2end', max_batch=64, has_nms=True
+        )
+
+        assert path2 == path1
+        assert path2.read_text() == content_before
+        assert path2.stat().st_mtime_ns == mtime_before, 'identical config must not be rewritten'
+
+    def test_does_rewrite_when_content_actually_changes(self, tmp_path: Path) -> None:
+        model_dir = tmp_path / 'yolov11_small_trt_end2end'
+        model_dir.mkdir()
+        export_models.save_triton_config(
+            model_dir, 'yolov11_small_trt_end2end', 'trt_end2end', max_batch=64, has_nms=True
+        )
+        path = export_models.save_triton_config(
+            model_dir, 'yolov11_small_trt_end2end', 'trt_end2end', max_batch=32, has_nms=True
+        )
+        assert 'max_batch_size: 32' in path.read_text()

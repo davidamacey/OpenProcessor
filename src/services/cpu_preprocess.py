@@ -192,15 +192,27 @@ def center_crop_cpu(
     """
     orig_h, orig_w = img_rgb.shape[:2]
 
-    # Resize shortest edge to target_size
+    # Resize shortest edge to target_size. F-28: round() (not int()/truncate)
+    # and a max(target_size, ...) floor -- on a small detection crop (common
+    # on ordinary COCO images: a distant person/object a few dozen px wide),
+    # scale * min(orig_h, orig_w) is mathematically target_size but float
+    # rounding can land a hair under it (e.g. 255.9999...), and int()
+    # truncates that to target_size - 1. The undershoot then made new_h (or
+    # new_w) < target_size, so start_y/start_x went negative and the
+    # subsequent slice silently returned a smaller (sometimes near-empty,
+    # e.g. 1x1) crop instead of erroring -- np.stack across a batch of such
+    # crops then failed with "all input arrays must have the same shape"
+    # once one image's boxes happened to round differently than another's.
     scale = target_size / min(orig_h, orig_w)
-    new_w = int(orig_w * scale)
-    new_h = int(orig_h * scale)
+    new_w = max(target_size, round(orig_w * scale))
+    new_h = max(target_size, round(orig_h * scale))
     resized = cv2.resize(img_rgb, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
 
-    # Center crop to target_size x target_size
-    start_x = (new_w - target_size) // 2
-    start_y = (new_h - target_size) // 2
+    # Center crop to target_size x target_size. new_w/new_h >= target_size
+    # is now guaranteed, so start_x/start_y are always >= 0 and the crop is
+    # always exactly (target_size, target_size).
+    start_x = max(0, (new_w - target_size) // 2)
+    start_y = max(0, (new_h - target_size) // 2)
     cropped = resized[start_y : start_y + target_size, start_x : start_x + target_size]
 
     # Normalize to [0, 1]
