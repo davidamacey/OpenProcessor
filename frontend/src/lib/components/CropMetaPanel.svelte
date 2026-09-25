@@ -1,7 +1,13 @@
 <script lang="ts">
-  import type { Crop, CropHistoryEntry, CropImageMeta } from '$lib/types';
+  import type {
+    Crop,
+    CropContextResponse,
+    CropHistoryEntry,
+    CropImageMeta,
+  } from '$lib/types';
   import { getCropHistory, getCropContext, getThumbUrl } from '$lib/api';
   import ProvenanceChip from './ProvenanceChip.svelte';
+  import SourceImageOverlay from './SourceImageOverlay.svelte';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf } from '$lib/annotations/cropSlots';
   import { slotIsPresent } from '$lib/annotations/types';
@@ -74,6 +80,9 @@
   let siblings = $state<Crop[] | null>(null);
   let imageError = $state<string | null>(null);
   let imageLoading = $state(false);
+  // K6: the full context response, handed straight to SourceImageOverlay
+  // so it doesn't re-fetch what this panel already loaded.
+  let contextRes = $state<CropContextResponse | null>(null);
 
   let showTextBoxes = $state(false);
 
@@ -101,6 +110,7 @@
     const id = crop.id;
     imageMeta = null;
     siblings = null;
+    contextRes = null;
     imageError = null;
     imageLoading = true;
     const controller = new AbortController();
@@ -108,6 +118,7 @@
       .then((res) => {
         imageMeta = res.image;
         siblings = res.items.filter((it) => it.id !== id);
+        contextRes = res;
       })
       .catch((e: unknown) => {
         if ((e as Error)?.name === 'AbortError') return;
@@ -562,6 +573,11 @@
   {:else if imageError}
     <p class="text-[11px] text-red-300">Source image unavailable: {imageError}</p>
   {:else if imageMeta}
+    {#if contextRes}
+      <div class="mb-2 h-40 w-full overflow-hidden rounded bg-zinc-950">
+        <SourceImageOverlay cropId={crop.id} context={contextRes} />
+      </div>
+    {/if}
     <dl class="grid grid-cols-2 gap-y-1 text-[11px] text-zinc-400">
       {#if imageMeta.width != null && imageMeta.height != null}
         <dt class="text-zinc-500">Size</dt>

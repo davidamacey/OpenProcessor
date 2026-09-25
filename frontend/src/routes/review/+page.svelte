@@ -6,7 +6,6 @@
     getCrops,
     getReviewQueue,
     getSelectStatus,
-    getSourceImageWithBbox,
     getThumbUrl,
     locateInReviewQueue,
     selectDiverse,
@@ -21,6 +20,7 @@
   import BboxCanvas from '$lib/components/BboxCanvas.svelte';
   import ScoreChip from '$lib/components/ScoreChip.svelte';
   import ScrollStrip from '$lib/components/ScrollStrip.svelte';
+  import SourceImageOverlay from '$lib/components/SourceImageOverlay.svelte';
   import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import StrategyBar from '$lib/components/StrategyBar.svelte';
@@ -2013,30 +2013,17 @@
       </div>
     {:else}
       <!-- Source image with bbox -->
-      <div class="flex min-h-0 flex-col surface p-2">
+      <div class="flex min-h-0 flex-col surface p-2" data-testid="review-source-panel">
         <div class="mb-2 flex items-center gap-2 px-1 text-xs text-zinc-400">
           <span>source</span>
           <span class="grow"></span>
           <span class="font-mono">{current.source ?? ''}</span>
         </div>
         <div class="flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
-          <img
-            src={getSourceImageWithBbox(
-              current.id,
-              1280,
-              // Cache-bust on sub-box edits so the burned-in overlay
-              // refreshes after a save. updated_at would be nicer but
-              // not every code path mutates it locally; the raw xyxy
-              // tuple is a stable enough fingerprint.
-              (activeSlot ? slotOf(current, activeSlot)?.subBox?.rawXyxy : null)?.join(
-                ',',
-              ) ?? 'none',
-            )}
-            alt="source"
-            loading="lazy"
-            decoding="async"
-            class="max-h-full max-w-full object-contain"
-          />
+          <!-- K6: boxes/labels are drawn client-side from
+               GET {API_PREFIX}/crops/{id}/context — the server no longer
+               burns an overlay into this image. -->
+          <SourceImageOverlay cropId={current.id} maxDim={1280} />
         </div>
       </div>
 

@@ -2,12 +2,13 @@
   import { sourceBadge } from '$lib/sourceBadge';
   import { sourceShortCode, vlmEmptyReasonText } from '$lib/cropCardText';
   import { classSourcesStore } from '$stores/classSources.svelte';
-  import { getThumbUrl, getSourceImageWithBbox } from '$lib/api';
+  import { getThumbUrl } from '$lib/api';
   import type { BBoxNorm, Crop } from '$lib/types';
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';
   import SlotBboxEditor from './SlotBboxEditor.svelte';
+  import SourceImageOverlay from './SourceImageOverlay.svelte';
 
   interface Props {
     crop: Crop;
@@ -426,9 +427,8 @@
     aria-label="Source image"
   >
     <div class="relative max-h-full max-w-6xl">
-      <img
-        src={getSourceImageWithBbox(crop.id)}
-        alt="source"
+      <SourceImageOverlay
+        cropId={crop.id}
         class="max-h-[85vh] max-w-full rounded-md border border-zinc-700"
       />
       <button

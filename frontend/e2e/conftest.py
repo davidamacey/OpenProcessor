@@ -170,6 +170,15 @@ class Stub:
         # know and stub them individually.
         self.on("GET", r"/health$", {"status": "ok"})
         self.on("GET", r"(thumbnail|region_thumbnail|/source)(/|$|\?)", self._image)
+        # K6 (docs/design/k6-frontend-overlay-plan-2026-09-24.md):
+        # `/review`'s source panel (SourceImageOverlay.svelte) fetches
+        # `/crops/{id}/context` and then the now-unannotated
+        # `/crops/{id}/image` on every visit — same "every test needs
+        # this" rationale as the four defaults above. A test that cares
+        # about the overlay's actual boxes registers its own, more
+        # specific `.on(...)` for `/context` (later registration wins).
+        self.on("GET", r"/crops/[^/]+/context$", self._context)
+        self.on("GET", r"/crops/[^/]+/image(/|$|\?)", self._image)
         self.on("GET", r"(/events|/stream)(/|$|\?)", (204, "", "text/plain"))
         self.on("GET", r"/methods(\?|$)", {"strategies": [], "flags": {}})
         self.on("GET", r"/class_sources(\?|$)", {"class_sources": []})
@@ -251,6 +260,27 @@ class Stub:
     @staticmethod
     def _image(_request: Any, _match: "re.Match[str]") -> HandlerResult:
         return (200, TRANSPARENT_GIF, "image/gif")
+
+    @staticmethod
+    def _context(_request: Any, _match: "re.Match[str]") -> HandlerResult:
+        # Minimal-but-valid `{API_PREFIX}/crops/{id}/context` default: no
+        # items, so SourceImageOverlay renders the (stubbed) image with
+        # zero boxes — a test asserting real box geometry registers its
+        # own `.on("GET", r"/crops/[^/]+/context$", ...)` instead.
+        return (
+            200,
+            {
+                "image": {
+                    "image_id": "stub-image",
+                    "image_path": "/fixtures/stub-image.jpg",
+                    "width": None,
+                    "height": None,
+                    "source": None,
+                    "indexed_at": None,
+                },
+                "items": [],
+            },
+        )
 
     def _dispatch(self, route: Any, request: Any) -> None:
         # Every branch below MUST end in a `route.fulfill`/`route.abort` —

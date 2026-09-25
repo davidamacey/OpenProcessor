@@ -6,11 +6,16 @@
    * domain-agnostic by construction (see
    * docs/genericization-plan-2026-09-13.md §3.1).
    *
-   * Ring color defaults to sky-blue (RGB 80,200,255), matching the
-   * server-rendered overlay on {API_PREFIX}/crops/{id}/image so the left-pane
-   * source preview and the right-pane crop canvas agree visually for
-   * a region slot; override via `ringColor` for a different slot's color
-   * scheme.
+   * Ring color defaults to sky-blue (RGB 80,200,255); override via
+   * `ringColor` for a different slot's color scheme. K6 (docs/design/
+   * k6-frontend-overlay-plan-2026-09-24.md): the backend no longer
+   * burns a box overlay into {API_PREFIX}/crops/{id}/image — the
+   * left-pane source preview now draws its own boxes client-side
+   * (`SourceImageOverlay.svelte`, colored from the slot's own
+   * `capabilities.subBox.ring`). This canvas only ever operates on the
+   * crop's own thumbnail (`getThumbUrl`), never the full source image,
+   * so it never needed the burned-in overlay itself — this comment
+   * previously described color-matching against it, which is now moot.
    *
    * Operates in **crop-local frame** ([0, 1]^4 normalized inside the
    * parent bbox). Used both by:

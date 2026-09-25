@@ -1,9 +1,10 @@
 <script lang="ts">
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
-  import { getSourceImageWithBbox, getThumbUrl } from '$lib/api';
+  import { getThumbUrl } from '$lib/api';
   import type { Crop } from '$lib/types';
   import CropMetaPanel from './CropMetaPanel.svelte';
+  import SourceImageOverlay from './SourceImageOverlay.svelte';
 
   interface Props {
     crop: Crop;
@@ -34,18 +35,13 @@
     <!-- K5 (visual audit 2026-09-24): the close button sits inside the
          panel's padding (it was half outside the top-right corner) and the
          meta column is min-w-0 so its chips wrap instead of clipping. -->
-    <!-- Source image with burned-in bbox. Same endpoint as the review
-         page so the rendering matches across surfaces. -->
+    <!-- K6: boxes/labels drawn client-side from the crop's context — same
+         component the review page and the crop-card lightbox use, so the
+         rendering matches across surfaces. -->
     <div class="flex min-h-0 flex-col gap-2">
       <div class="text-xs uppercase tracking-wider text-zinc-500">Source</div>
       <div class="flex min-h-0 flex-1 items-center justify-center bg-black">
-        <img
-          src={getSourceImageWithBbox(crop.id)}
-          alt="source"
-          loading="eager"
-          decoding="async"
-          class="max-h-[78vh] max-w-full object-contain"
-        />
+        <SourceImageOverlay cropId={crop.id} class="max-h-[78vh] max-w-full" />
       </div>
       <div class="flex items-center gap-3">
         <div class="text-xs text-zinc-500">Crop</div>
