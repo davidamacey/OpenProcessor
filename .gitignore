@@ -103,6 +103,14 @@ IMGS_TEST/
 # Class registry generated at runtime (default OP_REGISTRY_PATH); the
 # warehouse example data/class_registry.example.json IS committed.
 /data/class_registry.json
+# F-45: every class-registry write leaves a timestamped backup snapshot
+# (data/class_registry.<ISO8601Z-with-micros>.json) that isn't tracked.
+# The one prior attempt at this (a2abeb9) added only a test and never
+# added a pattern -- `git check-ignore` on a real backup file returned
+# nothing. Match the writer's actual timestamp format (see
+# src/services/curation/registry_backup.py or equivalent): digits, T,
+# more digits, optional micros, Z, .json.
+/data/class_registry.[0-9]*Z.json
 /data/exports/*
 # Anchored at repo root -- an earlier unanchored `backends/` pattern
 # accidentally hid the bake-off harness's source subpackage (see the

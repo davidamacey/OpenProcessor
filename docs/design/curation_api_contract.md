@@ -1604,7 +1604,9 @@ active `bus` (`file`/`process`) and `log_path` alongside the existing
 
 ### `GET /stats/dataset`
 
-- `labeled`: `by_human`, `by_vlm`, `by_classifier`, `by_proposal`, `other`
+- `labeled`: `by_human`, `by_vlm`, `by_classifier`, `other` (F-23: `by_proposal`
+  moved to `unlabeled` -- those class_source values never carry a
+  `class_id`, so it was structurally always 0 here)
 - `regions`: `boxed`, `confirmed`, `total_detected`, `by_detector`,
   `by_segmenter`, `by_human`, `by_human_drew`, `verified_by_human`,
   `verified_by_vlm`, `validated_by_human` (`by_detector` /
@@ -1806,7 +1808,7 @@ generic vocabulary used throughout this doc:
   storage field names to the fixed `region_status` / `region_text`
   wire names.
 - **Stats**: `GET /stats/dataset`'s classifier-vendor-named labeled
-  bucket became `labeled.by_classifier` / `labeled.by_proposal`; its
+  bucket became `labeled.by_classifier`; its
   domain-named `plates` block became `regions` with
   `regions.by_detector` / `regions.by_segmenter` /
   `regions.verified_by_vlm`.
@@ -1869,11 +1871,16 @@ that carry a `class_id`; a `class_source` alone (e.g. `vlm_unmatched` /
 `vlm_new_class_pending` with no class) no longer counts as
 `labeled.by_vlm`. New `unlabeled.vlm_no_class`: the subset of
 `no_label_source` where a VLM answered/proposed but never landed a
-class.
+class. F-23: `unlabeled.by_proposal` -- the fixed accounting for
+'detector proposed it, nothing has classified it yet' (moved from the
+always-0 `labeled.by_proposal` above) -- is a second, disjoint subset
+of `no_label_source`. `by_proposal + vlm_no_class` can equal
+`no_label_source` exactly (every unclassified crop happens to be one
+or the other) without either counting the other's docs.
 
 ```json
-{"labeled": {"by_human": 174, "by_vlm": 3200, "by_classifier": 3551, "by_proposal": 0, "other": 0},
- "unlabeled": {"pending_detection": 0, "pending_verification": 0, "no_label_source": 1252, "vlm_no_class": 1036}}
+{"labeled": {"by_human": 174, "by_vlm": 3200, "by_classifier": 3551, "other": 0},
+ "unlabeled": {"pending_detection": 0, "pending_verification": 0, "no_label_source": 1252, "vlm_no_class": 1036, "by_proposal": 216}}
 ```
 
 **`GET /review/new_class_proposals` + `/summary` (R5)** — the queue

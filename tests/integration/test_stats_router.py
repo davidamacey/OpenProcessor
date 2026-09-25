@@ -10,12 +10,15 @@ buckets.
 
 Schema produced by ``stats._rollup_class_sources`` + ``stats_dataset``:
 
-- ``labeled.{by_human, by_vlm, by_classifier, by_proposal, other}``
+- ``labeled.{by_human, by_vlm, by_classifier, other}``
   — *class-label* provenance. ``by_human`` counts crops whose
   ``class_source`` starts with ``human``; auto-validation
   (a majority-agreement rule) lives in ``by_classifier``, deliberately
   separate from ``by_human`` so the dashboard can distinguish
   "human applied this label" from "any validator approved it".
+  F-23: ``by_proposal`` moved to ``unlabeled`` -- it counts
+  detector-proposed-but-not-yet-classified crops, which never carry a
+  class_id, so it was always 0 here.
 - ``regions.{total_detected, by_detector, by_segmenter, by_human}`` —
   *region-detector* provenance. ``by_detector`` is the primary region
   detector's count and intentionally lives here (not under ``labeled``)
@@ -118,7 +121,8 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
 
     labeled = body.get('labeled')
     assert isinstance(labeled, dict)
-    for k in ('by_human', 'by_vlm', 'by_classifier', 'by_proposal', 'other'):
+    assert 'by_proposal' not in labeled, 'F-23: by_proposal moved to unlabeled'
+    for k in ('by_human', 'by_vlm', 'by_classifier', 'other'):
         assert k in labeled, f'labeled.{k} missing'
         assert isinstance(labeled[k], int)
         assert labeled[k] >= 0
@@ -142,10 +146,21 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
 
     unlabeled = body.get('unlabeled')
     assert isinstance(unlabeled, dict)
-    for k in ('pending_detection', 'pending_verification', 'no_label_source', 'vlm_no_class'):
+    for k in (
+        'pending_detection',
+        'pending_verification',
+        'no_label_source',
+        'vlm_no_class',
+        'by_proposal',
+    ):
         assert k in unlabeled, f'unlabeled.{k} missing'
         assert isinstance(unlabeled[k], int)
         assert unlabeled[k] >= 0
+    # F-23: by_proposal + vlm_no_class are both subsets of no_label_source
+    # (every proposal/vlm_unmatched source is class-less by construction),
+    # never a superset.
+    assert unlabeled['by_proposal'] <= unlabeled['no_label_source']
+    assert unlabeled['vlm_no_class'] <= unlabeled['no_label_source']
 
     in_progress = body.get('in_progress')
     assert isinstance(in_progress, dict)

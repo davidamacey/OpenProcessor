@@ -12,7 +12,7 @@ import re
 import pytest
 from fastapi.routing import APIRoute
 
-from src.routers.curation.stats import _rollup_class_sources
+from src.routers.curation.stats import _count_by_proposal, _rollup_class_sources
 from src.services.curation import ingest_class_sources
 from src.services.curation.review_queries import KNOWN_TABS
 
@@ -52,13 +52,33 @@ def test_class_source_rollup_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
         {'key': 'unlabeled_proposal', 'doc_count': 8},
         {'key': 'something_else', 'doc_count': 9},
     ]
+    # F-23: proposal sources never carry a class_id (they're the
+    # detector's "no class assigned yet" marker), so this function --
+    # which callers only ever feed class_id-scoped buckets -- no longer
+    # special-cases them; they fall into 'other' here. The real count is
+    # `_count_by_proposal`, fed the class-less buckets instead (below).
     assert _rollup_class_sources(buckets) == {
         'by_human': 1,
         'by_vlm': 5,
         'by_classifier': 17,
-        'by_proposal': 23,
-        'other': 9,
+        'other': 32,
     }
+
+
+def test_count_by_proposal_sums_proposal_and_low_conf_and_default_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F-23: the fixed accounting for 'detector proposed it, nothing has
+    classified it yet' -- fed class-less (no class_id) buckets."""
+    monkeypatch.setenv('OP_INGEST_PRIMARY_NAME', 'proposer')
+    no_class_buckets = [
+        {'key': 'proposer_proposal', 'doc_count': 5},
+        {'key': 'proposer_low_conf', 'doc_count': 10},
+        {'key': 'unlabeled_proposal', 'doc_count': 8},
+        {'key': 'vlm_unmatched', 'doc_count': 3},
+        {'key': '__none__', 'doc_count': 2},
+    ]
+    assert _count_by_proposal(no_class_buckets) == 23
 
 
 @pytest.fixture(scope='module')

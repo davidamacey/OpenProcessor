@@ -172,16 +172,25 @@ def _rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
     human label — using the validated flag here would inflate by_human.
     Region-detector breakdown (detector / segmenter / human) is computed
     separately by the caller via region-detector aggregations.
+
+    Callers pass ONLY ``class_sources_with_class`` buckets (docs that
+    carry a class_id — see ``_build_dataset_query_body``). F-23: this
+    function used to also bucket a ``by_proposal`` count here, but the
+    unlabeled-proposal class_source values (``unlabeled_proposal_class_sources``)
+    are, by construction, the detector's "no class assigned yet" marker
+    -- such a doc never carries a class_id, so it can never appear in
+    ``class_sources_with_class``. ``by_proposal`` was therefore always 0
+    on every real deployment. See ``_count_by_proposal`` for the fixed
+    accounting, now sourced from the class-less buckets and reported
+    under ``unlabeled`` instead.
     """
     classifier_sources = classifier_class_sources() | {
         CLUSTER_MAJORITY_CLASS_SOURCE,
         CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE,
     }
-    proposal_sources = unlabeled_proposal_class_sources() | {DEFAULT_PROPOSAL_CLASS_SOURCE}
     by_human = 0
     by_vlm = 0
     by_classifier = 0
-    by_proposal = 0
     by_other = 0
     for b in buckets:
         key = str(b.get('key', ''))
@@ -192,11 +201,6 @@ def _rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
             by_vlm += cnt
         elif key in classifier_sources:
             by_classifier += cnt
-        elif key in proposal_sources:
-            # The item detector proposed this crop as an object of
-            # interest but nothing has classified it yet: awaiting
-            # classification, not "other unknown".
-            by_proposal += cnt
         else:
             # Truly unknown / future provenance — surface in 'other'
             # rather than dropping.
@@ -205,9 +209,22 @@ def _rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
         'by_human': by_human,
         'by_vlm': by_vlm,
         'by_classifier': by_classifier,
-        'by_proposal': by_proposal,
         'other': by_other,
     }
+
+
+def _count_by_proposal(buckets: list[dict[str, Any]]) -> int:
+    """Sum ``class_source`` buckets that are a detector's "proposed but not
+    yet classified" marker (``unlabeled_proposal_class_sources()`` plus the
+    ingest-model default). Takes ``class_sources_no_class`` buckets (docs
+    with NO class_id) -- these sources never carry a class_id, so counting
+    them here (not in ``_rollup_class_sources``) is what makes the number
+    non-zero. A subset of ``unlabeled.no_label_source``, surfaced
+    explicitly the same way ``vlm_no_class`` is."""
+    proposal_sources = unlabeled_proposal_class_sources() | {DEFAULT_PROPOSAL_CLASS_SOURCE}
+    return sum(
+        int(b.get('doc_count', 0)) for b in buckets if str(b.get('key', '')) in proposal_sources
+    )
 
 
 def _read_auto_label_clusters_meta(
@@ -442,8 +459,12 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
     - ``labeled.{by_human, by_vlm, by_classifier, other}`` — rolled-up counts
       derived from ``class_source`` plus the ``class_validated`` /
       region-validated flags.
-    - ``unlabeled.{pending_detection, pending_verification, no_label_source}`` —
-      the region-status field plus crops with no ``class_id``.
+    - ``unlabeled.{pending_detection, pending_verification, no_label_source,
+      vlm_no_class, by_proposal}`` — the region-status field plus crops with
+      no ``class_id``. ``by_proposal`` is F-23's fixed accounting for
+      detector-proposed-but-not-yet-classified crops (moved here from the
+      always-0 ``labeled.by_proposal``, since those class_source values
+      never carry a class_id).
     - ``in_progress.region_drain_total_unfinished`` — matches the value
       returned by ``/curation/ingest/region_drain``.
     - ``clusters.{last_run_at, cluster_count, residual_count, noise_count, method}`` —
@@ -483,6 +504,10 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
         {str(b.get('key', '')): int(b.get('doc_count', 0)) for b in no_class_buckets},
         VLM_CLASS_SOURCE,
     )
+    # F-23: was miscounted as (always-zero) labeled.by_proposal; these
+    # sources never carry a class_id, so the real count only exists among
+    # the class-less buckets.
+    by_proposal = _count_by_proposal(no_class_buckets)
 
     # Region-detector rollup — separate from class label rollup.
     # by_detector counts crops where the profile's primary region detector
@@ -592,6 +617,13 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
             # a dashboard can tell "no class_source at all" apart from
             # "the VLM tried but didn't land on a registry class".
             'vlm_no_class': vlm_no_class,
+            # F-23: the detector proposed this crop as an object of
+            # interest but nothing has classified it yet -- moved here
+            # from labeled.by_proposal, which was structurally always 0
+            # (these class_source values never carry a class_id, so they
+            # could never appear in the class_id-scoped rollup that fed
+            # it). A subset of no_label_source, same as vlm_no_class.
+            'by_proposal': by_proposal,
         },
         'in_progress': {
             'region_drain_total_unfinished': region_drain_total_unfinished,
