@@ -116,6 +116,12 @@
     });
     return list;
   });
+  // Classes with any validated or held-out crop come first; the rest (often
+  // most of the registry) fold into one expandable row, so the classes that
+  // actually have data are never buried under empty ones.
+  const activeRows = $derived(rows.filter((r) => r.validated > 0 || r.test_count > 0));
+  const emptyRows = $derived(rows.filter((r) => !(r.validated > 0 || r.test_count > 0)));
+  let showEmptyClasses = $state(false);
 
   // DQ-M9 frontend half (docs/design/data-quality-pass-2026-09-24.md): the
   // Export button used to be enabled unconditionally — the audit's repro
@@ -432,8 +438,65 @@
     </section>
   {/if}
 
+  {#snippet classRow(row: ExportRow)}
+    <tr class="border-b border-zinc-900 hover:bg-zinc-900/40">
+      <td class="px-3 py-1.5 text-zinc-200">{row.class_name}</td>
+      <td class="px-3 py-1.5 font-mono text-xs text-zinc-500">{row.class_id}</td>
+      <td class="px-3 py-1.5 text-right font-mono text-zinc-400">
+        {row.total.toLocaleString()}
+      </td>
+      <td class="px-3 py-1.5 text-right font-mono text-zinc-400">
+        {row.validated.toLocaleString()}
+      </td>
+      <td class="px-3 py-1.5 text-right font-mono text-zinc-200">
+        {row.trainable.toLocaleString()}
+      </td>
+      <td class="px-3 py-1.5 text-right font-mono text-zinc-300">
+        {row.aug_target.toLocaleString()}
+      </td>
+      <td class="px-3 py-1.5 text-right">
+        {#if row.trainableGap == null}
+          <span class="font-mono text-xs text-zinc-500">—</span>
+        {:else}
+          <span
+            class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(
+              row.trainableGap,
+            )}"
+            title={row.trainableGap <= 0
+              ? 'on target'
+              : `${row.trainableGap} more trainable crops needed`}
+          >
+            {row.trainableGap > 0 ? '+' : ''}{row.trainableGap.toLocaleString()}
+          </span>
+        {/if}
+      </td>
+      <td class="px-3 py-1.5 text-right">
+        <span
+          class="rounded-md border px-1.5 py-0.5 font-mono text-xs {testBadge(
+            row.testDeficient,
+          )}"
+        >
+          {row.test_count}
+        </span>
+      </td>
+      <td class="px-3 py-1.5 text-right">
+        {#if row.adequacy == null}
+          <span class="font-mono text-xs text-zinc-500">—</span>
+        {:else}
+          <span
+            class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyClass(
+              row.adequacy,
+            )}"
+          >
+            {row.adequacy}
+          </span>
+        {/if}
+      </td>
+    </tr>
+  {/snippet}
+
   <!-- Dataset table -->
-  <section class="surface min-h-0 flex-1 overflow-auto">
+  <section class="surface min-h-[20rem] flex-1 overflow-auto">
     {#if loading && rows.length === 0}
       <div class="p-6 text-sm text-zinc-500">Loading dataset stats…</div>
     {:else if error}
@@ -502,62 +565,30 @@
           </tr>
         </thead>
         <tbody>
-          {#each rows as row (row.class_id)}
-            <tr class="border-b border-zinc-900 hover:bg-zinc-900/40">
-              <td class="px-3 py-1.5 text-zinc-200">{row.class_name}</td>
-              <td class="px-3 py-1.5 font-mono text-xs text-zinc-500">{row.class_id}</td>
-              <td class="px-3 py-1.5 text-right font-mono text-zinc-400">
-                {row.total.toLocaleString()}
-              </td>
-              <td class="px-3 py-1.5 text-right font-mono text-zinc-400">
-                {row.validated.toLocaleString()}
-              </td>
-              <td class="px-3 py-1.5 text-right font-mono text-zinc-200">
-                {row.trainable.toLocaleString()}
-              </td>
-              <td class="px-3 py-1.5 text-right font-mono text-zinc-300">
-                {row.aug_target.toLocaleString()}
-              </td>
-              <td class="px-3 py-1.5 text-right">
-                {#if row.trainableGap == null}
-                  <span class="font-mono text-xs text-zinc-500">—</span>
-                {:else}
-                  <span
-                    class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(
-                      row.trainableGap,
-                    )}"
-                    title={row.trainableGap <= 0
-                      ? 'on target'
-                      : `${row.trainableGap} more trainable crops needed`}
-                  >
-                    {row.trainableGap > 0 ? '+' : ''}{row.trainableGap.toLocaleString()}
-                  </span>
-                {/if}
-              </td>
-              <td class="px-3 py-1.5 text-right">
-                <span
-                  class="rounded-md border px-1.5 py-0.5 font-mono text-xs {testBadge(
-                    row.testDeficient,
-                  )}"
+          {#each activeRows as row (row.class_id)}
+            {@render classRow(row)}
+          {/each}
+          {#if emptyRows.length > 0}
+            <tr class="border-b border-zinc-900">
+              <td colspan="9" class="px-3 py-1.5">
+                <button
+                  type="button"
+                  class="text-xs text-zinc-400 hover:text-zinc-200"
+                  aria-expanded={showEmptyClasses}
+                  data-testid="export-empty-classes-toggle"
+                  onclick={() => (showEmptyClasses = !showEmptyClasses)}
                 >
-                  {row.test_count}
-                </span>
-              </td>
-              <td class="px-3 py-1.5 text-right">
-                {#if row.adequacy == null}
-                  <span class="font-mono text-xs text-zinc-500">—</span>
-                {:else}
-                  <span
-                    class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyClass(
-                      row.adequacy,
-                    )}"
-                  >
-                    {row.adequacy}
-                  </span>
-                {/if}
+                  {showEmptyClasses ? '▾' : '▸'}
+                  {emptyRows.length} classes with no validated crops
+                </button>
               </td>
             </tr>
-          {/each}
+            {#if showEmptyClasses}
+              {#each emptyRows as row (row.class_id)}
+                {@render classRow(row)}
+              {/each}
+            {/if}
+          {/if}
         </tbody>
       </table>
     {/if}
