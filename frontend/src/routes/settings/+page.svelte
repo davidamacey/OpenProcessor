@@ -18,6 +18,7 @@
   import { ApiError } from '$lib/api';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
+  import { formatTimestamp } from '$lib/formatDate';
   import {
     advisoryAxes,
     axisOptions,
@@ -203,8 +204,11 @@
       <div class="flex items-center justify-between">
         <h2 class="text-base font-semibold">Active defaults</h2>
         {#if curationSettingsStore.settings.updated_at}
-          <span class="text-xs text-zinc-500">
-            last changed {curationSettingsStore.settings.updated_at}
+          <span
+            class="text-xs text-zinc-500"
+            title={curationSettingsStore.settings.updated_at}
+          >
+            last changed {formatTimestamp(curationSettingsStore.settings.updated_at)}
           </span>
         {/if}
       </div>
