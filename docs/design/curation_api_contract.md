@@ -71,7 +71,7 @@ by router module; every path is relative to the configured
 
 | Router module | Routes |
 |---|---|
-| `classes.py` | `GET /class_sources`, `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `GET,PUT /classes/{class_id}`, `GET /classes/{class_id}/crops` |
+| `classes.py` | `GET /class_sources`, `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `GET,PUT /classes/{class_id}`, `POST /classes/{class_id}/deprecate`, `POST /classes/{class_id}/restore`, `GET /classes/{class_id}/crops` |
 | `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
 | `label_undo.py` | `POST /crops/{crop_id}/label/undo`, `POST /crops/label/undo_batch`, `DELETE /crops/{crop_id}/label`, `POST /crops/{crop_id}/discard`, `POST /crops/discard_batch`, `POST /crops/{crop_id}/vlm_dismiss`, `POST /crops/{crop_id}/review_undismiss`, `GET /crops/{crop_id}/history` |
 | `crop_context.py` | `GET /crops/{crop_id}/context` |
@@ -598,6 +598,8 @@ digit is a `400`).
 - Class names must match `^[a-z0-9_]+$` on create and rename (`422` otherwise; they become export/training class names). Hotkeys, on create and update: one character (`400`), not reserved (`422`), not bound to another active class (`409`); `""` on update clears. A create that fails any hotkey rule writes nothing.
 - `ClassMergeRequest`: `source_id`, `target_id`. `POST /classes/merge?dry_run=true` writes nothing and returns `{dry_run: true, source_id, target_id, would_relabel, would_unvalidate, holdout_blocking, blocked}` — `would_relabel` counts every non-holdout item of the source class (validated or not), `would_unvalidate` the validated ones among them (a merge relabels with `class_source: class_merge` and clears validation), `blocked` = the real merge would `409` on frozen test-holdout items. `400` for an unknown id or a self-merge.
 - `GET /class_sources` -> `{"class_sources": [{"id", "label", "role", "short_label"}, ...]}` — see "`class_source` values" below
+- `POST /classes/{class_id}/deprecate` -> `RegistryClassEntry` (`class_id`, `class_name`, `group`, `sample_count`, `validated_count`, `added_at`, `deprecated`, `notes`, `merged_into`, `hotkey_letter`). Retires a class with no target and no data — the direct counterpart to `POST /classes/merge`, which needs both. Counts items-index docs (`term: class_id`) and confirmed-labels-index docs (`term: class_id`, same field the merge relabel touches); `409` while either count is nonzero, body `{error: "class_still_referenced", message, class_id, item_count, confirmed_label_count}` naming merge as the alternative. `404` unknown id. Idempotent — re-deprecating an already-deprecated class returns it unchanged without re-checking references. Clears `hotkey_letter` so the freed letter can't collide with a class bound to it later.
+- `POST /classes/{class_id}/restore` -> `RegistryClassEntry`. Clears `deprecated`. `404` unknown id; `409` (plain-string detail) if a non-deprecated class already holds this class's `class_name` — the same name-uniqueness rule `rename_class`/`add_class` enforce.
 
 ### VLM labeling/verification
 

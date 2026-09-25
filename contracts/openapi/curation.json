@@ -3881,6 +3881,76 @@
         "title": "RegionVocabularyResponse",
         "type": "object"
       },
+      "RegistryClassEntry": {
+        "description": "Single class entry in ``class_registry.json``.\n\nThe on-disk file uses ``id`` / ``name`` keys for backward\ncompatibility with older label-file schemas. Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
+        "properties": {
+          "added_at": {
+            "title": "Added At",
+            "type": "string"
+          },
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "deprecated": {
+            "default": false,
+            "title": "Deprecated",
+            "type": "boolean"
+          },
+          "group": {
+            "default": "unknown",
+            "title": "Group",
+            "type": "string"
+          },
+          "hotkey_letter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotkey Letter"
+          },
+          "merged_into": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged Into"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          },
+          "sample_count": {
+            "default": 0,
+            "title": "Sample Count",
+            "type": "integer"
+          },
+          "validated_count": {
+            "default": 0,
+            "title": "Validated Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name"
+        ],
+        "title": "RegistryClassEntry",
+        "type": "object"
+      },
       "RejectionReasonEntry": {
         "description": "One pipeline-written ``region_rejection_reason`` value.",
         "properties": {
@@ -6321,6 +6391,92 @@
           }
         },
         "summary": "Class Crops",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/classes/{class_id}/deprecate": {
+      "post": {
+        "description": "Retire a class created by mistake that has no data yet.\n\nUnlike ``POST /classes/merge`` (which deprecates a source class while\nrelabeling its items into a target), this needs no target — it only\nflips ``deprecated`` on a class nothing references. Refuses with\n``409`` (naming the blocking counts) while any item or confirmed-label\ndoc still carries this ``class_id`` — merge instead. ``404`` for an\nunknown id. Idempotent: calling this on an already-deprecated class\njust returns it (no reference re-check). Clears any bound\n``hotkey_letter``.",
+        "operationId": "deprecate_class_curation_classes__class_id__deprecate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "class_id",
+            "required": true,
+            "schema": {
+              "title": "Class Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryClassEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deprecate Class",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/classes/{class_id}/restore": {
+      "post": {
+        "description": "Undo ``POST /classes/{id}/deprecate``. ``404`` for an unknown id;\n``409`` if a non-deprecated class already uses this class's name\n(the registry's name-uniqueness rule, enforced the same way\n``rename_class`` enforces it).",
+        "operationId": "restore_class_curation_classes__class_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "class_id",
+            "required": true,
+            "schema": {
+              "title": "Class Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryClassEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore Class",
         "tags": [
           "Curation"
         ]

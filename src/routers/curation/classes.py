@@ -6,7 +6,7 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query, status
 
-from src.clients.curation_opensearch import ClassRegistry, ClassRegistryError
+from src.clients.curation_opensearch import ClassRegistry, ClassRegistryError, RegistryClassEntry
 from src.routers.curation._class_models import (
     ClassCreateRequest,
     ClassEntry,
@@ -320,6 +320,81 @@ async def update_class(class_id: int, payload: ClassUpdateRequest) -> dict[str, 
     if entry is None:
         raise HTTPException(status_code=404, detail=f'class_id {class_id} not found')
     return entry.model_dump()
+
+
+async def _count_class_item_references(opensearch: Any, class_id: int) -> int:
+    """Items index docs whose ``class_id`` == this class. Same one-term
+    ``count`` shape ``merge_class`` already uses for its holdout guard."""
+    resp = await opensearch.count(
+        index=CURATION_ITEMS_INDEX, body={'query': {'term': {'class_id': class_id}}}
+    )
+    return int(resp.get('count', 0))
+
+
+async def _count_class_confirmed_label_references(opensearch: Any, class_id: int) -> int:
+    """Confirmed-labels index docs whose ``class_id`` == this class (the
+    index ``merge_class`` bulk-relabels via ``update_by_query``)."""
+    resp = await opensearch.count(
+        index=CURATION_LABELS_CONFIRMED_INDEX, body={'query': {'term': {'class_id': class_id}}}
+    )
+    return int(resp.get('count', 0))
+
+
+@router.post('/classes/{class_id}/deprecate', response_model=RegistryClassEntry)
+async def deprecate_class(class_id: int, opensearch: OpenSearchDep) -> RegistryClassEntry:
+    """Retire a class created by mistake that has no data yet.
+
+    Unlike ``POST /classes/merge`` (which deprecates a source class while
+    relabeling its items into a target), this needs no target — it only
+    flips ``deprecated`` on a class nothing references. Refuses with
+    ``409`` (naming the blocking counts) while any item or confirmed-label
+    doc still carries this ``class_id`` — merge instead. ``404`` for an
+    unknown id. Idempotent: calling this on an already-deprecated class
+    just returns it (no reference re-check). Clears any bound
+    ``hotkey_letter``.
+    """
+    reg = get_class_registry()
+    entry = reg.get(class_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f'unknown class_id {class_id}')
+    if entry.deprecated:
+        return entry
+
+    item_count = await _count_class_item_references(opensearch, class_id)
+    label_count = await _count_class_confirmed_label_references(opensearch, class_id)
+    if item_count or label_count:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                'error': 'class_still_referenced',
+                'message': (
+                    f'class_id {class_id} is still referenced by data; merge it into '
+                    'another class instead (POST /classes/merge)'
+                ),
+                'class_id': class_id,
+                'item_count': item_count,
+                'confirmed_label_count': label_count,
+            },
+        )
+    try:
+        return reg.set_deprecated(class_id, True)
+    except ClassRegistryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post('/classes/{class_id}/restore', response_model=RegistryClassEntry)
+async def restore_class(class_id: int) -> RegistryClassEntry:
+    """Undo ``POST /classes/{id}/deprecate``. ``404`` for an unknown id;
+    ``409`` if a non-deprecated class already uses this class's name
+    (the registry's name-uniqueness rule, enforced the same way
+    ``rename_class`` enforces it)."""
+    reg = get_class_registry()
+    if reg.get(class_id) is None:
+        raise HTTPException(status_code=404, detail=f'unknown class_id {class_id}')
+    try:
+        return reg.set_deprecated(class_id, False)
+    except ClassRegistryError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[str, Any]:
