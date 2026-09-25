@@ -24,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `examples/region_profiles/license_plate.json`, loaded via
   `OP_REGION_PROFILE_PATH=<path>`. `OP_REGION_PROFILE=<name>` now only
   resolves a profile a deployment's own startup code registered.
-  `DetectionProfile` gains `region_class_name` and `display_name` fields.
+  `DetectionProfile` gains `region_class_name`, `display_name` and
+  `display_name_singular` fields, served on `GET {prefix}/regions/vocabulary`.
 - **`OP_DETECTION_*` is retired**; ingest detectors use `OP_INGEST_PRIMARY_*` and
   `OP_INGEST_SECONDARY_*` (leftover `OP_DETECTION_*` vars fail with a rename
   message). The secondary detector is now actually wired into ingest.
@@ -40,8 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sweep and a LaTeX-number generator that hardcoded a private model id and a
   live-deployment URL) removed from the public tree (W7).
 - **Model comparison (bake-off) API v2, generic and multi-class** (clean break,
-  no compatibility fields; plan `docs/design/generic_model_comparison_plan.md`
-  §7, shapes in `docs/design/curation_api_contract.md`). Every
+  no compatibility fields; shapes in `docs/design/curation_api_contract.md`). Every
   `/curation/bakeoff/*` route is typed and result files carry
   `schema_version: 2` (older result files answer 409).
   `POST /bakeoff/run` takes `datasets: [{id}]` (`export:<path>`,
@@ -67,8 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The trainer's opt-in auto-quantize posts `POST /curation/bakeoff/run`
   (via `OP_API_BASE_URL` + `OP_API_PREFIX`) instead of writing a job file;
   `campaign.py` no longer reads `OP_BAKEOFF_JOBS_DIR` / `OP_BAKEOFF_OUT_DIR`.
-- **Naming sweep, wave W1 — stored-data renames** (`docs/design/naming_sweep_plan.md`
-  S1-S8; re-ingest required):
+- **Naming sweep, wave W1 — stored-data renames** (re-ingest required):
   - Items index kNN field `v6_embedding` → `backbone_embedding`
     (`CurationConfig.BACKBONE_EMBEDDING_FIELD`).
   - Images + items ingest-source field `hdd_source` → `source`; `GET
@@ -97,10 +96,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `VLM_URL` / `GEMMA_URL` are retired; only `OP_VLM_URL` / `OP_VLM_MODEL`
     / `OP_VLM_API_KEY` are read now.
 - **Naming sweep, wave W2 — wire surface**: `GET /curation/methods`'
-  operationId is `get_methods_curation_methods_get` (was
-  `legacy_methods_curation_methods_get`); its `flags` keys drop the `legacy_`
-  prefix (`scores_enabled`, `scores_shadow`, `select_diverse_enabled`,
-  `viz_projection_enabled`, `semantic_search_enabled`); the
+  operationId is `get_methods_curation_methods_get` (was a
+  company-initialed operation id); its `flags` keys drop the same
+  company-initialed prefix (`scores_enabled`, `scores_shadow`,
+  `select_diverse_enabled`, `viz_projection_enabled`,
+  `semantic_search_enabled`); the
   `coco_blind_spots` review tab id and its default-sort id are renamed
   to `classifier_blind_spots` / `classifier_blind_spots_default`.
 - **Naming sweep, wave W3 — env vars, clean break, no aliases.** A
@@ -132,8 +132,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/sam3/segment_plate_batch` path aliases are removed (`POST /segment`
   and `POST /segment/batch` are the only paths now; the shipped client
   posts to `/segment`).
+- **Naming sweep, wave W4 — Prometheus metric names.** Every metric
+  constant and name in `src/services/curation/metrics.py` moved off the
+  company-initialed `LEGACY_*`/`legacy_*` prefix onto `OP_*`/`op_*`, and
+  domain/vendor-named metrics were renamed alongside the prefix swap
+  (for example, the combined/separate VLM call counters, the
+  segmenter-leg duration and circuit-breaker metrics, and the
+  region-detector stage duration). Metrics that carried no domain name
+  (`occ_retry_count`, `worker_skip_human_won`, `shm_crop_cache_*`,
+  `source_image_*`, `thumbnail_cache_*`, …) kept their name and only
+  gained the `op_` prefix.
+- **Structured log events use a `curation_` prefix** instead of the
+  retired company-initialed one, across the OpenSearch client, ingest,
+  index bootstrap, and job/status logging.
+- **Training run status fields renamed**: `TrainJobStatus`'s
+  `best_metric` / `last_metric` pair is replaced by two distinct rows,
+  `last_epoch_metric` (the true last training epoch's metrics) and
+  `best_checkpoint_metric` (the best checkpoint's own re-validation
+  metrics) — see `docs/design/curation_api_contract.md`'s "Training run
+  status" section for why two fields are needed. `Job.migrate_status`
+  drops the retired keys from any pre-rename `status.json` on read
+  rather than migrating their values, since the two were never the same
+  measurement.
 
 ### Added
+- **Class deprecate/restore.** `POST /classes/{class_id}/deprecate` flips
+  `deprecated` on a class nothing references (idempotent; refuses on a
+  still-referenced class); `POST /classes/{class_id}/restore` undoes it
+  (`404` unknown id, `409` if a non-deprecated class already uses the
+  name) — a lighter-weight alternative to `POST /classes/merge` for a
+  class that was never actually used.
+- **Deployment-supplied training presets.** `OP_TRAIN_PRESETS_PATH` (a
+  JSON list of the same shape as the built-in presets) appends
+  deployment-specific `class_subset_presets` entries, served by
+  `GET /train/presets` alongside the generic built-ins (`all`, and
+  `all_except_region` / `region_only` when the active region profile
+  sets `region_class_name`).
+- **A background probe-inference job API**: `POST /probe/run` (resolves
+  a finished training job's checkpoint, `409` if not `finished` or no
+  checkpoint on disk; claims a GPU through the same arbiter
+  `POST /train/start` uses), `GET /probe/status`, `POST /probe/cancel`
+  — wraps `run_probe_inference` so a probe backfill runs as a tracked
+  background job instead of blocking the request; one job at a time.
+- **Review queues explain an empty result instead of just serving zero
+  rows.** `GET /review/{tab}` computes `empty_reason` from live index
+  state (for example, `"no probe predictions — run a probe"`,
+  `"item scores never computed"`, `"no unclassified proposals"`, else
+  `"no items match"`); `GET /review/tabs` gained
+  `empty_state: {has_probe_predictions, has_item_scores}` so a client
+  can word any tab's empty state without a per-tab round trip.
+- **A naming-leak pre-commit guard** (`scripts/codegen/check_naming_leaks.py`,
+  wired into `.pre-commit-config.yaml`): three `git grep` scans over the
+  whole tracked tree catch a reintroduced company name, retired
+  vendor/domain vocabulary, or private class-registry vocabulary before
+  it ships, filtered through a reviewed, per-line allowlist
+  (`scripts/codegen/naming_leak_allowlist.txt`) so a deliberate example
+  or historical/negative-test mention doesn't need re-justifying on
+  every commit.
 - **Per-class model comparison.** Every export with a labelled test split is
   an eval dataset (`GET /bakeoff/eval_datasets`, class counts and
   test-split hashes computed from the files); finished training runs are
@@ -165,8 +220,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answer to the class source they had before (VLM, ingest proposal or
   classifier, recovered from the untouched class provenance; class history
   as fallback) and records the empty attempt.
-- **Naming sweep, wave W0 — served detector/segmenter/VLM vocabulary**
-  (`docs/design/naming_sweep_plan.md`): `GET {prefix}/regions/vocabulary`
+- **Naming sweep, wave W0 — served detector/segmenter/VLM vocabulary**:
+  `GET {prefix}/regions/vocabulary`
   serves `{detectors, region_sources, chain_actors}` (each entry `{id,
   label, role, filterable}`) built from the active `DetectionProfile` /
   ingest profiles / `OP_VLM_MODEL` — never a hardcoded model id — so the
@@ -192,7 +247,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `reclassify_after_registry_growth.py`, `requeue_regions.py` (incl.
   `--missing-status` backfill), `seed_class_registry.py` (registry from ONNX
   `names`, `--check`), `cluster_raw_labels.py`, `ingest_upload.py` +
-  `POST /curation/ingest/upload` (byte ingest with content dedup),
+  `POST /curation/ingest/upload` (byte ingest with content dedup;
+  persists content-addressed uploads server-side under
+  `OP_UPLOAD_ROOT`), `GET /curation/ingest/config` (served upload/batch
+  limits and accepted extensions so a client stops hardcoding them),
   `import_labeled_dataset.py` (incl. `--images-only`) and
   `eval_regions_vs_gt.py` (region cascade vs ground truth: recall, precision,
   IoU, background false-positive gate).
@@ -405,13 +463,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   had silently diverged between routers and services during the port.
 - Removed private absolute host-path defaults from the bake-off
   harness.
-- Renamed all `LEGACY_*` environment variables to `OP_*` (23 vars) and all
-  `legacy_*` Prometheus metric names to `op_*`, closing the last
-  reference-deployment naming residue in the config surface.
-- **`region_*`/`plate_*` wire-contract leak**: `GET /curation/crops/{id}`
-  returned the raw OpenSearch `_source` (RegionFields storage keys,
-  `region_*` by default) instead of the frozen `ItemDoc` `plate_*` wire
-  contract; `PATCH /crops/{id}/plate_meta`'s `updated_fields` echoed
+- Renamed the reference deployment's company-initialed environment-variable
+  prefix to `OP_*` (23 vars) and its matching Prometheus metric-name
+  prefix to `op_*`, closing the last reference-deployment naming
+  residue in the config surface.
+- **Region wire-contract leak**: `GET /curation/crops/{id}`
+  returned the raw OpenSearch `_source` (`RegionFields` storage keys,
+  `region_*` by default) instead of the frozen `ItemDoc` wire contract;
+  `PATCH /crops/{id}/region_meta`'s `updated_fields` echoed
   the same internal keys instead of the request's wire names; and
   `GET /review/{tab}` built its response dict using storage keys as
   literal JSON keys. All three now correctly emit `plate_*`. `ItemDoc`
