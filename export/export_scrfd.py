@@ -619,7 +619,9 @@ dynamic_batching {{
 
 instance_group [
   {{
-    count: 4
+    # F-19: count 1 is the default core loadout's baseline (~1.7 GB);
+    # raise on a card with headroom to spare (see README "GPU sizing").
+    count: 1
     kind: KIND_GPU
     gpus: [ 0 ]
   }}

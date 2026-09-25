@@ -39,10 +39,14 @@ dynamic_batching {
   }
 }
 
-# Multiple instances for parallel processing
+# Multiple instances for parallel processing.
+# F-19 (fresh-start E2E findings 2026-09-25): count 2 measured at ~3.4 GB
+# (FP32 -- see F-13/F-16); the default core loadout has to share a 48 GB
+# card with the VLM + segmenter + trainer. count: 1 is ~1.7 GB -- raise
+# this on a card with headroom to spare (see README "GPU sizing").
 instance_group [
   {
-    count: 2  # baseline for 12 GB cards; raise on 24 GB+ GPUs
+    count: 1
     kind: KIND_GPU
     gpus: [ 0 ]
   }
