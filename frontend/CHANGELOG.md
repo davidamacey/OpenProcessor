@@ -45,6 +45,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- The live tier's always-on review screenshots were saved inside
+  pytest-playwright's `--output` directory, which the plugin deletes at
+  the start of every run, so each run silently erased the previous run's
+  screenshots. They now go to `artifacts_local/cw-live/live-shots/`.
 - `RunResults.svelte`'s MLflow run URL no longer overlaps the adjacent
   Checkpoint SHA-256 column at narrow (≤800px) widths — found during the
   #34 W1 visual review; the link was missing the `break-all` its

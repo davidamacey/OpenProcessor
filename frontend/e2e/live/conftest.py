@@ -52,7 +52,10 @@ API_PREFIX = "/curation"
 
 # e2e/live/conftest.py -> e2e/live -> e2e -> repo root.
 ROOT = Path(__file__).resolve().parents[2]
-SCREENSHOT_ROOT = ROOT / "artifacts_local" / "cw-live" / "live-tier"
+# Deliberately NOT under pytest-playwright's --output dir (live-tier/): that
+# plugin rmtree()s its output dir at session start, which silently deleted
+# every earlier run's review screenshots.
+SCREENSHOT_ROOT = ROOT / "artifacts_local" / "cw-live" / "live-shots"
 
 # Requests to `**/curation/**` matching this method set pass through
 # untouched; everything else is aborted and recorded. HEAD is included
@@ -124,7 +127,7 @@ def browser_context_args(browser_context_args: dict[str, Any]) -> dict[str, Any]
 @pytest.fixture(scope="session")
 def screenshot_run_dir() -> Path:
     """One timestamped directory per test-session run
-    (`artifacts_local/cw-live/live-tier/<run-timestamp>/`), holding every
+    (`artifacts_local/cw-live/live-shots/<run-timestamp>/`), holding every
     route's full-page screenshots at both the desktop (1600x1000) and
     narrow (800x1000) viewports — captured unconditionally by
     `test_route_sweep.py`, not only on a failure.

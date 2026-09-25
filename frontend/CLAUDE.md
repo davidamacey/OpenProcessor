@@ -1301,13 +1301,16 @@ viewport, and explicit navigation/action timeouts. Tests use
 A failing test's own screenshot is captured via pytest-playwright's
 `--screenshot=only-on-failure --output=...` flags (`scripts/run-e2e.mjs`
 when the target is `e2e/live`), landing directly under
-`artifacts_local/cw-live/live-tier/` (gitignored).
+`artifacts_local/cw-live/live-tier/` (gitignored). pytest-playwright
+wipes that directory at the start of every session, so it only ever
+holds the latest run's failure shots; the always-on review screenshots
+below live in a sibling directory for exactly that reason.
 
 **Full-page route screenshots (2026-09-24 visual-review follow-up),
 always, not just on failure.** `test_route_sweep.py` additionally saves
 one full-page PNG per route at each of two viewports — desktop
 (1600×1000) and narrow (800×1000) — under
-`artifacts_local/cw-live/live-tier/<run-timestamp>/<route-slug>-
+`artifacts_local/cw-live/live-shots/<run-timestamp>/<route-slug>-
 <width>.png` (`screenshot_run_dir`, a session-scoped fixture in
 `e2e/live/conftest.py` that timestamps one directory per test-session
 run). **These screenshots are not self-checking — a human (or an agent

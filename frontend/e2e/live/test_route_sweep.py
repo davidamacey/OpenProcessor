@@ -25,7 +25,7 @@ a live OpenProcessor backend). For each we assert:
 
 Every route also gets a full-page screenshot saved at both a desktop
 (1600x1000) and a narrow (800x1000) viewport, unconditionally — not just
-on failure — under `artifacts_local/cw-live/live-tier/<run-timestamp>/
+on failure — under `artifacts_local/cw-live/live-shots/<run-timestamp>/
 <route-slug>-<width>.png` (`screenshot_run_dir`, conftest.py). These are
 NOT self-checking: per CLAUDE.md's "Live read-only tier" section, a human
 must actually open a sample of them after each run.
