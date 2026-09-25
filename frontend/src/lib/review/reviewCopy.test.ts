@@ -59,6 +59,59 @@ describe('emptyQueueMessage (R3)', () => {
   });
 });
 
+describe('emptyQueueMessage: served empty_reason (#36 item 9)', () => {
+  const base = {
+    label: 'Uncertainty',
+    description: 'High active-learning probe entropy',
+    sortFallbackReason:
+      "default sort 'uncertainty_entropy' orders by 'probe_pred_entropy', which no item has yet",
+    emptyReason: 'no probe predictions — run a probe',
+    filtersActive: false,
+  };
+
+  it('the served empty_reason takes priority over the sort-fallback note', () => {
+    const m = emptyQueueMessage(base);
+    expect(m.lines).toContain('no probe predictions — run a probe');
+    expect(m.lines.join(' ')).not.toContain("orders by 'probe_pred_entropy'");
+  });
+
+  it('falls back to sortFallbackReason when empty_reason is absent (an older backend)', () => {
+    const m = emptyQueueMessage({ ...base, emptyReason: null });
+    expect(m.lines.join(' ')).toContain("orders by 'probe_pred_entropy'");
+  });
+
+  it('links to /train when emptyState says no probe has ever run and the reason mentions a probe', () => {
+    const m = emptyQueueMessage({
+      ...base,
+      emptyState: { has_probe_predictions: false, has_item_scores: true },
+    });
+    expect(m.link).toEqual({ href: '/train', text: 'Run a probe on /train' });
+  });
+
+  it('links to /settings when emptyState says no item scores exist and the reason mentions a score', () => {
+    const m = emptyQueueMessage({
+      ...base,
+      emptyReason: 'no uniqueness score computed yet',
+      sortFallbackReason: null,
+      emptyState: { has_probe_predictions: true, has_item_scores: false },
+    });
+    expect(m.link).toEqual({ href: '/settings', text: 'Compute scores on /settings' });
+  });
+
+  it('no link when emptyState says the prerequisite IS populated (a genuinely empty queue)', () => {
+    const m = emptyQueueMessage({
+      ...base,
+      emptyState: { has_probe_predictions: true, has_item_scores: true },
+    });
+    expect(m.link).toBeUndefined();
+  });
+
+  it('no link when emptyState is absent (an older backend)', () => {
+    const m = emptyQueueMessage({ ...base, emptyState: null });
+    expect(m.link).toBeUndefined();
+  });
+});
+
 describe('vlmEmptyReasonText / humanizeId (R6)', () => {
   it('turns a served id into prose', () => {
     expect(vlmEmptyReasonText('no_answer')).toBe('VLM gave no class — No answer');

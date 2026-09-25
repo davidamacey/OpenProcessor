@@ -17,7 +17,9 @@
  */
 
 import {
+  getReviewEmptyState,
   getReviewTabsVocabulary,
+  type ReviewEmptyState,
   type ReviewFilterSpec,
   type ReviewTabVocabularyEntry,
 } from '$lib/api';
@@ -25,6 +27,10 @@ import {
 class ReviewTabsVocabularyStore {
   list = $state<ReviewTabVocabularyEntry[]>([]);
   loaded = $state<boolean>(false);
+  /** #36 item 9: whether this deployment has any probe predictions/item
+   *  scores at all — `null` until loaded or on a backend that predates
+   *  the field. */
+  emptyState = $state<ReviewEmptyState | null>(null);
   #byId = $derived(new Map(this.list.map((t) => [t.id, t])));
   #inflight: Promise<void> | null = null;
 
@@ -33,7 +39,12 @@ class ReviewTabsVocabularyStore {
     if (this.#inflight) return this.#inflight;
     this.#inflight = (async () => {
       try {
-        this.list = await getReviewTabsVocabulary();
+        const [tabs, emptyState] = await Promise.all([
+          getReviewTabsVocabulary(),
+          getReviewEmptyState().catch(() => null),
+        ]);
+        this.list = tabs;
+        this.emptyState = emptyState;
       } catch {
         this.list = [];
       } finally {

@@ -748,6 +748,12 @@ export interface PaginatedResponse<T> {
    *  picked (2026-09-24 logic-moves W5). Absent on endpoints that don't
    *  report it. */
   sort_applied?: string | null;
+  /** Set by `{API_PREFIX}/review/{tab}` when `total === 0` — the server's
+   *  own explanation for why this queue is empty right now (e.g. "no
+   *  probe predictions — run a probe"), distinct from and more direct
+   *  than `sort_fallback_reason` (OpenProcessor #36 item 9). Absent when
+   *  the queue isn't empty, or on a backend that predates the field. */
+  empty_reason?: string | null;
   /** Provenance for a pool-scale overlay ordering (curation-strategy plan
    *  Phase 4 — currently only `{API_PREFIX}/crops?order=diverse`): which
    *  overlay/version produced this selection, and how large the pool it

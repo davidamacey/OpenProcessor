@@ -106,7 +106,13 @@ def _png(width: int, height: int) -> bytes:
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", raw) + chunk(b"IEND", b"")
 
 
-def _stub_review(stub, *, empty_uncertainty: bool = False) -> None:
+def _stub_review(
+    stub,
+    *,
+    empty_uncertainty: bool = False,
+    empty_reason: str | None = None,
+    empty_state: dict | None = None,
+) -> None:
     source_png = _png(640, 427)
     crop_png = _png(300, 140)
     stub.on("GET", r"thumbnail(/|$|\?)", (200, crop_png, "image/png"))
@@ -116,22 +122,25 @@ def _stub_review(stub, *, empty_uncertainty: bool = False) -> None:
 
     def review_handler(request, _match):
         if empty_uncertainty and "/review/uncertainty" in request.url:
-            return (
-                200,
-                {
-                    "items": [],
-                    "total": 0,
-                    "page": 1,
-                    "page_size": 30,
-                    "sort_applied": "atypicality",
-                    "sort_fallback_reason": "no item has 'probe_pred_entropy' yet",
-                },
-            )
+            body = {
+                "items": [],
+                "total": 0,
+                "page": 1,
+                "page_size": 30,
+                "sort_applied": "atypicality",
+                "sort_fallback_reason": "no item has 'probe_pred_entropy' yet",
+            }
+            if empty_reason is not None:
+                body["empty_reason"] = empty_reason
+            return (200, body)
         items = [review_item(i) for i in range(3)]
         return (200, {"items": items, "total": 3, "page": 1, "page_size": 30})
 
     stub.on("GET", r"/review/(?!tabs)", review_handler)
-    stub.on("GET", r"/review/tabs(\?|$)", TABS)
+    tabs = dict(TABS)
+    if empty_state is not None:
+        tabs = {**TABS, "empty_state": empty_state}
+    stub.on("GET", r"/review/tabs(\?|$)", tabs)
 
 
 def test_picker_and_quick_assign_never_offer_the_region_class(stub, page, app_url):
@@ -207,6 +216,33 @@ def test_empty_queue_explains_itself_and_dims_the_tab(stub, page, app_url):
     assert "no item has 'probe_pred_entropy' yet" in text, text
     assert "Queue empty." not in text
     page.get_by_test_id("tab-empty-count").first.wait_for(timeout=5000)
+
+
+def test_empty_queue_shows_served_empty_reason_and_links_to_the_probe_control(
+    stub, page, app_url
+):
+    """#36 item 9: GET {API_PREFIX}/review/{tab} serves empty_reason directly
+    when total == 0, and /review/tabs serves a top-level empty_state saying
+    whether a probe has ever run. The empty message must show the served
+    reason (over the raw sort-fallback string) and link to /train when
+    empty_state says no probe predictions exist at all."""
+    _stub_review(
+        stub,
+        empty_uncertainty=True,
+        empty_reason="no probe predictions — run a probe",
+        empty_state={"has_probe_predictions": False, "has_item_scores": True},
+    )
+    page.set_viewport_size({"width": 1600, "height": 1000})
+    page.goto(f"{app_url}/review?tab=uncertainty")
+    empty = page.get_by_test_id("queue-empty")
+    empty.wait_for(timeout=15000)
+    text = empty.inner_text()
+    assert "no probe predictions — run a probe" in text, text
+    assert "no item has 'probe_pred_entropy' yet" not in text, text
+
+    link = empty.get_by_role("link", name="Run a probe on /train")
+    link.wait_for(timeout=5000)
+    assert link.get_attribute("href") == "/train"
 
 
 _CANDIDATE_BBOX = [0.15, 0.25, 0.55, 0.75]

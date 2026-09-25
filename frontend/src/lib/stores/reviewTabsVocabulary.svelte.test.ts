@@ -18,6 +18,7 @@ function jsonResponse(status: number, body: unknown): Response {
 function resetStore(): void {
   reviewTabsVocabularyStore.list = [];
   reviewTabsVocabularyStore.loaded = false;
+  reviewTabsVocabularyStore.emptyState = null;
 }
 
 beforeEach(() => {
@@ -90,14 +91,50 @@ describe('reviewTabsVocabularyStore.init', () => {
     expect(reviewTabsVocabularyStore.loaded).toBe(true);
   });
 
-  it('a second call is a no-op once loaded (fetch called exactly once)', async () => {
+  it('a second call is a no-op once loaded (no further fetches)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, PAYLOAD));
     vi.stubGlobal('fetch', fetchMock);
 
     await reviewTabsVocabularyStore.init();
+    const callsAfterFirstInit = fetchMock.mock.calls.length;
     await reviewTabsVocabularyStore.init();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(callsAfterFirstInit);
+  });
+});
+
+// #36 item 9: GET {API_PREFIX}/review/tabs also carries a top-level
+// empty_state, read via a sibling getReviewEmptyState() call so the tabs
+// array's own shape/tests are untouched.
+const PAYLOAD_WITH_EMPTY_STATE = {
+  ...PAYLOAD,
+  empty_state: { has_probe_predictions: false, has_item_scores: true },
+};
+
+describe('reviewTabsVocabularyStore.emptyState', () => {
+  it('populates emptyState from the served empty_state', async () => {
+    // A fresh Response per call: init() fires two GETs of the same URL
+    // (the tabs array and the empty_state sibling read) concurrently, and
+    // a Response body can only be consumed once.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() => jsonResponse(200, PAYLOAD_WITH_EMPTY_STATE)),
+    );
+
+    await reviewTabsVocabularyStore.init();
+
+    expect(reviewTabsVocabularyStore.emptyState).toEqual({
+      has_probe_predictions: false,
+      has_item_scores: true,
+    });
+  });
+
+  it('stays null when the served response omits empty_state', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, PAYLOAD)));
+
+    await reviewTabsVocabularyStore.init();
+
+    expect(reviewTabsVocabularyStore.emptyState).toBeNull();
   });
 });
 

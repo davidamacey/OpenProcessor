@@ -42,6 +42,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     code change needed: `/models` already renders every entry
     `GET {API_PREFIX}/models/status` serves generically (by
     `friendly_name`/`role`), no hardcoded roster.
+  - Items 3, 4, 7 verified already served/correct as of c676d2b with no
+    frontend change needed: `new_class_proposals` excludes no-answer/
+    already-classed items; `region_rejection_reason` vocabulary/
+    resolution unchanged; `GET {API_PREFIX}/crops/{id}/image` still only
+    takes `max_dim` (K6's client-drawn `SourceImageOverlay` already the
+    only box/label renderer).
+  - Item 9: `PaginatedResponse` gains `empty_reason` (set by
+    `GET {API_PREFIX}/review/{tab}` when `total === 0`) — `/review`'s
+    empty-queue panel shows it, taking priority over the raw
+    `sort_fallback_reason` note. A new sibling read,
+    `getReviewEmptyState()`/`ReviewEmptyState`, picks up
+    `GET {API_PREFIX}/review/tabs`' top-level `empty_state`
+    (`has_probe_predictions`/`has_item_scores`) into
+    `reviewTabsVocabularyStore.emptyState`; when the reason mentions a
+    probe or a score and the matching flag is false, the panel adds a
+    direct link ("Run a probe on /train" / "Compute scores on
+    /settings"). Absent/malformed on either field renders exactly as
+    before.
+
+  Every changed behavior above has a new test watched failing against a
+  mutated copy before being restored byte-for-byte. Full stubbed e2e
+  suite (65 tests) green.
 
 - **Adopted OpenProcessor #34 W1 (backend commit eb5c251) — training
   lineage, build identity, and last-epoch vs. best-checkpoint metrics.**
