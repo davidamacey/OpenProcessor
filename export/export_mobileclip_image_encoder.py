@@ -19,8 +19,8 @@ Key steps:
 5. Validate output matches PyTorch
 
 Run from: yolo-api container
-    docker compose exec yolo-api python /app/scripts/track_e/export_mobileclip_image_encoder.py --model S2
-    docker compose exec yolo-api python /app/scripts/track_e/export_mobileclip_image_encoder.py --model B
+    docker compose exec yolo-api python /app/export/export_mobileclip_image_encoder.py --model S2
+    docker compose exec yolo-api python /app/export/export_mobileclip_image_encoder.py --model B
 """
 
 import argparse
@@ -466,7 +466,7 @@ def main():
     if not Path(checkpoint_path).exists():
         print(f'\nERROR: Checkpoint not found: {checkpoint_path}')
         print('\nTo download, run on HOST:')
-        print('  bash scripts/track_e/setup_mobileclip_env.sh')
+        print('  make download-models')
         sys.exit(1)
 
     # Load model
