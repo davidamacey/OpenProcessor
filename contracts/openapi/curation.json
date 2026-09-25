@@ -3836,6 +3836,17 @@
         "additionalProperties": false,
         "description": "Payload accepted by ``POST /curation/train/start``.\n\nAll fields except the dataset path are optional -- the trainer\napplies profile defaults from :mod:`src.services.training.profiles`\nfor anything not supplied.",
         "properties": {
+          "api_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Sha"
+          },
           "augmentation": {
             "anyOf": [
               {
@@ -3875,6 +3886,28 @@
             "description": "Absolute path (inside the trainer container) to a frozen export. The API typically passes the host's ``current/`` symlink target.",
             "title": "Dataset Export Dir",
             "type": "string"
+          },
+          "dataset_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Sha"
+          },
+          "dataset_version_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Version Tag"
           },
           "frozen_test_sha": {
             "anyOf": [
@@ -4022,6 +4055,39 @@
             "default": "labeler-ui",
             "title": "Submitted By",
             "type": "string"
+          },
+          "test_label_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Label Sha"
+          },
+          "trainer_image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trainer Image Id"
+          },
+          "trainer_image_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trainer Image Revision"
           }
         },
         "required": [

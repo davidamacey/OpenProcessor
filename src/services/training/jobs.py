@@ -45,6 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from src.config import get_gpu_arbiter_config
 from src.core.logging import get_logger
+from src.services.training import lineage
 
 
 logger = get_logger(__name__)
@@ -215,17 +216,30 @@ class TrainJobSpec(BaseModel):
     mlflow_run_name: str | None = None
 
     # Lineage -----------------------------------------------------------------
-    # Both are normally auto-filled by ``write_job`` at submit time and
-    # should not be set by API callers directly:
-    #   - frozen_test_sha: copied from the export's manifest.json
-    #     (``frozen_test_sha``) so the trainer's run manifest records which
-    #     frozen test split this run was evaluated against, instead of
-    #     always recording None.
+    # All of these are normally auto-filled by ``write_job`` at submit time
+    # and should not be set by API callers directly:
+    #   - dataset_sha / frozen_test_sha / test_label_sha / dataset_version_tag:
+    #     copied from the export's manifest.json (``src.services.training.
+    #     lineage.read_export_identity``), so the trainer's run manifest
+    #     records exactly which export, and which frozen test split, this
+    #     run trained/evaluated against instead of always recording None.
+    #     ``dataset_sha`` is the export's own claim and is never computed;
+    #     the two test-split hashes are computed from disk when an older
+    #     export's manifest lacks them.
+    #   - api_sha / trainer_image_id / trainer_image_revision: this API
+    #     process's own build identity plus the trainer container's image
+    #     id and baked-in revision label (``lineage.stamp_code_versions``).
     #   - registry_sha / registry_snapshot_path: a sha256 + on-disk copy of
     #     the class registry *at submit time*, so a class rename between
     #     export and promote can't silently relabel the served model
     #     (promote prefers this pinned snapshot over the live registry).
+    dataset_sha: str | None = None
     frozen_test_sha: str | None = None
+    test_label_sha: str | None = None
+    dataset_version_tag: str | None = None
+    api_sha: str | None = None
+    trainer_image_id: str | None = None
+    trainer_image_revision: str | None = None
     registry_sha: str | None = None
     registry_snapshot_path: str | None = None
 
@@ -517,23 +531,6 @@ async def _read_json(path: Path) -> dict[str, Any] | None:
     return await asyncio.to_thread(_do)
 
 
-def _read_frozen_test_sha(dataset_export_dir: str) -> str | None:
-    """Best-effort read of ``frozen_test_sha`` from the export's manifest.json.
-
-    The trainer's run manifest reads ``spec.raw['frozen_test_sha']`` -- if
-    nothing populates it, every run records ``dataset_sha: None``. A
-    dataset-export service that writes ``manifest.json`` should include
-    this field; this is a best-effort read mirroring the preflight's own
-    export-manifest reader.
-    """
-    try:
-        manifest = json.loads((Path(dataset_export_dir) / 'manifest.json').read_text())
-    except Exception:
-        return None
-    sha = manifest.get('frozen_test_sha')
-    return str(sha) if sha else None
-
-
 def _pin_registry_snapshot_sync(job_id: str) -> tuple[str | None, str | None]:
     """Snapshot the live class registry to a job-scoped file; return (sha, path).
 
@@ -585,10 +582,14 @@ async def write_job(job: TrainJobSpec) -> str:
     """Materialize ``<job_id>.job.json`` and return the assigned ``job_id``.
 
     If ``job.job_id`` is unset, we generate one of the form
-    ``<isoslug>_<family><size>``. Also auto-fills two lineage fields the
-    caller normally doesn't set directly: ``frozen_test_sha`` from the
-    export manifest, and ``registry_sha``/``registry_snapshot_path`` by
-    pinning the live class registry at this exact moment.
+    ``<isoslug>_<family><size>``. Also auto-fills the lineage fields the
+    caller normally doesn't set directly: ``dataset_sha`` /
+    ``frozen_test_sha`` / ``test_label_sha`` / ``dataset_version_tag`` from
+    the export manifest (:func:`~src.services.training.lineage.read_export_identity`),
+    ``api_sha`` / ``trainer_image_id`` / ``trainer_image_revision`` from this
+    build's own identity (:func:`~src.services.training.lineage.stamp_code_versions`),
+    and ``registry_sha``/``registry_snapshot_path`` by pinning the live class
+    registry at this exact moment.
     """
     spec = job.model_copy(deep=True)
     if not spec.job_id:
@@ -605,10 +606,24 @@ async def write_job(job: TrainJobSpec) -> str:
 
     # Pin lineage AFTER the duplicate check so a rejected duplicate submit
     # never leaves an orphaned registry-snapshot file behind.
-    if spec.frozen_test_sha is None:
-        spec.frozen_test_sha = await asyncio.to_thread(
-            _read_frozen_test_sha, spec.dataset_export_dir
-        )
+    if spec.dataset_sha is None or spec.frozen_test_sha is None or spec.test_label_sha is None:
+        identity = await asyncio.to_thread(lineage.read_export_identity, spec.dataset_export_dir)
+        if spec.dataset_sha is None:
+            spec.dataset_sha = identity.dataset_sha
+        if spec.frozen_test_sha is None:
+            spec.frozen_test_sha = identity.frozen_test_sha
+        if spec.test_label_sha is None:
+            spec.test_label_sha = identity.test_label_sha
+        if spec.dataset_version_tag is None:
+            spec.dataset_version_tag = identity.version_tag
+    if spec.api_sha is None or spec.trainer_image_id is None:
+        code_versions = await asyncio.to_thread(lineage.stamp_code_versions)
+        if spec.api_sha is None:
+            spec.api_sha = code_versions['api_sha']
+        if spec.trainer_image_id is None:
+            spec.trainer_image_id = code_versions['trainer_image_id']
+        if spec.trainer_image_revision is None:
+            spec.trainer_image_revision = code_versions['trainer_image_revision']
     if spec.registry_sha is None:
         spec.registry_sha, spec.registry_snapshot_path = await asyncio.to_thread(
             _pin_registry_snapshot_sync, spec.job_id

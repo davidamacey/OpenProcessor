@@ -276,7 +276,8 @@ def test_spec_default_uses_default_train_gpu_value(monkeypatch: pytest.MonkeyPat
 
 
 # =============================================================================
-# frozen_test_sha + registry pin
+# Lineage (dataset_sha / frozen_test_sha / test_label_sha / dataset_version_tag
+# / api_sha / trainer_image_id) + registry pin
 # =============================================================================
 
 
@@ -292,20 +293,61 @@ def test_spec_accepts_frozen_test_sha() -> None:
 
 
 @pytest.mark.asyncio
-async def test_write_job_autofills_frozen_test_sha_from_export_manifest(
+async def test_write_job_copies_lineage_from_a_full_export_manifest(
     jobs_dir: Path, tmp_path: Path
 ) -> None:
-    """write_job reads frozen_test_sha out of the export's manifest.json
-    when the caller didn't already supply one."""
+    """write_job copies dataset_sha / frozen_test_sha / test_label_sha /
+    dataset_version_tag straight off a manifest that already has them (a
+    fresh, post-W1 export) -- no on-disk recomputation needed."""
     export_dir = tmp_path / 'export'
-    export_dir.mkdir()
-    (export_dir / 'manifest.json').write_text(json.dumps({'frozen_test_sha': 'export-sha-1'}))
+    (export_dir / 'labels' / 'test').mkdir(parents=True)
+    (export_dir / 'labels' / 'test' / 'a.txt').write_text('0 0.5 0.5 0.1 0.1\n')
+    (export_dir / 'manifest.json').write_text(
+        json.dumps(
+            {
+                'dataset_sha': 'dataset-sha-1',
+                'frozen_test_sha': 'export-sha-1',
+                'test_label_sha': 'label-sha-1',
+                'version_tag': 'v1',
+            }
+        )
+    )
 
     spec = TrainJobSpec(job_id='autofill', dataset_export_dir=str(export_dir))
     await train_jobs.write_job(spec)
 
     raw = json.loads((jobs_dir / 'autofill.job.json').read_text())
+    assert raw['dataset_sha'] == 'dataset-sha-1'
     assert raw['frozen_test_sha'] == 'export-sha-1'
+    assert raw['test_label_sha'] == 'label-sha-1'
+    assert raw['dataset_version_tag'] == 'v1'
+
+
+@pytest.mark.asyncio
+async def test_write_job_computes_test_hashes_for_an_older_export_manifest(
+    jobs_dir: Path, tmp_path: Path
+) -> None:
+    """An export written before W1 has no frozen_test_sha/test_label_sha in
+    its manifest -- write_job must compute both from the on-disk test
+    split rather than leaving them None, so every *new* run still records
+    them even against an old export. dataset_sha is never computed (it's
+    the export's own claim) and stays None when the manifest lacks it."""
+    from src.services.curation.export_support import frozen_test_sha_of, label_content_sha
+
+    export_dir = tmp_path / 'export'
+    (export_dir / 'labels' / 'test').mkdir(parents=True)
+    (export_dir / 'labels' / 'test' / 'a.txt').write_text('0 0.5 0.5 0.1 0.1\n')
+    (export_dir / 'manifest.json').write_text(json.dumps({}))
+
+    spec = TrainJobSpec(job_id='backfill', dataset_export_dir=str(export_dir))
+    await train_jobs.write_job(spec)
+
+    raw = json.loads((jobs_dir / 'backfill.job.json').read_text())
+    assert raw['dataset_sha'] is None
+    assert raw['frozen_test_sha'] == frozen_test_sha_of(export_dir)
+    assert raw['test_label_sha'] == label_content_sha(export_dir, None, truncate=16, split='test')
+    assert raw['frozen_test_sha']
+    assert raw['test_label_sha']
 
 
 @pytest.mark.asyncio
@@ -314,7 +356,60 @@ async def test_write_job_leaves_frozen_test_sha_none_without_manifest(jobs_dir: 
     spec = TrainJobSpec(job_id='no_manifest', dataset_export_dir='/data/exports/missing')
     await train_jobs.write_job(spec)
     raw = json.loads((jobs_dir / 'no_manifest.job.json').read_text())
+    assert raw['dataset_sha'] is None
     assert raw['frozen_test_sha'] is None
+    assert raw['test_label_sha'] is None
+
+
+@pytest.mark.asyncio
+async def test_write_job_stamps_api_sha_from_op_build_sha(
+    jobs_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """api_sha is stamped from OP_BUILD_SHA (or a live git rev-parse in a
+    dev checkout) at submit time -- see
+    src.services.curation.export_support._code_sha."""
+    monkeypatch.setenv('OP_BUILD_SHA', 'apisha123')
+    spec = TrainJobSpec(job_id='stamp_api', dataset_export_dir=str(tmp_path / 'missing'))
+    await train_jobs.write_job(spec)
+    raw = json.loads((jobs_dir / 'stamp_api.job.json').read_text())
+    assert raw['api_sha'] == 'apisha123'
+
+
+@pytest.mark.asyncio
+async def test_write_job_stamps_trainer_image_id_from_docker_client(
+    jobs_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """trainer_image_id / trainer_image_revision come from the docker
+    socket when GpuArbiterConfig names a trainer container and the client
+    is reachable (src.services.training.lineage.stamp_code_versions)."""
+    from src.services.training import lineage
+
+    class _FakeImage:
+        id = 'sha256:abc'
+        labels = {'org.opencontainers.image.revision': 'trainer-rev-1'}
+
+    class _FakeContainer:
+        image = _FakeImage()
+
+    class _FakeContainers:
+        def get(self, _name: str) -> _FakeContainer:
+            return _FakeContainer()
+
+    class _FakeDockerClient:
+        containers = _FakeContainers()
+
+    monkeypatch.setattr(
+        lineage,
+        'get_gpu_arbiter_config',
+        lambda: GpuArbiterConfig(trainer_container='curation-trainer'),
+    )
+    monkeypatch.setattr(lineage, '_docker_client', lambda: _FakeDockerClient())
+
+    spec = TrainJobSpec(job_id='stamp_trainer', dataset_export_dir=str(tmp_path / 'missing'))
+    await train_jobs.write_job(spec)
+    raw = json.loads((jobs_dir / 'stamp_trainer.job.json').read_text())
+    assert raw['trainer_image_id'] == 'sha256:abc'
+    assert raw['trainer_image_revision'] == 'trainer-rev-1'
 
 
 @pytest.mark.asyncio
