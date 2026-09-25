@@ -11,6 +11,9 @@
     value: 0 | 1 | 2;
     /** Labels for scope 0 / 1 / 2. */
     labels?: [string, string, string];
+    /** Optional tooltips for scope 0 / 1 / 2 — e.g. that option 0 is a
+     *  tab's served default rather than "everything" (visual audit R11). */
+    titles?: [string?, string?, string?];
     /** Prefix text; omit for no prefix. */
     label?: string;
     labelClass?: string;
@@ -21,6 +24,7 @@
   let {
     value = $bindable(),
     labels = ['All', 'Largest', '+2nd'],
+    titles = [],
     label,
     labelClass = 'text-zinc-400',
     dense = false,
@@ -40,6 +44,7 @@
         class="chip rounded-none border-0 {value === opt.v
           ? 'bg-blue-600 text-white'
           : `${dense ? 'bg-zinc-800' : 'bg-zinc-900'} text-zinc-300 hover:bg-zinc-700`}"
+        title={titles[opt.v]}
         onclick={() => (value = opt.v)}
       >
         {opt.l}

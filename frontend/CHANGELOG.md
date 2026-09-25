@@ -1456,6 +1456,33 @@ class`) so an operator can see where a crop lives before relabeling
 
 ### Fixed
 
+- **`/review`, `/classes` and top-nav findings from the 2026-09-24 visual
+  audit** (`docs/design/visual-audit-2026-09-24.md`):
+  - R1: the `/` class picker and the quick-assign row no longer offer a
+    slot-bound region class (resolved through the slot registry; TODO for
+    a served class kind), and rank the item's own proposal / current /
+    VLM / model classes first instead of global validated count. The
+    picker's "Search all N classes" counts what it lists.
+  - R2 + narrow nav: new `ScrollStrip` component for the review tab bar
+    and the primary nav — a chevron on each side with hidden items, and
+    the active tab/link scrolled into view. The review action row is
+    sticky so Confirm/Skip/Discard stay on screen at 800px.
+  - R3: an empty queue says which queue it is, what it holds (served tab
+    description) and the served sort-fallback reason; tabs last seen
+    empty are dimmed with a 0. The long fallback chip truncates.
+  - R4: the applied-sort chip shows the served `/methods` label, not the
+    raw id; stale "COCO Blind Spots" copy renamed.
+  - R6/R7/R11: no blank class values, readable locate reasons and VLM
+    empty reasons, served label for a machine rejection reason, served
+    `/regions/statuses` label in Details, and embedded Details no longer
+    repeats the rows above it. The subject toggle's default explains
+    itself.
+  - R9: the region-text placeholder no longer looks like a reading.
+  - L1/L2/L5 (`/classes`): "Total (in cluster)" shows `cluster_size`;
+    every proposal term, flagged or not, is listed biggest-first with a
+    way to resolve it (Create stays limited to un-flagged terms);
+    Validated shows "incl. N test"; ID/Added hide below 1024px.
+
 - `/train` run results adopt OpenProcessor e9aac68. The overall eval figures
   are labelled by the served `eval.split`, with the last validation epoch
   shown separately from `eval.val_last`. The confusion matrix renders from

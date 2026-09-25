@@ -106,7 +106,7 @@ export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
     // New Class Proposals) falls back to this pinned sort.
     blurb:
       'Applied only to /review tabs that have no tuned default of their own (today: ' +
-      'All, New Class Proposals). Uncertainty, Model Disagreements, COCO Blind Spots ' +
+      'All, New Class Proposals). Uncertainty, Model Disagreements, Classifier Blind Spots ' +
       'and every region tab keep applying their own default sort regardless of this setting.',
     // Was irreversible (H-1) until the backend added a clear path; the
     // page's "Clear" button now covers this axis like any other.
