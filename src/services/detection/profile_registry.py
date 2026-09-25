@@ -40,6 +40,7 @@ profile is advertised and selectable by name.
 from __future__ import annotations
 
 import os
+import threading
 from typing import TYPE_CHECKING
 
 
@@ -51,6 +52,7 @@ REGION_DETECTION_ENV_PREFIX = 'OP_REGION_DETECTION_'
 _REGISTRY: dict[str, DetectionProfile] = {}
 _DEFAULT_NAME: str | None = None
 _ENV_RESOLVED = False
+_RESOLVE_LOCK = threading.Lock()
 
 
 def register_profile(profile: DetectionProfile, *, default: bool = False) -> None:
@@ -146,10 +148,16 @@ def ensure_env_region_profile() -> None:
     global _ENV_RESOLVED  # noqa: PLW0603
     if _ENV_RESOLVED:
         return
-    profile = region_profile_from_env()
-    _ENV_RESOLVED = True
-    if profile is not None:
-        register_profile(profile, default=True)
+    # Sync routes run in a thread pool: without the lock (and with the flag
+    # set before registration) a concurrent first lookup saw "resolved" but
+    # no profile yet and answered 409 no-profile on a configured deployment.
+    with _RESOLVE_LOCK:
+        if _ENV_RESOLVED:
+            return
+        profile = region_profile_from_env()
+        if profile is not None:
+            register_profile(profile, default=True)
+        _ENV_RESOLVED = True
 
 
 def get_profiles() -> dict[str, DetectionProfile]:

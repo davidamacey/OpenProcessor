@@ -168,6 +168,12 @@ async def lifespan(app: FastAPI):
 
     reject_retired_env()
 
+    # Resolve the region profile before serving: a bad profile file fails
+    # startup, and no request ever races its first-use resolution.
+    from src.services.detection.profile_registry import ensure_env_region_profile
+
+    ensure_env_region_profile()
+
     # Create shared ThreadPoolExecutor for CPU-bound tasks
     # (JPEG decode, resize, preprocessing)
     AppResources.shared_executor = ThreadPoolExecutor(
