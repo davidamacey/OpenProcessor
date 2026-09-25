@@ -198,6 +198,50 @@ def test_invalid_job_gets_a_terminal_failed_status(jobs_dir: Path) -> None:
 
 
 # =============================================================================
+# on_fit_epoch_end metric semantics
+# =============================================================================
+
+
+class _SpecStub:
+    """Just enough of ``JobSpec`` for ``_make_ultralytics_callbacks``:
+    ``on_fit_epoch_end`` itself never reads ``spec`` at all, but the shared
+    closure factory takes one positional argument."""
+
+    cancel_path = Path('/nonexistent/does-not-exist.cancel')
+
+
+class _FakeUltralyticsTrainer:
+    def __init__(self, epoch: int, map50: float, map50_95: float) -> None:
+        self.epoch = epoch  # 0-indexed, as Ultralytics reports it
+        self.metrics = {'metrics/mAP50(B)': map50, 'metrics/mAP50-95(B)': map50_95}
+
+
+def test_on_fit_epoch_end_tells_the_best_checkpoint_revalidation_apart_from_a_real_epoch() -> None:
+    """Ultralytics' final_eval() re-validates best.pt and fires
+    on_fit_epoch_end once more after training, WITHOUT advancing
+    trainer.epoch. Before the fix, this call silently overwrote
+    last_epoch_metric with the best checkpoint's own metrics (not the true
+    last epoch's) -- live evidence: last_metric mAP50-95 0.857 vs
+    results.csv's actual last-epoch row of 0.855. It must instead land in
+    a distinct, single coherent best_checkpoint_metric row."""
+    state = job_protocol.StatusState(job_id='x', state='running')
+    _, _, on_fit_epoch_end = trainer._make_ultralytics_callbacks(_SpecStub(), state, total_epochs=2)
+
+    # Epoch 1 (Ultralytics reports epoch=0).
+    on_fit_epoch_end(_FakeUltralyticsTrainer(epoch=0, map50=0.70, map50_95=0.40))
+    # Epoch 2, the true LAST training epoch (Ultralytics reports epoch=1).
+    on_fit_epoch_end(_FakeUltralyticsTrainer(epoch=1, map50=0.855, map50_95=0.80))
+    # final_eval()'s post-training re-validation of best.pt: same epoch=1,
+    # different (better) metrics because it validates the BEST checkpoint,
+    # not necessarily the last in-training epoch's weights.
+    on_fit_epoch_end(_FakeUltralyticsTrainer(epoch=1, map50=0.86, map50_95=0.857))
+
+    assert state.last_epoch_metric == {'epoch': 2, 'map50': 0.855, 'map50_95': 0.80}
+    assert state.best_checkpoint_metric == {'epoch': 2, 'map50': 0.86, 'map50_95': 0.857}
+    assert state.current_epoch == 2  # not clobbered by the revalidation call
+
+
+# =============================================================================
 # status.json: trainer writer -> API reader
 # =============================================================================
 
@@ -219,8 +263,8 @@ def test_trainer_status_payload_parses_in_the_api_reader(jobs_dir: Path, export_
     assert status.current_epoch == 2
     assert status.total_epochs == 3
     assert status.checkpoint_path == '/runs/x/weights/best.pt'
-    # The API back-fills best_metric from eval when the trainer omits it.
-    assert status.best_metric == {'map50': 0.71, 'map50_95': 0.42}
+    # The API back-fills best_checkpoint_metric from eval when the trainer omits it.
+    assert status.best_checkpoint_metric == {'map50': 0.71, 'map50_95': 0.42}
     assert status.heartbeat_at is not None
 
 

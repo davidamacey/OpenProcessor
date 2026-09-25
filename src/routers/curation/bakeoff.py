@@ -412,7 +412,7 @@ async def bakeoff_trained_models(limit: int = 100) -> dict[str, Any]:
                 'name': r.job_id,
                 'model_size': _infer_model_size(r.job_id, getattr(r, 'model_size', None)),
                 'checkpoint_path': r.checkpoint_path,
-                'map50': (r.best_metric or {}).get('map50'),
+                'map50': (r.best_checkpoint_metric or {}).get('map50'),
                 'finished_at': r.finished_at,
                 'campaign_id': r.campaign_id,
             }

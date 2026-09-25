@@ -726,6 +726,55 @@ index creation and is immune to clock skew; label edits after an export
 are deliberately not "stale" (exports are snapshots, and retraining on a
 past one is supported).
 
+### Training run status — `last_epoch_metric` / `best_checkpoint_metric`
+
+`GET /train/status`, `GET /train/status/{job_id}` and `GET /train/runs`
+(`TrainJobStatus`) serve two distinct per-run metric rows instead of the
+former `best_metric`/`last_metric` pair:
+
+- `last_epoch_metric`: `{"epoch": <int>, "map50": <float>, "map50_95": <float>}`
+  — the true LAST TRAINING epoch's metrics.
+- `best_checkpoint_metric`: same shape — the best checkpoint's
+  (`best.pt`) own re-validation metrics, as one coherent row (both
+  `map50` and `map50_95` from the same validation pass).
+
+Why two fields: Ultralytics fires its `on_fit_epoch_end` callback once
+more after training completes, re-validating `best.pt` — but without
+advancing its internal epoch counter, so that call is otherwise
+indistinguishable from a repeated epoch. The trainer
+(`docker/trainer/trainer.py::_make_ultralytics_callbacks`) detects the
+repeat and routes it to `best_checkpoint_metric` instead of clobbering
+`last_epoch_metric` with the wrong (best-checkpoint, not last-epoch)
+values — and `best_checkpoint_metric` is a single row rather than the
+former per-key running max, which could otherwise report `map50` from
+one epoch and `map50_95` from another. `best_checkpoint_metric` is
+back-filled from the run's `eval` block (the fresh test-split
+`.val()` pass, see below) when a status payload predates this field.
+
+`/bakeoff/trained_models`'s `map50` column and the promote gate
+(`src/routers/curation_train.py::_evaluate_promote_gate`) read from
+`eval.map50` (the fresh test-split re-validation, `state.eval` /
+`populate_eval_block`), not from either of these two fields — they are
+diagnostic epoch-level metrics, not the run's scored comparison metric.
+
+`GET /train/manifest/{job_id}`'s `results` block mirrors the same two
+field names (`last_epoch_metric`, `best_checkpoint_metric`) in place of
+the old `results.best_metric`.
+
+**`eval.head`.** YOLO26 exports/serves the NMS-free one-to-one head
+(`nms=False` at export, since Ultralytics forces `nms=False` on any
+`end2end` model). The trainer's own post-training test-split
+re-validation (`_finalize_run`, ~`docker/trainer/trainer.py:585`)
+explicitly forces that same head (`model.end2end = True`) before calling
+`.val(split='test', ...)` when the checkpoint is a genuine dual-head
+(one-to-one + one-to-many) YOLO26 build — `.val()` has no `end2end=`
+keyword; the only real toggle is the loaded model's own `.end2end`
+property (`ultralytics.nn.tasks.DetectionModel.end2end`, a setter
+delegating to `set_head_attr`). `state.eval.head` records `"end2end"`
+when this was applied, so a comparison result is explicit about which
+head it scored rather than silently depending on Ultralytics' own
+`.val()` default for the loaded checkpoint.
+
 ### Capability discovery — `GET /methods`
 
 `GET {prefix}/methods` (`src/routers/curation/methods.py`) is the

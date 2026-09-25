@@ -171,6 +171,21 @@ def _make_ultralytics_callbacks(
             raise CancelRequestedError(msg)
 
     def on_fit_epoch_end(trainer: Any) -> None:
+        """Capture per-epoch metrics -- and tell the true last training
+        epoch apart from Ultralytics' post-training re-validation of
+        best.pt.
+
+        Ultralytics' ``BaseTrainer.final_eval()`` re-validates the best
+        checkpoint after training completes and fires this same callback
+        one more time -- but does not advance ``trainer.epoch``. So a
+        repeated epoch number (same as the previous call) is the signal
+        that this call is the best checkpoint's own metrics, not a new
+        training epoch; only that call updates ``best_checkpoint_metric``.
+        Every other call is a real epoch and updates ``last_epoch_metric``.
+        This keeps both as one coherent row (map50 + map50_95 from the SAME
+        validation pass) instead of a per-key running max that can mix
+        metrics from different epochs.
+        """
         try:
             epoch = int(getattr(trainer, 'epoch', 0)) + 1  # Ultralytics is 0-indexed
             t0 = epoch_start_at.pop('t0', None)
@@ -178,22 +193,23 @@ def _make_ultralytics_callbacks(
             metrics = getattr(trainer, 'metrics', None) or {}
             map50 = metrics.get('metrics/mAP50(B)') or metrics.get('metrics/mAP_0.5')
             map5095 = metrics.get('metrics/mAP50-95(B)') or metrics.get('metrics/mAP_0.5:0.95')
-            last: dict[str, float] = {}
+            row: dict[str, Any] = {'epoch': epoch}
             if map50 is not None:
-                last['map50'] = float(map50)
+                row['map50'] = float(map50)
             if map5095 is not None:
-                last['map50_95'] = float(map5095)
-            best = state.best_metric or {}
-            new_best = {
-                **best,
-                **{k: v for k, v in last.items() if v > best.get(k, float('-inf'))},
-            }
+                row['map50_95'] = float(map5095)
             with state.lock:
-                state.current_epoch = epoch
-                state.total_epochs = total_epochs
-                state.epoch_time_s = epoch_dt
-                state.last_metric = last or None
-                state.best_metric = new_best or None
+                is_best_checkpoint_revalidation = (
+                    state.last_epoch_metric is not None
+                    and state.last_epoch_metric.get('epoch') == epoch
+                )
+                if is_best_checkpoint_revalidation:
+                    state.best_checkpoint_metric = row
+                else:
+                    state.current_epoch = epoch
+                    state.total_epochs = total_epochs
+                    state.epoch_time_s = epoch_dt
+                    state.last_epoch_metric = row
         except Exception as exc:  # metric capture must not kill the epoch
             logger.warning('on_fit_epoch_end metric capture failed', error=str(exc))
 

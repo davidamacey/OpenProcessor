@@ -289,8 +289,16 @@ class TrainJobStatus(BaseModel):
     current_epoch: int | None = None
     total_epochs: int | None = None
     epoch_time_s: float | None = None
-    best_metric: dict[str, float] | None = None
-    last_metric: dict[str, float] | None = None
+    # The true last TRAINING epoch's metrics (``{'epoch': N, 'map50': ...,
+    # 'map50_95': ...}``) -- distinct from best_checkpoint_metric because
+    # Ultralytics re-validates best.pt once more after training and that
+    # call does not advance the epoch counter (see docker/trainer/
+    # trainer.py's on_fit_epoch_end for how the two are told apart).
+    last_epoch_metric: dict[str, Any] | None = None
+    # The best checkpoint's (best.pt) own re-validation metrics, as one
+    # coherent row -- not a per-key running max across every epoch, which
+    # could mix map50 from one epoch with map50_95 from another.
+    best_checkpoint_metric: dict[str, Any] | None = None
     mlflow_run_id: str | None = None
     mlflow_run_url: str | None = None
     checkpoint_path: str | None = None
@@ -304,23 +312,24 @@ class TrainJobStatus(BaseModel):
     heartbeat_at: str | None = None
 
     @model_validator(mode='after')
-    def _backfill_best_metric_from_eval(self) -> TrainJobStatus:
-        """Back-fill ``best_metric`` from the final ``eval`` block.
+    def _backfill_best_checkpoint_metric_from_eval(self) -> TrainJobStatus:
+        """Back-fill ``best_checkpoint_metric`` from the final ``eval`` block.
 
-        Recent trainer builds write the run's mAP into ``eval`` (map50 /
-        map50_95) but no longer populate ``best_metric``/``last_metric``,
-        so the runs list and any bake-off model picker showed a blank mAP.
-        When ``best_metric`` is absent we derive it from ``eval`` so every
-        consumer shows it.
+        Some trainer builds write the run's mAP into ``eval`` (map50 /
+        map50_95) but leave ``best_checkpoint_metric`` unset (e.g. a run
+        whose status.json predates this field), so the runs list and any
+        bake-off model picker would show a blank mAP. When
+        ``best_checkpoint_metric`` is absent we derive it from ``eval`` so
+        every consumer shows it.
         """
-        if not self.best_metric and isinstance(self.eval, dict):
+        if not self.best_checkpoint_metric and isinstance(self.eval, dict):
             derived = {
                 k: float(self.eval[k])
                 for k in ('map50', 'map50_95')
                 if isinstance(self.eval.get(k), (int, float))
             }
             if derived:
-                self.best_metric = derived
+                self.best_checkpoint_metric = derived
         return self
 
 

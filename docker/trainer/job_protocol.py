@@ -155,8 +155,18 @@ class StatusState:
     current_epoch: int = 0
     total_epochs: int = 0
     epoch_time_s: float | None = None
-    best_metric: dict[str, float] | None = None
-    last_metric: dict[str, float] | None = None
+    # The true last TRAINING epoch's metrics (with its epoch number) --
+    # distinct from best_checkpoint_metric because Ultralytics'
+    # final_eval() fires the same on_fit_epoch_end callback once more
+    # after training, re-validating best.pt, and that call does not
+    # advance trainer.epoch -- see docker/trainer/trainer.py's
+    # on_fit_epoch_end for how the two are told apart.
+    last_epoch_metric: dict[str, Any] | None = None
+    # The best checkpoint's (best.pt) own re-validation metrics, as one
+    # coherent row (both map50 and map50_95 from the SAME validation
+    # pass) -- not a per-key running max across every epoch, which can
+    # mix map50 from one epoch with map50_95 from another.
+    best_checkpoint_metric: dict[str, Any] | None = None
     mlflow_run_id: str | None = None
     mlflow_run_url: str | None = None
     checkpoint_path: str | None = None
@@ -368,8 +378,8 @@ def build_status_payload(s: StatusState) -> dict[str, Any]:
             'current_epoch': s.current_epoch,
             'total_epochs': s.total_epochs,
             'epoch_time_s': s.epoch_time_s,
-            'best_metric': s.best_metric,
-            'last_metric': s.last_metric,
+            'last_epoch_metric': s.last_epoch_metric,
+            'best_checkpoint_metric': s.best_checkpoint_metric,
             'mlflow_run_id': s.mlflow_run_id,
             'mlflow_run_url': s.mlflow_run_url,
             'checkpoint_path': s.checkpoint_path,
@@ -643,7 +653,8 @@ def write_manifest(
                 'final_state': state.state,
                 'eval': state.eval,
                 'compare': state.compare,
-                'best_metric': state.best_metric,
+                'last_epoch_metric': state.last_epoch_metric,
+                'best_checkpoint_metric': state.best_checkpoint_metric,
                 'checkpoint_path': state.checkpoint_path,
                 'checkpoint_sha256': checkpoint_sha,
                 'mlflow_run_id': state.mlflow_run_id,

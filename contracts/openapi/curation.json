@@ -4100,19 +4100,17 @@
         "additionalProperties": true,
         "description": "``status.json`` shape.\n\nEvery field except ``job_id`` and ``state`` is nullable so the trainer\ncan write partial updates while the run is still spinning up.",
         "properties": {
-          "best_metric": {
+          "best_checkpoint_metric": {
             "anyOf": [
               {
-                "additionalProperties": {
-                  "type": "number"
-                },
+                "additionalProperties": true,
                 "type": "object"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Best Metric"
+            "title": "Best Checkpoint Metric"
           },
           "campaign_id": {
             "anyOf": [
@@ -4227,19 +4225,17 @@
             "title": "Job Id",
             "type": "string"
           },
-          "last_metric": {
+          "last_epoch_metric": {
             "anyOf": [
               {
-                "additionalProperties": {
-                  "type": "number"
-                },
+                "additionalProperties": true,
                 "type": "object"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Last Metric"
+            "title": "Last Epoch Metric"
           },
           "mlflow_run_id": {
             "anyOf": [
