@@ -273,3 +273,48 @@ def test_cluster_count_query_excludes_noise_ids() -> None:
     agg = _build_dataset_query_body(get_region_fields())['aggs']['distinct_clusters']
     assert agg['filter'] == {'range': {'cluster_id': {'gte': 0}}}
     assert agg['aggs']['n']['cardinality']['field'] == 'cluster_id'
+
+
+# =============================================================================
+# V-1 -- in_progress.region_stall_reason
+# =============================================================================
+
+
+def test_stats_dataset_region_stall_reason_null_by_default(app_client: TestClient) -> None:
+    """No active region profile (the fixture's neutral default) -- the
+    dashboard must never show a false stall."""
+    body = app_client.get('/curation/stats/dataset').json()
+    assert body['in_progress']['region_stall_reason'] is None
+
+
+def test_stats_dataset_surfaces_region_stall_reason(
+    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.config import DetectionProfile
+    from src.routers.curation import _raw_opensearch_dep
+    from src.services.triton_control import TritonControlService
+
+    monkeypatch.setenv('OP_REGION_DRAIN_STATE_DIR', str(tmp_path / 'region_drain'))
+    monkeypatch.setattr(
+        'src.routers.curation.stats.region_profile_or_neutral',
+        lambda: DetectionProfile(name='active', detector_model='det_v1', segmenter_name=''),
+    )
+
+    async def _empty_index(self: TritonControlService) -> list[dict[str, str]]:
+        return []
+
+    monkeypatch.setattr(TritonControlService, 'get_repository_index', _empty_index)
+
+    pending_response = _fake_dataset_search_response()
+    pending_response['aggregations']['region_status'] = {
+        'buckets': [{'key': 'pending_detection', 'doc_count': 42}]
+    }
+    fake_os = AsyncMock()
+    fake_os.search = AsyncMock(return_value=pending_response)
+    app_client.app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
+
+    body = app_client.get('/curation/stats/dataset').json()
+    reason = body['in_progress']['region_stall_reason']
+    assert reason is not None
+    assert 'det_v1' in reason
+    assert '42' in reason

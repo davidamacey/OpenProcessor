@@ -3512,9 +3512,27 @@
             "title": "Pending Verification",
             "type": "integer"
           },
+          "region_dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/RegionDependencyStatusResponse"
+            },
+            "title": "Region Dependencies",
+            "type": "array"
+          },
           "stable_for_s": {
             "title": "Stable For S",
             "type": "number"
+          },
+          "stall_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stall Reason"
           },
           "total_unfinished": {
             "title": "Total Unfinished",
@@ -6000,6 +6018,46 @@
           "run_id"
         ],
         "title": "QuantizeRequest",
+        "type": "object"
+      },
+      "RegionDependencyStatusResponse": {
+        "description": "One Triton model the active region profile depends on (V-1).",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "unavailable_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Since"
+          }
+        },
+        "required": [
+          "role",
+          "model",
+          "ready",
+          "detail"
+        ],
+        "title": "RegionDependencyStatusResponse",
         "type": "object"
       },
       "RegionProfileSummary": {
@@ -12169,7 +12227,7 @@
     },
     "/curation/ingest/region_drain": {
       "get": {
-        "description": "Region-detection worklog: how many items are still waiting for the\ndetection worker.\n\nUsed by an ingest walker to decide when the asynchronous\ndetect-then-verify chain has caught up after a folder finishes, before\ntriggering ``/curation/pipeline/auto_label``. The walker polls this\nendpoint every ``region_drain.poll_interval_s`` (``GET /ingest/config``)\nand proceeds once ``drained`` is true -- computed server-side\nnow, not invented client-side from ``total_unfinished == 0``.\n\nReturns:\n* ``pending_detection``    — items the detection worker hasn't reached\n                              yet (region status == 'pending_detection').\n* ``pending_verification`` — items where the detector found a\n                              candidate and the verify step is queued.\n* ``total_unfinished``     — sum of the two; what a legacy walker polled.\n* ``drained``              — true once ``total_unfinished`` has read 0\n                              for ``region_drain.stable_polls`` consecutive\n                              polls of this endpoint.\n* ``stable_for_s``         — seconds since the last non-zero reading.\n* ``observed_at``          — this poll's timestamp.\n\nRe-ingested data can never carry the retired ``'pending'`` /\n``'pending_verify'`` short names, so there is no legacy rollup.",
+        "description": "Region-detection worklog: how many items are still waiting for the\ndetection worker.\n\nUsed by an ingest walker to decide when the asynchronous\ndetect-then-verify chain has caught up after a folder finishes, before\ntriggering ``/curation/pipeline/auto_label``. The walker polls this\nendpoint every ``region_drain.poll_interval_s`` (``GET /ingest/config``)\nand proceeds once ``drained`` is true -- computed server-side\nnow, not invented client-side from ``total_unfinished == 0``.\n\nReturns:\n* ``pending_detection``    — items the detection worker hasn't reached\n                              yet (region status == 'pending_detection').\n* ``pending_verification`` — items where the detector found a\n                              candidate and the verify step is queued.\n* ``total_unfinished``     — sum of the two; what a legacy walker polled.\n* ``drained``              — true once ``total_unfinished`` has read 0\n                              for ``region_drain.stable_polls`` consecutive\n                              polls of this endpoint.\n* ``stable_for_s``         — seconds since the last non-zero reading.\n* ``observed_at``          — this poll's timestamp.\n* ``region_dependencies``  — (V-1) the active region profile's Triton\n                              model(s) (detector/segmenter) and\n                              whether each is READY right now; empty\n                              when no region profile is configured.\n* ``stall_reason``         — a human-readable line when items are\n                              pending AND a dependency is down; null\n                              otherwise (nothing pending, or the\n                              worker just hasn't caught up yet).\n\nRe-ingested data can never carry the retired ``'pending'`` /\n``'pending_verify'`` short names, so there is no legacy rollup.",
         "operationId": "ingest_region_drain_curation_ingest_region_drain_get",
         "responses": {
           "200": {

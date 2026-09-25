@@ -92,3 +92,69 @@ def test_region_drain_reports_drained_after_stable_zero_polls() -> None:
         last = client.get('/curation/ingest/region_drain').json()
     assert last['total_unfinished'] == 0
     assert last['drained'] is True
+
+
+# =============================================================================
+# V-1 -- region_dependencies / stall_reason on the drain response
+# =============================================================================
+
+
+def test_region_drain_reports_no_dependencies_with_no_active_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.config import DetectionProfile
+
+    monkeypatch.setattr(
+        'src.services.detection.profile_registry.region_profile_or_neutral',
+        lambda: DetectionProfile(name='neutral', detector_model=''),
+    )
+    fake = AsyncMock()
+    fake.search = AsyncMock(
+        return_value={
+            'aggregations': {
+                'by_status': {'buckets': [{'key': 'pending_detection', 'doc_count': 3}]}
+            }
+        }
+    )
+    r = _client(fake).get('/curation/ingest/region_drain')
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body['region_dependencies'] == []
+    assert body['stall_reason'] is None
+
+
+def test_region_drain_surfaces_stall_reason_when_a_dependency_is_down(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.config import DetectionProfile
+    from src.services.triton_control import TritonControlService
+
+    monkeypatch.setattr(
+        'src.services.detection.profile_registry.region_profile_or_neutral',
+        lambda: DetectionProfile(name='active', detector_model='det_v1', segmenter_name=''),
+    )
+
+    async def _empty_index(self: TritonControlService) -> list[dict[str, str]]:
+        return []
+
+    monkeypatch.setattr(TritonControlService, 'get_repository_index', _empty_index)
+
+    fake = AsyncMock()
+    fake.search = AsyncMock(
+        return_value={
+            'aggregations': {
+                'by_status': {'buckets': [{'key': 'pending_detection', 'doc_count': 42}]}
+            }
+        }
+    )
+    r = _client(fake).get('/curation/ingest/region_drain')
+    assert r.status_code == 200, r.text
+    body = r.json()
+    [dep] = body['region_dependencies']
+    assert dep['role'] == 'detector'
+    assert dep['model'] == 'det_v1'
+    assert dep['ready'] is False
+    assert dep['unavailable_since'] is not None
+    assert body['stall_reason'] is not None
+    assert '42' in body['stall_reason']
+    assert 'det_v1' in body['stall_reason']

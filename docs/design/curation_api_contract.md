@@ -2046,6 +2046,45 @@ multi-worker deployment polling from different processes tracks
 independent streaks (each worker's own view of "stable", never a
 correctness issue for the raw counts).
 
+**V-1** — the response also carries `region_dependencies` and
+`stall_reason` (`src/services/curation/region_dependency_health.py`),
+so a queue that isn't shrinking has a visible cause instead of reading
+as a flat, unexplained pending count:
+
+```json
+{"pending_detection": 3516, "pending_verification": 0, "total_unfinished": 3516,
+ "drained": false, "stable_for_s": 0.0, "observed_at": "2026-09-25T14:05:00+00:00",
+ "region_dependencies": [
+   {"role": "detector", "model": "region_detector_v1", "ready": true, "unavailable_since": null, "detail": "READY"},
+   {"role": "segmenter", "model": "sam3", "ready": false, "unavailable_since": "2026-09-25T14:02:11+00:00", "detail": "not in Triton repository index (never loaded)"}
+ ],
+ "stall_reason": "3516 item(s) awaiting region detection; segmenter (sam3) unavailable since 2026-09-25T14:02:11+00:00"}
+```
+
+`region_dependencies` is checked directly against Triton's own
+repository index from the API process (which can always reach Triton
+over the network, unlike probing the detection worker container, whose
+heartbeat is written to a container-local path the API can't see) —
+empty when no region profile is configured at all (the neutral/off
+case, not a stall). `stall_reason` is null whenever nothing is pending
+or every dependency is READY (the worker just hasn't caught up to a
+backlog yet, which is not a stall). `GET /stats/dataset`'s
+`in_progress.region_stall_reason` mirrors the same computation for the
+dashboard's "In-flight pipeline" panel.
+
+**Item behavior when a dependency is down (design decision, not a code
+change):** items simply stay in `pending_detection` — by design, the
+detection worker never writes a terminal region status on an infra
+failure (see `scripts/curation/worker/cascade.py`'s `_process_crop`
+docstring), so they're already retryable the moment the dependency
+recovers, with no dequeue/requeue logic needed. A new `region_unavailable`
+terminal-ish status was considered and rejected for this pass: it would
+touch the worker's state machine (`RegionStatus`, `region_state.py`'s
+writable-status set, the cascade's retry path) with no way to exercise
+that change against a live worker in this pass (no GPU/compose
+available) — the observability fix above (surface *why* it's stalled)
+covers the operator-facing gap without that risk.
+
 **BA-4** — `POST /ingest/upload` gained an optional `run_id` form
 field, recorded as `ingest_run_id` on every image doc from that call.
 `GET /ingest/status?run_id=` scopes `total`/`by_source`/`by_day` to it.

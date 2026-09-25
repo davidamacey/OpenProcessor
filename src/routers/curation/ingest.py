@@ -41,6 +41,7 @@ from src.routers.curation._common import (
     IngestStatusResponse,
     IngestUploadConfig,
     OpenSearchDep,
+    RegionDependencyStatusResponse,
     RegistryDep,
     _ensure_indexes,
     _PathLookupRequest,
@@ -475,11 +476,25 @@ async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainRes
                                   polls of this endpoint.
     * ``stable_for_s``         — seconds since the last non-zero reading.
     * ``observed_at``          — this poll's timestamp.
+    * ``region_dependencies``  — (V-1) the active region profile's Triton
+                                  model(s) (detector/segmenter) and
+                                  whether each is READY right now; empty
+                                  when no region profile is configured.
+    * ``stall_reason``         — a human-readable line when items are
+                                  pending AND a dependency is down; null
+                                  otherwise (nothing pending, or the
+                                  worker just hasn't caught up yet).
 
     Re-ingested data can never carry the retired ``'pending'`` /
     ``'pending_verify'`` short names, so there is no legacy rollup.
     """
+    from src.services.curation.region_dependency_health import (
+        check_region_dependencies,
+        stall_reason as _stall_reason,
+    )
     from src.services.curation.region_drain import observe_drain
+    from src.services.detection.profile_registry import region_profile_or_neutral
+    from src.services.triton_control import TritonControlService
 
     await _ensure_indexes(opensearch)
     fields = get_region_fields()
@@ -504,6 +519,22 @@ async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainRes
     pending_verification = raw.get(RegionStatus.PENDING_VERIFICATION, 0)
     total_unfinished = pending_detection + pending_verification
     verdict = observe_drain(total_unfinished)
+
+    control = TritonControlService()
+    dependencies = await check_region_dependencies(
+        control.get_repository_index, region_profile_or_neutral()
+    )
+    dependency_responses = [
+        RegionDependencyStatusResponse(
+            role=d.role,
+            model=d.model,
+            ready=d.ready,
+            unavailable_since=d.unavailable_since,
+            detail=d.detail,
+        )
+        for d in dependencies
+    ]
+
     return IngestRegionDrainResponse(
         pending_detection=pending_detection,
         pending_verification=pending_verification,
@@ -511,6 +542,8 @@ async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainRes
         drained=verdict.drained,
         stable_for_s=verdict.stable_for_s,
         observed_at=verdict.observed_at,
+        region_dependencies=dependency_responses,
+        stall_reason=_stall_reason(dependencies, pending_detection=pending_detection),
     )
 
 

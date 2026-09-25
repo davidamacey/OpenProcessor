@@ -423,6 +423,16 @@ class IngestConfigResponse(BaseModel):
     region_drain: IngestRegionDrainConfig
 
 
+class RegionDependencyStatusResponse(BaseModel):
+    """One Triton model the active region profile depends on (V-1)."""
+
+    role: str
+    model: str
+    ready: bool
+    unavailable_since: str | None = None
+    detail: str
+
+
 class IngestRegionDrainResponse(BaseModel):
     pending_detection: int
     pending_verification: int
@@ -435,6 +445,17 @@ class IngestRegionDrainResponse(BaseModel):
     drained: bool
     stable_for_s: float
     observed_at: str
+    # V-1: which of the active region profile's Triton models (detector /
+    # segmenter) aren't READY right now, and since when. Empty when no
+    # region profile is configured at all (the neutral/off case) -- not
+    # populated as a false "stall".
+    region_dependencies: list[RegionDependencyStatusResponse] = Field(default_factory=list)
+    # A single human-readable line for the dashboard, e.g. "3516 item(s)
+    # awaiting region detection; segmenter (sam3) unavailable since
+    # 2026-09-25T14:02:11+00:00". None when there's nothing pending, or
+    # every dependency is ready (queue is just working through a backlog,
+    # not stalled).
+    stall_reason: str | None = None
 
 
 class IngestStatusResponse(BaseModel):

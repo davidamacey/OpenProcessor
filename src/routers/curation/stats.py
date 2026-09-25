@@ -546,6 +546,21 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
     pending_verification = region_status_buckets.get(RegionStatus.PENDING_VERIFICATION, 0)
     region_drain_total_unfinished = pending_detection + pending_verification
 
+    # V-1: same stall-reason computation GET /ingest/region_drain serves,
+    # mirrored here so the dashboard's "In-flight pipeline" panel (which
+    # reads this endpoint, not region_drain) can render *why* the queue
+    # isn't shrinking instead of a bare "0 (stalled)".
+    from src.services.curation.region_dependency_health import (
+        check_region_dependencies,
+        stall_reason as _region_stall_reason,
+    )
+    from src.services.triton_control import TritonControlService
+
+    region_deps = await check_region_dependencies(
+        TritonControlService().get_repository_index, profile
+    )
+    region_stall_reason = _region_stall_reason(region_deps, pending_detection=pending_detection)
+
     no_label_source = int((aggs.get('no_label_source') or {}).get('doc_count', 0))
 
     cluster_meta = _read_auto_label_clusters_meta(
@@ -627,6 +642,10 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
         },
         'in_progress': {
             'region_drain_total_unfinished': region_drain_total_unfinished,
+            # V-1: null when nothing is pending or every region-profile
+            # Triton dependency is READY; otherwise a human-readable line
+            # naming which dependency is down and since when.
+            'region_stall_reason': region_stall_reason,
         },
         'clusters': cluster_meta,
     }
