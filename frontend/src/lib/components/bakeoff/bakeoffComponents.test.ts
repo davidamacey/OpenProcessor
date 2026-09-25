@@ -93,6 +93,33 @@ describe('ComparisonView', () => {
     );
   });
 
+  it("V-5: labels the metrics with the result's own served protocol thresholds", () => {
+    const t = render(ComparisonView, {
+      comparison: {
+        ...COMPARISON,
+        thresholds: { conf_floor: 0.002, nms_iou: 0.6, op_conf: 0.3, op_iou: 0.5 },
+      },
+      legacy: false,
+      error: null,
+      loading: false,
+    });
+    expect(
+      t.querySelector('[data-testid="comparison-protocol"]')?.textContent?.trim(),
+    ).toBe(
+      'bake-off protocol: mAP at conf ≥ 0.002, NMS IoU 0.6; precision/recall/F1 at conf 0.3 · IoU 0.5',
+    );
+  });
+
+  it('V-5: no protocol line when the result serves no thresholds', () => {
+    const t = render(ComparisonView, {
+      comparison: { ...COMPARISON, thresholds: {} },
+      legacy: false,
+      error: null,
+      loading: false,
+    });
+    expect(t.querySelector('[data-testid="comparison-protocol"]')).toBeNull();
+  });
+
   it('renders a null rank as "—" and flags a real train/test overlap', () => {
     const t = render(ComparisonView, {
       comparison: COMPARISON,
@@ -174,7 +201,7 @@ describe('ModelPicker', () => {
       trained: [trainedModel({ trainer_map50: null, trainer_map50_split: null })],
       facts: {},
     });
-    expect(t.textContent).toContain('trainer mAP50 —');
+    expect(t.textContent).toContain('trainer eval (Ultralytics val) mAP50 —');
   });
 });
 

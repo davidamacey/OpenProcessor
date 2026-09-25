@@ -15,6 +15,7 @@
     LEGACY_RESULTS_MESSAGE,
     metricLabel,
     PER_CLASS_METRICS,
+    protocolText,
     type PerClassMetric,
   } from '$lib/bakeoff/view';
 
@@ -65,6 +66,15 @@
         : "each model's own classes (not comparable)"}
       {#if c.profile}· profile <span class="font-mono">{c.profile}</span>{/if}
     </div>
+    {#if protocolText(c.thresholds)}
+      <p
+        class="mb-2 text-xs text-zinc-500"
+        data-testid="comparison-protocol"
+        title="The trainer's own mAP (Ultralytics val defaults) uses a different protocol, so the two numbers differ on the same split."
+      >
+        {protocolText(c.thresholds)}
+      </p>
+    {/if}
 
     {#if c.warnings.length}
       <ul

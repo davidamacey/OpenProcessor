@@ -23,6 +23,7 @@
     isTerminalTrainState,
     metricEpochLabel,
   } from '$lib/trainResults';
+  import { TRAINER_PROTOCOL_LABEL } from '$lib/bakeoff/view';
   import { formatCount } from '$lib/formatCount';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
@@ -209,6 +210,12 @@
         {#if evalData}
           <p class="mb-2 text-zinc-400">
             overall: <span class="text-zinc-200">{evalOverallLabel(evalData)}</span>
+            <span
+              class="ml-1 text-[10px] text-zinc-500"
+              data-testid="eval-protocol"
+              title="Ultralytics' own val protocol and defaults. A bake-off scores the same split with its profile's served thresholds, so its mAP differs."
+              >({TRAINER_PROTOCOL_LABEL})</span
+            >
             <span class="ml-3 font-mono text-zinc-100"
               >mAP50 {formatMetric(evalData.map50)}</span
             >

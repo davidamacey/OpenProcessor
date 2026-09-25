@@ -4,15 +4,20 @@
    * Promote-to-Triton modal. Phase 4 wiring; the labeler-side knob set
    * is intentionally minimal — Triton model name + max_batch_size +
    * fp16 + overwrite. The backend handles ONNX → JIT TensorRT compile.
+   *
+   * F-64: a promote-gate 422 renders the served message and every served
+   * failure, and a "force" checkbox appears only when the server says
+   * `force_allowed`.
    */
   import { promoteTrainJob } from '$lib/api';
+  import { promoteGateDetail, type PromoteGateDetail } from '$lib/promote';
   import { toastStore } from '$stores/toast.svelte';
   import type { PromoteRequest, PromoteResponse } from '$lib/types_train';
 
   interface Props {
     open: boolean;
     jobId: string | null;
-    /** Server suggests `<run_name>_v7`; we default to that. */
+    /** Default Triton model name (`defaultTritonName(job_id)`). */
     defaultName?: string;
     onclose: () => void;
     onpromoted?: (res: PromoteResponse) => void;
@@ -26,6 +31,8 @@
   let overwrite = $state<boolean>(false);
   let busy = $state<boolean>(false);
   let error = $state<string | null>(null);
+  let gate = $state<PromoteGateDetail | null>(null);
+  let force = $state<boolean>(false);
 
   // Re-seed the form when the parent opens us with a new defaultName.
   $effect(() => {
@@ -35,6 +42,8 @@
     fp16 = true;
     overwrite = false;
     error = null;
+    gate = null;
+    force = false;
   });
 
   async function submit(): Promise<void> {
@@ -48,12 +57,21 @@
         fp16,
         overwrite,
       };
+      if (force && gate?.force_allowed) body.force = true;
       const res = await promoteTrainJob(jobId, body);
       toastStore.success(`Promoted ${res.triton_name} → Triton`);
       onpromoted?.(res);
       onclose();
     } catch (e) {
-      error = (e as Error).message;
+      const served = promoteGateDetail(e);
+      if (served) {
+        gate = served;
+        error = null;
+        if (!served.force_allowed) force = false;
+      } else {
+        gate = null;
+        error = (e as Error).message;
+      }
     } finally {
       busy = false;
     }
@@ -97,7 +115,7 @@
             type="text"
             bind:value={tritonName}
             required
-            placeholder="yolo26m_v7_2026-05-09"
+            placeholder="model_name"
             pattern="[A-Za-z0-9_-]+"
             class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 font-mono text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
           />
@@ -137,6 +155,41 @@
           </div>
         </div>
 
+        {#if gate}
+          <div
+            class="mb-3 rounded-md border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-200"
+            data-testid="promote-gate"
+          >
+            <p class="font-medium">{gate.message}</p>
+            {#if gate.failures.length > 0}
+              <ul
+                class="mt-1 list-disc space-y-0.5 pl-4"
+                data-testid="promote-gate-failures"
+              >
+                {#each gate.failures as f, i (f.code + (f.class_name ?? '') + i)}
+                  <li>
+                    {#if f.class_name}<span class="font-mono">{f.class_name}</span>:
+                    {/if}{f.message}
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+            {#if gate.override}
+              <p class="mt-1 text-red-200/80">{gate.override}</p>
+            {/if}
+          </div>
+          {#if gate.force_allowed}
+            <label class="mb-3 flex items-center gap-2 text-xs text-amber-200">
+              <input
+                type="checkbox"
+                bind:checked={force}
+                data-testid="promote-force"
+                class="h-4 w-4 cursor-pointer accent-amber-500"
+              />
+              Promote anyway (bypass the gate)
+            </label>
+          {/if}
+        {/if}
         {#if error}
           <p class="mb-3 text-xs text-red-300">{error}</p>
         {/if}
@@ -150,7 +203,11 @@
             class="btn btn-primary"
             disabled={busy || !tritonName.trim()}
           >
-            {busy ? 'Promoting…' : 'Promote'}
+            {busy
+              ? 'Promoting…'
+              : force && gate?.force_allowed
+                ? 'Force promote'
+                : 'Promote'}
           </button>
         </div>
       </form>

@@ -7,6 +7,7 @@
    */
   import type { RegistryClass, TestHoldoutStats } from '$lib/types';
   import type { ClassSubsetPreset } from '$lib/types_train';
+  import { excludeLackingData, selectedLackingData } from '$lib/trainClassSelection';
 
   interface Props {
     classes: RegistryClass[];
@@ -38,6 +39,13 @@
   }: Props = $props();
 
   let expanded = $state<boolean>(false);
+
+  // V-4: selected classes the server reports as short of data (served
+  // `trainable_gap` > 0) — they block preflight. One click drops them.
+  const lackingSelected = $derived(selectedLackingData(selected, classes));
+  function excludeLacking(): void {
+    setSelected(excludeLackingData(selected, classes));
+  }
   let query = $state<string>('');
 
   // null/empty selection means "every non-deprecated class". Show that
@@ -170,6 +178,27 @@
     <span class="grow text-xs text-zinc-400">{summary}</span>
   </button>
 
+  {#if lackingSelected.length > 0}
+    <div
+      class="flex flex-wrap items-center gap-2 border-t border-zinc-800 px-3 py-2 text-xs text-amber-200"
+      data-testid="lacking-data-row"
+    >
+      <span>
+        {lackingSelected.length} selected class{lackingSelected.length === 1 ? '' : 'es'}
+        {lackingSelected.length === 1 ? 'has' : 'have'} too few trainable crops:
+        {lackingSelected.map((c) => c.name).join(', ')}
+      </span>
+      <button
+        type="button"
+        class="btn btn-sm"
+        data-testid="exclude-lacking"
+        onclick={excludeLacking}
+      >
+        Exclude classes without enough data
+      </button>
+    </div>
+  {/if}
+
   {#if expanded}
     <div class="border-t border-zinc-800 p-3">
       <!-- Top row: search + select / clear -->
@@ -222,6 +251,13 @@
                   <span class="grow truncate text-zinc-200">{cls.name}</span>
                   {#if cls.group}
                     <span class="font-mono text-[10px] text-zinc-500">{cls.group}</span>
+                  {/if}
+                  {#if (cls.trainable_gap ?? 0) > 0}
+                    <span
+                      class="font-mono text-[10px] text-amber-300"
+                      title="Short of the per-class minimum by {cls.trainable_gap} trainable crops (served trainable_gap)"
+                      >needs {cls.trainable_gap}</span
+                    >
                   {/if}
                   <span class="font-mono text-xs text-zinc-400">
                     {(cls.validated_count ?? 0).toLocaleString()}

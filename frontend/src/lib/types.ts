@@ -59,7 +59,9 @@ export interface RegistryClass {
    *  no longer include region counts as of #36 (X2), so this is the
    *  server's own trainable count for the class, not client math. */
   trainable?: number;
-  /** `aug_target - trainable`, served directly. */
+  /** On `GET {API_PREFIX}/classes`: the shortfall of `trainable` against
+   *  the served per-class hard minimum (`thresholds.block_below`), floored
+   *  at 0 — served directly. > 0 means the class blocks preflight. */
   trainable_gap?: number;
 }
 

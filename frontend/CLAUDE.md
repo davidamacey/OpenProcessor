@@ -516,7 +516,18 @@ n=NNN"` line it previously lacked entirely (label_purity/
 
 ## Training UI — `/train` (Phase 2 of the training pipeline)
 
-Full cockpit for the training pipeline. The form auto-runs `{API_PREFIX}/train/preflight`
+Full cockpit for the training pipeline. "Classes to train" defaults to the
+item classes whose served `trainable_gap` (`GET {API_PREFIX}/classes`: the
+shortfall against the per-class hard minimum) is 0, and offers "Exclude
+classes without enough data" while any selected class is short
+(`$lib/trainClassSelection.ts`, V-4) — no client threshold. The form stays
+mounted (disabled) during a run so its choices survive it, past runs render
+above the cohorts section, and the live log strips terminal escapes
+(`cleanLogLine`, `$lib/logText.ts`) (F-63). The overall eval figure is
+labelled "trainer eval (Ultralytics val)"; `/bakeoff` results label theirs
+with the result's own served `thresholds` (`protocolText`,
+`$lib/bakeoff/view.ts`), since the two protocols differ (V-5).
+The form auto-runs `{API_PREFIX}/train/preflight`
 on a 350ms debounce and renders the report inline. Status polls every 5s,
 log every 2s, both stop on terminal state. Multi-size campaigns get a
 size-chip swap in the submit row (auto-promote-best + `stop_when` threshold).
@@ -533,8 +544,13 @@ renders in a collapsible JSON block alongside it.
 Past-runs table actions:
 
 - **Promote ↑** — opens `PromoteModal` (Triton model name, max_batch_size,
-  fp16, overwrite, force-bypass-gate). 422 with the gate report renders
-  inline; `force=true` bypasses for known-good experimental runs.
+  fp16, overwrite). The name defaults to the run's own Triton-safe job id
+  (`defaultTritonName`, `$lib/promote.ts`) — no version suffix. Every
+  promote-blocking 422 serves `detail: {message, failures: [{code,
+message, class_name?}], force_allowed, override?, thresholds?}`
+  (`promoteGateDetail`); the modal renders the message, each failure and
+  the override hint, and offers a "Promote anyway" checkbox (sends
+  `force: true`) only when the server says `force_allowed` (F-64).
 - **Reproduce** — fetches `{API_PREFIX}/train/manifest/{job_id}` and submits a
   fresh job with the same `spec`/`lineage`. Phase 6 polish — design §15.4.
 

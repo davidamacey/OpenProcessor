@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`/train` promote (F-64).** The promote modal showed only "API 422".
+  It now renders the served gate `message`, every served failure (with
+  its class) and the `override` hint, and offers "Promote anyway"
+  (`force: true`) only when the server's `force_allowed` is true. The
+  default Triton name no longer carries a hardcoded `_v7` suffix; it is
+  the run's own Triton-safe job id.
+- **`/train` class defaults (V-4).** "Classes to train" defaulted to every
+  class, including an empty one, so preflight blocked. It now defaults to
+  the classes the server reports as having enough data (served
+  `trainable_gap` of 0), marks short classes "needs N", and offers a
+  one-click "Exclude classes without enough data".
+- **`/train` readability (F-63).** The live log no longer shows raw ANSI
+  escapes; the form keeps its values through a run instead of resetting
+  when it finishes; past runs render above the cohorts section; the
+  batch inputs have labels.
+- **Metric protocol labels (V-5).** The trainer's eval figure is labelled
+  "trainer eval (Ultralytics val)" on `/train` and in the `/bakeoff`
+  model picker; `/bakeoff` results state their own served protocol
+  thresholds ("mAP at conf ≥ …, NMS IoU …; precision/recall/F1 at …").
+
 - **`/classes` (F-52, F-53, F-54, F-56, F-58).** The Add Class name
   placeholder was a private-domain leftover; it is now "e.g.
   delivery_van" (and the group placeholder "e.g. animals / tools /
