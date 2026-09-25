@@ -229,9 +229,8 @@ for the full route table and wire-model field names, and
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#curation-subsystem) for the
 component map. Design rationale — why it's built behind three config
 dataclasses (`CurationConfig`, `RegionFields`, `DetectionProfile`) that
-genericized a private vehicle/license-plate curation stack, so a
-different domain constructs its own instances rather than forking the
-code — is in
+keep the subsystem domain-neutral, so a different domain constructs its
+own instances rather than forking the code — is in
 [`docs/design/curation_design_rationale.md`](docs/design/curation_design_rationale.md).
 
 | Method | Endpoint | Description |

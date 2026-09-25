@@ -99,7 +99,7 @@ consumer among anticipated others) is documented in
     names, filesystem roots, API prefix, embedding dimensions.
   - `RegionFields` (`src/config/region_fields.py`) — the OpenSearch
     document field names for a per-item "region of interest"
-    sub-annotation (e.g. a license plate on a vehicle crop). Defaults
+    sub-annotation (e.g. a defect region on an item crop). Defaults
     to `region_*` names; an existing deployment with data under
     different names constructs its own instance — a rename is a config
     flip, never a reindex.

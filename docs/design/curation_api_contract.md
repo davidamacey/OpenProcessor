@@ -512,7 +512,7 @@ cut both `purity` into tiers and `label_purity` at the gate) and
 denominator (it used to count only the top-5 classes, overstating purity
 on many-class clusters).
 
-**Representatives are now paged (F-15 / D-4, breaking change).**
+**Representatives are now paged (D-4, breaking change).**
 `GET /clusters` used to attach representative crops to *every* returned
 card via a `top_hits` sub-aggregation, which decompressed stored
 `_source` for every representative across every bucket in the response
@@ -1073,8 +1073,8 @@ entry carries an `axis` of `cluster` / `score` / `sort` / `overlay` /
 | `yolo` | `stable` | Backed by `GenericYoloExportService`; always advertised. |
 | `single_class` | `stable` | Backed by `SingleClassExportService`; single-class or class-subset export. |
 
-There is deliberately **no** domain-named export id. The reference
-implementation's single-class license-plate export is covered by
+There is deliberately **no** domain-named export id. An earlier
+single-class export is covered by
 `single_class`, which takes its target class ids from the request
 instead of hardcoding a domain vocabulary — a domain-named export kind
 would be exactly the
@@ -1850,7 +1850,7 @@ inflated `/train`'s class picker and `/export`'s per-class table.
 to `GET /stats/classes`'s `classes[]` rows.
 
 ```json
-{"class_id": 80, "class_name": "license_plate", "kind": "region",
+{"class_id": 80, "class_name": "defect", "kind": "region",
  "sample_count": 0, "validated_count": 0, "cluster_size": 0,
  "trainable": 0, "trainable_gap": 20}
 ```

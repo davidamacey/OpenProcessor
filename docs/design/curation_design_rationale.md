@@ -15,10 +15,9 @@ contract itself) and [`../ARCHITECTURE.md`](../ARCHITECTURE.md#curation-subsyste
 The `curation` subsystem — active-learning review queues, clustering,
 VLM-assisted labeling, dataset export, and the training-job API under
 `CurationConfig.api_prefix` (default `/curation`) — was genericized out
-of a private, domain-specific reference implementation (a
-vehicle/license-plate curation stack) built for one deployment. That
-reference implementation hardcoded its domain everywhere: OpenSearch
-field names, detector model names and geometry heuristics, index names,
+of an earlier, domain-specific internal implementation built for one
+deployment. That earlier implementation hardcoded its domain everywhere:
+OpenSearch field names, detector model names and geometry heuristics, index names,
 filesystem paths. None of that is inherent to "curate a stream of
 detector crops with human review and active learning" — it's one
 deployment's parameter values. The genericization's job was to find the
@@ -62,8 +61,8 @@ See §4 below — it's substantial enough to warrant its own section.
 Describes one detectable "region of interest" type as data: aspect-ratio
 and area heuristics for auto-confirmation, a text-hint pattern and
 length range, which Triton models (detector/segmenter/OCR) back it, and
-their input sizes and confidence floors. The reference cascade hardcoded
-all of this for exactly one region type (a license plate on a vehicle).
+their input sizes and confidence floors. The earlier internal cascade
+hardcoded all of this for exactly one region type.
 A deployment describing a different region — a barcode on a package, a
 tag on livestock — constructs its own `DetectionProfile` instance
 instead of branching or forking the cascade code that consumes it.
@@ -262,7 +261,7 @@ unfinished in these specific ways* lives somewhere durable.
   service directly to the internet.
 - **Coverage is uneven across the ported surface.** Some routers and
   services carry thorough test suites; others were ported with
-  comparatively thin coverage because the reference implementation
+  comparatively thin coverage because that earlier internal version
   itself had thin coverage there. Restoring/extending coverage on the
   weakest surfaces is ongoing, tracked work rather than a silent gap.
 
@@ -365,8 +364,9 @@ end to end:**
    `OP_REGION_DETECTION_DETECTOR_MODEL=...`,
    `OP_REGION_DETECTION_SAM_TEXT_PROMPT=...`), or register it via
    `src.services.detection.profile_registry.register_profile()` at
-   process startup and select it with `OP_REGION_PROFILE`. Mirror
-   `reference_profiles.REFERENCE_LICENSE_PLATE_PROFILE`'s shape. With
+   process startup and select it with `OP_REGION_PROFILE`. Mirror an
+   existing `DetectionProfile` instance's shape (see
+   `tests/curation/test_region_profile.py`). With
    no region profile configured (the default) region detection is off.
 3. Write a `PromptPack` JSON file describing the pallet vocabulary —
    copy `data/prompt_pack.example.json` (a worked warehouse/pallet
@@ -426,12 +426,12 @@ no class is common. A run whose training split shares images with the eval
 test split gets a leakage warning, never a block. Results are
 informational: promote does not read them.
 
-**Why a profile.** The harness was ported from the same license-plate
-reference deployment as the rest of this subsystem (§1), and it carried
+**Why a profile.** The harness was ported from the same earlier internal
+deployment as the rest of this subsystem (§1), and it carried
 that domain in code: a hardcoded single-class id, a YOLO writer that
-always emitted `license_plate`, the COCO vehicle classes baked in as the
-crop-mode coarse stage, and plate-benchmark converters and backends as
-built-ins. Following the `DetectionProfile` pattern (§2.3), everything that
+always emitted a fixed label, hardcoded classes baked in as the
+crop-mode coarse stage, and domain-specific benchmark converters and
+backends as built-ins. Following the `DetectionProfile` pattern (§2.3), everything that
 decides *what* is measured lives on a frozen `BakeoffProfile` dataclass
 (`scripts/curation/bakeoff/profile.py`):
 
@@ -439,7 +439,7 @@ decides *what* is measured lives on a frozen `BakeoffProfile` dataclass
 |---|---|
 | `class_filter` | the hardcoded single target class (a profile now scores every class in the split, optionally narrowed by name) |
 | `class_names` | the fixed single-class `data.yaml` written by dataset converters |
-| `context_class_ids`, `context_weights/imgsz/conf` | the hardcoded COCO vehicle ids used as the crop-mode coarse stage |
+| `context_class_ids`, `context_weights/imgsz/conf` | the hardcoded COCO context-class ids used as the crop-mode coarse stage |
 | `triton_model` (empty by design) | a default Triton model name — `--backend triton` now requires one from the profile or the request |
 | `default_backend`, `imgsz` | CLI defaults (a run's own imgsz still wins) |
 | `conf_floor`, `nms_iou`, `op_conf`, `op_iou`, `rank_metric` | metric thresholds and the comparison's hardcoded ranking metric |
@@ -461,13 +461,13 @@ source box onto class 0, a multi-class one keeps/maps ids and drops
 anything outside its label space. Domain formats register themselves from
 a profile's `converter_modules`.
 
-**The license-plate example.** `examples/bakeoff/license_plate/` keeps the
-original configuration as an opt-in reference, never a default and never
-listed by the API: its `profile.json` (COCO vehicle classes as context), the
-public plate-benchmark converters (CCPD, UFPR-ALPR, OpenALPR), the
-`lpdnet` and `open-image-models` backends (registered from the profile's
+**The `examples/bakeoff/license_plate/` example.** This directory keeps an
+original example configuration as an opt-in reference, never a default and
+never listed by the API: its `profile.json` (fixed context classes), the
+domain-specific benchmark-dataset converters, and detector backends
+(registered from the profile's
 `backend_modules` through `scripts/curation/bakeoff/backends/registry.py`),
-and a `baselines.json` of public plate detectors, each with a `class_map`.
+and a `baselines.json` of example detectors, each with a `class_map`.
 It is loaded only by path (`profile: "<path>/profile.json"` or
 `OP_BAKEOFF_PROFILE`), so `examples/` must be mounted into the API and the
 evaluator to use it. Nothing in `src/` or `scripts/` imports it. The
@@ -479,13 +479,13 @@ n_calib, calib_split, throughput}`) runs `scripts/curation/bakeoff/quantize.py`
 calibrated on the run's training export) and scores the variants in the
 same job as `run:<id>:<format>`; failures are recorded as failed stages in
 `status.json`, and a job with nothing left to score ends `state: error`.
-The reference deployment's CoreML leg drove a macOS host through a private
-driver and is not shipped: the request has no field for it.
+An earlier internal deployment's CoreML leg drove a macOS host through a
+proprietary driver and is not shipped: the request has no field for it.
 
 **What moved out.** Scripts that existed to produce one paper's tables and
 figures are not part of the harness and are not shipped in this tree: the
 dedup-threshold sweep and the LaTeX-number generator were removed (they
-hardcoded a private Triton model id and a live-deployment URL); the
+hardcoded an internal Triton model id and a live-deployment URL); the
 lean-angle sampling and deskew-figure prototypes were removed too (their
 reusable core, `src/services/detection/region_lean.py`, stays).
 `tests/curation/test_bakeoff_harness.py` guards the harness core against
