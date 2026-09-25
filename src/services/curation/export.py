@@ -61,7 +61,9 @@ from src.services.curation.export_support import (
     atomic_write_text,
     dataset_checksum,
     even_stratified_sample,
+    frozen_test_sha_of,
     hash_split,
+    label_content_sha,
     scroll_hits,
     stratified_split,
 )
@@ -405,6 +407,10 @@ class GenericYoloExportService:
         )
 
         checksum = dataset_checksum(item_ids)
+        frozen_test_sha = await asyncio.to_thread(frozen_test_sha_of, resolved_export_dir)
+        test_label_sha = await asyncio.to_thread(
+            label_content_sha, resolved_export_dir, None, truncate=16, split='test'
+        )
         finished_at = datetime.now(UTC).isoformat()
 
         data_yaml_path = resolved_export_dir / ARTIFACT_FILENAMES['data_yaml']
@@ -447,6 +453,8 @@ class GenericYoloExportService:
             'seed': seed,
             'group_key': group_key,
             'dataset_sha': checksum,
+            'frozen_test_sha': frozen_test_sha,
+            'test_label_sha': test_label_sha,
             'image_count': len(item_ids),
             'split_counts': counts.to_dict(),
             'class_count': len(names),
@@ -499,7 +507,9 @@ __all__ = [
     'atomic_write_text',
     'dataset_checksum',
     'even_stratified_sample',
+    'frozen_test_sha_of',
     'hash_split',
+    'label_content_sha',
     'resolve_current_export_dir',
     'stratified_split',
 ]

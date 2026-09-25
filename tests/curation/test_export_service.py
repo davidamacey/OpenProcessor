@@ -23,7 +23,9 @@ from src.services.curation.export import (
     _ExportRow,
     dataset_checksum,
     even_stratified_sample,
+    frozen_test_sha_of,
     hash_split,
+    label_content_sha,
     resolve_current_export_dir,
     stratified_split,
 )
@@ -408,6 +410,45 @@ async def test_manifest_structure_and_deterministic_sha(tmp_path, monkeypatch):
         assert key in manifest
     assert manifest['code_sha'] == 'deadbeef'
     assert manifest['dataset_sha'] == dataset_checksum(['crop-1'])
+
+
+@pytest.mark.asyncio
+async def test_manifest_has_frozen_test_sha_and_test_label_sha(tmp_path):
+    """W1 lineage: the multi-class manifest must record both test-split
+    identity hashes, independently recomputable from the written files by
+    the same functions the exporter used (parity with the single-class
+    exporter and with ``scripts.curation.bakeoff.freeze.test_sha``)."""
+    docs = [
+        {
+            'crop_id': 'crop-1',
+            'image_id': 'img-1',
+            'image_path': 'a.jpg',
+            'bbox_norm': [0.1, 0.1, 0.5, 0.5],
+            'class_id': 0,
+            'class_name': 'car',
+            'test_holdout': True,
+        },
+        {
+            'crop_id': 'crop-2',
+            'image_id': 'img-2',
+            'image_path': 'b.jpg',
+            'bbox_norm': [0.2, 0.2, 0.6, 0.6],
+            'class_id': 1,
+            'class_name': 'truck',
+            'test_holdout': False,
+        },
+    ]
+    service = _service(tmp_path, docs, ['car', 'truck'])
+    result = await service.export_dataset(version_tag='t1', seed=7, copy_images=False)
+    manifest = json.loads(Path(result.manifest_path).read_text())
+    export_dir = Path(result.export_dir)
+
+    assert manifest['frozen_test_sha'] == frozen_test_sha_of(export_dir)
+    assert manifest['test_label_sha'] == label_content_sha(
+        export_dir, None, truncate=16, split='test'
+    )
+    assert manifest['frozen_test_sha']
+    assert manifest['test_label_sha']
 
 
 @pytest.mark.asyncio

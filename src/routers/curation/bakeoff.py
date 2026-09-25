@@ -289,7 +289,9 @@ async def bakeoff_eval_datasets() -> dict[str, Any]:
             try:
                 meta = json.loads(lock.read_text(encoding='utf-8'))
                 n_test = meta.get('n_label_files')
-                sha = meta.get('frozen_test_sha')
+                # W1 renamed the lock key to test_label_sha; fall back to the
+                # legacy key for locks written before that (see freeze.py).
+                sha = meta.get('test_label_sha', meta.get('frozen_test_sha'))
             except (OSError, ValueError):
                 pass
             datasets.append(

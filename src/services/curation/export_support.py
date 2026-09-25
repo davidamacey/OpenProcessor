@@ -280,6 +280,74 @@ def dataset_checksum(item_ids: list[str]) -> str:
     return hashlib.sha256('\n'.join(sorted(item_ids)).encode()).hexdigest()
 
 
+def label_content_sha(
+    export_dir: Path,
+    _class_names: list[str] | None = None,
+    *,
+    truncate: int = 16,
+    split: str | None = None,
+) -> str:
+    """Checksum over the exported label *content*, not just its identity.
+
+    Hashes sorted ``(relative label path, sha256(file bytes))`` pairs, so
+    two exports agree only if the same frames AND the same boxes were
+    written. A checksum over item ids alone would call two datasets
+    identical after a box was corrected, which is exactly the change a
+    training lineage most needs to see.
+
+    ``split=None`` (default) hashes every label file under ``labels/``.
+    ``split='test'`` scopes the hash to ``labels/test/`` only, and is then
+    byte-for-byte identical to
+    :func:`scripts.curation.bakeoff.freeze.test_sha` at the default
+    ``truncate=16`` -- this parity is what lets the trainer-side lock file
+    and this exporter's own ``test_label_sha`` manifest field agree on the
+    same value without either importing the other.
+
+    ``_class_names`` is accepted (and ignored) purely so callers written
+    against the eventual class-mapping-aware call shape
+    (``label_content_sha(dir, class_names, truncate=16, split='test')``)
+    don't need a second signature; nothing in this wave uses it.
+
+    Truncated to ``truncate`` hex chars: long enough that an accidental
+    collision is not a practical concern, short enough to read in a log
+    line or a manifest diff.
+    """
+    labels_dir = (export_dir / 'labels' / split) if split else (export_dir / 'labels')
+    if not labels_dir.is_dir():
+        return ''
+    h = hashlib.sha256()
+    for path in sorted(labels_dir.rglob('*.txt')):
+        rel = path.relative_to(export_dir).as_posix()
+        h.update(rel.encode('utf-8'))
+        h.update(b'\0')
+        h.update(hashlib.sha256(path.read_bytes()).hexdigest().encode('ascii'))
+        h.update(b'\n')
+    return h.hexdigest()[:truncate]
+
+
+def frozen_test_sha_of(export_dir: Path) -> str:
+    """Checksum over the test split's *identity* — which frames are in it.
+
+    Deliberately filenames only, not content: the guarantee being made is
+    "the held-out evaluation set is the same set of frames as last time",
+    which must keep holding after a label correction inside the test set.
+    Content changes there are caught by ``test_label_sha``
+    (:func:`label_content_sha` with ``split='test'``) instead. Returns
+    ``''`` when there is no test split.
+    """
+    test_labels = export_dir / 'labels' / 'test'
+    if not test_labels.is_dir():
+        return ''
+    names = sorted(p.name for p in test_labels.glob('*.txt'))
+    if not names:
+        return ''
+    h = hashlib.sha256()
+    for name in names:
+        h.update(name.encode('utf-8'))
+        h.update(b'\n')
+    return h.hexdigest()[:16]
+
+
 def _build_export_id_map(classes: list[RegistryClassEntry]) -> dict[int, int]:
     """Registry ``class_id`` -> contiguous dense export id (0-indexed).
 
@@ -476,7 +544,9 @@ __all__ = [
     'atomic_write_text',
     'dataset_checksum',
     'even_stratified_sample',
+    'frozen_test_sha_of',
     'hash_split',
+    'label_content_sha',
     'scroll_hits',
     'stratified_split',
 ]
