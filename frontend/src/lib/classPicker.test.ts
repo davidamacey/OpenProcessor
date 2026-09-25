@@ -120,6 +120,50 @@ describe('resolveConfirmClassId', () => {
   });
 });
 
+// #36 item 1 (X2/R1): GET {API_PREFIX}/classes now serves kind directly —
+// it must win over the slot registry, both for excluding a region class
+// (even one the local registry doesn't know about) and for NOT excluding
+// a class the registry happens to bind but the backend now says is 'item'.
+describe('item-class targets: served kind (#36 item 1)', () => {
+  it('excludes a class the backend marks kind: region, with no slot registered at all', () => {
+    resetDeploymentSlots();
+    installServedRegionProfile(null);
+    try {
+      expect(isItemClassTarget({ name: 'some_region_class', kind: 'region' })).toBe(
+        false,
+      );
+    } finally {
+      resetDeploymentSlots();
+    }
+  });
+
+  it('keeps a class the backend marks kind: item, even if a slot happens to bind that name', () => {
+    installServedRegionProfile(WIDGET_TAG_PROFILE);
+    try {
+      expect(
+        isItemClassTarget({
+          name: WIDGET_TAG_PROFILE.region_class_name,
+          kind: 'item',
+        }),
+      ).toBe(true);
+    } finally {
+      resetDeploymentSlots();
+    }
+  });
+
+  it('falls back to the slot registry when kind is absent (an older backend)', () => {
+    installServedRegionProfile(WIDGET_TAG_PROFILE);
+    try {
+      expect(isItemClassTarget({ name: WIDGET_TAG_PROFILE.region_class_name })).toBe(
+        false,
+      );
+      expect(isItemClassTarget({ name: 'miata' })).toBe(true);
+    } finally {
+      resetDeploymentSlots();
+    }
+  });
+});
+
 describe('item-class targets with no region profile', () => {
   it('excludes no class: the region class is only special when the backend serves a profile for it', () => {
     resetDeploymentSlots();

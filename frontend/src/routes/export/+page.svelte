@@ -725,12 +725,24 @@
           {/if}
           {#if exportState.class_count != null}
             <!-- E2 (visual audit 2026-09-24): the served class_count is the
-                 registry size; say how many classes actually have objects. -->
+                 registry size; say how many classes actually have objects.
+                 #36 item 6: prefer the served classes_with_objects over the
+                 client-side count from class_split_counts, which is kept
+                 only as the fallback for an export/backend written before
+                 the field existed. -->
             <span
               class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1"
               data-testid="export-class-count"
             >
-              {#if exportState.class_split_counts}
+              {#if exportState.classes_with_objects != null}
+                <span class="font-mono text-zinc-200"
+                  >{exportState.classes_with_objects}</span
+                >
+                <span class="text-zinc-500">classes with objects</span>
+                <span class="ml-1 text-zinc-500"
+                  >({exportState.class_count} in registry)</span
+                >
+              {:else if exportState.class_split_counts}
                 <span class="font-mono text-zinc-200"
                   >{exportClassSplit.withObjects.length}</span
                 >

@@ -7,7 +7,12 @@
  * `$stores/reviewTabsVocabulary.svelte` respectively.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getRegionVocabulary, getReviewTabsVocabulary, API_PREFIX } from './api';
+import {
+  getRegionVocabulary,
+  getReviewEmptyState,
+  getReviewTabsVocabulary,
+  API_PREFIX,
+} from './api';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -76,6 +81,7 @@ describe('getRegionVocabulary', () => {
       region_profile: {
         name: 'widget_tag',
         display_name: 'Widget tags',
+        display_name_singular: 'Widget tag',
         region_class_name: 'widget_tag',
         text_reader: 'ocr',
       },
@@ -197,5 +203,40 @@ describe('getReviewTabsVocabulary', () => {
         ],
       },
     ]);
+  });
+});
+
+describe('getReviewEmptyState (#36 item 9)', () => {
+  it('GETs {API_PREFIX}/review/tabs and returns the served empty_state', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        tabs: [],
+        empty_state: { has_probe_predictions: false, has_item_scores: true },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getReviewEmptyState();
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_PREFIX}/review/tabs`);
+    expect(res).toEqual({ has_probe_predictions: false, has_item_scores: true });
+  });
+
+  it('returns null when empty_state is absent (an older backend)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ tabs: [] })));
+    expect(await getReviewEmptyState()).toBeNull();
+  });
+
+  it('returns null on a malformed empty_state rather than guessing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ tabs: [], empty_state: { has_probe_predictions: 'yes' } }),
+        ),
+    );
+    expect(await getReviewEmptyState()).toBeNull();
   });
 });

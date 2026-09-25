@@ -16,6 +16,7 @@ const schemas = (spec as { components: { schemas: Record<string, Schema> } }).co
 const FRONTEND_KEYS = {
   name: true,
   display_name: true,
+  display_name_singular: true,
   region_class_name: true,
   text_reader: true,
 } satisfies Record<keyof ServedRegionProfile, true>;

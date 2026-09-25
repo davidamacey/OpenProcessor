@@ -536,6 +536,22 @@
               {fmt(stats.unlabeled.no_label_source)}
             </dd>
           </div>
+          {#if stats.unlabeled.vlm_no_class != null}
+            <!-- #36 item 2: D1 fix — labeled.* now only counts docs with a
+                 real class_id, so a VLM attempt that couldn't resolve one
+                 shows up here instead of double-counting as "VLM-labeled". -->
+            <div class="flex justify-between">
+              <dt
+                class="text-zinc-400"
+                title="VLM looked at the crop but didn't resolve a class"
+              >
+                VLM, no class
+              </dt>
+              <dd class="font-mono text-red-300">
+                {fmt(stats.unlabeled.vlm_no_class)}
+              </dd>
+            </div>
+          {/if}
         </dl>
       </div>
 

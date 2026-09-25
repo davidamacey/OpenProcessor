@@ -224,6 +224,40 @@ describe('E1/E2 (visual audit 2026-09-24): trainable vs held out, classes with o
     expect(rows[0]?.trainable).toBe(8);
   });
 
+  it('#36 item 1: prefers the served trainable/trainable_gap over client math when present', () => {
+    // Deliberately served numbers that DISAGREE with what the client-side
+    // validated-minus-holdout formula would produce (30/470, per the test
+    // above with the same validated/test_count) — proves the served
+    // fields drive the row, not a recomputation.
+    const rows = buildExportRows(
+      perClass({
+        class_id: 52,
+        validated_count: 35,
+        aug_target: 500,
+        aug_gap: 465,
+        trainable: 174,
+        trainable_gap: 326,
+      }),
+      { total: 5, by_class: [{ key: 52, doc_count: 5 }] },
+    );
+    expect(rows[0]).toMatchObject({ trainable: 174, trainableGap: 326 });
+  });
+
+  it('falls back to client math when the export/backend predates trainable/trainable_gap', () => {
+    const rows = buildExportRows(
+      perClass({
+        class_id: 52,
+        validated_count: 35,
+        aug_target: 500,
+        aug_gap: 465,
+        trainable: undefined,
+        trainable_gap: undefined,
+      }),
+      { total: 5, by_class: [{ key: 52, doc_count: 5 }] },
+    );
+    expect(rows[0]).toMatchObject({ trainable: 30, trainableGap: 470 });
+  });
+
   it('splitExportClasses separates classes with any exported object from empty ones', () => {
     const { withObjects, empty } = splitExportClasses([
       { class_id: 1, train: 0, val: 0, test: 0 },

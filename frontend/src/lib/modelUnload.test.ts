@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  showsProtectedChip,
   unloadButtonState,
   unloadConfirmMessage,
   unloadForceConfirmMessage,
@@ -77,6 +78,115 @@ describe('unloadButtonState', () => {
         requires_force_to_unload: undefined,
       }),
     ).toBe('normal');
+  });
+});
+
+// 2026-09-25 follow-up to #36 item 5: GET {API_PREFIX}/models/status now
+// serves `unloadable` directly on every entry (false for the external
+// segmenter/VLM), and `is_region_protected` covers every model the active
+// config hard-blocks (403, no force flow), not just the region detector.
+describe('unloadButtonState: served unloadable (2026-09-25 follow-up)', () => {
+  it('rule 1: unloadable === false hides the button, whatever kind/flags say', () => {
+    expect(
+      unloadButtonState({
+        kind: 'triton',
+        is_region_protected: false,
+        requires_force_to_unload: false,
+        unloadable: false,
+      }),
+    ).toBe('hidden');
+  });
+
+  it('an external entry with unloadable: false hides the button (the segmenter, the VLM)', () => {
+    expect(
+      unloadButtonState({
+        kind: 'external',
+        is_region_protected: undefined,
+        requires_force_to_unload: undefined,
+        unloadable: false,
+      }),
+    ).toBe('hidden');
+  });
+
+  it('rule 2: is_region_protected still hides the button even when unloadable: true', () => {
+    expect(
+      unloadButtonState({
+        kind: 'triton',
+        is_region_protected: true,
+        requires_force_to_unload: false,
+        unloadable: true,
+      }),
+    ).toBe('hidden');
+  });
+
+  it('unloadable: true + no protection follows requires_force_to_unload as today', () => {
+    expect(
+      unloadButtonState({
+        kind: 'triton',
+        is_region_protected: false,
+        requires_force_to_unload: false,
+        unloadable: true,
+      }),
+    ).toBe('normal');
+    expect(
+      unloadButtonState({
+        kind: 'triton',
+        is_region_protected: false,
+        requires_force_to_unload: true,
+        unloadable: true,
+      }),
+    ).toBe('force-required');
+  });
+
+  it('a pre-follow-up backend (unloadable absent) falls back to the old kind !== triton rule', () => {
+    expect(
+      unloadButtonState({
+        kind: 'external',
+        is_region_protected: false,
+        requires_force_to_unload: false,
+        unloadable: undefined,
+      }),
+    ).toBe('hidden');
+    expect(
+      unloadButtonState({
+        kind: 'triton',
+        is_region_protected: false,
+        requires_force_to_unload: false,
+        unloadable: undefined,
+      }),
+    ).toBe('normal');
+  });
+});
+
+describe('showsProtectedChip', () => {
+  it('true for a region-protected model that IS otherwise unloadable', () => {
+    expect(showsProtectedChip({ is_region_protected: true, unloadable: true })).toBe(
+      true,
+    );
+  });
+
+  it('false for an external service (not region-protected, just not unloadable at all)', () => {
+    expect(
+      showsProtectedChip({ is_region_protected: undefined, unloadable: false }),
+    ).toBe(false);
+  });
+
+  it('false for an ordinary unprotected model', () => {
+    expect(showsProtectedChip({ is_region_protected: false, unloadable: true })).toBe(
+      false,
+    );
+  });
+
+  it('a backend that predates unloadable still shows the chip for a protected model', () => {
+    expect(showsProtectedChip({ is_region_protected: true, unloadable: undefined })).toBe(
+      true,
+    );
+  });
+
+  it('false for the (currently impossible) combination of protected AND explicitly not unloadable — defense in depth, matches the button being hidden by rule 1 either way', () => {
+    expect(showsProtectedChip({ is_region_protected: true, unloadable: false })).toBe(
+      false,
+    );
   });
 });
 

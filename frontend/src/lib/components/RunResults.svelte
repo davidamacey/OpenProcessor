@@ -26,6 +26,7 @@
   import { formatCount } from '$lib/formatCount';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
+  import ProbeControl from './ProbeControl.svelte';
   import type { TrainJobStatus, TrainManifest } from '$lib/types_train';
 
   interface Props {
@@ -134,6 +135,11 @@
           {status.error}
         </p>
       {/if}
+
+      <!-- #36 item 8: populates probe_pred_* from this run's checkpoint —
+           the one prerequisite the Uncertainty/Model-disagreements review
+           queues need (item 9's empty_state.has_probe_predictions). -->
+      <ProbeControl {status} />
 
       <!-- Training-time metrics (OpenProcessor #34 W1). Neither of these
            is the run's headline number — that's eval.map50 below,

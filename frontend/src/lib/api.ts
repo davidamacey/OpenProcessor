@@ -1043,7 +1043,15 @@ export interface DatasetStats {
   unlabeled: {
     pending_detection: number;
     pending_verification: number;
+    /** Crops with no `class_id` at all, whatever their `label_source`
+     *  (was miscounted as "labeled" — D1, visual audit 2026-09-24, before
+     *  OpenProcessor #36 restricted `labeled.*` to docs with a real
+     *  `class_id`). */
     no_label_source: number;
+    /** Subset of `no_label_source` the VLM looked at but couldn't (or
+     *  didn't) resolve to a class (#36 item 2). Served alongside
+     *  `no_label_source`; absent on a backend that predates it. */
+    vlm_no_class?: number;
   };
   in_progress: {
     region_drain_total_unfinished: number;
@@ -1087,6 +1095,8 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
       adequacy?: string;
       aug_target?: number;
       aug_gap?: number;
+      trainable?: number;
+      trainable_gap?: number;
     }>;
     thresholds?: ClassThresholds;
   };
@@ -1125,6 +1135,8 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
       adequacy: c.adequacy,
       aug_target: c.aug_target,
       aug_gap: c.aug_gap,
+      trainable: c.trainable,
+      trainable_gap: c.trainable_gap,
     })),
     thresholds: cls.thresholds,
   };
@@ -1152,6 +1164,9 @@ export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse>
     added_at?: string;
     hotkey_letter?: string | null;
     adequacy?: string;
+    kind?: 'item' | 'region';
+    trainable?: number;
+    trainable_gap?: number;
   };
   const res = await apiFetch<{
     classes: RawClass[];
@@ -1171,6 +1186,9 @@ export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse>
     deprecated: !!c.deprecated,
     hotkey_letter: c.hotkey_letter ?? null,
     adequacy: c.adequacy,
+    kind: c.kind,
+    trainable: c.trainable,
+    trainable_gap: c.trainable_gap,
   }));
   // Old-shape (bare array) or pre-cutover backend responses omit these —
   // an empty threshold/reserved set just means the adequacy chip and the
@@ -2243,6 +2261,43 @@ export async function getReviewTabsVocabulary(
     }));
 }
 
+/** `empty_state` on `GET {API_PREFIX}/review/tabs` (#36 item 9) — whether
+ *  the deployment has ANY probe predictions or item scores at all, so an
+ *  empty Uncertainty/Model-disagreements/score-sorted queue can point at
+ *  the missing prerequisite (run a probe, compute scores) instead of just
+ *  saying "empty". */
+export interface ReviewEmptyState {
+  has_probe_predictions: boolean;
+  has_item_scores: boolean;
+}
+
+/** Sibling read of `GET {API_PREFIX}/review/tabs`'s top-level `empty_state` —
+ *  kept as its own call (rather than changing `getReviewTabsVocabulary`'s
+ *  return shape) so every existing caller/test of the tabs array is
+ *  unaffected; `reviewTabsVocabularyStore.init()` fires both once. `null`
+ *  when absent (an older backend) — never invented client-side. */
+export async function getReviewEmptyState(
+  signal?: AbortSignal,
+): Promise<ReviewEmptyState | null> {
+  const res = await apiFetch<{ empty_state?: Partial<ReviewEmptyState> | null }>(
+    `${API_PREFIX}/review/tabs`,
+    {},
+    signal,
+  );
+  const es = res.empty_state;
+  if (!es || typeof es !== 'object') return null;
+  if (
+    typeof es.has_probe_predictions !== 'boolean' ||
+    typeof es.has_item_scores !== 'boolean'
+  ) {
+    return null;
+  }
+  return {
+    has_probe_predictions: es.has_probe_predictions,
+    has_item_scores: es.has_item_scores,
+  };
+}
+
 /**
  * Update or clear the region sub-bbox on a crop.
  *
@@ -2540,6 +2595,8 @@ export async function getReviewQueue(
     sort_fallback_reason?: string | null;
     /** The sort id actually applied — see PaginatedResponse.sort_applied. */
     sort_applied?: string | null;
+    /** Set when total === 0 — see PaginatedResponse.empty_reason (#36 item 9). */
+    empty_reason?: string | null;
   };
   const raw = await apiFetch<RawPage>(
     `${API_PREFIX}/review/${tab}${qs({ page, page_size: pageSize, ...filter })}`,
@@ -2565,10 +2622,11 @@ export async function getReviewQueue(
     page_size: raw.page_size ?? pageSize,
     sort_fallback_reason: raw.sort_fallback_reason ?? null,
     sort_applied: raw.sort_applied ?? null,
+    empty_reason: raw.empty_reason ?? null,
   };
 }
 
-/** `GET {API_PREFIX}/review/{tab}/locate` — where a specific crop sits in a
+/** `GET {API_PREFIX}/review/{tab}/locate`— where a specific crop sits in a
  *  review queue under the given filters/sort, without paging through it
  *  by hand. Powers `/review?crop_id=` deep links (2026-09-24 logic-moves
  *  W5): `in_queue: false` means the crop doesn't match this tab's
@@ -3660,6 +3718,67 @@ export function getTrainManifest(
   return apiFetch<TrainManifest>(
     `${API_PREFIX}/train/manifest/${encodeURIComponent(jobId)}`,
     {},
+    signal,
+  );
+}
+
+// -- Probe (#36 item 8) ---------------------------------------------------
+// Wraps POST {API_PREFIX}/probe/{run,cancel} / GET {API_PREFIX}/probe/status —
+// starts a probe pass from a finished training run's export, populating
+// probe_pred_* on items (the Uncertainty/Model-disagreements queues' one
+// prerequisite, per item 9's empty_state). Same idempotent job-poll shape
+// as scores/embedding-viz jobs: one job at a time, GET /probe/status is
+// the single source of truth for what's running.
+
+export interface ProbeRunRequest {
+  job_id: string;
+  architecture?: string;
+  gpu?: string | null;
+  resume?: boolean;
+}
+
+/** `ProbeStatusResponse` — served verbatim, including `error`, which is
+ *  the backend's own message (a GPU-arbiter claim failure, a training job
+ *  that isn't finished / has no exported checkpoint, etc.) and is always
+ *  rendered as-is, never reworded. */
+export interface ProbeStatusResponse {
+  status: string;
+  job_id?: string | null;
+  train_job_id?: string | null;
+  gpu?: string | null;
+  model_path?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  updated_count?: number | null;
+  error?: string | null;
+}
+
+/** Start a probe pass from `trainJobId`'s finished export. 409 when the
+ *  training job isn't finished / has no exported checkpoint, or a probe
+ *  is already running — surfaced via `ApiError.detail`, never guessed. */
+export function runProbe(
+  trainJobId: string,
+  opts: { architecture?: string; gpu?: string | null; resume?: boolean } = {},
+  signal?: AbortSignal,
+): Promise<ProbeStatusResponse> {
+  const body: ProbeRunRequest = { job_id: trainJobId, ...opts };
+  return apiFetch<ProbeStatusResponse>(
+    `${API_PREFIX}/probe/run`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** Poll the current/last probe job. */
+export function getProbeStatus(signal?: AbortSignal): Promise<ProbeStatusResponse> {
+  return apiFetch<ProbeStatusResponse>(`${API_PREFIX}/probe/status`, {}, signal);
+}
+
+/** Best-effort cancel of the active probe job. */
+export function cancelProbe(signal?: AbortSignal): Promise<ProbeStatusResponse> {
+  return apiFetch<ProbeStatusResponse>(
+    `${API_PREFIX}/probe/cancel`,
+    { method: 'POST' },
     signal,
   );
 }

@@ -165,20 +165,28 @@ export const REGION_TAB_ID = 'regions';
  *  own `/review/tabs` fallback label is the same word). */
 const GENERIC_NOUN = 'Regions';
 
+/** Fallback singular title when the profile sets no `display_name_singular`. */
+const GENERIC_NOUN_SINGULAR = 'Region';
+
 export function regionSlotFromServedProfile(p: ServedRegionProfile): SlotSpec {
   const noun = p.display_name.trim() || GENERIC_NOUN;
   // A profile without a region class still gets its review tab; binding
   // falls back to the profile name so the slot is never keyless.
   const className = p.region_class_name.trim() || p.name;
   const hasText = p.text_reader.trim().length > 0;
+  // `title` reads as a singular in the UI ("Confirm Region", "Region
+  // score"); the served plural noun ("Widget tags") is wrong there, so it's
+  // its own served field, falling back to the generic "Region" (#36 item 10).
+  const singularTitle = p.display_name_singular.trim() || GENERIC_NOUN_SINGULAR;
 
   return {
     key: p.name,
     bind: { className },
-    // `title` reads as a singular in the UI ("Confirm Region", "Region
-    // score"); the served noun is a plural collection name ("Widget tags"), so
-    // it labels the tab, gallery and stats panel instead.
-    label: { singular: 'region', plural: noun, title: 'Region' },
+    label: {
+      singular: singularTitle.toLowerCase(),
+      plural: noun,
+      title: singularTitle,
+    },
     capabilities: {
       ...REGION_WIRE_CAPABILITIES,
       text: hasText ? REGION_TEXT : undefined,

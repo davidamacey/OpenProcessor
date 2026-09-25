@@ -398,6 +398,26 @@ breaks page load. Flags are OpenProcessor env vars
 `OP_VIZ_PROJECTION_ENABLED`, `OP_SEMANTIC_SEARCH_ENABLED`), all default
 off.
 
+### Served empty-queue reasons (OpenProcessor #36 item 9, 2026-09-25)
+
+`GET {API_PREFIX}/review/{tab}` now serves `empty_reason` directly when
+`total === 0` — a plain-English cause ("no probe predictions — run a
+probe") distinct from and more direct than `sort_fallback_reason`
+(the ordering-degraded-to note above). `PaginatedResponse.empty_reason`
+plumbs it into `/review`'s empty-queue panel (`emptyQueueMessage`,
+`$lib/review/reviewCopy.ts`), which shows it ahead of
+`sort_fallback_reason` when both are set. `GET {API_PREFIX}/review/tabs`
+also gained a top-level `empty_state` (`has_probe_predictions`/
+`has_item_scores`) — a sibling read, `getReviewEmptyState()`
+(`reviewTabsVocabularyStore.emptyState`, kept separate from
+`getReviewTabsVocabulary()` so the tabs array's own shape/tests are
+untouched). When the served reason mentions a probe or a score and the
+matching `empty_state` flag is false, the panel adds a direct link ("Run
+a probe on /train" / "Compute scores on /settings") instead of leaving
+the operator to guess where to go — verified live: the Uncertainty
+queue's empty panel links to `/train` on this deployment (no probe has
+ever run). Absent/malformed on either field renders exactly as before.
+
 ## Cluster purity (DQ-M2, dq-queues cutover 2026-09-24)
 
 `GET {API_PREFIX}/clusters`' `purity` used to be tautological for a class
@@ -560,6 +580,35 @@ trainer_image_id}` (`trainer_sha` replaces the old `trainer_image`
   `best_checkpoint_metric` back-fill), so the fixtures above are
   hand-corrected to the fixed shape rather than mirroring the live
   response verbatim.
+
+### Probe control (`ProbeControl.svelte`, OpenProcessor #36 item 8, 2026-09-25)
+
+Every finished run's `RunResults` panel embeds `ProbeControl` above the
+metrics section — "Run probe predictions" starts a probe pass
+(`POST {API_PREFIX}/probe/run {job_id}`) from that run's exported
+checkpoint over the crop pool, populating `probe_pred_*`, the one
+prerequisite the Uncertainty and Model-disagreements review queues need
+(see "Served empty-queue reasons" below). Same idempotent job-poll shape
+as `ScoresCard`/`EmbeddingPlot`: confirm dialog, adopt-in-flight-on-mount
+(`GET {API_PREFIX}/probe/status`), explicit Cancel, the served
+result/error rendered verbatim.
+
+`$lib/probe.ts`'s `canRunProbe` gates the button on `state === 'finished'
+&& checkpoint_path != null` — **not** `checkpoint_sha256`, which a live
+check found `GET {API_PREFIX}/train/status/{job_id}` never serves at the
+top level (only inside the run's manifest, `results.checkpoint_sha256`,
+which this control doesn't fetch — it renders instantly off the
+already-loaded status like the rest of `RunResults`). Gating on the sha
+hid the button for every real finished run on the live deployment; fixed
+before commit and verified live via the temporary preview-proxy
+screenshot pass. `GET {API_PREFIX}/probe/status` is a single current/last-job
+singleton, not scoped per training run — a probe started for a
+_different_ run still polls as "running" here, so the control detects
+that via the response's `train_job_id` and shows "already running for
+another run" instead of a misleading enabled/disabled button with no
+explanation. The effect that adopts an in-flight job only fires when
+`canRunProbe` is true, so a `ProbeControl` instance for a non-qualifying
+past run makes zero `/probe/status` requests.
 
 ### Training cohorts (2026-09-24 logic-moves W6; originally P2.12-P2.14,
 
@@ -764,6 +813,21 @@ be bound to it.
 Escape-cancels keyboard (aria) drags. It clears the captured multi-drag set
 and restores the grid layout; the drag itself ends on pointer release.
 
+### Served item-vs-region class kind (OpenProcessor #36 item 1, X2/R1, 2026-09-25)
+
+`GET {API_PREFIX}/classes`/`/stats/classes` now serve `kind` (`'item'` |
+`'region'`) and `trainable`/`trainable_gap` directly on each class
+(`RegistryClass`/`StatsSummary.per_class`) — `sample_count`/
+`validated_count` no longer include region counts (X2). `$lib/
+classVisibility.ts`'s `isSlotBoundClass` reads the served `kind` first;
+falls back to the slot registry only when a class isn't tagged (an older
+backend) — the R1 fix (the region class topping the item-class picker
+and quick-assign row) is now backed by the server's own classification,
+not a client heuristic keyed off the slot registry alone. `/export`'s
+per-class table (`exportDatasetRows.ts`) prefers the served `trainable`/
+`trainable_gap` over the client-side validated-minus-holdout math, kept
+only as the fallback for an older export/backend.
+
 ## Data integrity
 
 - Every label change → immediate API call. No "save" button.
@@ -773,6 +837,26 @@ label_validated, class_source, updated_at}`, plus `class_id_history`).
 - Bulk ops show a confirmation dialog with affected count.
 - Test-set crops (`test_holdout=true`) are filtered out at the API level —
   the UI never receives them. Don't try to bypass.
+
+## `/models` unload gating (2026-09-25 follow-up to OpenProcessor #36 item 5)
+
+`GET {API_PREFIX}/models/status` serves `unloadable: boolean` on every
+entry (`false` for every external-service entry — the segmenter, the
+VLM — and `true` for Triton models) and widens `is_region_protected` to
+cover the ingest primary proposer/secondary classifier and the OCR
+det/rec pair, not just the region detector — every one of these
+hard-blocks `DELETE {API_PREFIX}/models/{name}` server-side (403, no
+`force` override). `$lib/modelUnload.ts`'s `unloadButtonState` reads
+`unloadable` FIRST (`=== false` hides the button outright, ahead of
+`kind`/`is_region_protected`); a backend that predates the field
+(`undefined`) falls back to the prior `kind !== 'triton'` rule. A
+region-protected-but-otherwise-unloadable model still shows no button,
+but `/models` now renders a "protected: in use by the pipeline" chip in
+that case (`showsProtectedChip`) instead of nothing. The segmenter can
+also serve `status: 'not_configured'`, with null inference/exec/latency
+fields — rendered "—" by the existing `fmtCount`/`fmtMs`, never `0`.
+Live, this leaves only the CLIP/PE image-encoder models with an Unload
+button.
 
 ## Plate provenance + OCR (Wave 1 + Wave 2b, 2026-05-11)
 
@@ -1039,8 +1123,10 @@ never depended on the burn-in).
 
 The backend serves at most one region profile, on
 `GET {API_PREFIX}/health` (and `GET {API_PREFIX}/regions/vocabulary`) as
-`region_profile: {name, display_name, region_class_name, text_reader} |
-null`. **It is the only gate for region features.** With `null`, every
+`region_profile: {name, display_name, display_name_singular,
+region_class_name, text_reader} | null` (`display_name_singular` added
+2026-09-25, OpenProcessor #36 item 10 — see below). **It is the only
+gate for region features.** With `null`, every
 region route (`/regions`, `/crops/{id}/region*`, region undo, the VLM
 verify routes, `/regions/clusters`) answers 409, so the UI renders no
 region surface at all and calls none of them.
@@ -1056,9 +1142,12 @@ region surface at all and calls none of them.
 - `regionSlotFromServedProfile()` (`src/lib/annotations/servedRegionSlot.ts`)
   builds the region `SlotSpec`: `key` = profile `name`, `bind.className`
   = `region_class_name` (falls back to `name`), tab label / plural noun /
-  stats panel title = `display_name` (falls back to "Regions"),
-  singular = "region", title = "Region" (it reads in singular contexts),
-  `?tab=` id and review endpoint = `regions`, browse path `/regions`,
+  stats panel title = `display_name` (falls back to "Regions"), singular
+  label/title = `display_name_singular` (falls back to "region"/"Region"
+  — item 10, 2026-09-25), used everywhere a singular-context string is
+  built generically ("Confirm `<Region>`", "`<Region>` score", "Edit
+  `<region>`") so a deployment reads "Confirm Plate" rather than the
+  generic "Confirm Region", `?tab=` id and review endpoint = `regions`, browse path `/regions`,
   text capability only when `text_reader` is non-empty, no client
   cohorts (served by `/training_cohorts`), and a `single_class` dataset
   export whose `profileName`/`datasetKind` is the profile `name` (so the

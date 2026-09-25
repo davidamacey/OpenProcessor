@@ -35,6 +35,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PALLET_REGION_PROFILE = {
     "name": "pallet_label",
     "display_name": "Pallet labels",
+    "display_name_singular": "Pallet label",
     "region_class_name": "pallet_label",
     "text_reader": "ocr",
 }

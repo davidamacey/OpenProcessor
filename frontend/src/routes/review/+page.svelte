@@ -167,6 +167,9 @@
   // yet). Rendered as a small inline note, never a toast — this isn't a
   // failure, just a degraded request.
   let sortFallbackReason = $state<string | null>(null);
+  // #36 item 9: the server's own explanation for an empty queue (e.g. "no
+  // probe predictions — run a probe"), distinct from sortFallbackReason.
+  let emptyReason = $state<string | null>(null);
   // The sort id the backend actually applied (item 10, 2026-09-24
   // logic-moves) — passed to StrategyBar so its summary chip can show
   // it next to whatever the operator picked (or didn't).
@@ -338,6 +341,7 @@
       );
       sortFallbackReason = res.sort_fallback_reason ?? null;
       sortApplied = res.sort_applied ?? null;
+      emptyReason = res.empty_reason ?? null;
       return res;
     },
     keyOf: (i) => i.id,
@@ -804,6 +808,8 @@
       label: activeQueueLabel,
       description: reviewTabsVocabularyStore.descriptionFor(activeTabEndpointId) ?? null,
       sortFallbackReason,
+      emptyReason,
+      emptyState: reviewTabsVocabularyStore.emptyState,
       filtersActive: clientFiltersActive,
     }),
   );
@@ -2010,6 +2016,17 @@
         {#each emptyMessage.lines as line (line)}
           <p class="mt-1 text-xs text-zinc-500">{line}</p>
         {/each}
+        {#if emptyMessage.link}
+          <!-- #36 item 9: served empty_state says the prerequisite this
+               queue needs has never been computed — point straight at the
+               control, not just "empty". -->
+          <p class="mt-2 text-xs">
+            <a
+              class="text-blue-400 underline hover:text-blue-300"
+              href={emptyMessage.link.href}>{emptyMessage.link.text}</a
+            >
+          </p>
+        {/if}
       </div>
     {:else}
       <!-- Source image with bbox -->

@@ -39,13 +39,29 @@ export interface EmptyQueueInput {
   description: string | null;
   /** Served `sort_fallback_reason` from the empty response, if any. */
   sortFallbackReason: string | null;
+  /** Served `empty_reason` from the empty response — the backend's own,
+   *  more direct explanation (#36 item 9), e.g. "no probe predictions —
+   *  run a probe". Takes priority over `sortFallbackReason` when both are
+   *  set, since it's the backend saying outright why, not just what
+   *  ordering fell back. */
+  emptyReason?: string | null;
   /** Whether the operator has any of their own filters narrowing the queue. */
   filtersActive: boolean;
+  /** Served `/review/tabs` `empty_state` (#36 item 9) — when the deployment
+   *  has never run a probe or computed item scores at all, the empty
+   *  message can point straight at the control that would populate this
+   *  queue, rather than leaving the operator to guess. `null`/absent on a
+   *  backend that predates the field. */
+  emptyState?: { has_probe_predictions: boolean; has_item_scores: boolean } | null;
 }
 
 export interface EmptyQueueMessage {
   title: string;
   lines: string[];
+  /** Set when the served `emptyState` says the prerequisite this queue
+   *  needs (probe predictions or item scores) has never been computed —
+   *  a link target the page renders as an anchor. */
+  link?: { href: string; text: string };
 }
 
 /**
@@ -58,15 +74,28 @@ export interface EmptyQueueMessage {
 export function emptyQueueMessage(input: EmptyQueueInput): EmptyQueueMessage {
   const lines: string[] = [];
   if (input.description) lines.push(`This queue holds: ${input.description}.`);
-  if (input.sortFallbackReason) {
+  if (input.emptyReason) {
+    // #36 item 9: the server's own direct reason — e.g. "no probe
+    // predictions — run a probe" — takes priority over the ordering
+    // fallback note, since it says outright why, not just what the
+    // queue's sort degraded to.
+    lines.push(input.emptyReason);
+  } else if (input.sortFallbackReason) {
     lines.push(
       `The data this queue is ordered by is not there yet: ${input.sortFallbackReason}`,
     );
   }
   if (input.filtersActive) {
     lines.push('Your filters may be hiding items — clear them to see the whole queue.');
-  } else if (!input.sortFallbackReason) {
+  } else if (!input.emptyReason && !input.sortFallbackReason) {
     lines.push('Nothing currently needs review here.');
   }
-  return { title: `The ${input.label} queue is empty.`, lines };
+  const reasonText = `${input.emptyReason ?? ''} ${input.sortFallbackReason ?? ''}`;
+  let link: EmptyQueueMessage['link'];
+  if (input.emptyState?.has_probe_predictions === false && /probe/.test(reasonText)) {
+    link = { href: '/train', text: 'Run a probe on /train' };
+  } else if (input.emptyState?.has_item_scores === false && /score/.test(reasonText)) {
+    link = { href: '/settings', text: 'Compute scores on /settings' };
+  }
+  return { title: `The ${input.label} queue is empty.`, lines, link };
 }

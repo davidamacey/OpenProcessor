@@ -139,7 +139,9 @@ describe('R7: region Status uses the served status vocabulary', () => {
     const slots = mapCropSlots(REGION_RAW, [0, 0, 1, 1]);
     expect(Object.keys(slots).length).toBeGreaterThan(0);
     const el = render({ crop: crop({ slots } as Partial<Crop>) });
-    expect(el.textContent).toContain('Region');
+    // #36 item 10: the served display_name_singular ("Widget tag"), not a
+    // hardcoded "Region" noun.
+    expect(el.textContent).toContain(WIDGET_TAG_PROFILE.display_name_singular);
     expect(rowValue(el, 'Status')).toBe('served-label-for-detected');
   });
 });

@@ -116,6 +116,43 @@ describe('DatasetStats', () => {
     expect(rows).toContain('Made by last run 1');
   });
 
+  it('#36 item 2 (D1): renders unlabeled.vlm_no_class in the Unlabeled block when served', () => {
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(DatasetStats, { target, props: {} });
+    flushSync();
+
+    capturedOpts?.onSnapshot?.(
+      {},
+      goodStats({
+        unlabeled: {
+          pending_detection: 10,
+          pending_verification: 5,
+          no_label_source: 1252,
+          vlm_no_class: 1252,
+        },
+      }) as unknown as Record<string, unknown>,
+    );
+    flushSync();
+
+    const rows = Array.from(target.querySelectorAll('dl div')).map((d) =>
+      d.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(rows).toContain('VLM, no class 1,252');
+  });
+
+  it('#36 item 2: omits the VLM-no-class row on a backend that predates the field', () => {
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(DatasetStats, { target, props: {} });
+    flushSync();
+
+    capturedOpts?.onSnapshot?.({}, goodStats() as unknown as Record<string, unknown>);
+    flushSync();
+
+    expect(target.textContent).not.toContain('VLM, no class');
+  });
+
   it('D4 (visual audit 2026-09-24): no hardcoded model/vendor names or HDD copy, verifier count named as such', () => {
     installServedRegionProfile(WIDGET_TAG_PROFILE);
     target = document.createElement('div');

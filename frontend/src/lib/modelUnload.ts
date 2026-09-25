@@ -19,22 +19,46 @@ import type { ModelInfo } from './types';
 export type UnloadButtonState = 'hidden' | 'normal' | 'force-required';
 
 /**
- * - `hidden`: never rendered — non-Triton models (the VLM) and any
- *   region-protected model (`is_region_protected`, the one guard with no
- *   override: region models and their data are never touched from here).
+ * - `hidden`: never rendered — either the server says outright this
+ *   entry can't be unloaded at all (`unloadable === false`, e.g. the
+ *   external segmenter/VLM entries, 2026-09-25 follow-up to #36 item 5),
+ *   or it's region-protected (`is_region_protected`, the one guard with
+ *   no override: region models and their data are never touched from
+ *   here — as of 698d1da this also covers the ingest primary proposer/
+ *   secondary classifier and the OCR det/rec pair, not just the region
+ *   detector).
  * - `force-required`: rendered, but the action requires an explicit
  *   second, stronger confirmation and is sent with `force=true` — the
  *   active item model or another core pipeline model currently
  *   serving live traffic.
  * - `normal`: rendered, single confirmation, `force=false`.
+ *
+ * `unloadable` is checked FIRST and is the server's own verdict — never
+ * re-derived from `kind`. A backend that predates the field (`unloadable`
+ * absent/`undefined`) falls back to the prior `kind !== 'triton'` rule,
+ * so an older deployment renders exactly as before.
  */
 export function unloadButtonState(
-  model: Pick<ModelInfo, 'kind' | 'is_region_protected' | 'requires_force_to_unload'>,
+  model: Pick<
+    ModelInfo,
+    'kind' | 'is_region_protected' | 'requires_force_to_unload' | 'unloadable'
+  >,
 ): UnloadButtonState {
-  if (model.kind !== 'triton') return 'hidden';
+  if (model.unloadable === false) return 'hidden';
+  if (model.unloadable === undefined && model.kind !== 'triton') return 'hidden';
   if (model.is_region_protected) return 'hidden';
   if (model.requires_force_to_unload) return 'force-required';
   return 'normal';
+}
+
+/** Whether to render the "protected: in use by the pipeline" chip next
+ *  to an unloadable-but-region-protected model — distinct from a model
+ *  that's simply not unloadable at all (an external service), which gets
+ *  no chip and no button. */
+export function showsProtectedChip(
+  model: Pick<ModelInfo, 'is_region_protected' | 'unloadable'>,
+): boolean {
+  return !!model.is_region_protected && model.unloadable !== false;
 }
 
 export function unloadConfirmMessage(

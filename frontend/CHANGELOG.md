@@ -8,6 +8,101 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Started adopting OpenProcessor #36 (backend commit c676d2b) — visual-audit
+  backend fixes, ingest hardening, probe job API, review empty reasons, K6
+  clean-image contract.** Contract snapshot synced to c676d2b.
+  - Item 10: `ServedRegionProfile` gains `display_name_singular`
+    ("Plate"); `regionSlotFromServedProfile` uses it for the
+    singular-context slot label (`label.title`/`label.singular`), which
+    drives every generic "Confirm `<Region>`" / "`<Region>` score" string
+    — falls back to the generic "Region"/"region" when empty or the
+    backend predates the field.
+  - Item 1: `RegistryClass`/`StatsSummary.per_class` gain the served
+    `kind` (`'item'` | `'region'`) and `trainable`/`trainable_gap`.
+    `classVisibility.ts`'s `isSlotBoundClass` now reads the served `kind`
+    first (falling back to the slot registry only when a backend
+    predates the field) — the visual-audit R1 fix (the class picker/
+    quick-assign pre-highlighting the region class) is now backed by the
+    server's own item/region classification, not a client heuristic.
+    `/export`'s per-class table (`exportDatasetRows.ts`'s `trainable`/
+    `trainableGap`) prefers the served numbers over the client-side
+    validated-minus-holdout math, kept only as the older-backend
+    fallback.
+  - Item 6: `ExportStatus`/`ExportDataset` gain the served
+    `classes_with_objects`; `/export`'s class-count chip and `/train`'s
+    current-export dataset card now render it directly instead of
+    recomputing "classes with objects" from `class_split_counts`
+    client-side (kept only as the older-backend fallback).
+  - Item 2 (D1): `DatasetStats.unlabeled` gains the served
+    `vlm_no_class` count; `DatasetStats.svelte`'s Unlabeled block renders
+    it as its own row ("VLM, no class") when served, absent on a
+    backend that predates it. `labeled.*` itself needed no frontend
+    change — it already just sums the server's own counters.
+  - Item 5 verified already fully adopted as of c676d2b with no frontend
+    code change needed: `/models` already renders every entry
+    `GET {API_PREFIX}/models/status` serves generically (by
+    `friendly_name`/`role`), no hardcoded roster.
+  - Items 3, 4, 7 verified already served/correct as of c676d2b with no
+    frontend change needed: `new_class_proposals` excludes no-answer/
+    already-classed items; `region_rejection_reason` vocabulary/
+    resolution unchanged; `GET {API_PREFIX}/crops/{id}/image` still only
+    takes `max_dim` (K6's client-drawn `SourceImageOverlay` already the
+    only box/label renderer).
+  - Item 9: `PaginatedResponse` gains `empty_reason` (set by
+    `GET {API_PREFIX}/review/{tab}` when `total === 0`) — `/review`'s
+    empty-queue panel shows it, taking priority over the raw
+    `sort_fallback_reason` note. A new sibling read,
+    `getReviewEmptyState()`/`ReviewEmptyState`, picks up
+    `GET {API_PREFIX}/review/tabs`' top-level `empty_state`
+    (`has_probe_predictions`/`has_item_scores`) into
+    `reviewTabsVocabularyStore.emptyState`; when the reason mentions a
+    probe or a score and the matching flag is false, the panel adds a
+    direct link ("Run a probe on /train" / "Compute scores on
+    /settings"). Absent/malformed on either field renders exactly as
+    before.
+
+  Every changed behavior above has a new test watched failing against a
+  mutated copy before being restored byte-for-byte. Full stubbed e2e
+  suite (65 tests) green.
+
+- **2026-09-25 follow-up to OpenProcessor #36 item 5 (`/models`, backend
+  698d1da) — served `unloadable` and widened `is_region_protected`.**
+  Contract snapshot synced to 698d1da (superset of c676d2b).
+  `ModelInfo` gains `unloadable`; `ModelStatus` gains `'not_configured'`
+  (the segmenter, `sam3`, is now `kind: 'external'` with a possible
+  `not_configured` status and null inference/exec/latency fields,
+  already rendered "—" by the existing `fmtCount`/`fmtMs`).
+  `unloadButtonState` (`$lib/modelUnload.ts`) now reads the served
+  `unloadable` FIRST: `unloadable === false` hides the button outright
+  (every external entry); `is_region_protected` — which as of 698d1da
+  also hard-blocks the ingest primary proposer/secondary classifier and
+  the OCR det/rec pair, not just the region detector — still hides it
+  too, but `/models` now renders a "protected: in use by the pipeline"
+  chip in that case (`showsProtectedChip`) instead of nothing. A backend
+  that predates `unloadable` (`undefined`) falls back to the prior
+  `kind !== 'triton'` rule, so an older deployment renders exactly as
+  before. Live, this leaves only the CLIP/PE encoders with an Unload
+  button.
+
+- **Adopted OpenProcessor #36 item 8 — probe control on `/train`.**
+  `api.ts` gains `runProbe`/`getProbeStatus`/`cancelProbe`
+  (`POST {API_PREFIX}/probe/run`, `GET {API_PREFIX}/probe/status`,
+  `POST {API_PREFIX}/probe/cancel`) and `ProbeStatusResponse`. A new
+  `ProbeControl.svelte`, embedded in `RunResults.svelte` for a finished
+  run, offers "Run probe predictions" — confirm dialog, idempotent
+  job-poll (adopts an in-flight job on mount, same pattern as
+  `ScoresCard`/`EmbeddingPlot`), explicit Cancel, and the served
+  result/error rendered verbatim, never reworded. Client-side gating
+  (`$lib/probe.ts`'s `canRunProbe`) only hides the button for a run that
+  obviously can't qualify (not finished, or finished with no recorded
+  checkpoint) — every other 409 (a probe already running, a GPU-arbiter
+  claim failure) surfaces as the backend's own detail text. A probe
+  running for a _different_ training run is detected via the response's
+  `train_job_id` and shown as "already running for another run" rather
+  than a misleading disabled button with no explanation. This populates
+  `probe_pred_*`, the prerequisite item 9's `empty_state.
+has_probe_predictions` checks for.
+
 - **Adopted OpenProcessor #34 W1 (backend commit eb5c251) — training
   lineage, build identity, and last-epoch vs. best-checkpoint metrics.**
   - `TrainJobStatus`/`TrainManifest.results` drop `best_metric`/

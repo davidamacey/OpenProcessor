@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { getModelsStatus, unloadModel } from '$lib/api';
   import {
+    showsProtectedChip,
     unloadButtonState,
     unloadConfirmMessage,
     unloadForceConfirmMessage,
@@ -50,12 +51,14 @@
   function statusPillClass(s: ModelStatus): string {
     if (s === 'ready') return 'bg-green-500/20 text-green-200 border-green-500/40';
     if (s === 'not_ready') return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
+    if (s === 'not_configured') return 'bg-zinc-700/40 text-zinc-400 border-zinc-600';
     return 'bg-red-500/20 text-red-200 border-red-500/40';
   }
 
   function statusLabel(s: ModelStatus): string {
     if (s === 'ready') return 'ready';
     if (s === 'not_ready') return 'not ready';
+    if (s === 'not_configured') return 'not configured';
     return 'unavailable';
   }
 
@@ -281,6 +284,20 @@
                     ? 'Force unload'
                     : 'Unload'}
               </button>
+            </div>
+          {:else if showsProtectedChip(m)}
+            <!-- 2026-09-25 follow-up to #36 item 5: is_region_protected now
+                 also covers the ingest primary/secondary and OCR det/rec
+                 models, not just the region detector — every one of them
+                 hard-blocks DELETE server-side (403, no force flow), so no
+                 button at all, just this explanatory chip. -->
+            <div class="mt-3 flex justify-end border-t border-zinc-800 pt-3">
+              <span
+                class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-500"
+                title="Hard-blocked server-side — DELETE 403s unconditionally, no force flow"
+              >
+                protected: in use by the pipeline
+              </span>
             </div>
           {/if}
         </li>
