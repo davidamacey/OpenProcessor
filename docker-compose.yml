@@ -277,6 +277,9 @@ services:
       - openprocessor-jobs:/jobs
     environment:
       - OPENSEARCH_URL=http://opensearch:9200
+      - OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
+      - OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-4}
+      - MKL_NUM_THREADS=${MKL_NUM_THREADS:-4}
     command:
       - python
       - -m
@@ -389,6 +392,8 @@ services:
         required: false
     ports:
       - 4611:8000  # Segmentation HTTP API
+    volumes:
+      - ./cache/huggingface:/home/appuser/.cache/huggingface  # ST-2: nvme-backed HF cache (appuser, matches yolo-api)
     environment:
       # Gated weights: the service boots and logs a warning without a
       # token, then fails the download. Set HF_TOKEN in .env.

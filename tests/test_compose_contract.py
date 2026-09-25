@@ -202,3 +202,26 @@ def test_evaluator_sees_exports_at_the_api_path() -> None:
     evaluator_mounts = services['curation-evaluator'].get('volumes') or []
     assert any(str(v).startswith('./data:/app/data') for v in api_mounts)
     assert './data:/app/data:ro' in evaluator_mounts
+
+
+def test_auto_label_worker_caps_blas_threads() -> None:
+    """LG-3: AHC/UMAP on the residual pool otherwise spawns one BLAS thread
+    per host core (48 on the reference host) with nothing else configured.
+    Cap them on curation-auto-label-worker so a big recluster doesn't starve
+    the rest of a shared host."""
+    env = _services()['curation-auto-label-worker'].get('environment') or []
+    env_str = '\n'.join(str(e) for e in env)
+    assert 'OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}' in env_str
+    assert 'OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-4}' in env_str
+    assert 'MKL_NUM_THREADS=${MKL_NUM_THREADS:-4}' in env_str
+
+
+def test_segmenter_hf_cache_mounted_at_appuser_home() -> None:
+    """ST-2: the segmenter container runs as uid 1000 (``appuser``) with
+    ``HF_HOME=/home/appuser/.cache/huggingface``. A cache bind at
+    ``/root/.cache/huggingface`` silently misses (wrong user), so the ~3.3G
+    of gated SAM3 weights land in the writable container layer and
+    re-download on every recreate instead of hitting the nvme bind."""
+    mounts = [str(v) for v in (_services()['segmenter'].get('volumes') or [])]
+    assert any(m.endswith(':/home/appuser/.cache/huggingface') for m in mounts), mounts
+    assert not any(m.endswith(':/root/.cache/huggingface') for m in mounts), mounts
