@@ -165,7 +165,7 @@ def _sum_prefixed(buckets: dict[str, int], prefix: str) -> int:
 def _rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
     """Roll up ``class_source`` buckets into dashboard taxonomy.
 
-    Returns a dict of vehicle-class label provenance counts. ``by_human``
+    Returns a dict of class label provenance counts. ``by_human``
     counts ONLY rows whose ``class_source`` is a human-prefixed value
     (e.g. 'human', 'human_move'). A majority-agreement auto-validator
     also sets ``class_validated=True`` but that's auto-validation, not a
@@ -326,7 +326,7 @@ def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
                     'missing': '__none__',
                 },
             },
-            # D1: the flat 'class_sources' agg above buckets EVERY crop by
+            # The flat 'class_sources' agg above buckets EVERY crop by
             # class_source regardless of whether a class_id was ever
             # assigned -- 'vlm_unmatched' / 'vlm_new_class_pending' both
             # start with 'vlm' and class_id is null on both, so the old
@@ -453,7 +453,7 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
     fields = get_region_fields()
     body = _build_dataset_query_body(fields)
     try:
-        # F-21: this is also the query the SSE stats stream re-runs
+        # This is also the query the SSE stats stream re-runs
         # every ~10-15s (see pipeline_events.py's TTL cache). Shard
         # request-cache eligible (size:0, no `now`/random scoring) —
         # OpenSearch invalidates it on every index refresh anyway, so
@@ -466,7 +466,7 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
     aggs = resp.get('aggregations') or {}
 
-    # D1: rollup is built from ``class_sources_with_class`` (docs that
+    # Rollup is built from ``class_sources_with_class`` (docs that
     # actually carry a class_id), not the flat ``class_sources`` agg --
     # otherwise a class-less vlm_unmatched/vlm_new_class_pending crop
     # counts as VLM-labeled. See the agg comment in
@@ -584,7 +584,7 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
             'pending_detection': pending_detection,
             'pending_verification': pending_verification,
             'no_label_source': no_label_source,
-            # D1: crops a VLM answered or proposed but that never got a
+            # Crops a VLM answered or proposed but that never got a
             # class_id (sources "vlm_unmatched" / "vlm_new_class_pending")
             # -- these used to be double counted as VLM labeled in the
             # "labeled" section above even though they carry no class.

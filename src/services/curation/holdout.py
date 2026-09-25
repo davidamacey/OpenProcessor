@@ -61,7 +61,7 @@ _STRATUM_SCAN_PAGE_SIZE = 1000
 # stratum, ~1300x today's entire cohort (382 crops).
 _STRATUM_SCAN_MAX_PAGES = 500
 
-# F-8 sentinels for the composite agg's missing_bucket strata (a doc with no
+# Sentinels for the composite agg's missing_bucket strata (a doc with no
 # class_id or no source). class_id uses -1 (never a real class id);
 # source uses an explicit string sentinel since '' was already a
 # plausible (if unlikely) real value and would be ambiguous with "missing".
@@ -80,7 +80,7 @@ def _equals_or_missing(field: str, value: Any, missing_sentinel: Any) -> dict[st
 def build_cohort_query() -> dict[str, Any]:
     """The freeze cohort: human-validated crops only.
 
-    Plan Phase 2 item 1 / Appendix C Decision 2 — the retired
+    The retired
     ``label_source`` filter referenced values nothing in the repo ever
     writes (0 matches, live).
     ``class_source`` is mapped ``keyword`` directly on the live index — no
@@ -156,7 +156,7 @@ async def fetch_cohort_strata(
     cohort via composite agg (following ``after_key`` across pages), then
     real-scan each stratum for its full ``crop_id`` list.
 
-    Plan Phase 2 item 2, three bugs in one call site:
+    Three bugs fixed in this call site:
 
     - ``source`` is mapped ``keyword`` directly on the live index — no
       ``.keyword`` subfield exists; querying one either 400s or (composite
@@ -167,8 +167,7 @@ async def fetch_cohort_strata(
     - The original per-bucket ``top_hits(size: 1000)`` cap 400s past
       OpenSearch's default ``index.max_inner_result_window`` (100) on any
       real stratum over 100 crops — replaced with a genuine per-stratum
-      scan (:func:`scan_stratum_crop_ids`), matching the plan's "real
-      per-stratum scan" alternative.
+      scan (:func:`scan_stratum_crop_ids`).
 
     Returns one dict per stratum: ``{'class_id': int, 'source': str,
     'crop_ids': list[str]}``.
@@ -179,7 +178,7 @@ async def fetch_cohort_strata(
         composite: dict[str, Any] = {
             'size': _STRATA_PAGE_SIZE,
             'sources': [
-                # F-8: missing_bucket keeps docs with no class_id/source
+                # missing_bucket keeps docs with no class_id/source
                 # in the strata enumeration (as an explicit null key)
                 # instead of silently dropping them from the composite agg
                 # entirely -- a doc missing one of these fields would
@@ -200,7 +199,7 @@ async def fetch_cohort_strata(
         page_buckets = strata.get('buckets', [])
         for bucket in page_buckets:
             key = bucket.get('key') or {}
-            # F-8: `int(key.get('class_id') or -1)` treated class_id == 0
+            # `int(key.get('class_id') or -1)` treated class_id == 0
             # the same as a missing key (`0 or -1` == -1 in Python),
             # silently misbucketing every class-0 crop as "unknown". Only
             # an actually-missing/None key (missing_bucket above) falls
@@ -295,7 +294,7 @@ def persist_freeze_record(
       ``ClassRegistry._atomic_write``).
 
     Without this, ``test_holdout_sha`` in the API response is a number
-    nobody can verify or use to revert a bad freeze (plan Phase 2, item 4).
+    nobody can verify or use to revert a bad freeze.
     """
     target_dir = state_dir if state_dir is not None else _default_state_dir()
     target_dir.mkdir(parents=True, exist_ok=True)

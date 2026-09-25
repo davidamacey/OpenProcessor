@@ -74,7 +74,7 @@ _INDEXES_BOOTSTRAPPED = False
 
 # OpenSearch's index.max_result_window default. from+size past this 500s
 # ("Result window is too large") instead of paging -- reject it explicitly
-# with a 422 before it ever reaches OpenSearch (F-7).
+# with a 422 before it ever reaches OpenSearch.
 MAX_RESULT_WINDOW = 10_000
 
 
@@ -143,7 +143,7 @@ RegionProfileDep = Annotated[Any, Depends(_require_region_profile_dep)]
 async def warm_knn_indexes(opensearch: Any) -> None:
     """Warm the kNN native-engine graph cache for the items + images indexes.
 
-    F-24: without this, the first semantic-search / kNN query after a
+    Without this, the first semantic-search / kNN query after a
     restart (or after a shard relocation) pays the cost of loading the
     faiss/HNSW graph off disk cold. The warmup endpoint forces that load
     to happen once, up front, off the request path.
@@ -174,7 +174,7 @@ async def warm_knn_indexes(opensearch: Any) -> None:
     )
 
 
-# F-28.4: guards the whole ~5-exists + N-put_mapping bootstrap sequence
+# Guards the whole ~5-exists + N-put_mapping bootstrap sequence
 # below. Without this, concurrent requests that all arrive before the
 # first one flips _INDEXES_BOOTSTRAPPED each independently race through
 # the full migration sequence against OpenSearch (redundant `exists` +

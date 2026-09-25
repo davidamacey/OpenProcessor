@@ -1,6 +1,6 @@
 """Evaluation datasets for the model comparison (bake-off): discovery, ids, identity.
 
-Two sources (plan ``generic_model_comparison_plan.md`` section 3.2):
+Two sources:
 
 * ``export`` -- every real directory (not a symlink) at depth 1 or 2 under
   ``CurationConfig.export_root`` that holds ``manifest.json``, ``data.yaml``
@@ -61,7 +61,7 @@ class EvalClassCount:
 
 @dataclass(frozen=True)
 class EvalDatasetRecord:
-    """One eval dataset with everything computed from its files (plan 7.2)."""
+    """One eval dataset with everything computed from its files."""
 
     id: str
     source: str  # 'export' | 'external'
@@ -243,7 +243,7 @@ def _build(
         kind = 'single_class' if meta.get('dataset_kind') == 'single_class' else 'multi_class'
         frozen_ok = None
     else:
-        # freeze.py wrote the content hash under the legacy key before W1.
+        # freeze.py wrote the content hash under the legacy key in an earlier version.
         recorded_label_sha = meta.get('test_label_sha') or meta.get('frozen_test_sha')
         frozen_test_sha = frozen_test_sha_of(d)
         kind = 'external'
@@ -387,7 +387,7 @@ def export_id_for_dir(export_dir: str | Path) -> str:
 def train_test_overlap(train_export_dir: Path, dataset: EvalDatasetRecord) -> dict[str, Any]:
     """Eval test images whose stem is also in the training export's train/val labels.
 
-    A leakage warning, never a block (plan 3.5). ``fraction`` is over the eval
+    A leakage warning, never a block. ``fraction`` is over the eval
     split's images.
     """
     train_stems: set[str] = set()

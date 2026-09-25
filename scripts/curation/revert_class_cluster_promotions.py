@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""CM-1 data repair: revert class-cluster auto-promotions.
+"""Data repair: revert class-cluster auto-promotions.
 
-Before CM-1's aggregation-query fix
+Before the aggregation-query fix
 (``src/services/curation/clustering/auto_promote.py``), ``auto_promote_clusters``
 scored purity over EVERY ``cluster_id`` bucket, including class clusters
 (``0 .. RESIDUAL_CLUSTER_ID_OFFSET-1``, where ``cluster_id == class_id`` by
@@ -20,7 +20,7 @@ written by ``auto_promote`` for a ``cluster_id < RESIDUAL_CLUSTER_ID_OFFSET``
 promotion, and ``class_validated`` is set back to ``false``.
 
 Human-owned items are never touched (``is_human_owned_class`` guard,
-mirroring the F-3 painless no-op other writers use) -- if a human
+mirroring the painless no-op other writers use) -- if a human
 subsequently confirmed a class this script would otherwise revert, the
 human write wins and the item is left alone.
 
@@ -145,7 +145,7 @@ async def _run(opensearch_url: str, *, apply: bool) -> int:
         print(
             f'\n{len(hits):,} items carry class_source='
             f'{CLUSTER_MAJORITY_CLASS_SOURCE!r}; {len(eligible):,} were promoted '
-            'from a class-range cluster (the CM-1 bug) and are eligible to revert.\n'
+            'from a class-range cluster (the aggregation-query bug) and are eligible to revert.\n'
         )
         if eligible:
             restored_names = Counter(e.get('class_name') for e in eligible.values())

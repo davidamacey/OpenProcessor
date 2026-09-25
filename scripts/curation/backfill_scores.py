@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Backfill curation scores (uniqueness / near-dup / mistakenness) over the
-residual item pool (curation-strategy plan §7 Phase 1).
+residual item pool.
 
 Thin CLI wrapper over ``src.services.curation.item_scores.job`` — same
 argparse + ``--dry-run`` + ``--limit`` conventions as other offline backfill
@@ -10,8 +10,8 @@ share identical logic (single embedding fetch, per-scorer bulk writes,
 ``test_holdout`` exclusion).
 
 Resumable: every scorer overwrites its own fields on the items it processes
-(version-stamped — see ``ScoreResult.version`` / plan §4 "Versioning
-rule"); there is no partial-item skip logic because each scorer's math
+(version-stamped — see ``ScoreResult.version``); there is no partial-item
+skip logic because each scorer's math
 depends on the *whole* residual pool's geometry (k-NN neighbours, IVF
 buckets), not just the unscored subset. ``--limit`` caps how many residual
 items are pulled (smoke runs only — a k-NN/near-dup score computed over a

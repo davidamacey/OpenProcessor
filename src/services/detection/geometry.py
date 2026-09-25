@@ -1,10 +1,9 @@
 """Shared crop/bbox geometry helpers for the detection subsystem.
 
-Extracted from the private reference ingest service (see
-``docs/design/curation_design_rationale.md`` §2.1 for the citation
-convention) and from this repo's own :mod:`src.services.detection.cascade_detect`,
-which previously carried a private, near-identical copy of the
-letterbox/undo-letterbox math. Both the curation ingest service
+Extracted from the curation ingest service and from this repo's own
+:mod:`src.services.detection.cascade_detect`, which previously each
+carried their own near-identical copy of the letterbox/undo-letterbox
+math. Both the curation ingest service
 (:mod:`src.services.curation.ingest`) and the region-detection cascade
 import these functions so bbox math, crop ids and letterbox transforms
 stay bit-identical across the two pipelines.

@@ -247,7 +247,7 @@ async def pipeline_auto_label(
             summary['stages']['cluster_residuals'] = {'status': 'error', 'error': str(exc)}
         from src.services.curation.clustering.cluster_geometry import cluster_geometry_stage
 
-        # DQ-M3: every cluster (class ones too) gets centroid geometry.
+        # Every cluster (class ones too) gets centroid geometry.
         summary['stages']['cluster_residuals']['cluster_geometry'] = await with_elapsed_tick(
             progress, cluster_geometry_stage(opensearch)
         )

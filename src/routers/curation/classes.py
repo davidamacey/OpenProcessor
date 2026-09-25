@@ -129,7 +129,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                         },
                     },
                 },
-                # F-12: restrict to class-kind cluster ids (cluster_id ==
+                # Restrict to class-kind cluster ids (cluster_id ==
                 # class_id by invariant) via a filter agg before
                 # terms-aggregating, so candidate/residual cluster ids
                 # (>= RESIDUAL_CLUSTER_ID_OFFSET, often far more numerous
@@ -171,7 +171,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
     # one, NOT as a separate doc whose primary class_id == that class. The
     # class-aggregation count above only captures the rare mis-labels.
     #
-    # X2: this used to override sample_count/validated_count/cluster_size
+    # This used to override sample_count/validated_count/cluster_size
     # with the region inventory total, which made the region "class" look
     # like an item class with thousands of validated crops -- it inflated
     # /train's class picker and /export's per-class table (the served
@@ -496,7 +496,7 @@ async def merge_class(
     # field (its label_source means "original label provenance", not
     # "is this human-confirmed") — stays a plain update_by_query.
     #
-    # F-29: this index has no mapping for cluster_id/cluster_subid — they
+    # This index has no mapping for cluster_id/cluster_subid — they
     # were only ever written here (nothing reads them off this index;
     # models.py's health check only checks index existence), so an
     # unmapped field was accumulating on every merge for no reader. Drop
@@ -563,7 +563,7 @@ async def merge_class(
     try:
         crop_ids = await _scroll_merge_ids()
         if crop_ids:
-            # F-29: refresh once after every page instead of forcing a
+            # Refresh once after every page instead of forcing a
             # refresh=True on each of occ_skip_on_conflict_bulk's
             # per-500-id pages.
             bulk_result = await occ_skip_on_conflict_bulk(

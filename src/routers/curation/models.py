@@ -1,15 +1,13 @@
 """Curation /health + /models/status + /models/{name} (unload) endpoints.
 
-The reference implementation this was ported from hardcodes a fixed
-domain-specific model roster (a COCO region proposer, an 80-class
-secondary classifier, a region detector, …) with domain-friendly
-names. This port drives the equivalent roster off the already-generic
-config this plan built: :class:`~src.config.detection_profile.DetectionProfile`
-(the configured region detector + OCR det/rec models) and
+Drives the pipeline-model roster off generic config rather than any
+hardcoded, domain-specific model list:
+:class:`~src.config.detection_profile.DetectionProfile` (the configured
+region detector + OCR det/rec models) and
 :class:`~src.config.settings.TritonModelConfig` (CLIP/face-recognition
-models already generic on ``origin/main``), plus the PE-Core image
-encoder. A deployment with a different ``DetectionProfile`` gets its own
-roster and its own "never unload this" guard for free.
+models), plus the PE-Core image encoder. A deployment with a different
+``DetectionProfile`` gets its own roster and its own "never unload this"
+guard for free.
 """
 
 from __future__ import annotations
@@ -148,7 +146,7 @@ async def curation_health(
 
 def _core_models() -> tuple[tuple[str, str, str, str], ...]:
     """Fixed pipeline-model roster, derived from config rather than
-    hardcoded vehicle-domain names.
+    a hardcoded, domain-specific model list.
 
     Skips the region-detector / OCR entries entirely when the active
     ``DetectionProfile`` leaves them unset (empty string default) — a
@@ -156,7 +154,7 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
     always-present CLIP + PE encoder entries.
     """
     entries: list[tuple[str, str, str, str]] = []
-    # M2: the primary item proposer and (if configured) the secondary
+    # The primary item proposer and (if configured) the secondary
     # classifier drive most of the label provenance the labeler shows on
     # /review and /classes (class_source ending '_proposal' / '_model')
     # -- they were missing here entirely, so /models showed nothing for
@@ -256,10 +254,9 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
 # through the unload endpoint, not even with force=true. "Never touch the
 # configured pipeline's models" is the standing constraint; which models
 # that means is driven by the active ingest/detection profiles, not a
-# hardcoded domain-specific prefix. S8: no hardcoded detector-name prefix
-# is dropped -- the code never names the deployed detector ids; a name is
-# protected only via the active profiles' configured model fields (or the
-# fixed paddleocr_ OCR prefix).
+# hardcoded domain-specific prefix -- the code never names the deployed
+# detector ids; a name is protected only via the active profiles'
+# configured model fields (or the fixed paddleocr_ OCR prefix).
 _REGION_PROTECTED_PREFIXES = ('paddleocr_',)
 
 

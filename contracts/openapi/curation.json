@@ -1058,7 +1058,7 @@
                 "type": "null"
               }
             ],
-            "description": "JSON list of stable identifiers, one per image, stored as source_identifier (default: the upload filenames). Need not exist on the server -- BA-1: image_path is now the server-persisted path the uploaded bytes were written under.",
+            "description": "JSON list of stable identifiers, one per image, stored as source_identifier (default: the upload filenames). Need not exist on the server -- image_path is now the server-persisted path the uploaded bytes were written under.",
             "title": "Image Paths"
           },
           "images": {
@@ -1079,7 +1079,7 @@
                 "type": "null"
               }
             ],
-            "description": "BA-4: optional tag for this upload call, recorded as ingest_run_id.",
+            "description": "Optional tag for this upload call, recorded as ingest_run_id.",
             "title": "Run Id"
           },
           "source": {
@@ -1927,7 +1927,7 @@
         "type": "object"
       },
       "CropExcludeRequest": {
-        "description": "Exclude crops from training + clustering (reversible).\n\nBlurry / unidentifiable / partial crops the human doesn't want in\nthe training set. ``reason`` defaults to ``'ignore'``; the UI can\npass a more specific tag (``'blurry'``, ``'unidentifiable'``,\n``'not_a_vehicle'``, ``'partial_crop'``) when the operator wants to\nrecord why (e.g. a whole cluster of blurry items).",
+        "description": "Exclude crops from training + clustering (reversible).\n\nBlurry / unidentifiable / partial crops the human doesn't want in\nthe training set. ``reason`` defaults to ``'ignore'``; the UI can\npass a more specific tag (``'blurry'``, ``'unidentifiable'``,\n``'wrong_class'``, ``'partial_crop'``) when the operator wants to\nrecord why (e.g. a whole cluster of blurry items).",
         "properties": {
           "crop_ids": {
             "items": {
@@ -3148,7 +3148,7 @@
                 "type": "null"
               }
             ],
-            "description": "T1: the browser-reachable MLflow base URL (CurationConfig.mlflow_public_url / OP_MLFLOW_PUBLIC_URL), null when unset. A served train run may carry its own mlflow_run_url that is correct host-side but unreachable from an operator browser -- a client should build the link from this base rather than guessing a port.",
+            "description": "The browser-reachable MLflow base URL (CurationConfig.mlflow_public_url / OP_MLFLOW_PUBLIC_URL), null when unset. A served train run may carry its own mlflow_run_url that is correct host-side but unreachable from an operator browser -- a client should build the link from this base rather than guessing a port.",
             "title": "Mlflow Public Url"
           },
           "opensearch": {
@@ -5418,7 +5418,7 @@
         "type": "object"
       },
       "PreflightCheck": {
-        "description": "Single row in the preflight report (design §15.1).",
+        "description": "Single row in the preflight report.",
         "properties": {
           "detail": {
             "anyOf": [
@@ -6251,7 +6251,7 @@
         "type": "object"
       },
       "ReviewEmptyState": {
-        "description": "C3: underlying-state flags a client uses to word ANY tab's\nzero-result state without a per-tab round trip -- the same signals\n``GET /review/{tab}``'s own ``empty_reason`` is derived from.",
+        "description": "Underlying-state flags a client uses to word ANY tab's\nzero-result state without a per-tab round trip -- the same signals\n``GET /review/{tab}``'s own ``empty_reason`` is derived from.",
         "properties": {
           "has_item_scores": {
             "title": "Has Item Scores",
@@ -9042,7 +9042,7 @@
     },
     "/curation/clusters": {
       "get": {
-        "description": "Authoritative per-cluster card payload for the labeler.\n\nSingle OpenSearch aggregation that returns, for every cluster_id:\n\n* ``size`` (total members), ``validated_count`` (class_validated=true),\n* ``dominant_class_{id,name,count}`` and ``label_purity``\n  (largest-class share among labelled members) with\n  ``labelled_share``. A candidate cluster only gets a\n  ``dominant_class_name`` when a unique top class has at least\n  ``CANDIDATE_DOMINANT_MIN_COUNT`` members and\n  ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones;\n  ``dominant_count``/``labelled_count``/``label_purity`` are always\n  reported,\n* ``purity`` / ``purity_n`` / ``purity_basis`` / ``purity_tier``\n  (DQ-M2): the share of the ``purity_n`` members the cluster-geometry\n  pass measured for this cluster whose nearest cluster centroid is\n  this cluster's own — independent of the labels that placed them, so\n  a class cluster is no longer 1.0 by construction; ``null`` when no\n  member has been measured,\n* ``is_unlabeled`` (true when no class_name has any signal at all),\n* ``cluster_kind`` (``class`` | ``candidate`` | ``unassigned``),\n* ``n_subclusters`` (distinct cluster_subid values), and\n* ``representatives`` (top ``per_cluster`` crops sorted by\n  cluster_distance asc).\n\nThis endpoint exists so the frontend can stop computing dominant\nclass / purity from a 4-crop sample (it was getting wrong answers\non candidate clusters where all reps were null-class). The\naggregation is cheap because ``cluster_id`` is a low-cardinality\ninteger field; ``class_name``/``class_source``/``cluster_subid`` are\nall mapped ``keyword`` directly on the live index (no ``.keyword``\nsubfield).",
+        "description": "Authoritative per-cluster card payload for the labeler.\n\nSingle OpenSearch aggregation that returns, for every cluster_id:\n\n* ``size`` (total members), ``validated_count`` (class_validated=true),\n* ``dominant_class_{id,name,count}`` and ``label_purity``\n  (largest-class share among labelled members) with\n  ``labelled_share``. A candidate cluster only gets a\n  ``dominant_class_name`` when a unique top class has at least\n  ``CANDIDATE_DOMINANT_MIN_COUNT`` members and\n  ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones;\n  ``dominant_count``/``labelled_count``/``label_purity`` are always\n  reported,\n* ``purity`` / ``purity_n`` / ``purity_basis`` / ``purity_tier``\n  : the share of the ``purity_n`` members the cluster-geometry\n  pass measured for this cluster whose nearest cluster centroid is\n  this cluster's own — independent of the labels that placed them, so\n  a class cluster is no longer 1.0 by construction; ``null`` when no\n  member has been measured,\n* ``is_unlabeled`` (true when no class_name has any signal at all),\n* ``cluster_kind`` (``class`` | ``candidate`` | ``unassigned``),\n* ``n_subclusters`` (distinct cluster_subid values), and\n* ``representatives`` (top ``per_cluster`` crops sorted by\n  cluster_distance asc).\n\nThis endpoint exists so the frontend can stop computing dominant\nclass / purity from a 4-crop sample (it was getting wrong answers\non candidate clusters where all reps were null-class). The\naggregation is cheap because ``cluster_id`` is a low-cardinality\ninteger field; ``class_name``/``class_source``/``cluster_subid`` are\nall mapped ``keyword`` directly on the live index (no ``.keyword``\nsubfield).",
         "operationId": "list_clusters_curation_clusters_get",
         "parameters": [
           {
@@ -9308,7 +9308,7 @@
     },
     "/curation/clusters/refine/{cluster_id}": {
       "post": {
-        "description": "Run AHC refinement on a curation \"vehicles\" cluster.\n\nWrites ``cluster_subid`` (keyword, e.g. ``\"47a\"``) to every member.\nSkips clusters below the small-cluster floor or above ``max_members``\n(the pairwise matrix grows ~8*n^2 bytes). Re-running on the same\ncluster overwrites prior subids, so refinement is idempotent.",
+        "description": "Run AHC refinement on a curation item cluster.\n\nWrites ``cluster_subid`` (keyword, e.g. ``\"47a\"``) to every member.\nSkips clusters below the small-cluster floor or above ``max_members``\n(the pairwise matrix grows ~8*n^2 bytes). Re-running on the same\ncluster overwrites prior subids, so refinement is idempotent.",
         "operationId": "refine_cluster_endpoint_curation_clusters_refine__cluster_id__post",
         "parameters": [
           {
@@ -9379,7 +9379,7 @@
     },
     "/curation/clusters/representatives": {
       "get": {
-        "description": "Return up to ``per_cluster`` representative crop_ids per cluster, one page.\n\nF-15 / D-4: the cluster id list still comes from one cheap ``terms``\naggregation (no sub-agg), but representatives are fetched via one\n``_msearch`` covering only the ``[offset, offset+max_clusters)`` page\nof cluster ids (ordered by member count desc) — not via a\n``top_hits`` sub-agg that would decompress stored ``_source`` for\nevery representative across every bucket. Only clusters in that page\nappear as keys in the response; call again with a larger ``offset``\nfor the next page.\n\nWhen ``class_id`` is set, the outer query filters to crops with that\nclass so the agg only returns clusters that contain at least one\nmember of the class — driving the labeler's class-sidebar filter.",
+        "description": "Return up to ``per_cluster`` representative crop_ids per cluster, one page.\n\nThe cluster id list still comes from one cheap ``terms``\naggregation (no sub-agg), but representatives are fetched via one\n``_msearch`` covering only the ``[offset, offset+max_clusters)`` page\nof cluster ids (ordered by member count desc) — not via a\n``top_hits`` sub-agg that would decompress stored ``_source`` for\nevery representative across every bucket. Only clusters in that page\nappear as keys in the response; call again with a larger ``offset``\nfor the next page.\n\nWhen ``class_id`` is set, the outer query filters to crops with that\nclass so the agg only returns clusters that contain at least one\nmember of the class — driving the labeler's class-sidebar filter.",
         "operationId": "cluster_representatives_curation_clusters_representatives_get",
         "parameters": [
           {
@@ -10460,7 +10460,7 @@
     },
     "/curation/crops/{crop_id}/image": {
       "get": {
-        "description": "The clean source image for this crop's parent frame — no box, label\nor other overlay drawn (K6). Only resize, EXIF-transpose and RGB\nconversion apply.\n\nDefaults to full resolution to preserve compatibility with callers\nthat need pixel-accurate frames. Pass ``max_dim`` for the labeler\nreview queue, where the user is glancing at one item at a time and a\nsub-MB preview is plenty. The frontend draws the item box, the\nregion box and any rejected-candidate box itself, from the geometry\n``GET {prefix}/crops/{id}/context`` serves in source-image-normalized\ncoordinates.",
+        "description": "The clean source image for this crop's parent frame — no box, label\nor other overlay drawn. Only resize, EXIF-transpose and RGB\nconversion apply.\n\nDefaults to full resolution to preserve compatibility with callers\nthat need pixel-accurate frames. Pass ``max_dim`` for the labeler\nreview queue, where the user is glancing at one item at a time and a\nsub-MB preview is plenty. The frontend draws the item box, the\nregion box and any rejected-candidate box itself, from the geometry\n``GET {prefix}/crops/{id}/context`` serves in source-image-normalized\ncoordinates.",
         "operationId": "crop_full_image_curation_crops__crop_id__image_get",
         "parameters": [
           {
@@ -10819,7 +10819,7 @@
     },
     "/curation/crops/{crop_id}/region_thumbnail": {
       "get": {
-        "description": "128px JPEG thumbnail of the crop's region-of-interest sub-bbox.\n\nUsed by the region-verification UI in the labeler. Falls back to the\nverifier-rejected candidate box (``RegionFields.candidate_bbox_norm``)\nwhen there is no accepted region box (``RegionFields.bbox_norm``) --\na ``verify_rejected`` item never has the latter, so this route used to\n404 for every one of them even though the item is still reviewable\n(DQ-B2 follow-up). 404 only when the crop has neither box. The cache\nkey includes the box's own coordinates (``ThumbnailCache.get_or_compute``),\nso a later promotion or re-detection that changes the box never\nserves a stale image -- it's a different cache key.",
+        "description": "128px JPEG thumbnail of the crop's region-of-interest sub-bbox.\n\nUsed by the region-verification UI in the labeler. Falls back to the\nverifier-rejected candidate box (``RegionFields.candidate_bbox_norm``)\nwhen there is no accepted region box (``RegionFields.bbox_norm``) --\na ``verify_rejected`` item never has the latter, so this route used to\n404 for every one of them even though the item is still reviewable\n404 only when the crop has neither box. The cache\nkey includes the box's own coordinates (``ThumbnailCache.get_or_compute``),\nso a later promotion or re-detection that changes the box never\nserves a stale image -- it's a different cache key.",
         "operationId": "crop_region_thumbnail_curation_crops__crop_id__region_thumbnail_get",
         "parameters": [
           {
@@ -11783,7 +11783,7 @@
     },
     "/curation/ingest/config": {
       "get": {
-        "description": "Typed ingest capability + limits (BA-2).\n\n``upload``/``batch``/``region_drain`` are all real config, not\nhardcoded client-side constants: ``upload.max_images_per_request`` /\n``max_bytes_per_request`` / ``accepted_extensions`` are enforced (413 /\nper-item ``unsupported_type``) by ``POST /ingest/upload``;\n``batch.max_items`` is enforced by ``POST /ingest/batch``;\n``region_drain.*`` are the parameters ``GET /ingest/region_drain``'s\nstability verdict uses.",
+        "description": "Typed ingest capability + limits.\n\n``upload``/``batch``/``region_drain`` are all real config, not\nhardcoded client-side constants: ``upload.max_images_per_request`` /\n``max_bytes_per_request`` / ``accepted_extensions`` are enforced (413 /\nper-item ``unsupported_type``) by ``POST /ingest/upload``;\n``batch.max_items`` is enforced by ``POST /ingest/batch``;\n``region_drain.*`` are the parameters ``GET /ingest/region_drain``'s\nstability verdict uses.",
         "operationId": "ingest_config_curation_ingest_config_get",
         "responses": {
           "200": {
@@ -11847,7 +11847,7 @@
     },
     "/curation/ingest/path_lookup": {
       "post": {
-        "description": "Filter a list of paths down to those already ingested.\n\nUsed by an ingest walker to short-circuit the read+hash work for\nre-scans of immutable archive media. Matches on ``image_path`` OR\n``source_identifier`` (BA-1): a byte-upload ingest's client identifier\nis recorded as ``source_identifier`` now that ``image_path`` is the\nserver-persisted path, so a re-scan driver that only knows its own\nidentifiers still gets a hit. Both fields are mapped keyword on the\nimages index.",
+        "description": "Filter a list of paths down to those already ingested.\n\nUsed by an ingest walker to short-circuit the read+hash work for\nre-scans of immutable archive media. Matches on ``image_path`` OR\n``source_identifier``: a byte-upload ingest's client identifier\nis recorded as ``source_identifier`` now that ``image_path`` is the\nserver-persisted path, so a re-scan driver that only knows its own\nidentifiers still gets a hit. Both fields are mapped keyword on the\nimages index.",
         "operationId": "curation_ingest_path_lookup_curation_ingest_path_lookup_post",
         "requestBody": {
           "content": {
@@ -11889,7 +11889,7 @@
     },
     "/curation/ingest/region_drain": {
       "get": {
-        "description": "Region-detection worklog: how many items are still waiting for the\ndetection worker.\n\nUsed by an ingest walker to decide when the asynchronous\ndetect-then-verify chain has caught up after a folder finishes, before\ntriggering ``/curation/pipeline/auto_label``. The walker polls this\nendpoint every ``region_drain.poll_interval_s`` (``GET /ingest/config``)\nand proceeds once ``drained`` is true (BA-3) -- computed server-side\nnow, not invented client-side from ``total_unfinished == 0``.\n\nReturns:\n* ``pending_detection``    — items the detection worker hasn't reached\n                              yet (region status == 'pending_detection').\n* ``pending_verification`` — items where the detector found a\n                              candidate and the verify step is queued.\n* ``total_unfinished``     — sum of the two; what a legacy walker polled.\n* ``drained``              — true once ``total_unfinished`` has read 0\n                              for ``region_drain.stable_polls`` consecutive\n                              polls of this endpoint.\n* ``stable_for_s``         — seconds since the last non-zero reading.\n* ``observed_at``          — this poll's timestamp.\n\nRe-ingested data can never carry the retired ``'pending'`` /\n``'pending_verify'`` short names (S5), so there is no legacy rollup.",
+        "description": "Region-detection worklog: how many items are still waiting for the\ndetection worker.\n\nUsed by an ingest walker to decide when the asynchronous\ndetect-then-verify chain has caught up after a folder finishes, before\ntriggering ``/curation/pipeline/auto_label``. The walker polls this\nendpoint every ``region_drain.poll_interval_s`` (``GET /ingest/config``)\nand proceeds once ``drained`` is true -- computed server-side\nnow, not invented client-side from ``total_unfinished == 0``.\n\nReturns:\n* ``pending_detection``    — items the detection worker hasn't reached\n                              yet (region status == 'pending_detection').\n* ``pending_verification`` — items where the detector found a\n                              candidate and the verify step is queued.\n* ``total_unfinished``     — sum of the two; what a legacy walker polled.\n* ``drained``              — true once ``total_unfinished`` has read 0\n                              for ``region_drain.stable_polls`` consecutive\n                              polls of this endpoint.\n* ``stable_for_s``         — seconds since the last non-zero reading.\n* ``observed_at``          — this poll's timestamp.\n\nRe-ingested data can never carry the retired ``'pending'`` /\n``'pending_verify'`` short names, so there is no legacy rollup.",
         "operationId": "ingest_region_drain_curation_ingest_region_drain_get",
         "responses": {
           "200": {
@@ -11911,11 +11911,11 @@
     },
     "/curation/ingest/status": {
       "get": {
-        "description": "Recent ingest summary — counts grouped by source.\n\n``run_id`` scopes ``total``/``by_source``/``by_day`` to images carrying\nthat ``ingest_run_id`` (BA-4) -- an upload run's own images doc field,\nset by ``POST /ingest/upload``'s optional ``run_id`` form field.",
+        "description": "Recent ingest summary — counts grouped by source.\n\n``run_id`` scopes ``total``/``by_source``/``by_day`` to images carrying\nthat ``ingest_run_id`` -- an upload run's own images doc field,\nset by ``POST /ingest/upload``'s optional ``run_id`` form field.",
         "operationId": "ingest_status_curation_ingest_status_get",
         "parameters": [
           {
-            "description": "BA-4: scope counts to one POST /ingest/upload run_id.",
+            "description": "Scope counts to one POST /ingest/upload run_id.",
             "in": "query",
             "name": "run_id",
             "required": false,
@@ -11928,7 +11928,7 @@
                   "type": "null"
                 }
               ],
-              "description": "BA-4: scope counts to one POST /ingest/upload run_id.",
+              "description": "Scope counts to one POST /ingest/upload run_id.",
               "title": "Run Id"
             }
           }
@@ -11963,7 +11963,7 @@
     },
     "/curation/ingest/upload": {
       "post": {
-        "description": "Ingest a batch of images sent as bytes (multipart), not server-side paths.\n\nFor storage the API container cannot mount (a laptop, a remote NAS, a\nhigh-latency share): the client reads the files and uploads them.\n\nBA-1: the uploaded bytes are now persisted server-side, content-addressed,\nunder ``CurationConfig.upload_root`` (see\n:func:`src.services.curation.image_serving.persist_uploaded_bytes`) —\nthat path is stored as ``image_path`` (so thumbnails, the region worker\nand the VLM can all re-open it), and the client's own identifier is kept\nverbatim in the new ``source_identifier`` field. ``POST\n/curation/ingest/path_lookup`` matches on either field.\n\nResume is server-side content dedup: every image is fingerprinted\n(imohash over the uploaded bytes) and one already in the images index\ncomes back as ``duplicate`` without re-running inference — and since\nthe persisted path is itself content-addressed by that same hash, the\nsame bytes are only ever written to disk once, so a crashed upload run\ncan simply be restarted. The whole-frame embedding is computed from the\nuploaded bytes, not by re-opening the path.",
+        "description": "Ingest a batch of images sent as bytes (multipart), not server-side paths.\n\nFor storage the API container cannot mount (a laptop, a remote NAS, a\nhigh-latency share): the client reads the files and uploads them.\n\nThe uploaded bytes are now persisted server-side, content-addressed,\nunder ``CurationConfig.upload_root`` (see\n:func:`src.services.curation.image_serving.persist_uploaded_bytes`) —\nthat path is stored as ``image_path`` (so thumbnails, the region worker\nand the VLM can all re-open it), and the client's own identifier is kept\nverbatim in the new ``source_identifier`` field. ``POST\n/curation/ingest/path_lookup`` matches on either field.\n\nResume is server-side content dedup: every image is fingerprinted\n(imohash over the uploaded bytes) and one already in the images index\ncomes back as ``duplicate`` without re-running inference — and since\nthe persisted path is itself content-addressed by that same hash, the\nsame bytes are only ever written to disk once, so a crashed upload run\ncan simply be restarted. The whole-frame embedding is computed from the\nuploaded bytes, not by re-opening the path.",
         "operationId": "curation_ingest_upload_curation_ingest_upload_post",
         "requestBody": {
           "content": {
@@ -13698,7 +13698,7 @@
     },
     "/curation/regions/vocabulary": {
       "get": {
-        "description": "The deployment-configured detector/segmenter/verifier vocabulary\n(W0: naming sweep finding m9).\n\n``{detectors: [{id, label, role, filterable}], region_sources:\n[{id, label, role}], chain_actors: [{id, label, role}], text_rules,\ntext_choices, rejection_reasons: [{id, label, kind, match,\nlabel_template}]}``. ``kind`` is ``model_verdict`` / ``automatic`` /\n``needs_human``; ``match`` is ``exact`` or ``prefix``. Built from\nthe active region profile / ingest profiles / ``OP_VLM_MODEL`` --\nnever a hardcoded model id. ``filterable`` marks the values that can\nappear in stored ``region_detector`` (the detector filter's exact\noption list). The frontend renders this instead of hardcoding a\nlabel/palette map keyed on private model ids.",
+        "description": "The deployment-configured detector/segmenter/verifier vocabulary.\n\n``{detectors: [{id, label, role, filterable}], region_sources:\n[{id, label, role}], chain_actors: [{id, label, role}], text_rules,\ntext_choices, rejection_reasons: [{id, label, kind, match,\nlabel_template}]}``. ``kind`` is ``model_verdict`` / ``automatic`` /\n``needs_human``; ``match`` is ``exact`` or ``prefix``. Built from\nthe active region profile / ingest profiles / ``OP_VLM_MODEL`` --\nnever a hardcoded model id. ``filterable`` marks the values that can\nappear in stored ``region_detector`` (the detector filter's exact\noption list). The frontend renders this instead of hardcoding a\nlabel/palette map keyed on private model ids.",
         "operationId": "regions_vocabulary_curation_regions_vocabulary_get",
         "responses": {
           "200": {
@@ -13896,7 +13896,7 @@
     },
     "/curation/review/tabs": {
       "get": {
-        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) plus ``filters`` (the query parameters it honours)\n``filter_defaults`` (values it applies when one is omitted) and\n``filter_specs`` (self-describing enum filters) — the frontend renders this instead of hardcoding tab labels or assuming a\nfilter works everywhere. Must be registered before ``GET /review/{tab}``\nso it isn't shadowed as ``tab='tabs'``.\n\nC3: also carries ``empty_state`` -- ``{has_probe_predictions,\nhas_item_scores}`` -- computed once here so a client can annotate any\ntab's zero-result state (the same reasons ``GET /review/{tab}``'s own\n``empty_reason`` uses) without a per-tab round trip.",
+        "description": "Every review tab's ``id``/``label``/``description`` plus\n``filters`` (the query parameters it honours)\n``filter_defaults`` (values it applies when one is omitted) and\n``filter_specs`` (self-describing enum filters) — the frontend renders this instead of hardcoding tab labels or assuming a\nfilter works everywhere. Must be registered before ``GET /review/{tab}``\nso it isn't shadowed as ``tab='tabs'``.\n\nAlso carries ``empty_state`` -- ``{has_probe_predictions,\nhas_item_scores}`` -- computed once here so a client can annotate any\ntab's zero-result state (the same reasons ``GET /review/{tab}``'s own\n``empty_reason`` uses) without a per-tab round trip.",
         "operationId": "review_tabs_curation_review_tabs_get",
         "responses": {
           "200": {
@@ -14890,7 +14890,7 @@
     },
     "/curation/select/diverse": {
       "post": {
-        "description": "Pool-scale diversity selection — k-center-greedy over an arbitrary\nscope (cluster / review tab / generic filters), bigger than what fits\nin one ``GET /curation/crops`` page.\n\nAnswers inline (``200``, ``{crop_ids, method, version, n_pool}``) when\nthe scoped pool is small enough per ``OP_SELECT_SYNC_MAX_OPS``;\notherwise starts a background job and returns ``202`` with\n``{job_id, status: 'running', ...}`` — poll ``GET /curation/select/status``.\nNever writes anything to OpenSearch (read-only selection, plan §8\nnon-goal #3).",
+        "description": "Pool-scale diversity selection — k-center-greedy over an arbitrary\nscope (cluster / review tab / generic filters), bigger than what fits\nin one ``GET /curation/crops`` page.\n\nAnswers inline (``200``, ``{crop_ids, method, version, n_pool}``) when\nthe scoped pool is small enough per ``OP_SELECT_SYNC_MAX_OPS``;\notherwise starts a background job and returns ``202`` with\n``{job_id, status: 'running', ...}`` — poll ``GET /curation/select/status``.\nNever writes anything to OpenSearch (read-only selection).",
         "operationId": "select_diverse_curation_select_diverse_post",
         "requestBody": {
           "content": {
@@ -15307,7 +15307,7 @@
     },
     "/curation/train/gpus": {
       "get": {
-        "description": "Serve the training GPU picker: values, labels, and stop advisories.\n\nBackend owns these decisions (design rationale: the frontend must\nnever hardcode a deployment's GPU topology) -- see\n``docs/design/train_gpu_options_plan.md``. Unrestricted installs (no\n``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.",
+        "description": "Serve the training GPU picker: values, labels, and stop advisories.\n\nBackend owns these decisions -- the frontend must never hardcode a\ndeployment's GPU topology. Unrestricted installs (no\n``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.",
         "operationId": "list_train_gpu_options_curation_train_gpus_get",
         "responses": {
           "200": {
@@ -15386,7 +15386,7 @@
     },
     "/curation/train/manifest/{job_id}": {
       "get": {
-        "description": "Return the run's ``manifest.json`` (design §15.4 lineage envelope).\n\n404 if the manifest doesn't exist yet — older runs that finished\nbefore the manifest writer landed simply lack one.",
+        "description": "Return the run's ``manifest.json`` (lineage envelope).\n\n404 if the manifest doesn't exist yet — older runs that finished\nbefore the manifest writer landed simply lack one.",
         "operationId": "get_manifest_curation_train_manifest__job_id__get",
         "parameters": [
           {
@@ -15471,7 +15471,7 @@
     },
     "/curation/train/presets": {
       "get": {
-        "description": "Return server-side class-subset presets (design §12.3).",
+        "description": "Return server-side class-subset presets.",
         "operationId": "list_presets_curation_train_presets_get",
         "responses": {
           "200": {
@@ -15515,7 +15515,7 @@
     },
     "/curation/train/promote/{job_id}": {
       "post": {
-        "description": "Promote a finished training run into the Triton model repo.\n\nReads the run's ``status.json`` for the ONNX export the trainer\nproduced during the ``exporting`` state, copies it into\n``models/<triton_name>/1/model.onnx``, writes ``config.pbtxt``\nusing the YOLO26 single-output template (no NMS plugin — NMS is\ninternal to the YOLO26 forward pass per design §10), writes\n``labels.txt`` honoring any subset-training class_remap, and POSTs\nTriton's load endpoint to make the model active immediately.\n\nErrors:\n    404: job not found, or its ONNX export hasn't been written\n    409: a Triton model with this name already exists (use\n          ``overwrite=true`` to clobber)\n    422: status.json shows the run isn't in a promote-ready state\n    502: Triton refused the load (config or weights mismatch)",
+        "description": "Promote a finished training run into the Triton model repo.\n\nReads the run's ``status.json`` for the ONNX export the trainer\nproduced during the ``exporting`` state, copies it into\n``models/<triton_name>/1/model.onnx``, writes ``config.pbtxt``\nusing the YOLO26 single-output template (no NMS plugin — NMS is\ninternal to the YOLO26 forward pass), writes\n``labels.txt`` honoring any subset-training class_remap, and POSTs\nTriton's load endpoint to make the model active immediately.\n\nErrors:\n    404: job not found, or its ONNX export hasn't been written\n    409: a Triton model with this name already exists (use\n          ``overwrite=true`` to clobber)\n    422: status.json shows the run isn't in a promote-ready state\n    502: Triton refused the load (config or weights mismatch)",
         "operationId": "promote_run_curation_train_promote__job_id__post",
         "parameters": [
           {
@@ -15683,7 +15683,7 @@
     },
     "/curation/train/start_campaign": {
       "post": {
-        "description": "Submit a multi-size training campaign (design §14).\n\nPreflight runs once on a synthetic spec built from the first run; the\nrest of the runs share the same dataset / class set so a single\npreflight covers them all.",
+        "description": "Submit a multi-size training campaign.\n\nPreflight runs once on a synthetic spec built from the first run; the\nrest of the runs share the same dataset / class set so a single\npreflight covers them all.",
         "operationId": "start_campaign_curation_train_start_campaign_post",
         "parameters": [
           {

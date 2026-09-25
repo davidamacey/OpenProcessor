@@ -1,7 +1,6 @@
 """Triton ``config.pbtxt`` writer for YOLO26 models.
 
-Ported from a reference curation stack's
-training pipeline. The official Ultralytics + Triton guide
+The official Ultralytics + Triton guide
 (https://docs.ultralytics.com/guides/triton-inference-server) recommends
 the ONNX + TensorRT execution accelerator path: place an ONNX file at
 ``<model_repo>/<model_name>/1/model.onnx`` and let Triton JIT-compile

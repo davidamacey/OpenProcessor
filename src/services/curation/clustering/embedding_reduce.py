@@ -1,4 +1,4 @@
-"""UMAP residual-pool reducer — visualization only (CM-7 doc fix).
+"""UMAP residual-pool reducer — visualization only.
 
 Two genuinely separate things live in this module, and only one of
 them touches real clustering:
@@ -26,9 +26,8 @@ UMAP-reduce path is ``POST /curation/cluster/umap/rebuild``
 labeler's 2D/3D scatter visualization. Any design note claiming "UMAP
 feeds the clustering pipeline" is wrong; correct it if you find one.
 
-Defaults are tuned for the reference embedding pipeline (a private
-design doc's Appendix C.12
-of the redesign plan); override the embedding field via
+Defaults are tuned for the current embedding pipeline; override the
+embedding field via
 ``OP_RESIDUAL_EMBEDDING_FIELD`` if experimenting.
 """
 
@@ -72,7 +71,7 @@ _STATE_DIR = get_curation_config().state_dir
 UMAP_STATE_JOBLIB_PATH = str(Path(_STATE_DIR) / 'umap_state.joblib')
 UMAP_STATE_JOBLIB_PATH_CUML = str(Path(_STATE_DIR) / 'umap_state_cuml.joblib')
 
-# UMAP hyperparameters — Appendix C.12 of the reference redesign plan.
+# UMAP hyperparameters.
 UMAP_N_COMPONENTS = 50
 UMAP_N_NEIGHBORS = 15
 UMAP_MIN_DIST = 0.0
@@ -81,10 +80,10 @@ UMAP_RANDOM_STATE = 42
 
 # Embedding field to reduce. ``pe_embedding`` is PE-Core-L14-336's
 # foundation visual encoder (1024-d), trained on broad web imagery —
-# better at grouping out-of-distribution vehicles by semantic similarity
+# better at grouping out-of-distribution items by semantic similarity
 # than ``backbone_embedding`` (the secondary classifier's penultimate layer, which
-# clusters by framing/lighting outside its confident range). The
-# 2026-05-18 visual audit picked pe_embedding as the residual default.
+# clusters by framing/lighting outside its confident range). A visual
+# audit picked pe_embedding as the residual default.
 RESIDUAL_EMBEDDING_FIELD = os.environ.get('OP_RESIDUAL_EMBEDDING_FIELD', 'pe_embedding')
 
 # Crops with these class_source values are *confidently* labeled and
@@ -644,7 +643,7 @@ async def get_or_fit_reducer(
 async def umap_rebuild(client: AsyncOpenSearch) -> dict[str, Any]:
     """Force a UMAP refit over the current residual pool.
 
-    Exposed via ``POST /curation/cluster/umap/rebuild``. CM-7: this is
+    Exposed via ``POST /curation/cluster/umap/rebuild``. This is
     visualization-only -- it refits the manifold cache the labeler's
     scatter view reads, and has no effect on the next auto-label run.
     AHC/IVF cluster the raw 1024-d embeddings directly and never

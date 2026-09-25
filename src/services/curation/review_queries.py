@@ -1,13 +1,12 @@
-"""Per-tab query construction for ``GET /curation/review/{tab}`` (curation-strategy
-plan §7 Phase 3 / §10.6).
+"""Per-tab query construction for ``GET /curation/review/{tab}``.
 
 Split out of the review router verbatim (no behavior change) so that
-router's Phase 3 sort/filter additions could land without breaching the
+router's sort/filter additions could land without breaching the
 700-LOC pre-commit ceiling on ``src/routers/curation/*.py``
 (``.pre-commit-config.yaml``'s ``max-file-size`` hook). This module owns
 *what a tab matches* (``must``/``must_not`` + the human-readable ``reason``);
 ``review_sorts.py`` owns *what order results come back in* — the two are
-deliberately independent registries (plan §0), so a tab's match logic can
+deliberately independent registries, so a tab's match logic can
 never accidentally couple to its default sort.
 """
 
@@ -43,9 +42,9 @@ KNOWN_TABS: tuple[str, ...] = (
     'new_class_proposals',
 )
 
-# W0: a display label + description per tab, so the frontend stops
-# hardcoding them (F7's "Classifier blind spots" for classifier_blind_spots in
-# particular -- the id itself is renamed in a later wave). Served by
+# A display label + description per tab, so the frontend stops
+# hardcoding them ("Classifier blind spots" for classifier_blind_spots in
+# particular -- the id itself was renamed at some point). Served by
 # ``GET {prefix}/review/tabs``.
 TAB_LABELS: dict[str, tuple[str, str]] = {
     'all': ('All', 'Unified queue: every crop a human should look at, most-uncertain first'),
@@ -92,7 +91,7 @@ COMMON_FILTERS: tuple[str, ...] = (
 )
 # Tab-only filters, on top of COMMON_FILTERS.
 TAB_EXTRA_FILTERS: dict[str, tuple[str, ...]] = {'regions': ('text', 'region_status')}
-# A filter value a tab applies when the client omits it (DQ-M6: the two
+# A filter value a tab applies when the client omits it (the two
 # "primary subject" tabs are rank-limited by definition).
 PRIMARY_SUBJECT_MAX_RANK = 2
 TAB_FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
@@ -102,7 +101,7 @@ TAB_FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
 }
 
 # The ``region_status`` filter's selectable values on the ``regions`` tab
-# (DQ-B2 follow-up: a verifier-rejected candidate is reviewable but was
+# (a verifier-rejected candidate is reviewable but was
 # unreachable from the queue). ``'all'`` is the default -- today's
 # accepted-but-unvalidated boxes plus a rejected candidate that still has
 # a box to show. Served through ``FILTER_SPECS`` below.
@@ -194,7 +193,7 @@ def _tab_description(tab: str) -> str:
 
 
 def mismatch_reason(src: dict[str, Any], registry_names: frozenset[str], default: str) -> str:
-    """Per-item reason on the ``mismatches`` tab (DQ-m4).
+    """Per-item reason on the ``mismatches`` tab.
 
     ``vlm_unmatched`` covers more than "the VLM named something outside
     the registry": a low-confidence answer that *is* a registry class is
@@ -220,7 +219,7 @@ def region_reason(src: dict[str, Any], fields: Any, default: str) -> str:
     accepted-but-unreviewed box: the reviewer is confirming/reversing a
     rejection, not just validating a fresh detection.
 
-    R10: this used to always say "...— needs human review" even for a
+    This used to always say "...— needs human review" even for a
     reason whose own kind is a firm model/automatic verdict, and embedded
     the raw ``region_rejection_reason`` id verbatim instead of its served
     vocabulary label -- so a box the verifier actually rejected read
@@ -245,7 +244,7 @@ def _escape_wildcard(text: str) -> str:
 def region_text_clause(field: str, text: str) -> dict[str, Any]:
     """Substring match on ``field`` (typically :attr:`RegionFields.text`),
     case-insensitive and with user input escaped so wildcard metacharacters
-    in the search string match literally (F-9). Stored case depends on
+    in the search string match literally. Stored case depends on
     whichever writer set the text, so this never assumes an uppercase
     canonical form -- unlike a naive ``f'*{text.upper()}*'`` wildcard, which
     is both case-sensitive against mixed-case stored values and vulnerable
@@ -274,7 +273,7 @@ def build_tab_query(
     ``region_status`` (``regions`` tab only, ignored elsewhere): one of
     :data:`REGION_STATUS_FILTER_VALUES`. Raises ``HTTPException(400, ...)``
     for an unrecognized ``tab`` or an unrecognized ``region_status`` — same
-    behavior the reference review router had inline before this split.
+    behavior the review router had inline before this split.
     """
     fields = get_region_fields()
     must: list[dict[str, Any]] = []
@@ -284,7 +283,7 @@ def build_tab_query(
         # dismiss_from_review, or the legacy review_dismiss) stay out of
         # every queue until undone / POST /crops/{id}/review_undismiss.
         {'exists': {'field': 'review_dismissed_at'}},
-        # F-4: an excluded item (POST /crops/{id}/exclude) must never
+        # An excluded item (POST /crops/{id}/exclude) must never
         # reappear in any review tab, regardless of what else flags it.
         {'term': {'class_excluded': True}},
     ]
@@ -307,13 +306,13 @@ def build_tab_query(
                         {'exists': {'field': VLM_CLASS_EMPTY_REASON_FIELD}},
                         {'terms': {'vlm_confidence': ['medium', 'low']}},
                         {'range': {'cluster_distance': {'gte': 0.35}}},
-                        # D-1 (F-6): `exists probe_pred_entropy` matches
+                        # `exists probe_pred_entropy` matches
                         # almost every non-holdout item after one probe
                         # run -- a no-op filter in practice. Gate on an
                         # actual uncertainty threshold instead.
                         {'range': {'probe_pred_entropy': {'gte': PROBE_ENTROPY_REVIEW_MIN}}},
-                        # Crops with no class assigned at all (YOLO11 found a
-                        # vehicle but neither the classifier nor the VLM got a usable label)
+                        # Crops with no class assigned at all (the detector found an
+                        # item but neither the classifier nor the VLM got a usable label)
                         {
                             'bool': {
                                 'must_not': [{'exists': {'field': 'class_id'}}],
@@ -335,7 +334,7 @@ def build_tab_query(
         must.append({'term': {'class_source': 'vlm_unmatched'}})
         reason = "VLM's reply did not match any registry class"
     elif tab == 'vlm_low_conf':
-        # DQ-M8: select on the VLM's own confidence only. `confidence` is
+        # Select on the VLM's own confidence only. `confidence` is
         # the detector/classifier score, not the VLM's -- gating on it hid
         # every VLM-unsure item on a confidently-detected crop. The
         # class_source clause keeps a stale vlm_confidence (the label has
@@ -344,13 +343,13 @@ def build_tab_query(
         must.append({'terms': {'class_source': sorted(VLM_CLASS_SOURCES)}})
         reason = 'VLM confidence below high'
     elif tab == 'outliers':
-        # D-1 (F-6): outlier_flagged is never written anywhere in the
+        # outlier_flagged is never written anywhere in the
         # repo -- deleted. This queue is cluster_distance >= 0.35 only.
         must.append({'range': {'cluster_distance': {'gte': 0.35}}})
         # Default sort: 'atypicality' — see review_sorts.py.
         reason = 'outlier — far from cluster centroid'
     elif tab == 'uncertainty':
-        # Wave 5 active learning probe writes ``probe_pred_entropy`` per
+        # The active-learning probe writes ``probe_pred_entropy`` per
         # crop. High entropy = the v7-nano probe is uncertain. Sort desc.
         must.append({'exists': {'field': 'probe_pred_entropy'}})
         # Default sort: 'uncertainty_entropy' — see review_sorts.py.
@@ -364,7 +363,7 @@ def build_tab_query(
         # a rejected candidate had no bbox_norm, so it could never match
         # `exists bbox_norm` and was unreachable from this queue even
         # though the confirm-promotes-candidate write path already
-        # supported reversing it (DQ-B2 follow-up). The reviewer opens
+        # supported reversing it. The reviewer opens
         # each in the region editor, adjusts the box if needed, and
         # confirms, which sets the human-only validated flag (a rejected
         # candidate's confirm promotes it into `bbox_norm` instead).
@@ -429,7 +428,7 @@ def build_tab_query(
         # the high-confidence items are reviewed first — see
         # review_sorts.py's two-key 'region_score' clause.
     elif tab == 'model_disagreements':
-        # Active-learning loop (design §15.6 / 17 Phase 5): after a
+        # Active-learning loop: after a
         # promote, /curation/pipeline/auto_label re-scores crops with the new
         # model and writes probe_pred_class. This tab surfaces validated
         # crops where the new model's prediction differs from the human
@@ -448,7 +447,7 @@ def build_tab_query(
         # probe_pred_class and class_name are mapped `text` with fielddata
         # disabled (the OpenSearch/ES default), so `doc['probe_pred_class']`
         # throws "Fielddata is disabled on text fields" at query time.
-        # This was invisible until Phase 11's probe backfill gave
+        # This was invisible until the probe backfill gave
         # probe_pred_class its first real (non-empty) coverage — before
         # that, the `exists: probe_pred_class` clause matched zero docs, so
         # the script never ran against a real document. Confirmed live
@@ -460,7 +459,7 @@ def build_tab_query(
                     'script': {
                         # Both fields are mapped `keyword` directly on the
                         # live index — no `.keyword` subfield exists (see
-                        # the reference clusters router's top_class agg for the full story
+                        # the clusters router's top_class agg for the full story
                         # on why this repo's code assumed one).
                         'source': (
                             "doc.containsKey('probe_pred_class') && "
@@ -485,7 +484,7 @@ def build_tab_query(
         # band, not a floor: target everything below the 0.75 ingest floor
         # (or no classifier box at all) and let rank + the clarity slider strip the
         # junk, so a large clear crop the classifier whiffed on at 0.05 still surfaces.
-        # D-1 (F-6): classifier_raw_confidence is never written in
+        # classifier_raw_confidence is never written in
         # production -- point the "unsure" branch at the stored
         # `confidence` field, restricted to items a classifier actually
         # scored (unlabeled_proposal_class_sources() below already covers
@@ -532,7 +531,7 @@ def build_tab_query(
                 }
             }
         )
-        # R5: two ways a stale/mismatched flag lands an item here that
+        # Two ways a stale/mismatched flag lands an item here that
         # doesn't need a new class at all:
         #  1. the VLM attempt gave no answer at all (empty_reason ==
         #     no_answer) -- nothing was proposed, so it can't need a new
@@ -551,7 +550,7 @@ def build_tab_query(
             detail=f'unknown review tab: {tab}. Must be one of: {", ".join(KNOWN_TABS)}',
         )
 
-    # DQ-M6: subject-size limit, applied once here for every tab that
+    # Subject-size limit, applied once here for every tab that
     # serves it (it used to be honoured only by the two primary tabs).
     rank_limit = (
         max_rank if max_rank is not None else TAB_FILTER_DEFAULTS.get(tab, {}).get('max_rank')

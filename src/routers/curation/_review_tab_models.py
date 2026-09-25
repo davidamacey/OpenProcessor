@@ -38,7 +38,7 @@ class ReviewTab(BaseModel):
 
 
 class ReviewEmptyState(BaseModel):
-    """C3: underlying-state flags a client uses to word ANY tab's
+    """Underlying-state flags a client uses to word ANY tab's
     zero-result state without a per-tab round trip -- the same signals
     ``GET /review/{tab}``'s own ``empty_reason`` is derived from."""
 

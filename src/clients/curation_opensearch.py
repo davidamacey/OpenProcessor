@@ -28,7 +28,7 @@ index *names* are deployment data, not hardcoded here):
   :py:meth:`ClassRegistry.sync_to_opensearch`.
 
 Every OpenSearch field reference for the per-item "region of interest"
-sub-annotation (e.g. a license plate on a vehicle crop) is routed
+sub-annotation (e.g. a defect region on an item crop) is routed
 through the module-level :class:`~src.config.RegionFields` instance
 (``F``) rather than hardcoded — see ``src/config/region_fields.py``
 for the full design rationale. Everything else in the item schema
@@ -203,7 +203,7 @@ def _images_body() -> dict[str, Any]:
 # writes record the full pre-write class state (class_detector* through
 # cluster_subid, restorable=true) so the labeler's Undo restores it exactly.
 #
-# F-22: mapped as an unindexed object, not `nested`. Nothing ever issues a
+# Mapped as an unindexed object, not `nested`. Nothing ever issues a
 # `nested` query or agg against this field (only mapping + plain `_source`
 # reads/writes) -- rg -n "'nested'" src scripts turns up none -- yet every
 # entry cost a hidden Lucene doc (the reference index carried 560k Lucene
@@ -303,8 +303,8 @@ def _items_body() -> dict[str, Any]:
                 # bucketed confidence keyword carries the signal.
                 #
                 # Field name kept as-is (not indirected via RegionFields —
-                # out of scope, §3.2 scope table): this is a live persisted
-                # OpenSearch key, and only the region-of-interest ("plate")
+                # out of scope): this is a live persisted
+                # OpenSearch key, and only the region-of-interest
                 # fields have an indirection mechanism in Phase 2.
                 'vlm_raw_label': {'type': 'keyword'},
                 'vlm_raw_label_conf': {'type': 'float'},
@@ -318,10 +318,10 @@ def _items_body() -> dict[str, Any]:
                 **VLM_CLASS_ATTEMPT_MAPPING,
                 # VLM-extracted make/model hint. Field names kept as-is for
                 # the same reason as above (no region-of-interest concept
-                # applies to a vehicle make/model).
+                # applies to this item-level attribute).
                 'vlm_item_make': {'type': 'keyword'},
                 'vlm_item_model': {'type': 'keyword'},
-                # Region-visibility hint (CFG-8): this WAS a vendor- and
+                # Region-visibility hint: this WAS a vendor- and
                 # domain-named field baked into the otherwise-generic
                 # index mapping, unlike its siblings above
                 # it IS a region-of-interest concept and RegionFields
@@ -472,7 +472,7 @@ def _items_body() -> dict[str, Any]:
                 # the region bbox, pad-to-square). Lets regions be
                 # clustered / AHC-refined like item classes so
                 # false-positives and bad boxes surface as outliers.
-                # F-23/D-2: knn_vector, not a plain indexed float array. A
+                # knn_vector, not a plain indexed float array. A
                 # 1024-value float array indexed 1024 BKD points plus
                 # useless sorted/deduplicated doc values and stored ~22KiB
                 # of JSON in _source per doc (measured fetch cost 50-70ms
@@ -568,7 +568,7 @@ def _umap_state_body() -> dict[str, Any]:
     UMAP reducer, base64-encoded, up to ~60 MB (see
     ``_OPENSEARCH_PERSIST_MAX_BYTES``) -- mapped ``binary`` (stored,
     never analyzed/indexed) rather than left to dynamic mapping, which
-    tokenized it as ``text`` (F-27)."""
+    tokenized it as ``text``."""
     return {
         'settings': _plain_settings(),
         'mappings': {
@@ -629,7 +629,7 @@ instance) would key by tenant id with this same literal as the
 single-tenant fallback."""
 
 
-# F-28.1: get_curation_settings is read on nearly every strategy-scoring
+# get_curation_settings is read on nearly every strategy-scoring
 # request path (strategy_defaults.py, strategy_registry.py both fetch it
 # per call). A 5s TTL cache avoids a GET-by-id round trip on every one of
 # those, while staying short enough that a settings change is visible
@@ -659,7 +659,7 @@ async def get_curation_settings(client: Any, cfg: CurationConfig | None = None) 
     filtered out here so a cleared axis simply doesn't appear in
     ``defaults``, identical to "never had an override."
 
-    F-28.1: cached for :data:`_SETTINGS_CACHE_TTL_SECONDS`, invalidated
+    Cached for :data:`_SETTINGS_CACHE_TTL_SECONDS`, invalidated
     immediately by :func:`update_curation_settings` on write.
     """
     active_cfg = cfg or config
@@ -709,7 +709,7 @@ async def update_curation_settings(
     a literal null (see :func:`get_curation_settings`'s note on why that
     read path filters it back out).
 
-    F-28.1: no ``refresh=True`` -- the read-immediately-after-write below
+    No ``refresh=True`` -- the read-immediately-after-write below
     is a single-doc ``GET`` (not ``_search``), which OpenSearch serves
     real-time from the translog regardless of the index's refresh
     interval, so forcing a segment refresh here bought nothing but
@@ -1053,12 +1053,12 @@ async def ensure_items_history_fields(
     re-ingested or migrated index has the field ready when the writers go
     live.
 
-    F-22: a field's type can't change in place — an index built before this
+    A field's type can't change in place — an index built before this
     field went from ``nested`` to ``object enabled:false`` still has it
     mapped ``nested``, and OpenSearch would 400 on a conflicting
     ``put_mapping`` every cold start. No-op whenever the field is already
     present, regardless of its type; the type change itself only takes
-    effect on a reindex (see the F-5 migration note).
+    effect on a reindex.
     """
     index = config.items_index
     try:
@@ -1247,7 +1247,7 @@ async def ensure_items_region_embedding(
     cluster / AHC-refine regions so false-positives and bad boxes surface
     as outliers. Additive ``PUT <index>/_mapping`` — idempotent.
 
-    F-23/D-2: ``knn_vector``, matching the current items mapping
+    ``knn_vector``, matching the current items mapping
     (``op_items`` has ``index.knn: true``; the earlier plain-``float``
     rationale here assumed ``index.knn`` was disabled, which is no longer
     true). A ``put_mapping`` against an index still carrying the old plain
@@ -2004,7 +2004,7 @@ class ClassRegistry:
             await client.indices.create(index=index, body=INDEX_BODIES[IndexRole.CLASSES])
             logger.info('curation_index_created_on_sync', index=index)
 
-        # F-26: one bulk() instead of one index() per class.
+        # One bulk() instead of one index() per class.
         upserted = 0
         if reg.classes:
             bulk_body: list[dict[str, Any]] = []

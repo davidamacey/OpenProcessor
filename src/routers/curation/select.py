@@ -1,30 +1,30 @@
-"""Diversity / core-set selection overlay (curation-strategy plan
-§2.6/§3.4/§7 Phase 4): ``GET /curation/crops?order=diverse``'s helper +
-``POST /curation/select/diverse``.
+"""Diversity / core-set selection overlay: ``GET
+/curation/crops?order=diverse``'s helper + ``POST
+/curation/select/diverse``.
 
 k-center-greedy (:func:`src.services.curation.selection.k_center_greedy`,
 Sener & Savarese ICLR 2018) over crop ``pe_embedding`` vectors. This is a
 pure **selection** overlay — like every ``crop_scores`` scorer, it never
 writes ``cluster_id``/``cluster_subid``/``cluster_distance`` or any other
-crop field (plan §8 non-goal #3); unlike a scorer it doesn't write
-anything to OpenSearch *at all* — it only ever reads embeddings and
-returns an ordering/subset of ids.
+crop field; unlike a scorer it doesn't write anything to OpenSearch *at
+all* — it only ever reads embeddings and returns an ordering/subset of
+ids.
 
-**Validation status (docs/design/curation_scores.md §6):** the cheap
-pre-screen passed on real data (k-center-greedy vs. random vs.
-cluster-representatives, 1.50x label-coverage ratio, bar >= 1.3x) — that
-unblocked writing this module. The **full gate** (a real training A/B via
-``/curation/bakeoff``, mAP50-95 >= +1.0pt) has NOT run. Per plan §6/§10.2 this
-means ``diverse`` stays ``experimental`` at most in ``strategy_registry.py``
-— never promotable to ``stable`` by this module or by flipping
-``OP_SELECT_DIVERSE_ENABLED`` alone.
+**Validation status:** the cheap pre-screen passed on real data
+(k-center-greedy vs. random vs. cluster-representatives, 1.50x
+label-coverage ratio, bar >= 1.3x) — that unblocked writing this module.
+The **full gate** (a real training A/B via ``/curation/bakeoff``,
+mAP50-95 >= +1.0pt) has NOT run. Until it does, ``diverse`` stays
+``experimental`` at most in ``strategy_registry.py`` — never promotable
+to ``stable`` by this module or by flipping ``OP_SELECT_DIVERSE_ENABLED``
+alone.
 
 Gated end-to-end by ``OP_SELECT_DIVERSE_ENABLED`` (default off, inline
 ``os.getenv`` per house convention):
 
 * ``GET /curation/crops?order=diverse`` with the flag off behaves exactly like
   today's handling of any other unrecognized ``order`` value — silently
-  ignored, default sort — because the reference crops router's ``order`` branch simply
+  ignored, default sort — because the crops router's ``order`` branch simply
   never matches when this module reports "not enabled" (see
   :func:`compute_diverse_order` — same early-return shape
   ``compute_outlier_order`` uses for "too large", just for "disabled").
@@ -32,8 +32,8 @@ Gated end-to-end by ``OP_SELECT_DIVERSE_ENABLED`` (default off, inline
   ``scores.py``'s ``scores_compute`` convention for its own disabled
   flag, not a bespoke 404).
 
-**Compute budget & the sync-vs-job split (plan §3 compute budget /
-curation_scores.md §6's 93.6s @ n=30,000,k=5,000 real benchmark):**
+**Compute budget & the sync-vs-job split** (based on a 93.6s
+@ n=30,000,k=5,000 real benchmark):
 
 k-center-greedy is O(n*k*d). Two very different call shapes need two very
 different budgets:
@@ -48,18 +48,17 @@ different budgets:
    cap (``_get_diverse_inline_max()`` below) — at the 3,000,000-op default
    that's ~1,732 crops, comfortably "a few thousand" and a couple of
    seconds of BLAS matvecs on CPU. Above that cap, the endpoint returns
-   ``None`` and the reference crops router falls through to its default sort — the
+   ``None`` and the crops router falls through to its default sort — the
    *exact* same fallback contract ``order=outliers`` already uses above
    its own cap (mirrored, not reinvented).
 2. ``POST /curation/select/diverse`` is user-``k``-bounded (O(n*k*d), linear in
    k, not quadratic) — this is the "give me 1,000 diverse crops out of a
-   30,000-crop cluster" pool-scale case the plan's own compute budget
-   flags as ~1-2 min CPU at n~128k/k~1000, i.e. too slow to block an HTTP
-   request. ``OP_SELECT_SYNC_MAX_OPS`` (default 3,000,000 — derived from
-   the real 93.6s-at-n*k=1.5e8 k-center-greedy benchmark in
-   ``docs/design/curation_scores.md`` §6, budgeting for a ~2s wall-clock
-   ceiling on an inline request: 1.5e8 selections / 93.6s ~= 1.6e6
-   selections/sec => 2s budget ~= 3.2e6) decides sync vs. job: if
+   30,000-crop cluster" pool-scale case, measured at ~1-2 min CPU at
+   n~128k/k~1000, i.e. too slow to block an HTTP request.
+   ``OP_SELECT_SYNC_MAX_OPS`` (default 3,000,000 — derived from the real
+   93.6s-at-n*k=1.5e8 k-center-greedy benchmark, budgeting for a ~2s
+   wall-clock ceiling on an inline request: 1.5e8 selections / 93.6s ~=
+   1.6e6 selections/sec => 2s budget ~= 3.2e6) decides sync vs. job: if
    ``n_pool * k <= OP_SELECT_SYNC_MAX_OPS`` (and the pool itself fit under
    ``OP_SELECT_MAX_N``, the fetch cap), answer inline with the documented
    ``{crop_ids, method, version, n_pool}`` body. Otherwise this starts a
@@ -70,20 +69,17 @@ different budgets:
    pool uncapped by ``OP_SELECT_MAX_N`` (bounded only by the much larger
    ``OP_SELECT_JOB_MAX_N``, default 200,000 — a generous safety ceiling
    above the largest real pool this repo has ever seen, ~347,837 total /
-   ~124,920 residual per ``docs/design/curation_scores.md`` §0, chosen so
-   a background job can actually answer the "whole residual pool" use
-   case the plan's compute-budget section describes, which the 20,000
-   sync cap would otherwise make impossible to ever service).
+   ~124,920 residual, chosen so a background job can actually answer the
+   "whole residual pool" use case, which the 20,000 sync cap would
+   otherwise make impossible to ever service).
 
-Judgment call, not spelled out verbatim in the plan: the plan's §3 flag
-table lists a single ``OP_SELECT_MAX_N=20000``. This module treats that
-value as *the sync-path fetch cap* (matching its literal
-``cluster_outliers._MAX_MEMBERS`` precedent, used by both the GET path and
-as the "is this small enough to even consider answering inline" gate for
-POST) and introduces ``OP_SELECT_SYNC_MAX_OPS``/``OP_SELECT_JOB_MAX_N`` as
-two new, undocumented-in-the-plan constants to resolve the tension between
-"20,000 is the sync cap" and "the plan's own POST example asks for
-diversity over a 30,000-crop cluster" — see module docstring above.
+Judgment call: ``OP_SELECT_MAX_N=20000`` is treated as *the sync-path
+fetch cap* (matching its literal ``cluster_outliers._MAX_MEMBERS``
+precedent, used by both the GET path and as the "is this small enough to
+even consider answering inline" gate for POST); ``OP_SELECT_SYNC_MAX_OPS``
+/``OP_SELECT_JOB_MAX_N`` are two additional constants that resolve the
+tension between "20,000 is the sync cap" and "diversity may be requested
+over a 30,000-crop cluster" — see above.
 """
 
 from __future__ import annotations
@@ -211,7 +207,7 @@ async def compute_diverse_order(
     if not ids:
         return []
 
-    # F-16: cache 'count' must be the pool size (len(ids)), the same value
+    # Cache 'count' must be the pool size (len(ids)), the same value
     # a fresh call compares against via current_count — NOT len(order),
     # which is capped at k and so (for k < pool size, the common case)
     # could never match current_count on a later lookup, making the cache
@@ -257,8 +253,8 @@ class SelectDiverseRequest(BaseModel):
 def _build_scope_query(scope: SelectDiverseScope) -> dict[str, Any]:
     """Translate a ``SelectDiverseScope`` into an OpenSearch bool query.
 
-    ``test_holdout=true`` crops are always excluded (plan §8 non-goal #12
-    — no scope can opt back in; this is a training-selection-adjacent
+    ``test_holdout=true`` crops are always excluded — no scope can opt
+    back in; this is a training-selection-adjacent
     operation and must never leak the frozen holdout into what gets
     labeled next).
     """
@@ -301,8 +297,7 @@ async def select_diverse(
     the scoped pool is small enough per ``OP_SELECT_SYNC_MAX_OPS``;
     otherwise starts a background job and returns ``202`` with
     ``{job_id, status: 'running', ...}`` — poll ``GET /curation/select/status``.
-    Never writes anything to OpenSearch (read-only selection, plan §8
-    non-goal #3).
+    Never writes anything to OpenSearch (read-only selection).
     """
     if not _diverse_enabled():
         raise HTTPException(

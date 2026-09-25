@@ -64,7 +64,7 @@ ITEMS_INDEX = os.environ.get('OP_ITEMS_INDEX_OVERRIDE') or 'op_items'
 # reason; tests/curation/test_item_embedding_field.py pins the two together.
 ITEM_EMBEDDING_FIELD = 'pe_embedding'
 
-# F-11: how long a released-then-not-yet-refreshed crop id stays in the
+# How long a released-then-not-yet-refreshed crop id stays in the
 # released_at guard. Mirrors scripts/curation/worker/runner.py's
 # _RELEASED_AT_TTL_S.
 _RELEASED_AT_TTL_S = 300.0
@@ -77,7 +77,6 @@ _RELEASED_AT_TTL_S = 300.0
 # path's own low-confidence threshold. The 0.70-0.80 band was sending high-confidence classifier crops
 # to the VLM and surfacing them in the vlm_low_conf review tab as
 # "classifier 95.9 %, VLM medium" — noise the human review queue doesn't need.
-# See the Wave 1 chained-tuning notes in the region-detection design docs.
 DEFAULT_CLASSIFIER_CONF_SKIP = 0.80
 
 
@@ -87,7 +86,7 @@ _classifier_sources_empty_warned = False
 def _warn_classifier_sources_empty_once() -> None:
     """Log once (not every poll) that the 'classifier already confident'
     must_not guard is inactive because classifier_class_sources() is
-    empty in this environment (F-11)."""
+    empty in this environment."""
     global _classifier_sources_empty_warned  # noqa: PLW0603 - warn-once flag
     if not _classifier_sources_empty_warned:
         _classifier_sources_empty_warned = True
@@ -104,7 +103,7 @@ def _build_pending_query(classifier_skip_conf: float, exclude_ids: list[str] | N
     Mirrors the ``must_not`` clauses in pipeline_auto_label so the same
     crops the on-demand pipeline would process are picked up by the worker.
 
-    F-20: ``exclude_ids`` pushes the producer's in-flight set into the
+    ``exclude_ids`` pushes the producer's in-flight set into the
     query server-side (``must_not: {ids: ...}``) instead of over-fetching
     ``batch_size + len(in_flight)`` docs and filtering in-flight ids out
     in Python.
@@ -134,18 +133,18 @@ def _build_pending_query(classifier_skip_conf: float, exclude_ids: list[str] | N
             },
         )
     else:
-        # F-11: an empty terms clause matches nothing (correct as a
+        # An empty terms clause matches nothing (correct as a
         # must_not exclusion) but is dead weight in the query shape --
         # only emit it when there's something to exclude, and log once
         # so operators know this guard rail is inactive in this env.
         _warn_classifier_sources_empty_once()
-    # F-20: one `terms` clause instead of 5 separate `term` clauses on the
+    # One `terms` clause instead of 5 separate `term` clauses on the
     # same field — same match semantics, one less clause for OS to eval.
     must_not.append(
         {
             'terms': {
                 'class_source': [
-                    # Plan §1.5: prototype + ensemble_proto_rescue +
+                    # prototype + ensemble_proto_rescue +
                     # ensemble_consensus class_source values are gone.
                     # Surviving auto-validation path is
                     # 'classifier_vlm_agreement' (A-PR2 ensemble writer;
@@ -179,7 +178,7 @@ def _filter_fresh_ids(
     fetch_started: float,
 ) -> list[str]:
     """Ids a producer may safely dispatch: not currently in flight, and not
-    released at or after ``fetch_started`` (F-11).
+    released at or after ``fetch_started``.
 
     A fetch that started before (or at the same moment as) a consumer's
     release may still observe pre-write state, since the write uses
@@ -290,7 +289,7 @@ async def run(args: argparse.Namespace) -> int:
     # written the terminal class_source back to OS.
     in_flight: set[str] = set()
     in_flight_lock = asyncio.Lock()
-    # F-11: label_batch writes with refresh=False, so a producer fetch
+    # label_batch writes with refresh=False, so a producer fetch
     # that starts right after a consumer discards a crop from in_flight
     # can still see the pre-write state and re-dispatch it (duplicate GPU
     # work). Ported from the region/SAM worker's runner.py pattern: hold
@@ -327,7 +326,7 @@ async def run(args: argparse.Namespace) -> int:
                 await asyncio.sleep(0.05)
                 continue
             try:
-                # F-20: in-flight ids are excluded server-side (must_not
+                # In-flight ids are excluded server-side (must_not
                 # ids) now, so the fetch only needs to refill the queue —
                 # no more "+ in_flight_count" over-fetch-then-filter. The
                 # 1000+ in-flight ids at concurrency=24 still ride along
@@ -353,7 +352,7 @@ async def run(args: argparse.Namespace) -> int:
             # Filter out ids the consumers are still processing, and ids
             # released since (or shortly before) this fetch started -- the
             # write used refresh=False, so a fetch that began around the
-            # same time as the release may still see stale state (F-11).
+            # same time as the release may still see stale state.
             async with in_flight_lock:
                 fresh = _filter_fresh_ids(
                     ids, in_flight=in_flight, released_at=released_at, fetch_started=fetch_started
@@ -445,7 +444,7 @@ async def run(args: argparse.Namespace) -> int:
             last_t = now
 
     def _crash_on_unhandled_exception(task: asyncio.Task) -> None:
-        """S-1: a task dying silently (e.g. an import error inside the
+        """A task dying silently (e.g. an import error inside the
         producer coroutine) previously left the worker reporting
         `session=0 chunks=0` forever with a passing healthcheck. Any
         task that finishes with an exception other than cancellation is
@@ -576,13 +575,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_CLASSIFIER_CONF_SKIP,
         help='Skip the VLM for classifier-labeled crops at or above this confidence.',
     )
-    # GPU arbiter sentinel — design §14.5. The trainer touches this file
+    # GPU arbiter sentinel. The trainer touches this file
     # before a single-GPU run starts; the worker pauses while it exists
     # so we don't fight the trainer for CPU/RAM. (For dual-GPU runs the
     # arbiter stops the whole VLM container instead, so this path
     # never runs.) See src/services/training/gpu_arbiter.py.
     #
-    # S-4: this literal 'vlm_worker/pause.sentinel' path must stay in
+    # This literal 'vlm_worker/pause.sentinel' path must stay in
     # sync with CurationConfig.pause_sentinel_path (src/config/curation.py),
     # which gpu_arbiter.py and scripts/curation/worker/state.py both
     # resolve through. Duplicated here (rather than importing

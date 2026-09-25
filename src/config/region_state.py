@@ -29,7 +29,7 @@ same no-migration reasoning as ``RegionFields``: this is a rename of
 the Python symbol, not the OpenSearch data.
 
 **Exception (work item B2):** ``no_plate_box`` / ``no_plate_visible``
-were the last two domain-specific (license-plate) values on the public
+were the last two domain-specific values on the public
 wire contract and were renamed to ``no_region_box`` /
 ``no_region_visible`` — symbol *and* value — to match the generic
 vocabulary the rest of this module already uses. That is a breaking

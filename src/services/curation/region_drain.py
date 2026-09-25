@@ -1,4 +1,4 @@
-"""BA-3: the region-drain stability verdict for ``GET /ingest/region_drain``.
+"""The region-drain stability verdict for ``GET /ingest/region_drain``.
 
 An ingest walker used to invent its own "stability window" client-side
 (wait N polls of ``total_unfinished == 0`` before triggering

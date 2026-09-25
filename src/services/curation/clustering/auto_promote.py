@@ -32,8 +32,8 @@ from src.services.curation.cluster_purity import (
     is_promotable,
 )
 
-# Import order matters here — see orchestrator.py's bottom-of-file import
-# and plan §7 R11. orchestrator.py imports auto_promote_clusters from this
+# Import order matters here — see orchestrator.py's bottom-of-file import.
+# orchestrator.py imports auto_promote_clusters from this
 # module at the bottom of its file, forming an intentional, preserved
 # circular import: importing this module first (in isolation) fails, but
 # the app always imports orchestrator first, so this resolves fine in
@@ -60,7 +60,7 @@ _classifier_sources_empty_warned = False
 def _warn_classifier_sources_empty_once() -> None:
     """Log once (not per cluster) that classifier_class_sources() is empty
     in this environment, so the promote_query's classifier-source gate is
-    dropped rather than emitted as a dead terms:[] clause (F-11)."""
+    dropped rather than emitted as a dead terms:[] clause."""
     global _classifier_sources_empty_warned  # noqa: PLW0603 - warn-once flag
     if not _classifier_sources_empty_warned:
         _classifier_sources_empty_warned = True
@@ -77,12 +77,12 @@ async def _scroll_hits(
     (:data:`CLASS_GUARD_SOURCE_FIELDS`), scrolled in pages. The merger
     promotes a doc only if that state is unchanged at write time.
 
-    Phase 3 (b): replaces the direct-target scroll a painless
-    ``update_by_query`` script would otherwise need — we need doc ids so
-    each write can go through the OCC bulk merger below (which is how
+    Replaces the direct-target scroll a painless ``update_by_query``
+    script would otherwise need — we need doc ids so each write can go
+    through the OCC bulk merger below (which is how
     ``class_id_history`` gets appended per-doc; a painless script would
     have to reimplement the dedupe + cap logic in-cluster, which is the
-    riskier of the two options the plan calls out).
+    riskier of the two options).
     """
     found: dict[str, dict[str, Any]] = {}
     body = {'size': _SCROLL_PAGE, 'query': query, '_source': list(CLASS_GUARD_SOURCE_FIELDS)}
@@ -106,8 +106,8 @@ _CLUSTER_AGG_PAGE_SIZE = 1000
 
 
 async def _scroll_cluster_buckets(client: AsyncOpenSearch, *, index: str) -> list[dict[str, Any]]:
-    """Page every ``cluster_id`` bucket via a ``composite`` aggregation
-    (F-29), instead of a single ``terms`` agg capped at ``size: 10000`` —
+    """Page every ``cluster_id`` bucket via a ``composite`` aggregation,
+    instead of a single ``terms`` agg capped at ``size: 10000`` —
     a single oversized terms agg both costs one big heap allocation and,
     past 10000 distinct cluster_ids, silently drops the rest instead of
     erroring. ``composite`` pages exhaustively via ``after_key``.
@@ -178,11 +178,11 @@ async def auto_promote_clusters(
 
     Returns a summary keyed by ``promoted``, ``skipped``, ``clusters``.
     """
-    # Per-cluster top class, paged (F-29). Purity is computed across ALL
+    # Per-cluster top class, paged. Purity is computed across ALL
     # labelled members (validated + unvalidated) so a cluster with 99
     # classifier class A + 1 unvalidated class B isn't deemed 100% class B.
     #
-    # CM-1: restrict to candidate clusters (cluster_id >= the residual
+    # Restrict to candidate clusters (cluster_id >= the residual
     # offset). Class clusters (0..RESIDUAL_CLUSTER_ID_OFFSET-1) have
     # cluster_id == class_id by construction, so their purity is always
     # 1.0 -- every member "agrees" with the cluster because the cluster
@@ -191,7 +191,7 @@ async def auto_promote_clusters(
     # nothing but the classifier's own earlier output: a circular
     # self-validation, not an independent signal.
     #
-    # CM-2: exclude class_excluded items from the aggregation too, so an
+    # Exclude class_excluded items from the aggregation too, so an
     # excluded item's class can't skew a cluster's purity/top-class call
     # for the *other* members that do get promoted.
     cluster_buckets = await _scroll_cluster_buckets(client, index=ITEMS_INDEX)
@@ -265,7 +265,7 @@ async def auto_promote_clusters(
         if classifier_sources:
             promote_filter.append({'terms': {'class_source': classifier_sources}})
         else:
-            # F-11: an empty terms:[] clause in filter context matches
+            # An empty terms:[] clause in filter context matches
             # nothing, so the write below would silently promote zero
             # crops even though dry-run's total_promoted counted them.
             # Drop the gate instead when no classifier sources are
@@ -276,18 +276,18 @@ async def auto_promote_clusters(
                 'filter': promote_filter,
                 'must_not': [
                     {'term': {'class_validated': True}},
-                    # P0-3: never auto-promote a frozen test_holdout
+                    # Never auto-promote a frozen test_holdout
                     # crop's class fields — this writer is class-only,
                     # so an unconditional exclusion is correct here.
                     {'term': {'test_holdout': True}},
-                    # CM-2: never auto-promote an excluded item's class.
+                    # Never auto-promote an excluded item's class.
                     {'term': {'class_excluded': True}},
                 ],
             },
         }
 
         if dry_run:
-            # CM-2: `members - top_count` counted every non-majority
+            # `members - top_count` counted every non-majority
             # member of the cluster, not the set this query actually
             # touches (which is also gated on class_source and
             # class_validated=false). Count the real query instead.
@@ -324,7 +324,7 @@ async def auto_promote_clusters(
                 return {}
             # Promote only the class state the cluster vote was taken on: a
             # human write, validation or exclusion since the scroll read
-            # (CM-2) — even an undo back to a classifier label — wins.
+            # — even an undo back to a classifier label — wins.
             if not _guard.allows(doc_id, current):
                 return {}
             update: dict[str, Any] = {
@@ -342,7 +342,7 @@ async def auto_promote_clusters(
                 doc_ids=list(read),
                 merger=_merge_promote,
                 index=ITEMS_INDEX,
-                # F-29: refresh once at the end of the whole promote
+                # Refresh once at the end of the whole promote
                 # operation instead of forcing a refresh on every
                 # per-cluster (and, within that, every per-page) bulk call.
                 refresh=False,

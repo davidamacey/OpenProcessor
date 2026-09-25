@@ -1,8 +1,7 @@
 """Training-job control protocol (file-based).
 
-Ported from a reference curation stack's
-training pipeline — see ``docs/design/curation_design_rationale.md``
-for the genericization rationale. This module encapsulates the API <-> trainer protocol:
+See ``docs/design/curation_design_rationale.md`` for the design
+rationale. This module encapsulates the API <-> trainer protocol:
 
 - The API writes ``<job_id>.job.json`` into the shared ``/jobs/`` volume
   to start a run. The trainer container watches the directory.
@@ -351,11 +350,11 @@ class TrainJobStatus(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def _drop_retired_metric_keys(cls, data: Any) -> Any:
-        """Drop ``best_metric`` / ``last_metric`` from pre-W1 status files.
+        """Drop ``best_metric`` / ``last_metric`` from older status files.
 
         ``extra='allow'`` would otherwise serve them. They are not mapped
         onto the new fields: ``best_metric`` was a per-key running max that
-        could pair map50 and map50_95 from different epochs. A pre-W1 run
+        could pair map50 and map50_95 from different epochs. An older run
         leaves both new fields null; its ``eval`` block (labelled by
         ``eval.split``) still carries the final score.
         """

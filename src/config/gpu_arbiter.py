@@ -1,13 +1,13 @@
 """GPU-arbiter deployment configuration.
 
-The reference implementation hardcodes three deployment-specific facts
-directly in code: which GPU ids a training job may target (a module-level
-allowed-ids frozenset), which docker containers to stop/start to free
-GPUs for a run (a module-level container-name tuple), and the name of
-the trainer container to probe for reachability (a module-level
-constant). All three are host/deployment facts, not generic
-training-pipeline logic, so they live here as data rather than in
-``src/services/training/gpu_arbiter.py``.
+Three deployment-specific facts live here as data rather than as
+hardcoded logic: which GPU ids a training job may target (a
+module-level allowed-ids frozenset), which docker containers to
+stop/start to free GPUs for a run (a module-level container-name
+tuple), and the name of the trainer container to probe for
+reachability (a module-level constant). All three are host/deployment
+facts, not generic training-pipeline logic, so they live here rather
+than in ``src/services/training/gpu_arbiter.py``.
 
 **Default is permissive/empty, deliberately.** A generic OSS install has
 no fixed GPU layout and no fixed set of sibling containers to coordinate

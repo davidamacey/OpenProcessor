@@ -12,7 +12,7 @@ Modes:
     --watch /eval_jobs   poll for ``*.job.json`` (same protocol as the training job runner)
     --job <file>         run one job spec and exit
 
-Job spec v2 (written by the API; plan section 7.12)::
+Job spec v2 (written by the API)::
 
     {
         'schema_version': 2,

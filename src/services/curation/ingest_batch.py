@@ -128,7 +128,7 @@ async def _prefill_detections(
 async def _refresh_items_for_label_import(service: CurationIngestService) -> None:
     """Make this batch's just-written item docs searchable.
 
-    F-26: the images-index refresh is no longer needed — ``_import_batch_labels``
+    The images-index refresh is no longer needed — ``_import_batch_labels``
     now passes each result's ``image_id`` straight through to
     ``import_labels_batch`` (this batch already knows it; no need to
     search the images index to rediscover it). The detector items still
@@ -168,7 +168,7 @@ async def _import_batch_labels(
         if not (label_path and res.status == 'success'):
             continue
         pairs.append((Path(image_path), Path(label_path)))
-        # F-26: this ingest batch already knows the image_id it just wrote
+        # This ingest batch already knows the image_id it just wrote
         # — hand it straight to the importer instead of making it search
         # the images index to rediscover what this call already knows.
         if res.image_id:

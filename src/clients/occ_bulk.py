@@ -1,6 +1,6 @@
 """Human-write-semantics batch OCC update.
 
-Split out of :mod:`src.clients.occ` (F-17) to keep that module under the
+Split out of :mod:`src.clients.occ` to keep that module under the
 700-LOC ratchet — a real seam, not an arbitrary split: ``occ.py`` covers
 single-doc OCC (:func:`~src.clients.occ.occ_update_one`) and
 worker-semantics bulk OCC (:func:`~src.clients.occ.occ_skip_on_conflict_bulk`,

@@ -1,4 +1,4 @@
-"""Stored ``region_source`` / ``candidate_source`` provenance vocabulary (S3).
+"""Stored ``region_source`` / ``candidate_source`` provenance vocabulary.
 
 Single source of truth for the generic candidate-provenance strings the
 detection worker (:mod:`scripts.curation.worker`) writes to a region's

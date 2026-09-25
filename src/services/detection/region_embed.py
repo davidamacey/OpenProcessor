@@ -1,6 +1,6 @@
-"""PE-Core embedding for a region-of-interest crop (LG-1).
+"""PE-Core embedding for a region-of-interest crop.
 
-The legacy stack ran a standalone backfill loop that cropped the region,
+An earlier version of this service ran a standalone backfill loop that cropped the region,
 encoded it, L2-normalized, and wrote the vector back — `region_embedding`
 is what region-FP clustering (:mod:`src.services.curation.clustering.orchestrator`,
 region-FP paths) and ``/regions/suspected_false_positives``
@@ -12,7 +12,7 @@ between a live writer (the detection worker, at verify time) and the
 one-off backfill script for existing items — see
 ``scripts/curation/backfill_region_embeddings.py``.
 
-CM-3 must land before this is used for anything that feeds
+The squared-L2 fix must land before this is used for anything that feeds
 ``FalsePositiveCentroidStore`` — the store's search() previously
 returned squared L2, which every consumer assumed was plain L2.
 """

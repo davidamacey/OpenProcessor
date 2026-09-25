@@ -2,22 +2,20 @@
 Generic vision-language-model (VLM) labeler service.
 
 Talks to any OpenAI-compatible vision ``/chat/completions`` endpoint
-(the reference deployment runs behind OpenWebUI, but nothing here names
+(a deployment might run behind OpenWebUI, but nothing here names
 that model) to:
 
 - batch-classify item crops into one of a caller-supplied set of class
   names (closed- or open-vocabulary)
 - verify whether a crop's sub-region-of-interest (e.g. a printed label
-  on a product photo; a license plate on a vehicle crop) is real, and
-  read any text on it
+  on a product photo) is real, and read any text on it
 
-Split out of the reference VLM labeler (a 3-way split: this
-module is the orchestration half — transport lives in
-``vlm_client.py``, prompt/vocabulary data lives in ``vlm_prompts.py``).
-This module lands over the 700-LOC pre-commit ratchet cap on arrival;
-that is expected (see ``docs/design/curation_design_rationale.md`` §5)
-— the follow-up split of ``VlmLabeler``'s class body is out of scope
-for this port.
+This module is one of a 3-way split: this module is the orchestration
+half — transport lives in ``vlm_client.py``, prompt/vocabulary data
+lives in ``vlm_prompts.py``. This module lands over the 700-LOC
+pre-commit ratchet cap on arrival; that is expected (see
+``docs/design/curation_design_rationale.md`` §5) — the follow-up split
+of ``VlmLabeler``'s class body is out of scope here.
 
 Design notes
 ------------
@@ -35,9 +33,9 @@ Design notes
   region-of-interest sub-annotation (``region_visible``,
   ``region_bbox_correct``, ``region_text``, ``region_confidence``) are
   read via a :class:`~src.config.RegionFields` instance rather than
-  hardcoded literals (§3.2), so a deployment with existing data under
-  different field names (e.g. a proprietary-dataset overlay using
-  ``roi_*``) is a config flip, not a code change. A :class:`~src.services.labeling
+  hardcoded literals, so a deployment with existing data under
+  different field names (e.g. an overlay using ``roi_*``) is a config
+  flip, not a code change. A :class:`~src.services.labeling
   .vlm_prompts.PromptPack`'s own templates ask the VLM for the matching
   key names — see that module's docstring.
 

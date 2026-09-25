@@ -29,7 +29,7 @@ class ClassEntry(BaseModel):
     # ok / warn / block from validated_count (dataset_thresholds.py).
     adequacy: Literal['ok', 'warn', 'block'] = 'block'
     added_at: str | None = None
-    # X2: 'region' when this class_name equals the active region profile's
+    # 'region' when this class_name equals the active region profile's
     # region_class_name (DetectionProfile.region_class_name) -- i.e. this
     # "class" is really a sub-bbox slot on parent items, not a class item
     # crops get primarily labeled into. Region classes must not have their

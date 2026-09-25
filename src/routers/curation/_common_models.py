@@ -39,13 +39,13 @@ class IngestImageResponse(BaseModel):
     n_crops: int = 0
     n_regions: int = 0
     error: str | None = None
-    # BA-7: a stable machine code alongside the message, e.g.
+    # A stable machine code alongside the message, e.g.
     # 'unservable_path', 'unsupported_type', 'decode_failed', 'too_large',
     # 'detector_infer', 'bulk_index' -- always present when status=='failed',
     # null otherwise. Lets a client group/label failures without parsing
     # `error`'s prose.
     error_kind: str | None = None
-    # BA-1: the client-supplied identifier for a byte-upload ingest, where
+    # The client-supplied identifier for a byte-upload ingest, where
     # image_path is now the server-persisted path. Null for a server-path
     # ingest (image_path already IS the client-meaningful identifier).
     source_identifier: str | None = None
@@ -108,7 +108,7 @@ class CropExcludeRequest(BaseModel):
     Blurry / unidentifiable / partial crops the human doesn't want in
     the training set. ``reason`` defaults to ``'ignore'``; the UI can
     pass a more specific tag (``'blurry'``, ``'unidentifiable'``,
-    ``'not_a_vehicle'``, ``'partial_crop'``) when the operator wants to
+    ``'wrong_class'``, ``'partial_crop'``) when the operator wants to
     record why (e.g. a whole cluster of blurry items).
     """
 
@@ -266,7 +266,7 @@ class HealthResponse(BaseModel):
     mlflow_public_url: str | None = Field(
         default=None,
         description=(
-            'T1: the browser-reachable MLflow base URL (CurationConfig.'
+            'The browser-reachable MLflow base URL (CurationConfig.'
             'mlflow_public_url / OP_MLFLOW_PUBLIC_URL), null when unset. '
             'A served train run may carry its own mlflow_run_url that is '
             'correct host-side but unreachable from an operator browser -- '
@@ -365,7 +365,7 @@ class _PathLookupResponse(BaseModel):
 
 
 # =============================================================================
-# BA-2/BA-3/BA-6: typed ingest config / drain-verdict / status models.
+# Typed ingest config / drain-verdict / status models.
 # =============================================================================
 
 
@@ -374,7 +374,7 @@ class IngestUploadConfig(BaseModel):
     max_images_per_request: int
     max_bytes_per_request: int
     accepted_extensions: list[str]
-    # BA-1: false only ever for a deployment that hasn't wired an upload
+    # False only ever for a deployment that hasn't wired an upload
     # root at all (there isn't one today -- upload_root always has a
     # default) -- kept as an explicit field rather than assumed true so a
     # future "uploads disabled" deployment mode can serve false here
@@ -403,7 +403,7 @@ class IngestRegionDrainResponse(BaseModel):
     pending_detection: int
     pending_verification: int
     total_unfinished: int
-    # BA-3: the stability verdict a walker used to have to invent a
+    # The stability verdict a walker used to have to invent a
     # window for client-side. drained=true only once total_unfinished
     # has read 0 for at least stable_polls consecutive polls (a single
     # zero reading right after a burst finishes could be a race, not a

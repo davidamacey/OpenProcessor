@@ -1,7 +1,7 @@
 """Export readiness: refuse an export with nothing in it, and tell a
 training preflight whether an export still describes the current dataset.
 
-DQ-M9. ``POST /export/yolo`` used to write (and flip ``current`` to) an
+``POST /export/yolo`` used to write (and flip ``current`` to) an
 empty dataset when no item was exportable, and a training preflight
 passed a months-old export built from an items index that had since been
 rebuilt.

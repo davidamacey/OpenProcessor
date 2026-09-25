@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 logger = get_logger('curation_worker')
 
-# S3: stored ``region_source`` / ``candidate_source`` provenance values are
+# Stored ``region_source`` / ``candidate_source`` provenance values are
 # defined in src/config/region_source.py (imported above) so both this
 # worker and the API router (region_vocabulary.py) share one source of
 # truth without a scripts -> src layering violation.
@@ -47,7 +47,7 @@ DEFAULT_VLM_URL = os.environ.get('OP_VLM_URL', '')
 DEFAULT_PAUSE_SENTINEL = Path(
     os.environ.get(
         'OP_WORKER_PAUSE_SENTINEL',
-        # S-4: must match CurationConfig.pause_sentinel_path -- the
+        # Must match CurationConfig.pause_sentinel_path -- the
         # gpu_arbiter writer resolves through the same property.
         str(_config.pause_sentinel_path),
     )
@@ -77,8 +77,8 @@ def region_profile() -> DetectionProfile:
     return profile
 
 
-# Status names (task #7 rename — see plan / task #7 description).
-# Worker emits the new long-form names everywhere; reads accept both
+# Status names (renamed to the long form). Worker emits the new
+# long-form names everywhere; reads accept both
 # legacy and new names until the OS migration completes.
 STATUS_PENDING_DETECTION = RegionStatus.PENDING_DETECTION
 STATUS_PENDING_VERIFICATION = RegionStatus.PENDING_VERIFICATION
@@ -103,7 +103,7 @@ class _ItemTask:
     vehicle_bbox_norm: tuple[float, float, float, float]
     region_status: str | None
     class_name: str
-    # F-11: dead field -- nothing writes or maps a ``group`` item field, so
+    # Dead field -- nothing writes or maps a ``group`` item field, so
     # this was always empty in production. Kept (default '', never read by
     # _is_secondary_shape) purely for source/test-fixture back-compat;
     # cascade.py's _fetch_pending no longer requests it from OpenSearch.
@@ -113,7 +113,7 @@ class _ItemTask:
     # in every consumer's per-task processing block so worker logs can
     # be joined back to the originating request (Phase 4a).
     request_id: str = '-'
-    # B-PR5 cohort marker. ``coco_yolo11_proposal`` means the primary
+    # Cohort marker. ``coco_yolo11_proposal`` means the primary
     # classifier missed and we fell back to a generic proposal — these
     # crops still need a class label, so combining class + region-verify
     # + OCR in one ``VlmLabeler.label_combined`` call cuts ~2 round-trips
@@ -162,7 +162,7 @@ class _ItemTask:
     # ``RegionFields.detector_chain`` on every write that produces a
     # region bbox.
     detection_trace: list[str] = field(default_factory=list)
-    # B-PR5: class-side update from a combined VLM call. Layered onto
+    # Class-side update from a combined VLM call. Layered onto
     # ``update_doc`` at write time so subsequent region-cascade writes
     # don't clobber the class fields (cohort = primary-detector-missed).
     combined_class_update: dict[str, Any] = field(default_factory=dict)
@@ -286,7 +286,7 @@ def _is_secondary_shape(task: _ItemTask) -> bool:
     class registry's ``group`` values. A profile with no groups routes
     nothing to the secondary-shape path.
 
-    F-11: ``task.group`` came from a ``group`` field on the item doc that
+    ``task.group`` came from a ``group`` field on the item doc that
     nothing ever writes or maps -- it was always empty, so this always
     fell through to the name-suffix heuristic below. Resolve the group
     from the class registry (the actual source of truth for

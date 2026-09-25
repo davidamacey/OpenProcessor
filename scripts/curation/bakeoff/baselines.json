@@ -1,4 +1,4 @@
 {
-  "_comment": "Baseline-model registry for the bake-off UI picker (GET /curation/bakeoff/baseline_models). Empty by default: previous training runs are the baselines, and quantized ONNX variants of a run are produced by the bake-off job's quantize stage. Add external models as entries (schema: docs/design/generic_model_comparison_plan.md section 7.6), give a profile its own registry via baselines_path, or point OP_BAKEOFF_BASELINES_PATH at your own file.",
+  "_comment": "Baseline-model registry for the bake-off UI picker (GET /curation/bakeoff/baseline_models). Empty by default: previous training runs are the baselines, and quantized ONNX variants of a run are produced by the bake-off job's quantize stage. Add external models as entries (schema: see the `Baseline` model in ``src/routers/curation/_bakeoff_models.py``), give a profile its own registry via baselines_path, or point OP_BAKEOFF_BASELINES_PATH at your own file.",
   "baselines": []
 }

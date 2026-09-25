@@ -217,7 +217,7 @@ async def _batch_write(
     writer_id: str,
 ) -> dict[str, Any]:
     """Apply ``build`` to every crop via one batched mget + bulk round-trip
-    per retry round (F-17), instead of one ``occ_update_one`` round-trip
+    per retry round, instead of one ``occ_update_one`` round-trip
     per crop.
 
     Doesn't route through :func:`src.clients.occ_bulk.occ_update_bulk` — that

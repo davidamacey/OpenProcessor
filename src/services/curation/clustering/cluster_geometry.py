@@ -1,6 +1,6 @@
 """Cluster geometry for every clustered item, written after each clustering run.
 
-DQ-M3. The residual run writes ``cluster_distance`` for the candidate
+The residual run writes ``cluster_distance`` for the candidate
 clusters it assigns, but class clusters (``cluster_id == class_id``) are
 filled by labelling, so most of their members had no distance — and an
 item the VLM moved into a class cluster kept a distance to the candidate
@@ -19,7 +19,7 @@ This pass runs after the residual stage of the auto-label pipeline:
 3. It writes ``cluster_nearest_id``: the cluster whose centroid is
    nearest the item among all clusters. ``GET /clusters`` serves a
    cluster's ``purity`` as the share of its measured members whose
-   nearest centroid is their own (DQ-M2) — a signal independent of the
+   nearest centroid is their own — a signal independent of the
    labels that placed them there.
 
 Every write is guarded on the item still being in the cluster it was
@@ -48,7 +48,7 @@ from src.services.curation.export_support import scroll_hits
 logger = get_logger(__name__)
 
 DISTANCE_REF_FIELD = 'cluster_distance_cluster_id'
-# The cluster whose centroid is nearest the item (DQ-M2 cluster purity).
+# The cluster whose centroid is nearest the item (cluster purity).
 NEAREST_FIELD = 'cluster_nearest_id'
 _MAX_CLUSTER_BUCKETS = 20000
 _BULK_CHUNK = 2000

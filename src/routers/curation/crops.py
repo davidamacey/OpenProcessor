@@ -59,7 +59,7 @@ async def _occ_bulk_human_relabel(
     writer_id: str,
     max_retries: int = 5,
 ) -> dict[str, Any]:
-    """Batch OCC relabel (F-17): one mget page + one bulk call instead of
+    """Batch OCC relabel: one mget page + one bulk call instead of
     one ``occ_update_one`` round-trip per crop. ``refresh='wait_for'`` is
     attached only to the final bulk call of each retry round (see
     :func:`src.clients.occ_bulk.occ_update_bulk`), not per crop.
@@ -203,7 +203,7 @@ async def list_crops(
         conf_clause = confidence_band(conf_min, conf_max)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    # F-19: every clause below is a pure predicate (term/exists/range/
+    # Every clause below is a pure predicate (term/exists/range/
     # must_not-wrapped-term) — none score — so all of it lives in filter
     # context, not must.
     filt: list[dict[str, Any]] = []
@@ -273,7 +273,7 @@ async def list_crops(
         # this scale and matches the /curation/review endpoint.
         'track_total_hits': True,
         # Never ship the 1024-d embedding vectors or class_id_history
-        # to the card grid (F-25 -- history is undo-only).
+        # to the card grid (history is undo-only).
         '_source': {'excludes': item_list_source_excludes()},
     }
     try:
@@ -333,7 +333,7 @@ async def get_crop(
     storage names.
     """
     try:
-        # F-25: still excludes the 1024-d embedding vectors (matching
+        # Still excludes the 1024-d embedding vectors (matching
         # every other item endpoint's behavior) -- but not
         # class_id_history, since a single-item view may legitimately
         # want it, unlike a paginated list.
@@ -415,7 +415,7 @@ async def batch_label_crops(
             writer='human:batch_label_crops',
         )
 
-    # F-17: one mget page + one bulk call (regardless of batch size) via
+    # One mget page + one bulk call (regardless of batch size) via
     # occ_update_bulk, instead of one occ_update_one round-trip per crop.
     return await _occ_bulk_human_relabel(
         opensearch,
@@ -490,7 +490,7 @@ async def move_crops(
             'updated_at': _now_iso(),
         }
 
-    # F-17: batched via occ_update_bulk — see batch_label_crops above.
+    # Batched via occ_update_bulk — see batch_label_crops above.
     return await _occ_bulk_human_relabel(
         opensearch,
         payload.crop_ids,

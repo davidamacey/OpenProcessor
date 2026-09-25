@@ -122,7 +122,7 @@ def _subcluster_label(idx: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# F-3: guarded bulk writers.
+# Guarded bulk writers.
 #
 # Every clustering writer below fetches candidates, spends seconds-to-minutes
 # fitting a model, then bulk-writes cluster_id/cluster_subid back. A blind
@@ -209,7 +209,7 @@ def _guarded_class_cluster_write(cid: int, dist: float | None) -> dict[str, Any]
                 " ctx._source['cluster_id'] = params.cid;"
                 " ctx._source.remove('cluster_subid');"
                 " ctx._source['cluster_distance'] = params.dist;"
-                # The cluster the distance was measured against (DQ-M3);
+                # The cluster the distance was measured against;
                 # a later move leaves it pointing at the old cluster.
                 " ctx._source['cluster_distance_cluster_id'] = params.cid;"
             ),
@@ -218,7 +218,7 @@ def _guarded_class_cluster_write(cid: int, dist: float | None) -> dict[str, Any]
 
 
 def _region_write_guard_clauses(F: Any) -> list[GuardClause]:
-    """F-3 region-write guard: mirrors :func:`fp_candidate_must_not`'s human
+    """Region-write guard: mirrors :func:`fp_candidate_must_not`'s human
     clauses (``F.label_source``/``F.verifier`` == ``'human'``) plus
     ``F.validated`` -- a VLM-validated region is not ground truth (see
     ``fp_candidate_must_not``'s docstring) but a *human*-validated one is
@@ -251,7 +251,7 @@ def _guarded_region_write(F: Any, fields: dict[str, Any]) -> dict[str, Any]:
 
 
 def _log_bulk_write_errors(op: str, resp: dict[str, Any]) -> None:
-    """F-3 item 4: log each failed bulk item (id + status + reason) at
+    """Log each failed bulk item (id + status + reason) at
     warning level instead of only a chunk-level 'errors: true' flag.
     Doesn't raise -- matches this module's existing partial-bulk-failure
     behavior of proceeding rather than aborting the whole run."""
@@ -279,7 +279,7 @@ async def _fetch_cluster_members(
 ) -> list[dict[str, Any]]:
     """Pull every doc with ``<cluster_id_field> == cluster_id`` from ``index``.
 
-    Reads ``embedding_field`` (default the vehicle residual field
+    Reads ``embedding_field`` (default the item residual field
     ``pe_embedding``; the region path passes ``RegionFields.embedding``),
     1024x4B ≈ 4KB each, so MAX_REFINE_MEMBERS (default 8000) members ≈
     32MB — safe to load into RAM. The
@@ -340,7 +340,7 @@ async def _bulk_update_subids(
 ) -> int:
     """Bulk-update ``subid_field`` on the supplied (doc_id, subid) pairs.
 
-    F-3: when ``expected_cluster_id`` is given (refine's caller always
+    When ``expected_cluster_id`` is given (refine's caller always
     passes it -- the cluster being refined), the write is a guarded
     painless script that noops if the doc's ``cluster_id_field`` no longer
     equals ``expected_cluster_id``. Refine snapshots members, fits AHC
@@ -422,12 +422,12 @@ async def refine_cluster(
     5. Compute purity (largest-class share among labelled members) and return
        a summary.
 
-    Defaults refine vehicle clusters over ``pe_embedding`` / ``cluster_id`` /
+    Defaults refine item clusters over ``pe_embedding`` / ``cluster_id`` /
     ``cluster_subid``. The region path passes
     ``cluster_id_field=RegionFields.cluster_id``,
     ``embedding_field=RegionFields.embedding``,
     ``subid_field=RegionFields.cluster_subid`` (see :func:`refine_region_cluster`)
-    to refine region buckets without touching vehicle clustering.
+    to refine region buckets without touching item clustering.
 
     Returns:
         ``{cluster_id, n_members, n_subclusters, purity, action, ...}``.
@@ -435,7 +435,7 @@ async def refine_cluster(
     log = logger.bind(cluster_id=cluster_id, index=index, cluster_id_field=cluster_id_field)
     log.info('curation_refine_cluster_start')
 
-    # F-16: count before scrolling every member's embedding — a cluster
+    # Count before scrolling every member's embedding — a cluster
     # far past max_members should never pay for that fetch just to
     # discover it's too large to refine.
     count_resp = await client.count(
@@ -851,7 +851,7 @@ async def _park_gated_residuals(
         return 0
     base = _residual_pool_filter()
     # "Fails the gate" = residual pool AND NOT(passes all gate clauses).
-    # F-29: also exclude docs already parked — rewriting cluster_id=-3 onto
+    # Also exclude docs already parked — rewriting cluster_id=-3 onto
     # a doc that's already -3 (with cluster_subid already null) is a
     # wasted write on every re-run of this gate.
     query = {
@@ -910,9 +910,9 @@ async def cluster_residuals(
     * ``"ivf"`` (default) — FAISS k-means partitioning into a fixed K
       buckets, trained on a bounded sample and persisted so ingest +
       assign_only reuse the centroids. No ``-1`` noise; every crop gets
-      a bucket. Chosen because the vehicle-embedding manifold is
+      a bucket. Chosen because the item-embedding manifold is
       continuously dense (no density gaps for HDBSCAN, no geometry for
-      UMAP to preserve) — see docs/design/clustering_methods.md.
+      UMAP to preserve).
     * ``"ahc"`` — sklearn AgglomerativeClustering complete-linkage on a
       sparse cosine kNN graph. Same algorithm as the refine endpoint;
       retained as a fallback. Don't use on large n — the C-level
@@ -1076,7 +1076,7 @@ async def cluster_residuals(
             if new_cid >= 0:
                 new_cid += RESIDUAL_CLUSTER_ID_OFFSET
             bulk_body.append({'update': {'_index': ITEMS_INDEX, '_id': crop_id}})
-            # F-3: guarded script, not a blind 'doc' update -- clear
+            # Guarded script, not a blind 'doc' update -- clear
             # cluster_subid (stale refine groupings from the doc's previous
             # cluster have no meaning in the new candidate) and set
             # cluster_distance (present for IVF, else null so a stale
@@ -1220,7 +1220,7 @@ async def assign_only_residuals(
                 ):
                     new_cid = int(label) + RESIDUAL_CLUSTER_ID_OFFSET
                     bulk_body.append({'update': {'_index': ITEMS_INDEX, '_id': crop_id}})
-                    # F-3: guarded script — see cluster_residuals above.
+                    # Guarded script — see cluster_residuals above.
                     bulk_body.append(_guarded_class_cluster_write(new_cid, float(dist)))
                 br = await client.bulk(body=bulk_body, refresh=False)
                 if br.get('errors'):
@@ -1269,11 +1269,11 @@ async def assign_only_residuals(
 # ============================================================================
 # Region clustering — coarse partition + per-bucket AHC refine over the
 # RegionFields embedding (a deployment overlay may point this at an
-# existing region_pe_embedding field). Regions are all one
-# class (e.g. license plate), so this is OUTLIER discovery: similar regions
-# group together and false-positives / bad boxes fall out as sub-cluster
-# outliers under refine. Writes the independent RegionFields cluster fields
-# (not the vehicle-level cluster_*).
+# existing region_pe_embedding field). Regions are all one class (e.g.
+# a single sub-annotation type), so this is OUTLIER discovery: similar
+# regions group together and false-positives / bad boxes fall out as
+# sub-cluster outliers under refine. Writes the independent RegionFields
+# cluster fields (not the item-level cluster_*).
 # ============================================================================
 
 F = get_region_fields()
@@ -1283,11 +1283,12 @@ REGION_TARGET_BUCKET_SIZE = 800
 # MAX_REFINE_MEMBERS (2000), keeping per-bucket AHC refine cheap.
 MIN_REGIONS_FOR_CLUSTERING = 32
 
-# Permanent region false-positive bucket (e.g. license-plate FPs).
+# Permanent region false-positive bucket.
 # Negative so it never collides with the flat KMeans namespace (0..K-1).
 # Human FP marks park crops here; cluster_region_residuals excludes them so
-# the good buckets' centroids stay clean. FPs vary widely (lights, bumpers,
-# stickers, brackets) so build_region_fp_centroids sub-types this bucket.
+# the good buckets' centroids stay clean. FPs vary widely (background
+# clutter, similar-looking non-target objects, empty boxes) so
+# build_region_fp_centroids sub-types this bucket.
 FALSE_POSITIVE_REGION_CLUSTER_ID = -100
 FP_TARGET_SUBTYPE_SIZE = 150  # target members per FP sub-type
 FP_MIN_FOR_SUBTYPES = 32  # below this, one whole-bucket centroid
@@ -1352,7 +1353,7 @@ async def cluster_region_residuals(
     from sklearn.cluster import MiniBatchKMeans
 
     x = np.asarray(vecs, dtype=np.float32)
-    # CM-3: re-normalize defensively. The k-means/cosine-distance math
+    # Re-normalize defensively. The k-means/cosine-distance math
     # below assumes unit-norm rows, but this reads region_embedding
     # straight off the index with no guarantee the writer's normalization
     # survived (or that every historical row was written by a
@@ -1377,7 +1378,7 @@ async def cluster_region_residuals(
     n_written = 0
     for doc_id, lab, dist in zip(ids, labels, dists, strict=True):
         bulk.append({'update': {'_index': ITEMS_INDEX, '_id': doc_id}})
-        # F-3: guarded script — noop instead of overwriting a
+        # Guarded script — noop instead of overwriting a
         # human-verified/validated region; a fresh coarse partition
         # invalidates any prior refine, so cluster_subid is removed.
         bulk.append(
@@ -1430,7 +1431,7 @@ async def refine_region_cluster(
 
     Thin wrapper over :func:`refine_cluster` pinned to the region fields, so
     outlier regions (false-positives / bad boxes) split into their own
-    sub-clusters exactly like vehicle-class refine.
+    sub-clusters exactly like item-class refine.
     """
     return await refine_cluster(
         client,
@@ -1494,16 +1495,16 @@ def _write_region_cluster_job(state: dict[str, Any]) -> None:
 
 
 def region_cluster_job_status() -> dict[str, Any]:
-    """Cross-worker snapshot of the background plate-clustering job."""
+    """Cross-worker snapshot of the background region-clustering job."""
     return _read_region_cluster_job()
 
 
-# A manual AHC refine of a good plate bucket writes per-crop sub-ids that a
+# A manual AHC refine of a good region bucket writes per-crop sub-ids that a
 # full re-partition would wipe (sub-ids are cluster-local). We record the last
 # refine time so the one-click pipeline can skip the destructive re-partition
 # while recent refine work is still fresh (a SHORT TTL), unless the caller forces
 # it OR a substantial batch of new FPs has accumulated since the last partition
-# (which busts the TTL — the good-plate pool changed enough to be worth it).
+# (which busts the TTL — the good-region pool changed enough to be worth it).
 REGION_REPARTITION_REFINE_TTL_S = 600.0  # 10 min — short; just protects in-progress refines
 FP_REPARTITION_BUST_DELTA = 200  # this many new FPs since last partition busts the TTL
 _REGION_REFINE_MARKER = Path(
@@ -1517,7 +1518,7 @@ _REGION_PARTITION_MARKER = Path(
 
 
 def mark_region_refine(cluster_id: int) -> None:
-    """Record that a good plate bucket was just manually refined (TTL anchor)."""
+    """Record that a good region bucket was just manually refined (TTL anchor)."""
     try:
         _REGION_REFINE_MARKER.parent.mkdir(parents=True, exist_ok=True)
         tmp = _REGION_REFINE_MARKER.with_suffix('.tmp')
@@ -1580,17 +1581,17 @@ async def start_region_cluster_job(
     fp_bust_delta: int = FP_REPARTITION_BUST_DELTA,
     force_repartition: bool = False,
 ) -> dict[str, Any]:
-    """Launch the full plate-clustering pipeline in the background (single-flight).
+    """Launch the full region-clustering pipeline in the background (single-flight).
 
     Pipeline (FP-prep steps are best-effort so a failure can't block the main
     re-partition):
       1. ``rebuild_fp_centroids``: re-sub-type the FP bucket + rebuild its
          sub-type centroids from the current false positives.
-      2. ``auto_fp_threshold`` > 0: auto-move plates within that L2 distance of an
+      2. ``auto_fp_threshold`` > 0: auto-move regions within that L2 distance of an
          FP sub-centroid into the FP bucket (the tight, near-certain matches).
-      3. re-partition the good plates (FPs — including the just-moved ones —
+      3. re-partition the good regions (FPs — including the just-moved ones —
          excluded), so the good buckets' centroids stay clean. **Skipped** when a
-         manual plate refine happened within ``repartition_ttl_s`` (a short TTL),
+         manual region refine happened within ``repartition_ttl_s`` (a short TTL),
          to avoid wiping that fresh cluster-local sub-id work — UNLESS
          ``force_repartition`` or at least ``fp_bust_delta`` new FPs have
          accumulated since the last partition (a substantial change busts the TTL).
@@ -1625,10 +1626,10 @@ async def start_region_cluster_job(
                 except Exception as exc:
                     extra['auto_fp'] = {'status': 'error', 'error': str(exc)}
                     logger.error('curation_region_job_auto_fp_failed', error=str(exc))
-            # TTL gate: a re-partition clears good-plate sub-ids, so skip it
+            # TTL gate: a re-partition clears good-region sub-ids, so skip it
             # while a recent manual refine is still fresh — UNLESS forced, or a
             # substantial batch of FPs accumulated since the last partition
-            # (then the good-plate pool changed enough to be worth re-clustering).
+            # (then the good-region pool changed enough to be worth re-clustering).
             current_fp = await _count_false_positives(client)
             fp_at_last = int(_read_region_partition_marker().get('fp_count', 0))
             fp_delta = current_fp - fp_at_last
@@ -1648,7 +1649,7 @@ async def start_region_cluster_job(
             else:
                 result = {
                     'status': 'skipped_repartition_ttl',
-                    'reason': 'recent manual plate refine within TTL; sub-clusters preserved',
+                    'reason': 'recent manual region refine within TTL; sub-clusters preserved',
                     'last_refine_at': refine_at,
                     'repartition_ttl_s': repartition_ttl_s,
                     'fp_delta_since_partition': fp_delta,
@@ -1743,7 +1744,7 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
             return c.astype(np.float32), labels, np.linalg.norm(x - c[labels], axis=1)
         km = MiniBatchKMeans(n_clusters=k, random_state=0, n_init=3, batch_size=4096)
         labels = km.fit_predict(x)
-        # CM-3: k-means centroids (an arithmetic mean of unit-norm
+        # k-means centroids (an arithmetic mean of unit-norm
         # members) are not themselves unit-norm. FalsePositiveCentroidStore
         # persists these into an IndexFlatL2 that fp_store.search() maps
         # to cosine similarity assuming every stored vector is unit-norm
@@ -1873,7 +1874,7 @@ async def auto_assign_fp_from_centroids(
     bulk: list[dict[str, Any]] = []
     for doc_id, sub, d in moved:
         bulk.append({'update': {'_index': ITEMS_INDEX, '_id': doc_id}})
-        # F-3: guarded script — the query above already excludes
+        # Guarded script — the query above already excludes
         # human-verified regions via fp_candidate_must_not() at scroll
         # time, but a human write between the scroll and this write
         # (the scan + distance search can take a while) must still not
@@ -1918,7 +1919,7 @@ async def auto_assign_fp_from_centroids(
 
 
 # Background FP-centroid job state — same cross-worker file pattern as the
-# plate-clustering job above (own file so the two can run independently).
+# region-clustering job above (own file so the two can run independently).
 _FP_JOB_FILE = Path(
     os.getenv('OP_REGION_FP_JOB_FILE') or str(Path(tempfile.gettempdir()) / 'region_fp_job.json')
 )

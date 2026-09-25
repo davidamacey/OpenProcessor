@@ -170,7 +170,7 @@ class Settings(BaseSettings):
         env_prefix = ''  # No prefix for env vars
         case_sensitive = False
         extra = 'ignore'
-        # CFG-5: previously unset -- a bare `.env` in the repo root did
+        # Previously unset -- a bare `.env` in the repo root did
         # nothing for a locally-run process (docker-compose's own .env
         # handling is separate and only covered vars explicitly
         # interpolated into docker-compose.yml, e.g. OP_API_PREFIX).

@@ -6,10 +6,10 @@
 # specs; this container scores each candidate detector against a frozen
 # test split and writes matrix.json/comparison.json for the review UI).
 #
-# Standalone image (no shared trainer base image exists in this repo yet
-# — see docs/design/oss_main_completion_plan.md Wave 4 / D6): installs the
-# same detection-stack pins as the core API image (requirements.txt) plus
-# the harness-only extras (scripts/curation/bakeoff/requirements.txt).
+# Standalone image (no shared trainer base image exists in this repo):
+# installs the same detection-stack pins as the core API image
+# (requirements.txt) plus the harness-only extras
+# (scripts/curation/bakeoff/requirements.txt).
 #
 # Build:
 #   docker compose --profile curation build curation-evaluator

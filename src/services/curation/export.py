@@ -1,18 +1,16 @@
 """Generic YOLO-format dataset export service.
 
-The reference implementation this was ported from
-(see ``docs/design/curation_design_rationale.md`` for the genericization
-approach) splits into two halves: artifact filenames, class
-lists and split ratios are deployment data (an ``ExportProfile``, extracted
-here), while the YOLO-format writer, split logic and manifest/checksum
-mechanism are generic algorithm code that stays code. The bespoke
-whole-frame-vs-crop / near-dup-collapsing features of the reference
-exporter (a 1143-LOC domain-specific service, never ported) are
+Splits into two halves (see ``docs/design/curation_design_rationale.md``
+for the design approach): artifact filenames, class lists and split
+ratios are deployment data (an ``ExportProfile``, extracted here), while
+the YOLO-format writer, split logic and manifest/checksum mechanism are
+generic algorithm code that stays code. Domain-specific
+whole-frame-vs-crop / near-dup-collapsing export features are
 intentionally NOT reproduced here; a deployment-specific overlay can
-extend :class:`GenericYoloExportService` directly if it needs them (plan
-§7 R5 — the generic curation stack ships with a thinner export path than
-the reference by design, tracked as the most likely first follow-up after
-merge).
+extend :class:`GenericYoloExportService` directly if it needs them — the
+generic curation stack ships with a thinner export path by design,
+tracked as the most likely first follow-up after any such feature is
+needed.
 
 **Layout: one image, one label file, per source image.** Validated items
 (one object each) are grouped by ``image_id``
@@ -122,7 +120,7 @@ REGISTRY_ARTIFACT_CONTENT_TYPES: dict[str, str] = {
 
 @dataclass(frozen=True)
 class ExportProfile:
-    """Deployment-tunable export knobs (plan §3.5 extraction)."""
+    """Deployment-tunable export knobs."""
 
     name: str = 'default'
     train_ratio: float = 0.8
@@ -579,7 +577,7 @@ class GenericYoloExportService:
         (resolved_export_dir / ARTIFACT_FILENAMES['label_stats']).write_text(
             json.dumps(label_stats, indent=2)
         )
-        # E2: class_count is the registry size written into data.yaml
+        # class_count is the registry size written into data.yaml
         # (nc/names) -- it stays that way for back-compat, but a class
         # with zero labeled objects in this export inflates that number
         # into looking like "84 classes of real data" when only a
