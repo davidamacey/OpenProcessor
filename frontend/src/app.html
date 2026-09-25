@@ -7,6 +7,17 @@
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#09090b" />
     <title>Cropwright</title>
+    <!-- __INGEST_MAX_REQUEST_MB__ is substituted at container start
+         (docker-entrypoint.sh) from CROPWRIGHT_INGEST_MAX_REQUEST_MB —
+         the deployment-owned nginx client_max_body_size cap ingestConfig.ts's
+         upload chunk planner needs to know (docs/design/
+         ingest-ui-and-acceptance-plan-2026-09-24.md §A.4). The
+         unresolved literal `__INGEST_MAX_REQUEST_MB__` (local dev, or
+         a skipped entrypoint) is recognized by ingestConfig.ts as
+         "unset" the same way normalizeApiPrefix treats __API_PREFIX__. -->
+    <script>
+      window.__CROPWRIGHT_INGEST_MAX_REQUEST_MB__ = '__INGEST_MAX_REQUEST_MB__';
+    </script>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

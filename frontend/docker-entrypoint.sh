@@ -38,14 +38,30 @@ if printf '%s' "$API_UPSTREAM" | grep -q '[^A-Za-z0-9.:/_-]'; then
   exit 1
 fi
 
+# Deployment-owned upload/body-size cap (docs/design/
+# ingest-ui-and-acceptance-plan-2026-09-24.md §A.4) — ours, not the
+# backend's. Substituted into both nginx.conf's client_max_body_size
+# (as `<n>m`) and window.__CROPWRIGHT_INGEST_MAX_REQUEST_MB__
+# (src/app.html) so the client-side chunk planner and the proxy's actual
+# limit can never drift apart. Must be a bare positive integer (MB) —
+# it's interpolated directly into nginx config.
+INGEST_MAX_REQUEST_MB="${CROPWRIGHT_INGEST_MAX_REQUEST_MB:-256}"
+case "$INGEST_MAX_REQUEST_MB" in
+  ''|*[!0-9]*)
+    echo "[entrypoint] CROPWRIGHT_INGEST_MAX_REQUEST_MB must be a positive integer, got: $INGEST_MAX_REQUEST_MB" >&2
+    exit 1
+    ;;
+esac
+
 find /usr/share/nginx/html -type f \( -name '*.js' -o -name '*.html' \) \
-    -exec sed -i "s|__RUNTIME__|${TARGET_URL}|g; s|__API_PREFIX__|${API_PREFIX}|g" {} +
+    -exec sed -i "s|__RUNTIME__|${TARGET_URL}|g; s|__API_PREFIX__|${API_PREFIX}|g; s|__INGEST_MAX_REQUEST_MB__|${INGEST_MAX_REQUEST_MB}|g" {} +
 
 # nginx's proxy `location` must track the same prefix, or the SPA asks
 # for {prefix}/... and nginx answers with index.html. This runs as
 # /docker-entrypoint.d/40-runtime-config.sh, i.e. before nginx starts.
-sed -i "s|__API_PREFIX__|${API_PREFIX}|g; s|__API_UPSTREAM__|${API_UPSTREAM}|g" /etc/nginx/conf.d/default.conf
+sed -i "s|__API_PREFIX__|${API_PREFIX}|g; s|__API_UPSTREAM__|${API_UPSTREAM}|g; s|__INGEST_MAX_REQUEST_MB__|${INGEST_MAX_REQUEST_MB}|g" /etc/nginx/conf.d/default.conf
 
 echo "[entrypoint] PUBLIC_TRITON_API_URL=${TARGET_URL:-<empty - relative URLs via nginx proxy>}"
 echo "[entrypoint] PUBLIC_API_PREFIX=${API_PREFIX}"
 echo "[entrypoint] API_UPSTREAM=${API_UPSTREAM}"
+echo "[entrypoint] CROPWRIGHT_INGEST_MAX_REQUEST_MB=${INGEST_MAX_REQUEST_MB}"

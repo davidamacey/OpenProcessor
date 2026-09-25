@@ -17,6 +17,8 @@ services:
       # Leave empty to use the nginx proxy; set only to call an API on
       # a different origin directly from the browser.
       - PUBLIC_TRITON_API_URL=${PUBLIC_TRITON_API_URL:-}
+      # Deployment-owned nginx upload cap for /ingest, in MB (default 256).
+      - CROPWRIGHT_INGEST_MAX_REQUEST_MB=${CROPWRIGHT_INGEST_MAX_REQUEST_MB:-256}
     ports:
       - '${CROPWRIGHT_PORT:-5184}:80'
     healthcheck:
