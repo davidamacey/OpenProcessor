@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     getNewClassProposalsSummary,
+    getTestHoldoutStats,
     getThumbUrl,
     mergeClasses,
     previewClassMerge,
@@ -12,6 +13,7 @@
   } from '$lib/api';
   import AddClassModal from '$components/AddClassModal.svelte';
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
+  import { proposalRows } from '$lib/classes/proposalRows';
   import { formatDateOnly } from '$lib/formatDate';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
@@ -300,11 +302,34 @@
 
   onMount(() => void loadProposals());
 
+  // L5 (visual audit 2026-09-24): `validated_count` includes the frozen
+  // test holdout (vw 35 here vs 30 trainable on /train). The served
+  // per-class holdout count is shown next to it rather than subtracted
+  // client-side. Absent (older backend / failure) => no suffix.
+  let testHeldOutByClass = $state<Map<number, number>>(new Map());
+  onMount(() => {
+    const ctrl = new AbortController();
+    getTestHoldoutStats(ctrl.signal)
+      .then((res) => {
+        testHeldOutByClass = new Map(
+          (Array.isArray(res.by_class) ? res.by_class : []).map((b) => [
+            b.key,
+            b.doc_count,
+          ]),
+        );
+      })
+      .catch(() => {
+        testHeldOutByClass = new Map();
+      });
+    return () => ctrl.abort();
+  });
+
   function dismissProposalTerm(label: string): void {
     if (!proposalsSummary) return;
     proposalsSummary = {
       ...proposalsSummary,
       top_terms: proposalsSummary.top_terms.filter((t) => t.label !== label),
+      flagged_terms: proposalsSummary.flagged_terms.filter((t) => t.label !== label),
     };
   }
 
@@ -390,8 +415,6 @@
   // one-click create over 89 "motorcycle" crops would have made a
   // super-class). `existing_class` still gets a one-click map action,
   // using the server's own `class_id`, not an operator-picked select.
-  let flaggedSectionOpen = $state<boolean>(false);
-
   function flagReason(term: NewClassProposalTerm): string {
     if (term.flag === 'generic_parent') return 'generic parent';
     if (term.flag === 'non_object') return 'not an object';
@@ -511,15 +534,17 @@
           )}), or when the term already names a registered class.
         </p>
       {/if}
-      {#if proposalsSummary.top_terms.length === 0}
-        <p class="mb-3 text-xs text-zinc-500">
-          No actionable terms right now — see "flagged terms" below.
-        </p>
-      {/if}
-      <ul class="flex flex-col gap-3">
-        {#each proposalsSummary.top_terms as term (term.label)}
+      <!-- L2 (visual audit 2026-09-24): one list, biggest term first.
+           Flagged terms (generic parent / not an object / existing class)
+           used to sit in a collapsed section with no action at all while
+           holding most pending crops; they now get "map to existing"
+           too. Only "Create class" stays limited to un-flagged terms. -->
+      <ul class="flex flex-col gap-3" data-testid="proposal-rows">
+        {#each proposalRows(proposalsSummary) as row (row.term.label)}
+          {@const term = row.term}
           <li
             class="flex flex-wrap items-center gap-3 rounded border border-zinc-800 p-2"
+            data-testid="proposal-row"
           >
             <div class="flex shrink-0 items-center gap-1">
               {#each term.sample_crop_ids.slice(0, 4) as cropId (cropId)}
@@ -533,60 +558,81 @@
             </div>
             <div class="min-w-0 shrink-0">
               <div class="text-sm text-zinc-100">{term.label}</div>
-              <div class="text-[11px] text-zinc-500">{term.count} crop(s)</div>
+              <div class="text-[11px] text-zinc-500">
+                {term.count} crop(s)
+                {#if term.flag}
+                  · <span class="text-amber-300">{flagReason(term)}</span>
+                {/if}
+              </div>
             </div>
             <span class="grow"></span>
-            <div class="flex shrink-0 items-center gap-1.5">
-              <input
-                type="text"
-                placeholder={term.label}
-                value={newClassNameByTerm[term.label] ?? ''}
-                oninput={(e) => {
-                  newClassNameByTerm = {
-                    ...newClassNameByTerm,
-                    [term.label]: (e.currentTarget as HTMLInputElement).value,
-                  };
-                }}
-                class="input-sm w-32"
-                disabled={proposalBusyTerm === term.label}
-              />
-              <button
-                type="button"
-                class="btn-sm btn-primary"
-                disabled={proposalBusyTerm === term.label}
-                onclick={() => void createClassAndAssign(term)}
-              >
-                Create class & assign
-              </button>
-            </div>
-            <div class="flex shrink-0 items-center gap-1.5">
-              <select
-                class="select-sm"
-                value={mapTargetByTerm[term.label] ?? ''}
-                onchange={(e) => {
-                  const v = (e.currentTarget as HTMLSelectElement).value;
-                  mapTargetByTerm = {
-                    ...mapTargetByTerm,
-                    [term.label]: v === '' ? null : Number(v),
-                  };
-                }}
-                disabled={proposalBusyTerm === term.label}
-              >
-                <option value="">map to existing…</option>
-                {#each allClasses.filter((c) => !c.deprecated) as cls (cls.id)}
-                  <option value={cls.id}>{cls.name}</option>
-                {/each}
-              </select>
+            {#if row.canCreate}
+              <div class="flex shrink-0 items-center gap-1.5">
+                <input
+                  type="text"
+                  placeholder={term.label}
+                  value={newClassNameByTerm[term.label] ?? ''}
+                  oninput={(e) => {
+                    newClassNameByTerm = {
+                      ...newClassNameByTerm,
+                      [term.label]: (e.currentTarget as HTMLInputElement).value,
+                    };
+                  }}
+                  class="input-sm w-32"
+                  disabled={proposalBusyTerm === term.label}
+                />
+                <button
+                  type="button"
+                  class="btn-sm btn-primary"
+                  disabled={proposalBusyTerm === term.label}
+                  onclick={() => void createClassAndAssign(term)}
+                >
+                  Create class & assign
+                </button>
+              </div>
+            {/if}
+            {#if row.fixedMapClassId != null}
               <button
                 type="button"
                 class="btn-sm"
-                disabled={proposalBusyTerm === term.label ||
-                  mapTargetByTerm[term.label] == null}
-                onclick={() => void mapToExisting(term)}
+                disabled={proposalBusyTerm === term.label}
+                onclick={() => void mapFlaggedTermToClass(term)}
               >
-                Assign
+                Map to {classesStore.byId(row.fixedMapClassId)?.name ??
+                  row.fixedMapClassId}
               </button>
-            </div>
+            {/if}
+            {#if row.canPickMapTarget}
+              <div class="flex shrink-0 items-center gap-1.5">
+                <select
+                  class="select-sm"
+                  aria-label="Map {term.label} to an existing class"
+                  value={mapTargetByTerm[term.label] ?? ''}
+                  onchange={(e) => {
+                    const v = (e.currentTarget as HTMLSelectElement).value;
+                    mapTargetByTerm = {
+                      ...mapTargetByTerm,
+                      [term.label]: v === '' ? null : Number(v),
+                    };
+                  }}
+                  disabled={proposalBusyTerm === term.label}
+                >
+                  <option value="">map to existing…</option>
+                  {#each allClasses.filter((c) => !c.deprecated) as cls (cls.id)}
+                    <option value={cls.id}>{cls.name}</option>
+                  {/each}
+                </select>
+                <button
+                  type="button"
+                  class="btn-sm"
+                  disabled={proposalBusyTerm === term.label ||
+                    mapTargetByTerm[term.label] == null}
+                  onclick={() => void mapToExisting(term)}
+                >
+                  Assign
+                </button>
+              </div>
+            {/if}
             <button
               type="button"
               class="btn-sm btn-icon"
@@ -598,44 +644,6 @@
           </li>
         {/each}
       </ul>
-
-      {#if proposalsSummary.flagged_terms.length > 0}
-        <details
-          class="mt-3 rounded border border-zinc-800 p-2"
-          bind:open={flaggedSectionOpen}
-        >
-          <summary class="cursor-pointer text-xs text-zinc-400">
-            Flagged terms ({proposalsSummary.flagged_terms.length}) — not offered a
-            one-click create
-          </summary>
-          <ul class="mt-2 flex flex-col gap-2">
-            {#each proposalsSummary.flagged_terms as term (term.label)}
-              <li
-                class="flex flex-wrap items-center gap-3 rounded border border-zinc-800/60 p-2"
-              >
-                <div class="min-w-0 shrink-0">
-                  <div class="text-sm text-zinc-200">{term.label}</div>
-                  <div class="text-[11px] text-zinc-500">
-                    {term.count} crop(s) ·
-                    <span class="text-amber-300">{flagReason(term)}</span>
-                  </div>
-                </div>
-                <span class="grow"></span>
-                {#if term.flag === 'existing_class' && term.class_id != null}
-                  <button
-                    type="button"
-                    class="btn-sm"
-                    disabled={proposalBusyTerm === term.label}
-                    onclick={() => void mapFlaggedTermToClass(term)}
-                  >
-                    Map to {classesStore.byId(term.class_id)?.name ?? term.class_id}
-                  </button>
-                {/if}
-              </li>
-            {/each}
-          </ul>
-        </details>
-      {/if}
     </section>
   {/if}
 
@@ -653,13 +661,19 @@
           class="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950 text-left text-xs uppercase text-zinc-400"
         >
           <tr>
-            <th class="px-3 py-2 font-medium">ID</th>
+            <!-- L5: ID and Added hide below md so the table fits 800px. -->
+            <th class="hidden px-3 py-2 font-medium md:table-cell">ID</th>
             <th class="px-3 py-2 font-medium">Name</th>
             <th class="px-3 py-2 font-medium">Group</th>
             <th class="px-3 py-2 text-center font-medium">Hotkey</th>
-            <th class="px-3 py-2 text-right font-medium">Validated</th>
+            <th
+              class="px-3 py-2 text-right font-medium"
+              title="Human-validated crops, including any frozen as test holdout (shown as incl. N test)"
+            >
+              Validated
+            </th>
             <!-- DQ-m9 (docs/design/data-quality-pass-2026-09-24.md): this
-                 "Total" is `sample_count` from GET /classes — the
+                 "Total" is `cluster_size` from GET /classes — the
                  class-cluster bucket size (what /clusters/{id} shows as
                  "in cluster"), NOT the same number as /export's "Total"
                  column (GET /stats/classes, every crop with that
@@ -669,18 +683,24 @@
                  crop's own class_id is the region class). -->
             <th
               class="px-3 py-2 text-right font-medium"
-              title="Class-cluster bucket size (sample_count) — matches the per-cluster page's &quot;in cluster&quot; count. Not the same as /export's Total column."
+              title="Class-cluster size (cluster_size) — the same number the cluster page and sidebar show as &quot;in cluster&quot;. Not the same as /export's Total column."
             >
               Total (in cluster)
             </th>
-            <th class="px-3 py-2 font-medium">Added</th>
+            <th class="hidden px-3 py-2 font-medium md:table-cell">Added</th>
             <th class="px-3 py-2"></th>
           </tr>
         </thead>
         <tbody>
           {#each activeRows as cls (cls.id)}
-            <tr class="border-b border-zinc-900 hover:bg-zinc-900/40">
-              <td class="px-3 py-1.5 font-mono text-xs text-zinc-400">{cls.id}</td>
+            {@const heldOut = testHeldOutByClass.get(cls.id) ?? 0}
+            <tr
+              class="border-b border-zinc-900 hover:bg-zinc-900/40"
+              data-testid="class-row-{cls.id}"
+            >
+              <td class="hidden px-3 py-1.5 font-mono text-xs text-zinc-400 md:table-cell"
+                >{cls.id}</td
+              >
               <td class="px-3 py-1.5">
                 {#if editingId === cls.id}
                   <input
@@ -747,11 +767,21 @@
                 >
                   {cls.validated_count ?? 0}
                 </span>
+                {#if heldOut > 0}
+                  <span
+                    class="ml-1 whitespace-nowrap text-[10px] text-zinc-500"
+                    data-testid="validated-test-suffix">incl. {heldOut} test</span
+                  >
+                {/if}
               </td>
-              <td class="px-3 py-1.5 text-right font-mono text-zinc-400"
-                >{cls.count ?? 0}</td
+              <!-- L1 (visual audit 2026-09-24): this showed sample_count
+                   (bmw 271) under a header promising the cluster page's
+                   "in cluster" number (270) — it now shows cluster_size. -->
+              <td
+                class="px-3 py-1.5 text-right font-mono text-zinc-400"
+                data-testid="in-cluster">{cls.cluster_size ?? 0}</td
               >
-              <td class="px-3 py-1.5 text-xs text-zinc-500">
+              <td class="hidden px-3 py-1.5 text-xs text-zinc-500 md:table-cell">
                 {formatDateOnly(cls.added_at)}
               </td>
               <td class="px-3 py-1.5 text-right">
