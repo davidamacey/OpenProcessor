@@ -53,6 +53,8 @@ describe('IngestRunPanel', () => {
           n_crops: 0,
           n_regions: 0,
           error: 'decode failed',
+          error_kind: 'decode_failed',
+          source_identifier: 'upload/a.jpg',
         },
       ],
       disagreements: [],
@@ -95,6 +97,8 @@ describe('IngestRunPanel', () => {
           n_crops: 0,
           n_regions: 0,
           error: 'decode failed',
+          error_kind: 'decode_failed',
+          source_identifier: 'upload/a.jpg',
         },
       ],
       disagreements: [],
@@ -125,7 +129,7 @@ describe('IngestRunPanel', () => {
     dlBtn?.click();
     expect(capturedBlob).toBeTruthy();
     const text = await (capturedBlob as unknown as Blob).text();
-    expect(text).toContain('identifier,status,error,image_id,n_crops');
+    expect(text).toContain('identifier,status,error,error_kind,image_id,n_crops');
     expect(text).toContain('decode failed');
     URL.createObjectURL = originalCreateObjectURL;
   });

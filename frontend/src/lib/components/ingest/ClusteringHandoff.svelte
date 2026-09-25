@@ -3,9 +3,14 @@
    * Wraps `<AutoLabelPanel>` with the ingest-aware gate
    * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.5):
    * blocked while the upload run is active, or while the served region
-   * drain has unfinished work, or while the drain fetch itself is
-   * failing. No client stability window — the operator decides, and the
-   * note shows exactly when the served zero was observed.
+   * drain isn't `drained`, or while the drain fetch itself is failing.
+   *
+   * BA-3 (landed, OpenProcessor c676d2b): the gate reads the server's own
+   * `drained` verdict (`total_unfinished` read 0 for
+   * `IngestConfig.region_drain.stable_polls` consecutive polls) instead
+   * of a raw `total_unfinished === 0` reading — no client-side stability
+   * window either way, the server now computes the same one every client
+   * used to have to invent independently.
    */
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
   import type { IngestRunState } from '$lib/ingest/ingestRunController.svelte';
@@ -35,10 +40,13 @@
     if (drainError) {
       return { blocked: true, reason: 'Worklog unavailable' };
     }
-    if (drain && drain.total_unfinished > 0) {
+    if (drain && !drain.drained) {
       return {
         blocked: true,
-        reason: `Region detection still has ${drain.total_unfinished} items queued (served worklog)`,
+        reason:
+          drain.total_unfinished > 0
+            ? `Region detection still has ${drain.total_unfinished} items queued (served worklog)`
+            : `Worklog just reached zero — waiting for the served stability verdict`,
       };
     }
     return null;
@@ -46,7 +54,7 @@
 
   const note = $derived(
     !gate && drainObservedAt !== null
-      ? `Worklog empty as of ${formatTime(drainObservedAt)}`
+      ? `Worklog drained as of ${formatTime(drainObservedAt)}`
       : null,
   );
 </script>

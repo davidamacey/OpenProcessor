@@ -1,14 +1,16 @@
 <script lang="ts">
   /**
    * Shows `pending_detection`/`pending_verification`/`total_unfinished`
-   * plus "last checked" (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md
-   * §A.2). Polls at the documented interim interval (BA-3's
-   * `poll_interval_s` isn't served yet — this uses `config.regionDrainPollIntervalS`,
-   * default 10s per the backend docstring's "~10s"). Stops polling
+   * plus the BA-3 `drained` stability verdict and "last checked"
+   * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.2).
+   * Polls at `config.regionDrainPollIntervalS` — BA-2's served
+   * `region_drain.poll_interval_s` once `/ingest/config` is wired up by
+   * the page, else the documented interim default (10s). Stops polling
    * while the page is hidden.
    *
    * §A.5: the drain gate that decides whether clustering can start reads
-   * this same served value through `onUpdate`, not a second fetch.
+   * this same served value (including `drained`) through `onUpdate`, not
+   * a second fetch.
    */
   import { onDestroy, onMount } from 'svelte';
   import { ApiError, getRegionDrain } from '$lib/api';
@@ -87,7 +89,21 @@
           {drain.total_unfinished}
         </div>
       </div>
+      <div>
+        <div class="text-zinc-500">Drained (BA-3)</div>
+        <div
+          class="font-mono {drain.drained ? 'text-emerald-400' : 'text-zinc-200'}"
+          data-testid="region-drain-drained"
+        >
+          {drain.drained ? 'yes' : 'no'}
+        </div>
+      </div>
     </div>
-    <p class="mt-1 text-[11px] text-zinc-500">Last checked: {formatTime(lastChecked)}</p>
+    <p class="mt-1 text-[11px] text-zinc-500">
+      Last checked: {formatTime(lastChecked)}
+      {#if drain.drained}
+        · stable for {Math.round(drain.stable_for_s)}s
+      {/if}
+    </p>
   {/if}
 </div>

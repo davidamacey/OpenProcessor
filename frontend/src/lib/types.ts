@@ -1058,11 +1058,27 @@ export interface UndoEntry {
 // -- ingest --
 // docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.1. Wire
 // shapes for OpenProcessor's `{API_PREFIX}/ingest/*` router
-// (`src/routers/curation/ingest.py`, `_common.py:288-322,586-596` on the
-// backend). `IngestConfig` is provisional (BA-2) — every field optional,
-// since the endpoint doesn't exist yet.
+// (`src/routers/curation/ingest.py`, `_common_models.py` on the
+// backend). BA-1..BA-7 (OpenProcessor #36, c676d2b) landed: upload bytes
+// are persisted (`source_identifier` alongside `image_path`), `error_kind`
+// is a stable code on every failed result, `GET {API_PREFIX}/ingest/config`
+// is real and typed, and `GET {API_PREFIX}/ingest/region_drain` serves a
+// server-computed `drained` verdict.
 
 export type IngestItemStatus = 'success' | 'duplicate' | 'failed';
+
+// BA-7: stable machine codes served alongside `error`'s free-text message
+// on a failed result. Not an exhaustive union on the wire (a future
+// failure mode may still surface a message without extending this list),
+// so this type stays a documented `string`, not a literal union.
+export type IngestErrorKind =
+  | 'empty'
+  | 'unservable_path'
+  | 'unsupported_type'
+  | 'too_large'
+  | 'decode_failed'
+  | 'detector_infer'
+  | 'bulk_index';
 
 export interface IngestImageResult {
   status: IngestItemStatus;
@@ -1072,6 +1088,15 @@ export interface IngestImageResult {
   n_crops: number;
   n_regions: number;
   error: string | null;
+  /** BA-7. Always present when `status === 'failed'`, null otherwise. */
+  error_kind: IngestErrorKind | string | null;
+  /**
+   * BA-1: the client-supplied identifier for a byte-upload ingest, where
+   * `image_path` is now the server-persisted path. Null for a
+   * server-path ingest (`image_path` already IS the client-meaningful
+   * identifier).
+   */
+  source_identifier: string | null;
 }
 
 export interface BatchIngestSummary {
@@ -1108,10 +1133,16 @@ export interface RegionDrain {
   pending_detection: number;
   pending_verification: number;
   total_unfinished: number;
-  /** BA-3, not served today. */
-  drained?: boolean;
-  stable_for_s?: number;
-  observed_at?: string;
+  /**
+   * BA-3 (landed, c676d2b): true once `total_unfinished` has read 0 for
+   * `IngestConfig.region_drain.stable_polls` consecutive polls of this
+   * endpoint — computed server-side, not a client-invented window.
+   */
+  drained: boolean;
+  /** Seconds since the last non-zero reading (0 while still non-zero). */
+  stable_for_s: number;
+  /** ISO timestamp of this poll. */
+  observed_at: string;
 }
 
 export interface IngestPathLookupResponse {
@@ -1136,14 +1167,20 @@ export interface IngestUploadRequest {
   source: string;
 }
 
-/** BA-2, provisional until served — every field optional. */
+/**
+ * BA-2 (landed, c676d2b): `GET {API_PREFIX}/ingest/config`'s served
+ * shape — real, enforced limits, not client-guessed constants. Field
+ * names/nesting match `IngestConfigResponse` in
+ * `src/routers/curation/_common_models.py` on the backend exactly.
+ */
 export interface IngestConfig {
-  upload?: {
-    enabled?: boolean;
-    max_images_per_request?: number;
-    accepted_extensions?: string[];
-    persists_bytes?: boolean;
+  upload: {
+    enabled: boolean;
+    max_images_per_request: number;
+    max_bytes_per_request: number;
+    accepted_extensions: string[];
+    persists_bytes: boolean;
   };
-  batch?: { enabled?: boolean; max_items_per_request?: number; source_roots?: string[] };
-  region_drain?: { poll_interval_s?: number; stable_polls?: number };
+  batch: { enabled: boolean; max_items: number; source_roots: string[] };
+  region_drain: { poll_interval_s: number; stable_polls: number };
 }

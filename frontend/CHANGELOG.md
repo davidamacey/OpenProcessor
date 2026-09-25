@@ -8,6 +8,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Adopted OpenProcessor #36 ingest hardening BA-1..BA-7 (backend commit
+  c676d2b) — persisted uploads, served ingest config/limits, a
+  server-computed drain-stability verdict, and stable per-item error
+  codes.** Pieces 11-13 of `docs/design/
+ingest-ui-and-acceptance-plan-2026-09-24.md` land; pieces 1-10 were
+  already merged.
+  - **BA-1 (upload bytes persisted).** `POST {API_PREFIX}/ingest/upload`
+    now writes the uploaded bytes server-side; `image_path` on every
+    result is the server-persisted, content-addressed path, and the
+    client's own identifier is echoed back as the new `source_identifier`
+    field. `ingestRunController.svelte.ts`'s response mapping now keys
+    off `source_identifier` (falling back to `image_path` for a
+    pre-BA-1 backend). The always-on "uploaded images can't be browsed"
+    amber caveat banner on `/ingest` is gone when the served
+    `upload.persists_bytes === true` — it renders only as a pre-BA-2
+    fallback.
+  - **BA-2 (`GET {API_PREFIX}/ingest/config`).** Real, typed, and wired
+    up via `getIngestConfig()` (`api.ts`) — `/ingest`'s page fetches it
+    once `ingestAvailability` confirms the router is mounted and resolves
+    every upload/batch/region-drain limit from it
+    (`ingestConfig.ts`'s `resolveIngestConfig`), replacing every interim
+    client constant as the primary source (the constants remain only as
+    the pre-BA-2 fallback). `uploadMaxBytes` is now the tighter of the
+    nginx proxy's body-size cap and the served
+    `upload.max_bytes_per_request`.
+  - **BA-3 (region-drain `drained` verdict).** `GET
+{API_PREFIX}/ingest/region_drain` now serves `drained`/`stable_for_s`/
+    `observed_at`. `ClusteringHandoff.svelte`'s gate reads `drained`
+    instead of a raw `total_unfinished === 0` reading — no client-side
+    stability window either way, the server now computes the one every
+    client used to have to invent independently.
+    `RegionDrainPanel.svelte` shows the verdict and how long it's held.
+  - **BA-6 (`GET {API_PREFIX}/ingest/status` typed)** — no frontend
+    change needed, the served shape already matched `IngestStatus`.
+  - **BA-7 (stable `error_kind`).** Every failed ingest result (upload,
+    batch, single-image) now carries a stable `error_kind` alongside its
+    prose `error`. The `/ingest` upload run panel's Failed tab and the
+    new server-path batch panel both group failures into filterable
+    error_kind chips (`ingestResults.svelte.ts`'s `errorKindCounts`/
+    `countOfErrorKind`/`page(..., errorKind)`).
+  - **Piece 11 (server-path batch panel).** New
+    `IngestBatchPanel.svelte`, rendered on `/ingest` only when the served
+    `batch.source_roots` is non-empty — lists the served roots read-only
+    and submits real ingests via the existing `POST
+{API_PREFIX}/ingest/batch` (which predates #36; BA-2/BA-5 are what
+    make the source-roots gate and the `label_txt_path` guard real).
+    Client-side pre-checks the entered path count against the served
+    `batch.max_items` before submit.
+  - Contract: `IngestConfig`/`RegionDrain`/`IngestImageResult` (`types.ts`)
+    now mirror the served shapes exactly (`batch.max_items`, not
+    `max_items_per_request`; `upload.max_bytes_per_request` added;
+    `drained`/`stable_for_s`/`observed_at` required, not optional).
+    `ingestContract.test.ts` gained coverage for `IngestConfig` and
+    `RegionDrain` against the vendored OpenAPI.
+
 - **Adopted OpenProcessor #34 W1 (backend commit eb5c251) — training
   lineage, build identity, and last-epoch vs. best-checkpoint metrics.**
   - `TrainJobStatus`/`TrainManifest.results` drop `best_metric`/

@@ -46,7 +46,7 @@ here is a stub.
 | Route            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `/dashboard`     | Current pipeline dashboard — live `DatasetStats` (polls every 10s) + `AutoLabelPanel` ("Run Clustering Now" with stage progress), shared with the daemon-fired auto-label run. `AutoLabelPanel` also hosts an optional per-class assist scope (`AssistScopeBar`, absent unless `/methods` advertises a usable `prompt_pack` — see "Curation-strategy selector bar" below) that lets an operator point the VLM-assisted sweep at a single class instead of the whole pool.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `/ingest`        | Bring images into the pool. Offers browser upload (files, folders and drag-drop) to `POST {API_PREFIX}/ingest/upload`, chunked to the served per-request cap with bounded concurrency. It shows a per-file result (ingested / duplicate / failed + served reason), supports pause/resume/cancel, and pre-filters already-indexed identifiers via `POST {API_PREFIX}/ingest/path_lookup`. An optional server-path mode uses `POST {API_PREFIX}/ingest/batch` and is shown only when the backend advertises it (not yet — see "Ingest" below). The page also has an ingest status table by source (`GET {API_PREFIX}/ingest/status`), a region-drain panel (`GET {API_PREFIX}/ingest/region_drain`, only with a served region profile), and a clustering handoff that reuses `AutoLabelPanel`. The route is gated by `ingestAvailability`: when the backend lacks the ingest router, the page is absent, not disabled.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `/ingest`        | Bring images into the pool. Offers browser upload (files, folders and drag-drop) to `POST {API_PREFIX}/ingest/upload`, chunked to the served per-request cap with bounded concurrency. It shows a per-file result (ingested / duplicate / failed + served reason), supports pause/resume/cancel, and pre-filters already-indexed identifiers via `POST {API_PREFIX}/ingest/path_lookup`. An optional server-path mode uses `POST {API_PREFIX}/ingest/batch` and is shown only when the backend advertises at least one `batch.source_roots` entry via `GET {API_PREFIX}/ingest/config` (see "Ingest" below). The page also has an ingest status table by source (`GET {API_PREFIX}/ingest/status`), a region-drain panel (`GET {API_PREFIX}/ingest/region_drain`, only with a served region profile), and a clustering handoff that reuses `AutoLabelPanel`. The route is gated by `ingestAvailability`: when the backend lacks the ingest router, the page is absent, not disabled.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `/clusters`      | Cluster grid view, sidebar filter, **strategy bar** (review-sort dropdown + score chips, see below — no cluster-method picker here; that lives on `/settings`). When the class filter is a slot-bound class (the served region profile's `region_class_name`), replaces the cluster grid with that slot's **region gallery** (`SlotGallery`, driven by `createSlotGalleryController(slot)` in `src/routes/clusters/slotGalleryController.svelte.ts`, one controller per slot bound through `slotForClassName`, browsing the slot's `queue.browsePath`, i.e. `{API_PREFIX}/regions`; detector / verified / status / score / text filters, all copy templated over `slot.label`). The unfiltered grid pins one synthetic inventory card per registered slot with a browse endpoint. Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below). An **Ignored** toggle (2026-09-24, logic-moves W7) swaps the grid for the excluded/`cluster_id=-2` bucket with a "Restore selected" action, and an **item-text search** box (`{API_PREFIX}/crops?item_text=`) swaps it for a literal OCR-text search over `item_text_lines` — both mode-swaps mirror the existing dataset-wide semantic search's pattern, and neither is the same endpoint as the semantic (embedding) search box.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `/clusters/[id]` | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `/review`        | 6 top-level review tabs (2026-09 consolidation, down from 9, plus `new_class_proposals` added 2026-09-24 — see below): **All** / **Uncertainty** / **Model Disagreements** / **Classifier Blind Spots** / **New Class Proposals** / one tab per registered queue-capable slot (in practice the one region tab, present only when the backend serves a region profile and labelled by its `display_name`, `?tab=regions`), each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays — the bar's summary chip also shows the server's `sort_applied` next to whatever was requested. The All tab additionally offers a row of **quick-filter preset chips** (VLM mismatches / VLM low-conf / Primary · low-conf) that layer the former Mismatches / Gemma Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. Class/Source/Conf filter controls (`class_id`/`source`/`conf_min`/`conf_max`) are live against `GET {API_PREFIX}/review/{tab}`. `/review?crop_id=` deep links resolve via `GET {API_PREFIX}/review/{tab}/locate` — jumps straight to the crop's served page/rank, or shows the backend's `reason` when it isn't in the queue. A slot tab carries provenance chips + the region text reading, driven by the active slot's capabilities rather than a hardcoded tab check (see "Slot-generic review tabs" below).                                                                                                                                                                                                                                                                                                                                  |
@@ -57,14 +57,13 @@ here is a stub.
 | `/bakeoff`       | LPR model × frozen-dataset bake-off cockpit — scores every selected model against every selected dataset in the on-demand `curation-evaluator` container, renders a model × dataset matrix (best cell per dataset bolded). Gated on backend availability via a one-shot probe of `GET {API_PREFIX}/bakeoff/runs` (`src/lib/bakeoffAvailability.svelte.ts`) — absent, not disabled: the nav link and page body don't render at all when the backend's `{API_PREFIX}/bakeoff/*` router isn't mounted, and no discovery request fires unconditionally on mount. Provisional until the backend ships an `evaluation` axis on `/methods`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `/settings`      | Deployment-defaults admin page for the shared curation-strategy defaults (`GET,PUT {API_PREFIX}/settings`) — one place to pin the deployment's clustering method, review-queue sort and VLM prompt pack (the latter honored by the always-on VLM labeler and by auto-label runs that don't pick their own), plus a read-only "Set by the backend's startup config" section for `detection_profile` (the backend picks it from startup config; nothing that runs reads a shared or per-run selection). Which axes get a control is decided solely by the server's per-entry `settable` flag on `/methods` (`settableAxes` in `src/lib/curationSettings.ts`). Deployment-wide — see `docs/design/curation-settings-ui-plan-2026-09-21.md` — so it is its own route rather than a `StrategyBar` chip, with an explicit confirm dialog before every save. Also hosts the **Curation scores card** (`ScoresCard.svelte`, G10, 2026-09-24) — per-scorer coverage from `GET {API_PREFIX}/scores/coverage`, confirm-gated "Compute all"/"Compute selected" (`POST {API_PREFIX}/scores/compute {scorers}`, ids always sourced from the served coverage keys), a progress poll of `GET {API_PREFIX}/scores/status` following `EmbeddingPlot`'s rebuild-job pattern, and "Cancel" (`POST {API_PREFIX}/scores/cancel`). Absent, not broken, when `/scores/coverage` 404s; a failed compute (e.g. mistakenness lacking probe predictions) shows the backend's error verbatim. A completed compute reloads coverage and resets `strategiesStore` so `StrategyBar`'s sort/score options pick up the new coverage without a full page reload — see "Curation-strategy selector bar" below.                                                                                   |
 
-## Ingest (`/ingest`, 2026-09-24)
+## Ingest (`/ingest`, 2026-09-24; BA-1..BA-7 adopted 2026-09-25)
 
 Bring images into the pool — the frontend side of
-`docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md`. Pieces 1-10
-of that plan are implemented; pieces 11-13 (server-path panel, served
-`GET {API_PREFIX}/ingest/config`, a served drain-stability verdict) are
-out of scope until the corresponding backend asks (BA-2/BA-3/BA-5) land
-— see the plan's status section for exactly which pieces are done.
+`docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md`. All 13 pieces
+of that plan are implemented as of OpenProcessor #36 (backend commit
+c676d2b) — see the plan's status section for the full piece-by-piece
+record.
 
 - **Gating.** `src/lib/ingest/ingestAvailability.svelte.ts` probes
   `GET {API_PREFIX}/ingest/status` once (modelled on
@@ -77,14 +76,29 @@ out of scope until the corresponding backend asks (BA-2/BA-3/BA-5) land
   their own GET on mount, and a genuinely-absent backend must fire zero
   ingest requests (caught live by `e2e/stubbed/test_ingest.py`'s
   `test_ingest_absent`, which found this as a real bug during
-  implementation).
-- **Upload caveat (F1, blocking).** `POST {API_PREFIX}/ingest/upload`
-  does not persist the uploaded bytes on any backend today, so an
-  uploaded item has no thumbnail and fails region detection end-to-end.
-  The page always shows an amber caveat banner in upload mode unless
-  the operator has set `PUBLIC_CROPWRIGHT_INGEST_UPLOAD=1` (see the
-  plan deviation note below) or the backend serves
-  `upload.persists_bytes` via BA-2 (not shipped yet).
+  implementation). The availability probe deliberately still targets
+  `/ingest/status`, not `/ingest/config` — `/routes/ingest/+page.svelte`
+  fetches `getIngestConfig()` itself, once, only after `available`
+  resolves `true`, so a config fetch never fires against a backend that
+  lacks the router.
+- **Served config (BA-2, landed).** `GET {API_PREFIX}/ingest/config` is
+  real and wired up (`getIngestConfig()`, `api.ts`) — `ingestConfig.ts`'s
+  `resolveIngestConfig(served)` resolves every upload/batch/region-drain
+  limit from it, falling back to the documented interim constants only
+  while the fetch is in flight or against a pre-BA-2 backend (404 →
+  `null`). `uploadMaxBytes` is the tighter of the nginx proxy's
+  `client_max_body_size` and the served `upload.max_bytes_per_request` —
+  a chunk sized against only one of the two could still 413 against the
+  other.
+- **Upload caveat.** The amber "uploaded images can't be browsed" banner
+  now renders only when `upload.persists_bytes` is `false`, or when it's
+  unknown (`null` — a pre-BA-2 backend, or the served config hasn't
+  loaded yet) and the operator hasn't set
+  `PUBLIC_CROPWRIGHT_INGEST_UPLOAD=1`. BA-1 landed
+  (`POST {API_PREFIX}/ingest/upload` persists the uploaded bytes
+  server-side, content-addressed) so a deployment on c676d2b+ serves
+  `persists_bytes: true` and shows no banner at all — the served truth,
+  not a hardcoded caveat.
 - **Run controller.** `src/lib/ingest/ingestRunController.svelte.ts`
   (`createIngestRun`, same factory convention as
   `clusterController`/`reviewController`) owns the whole
@@ -93,28 +107,66 @@ out of scope until the corresponding backend asks (BA-2/BA-3/BA-5) land
   `POST {API_PREFIX}/ingest/path_lookup`, chunks the selection
   (`src/lib/ingest/uploadPlanner.ts`, respecting an image-count and a
   byte cap), dispatches with bounded concurrency (default 2), and maps
-  each chunk's response per status code — 200 (map by `image_path`), a
-  backend-style 413 (JSON body: halve the chunk and retry once), an
-  nginx-style 413 (HTML body: stop the run, never retry), 422 (fail with
-  the served detail), 503 (auto-pause with the served detail). Per-file
-  results live in `src/lib/ingest/ingestResults.svelte.ts`, backed by
-  `SvelteMap` (`svelte/reactivity`) — plain `$state(new Map())` only
-  makes the _binding_ reassignment reactive, not `.set()`/`.delete()`
-  on the same instance, which silently broke the Failed/Duplicate/
-  Ingested tab counts until a mount test caught it.
+  each chunk's response — 200 (BA-1: keyed by the returned
+  `source_identifier`, not `image_path`, since `image_path` is now the
+  server-persisted content-addressed path; falls back to `image_path`
+  for a pre-BA-1 backend that doesn't echo `source_identifier`), a
+  backend-style 413 (JSON body: halve the chunk and retry once, tagged
+  `error_kind: 'too_large'`), an nginx-style 413 (HTML body: stop the
+  run, never retry), 422 (fail with the served detail), 503 (auto-pause
+  with the served detail). Per-file results live in
+  `src/lib/ingest/ingestResults.svelte.ts`, backed by `SvelteMap`
+  (`svelte/reactivity`) — plain `$state(new Map())` only makes the
+  _binding_ reassignment reactive, not `.set()`/`.delete()` on the same
+  instance, which silently broke the Failed/Duplicate/Ingested tab
+  counts until a mount test caught it.
+- **Stable error codes (BA-7, landed).** Every failed result (upload,
+  batch, single-image) now carries `error_kind` alongside its prose
+  `error` — `IngestErrorKind` in `types.ts` documents the known codes
+  (`empty`/`unservable_path`/`unsupported_type`/`too_large`/
+  `decode_failed`/`detector_infer`/`bulk_index`), kept as a documented
+  `string` rather than a closed union since a future failure mode may
+  still surface a message without extending this list. The upload run
+  panel's Failed tab and the server-path batch panel below both render
+  filterable error_kind chips
+  (`ingestResults.svelte.ts`'s `errorKindCounts()`/`countOfErrorKind()`/
+  `page(kind, offset, limit, errorKind)`) over the served detail — no
+  client-side prose parsing.
 - **Identifiers.** `${identifierPrefix}${relPath}` (default prefix
   `${sourceTag}/`), computed by `src/lib/ingest/fileSource.ts`'s
   `makeIdentifier` — normalizes backslashes, strips a leading `./`/`/`,
   and rejects any `..` segment. `path_lookup` matches this identifier
-  exactly, which is why the prefix matters: two different folders that
-  both contain e.g. `img001.jpg` at their root would otherwise collide.
+  exactly (against either `image_path` or, since BA-1, `source_identifier`
+  — server-side), which is why the prefix matters: two different folders
+  that both contain e.g. `img001.jpg` at their root would otherwise
+  collide.
+- **Server-path ingest (piece 11, landed).** `IngestBatchPanel.svelte`
+  renders on `/ingest` only when the served `batch.source_roots` is
+  non-empty (`config.batchSourceRoots`) — lists the roots read-only and
+  submits real batches via the pre-existing `POST
+{API_PREFIX}/ingest/batch` (that endpoint predates #36; BA-2 is what
+  serves `source_roots`/`max_items` for the gate and client-side cap
+  check, and BA-5 is what guards a submitted `label_txt_path` against
+  the same configured roots as the image path server-side). One
+  synchronous call per submit, not chunked like the upload run
+  controller — a server-path batch has no browser-side byte cost, and
+  the backend already batches its own detector inference internally.
+  Its own failures render through the same error_kind chip pattern as
+  the upload run panel.
 - **Clustering handoff.** `ClusteringHandoff.svelte` computes a gate
   from the upload run's own state plus the latest served region drain
   and passes it to `AutoLabelPanel`'s new, additive, optional `gate`
   prop (`{blocked, reason} | null`) — every other `AutoLabelPanel`
-  caller (the dashboard) passes nothing and is unaffected. There is
-  deliberately **no client-side stability window**: the operator reads
-  the served "worklog empty as of HH:MM:SS" note and decides.
+  caller (the dashboard) passes nothing and is unaffected. **BA-3
+  (landed):** the gate now reads the served `drained` verdict
+  (`GET {API_PREFIX}/ingest/region_drain`'s `drained`/`stable_for_s`/
+  `observed_at` — true once `total_unfinished` has read 0 for
+  `region_drain.stable_polls` consecutive polls) instead of a raw
+  `total_unfinished === 0` reading. Still **no client-side stability
+  window** — the server now computes the one every client used to have
+  to invent independently, and the operator reads the served "Worklog
+  drained as of HH:MM:SS" note. `RegionDrainPanel.svelte` shows the
+  verdict and how long it's held (`stable for Ns`).
 - **Deployment-owned upload cap.** `CROPWRIGHT_INGEST_MAX_REQUEST_MB`
   (default 256, `docker-entrypoint.sh`) is substituted into both
   `nginx.conf`'s `client_max_body_size` and
@@ -125,17 +177,15 @@ out of scope until the corresponding backend asks (BA-2/BA-3/BA-5) land
   location, since nginx matches regex locations in declaration order)
   with a 600s `proxy_read_timeout` — a 128-image batch with detector +
   embedding inference can exceed the general API location's 120s.
-- **Security.** Server-path ingest (`POST {API_PREFIX}/ingest/batch`,
-  piece 11, not built) would let an operator type arbitrary server-side
-  paths; it is gated absent until the backend serves `batch.enabled`
-  plus guards `label_txt_path` the same way as `path` (BA-2/BA-5). More
-  generally: **the curation API has no request authentication at all**
-  (an explicit owner decision — see `docs/design/
-ingest-ui-and-acceptance-plan-2026-09-24.md` §A.6). Anyone who can
-  reach the nginx origin can already ingest, label, export and train.
-  Expose Cropwright (and the OpenProcessor API it proxies) only on a
-  trusted network — never the public internet — until the backend adds
-  opt-in auth (BA-5).
+- **Security.** The curation API still has **no request authentication
+  at all** (an explicit owner decision — see `docs/design/
+ingest-ui-and-acceptance-plan-2026-09-24.md` §A.6). Anyone who can reach
+  the nginx origin can already ingest (including, now, via the
+  server-path batch panel above), label, export and train. Expose
+  Cropwright (and the OpenProcessor API it proxies) only on a trusted
+  network — never the public internet — until the backend adds opt-in
+  auth (BA-5's auth half is still open; only the `label_txt_path` root
+  guard half of BA-5 landed with #36).
 - **Plan deviations** (recorded in the plan doc's own status section
   too):
   - the plan's nginx-413 detection ("`ApiError.detail == null`")
@@ -153,12 +203,13 @@ ingest-ui-and-acceptance-plan-2026-09-24.md` §A.6). Anyone who can
     _nested_ `location` inside the general API location; nginx doesn't
     reliably support nesting one regex location inside another, so
     `nginx.conf` uses a sibling location matched first instead.
-  - `getIngestConfig` (BA-2, `GET {API_PREFIX}/ingest/config`) is
-    intentionally not wrapped in `api.ts` yet — the route isn't in the
-    vendored OpenAPI, and `endpointCatalog.test.ts` would (correctly)
-    fail on an unresolvable call site. `ingestConfig.ts`'s
-    `resolveIngestConfig` already accepts `IngestConfig | null`, so
-    every call site just passes `null` until the wrapper is added.
+  - the plan's `batch.max_items_per_request` field name doesn't match
+    what the backend actually serves (`batch.max_items`) —
+    `IngestConfig`/`ResolvedIngestConfig` use the served name.
+  - BA-4 (an upload run's own `run_id`/`GET /ingest/status?run_id=`
+    scoping) landed server-side but has no frontend surface yet — no UI
+    asked for "this run's own counts after a reload" this pass;
+    `ingestUpload()` doesn't send the optional `run_id` form field.
 
 ## `/review` tab consolidation (2026-09)
 

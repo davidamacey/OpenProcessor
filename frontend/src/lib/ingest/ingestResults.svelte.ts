@@ -19,6 +19,10 @@ export interface IngestFileResult {
   identifier: string;
   kind: IngestResultKind;
   error?: string | null;
+  /** BA-7: the served stable error code, set whenever `error` is on a
+   *  `failed` result. Absent for `not_sent` (never sent — no server
+   *  error to carry) and every non-failed kind. */
+  error_kind?: string | null;
   image_id?: string | null;
   n_crops?: number | null;
 }
@@ -29,14 +33,23 @@ export interface IngestResults {
   get(id: string): IngestFileResult | undefined;
   delete(id: string): void;
   countOf(kind: IngestResultKind): number;
+  /** Count of `'failed'` entries matching `errorKind` (`'unknown'` for null/absent). */
+  countOfErrorKind(errorKind: string): number;
   failures(): [string, IngestFileResult][];
   /** `not_sent` counts as retryable too — both are what "Retry failed" resends. */
   retryable(): [string, IngestFileResult][];
+  /** `errorKind` (undefined = no filter) narrows the `'failed'` page to
+   *  entries whose `error_kind` matches (`'unknown'` matches null/absent). */
   page(
     kind: IngestResultKind,
     offset: number,
     limit: number,
+    errorKind?: string,
   ): [string, IngestFileResult][];
+  /** BA-7: `failed` counts grouped by `error_kind` (`'unknown'` for a
+   *  null/absent kind), descending by count — drives the Failed tab's
+   *  filter chips. */
+  errorKindCounts(): [string, number][];
   toCsv(): string;
   clear(): void;
 }
@@ -81,22 +94,43 @@ export function createIngestResults(): IngestResults {
       for (const r of map.values()) if (r.kind === kind) n++;
       return n;
     },
+    countOfErrorKind(errorKind) {
+      let n = 0;
+      for (const r of map.values()) {
+        if (r.kind === 'failed' && (r.error_kind ?? 'unknown') === errorKind) n++;
+      }
+      return n;
+    },
     failures() {
       return entriesByKind('failed');
     },
     retryable() {
       return [...entriesByKind('failed'), ...entriesByKind('not_sent')];
     },
-    page(kind, offset, limit) {
-      return entriesByKind(kind).slice(offset, offset + limit);
+    page(kind, offset, limit, errorKind) {
+      const entries = entriesByKind(kind);
+      const filtered =
+        errorKind === undefined
+          ? entries
+          : entries.filter(([, r]) => (r.error_kind ?? 'unknown') === errorKind);
+      return filtered.slice(offset, offset + limit);
+    },
+    errorKindCounts() {
+      const counts = new Map<string, number>();
+      for (const [, r] of entriesByKind('failed')) {
+        const kind = r.error_kind ?? 'unknown';
+        counts.set(kind, (counts.get(kind) ?? 0) + 1);
+      }
+      return [...counts.entries()].sort((a, b) => b[1] - a[1]);
     },
     toCsv() {
-      const header = 'identifier,status,error,image_id,n_crops';
+      const header = 'identifier,status,error,error_kind,image_id,n_crops';
       const rows = [...map.values()].map((r) =>
         [
           csvField(r.identifier),
           csvField(r.kind),
           csvField(r.error),
+          csvField(r.error_kind),
           csvField(r.image_id),
           csvField(r.n_crops),
         ].join(','),
