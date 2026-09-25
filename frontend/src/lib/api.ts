@@ -3253,6 +3253,74 @@ export function renameClass(
   );
 }
 
+/**
+ * The 409 `detail` `POST {API_PREFIX}/classes/{id}/deprecate` produces when
+ * the class still has data referencing it (`{error:"class_still_referenced",
+ * message, class_id, item_count, confirmed_label_count}`) — merge is the
+ * only way to retire a class in that state, so the caller uses this to
+ * offer the existing merge flow instead of a raw error toast.
+ */
+export interface ClassStillReferencedDetail {
+  error: 'class_still_referenced';
+  message: string;
+  class_id: number;
+  item_count: number;
+  confirmed_label_count: number;
+}
+
+export function classStillReferencedDetail(
+  e: unknown,
+): ClassStillReferencedDetail | null {
+  if (!(e instanceof ApiError) || e.status !== 409) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const d = detail as Record<string, unknown>;
+  if (d.error !== 'class_still_referenced') return null;
+  if (typeof d.message !== 'string') return null;
+  if (typeof d.class_id !== 'number') return null;
+  if (typeof d.item_count !== 'number' || typeof d.confirmed_label_count !== 'number') {
+    return null;
+  }
+  return {
+    error: 'class_still_referenced',
+    message: d.message,
+    class_id: d.class_id,
+    item_count: d.item_count,
+    confirmed_label_count: d.confirmed_label_count,
+  };
+}
+
+/**
+ * Retire a class with no data yet — no merge target needed. Idempotent
+ * (calling on an already-deprecated class just returns it) and clears any
+ * bound `hotkey_letter` server-side. 404 for an unknown id; 409 (see
+ * `classStillReferencedDetail`) while any item/confirmed-label doc still
+ * carries this `class_id` — merge instead. The response is the backend's
+ * own `RegistryClassEntry` shape (`class_id`/`class_name`/…, not the
+ * labeler's `RegistryClass`); callers refetch `classesStore` rather than
+ * mapping it.
+ */
+export function deprecateClass(classId: number, signal?: AbortSignal): Promise<unknown> {
+  return apiFetch<unknown>(
+    `${API_PREFIX}/classes/${classId}/deprecate`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+/**
+ * Undo `deprecateClass`. 404 for an unknown id; 409 with a PLAIN STRING
+ * `detail` (not the structured shape above) when a live class already
+ * uses this class's name — show `ApiError.detail` verbatim.
+ */
+export function restoreClass(classId: number, signal?: AbortSignal): Promise<unknown> {
+  return apiFetch<unknown>(
+    `${API_PREFIX}/classes/${classId}/restore`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
 export function mergeClasses(
   payload: RegistryClassMerge,
   signal?: AbortSignal,

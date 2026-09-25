@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **`/classes` Deprecate and Restore actions** (OpenProcessor 698d1da,
+  cf3c87a — "deprecate/restore empty classes without a merge target").
+  Every active class row now has a **Deprecate** button (confirm dialog
+  naming the class), calling `POST {API_PREFIX}/classes/{id}/deprecate`
+  and refreshing `classesStore` on success so pickers/hotkeys/exports
+  drop it immediately. A 409 with the backend's structured
+  `class_still_referenced` detail (`{message, item_count,
+confirmed_label_count}`) offers the existing merge dialog instead,
+  preselecting the attempted class as the merge source
+  (`openMergeWithSource`), rather than a raw error toast. The
+  deprecated-classes table's **Restore** button — permanently disabled
+  since it shipped ("no backend support exists") — is now live: `POST
+{API_PREFIX}/classes/{id}/restore`, with a 409 (a PLAIN STRING detail,
+  unlike deprecate's structured one) shown verbatim in the toast. New
+  `deprecateClass`/`restoreClass`/`classStillReferencedDetail` wrappers
+  in `api.ts`.
+
 ### Changed
 
 - **Started adopting OpenProcessor #36 (backend commit c676d2b) — visual-audit

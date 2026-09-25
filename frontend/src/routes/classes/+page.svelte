@@ -1,5 +1,8 @@
 <script lang="ts">
   import {
+    ApiError,
+    classStillReferencedDetail,
+    deprecateClass,
     getNewClassProposalsSummary,
     getTestHoldoutStats,
     getThumbUrl,
@@ -7,6 +10,7 @@
     previewClassMerge,
     renameClass,
     resolveNewClassProposal,
+    restoreClass,
     syncClassesToOpensearch,
     type NewClassProposalsSummary,
     type NewClassProposalTerm,
@@ -159,6 +163,62 @@
     }
   }
 
+  // -- Deprecate / Restore (was disabled — no backend support; now real,
+  //    POST {API_PREFIX}/classes/{id}/deprecate + /restore). ------------------
+
+  async function deprecateClassAction(cls: RegistryClass): Promise<void> {
+    const ok = window.confirm(
+      `Deprecate "${cls.name}"? It drops out of pickers, exports, VLM prompts and ` +
+        'hotkeys, and can be restored later (unless another class later claims its name).',
+    );
+    if (!ok) return;
+    busy = true;
+    try {
+      await deprecateClass(cls.id);
+      toastStore.success(`Deprecated ${cls.name}.`);
+      await classesStore.clearAndRefetch();
+    } catch (e) {
+      // 409 while the class still has data — the backend names the exact
+      // counts; merge is the only way to retire a class in that state, so
+      // offer the existing merge flow with this class preselected as the
+      // source rather than just failing.
+      const ref = classStillReferencedDetail(e);
+      if (ref) {
+        const goMerge = window.confirm(
+          `${ref.message} (${ref.item_count} item(s), ${ref.confirmed_label_count} confirmed ` +
+            `label(s)). Merge "${cls.name}" into another class instead?`,
+        );
+        if (goMerge) openMergeWithSource(cls.id);
+      } else {
+        toastStore.error(`Deprecate failed: ${(e as Error).message}`);
+      }
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function restoreClassAction(cls: RegistryClass): Promise<void> {
+    const ok = window.confirm(`Restore "${cls.name}"? It becomes assignable again.`);
+    if (!ok) return;
+    busy = true;
+    try {
+      await restoreClass(cls.id);
+      toastStore.success(`Restored ${cls.name}.`);
+      await classesStore.clearAndRefetch();
+    } catch (e) {
+      // 409 here is a PLAIN STRING detail (a live class already uses this
+      // name) — show it verbatim, not the structured class_still_referenced
+      // shape deprecate uses.
+      if (e instanceof ApiError && e.status === 409 && e.detail) {
+        toastStore.error(e.detail);
+      } else {
+        toastStore.error(`Restore failed: ${(e as Error).message}`);
+      }
+    } finally {
+      busy = false;
+    }
+  }
+
   function openAdd(): void {
     addOpen = true;
   }
@@ -169,6 +229,11 @@
     mergePreview = null;
     mergePreviewError = null;
     mergeOpen = true;
+  }
+
+  function openMergeWithSource(sourceId: number): void {
+    openMerge();
+    mergeSourceId = sourceId;
   }
 
   function closeMerge(): void {
@@ -810,6 +875,15 @@
                   >
                     Rename
                   </button>
+                  <button
+                    type="button"
+                    class="btn"
+                    data-testid="deprecate-{cls.id}"
+                    onclick={() => void deprecateClassAction(cls)}
+                    disabled={busy}
+                  >
+                    Deprecate
+                  </button>
                 {/if}
               </td>
             </tr>
@@ -853,8 +927,9 @@
                     <button
                       type="button"
                       class="btn"
-                      disabled
-                      title="Restore not yet implemented"
+                      data-testid="restore-{cls.id}"
+                      onclick={() => void restoreClassAction(cls)}
+                      disabled={busy}
                     >
                       Restore
                     </button>
