@@ -90,6 +90,18 @@ import type {
   TrainJobStatus,
   TrainManifest,
 } from './types_train';
+import type {
+  BakeoffComparison,
+  BakeoffMatrix,
+  BakeoffProfileList,
+  BakeoffRunAccepted,
+  BakeoffRunList,
+  BakeoffRunRequest,
+  BakeoffStatus,
+  BaselineModelList,
+  EvalDatasetList,
+  TrainedModelList,
+} from './types_bakeoff';
 
 // Vite exposes only PUBLIC_-prefixed env vars to the client. SvelteKit uses
 // `$env/dynamic/public` but importing that here would force every consumer
@@ -4067,219 +4079,51 @@ export async function getIngestConfig(
 }
 
 // ===========================================================================
-// Detector bake-off ({API_PREFIX}/bakeoff) — model comparison runs + results.
+// Model comparison ({API_PREFIX}/bakeoff) — v2 wire, OpenProcessor #34 §7.
+// Types live in `./types_bakeoff.ts`.
 // ===========================================================================
-
-export interface BakeoffModelSpec {
-  backend:
-    | 'ultralytics'
-    | 'triton'
-    | 'open-image-models'
-    | 'two-stage'
-    | 'lpdnet'
-    | 'onnxruntime'
-    | 'coreml';
-  name: string;
-  /** Per-model BakeoffProfile override; else the request-level `profile`. */
-  profile?: string;
-  mode?: 'full' | 'crop' | 'both';
-  weights?: string;
-  imgsz?: number;
-  device?: string;
-  pred_class_id?: number;
-  gt_class_id?: number;
-  gt_class_name?: string;
-  triton_url?: string;
-  triton_model?: string;
-  lpdnet_variant?: 'usa' | 'ccpd';
-  /** Coarse (parent-object) stage for crop / two-stage; unset fields come
-   *  from the profile's `context_*`. */
-  primary_weights?: string;
-  primary_classes?: string;
-  primary_imgsz?: number;
-  secondary_backend?: string;
-  secondary_imgsz?: number;
-  training_data?: string;
-}
-
-/**
- * What a bake-off scores: the target class under test plus the cascade
- * context and metric config (backend `BakeoffProfile`). `registered`
- * profiles are deployment-configured; `example` ones ship with the
- * harness as templates.
- */
-export interface BakeoffProfile {
-  name: string;
-  kind: 'registered' | 'example';
-  target_class_id: number;
-  target_class_name: string;
-  class_names: string[];
-  context_class_ids: number[];
-  default_backend: string;
-  imgsz: number;
-  rank_metric: string;
-  baselines_path: string;
-  /** The profile a run uses when the request names none. */
-  default?: boolean;
-}
-
-export interface BakeoffProfileList {
-  profiles: BakeoffProfile[];
-  count: number;
-  /** Name of the `default: true` row; null when the configured default
-   *  does not resolve (see `default_error`). */
-  default_profile?: string | null;
-  default_error?: string;
-}
-
-/** One failed piece of a bake-off: a whole stage (`throughput`, a
- *  quantize export) or one dataset × model cell. */
-export interface BakeoffFailure {
-  stage?: string;
-  dataset?: string;
-  model?: string;
-  error: string;
-}
-
-/** `GET /bakeoff/status/{job_id}` — the runner's status.json. */
-export interface BakeoffStatus {
-  state?: 'enqueued' | 'running' | 'done' | 'error' | string;
-  /** Job-level reason when `state` is `error`. */
-  error?: string;
-  progress?: { done: number; total: number };
-  completed?: string[];
-  failed?: BakeoffFailure[];
-}
 
 export function bakeoffProfiles(signal?: AbortSignal): Promise<BakeoffProfileList> {
   return apiFetch(`${API_PREFIX}/bakeoff/profiles`, {}, signal);
 }
 
-export interface BakeoffRunRow {
-  model: string;
-  runtime: string;
-  training_data: string;
-  imgsz: number | string;
-  map_50: number;
-  map_50_95: number;
-  ap_small: number;
-  mean_iou: number;
-  precision: number;
-  recall: number;
-  f1: number;
-  latency_ms: number;
-  fps: number;
-}
-
-export interface BakeoffComparison {
-  models: BakeoffRunRow[];
-  n_models: number;
-}
-
-export interface BakeoffRunSummary {
-  job_id: string;
-  state: string | null;
-  models: string[];
-  started_at?: string;
-  finished_at?: string;
-}
-
-/** A finished training run selectable as a bake-off contender.
- *  `map50` is sourced from the run's `eval.map50` (OpenProcessor #34 W1
- *  fix — previously `best_checkpoint_metric.map50`, a training-time
- *  figure, not the frozen-holdout eval); `map50_split` names which pass
- *  produced it ('test' when the holdout pass ran, 'val' when it fell
- *  back), mirroring `eval.split` — label any rendered `map50` with it. */
-export interface BakeoffTrainedModel {
-  run_id: string;
-  name: string;
-  model_size: string | null;
-  checkpoint_path: string;
-  map50: number | null;
-  map50_split: 'test' | 'val' | null;
-  finished_at: string | null;
-  campaign_id: string | null;
-}
-
-/**
- * List finished training runs (with a checkpoint) so the bake-off can score an
- * already-trained model straight from the backend — no download/re-upload.
- */
-export function bakeoffTrainedModels(
-  signal?: AbortSignal,
-): Promise<{ models: BakeoffTrainedModel[]; count: number }> {
-  return apiFetch(`${API_PREFIX}/bakeoff/trained_models`, {}, signal);
-}
-
-/** A frozen evaluation dataset (a column in the bake-off matrix). */
-export interface BakeoffEvalDataset {
-  name: string;
-  path: string;
-  kind: string;
-  n_test: number | null;
-  frozen_sha: string | null;
-}
-
-/** model x dataset matrix from a finished matrix bake-off. */
-export interface BakeoffMatrix {
-  datasets: string[];
-  models: string[];
-  metrics: string[];
-  cells: Record<string, Record<string, Record<string, number | null>>>;
-  best: Record<string, Record<string, string>>;
-}
-
-export function bakeoffRun(
-  body: {
-    dataset?: string;
-    datasets?: { path: string; name?: string }[];
-    models: BakeoffModelSpec[];
-    /** BakeoffProfile name; omitted = the evaluator's deployment default. */
-    profile?: string;
-    verify_frozen?: boolean;
-    job_id?: string;
-  },
-  signal?: AbortSignal,
-): Promise<{ status: string; job_id: string; out_dir: string }> {
-  return apiFetch(
-    `${API_PREFIX}/bakeoff/run`,
-    { method: 'POST', body: JSON.stringify(body) },
-    signal,
-  );
-}
-
-/** Auto-discovered frozen evaluation datasets (matrix columns). */
-export function bakeoffEvalDatasets(
-  signal?: AbortSignal,
-): Promise<{ datasets: BakeoffEvalDataset[]; count: number }> {
-  return apiFetch(`${API_PREFIX}/bakeoff/eval_datasets`, {}, signal);
-}
-
-/** Public/commercial baseline detectors from the editable registry —
- *  the given profile's own registry when it declares one. */
+/** The given profile's baseline registry (empty by default). */
 export function bakeoffBaselineModels(
   profile?: string,
   signal?: AbortSignal,
-): Promise<{ baselines: BakeoffModelSpec[]; count: number }> {
+): Promise<BaselineModelList> {
   return apiFetch(`${API_PREFIX}/bakeoff/baseline_models${qs({ profile })}`, {}, signal);
 }
 
-/** The model x dataset matrix for a finished matrix job. */
-export function bakeoffMatrix(
-  jobId: string,
+/** Export test splits and external frozen sets, in served order. */
+export function bakeoffEvalDatasets(
+  source?: 'export' | 'external',
   signal?: AbortSignal,
-): Promise<BakeoffMatrix> {
+): Promise<EvalDatasetList> {
+  return apiFetch(`${API_PREFIX}/bakeoff/eval_datasets${qs({ source })}`, {}, signal);
+}
+
+/** Finished training runs; with `datasetId`, each carries `for_dataset`. */
+export function bakeoffTrainedModels(
+  params: { datasetId?: string; limit?: number } = {},
+  signal?: AbortSignal,
+): Promise<TrainedModelList> {
   return apiFetch(
-    `${API_PREFIX}/bakeoff/matrix/${encodeURIComponent(jobId)}`,
+    `${API_PREFIX}/bakeoff/trained_models${qs({ dataset_id: params.datasetId, limit: params.limit })}`,
     {},
     signal,
   );
 }
 
-export function bakeoffRuns(
+export function bakeoffRun(
+  body: BakeoffRunRequest,
   signal?: AbortSignal,
-): Promise<{ runs: BakeoffRunSummary[] }> {
-  return apiFetch(`${API_PREFIX}/bakeoff/runs`, {}, signal);
+): Promise<BakeoffRunAccepted> {
+  return apiFetch(
+    `${API_PREFIX}/bakeoff/run`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
 }
 
 export function bakeoffStatus(
@@ -4293,12 +4137,30 @@ export function bakeoffStatus(
   );
 }
 
+export function bakeoffRuns(signal?: AbortSignal): Promise<BakeoffRunList> {
+  return apiFetch(`${API_PREFIX}/bakeoff/runs`, {}, signal);
+}
+
+/** One dataset's comparison (default: the job's first dataset). A 409
+ *  means the stored result predates the v2 format. */
 export function bakeoffResults(
   jobId: string,
+  datasetId?: string,
   signal?: AbortSignal,
 ): Promise<BakeoffComparison> {
   return apiFetch(
-    `${API_PREFIX}/bakeoff/results/${encodeURIComponent(jobId)}`,
+    `${API_PREFIX}/bakeoff/results/${encodeURIComponent(jobId)}${qs({ dataset_id: datasetId })}`,
+    {},
+    signal,
+  );
+}
+
+export function bakeoffMatrix(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<BakeoffMatrix> {
+  return apiFetch(
+    `${API_PREFIX}/bakeoff/matrix/${encodeURIComponent(jobId)}`,
     {},
     signal,
   );

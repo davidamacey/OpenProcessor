@@ -136,10 +136,14 @@ def register_base(stub, *, fail_put_label: bool = False) -> None:
     stub.on("GET", r"/train/presets(\?|$)", {"class_subset_presets": []})
     stub.on("GET", r"/train/gpus(\?|$)", {"options": [], "allowed_ids": [], "unrestricted": True})
     stub.on("GET", r"/training_cohorts(\?|$)", {"cohorts": []})
-    stub.on("GET", r"/bakeoff/profiles(\?|$)", {"profiles": []})
-    stub.on("GET", r"/bakeoff/eval_datasets(\?|$)", {"datasets": []})
-    stub.on("GET", r"/bakeoff/trained_models(\?|$)", {"models": []})
-    stub.on("GET", r"/bakeoff/baseline_models(\?|$)", {"models": []})
+    stub.on(
+        "GET",
+        r"/bakeoff/profiles(\?|$)",
+        {"profiles": [], "count": 0, "default_profile": None, "default_error": None},
+    )
+    stub.on("GET", r"/bakeoff/eval_datasets(\?|$)", {"datasets": [], "count": 0})
+    stub.on("GET", r"/bakeoff/trained_models(\?|$)", {"models": [], "count": 0})
+    stub.on("GET", r"/bakeoff/baseline_models(\?|$)", {"baselines": [], "count": 0})
 
     def review_handler(_request, _match):
         items = []
