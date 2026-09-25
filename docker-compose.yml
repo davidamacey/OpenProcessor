@@ -515,6 +515,14 @@ services:
     volumes:
       - ./cache/huggingface:/home/appuser/.cache/huggingface  # ST-2: nvme-backed HF cache (appuser, matches yolo-api)
     environment:
+      # SEGMENTER_LISTEN_PORT is the container's own uvicorn bind port and
+      # is intentionally NOT the same name as SEGMENTER_PORT (the host-side
+      # port env.template/.env map below) -- env_file loads the whole .env
+      # into this container, and a shared name would let the host port
+      # clobber the in-container bind (F-75). Fixed at 8000, matching the
+      # Dockerfile default and the port mapping/healthcheck/OP_SEGMENTER_URL
+      # below; do not source this from .env.
+      - SEGMENTER_LISTEN_PORT=8000
       # Gated weights: the service boots and logs a warning without a
       # token, then fails the download. Set HF_TOKEN in .env.
       - HF_TOKEN=${HF_TOKEN:-}

@@ -148,6 +148,28 @@ def test_yolo_label_lines_center_and_size() -> None:
     assert lines == ['0 0.300000 0.200000 0.200000 0.200000']
 
 
+# --- data.yaml split mapping (F-76) ----------------------------------------
+
+
+def test_write_labels_and_data_yaml_train_and_val_point_at_different_splits(
+    tmp_path: Path,
+) -> None:
+    """train: and val: must resolve to different directories -- both
+    pointing at images/validation (the original bug) makes a YOLO-dataset
+    consumer that reads every split (e.g. eval_regions_vs_gt.py with no
+    --splits filter) see the same 74 images twice and double-count them
+    in [total]."""
+    selected = [*_pool([1, 2]), {**_pool([3])[0], 'split': 'test'}]
+    f.write_labels_and_data_yaml(tmp_path, selected)
+
+    import yaml
+
+    data = yaml.safe_load((tmp_path / 'data.yaml').read_text())
+    assert data['train'] != data['val']
+    assert data['train'] == 'images/validation'
+    assert data['val'] == 'images/test'
+
+
 # --- manifest pin ------------------------------------------------------------
 
 

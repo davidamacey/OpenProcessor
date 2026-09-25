@@ -9,6 +9,7 @@ items join is exercised, not stubbed.
 
 from __future__ import annotations
 
+import argparse
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -368,6 +369,41 @@ def _run_cli(monkeypatch, fake: QueryFakeOpenSearch, argv: list[str]) -> int:
     monkeypatch.setattr(mod, 'AsyncOpenSearch', lambda **_kw: _Closable(fake))
     monkeypatch.setattr(mod, 'get_curation_config', lambda: CFG)
     return mod.main(argv)
+
+
+def _dataset_with_duplicated_split_dir(root: Path) -> Path:
+    """A data.yaml where train: and val: both point at images/validation --
+    the F-76 bug shape (originally produced by
+    scripts/datasets/fetch_openimages_plates.py)."""
+    img = root / 'images' / 'validation' / 'a.jpg'
+    img.parent.mkdir(parents=True, exist_ok=True)
+    img.write_bytes(b'x')
+    lbl = root / 'labels' / 'validation' / 'a.txt'
+    lbl.parent.mkdir(parents=True, exist_ok=True)
+    lbl.write_text('0 0.15 0.15 0.1 0.1\n')
+    data = root / 'data.yaml'
+    data.write_text('train: images/validation\nval: images/validation\nnc: 1\nnames: {0: region}\n')
+    return data
+
+
+def test_build_cohort_deduplicates_when_a_yaml_lists_the_same_dir_twice(
+    tmp_path: Path,
+) -> None:
+    """F-76: train: and val: both resolving to images/validation must not
+    make build_cohort() count and score the same image twice."""
+    mod = _cli()
+    data = _dataset_with_duplicated_split_dir(tmp_path / 'ds')
+    args = argparse.Namespace(
+        state_dir=None,
+        image_list=None,
+        dataset=data,
+        splits=None,
+        path_map=None,
+        gt_class=None,
+    )
+    cohort = mod.build_cohort(args)
+    assert len(cohort) == 1
+    assert {c.split for c in cohort} == {'train'}  # first occurrence wins
 
 
 def test_cli_dataset_cohort_with_path_map(monkeypatch, tmp_path: Path, capsys) -> None:

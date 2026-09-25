@@ -116,6 +116,30 @@ def _entry(
     )
 
 
+def _dedupe_cohort(cohort: list[CohortImage]) -> list[CohortImage]:
+    """Drop repeat entries for the same image, keeping the first occurrence.
+
+    A ``data.yaml`` that lists the same directory under two split keys
+    (e.g. ``train:`` and ``val:`` both pointing at ``images/validation`` --
+    F-76) makes :func:`discover` return that image under both splits, so
+    the naive per-split concatenation in :func:`build_cohort` would count
+    it twice in ``[total]`` and score it twice. Identity is ``image_id``
+    when the source (e.g. ``ingested/<split>.jsonl``) provided one, else
+    the resolved image path -- both splits resolve to the exact same file
+    in the duplicate-directory case, so the path alone already collapses
+    them.
+    """
+    seen: set[str] = set()
+    deduped: list[CohortImage] = []
+    for entry in cohort:
+        identity = entry.image_id or entry.key
+        if identity in seen:
+            continue
+        seen.add(identity)
+        deduped.append(entry)
+    return deduped
+
+
 def build_cohort(args: argparse.Namespace) -> list[CohortImage]:
     """Resolve the evaluated frames from state dir / image list / dataset."""
     kw: dict[str, Any] = {'path_map': args.path_map, 'class_ids': args.gt_class or None}
@@ -147,19 +171,21 @@ def build_cohort(args: argparse.Namespace) -> list[CohortImage]:
                             **kw,
                         )
                     )
-        return cohort
+        return _dedupe_cohort(cohort)
 
     if args.image_list is not None:
         split = wanted[0] if wanted and len(wanted) == 1 else 'list'
         lines = args.image_list.read_text(encoding='utf-8').splitlines()
-        return [_entry(Path(ln.strip()), split, **kw) for ln in lines if ln.strip()]
+        cohort = [_entry(Path(ln.strip()), split, **kw) for ln in lines if ln.strip()]
+        return _dedupe_cohort(cohort)
 
     found, _names = discover(args.dataset)
     splits = wanted or list(found)
     missing = [s for s in splits if s not in found]
     if missing:
         raise DatasetError(f'splits not in dataset: {missing} (found: {sorted(found)})')
-    return [_entry(img, split, **kw) for split in splits for img in found[split]]
+    cohort = [_entry(img, split, **kw) for split in splits for img in found[split]]
+    return _dedupe_cohort(cohort)
 
 
 # =============================================================================

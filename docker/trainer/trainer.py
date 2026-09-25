@@ -136,7 +136,20 @@ def _probe_cuda_device_count() -> int | None:
         return None
 
 
-def write_trainer_capabilities(jobs_dir: Path) -> None:
+# How often watch_loop re-touches .trainer_capabilities.json's written_at
+# while idle. The API's probe_trainer_reachable (src/services/training/
+# gpu_arbiter.py TRAINER_HEARTBEAT_STALE_SECONDS=120) treats anything
+# older than 4x this as stale -- this is the socket-free signal that
+# replaced the previous docker-only reachability check (F-72).
+HEARTBEAT_INTERVAL_S = 30.0
+
+# Cached across heartbeats so re-touching written_at doesn't re-fork a
+# subprocess to re-probe CUDA every 30s -- only the first write (startup)
+# and any explicit re-probe pay that cost.
+_capabilities_cache: dict[str, Any] = {}
+
+
+def write_trainer_capabilities(jobs_dir: Path, *, probe_cuda: bool = True) -> None:
     """Publish this container's GPU attachment for the API's preflight check.
 
     Writes ``<jobs_dir>/.trainer_capabilities.json`` atomically:
@@ -144,14 +157,21 @@ def write_trainer_capabilities(jobs_dir: Path) -> None:
     its host index), ``visible_count`` (:func:`_probe_cuda_device_count`),
     ``build_sha`` (this image's baked ``OP_BUILD_SHA``), and ``written_at``.
 
+    Called once at startup (``probe_cuda=True``) and then again every
+    ``HEARTBEAT_INTERVAL_S`` from :func:`watch_loop` while idle
+    (``probe_cuda=False``, reusing the cached ``visible_count``) purely to
+    refresh ``written_at`` -- the API's reachability probe reads that
+    timestamp's freshness instead of needing a docker socket.
+
     Best-effort: any failure (no CUDA, no write permission) is logged and
     swallowed -- an older trainer image or a probe failure must only
     downgrade the API's check to a warning, never crash trainer startup.
     """
-    visible_count = _probe_cuda_device_count()
+    if probe_cuda or 'visible_count' not in _capabilities_cache:
+        _capabilities_cache['visible_count'] = _probe_cuda_device_count()
     payload = {
         'gpu_order': list(_gpu_order()),
-        'visible_count': visible_count,
+        'visible_count': _capabilities_cache['visible_count'],
         'build_sha': os.environ.get('OP_BUILD_SHA'),
         'written_at': _utcnow_iso(),
     }
@@ -918,12 +938,17 @@ def watch_loop(jobs_dir: Path) -> None:
     signal.signal(signal.SIGINT, _signal_handler)
 
     logger.info('watcher started', jobs_dir=str(jobs_dir))
+    last_heartbeat = time.monotonic()
     while not stop.is_set():
         try:
             handled = process_one(jobs_dir)
         except Exception:  # the watcher must outlive any single job
             logger.exception('watcher: job dispatch failed')
             handled = False
+        now = time.monotonic()
+        if now - last_heartbeat >= HEARTBEAT_INTERVAL_S:
+            write_trainer_capabilities(jobs_dir, probe_cuda=False)
+            last_heartbeat = now
         if handled:
             continue
         for _ in range(int(POLL_INTERVAL_S * 10)):

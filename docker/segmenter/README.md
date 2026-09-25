@@ -105,7 +105,7 @@ segmenter leg is a clean no-op; see
 |---|---|---|
 | `HF_TOKEN` | (required) | HuggingFace auth for the gated SAM 3 weights. `HUGGINGFACE_HUB_TOKEN` and `HUGGING_TOKEN` are also accepted. |
 | `SEGMENTER_DEVICE` | `cuda:0` | Torch device to host the model on. |
-| `SEGMENTER_PORT` | `8000` | HTTP port inside the container. |
+| `SEGMENTER_LISTEN_PORT` | `8000` | HTTP port inside the container. Deliberately distinct from `SEGMENTER_PORT`, the host-side port compose maps (`env.template`) — sharing a name let `.env`'s host-port value leak into the container's own uvicorn bind and break it (F-75). |
 | `SEGMENTER_LOG_LEVEL` | `info` | uvicorn / app log level. |
 | `SEGMENTER_INSTANCES` | `2` | Processors in the pool = max concurrent forwards. |
 | `SEGMENTER_SHARED_WEIGHTS` | `0` | `1` builds the model once and wraps it in N processors (see below). |

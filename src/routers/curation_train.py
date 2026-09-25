@@ -660,11 +660,11 @@ async def _run_preflight(
     # ---- 2b. trainer reachable ------------------------------------------
     # Without this, /start writes job.json and the run sits in `queued`
     # forever with no error if the configured trainer container was never started.
-    trainer_up, trainer_detail = await probe_trainer_reachable()
+    trainer_severity, trainer_detail = await probe_trainer_reachable()
     checks.append(
         PreflightCheck(
             name='trainer_reachable',
-            severity='ok' if trainer_up else 'block',
+            severity=trainer_severity,
             message=trainer_detail,
         )
     )
