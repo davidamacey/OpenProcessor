@@ -300,3 +300,27 @@ async def test_probe_writes_the_registry_id_of_its_prediction(
         class_ids={},
     )
     assert fake_os.updates[0]['doc']['probe_pred_class_id'] is None
+
+
+def test_raw_preds_accepts_arbitrary_attributes() -> None:
+    """Live failure (deployed ultralytics 8.4.161 vs host venv 8.3.253):
+    ``POST /probe/run`` raised ``'_RawPreds' object has no attribute
+    'save_dir' and no __dict__ for setting new attributes`` --
+    ``BasePredictor.stream_inference`` sets bookkeeping attributes (e.g.
+    ``save_dir``, not just ``speed``) on each result object post-postprocess,
+    and the set it sets has grown across ultralytics releases.
+    ``_RawPreds`` must accept attribute assignment for names it never
+    anticipated, not just the ones this module already knows about."""
+    import torch
+
+    from src.services.curation.probe_predictions import _RawPreds
+
+    preds = _RawPreds(torch.zeros((9, 1)))
+    preds.speed = {'preprocess': 0.1}
+    # setattr/getattr, not a static `.save_dir =` -- this attribute is
+    # deliberately not declared anywhere on the class; the point of the
+    # fix is that assigning an *unanticipated* name still works at
+    # runtime (a real attribute-defined check would defeat the test).
+    setattr(preds, 'save_dir', '/tmp/whatever')  # noqa: B010
+    assert getattr(preds, 'save_dir') == '/tmp/whatever'  # noqa: B009
+    assert preds.tensor.shape == (9, 1)

@@ -91,14 +91,14 @@ logger = get_logger(__name__)
 class _RawPreds:
     """Wraps one image's raw pre-NMS prediction tensor.
 
-    ``BasePredictor.stream_inference`` unconditionally does
-    ``self.results[i].speed = {...}`` bookkeeping after postprocess — this
-    thin wrapper just needs to accept that attribute assignment so we can
-    skip constructing real ``Results`` objects (which would require running
-    NMS first).
+    ``BasePredictor.stream_inference``/``write_results`` do bookkeeping
+    attribute assignments on each result object post-postprocess (e.g.
+    ``speed``, and ultralytics 8.4.x's ``save_dir``) -- deliberately NOT
+    ``__slots__``-restricted: a fixed attribute tuple is exactly what
+    broke against a newer ultralytics release setting attributes this
+    module never anticipated (``'_RawPreds' object has no attribute
+    'save_dir' and no __dict__ for setting new attributes``).
     """
-
-    __slots__ = ('speed', 'tensor')
 
     def __init__(self, tensor: Any) -> None:
         self.tensor = tensor
@@ -140,6 +140,15 @@ def _build_raw_predictor(model: Any) -> Any:
         'mode': 'predict',
         'rect': True,
         'verbose': False,
+        # Explicit, not left to ultralytics' own default (``save`` was
+        # True by default in 8.4.161): any of these routes through
+        # ``BasePredictor.write_results``, which calls ``result.verbose()``
+        # and sets ``result.save_dir`` unconditionally -- neither of which
+        # ``_RawPreds`` needs, and this pass never wants disk/window output.
+        'save': False,
+        'save_txt': False,
+        'save_crop': False,
+        'show': False,
     }
     _use_class_score_head(model)
     predictor = DetectionPredictor(overrides=args, _callbacks=model.callbacks)
