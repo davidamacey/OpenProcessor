@@ -17,6 +17,8 @@
  * predicate harder to grep for later).
  */
 
+import { slotForClassName } from '$lib/annotations/registeredSlots';
+
 /** Currently hides nothing — see the module header for why this stays a
  *  named predicate instead of being deleted. */
 export function isPickerHiddenClass(_name: string): boolean {
@@ -36,4 +38,28 @@ export function isAssignableClass(cls: { name: string; deprecated?: boolean }): 
   if (cls.deprecated) return false;
   if (isPickerHiddenClass(cls.name)) return false;
   return true;
+}
+
+/**
+ * True if `cls` is bound to a registered annotation slot (its regions are
+ * sub-boxes on other items, not items of their own) — resolved through the
+ * slot registry, never a hardcoded class name.
+ *
+ * TODO(served class kind): the backend is being asked to serve a class
+ * `kind` (item vs region) on `GET {API_PREFIX}/classes` (visual audit
+ * 2026-09-24, R1/X2). Once it does, read that instead of the slot registry.
+ */
+export function isSlotBoundClass(cls: { name: string }): boolean {
+  return slotForClassName(cls.name) != null;
+}
+
+/**
+ * True if `cls` may be offered as an ITEM-class assignment target — the
+ * `/review` class picker and quick-assign row. Stricter than
+ * `isAssignableClass`: a slot-bound region class is never an item's class,
+ * so offering it there only invites `/` + Enter mislabeling an item as a
+ * region (visual audit 2026-09-24, R1).
+ */
+export function isItemClassTarget(cls: { name: string; deprecated?: boolean }): boolean {
+  return isAssignableClass(cls) && !isSlotBoundClass(cls);
 }
