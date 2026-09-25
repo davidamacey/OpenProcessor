@@ -2,9 +2,7 @@
 
 Cropwright is a keyboard-first, cluster-assisted web app for labeling
 image crops at scale — the human-in-the-loop frontend for
-[OpenProcessor](https://github.com/example-org/openprocessor)
-
-<!-- TODO(coordinator): confirm the public OpenProcessor repo URL. -->.
+[OpenProcessor](https://github.com/davidamacey/OpenProcessor).
 
 It is a **pure frontend** — no database of its own, no offline/mock
 mode — and is domain-agnostic: what you're labeling (vehicles, defects,
@@ -233,10 +231,7 @@ rename fails a frontend test instead of silently rendering blanks.
 ## License
 
 MIT. See [LICENSE](LICENSE). Cropwright is the frontend companion to
-[OpenProcessor](https://github.com/example-org/openprocessor)
-
-<!-- TODO(coordinator): same URL as above. -->, which handles inference,
-
+[OpenProcessor](https://github.com/davidamacey/OpenProcessor), which handles inference,
 search and clustering server-side.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow and
