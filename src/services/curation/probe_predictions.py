@@ -104,6 +104,20 @@ class _RawPreds:
         self.speed: dict[str, float] | None = None
 
 
+def _use_class_score_head(model: Any) -> None:
+    """Switch an end-to-end (NMS-free) model to its one-to-many head.
+
+    An end-to-end head (e.g. YOLO26) returns post-selection rows
+    ``(max_det, 6)`` = box, confidence, class id, with no per-class scores.
+    Its one-to-many branch returns the ``(4 + nc, anchors)`` class-score
+    tensor the posterior is built from. Models without the toggle are left
+    alone.
+    """
+    inner = getattr(model, 'model', None)
+    if inner is not None and getattr(inner, 'end2end', False):
+        inner.end2end = False
+
+
 def _build_raw_predictor(model: Any) -> Any:
     """Construct a ``DetectionPredictor`` bound to ``model`` whose
     ``postprocess`` is patched to skip NMS and return the raw pre-NMS
@@ -126,6 +140,7 @@ def _build_raw_predictor(model: Any) -> Any:
         'rect': True,
         'verbose': False,
     }
+    _use_class_score_head(model)
     predictor = DetectionPredictor(overrides=args, _callbacks=model.callbacks)
     predictor.setup_model(model=model.model, verbose=False)
 
@@ -155,6 +170,16 @@ def _summarize_prediction_raw(
     tensor = raw_results[0].tensor
     if tensor is None or tensor.ndim != 2 or tensor.shape[1] == 0 or tensor.shape[0] <= 4:
         return None, 0.0, 0.0, 0.0
+    names = getattr(model, 'names', {})
+    if names and tensor.shape[0] != 4 + len(names):
+        # Not a (4 + nc, anchors) class-score tensor, e.g. end-to-end
+        # post-selection rows; reading it as one would invent a posterior.
+        logger.warning(
+            'probe_raw_tensor_shape_mismatch',
+            shape=tuple(tensor.shape),
+            expected_rows=4 + len(names),
+        )
+        return None, 0.0, 0.0, 0.0
 
     cls_scores = tensor[4:, :]  # (nc, num_anchors) — per-class sigmoid scores
     if cls_scores.shape[0] == 0:
@@ -176,7 +201,6 @@ def _summarize_prediction_raw(
     margin = float(top1_prob.item()) - top2_prob
     entropy = float(-(probs * torch.log(probs.clamp_min(1e-12))).sum().item())
 
-    names = getattr(model, 'names', {})
     cls_id = int(top1_idx.item())
     cls_name = (
         names.get(cls_id)
