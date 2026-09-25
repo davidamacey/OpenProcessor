@@ -1,5 +1,6 @@
 {
   "_comment": "Example region-detection profile: license-plate sub-region detection on a vehicle crop. Loadable via OP_REGION_PROFILE_PATH=examples/region_profiles/license_plate.json. This is a worked example, not a built-in profile -- the app ships with region detection off (no active profile) until an operator points config at a file like this one.",
+  "_detector_model_comment": "No public 'license_plate_detector' Triton model ships with this project (no CC/permissively-licensed plate CNN was found at genericization time -- see docs/design/openprocessor_internal for the survey). detector_model names a Triton model that is never loaded in the base compose, so every RegionDetector.detect() call fails at inference (Triton 'model not found') and is caught, logged as 'region_infer_failed', and returns None -- the cascade falls through to the segmenter (SAM 3, prompted by segmenter_text_prompt) + OCR text-hint path, so region detection still works end to end, just without a dedicated CNN leg. Point detector_model at your own exported plate detector to add that leg back, or leave it as-is to run segmenter-only.",
   "name": "license_plate",
   "detector_model": "license_plate_detector",
   "detector_version": "1",
@@ -53,7 +54,8 @@
     "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "PR"
   ],
   "segmenter_text_prompt": "license plate, registration plate, number plate",
-  "secondary_shape_groups": ["sportbikes", "cruisers", "touring-adventurebikes", "trikes-dirtbikes-motards-scooters-bicycles"],
+  "_secondary_shape_groups_comment": "Optional: route crops whose class registry `group` value is in this set down a secondary detection path (see scripts/curation/worker/state.py::_is_secondary_shape). Empty here on purpose -- a private deployment's motorcycle-subtype taxonomy (sportbike/cruiser/etc.) isn't meaningful to a new user and doesn't match any group in the public class registry. Populate it with your own registry `group` values if your deployment needs the split; leave it empty to route nothing.",
+  "secondary_shape_groups": [],
   "region_class_name": "license_plate",
   "display_name": "Plates",
   "display_name_singular": "Plate"

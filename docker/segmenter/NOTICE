@@ -9,7 +9,13 @@ Model 3 (SAM 3) to serve the detection cascade's segmenter leg. See
 SAM 3 (the model + Python library)
 ------------------------------------------------------------------------
 Source:   https://github.com/facebookresearch/sam3
-License:  Apache License 2.0 (see the upstream LICENSE file)
+License:  Code (the sam3 Python library) is Apache License 2.0. The
+          pretrained **weights** are distributed separately under
+          Meta's SAM License (a custom license, not Apache-2.0):
+          commercial use and redistribution are allowed, but the SAM
+          License text must travel with the weights. Verify current
+          terms at the HuggingFace model card (`facebook/sam3`, gated)
+          before redistributing engines built from these weights.
 Use:      The Dockerfile pip-installs SAM 3 into the image; the service
           imports ``sam3.model_builder.build_sam3_image_model`` and
           ``sam3.model.sam3_image_processor.Sam3Processor``.

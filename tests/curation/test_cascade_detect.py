@@ -718,15 +718,13 @@ class TestPaddleOcrTextRecognizer:
         assert regions == []
 
 
-def test_reference_profile_secondary_shape_groups_match_registry_group_names() -> None:
-    """The reference profile's secondary-shape groups must be real class
-    registry ``group`` values -- a stale name (e.g. a bare 'dirtbikes')
-    silently never matches and routes those crops down the wrong path."""
-    assert REFERENCE_LICENSE_PLATE_PROFILE.secondary_shape_groups == frozenset(
-        {
-            'sportbikes',
-            'cruisers',
-            'touring-adventurebikes',
-            'trikes-dirtbikes-motards-scooters-bicycles',
-        }
-    )
+def test_reference_profile_secondary_shape_groups_empty_by_default() -> None:
+    """The shipped example profile leaves ``secondary_shape_groups`` empty
+    (G-20): a private deployment's motorcycle-subtype taxonomy isn't
+    meaningful to a new user and doesn't match any group in the public
+    class registry example. Empty routes nothing to the secondary-shape
+    path (see ``scripts/curation/worker/state.py::_is_secondary_shape``);
+    a deployment opts in by populating it with its own registry ``group``
+    values -- a stale name would otherwise silently never match and route
+    those crops down the wrong path."""
+    assert REFERENCE_LICENSE_PLATE_PROFILE.secondary_shape_groups == frozenset()

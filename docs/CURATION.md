@@ -134,6 +134,22 @@ trainer. A deployment supplies:
   (`OP_INGEST_SECONDARY_DETECTOR_MODEL` + `OP_INGEST_SECONDARY_<FIELD>`)
   overrides the primary's class on IoU-matched boxes. The retired
   `OP_DETECTION_*` prefix is rejected at startup with a rename message.
+
+  **A promoted YOLO26 model does not fit either ingest contract yet
+  (G-25).** `POST /curation/train/promote/{job_id}` exports a fused,
+  already-NMS'd engine with one output tensor shaped `[300, 6]`
+  (`x1, y1, x2, y2, score, class`) — neither the primary's expected
+  4-tensor end2end response (`num_dets`/`det_boxes`/`det_scores`/`det_classes`)
+  nor the secondary's raw `[B, N, 5+nc]` pre-NMS tensor. It serves fine
+  as a stand-alone detector through `POST /detect?model_name=<promoted>`
+  (see `src/routers/detect.py`, which already accepts YOLO26 fused
+  engines per-request), but pointing `OP_INGEST_PRIMARY_DETECTOR_MODEL`
+  or `OP_INGEST_SECONDARY_DETECTOR_MODEL` at one today either fails to
+  decode or silently produces nothing. Wiring it up as an ingest
+  detector needs either a third decode path in `ingest_detect.py` for
+  the `[300, 6]` shape, or re-exporting the trained model through the
+  end2end/raw-output pipeline the ingest detectors already speak — not
+  done as of this writing.
 - **Optionally, a region-of-interest profile** — the sub-region the
   detection worker's cascade looks for *inside* each item crop.
   **Neutral by default:** with nothing configured no region profile is
@@ -221,6 +237,36 @@ trainer. A deployment supplies:
   You can still swap in your own trainer: it only has to speak the file
   protocol above.
 
+  **Offline installs (G-19): the trainer needs internet access at run
+  start.** Unless `hyperparameters.model` points at a file already on
+  disk, `curation-trainer` calls into Ultralytics to fetch the base
+  checkpoint (`yolo26s.pt`, `yolo26n.pt`, etc.) from GitHub release
+  assets the first time a given family/size is trained — there is no
+  offline bundle and no pre-flight check for network reachability. On
+  an air-gapped host, pre-download the checkpoint yourself and set
+  `hyperparameters.model` to its path before calling `/train/start`.
+
+  **`POST /curation/train/start` does not merge profile defaults into
+  `hyperparameters` (G-19b).** `GET /curation/train/profiles` returns a
+  hyperparameter table (epochs, batch, imgsz, optimizer, patience, …)
+  per `(model_family, model_size, profile)` for a frontend to render —
+  but posting `{"profile": "small", ...}` alone does **not** pull those
+  values in. Every field the profile implies must be copied into the
+  request's own `hyperparameters` object; a bare top-level `epochs`
+  (outside `hyperparameters`) is rejected with `422` because the
+  request model uses `extra='forbid'`. Example, matching the `small`
+  YOLO26 profile's 70-epoch default:
+
+  ```bash
+  curl -s -X POST "$API/curation/train/start" -H 'content-type: application/json' -d '{
+    "dataset_export_dir": "/app/data/exports/<ts>",
+    "model_family": "yolo26", "model_size": "s", "profile": "small",
+    "cuda_visible_devices": "0",
+    "hyperparameters": {"epochs": 70, "imgsz": 640, "batch": 16, "optimizer": "MuSGD"},
+    "mlflow_run_name": "my-run"
+  }'
+  ```
+
 ## Class-registry schema
 
 The class registry is a single JSON file at `OP_REGISTRY_PATH` (default
@@ -279,9 +325,9 @@ This starts, in addition to the base services:
 |---|---|
 | `curation-detection-worker` | Runs the detection cascade continuously over `pending_detection` items. |
 | `curation-vlm-worker` | Verifies/labels items via the configured VLM. |
-| `curation-auto-label-worker` | Drives the `/curation/pipeline/auto_label` protocol as a long-lived process. |
+| `curation-auto-label-worker` | Drives the `/curation/pipeline/auto_label` protocol as a long-lived process. **Clusters only by default** (`run_vlm=false`) — it does not label with the VLM unless a caller passes `run_vlm=true` (see the "VLM labeling" step below). |
 | `curation-cluster-refresh` | Periodically retrains/refreshes the residual clustering. |
-| `curation-evaluator` (run on demand, not long-lived) | `docker compose --profile curation run --rm curation-evaluator` — the model-comparison (bake-off) harness: scores training runs and baselines per class on the test split of any export (`/curation/bakeoff/*`, see `docs/design/curation_design_rationale.md` §8). Mounts `./data` read-only to read exports. |
+| `curation-evaluator` (a watcher, not a one-shot job) | `docker compose --profile curation up -d curation-evaluator` — starts a long-lived watcher that serves the model-comparison (bake-off) harness: scores training runs and baselines per class on the test split of any export (`/curation/bakeoff/*`, see `docs/design/curation_design_rationale.md` §8). Mounts `./data` read-only to read exports. **Do not use `docker compose run --rm curation-evaluator`** — the container never exits on its own, so `run --rm` just blocks the foreground shell instead of running a job to completion. |
 
 None of these workers requires Triton or a GPU to *start* — they will
 sit idle or error per-call until you've configured a real detector/VLM
@@ -306,6 +352,18 @@ failure.
 
 ## Seed / bootstrap path for a fresh install
 
+**No dataset to ingest yet?** `make sample-coco` /
+`make sample-coco-readme` / `make sample-plates` fetch public,
+license-filtered sample data (COCO 2017 subset, plus an Open Images V7
+"Vehicle registration plate" region set) into gitignored
+`data/samples/`, from pinned, deterministic manifests
+(`scripts/datasets/manifests/`) — nothing proprietary is bundled with
+this repo. See "Try it with a public sample" in the top-level
+[README.md](../README.md) and `python scripts/datasets/fetch_coco_subset.py --help`
+/ `python scripts/datasets/fetch_openimages_plates.py --help` for every
+flag (per-class counts, seed, license filter, side sets). `make
+sample-clean` removes everything fetched.
+
 1. Start the API (`docker compose up -d` or your own compose target).
    OpenSearch indexes are created automatically on startup via
    `create_curation_indexes` — there is no separate schema-migration
@@ -315,6 +373,29 @@ failure.
    edit `classes` for your domain, or start from an empty
    `{"version": 1, "updated_at": "...", "classes": []}` and add classes
    via `POST /curation/classes`.
+
+   **Create classes from zero (quick start).** A brand-new install has
+   neither file — `data/class_registry.example.json` is a worked
+   warehouse example, and `scripts/curation/seed_class_registry.py`
+   seeds every class a *detector* already knows (all 80 COCO classes for
+   a stock YOLO11/YOLO26 checkpoint), which is rarely what you want for
+   a narrow domain. To start with only the classes you care about:
+
+   ```bash
+   for name in car truck bus motorcycle bicycle; do
+     curl -s -X POST "$API/curation/classes" \
+       -H 'content-type: application/json' \
+       -d "{\"name\": \"$name\", \"group\": \"vehicle\"}"
+   done
+   curl -s "$API/curation/classes" | jq '.classes | length'   # -> 5
+   ```
+
+   This writes `data/class_registry.json` (dense ids starting at 0) the
+   first time it's called — no file needs to exist beforehand. `GET
+   /curation/health` flips from `degraded` (`registry.exists=false`) to
+   `ok` once at least one class exists (with Triton/OpenSearch reachable
+   too). A duplicate `name` is `409`; a reserved hotkey (`g n d z x u a m
+   / f e b`) is rejected the same way in the UI and the API.
 3. Build the PE-Core encoders (`make pe-download pe-export-image
    pe-build-trt pe-export-text`, or `make export-pe`), load
    `pe_image_encoder` in Triton and restart the API — see "Models you
@@ -347,7 +428,20 @@ failure.
    class ids cannot drift from the model's class order.
 6. Optionally bring up the async workers (`--profile curation`) so
    detection/labeling/clustering keep running without you driving each
-   step by hand.
+   step by hand. `curation-auto-label-worker` and the underlying
+   `/curation/pipeline/auto_label/start` protocol **cluster only by
+   default** (G-11) — the VLM does not label anything unless you pass
+   `run_vlm=true`:
+
+   ```bash
+   curl -s -X POST \
+     "$API/curation/pipeline/auto_label/start?run_vlm=true&train_clusters=true"
+   curl -s "$API/curation/pipeline/auto_label/status"   # poll until terminal
+   ```
+
+   The continuous `curation-vlm-worker` (started by the same
+   `--profile curation` compose command) also labels unvalidated items
+   with `pe_embedding` on its own schedule, independent of `auto_label`.
 7. Browse and label via `GET /curation/crops`, `PUT
    /curation/crops/{crop_id}/label`, etc., or point a labeling frontend
    (Cropwright is the first such consumer) at the API — see
@@ -357,7 +451,14 @@ failure.
    narrowed dataset for one class (or a class subset), which adds
    background/hard-negative frames the narrowed detector needs and an
    extra integrity field: `frozen_test_sha` over the test split's
-   identity. Both exporters record `dataset_sha`, a hash of the actual
+   identity. **`/export/yolo` always exports every class** — it has no
+   `classes` field. A class subset lives in exactly two places: `POST
+   /export/single_class` (above) for a narrowed *dataset*, or
+   `hyperparameters.include_classes` on `POST /curation/train/start` to
+   train on a subset of an already-exported multi-class dataset. Since
+   the genericization pass (G-16), `/export/yolo` rejects unknown body
+   keys with `422` — passing `classes` there was previously silently
+   ignored (the export ran unfiltered) rather than erroring. Both exporters record `dataset_sha`, a hash of the actual
    written label *content* (which frames, in which split, with which
    boxes) plus the export's ordered class-name list — not of which item
    ids were selected, so a split reassignment, a corrected box, or a

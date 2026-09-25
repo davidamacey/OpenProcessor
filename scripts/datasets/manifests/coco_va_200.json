@@ -1,0 +1,1602 @@
+[
+  {
+    "file_name": "000000005001.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5298/5457068434_0929d78491_z.jpg",
+    "image_id": 5001,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000007281.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4112/5022207571_74aab92fd5_z.jpg",
+    "image_id": 7281,
+    "license_name": "Attribution License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000008690.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3753/9867545575_fa972e6c4a_z.jpg",
+    "image_id": 8690,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "sheep",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000011149.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3625/3323418866_ea5017538d_z.jpg",
+    "image_id": 11149,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000012062.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3775/9086068242_2064357878_z.jpg",
+    "image_id": 12062,
+    "license_name": "Attribution License",
+    "primary_class": "sheep",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000014430.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7082/7338716724_283fbffe30_z.jpg",
+    "image_id": 14430,
+    "license_name": "Attribution License",
+    "primary_class": "cow",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000015517.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8184/8407007011_9456edeb6d_z.jpg",
+    "image_id": 15517,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000016109.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5240/7401930672_e566a8437a_z.jpg",
+    "image_id": 16109,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "sheep",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000017029.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7304/8746020648_f1e2075b86_z.jpg",
+    "image_id": 17029,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000018837.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8219/8372455764_124e052754_z.jpg",
+    "image_id": 18837,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000022589.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4072/4569416948_52d65ff8f6_z.jpg",
+    "image_id": 22589,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "sheep",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000026201.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4123/4923969538_ee71829897_z.jpg",
+    "image_id": 26201,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000034732.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2683/4132987353_a4e7f6e3b0_z.jpg",
+    "image_id": 34732,
+    "license_name": "Attribution License",
+    "primary_class": "sheep",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000036732.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8468/8417250086_2fc1d0cf19_z.jpg",
+    "image_id": 36732,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "sheep",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000037751.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5472/9665212431_0c4013f384_z.jpg",
+    "image_id": 37751,
+    "license_name": "Attribution License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000039769.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/60/210383891_f91a89fd5e_z.jpg",
+    "image_id": 39769,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000041146.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3826/9306422718_4b90d03b01_z.jpg",
+    "image_id": 41146,
+    "license_name": "Attribution License",
+    "primary_class": "cow",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000042024.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2518/4449442302_5002b1c530_z.jpg",
+    "image_id": 42024,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000043737.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3593/3595526099_c28a93aaa0_z.jpg",
+    "image_id": 43737,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000045070.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3819/9272204163_a30ebf1d58_z.jpg",
+    "image_id": 45070,
+    "license_name": "Attribution License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000047571.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3771/10008328626_e50e829f0b_z.jpg",
+    "image_id": 47571,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000051309.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4081/4737610316_f8bf6beb3b_z.jpg",
+    "image_id": 51309,
+    "license_name": "Attribution License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000058111.jpg",
+    "flickr_url": "http://farm2.staticflickr.com/1212/1432440864_7e0f17c51a_z.jpg",
+    "image_id": 58111,
+    "license_name": "Attribution License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000060202.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2814/9209347017_310569c8b8_z.jpg",
+    "image_id": 60202,
+    "license_name": "Attribution License",
+    "primary_class": "cow",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000061510.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8102/8503553975_e3b6a7e171_z.jpg",
+    "image_id": 61510,
+    "license_name": "Attribution License",
+    "primary_class": "sheep",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000070774.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5219/5517860224_7973e10013_z.jpg",
+    "image_id": 70774,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000076547.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8557/8771723390_13dc9d18fa_z.jpg",
+    "image_id": 76547,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000080153.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5142/5650798989_4e830b5a03_z.jpg",
+    "image_id": 80153,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000085376.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7059/6867232585_0d4ea34bae_z.jpg",
+    "image_id": 85376,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000088265.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5541/9095670368_d6a61781a3_z.jpg",
+    "image_id": 88265,
+    "license_name": "Attribution License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000094751.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/8/9572416_70a00a9ce9_z.jpg",
+    "image_id": 94751,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000094871.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8503/8282824777_4495950c61_z.jpg",
+    "image_id": 94871,
+    "license_name": "Attribution License",
+    "primary_class": "sheep",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000097924.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8527/8546652580_94dbb43241_z.jpg",
+    "image_id": 97924,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000100510.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5547/9059818049_548550bd8f_z.jpg",
+    "image_id": 100510,
+    "license_name": "Attribution License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000100624.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2035/1874994806_da5fee8f5a_z.jpg",
+    "image_id": 100624,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000102805.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6205/6101493857_573faccfab_z.jpg",
+    "image_id": 102805,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000114907.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8303/7825237468_9345ce9a8e_z.jpg",
+    "image_id": 114907,
+    "license_name": "Attribution License",
+    "primary_class": "cow",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000119233.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2248/2050977429_aff593ecc2_z.jpg",
+    "image_id": 119233,
+    "license_name": "Attribution License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000119828.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2646/4171324648_411cccdac6_z.jpg",
+    "image_id": 119828,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000124636.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6179/6186207005_4c1eca67e8_z.jpg",
+    "image_id": 124636,
+    "license_name": "Attribution License",
+    "primary_class": "cow",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000126110.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/58/192105537_1b69c0b40d_z.jpg",
+    "image_id": 126110,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000128372.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8479/8172792873_5d083ef147_z.jpg",
+    "image_id": 128372,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000129416.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/215/459774067_b09c502247_z.jpg",
+    "image_id": 129416,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cow",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000133778.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8481/8196665872_54969ddafa_z.jpg",
+    "image_id": 133778,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cow",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000134594.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6223/6320177049_8bb84d8182_z.jpg",
+    "image_id": 134594,
+    "license_name": "Attribution License",
+    "primary_class": "cow",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000134882.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8249/8643440732_42cbe68c0f_z.jpg",
+    "image_id": 134882,
+    "license_name": "Attribution License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000135670.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2528/3925803088_79760dbe81_z.jpg",
+    "image_id": 135670,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000140203.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/47/151349771_c85a058c7d_z.jpg",
+    "image_id": 140203,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000140270.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8121/8714346440_8ccf87db39_z.jpg",
+    "image_id": 140270,
+    "license_name": "Attribution License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000144519.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6122/5986818983_607aca6927_z.jpg",
+    "image_id": 144519,
+    "license_name": "Attribution License",
+    "primary_class": "sheep",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000153217.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/32/36546844_5d6e8e5c37_z.jpg",
+    "image_id": 153217,
+    "license_name": "Attribution License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000154000.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7098/7345318588_d85c0761a3_z.jpg",
+    "image_id": 154000,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000157807.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4073/4770866338_a523fcc318_z.jpg",
+    "image_id": 157807,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000160012.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4009/4409615060_2f5554e232_z.jpg",
+    "image_id": 160012,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000160852.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5082/5293549136_f388052301_z.jpg",
+    "image_id": 160852,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cow",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000165518.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7216/7243537732_10dda0da2a_z.jpg",
+    "image_id": 165518,
+    "license_name": "Attribution License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000166277.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/247/522239585_3ad698c8a7_z.jpg",
+    "image_id": 166277,
+    "license_name": "Attribution License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000166287.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7160/6682122873_328803098d_z.jpg",
+    "image_id": 166287,
+    "license_name": "Attribution License",
+    "primary_class": "cow",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000170731.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4038/4533025672_632a753517_z.jpg",
+    "image_id": 170731,
+    "license_name": "Attribution License",
+    "primary_class": "sheep",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000171382.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3401/4572932047_8619a2bfac_z.jpg",
+    "image_id": 171382,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000176037.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8046/8140155314_abf7a6c841_z.jpg",
+    "image_id": 176037,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000181816.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8031/7978704233_c38f174e37_z.jpg",
+    "image_id": 181816,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000181859.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3393/3430882393_21bffd2a53_z.jpg",
+    "image_id": 181859,
+    "license_name": "Attribution License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000183246.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2259/2469205788_1473198ae0_z.jpg",
+    "image_id": 183246,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000184324.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3568/3364389746_361655c747_z.jpg",
+    "image_id": 184324,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000189806.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/83/217730183_8f58409e7c_z.jpg",
+    "image_id": 189806,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000190140.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6118/6216901971_786976ff66_z.jpg",
+    "image_id": 190140,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000190923.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2669/3706332805_237c47a25d_z.jpg",
+    "image_id": 190923,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000193674.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5170/5240208640_839ede4a38_z.jpg",
+    "image_id": 193674,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000196759.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7324/9356649003_5cf8fb57b3_z.jpg",
+    "image_id": 196759,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000198641.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4062/4346863707_0e5e93cea4_z.jpg",
+    "image_id": 198641,
+    "license_name": "Attribution License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000202339.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8070/8204757796_ce9fd630a2_z.jpg",
+    "image_id": 202339,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000203389.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5257/5429775787_db93d0b30f_z.jpg",
+    "image_id": 203389,
+    "license_name": "Attribution License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000205289.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8048/8094964301_1518affa3b_z.jpg",
+    "image_id": 205289,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000206487.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8010/7686978996_27b7fdfdbf_z.jpg",
+    "image_id": 206487,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000210273.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5163/5336041838_1a09008014_z.jpg",
+    "image_id": 210273,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000210299.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6199/6207968507_effbfb5a1f_z.jpg",
+    "image_id": 210299,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000212226.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3633/3554392751_0a85ee44f8_z.jpg",
+    "image_id": 212226,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000213255.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2021/2521020235_f252d7108f_z.jpg",
+    "image_id": 213255,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000213547.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2062/2243132921_779f9cdc24_z.jpg",
+    "image_id": 213547,
+    "license_name": "Attribution License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000214753.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8073/8392128987_e7b98a0936_z.jpg",
+    "image_id": 214753,
+    "license_name": "Attribution License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000222317.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3009/3098419724_89827f6fd7_z.jpg",
+    "image_id": 222317,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000222863.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6006/5930505833_3bdbbd21b8_z.jpg",
+    "image_id": 222863,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cow",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000226417.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/193/495093205_cbb83a14ff_z.jpg",
+    "image_id": 226417,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000227686.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5162/5321580225_fc7b1a7ecf_z.jpg",
+    "image_id": 227686,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000231831.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2324/2242089027_800a938327_z.jpg",
+    "image_id": 231831,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000234807.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2730/4157904856_41ed6d95ca_z.jpg",
+    "image_id": 234807,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000241326.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/6/74600093_1e3ace7913_z.jpg",
+    "image_id": 241326,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000242287.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2626/4072194513_edb6acfb2b_z.jpg",
+    "image_id": 242287,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000244411.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5338/7442803416_877f86a182_z.jpg",
+    "image_id": 244411,
+    "license_name": "Attribution License",
+    "primary_class": "cow",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000246963.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6038/5878125821_37e6cc59e9_z.jpg",
+    "image_id": 246963,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000253386.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3196/3037448990_28822471dd_z.jpg",
+    "image_id": 253386,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000259830.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3412/3308735477_1db07df522_z.jpg",
+    "image_id": 259830,
+    "license_name": "Attribution License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000260106.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7355/9062004031_5775136a94_z.jpg",
+    "image_id": 260106,
+    "license_name": "Attribution License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000261161.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8325/8113006533_a2d7ac54d0_z.jpg",
+    "image_id": 261161,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000261888.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4079/4918743472_0b684750c4_z.jpg",
+    "image_id": 261888,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000261982.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2275/2532435475_b4ed8b2efb_z.jpg",
+    "image_id": 261982,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000262938.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7029/6716837175_fb5e4de84a_z.jpg",
+    "image_id": 262938,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000271728.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8068/8152724397_82f0c4fc97_z.jpg",
+    "image_id": 271728,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000274687.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3602/4075988767_c3b2313002_z.jpg",
+    "image_id": 274687,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000278353.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6095/6366176437_b0672bc6e8_z.jpg",
+    "image_id": 278353,
+    "license_name": "Attribution License",
+    "primary_class": "sheep",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000278705.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3282/2875114693_2caf3d7481_z.jpg",
+    "image_id": 278705,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000280710.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7320/9655397508_cf2472680c_z.jpg",
+    "image_id": 280710,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000284725.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7375/9766932005_d859b2b6da_z.jpg",
+    "image_id": 284725,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000290843.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3426/3384885001_346b9951a5_z.jpg",
+    "image_id": 290843,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000291791.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7407/9120226816_110da6cb9f_z.jpg",
+    "image_id": 291791,
+    "license_name": "Attribution License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000297147.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7224/7310741494_1041ae1885_z.jpg",
+    "image_id": 297147,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000301421.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3222/2511994966_2a82bf9b43_z.jpg",
+    "image_id": 301421,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000306893.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2320/1716567943_1543348c2e_z.jpg",
+    "image_id": 306893,
+    "license_name": "Attribution License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000309391.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5246/5329327710_92169d73d4_z.jpg",
+    "image_id": 309391,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000313588.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8209/8253725562_84e76ed5e9_z.jpg",
+    "image_id": 313588,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000318238.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7402/9964003514_84ce7550c9_z.jpg",
+    "image_id": 318238,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000321705.jpg",
+    "flickr_url": "http://farm2.staticflickr.com/1011/4552121432_280caca3bf_z.jpg",
+    "image_id": 321705,
+    "license_name": "Attribution License",
+    "primary_class": "sheep",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000332318.jpg",
+    "flickr_url": "http://farm2.staticflickr.com/1169/541175475_cf575c83ba_z.jpg",
+    "image_id": 332318,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000333772.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4038/4212612461_ca16f4e7fb_z.jpg",
+    "image_id": 333772,
+    "license_name": "Attribution License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000335450.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3726/9672273201_9ca222c0c2_z.jpg",
+    "image_id": 335450,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000338219.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7283/8999990657_da131bf6a9_z.jpg",
+    "image_id": 338219,
+    "license_name": "Attribution License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000338901.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3220/3098425884_0dfc6b86d5_z.jpg",
+    "image_id": 338901,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000338986.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7284/8715827786_9ffcac1fa5_z.jpg",
+    "image_id": 338986,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000340272.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7272/7104098187_3f5a8bccc5_z.jpg",
+    "image_id": 340272,
+    "license_name": "Attribution License",
+    "primary_class": "sheep",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000341469.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8123/8659803549_02c7baa8a3_z.jpg",
+    "image_id": 341469,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000343218.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3169/2653643649_665418b9df_z.jpg",
+    "image_id": 343218,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000343934.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5339/10051858643_11783d3e9f_z.jpg",
+    "image_id": 343934,
+    "license_name": "Attribution License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000347930.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4049/4377071026_9646c57fb7_z.jpg",
+    "image_id": 347930,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000348488.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8009/7642694662_166be80756_z.jpg",
+    "image_id": 348488,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000351530.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8334/8125752591_b7f7b8da3b_z.jpg",
+    "image_id": 351530,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000356387.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3013/3055048577_d0063c6acb_z.jpg",
+    "image_id": 356387,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000357340.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6024/5923283368_b400777227_z.jpg",
+    "image_id": 357340,
+    "license_name": "Attribution License",
+    "primary_class": "sheep",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000361142.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2046/2274699389_b912eafb26_z.jpg",
+    "image_id": 361142,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000364322.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8253/8665048529_079f677dfc_z.jpg",
+    "image_id": 364322,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "sheep",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000365655.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3788/9708425604_ea76a33375_z.jpg",
+    "image_id": 365655,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000369751.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4132/5092877690_7f62303b95_z.jpg",
+    "image_id": 369751,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000371406.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3689/9622283851_6b960097a3_z.jpg",
+    "image_id": 371406,
+    "license_name": "Attribution License",
+    "primary_class": "cow",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000380203.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4121/4894742604_c45710ab18_z.jpg",
+    "image_id": 380203,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000386712.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7282/8737046741_4f76db2bd0_z.jpg",
+    "image_id": 386712,
+    "license_name": "Attribution License",
+    "primary_class": "sheep",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000389451.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8216/8336832110_eeb84b1eed_z.jpg",
+    "image_id": 389451,
+    "license_name": "Attribution License",
+    "primary_class": "cow",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000389933.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4061/4376326145_7ef66603e3_z.jpg",
+    "image_id": 389933,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000392722.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2829/9953419346_8bcbd5480f_z.jpg",
+    "image_id": 392722,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000392818.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2446/3572256424_9d106e4692_z.jpg",
+    "image_id": 392818,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000393226.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8003/7321339838_42fe225709_z.jpg",
+    "image_id": 393226,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000397639.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5102/5743641461_08040c4012_z.jpg",
+    "image_id": 397639,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "sheep",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000399560.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6211/6868773848_4d64c5ab2a_z.jpg",
+    "image_id": 399560,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000399764.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5027/5777469905_789a18095a_z.jpg",
+    "image_id": 399764,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cow",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000401862.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8540/8698627837_6d1fb59ce4_z.jpg",
+    "image_id": 401862,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000402992.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6135/5922506927_b60c053513_z.jpg",
+    "image_id": 402992,
+    "license_name": "Attribution License",
+    "primary_class": "cow",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000411938.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5301/5694283812_1ba30885f9_z.jpg",
+    "image_id": 411938,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000416170.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4084/5431709496_86fbc8af7c_z.jpg",
+    "image_id": 416170,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000416837.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6210/6076000352_33c4523167_z.jpg",
+    "image_id": 416837,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cow",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000416885.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3040/2791132570_faa5072ab9_z.jpg",
+    "image_id": 416885,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000418281.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2826/10096943865_4342e11627_z.jpg",
+    "image_id": 418281,
+    "license_name": "Attribution License",
+    "primary_class": "cow",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000423519.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3754/10191731076_ac8f52461a_z.jpg",
+    "image_id": 423519,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000423617.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8479/8195678412_8d8d906379_z.jpg",
+    "image_id": 423617,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000426166.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3052/2319776213_ced79b883c_z.jpg",
+    "image_id": 426166,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000429109.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8347/8171276414_19d5eb8e3f_z.jpg",
+    "image_id": 429109,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000436638.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/36/97153102_4938d0e535_z.jpg",
+    "image_id": 436638,
+    "license_name": "Attribution License",
+    "primary_class": "cow",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000452321.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5334/9618201274_317408969f_z.jpg",
+    "image_id": 452321,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000454798.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8108/8653189194_05e2d93b19_z.jpg",
+    "image_id": 454798,
+    "license_name": "Attribution License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000455085.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8328/8376341185_a823707710_z.jpg",
+    "image_id": 455085,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000460229.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3572/5744200926_082c11c43c_z.jpg",
+    "image_id": 460229,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000460841.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2369/1800134882_706bec9a8d_z.jpg",
+    "image_id": 460841,
+    "license_name": "Attribution License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000461404.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7155/6706049891_679c520b99_z.jpg",
+    "image_id": 461404,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cow",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000461751.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5035/7145171189_ac4034c5f3_z.jpg",
+    "image_id": 461751,
+    "license_name": "Attribution License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000467848.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7282/8743933964_a0886ffeff_z.jpg",
+    "image_id": 467848,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000468505.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3012/2488900788_9115057573_z.jpg",
+    "image_id": 468505,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000469192.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8016/7671708924_54b6fd2c48_z.jpg",
+    "image_id": 469192,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000472623.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5298/5540579478_e9d5e490b2_z.jpg",
+    "image_id": 472623,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000475732.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4047/4277980850_fb595d679e_z.jpg",
+    "image_id": 475732,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000476215.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5183/5625249657_f47dbafb44_z.jpg",
+    "image_id": 476215,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000479912.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7164/6754205289_c601f79a44_z.jpg",
+    "image_id": 479912,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000481159.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8330/8417865009_89a5b48bcb_z.jpg",
+    "image_id": 481159,
+    "license_name": "Attribution License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000484404.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8519/8621095125_f3b1b07192_z.jpg",
+    "image_id": 484404,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000486479.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3563/3792891749_6efb555740_z.jpg",
+    "image_id": 486479,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000488592.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3201/2729006923_2090a46424_z.jpg",
+    "image_id": 488592,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000490171.jpg",
+    "flickr_url": "http://farm2.staticflickr.com/1396/552454479_2adb976eb8_z.jpg",
+    "image_id": 490171,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000495146.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7375/9211776644_83a3bd9c9b_z.jpg",
+    "image_id": 495146,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000499622.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6158/6183504440_29f4164214_z.jpg",
+    "image_id": 499622,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000514213.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6089/6106668759_ff404395f2_z.jpg",
+    "image_id": 514213,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "sheep",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000514376.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2842/8750726399_6f14b42d73_z.jpg",
+    "image_id": 514376,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000516410.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8408/8787777656_5c4c4f3dd5_z.jpg",
+    "image_id": 516410,
+    "license_name": "Attribution License",
+    "primary_class": "sheep",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000521141.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/49/121598568_f73fc969ce_z.jpg",
+    "image_id": 521141,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000521259.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8050/8115935734_0ff6dcfd4e_z.jpg",
+    "image_id": 521259,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000524108.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7272/7574728256_1eaaf7ba1e_z.jpg",
+    "image_id": 524108,
+    "license_name": "Attribution License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000528524.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8180/8069316186_791b37c4e1_z.jpg",
+    "image_id": 528524,
+    "license_name": "Attribution License",
+    "primary_class": "sheep",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000529105.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3576/3682341767_51b97e44e6_z.jpg",
+    "image_id": 529105,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000530624.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5195/7235177844_90ef706004_z.jpg",
+    "image_id": 530624,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000540928.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3591/3373335806_30482ab023_z.jpg",
+    "image_id": 540928,
+    "license_name": "Attribution License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000542856.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8285/7826926496_3aa9e9d112_z.jpg",
+    "image_id": 542856,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000553776.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6151/6170479032_96264d194f_z.jpg",
+    "image_id": 553776,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000553990.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8539/8686063159_82aa07943f_z.jpg",
+    "image_id": 553990,
+    "license_name": "Attribution License",
+    "primary_class": "horse",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000554291.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/103/256248429_ebcfe37830_z.jpg",
+    "image_id": 554291,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000558073.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/90/208357409_c000a120af_z.jpg",
+    "image_id": 558073,
+    "license_name": "Attribution License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000567197.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3044/3110606120_36aa6bdc13_z.jpg",
+    "image_id": 567197,
+    "license_name": "No known copyright restrictions",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000568290.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7342/9305416099_b62431c75b_z.jpg",
+    "image_id": 568290,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000570664.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/208/508728978_915f97d63a_z.jpg",
+    "image_id": 570664,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "cat",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000571264.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8012/6988704388_144a769946_z.jpg",
+    "image_id": 571264,
+    "license_name": "Attribution License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000571857.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6179/6199221017_d5f37ecb01_z.jpg",
+    "image_id": 571857,
+    "license_name": "Attribution License",
+    "primary_class": "bicycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000573943.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8050/8089769426_0ae26e7732_z.jpg",
+    "image_id": 573943,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000574702.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2035/2252476376_bfc3cda192_z.jpg",
+    "image_id": 574702,
+    "license_name": "Attribution License",
+    "primary_class": "motorcycle",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000577932.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4019/5159956078_f820c56d6f_z.jpg",
+    "image_id": 577932,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000579321.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4114/4737904204_465fa5d55b_z.jpg",
+    "image_id": 579321,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "dog",
+    "split": "val2017"
+  }
+]

@@ -365,7 +365,9 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=128):
         print('    docker compose exec triton-server trtexec \\')
         print(f'      --onnx={onnx_path} \\')
         print(f'      --saveEngine={plan_path} \\')
-        print('      --fp16 \\')
+        # TRT 11.1 is strongly typed: trtexec has no --fp16 flag anymore.
+        # Bake reduced precision into the ONNX first (ModelOpt AutoCast,
+        # see the "Baking FP16" step above) if you want a non-FP32 engine.
         print(f'      --minShapes=images:1x3x{IMAGE_SIZE}x{IMAGE_SIZE} \\')
         print(f'      --optShapes=images:8x3x{IMAGE_SIZE}x{IMAGE_SIZE} \\')
         print(f'      --maxShapes=images:{max_batch_size}x3x{IMAGE_SIZE}x{IMAGE_SIZE}')
@@ -475,7 +477,9 @@ def main():
         print('  docker compose exec triton-server trtexec \\')
         print(f'    --onnx=/models/{checkpoint_name}_image_encoder.onnx \\')
         print(f'    --saveEngine=/models/{checkpoint_name}_image_encoder/1/model.plan \\')
-        print('    --fp16 \\')
+        # TRT 11.1 is strongly typed: trtexec has no --fp16 flag anymore.
+        # Bake reduced precision into the ONNX first (ModelOpt AutoCast)
+        # if you want a non-FP32 engine.
         print(f'    --minShapes=images:1x3x{IMAGE_SIZE}x{IMAGE_SIZE} \\')
         print(f'    --optShapes=images:8x3x{IMAGE_SIZE}x{IMAGE_SIZE} \\')
         print(f'    --maxShapes=images:{args.max_batch_size}x3x{IMAGE_SIZE}x{IMAGE_SIZE}')

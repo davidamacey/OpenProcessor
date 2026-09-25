@@ -23,7 +23,9 @@ from src.routers.curation._common import OpenSearchDep, router
 class ProbeRunRequest(BaseModel):
     job_id: str
     gpu: str | None = None
-    architecture: str = 'yolo11'
+    # yolo26 is the only trained family (G-22); yolo11/yolov5_objectness
+    # remain valid for older checkpoints or a second-family reuse.
+    architecture: str = 'yolo26'
     resume: bool = False
 
 

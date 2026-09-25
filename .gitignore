@@ -87,6 +87,23 @@ sample_data/
 IMGS_TEST/
 /SAMPLE_PICTURES/
 
+# Fetched public sample datasets (scripts/datasets/, G-05) -- pinned
+# manifests under scripts/datasets/manifests/ ARE committed; only the
+# downloaded imagery/CSVs under data/samples/ are ignored here.
+/data/samples/
+# Class registry generated at runtime (default OP_REGISTRY_PATH); the
+# warehouse example data/class_registry.example.json IS committed.
+/data/class_registry.json
+/data/exports/*
+# Anchored at repo root -- an earlier unanchored `backends/` pattern
+# accidentally hid the bake-off harness's source subpackage (see the
+# `/backends/` note above). Anchor `cache/` the same way. `!` re-includes
+# must walk down directory-by-directory or git never looks inside an
+# excluded dir to find the negated file.
+/cache/**
+!/cache/huggingface/
+!/cache/huggingface/.gitkeep
+
 # ============================================================================
 # Reference Repositories (External Code for Research)
 # ============================================================================
@@ -94,9 +111,8 @@ IMGS_TEST/
 # External repos cloned for reference (36MB - not needed in version control)
 reference_repos/
 
-# HuggingFace cache (tokenizers, models - downloaded at runtime)
-cache/huggingface/
-!cache/huggingface/.gitkeep
+# HuggingFace cache (tokenizers, models - downloaded at runtime):
+# superseded by the anchored /cache/** rule above (G-17).
 
 # ============================================================================
 # Monitoring and Logs

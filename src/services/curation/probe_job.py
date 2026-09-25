@@ -297,7 +297,7 @@ async def start_probe_job(
     *,
     config: Any = None,
     gpu: str | None = None,
-    architecture: str = 'yolo11',
+    architecture: str = 'yolo26',
     resume: bool = False,
 ) -> dict[str, Any]:
     """Start a probe job. Raises :class:`ProbeJobBusyError` if one is

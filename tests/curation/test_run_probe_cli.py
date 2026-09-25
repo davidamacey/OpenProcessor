@@ -184,7 +184,7 @@ def test_cli_defaults_to_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, 'argv', ['run_probe.py', '--model', 'm.onnx'])
     assert mod.main() == 0
     assert captured['args'].dry_run is True
-    assert captured['args'].architecture == 'yolo11'
+    assert captured['args'].architecture == 'yolo26'
 
 
 def _patch_client(monkeypatch, mod, fake):

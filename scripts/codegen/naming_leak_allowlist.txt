@@ -139,6 +139,7 @@ tests/curation/test_triton_promote.py # exercises the example profile
 tests/curation/test_yolo26_triton_config.py # exercises the example profile
 tests/integration/test_import_labeled_dataset.py # exercises the example profile
 tests/examples/test_bakeoff_license_plate_example.py # exercises the opt-in license_plate bake-off example under examples/bakeoff/ (loads it by path)
+scripts/datasets/fetch_openimages_plates.py # G-05 public sample fetcher: fetches Open Images V7's own "Vehicle registration plate" class by that exact public display name; same public license_plate example domain this allowlist section already covers throughout
 
 # ---------------------------------------------------------------------------
 # Scan C (private class vocabulary: sportbike/cruiserbike/dirtbike/harley/honda)

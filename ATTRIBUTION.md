@@ -82,7 +82,18 @@ MobileCLIP2-S2 is used for generating image and text embeddings for visual searc
 - **Repository:** https://github.com/apple/ml-mobileclip
 - **Paper:** "MobileCLIP: Fast Image-Text Models through Multi-Modal Reinforced Training"
 - **Model:** MobileCLIP2-S2 (35.7M parameters, 77.2% ImageNet accuracy)
-- **License:** Apple Sample Code License
+- **Code license:** Apple Sample Code License (`ml-mobileclip` repository)
+
+### Model-weight license note (separate from the code license)
+The pretrained **weights** used by this project come from
+`apple/MobileCLIP2-S2` on the HuggingFace Hub, published under the
+**Apple ML Research (`apple-amlr`) model license** — a research-only
+term distinct from both the Apache-licensed code and the code-level
+Apple Sample Code License above. **Not redistributable** for commercial
+use; the user downloads these weights themselves (`make
+export-mobileclip`) and is bound by `apple-amlr` directly. Verify
+current terms on the HuggingFace model card before any commercial
+deployment.
 
 ### Usage in This Project
 - Image encoder exported to TensorRT for GPU-accelerated embedding generation
@@ -206,13 +217,57 @@ The optional segmenter container (`docker/segmenter/`) wraps Meta's SAM 3 to ser
 
 ### Repository Information
 - **Repository:** https://github.com/facebookresearch/sam3
-- **License:** Apache License 2.0
+- **Code license:** Apache License 2.0 (the `sam3` Python library)
+- **Weight license:** **SAM License** (Meta's custom license for the
+  pretrained checkpoints) — **not Apache-2.0**. The SAM License permits
+  commercial use and redistribution provided the license text travels
+  with the weights. Gated on HuggingFace (`facebook/sam3`); requires an
+  accepted gate + `HF_TOKEN` to download.
 - **Model weights:** pulled from HuggingFace at first run (gated; requires `HF_TOKEN`)
 
 ### Usage in This Project
 - `docker/segmenter/Dockerfile` pip-installs SAM 3 from a pinned upstream commit; no SAM 3 source is vendored into this repository
 - `docker/segmenter/sam3_backend.py` imports `sam3.model_builder.build_sam3_image_model` and `sam3.model.sam3_image_processor.Sam3Processor`
 - Service-local attribution detail: [`docker/segmenter/NOTICE`](docker/segmenter/NOTICE)
+
+---
+
+## Datasets used for public sample fetching
+
+### COCO 2017
+
+- **Source:** https://cocodataset.org
+- **Citation:** Lin, T.-Y. et al. (2014). "Microsoft COCO: Common
+  Objects in Context." ECCV.
+- **Annotations license:** CC BY 4.0 (COCO Consortium).
+- **Image license:** Images are not owned by the COCO Consortium; each
+  image is a separate Flickr upload with its own `license` id resolved
+  from the annotation JSON's `licenses[]` array. `scripts/datasets/fetch_coco_subset.py`
+  keeps only Attribution, Attribution-ShareAlike, "No known copyright
+  restrictions", and "United States Government Work" images, and writes
+  per-image author/license/URL to `data/samples/coco_va/ATTRIBUTION.csv`.
+- **Used for:** the main 10-class vehicle+animal sample set (`make sample-coco`) and the README quick-start subset (`make sample-coco-readme`).
+
+### Open Images V7
+
+- **Source:** https://storage.googleapis.com/openimages/web/factsfigures_v7.html
+- **Citation:** Kuznetsova, A. et al. (2020). "The Open Images Dataset
+  V4: Unified image classification, object detection, and visual
+  relationship detection at scale." IJCV.
+- **Annotations license:** CC BY 4.0 (Google LLC).
+- **Image license:** Images are listed as CC BY 2.0 per Google's
+  factsfigures page, with the caveat to verify each image's metadata.
+  `scripts/datasets/fetch_openimages_plates.py` keeps only images whose
+  per-image `License` column is a CC BY 2.0 URL, and writes
+  `data/samples/oi_plates/ATTRIBUTION.csv` (ImageID, OriginalURL,
+  Author, License).
+- **Used for:** the "Vehicle registration plate" region sample set (`make sample-plates`).
+
+### Ultralytics test images (`bus.jpg`, `zidane.jpg`)
+
+- **Source:** https://github.com/ultralytics/assets (fetched by `make download-test-images`)
+- **License:** AGPL-3.0, same as the Ultralytics repository that publishes them as standard smoke-test assets.
+- **Credit:** Ultralytics.
 
 ---
 
@@ -308,14 +363,34 @@ propagates to the combined work.
 | Ultralytics YOLO | AGPL-3.0 | ✓ Yes (inherited) |
 | NVIDIA Triton | BSD 3-Clause | ✓ Yes |
 | NVIDIA TensorRT | NVIDIA DSLA | ✓ Yes |
-| Apple MobileCLIP | Apple Sample Code | ✓ Yes (this file) |
+| Apple MobileCLIP (code) | Apple Sample Code | ✓ Yes (this file) |
+| Apple MobileCLIP2-S2 (weights) | `apple-amlr` (research-only, **not redistributable**) | ✓ Yes (this file) — see the model-weight license note above |
 | InsightFace (SCRFD, ArcFace) code | MIT | ✓ Yes (this file) |
 | InsightFace `buffalo_l` pretrained weights | Non-commercial research use only (verify upstream) | ✓ Yes (this file) — see the model-weight license note above |
 | PaddlePaddle PaddleOCR (PP-OCRv5) | Apache 2.0 | ✓ Yes (this file) |
 | Meta Perception Encoder (PE-Core) | Apache 2.0 | ✓ Yes (this file) |
 | OpenSearch | Apache 2.0 | ✓ Yes |
 | OpenCLIP | MIT | ✓ Yes |
-| Meta SAM 3 (optional segmenter image) | Apache 2.0 | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
+| Meta SAM 3 (code) | Apache 2.0 | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
+| Meta SAM 3 (weights) | SAM License (custom; commercial use + redistribution OK with license attached), gated on HuggingFace | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
+| COCO 2017 (annotations) | CC BY 4.0 (COCO Consortium) | ✓ Yes (this file) |
+| COCO 2017 (images) | Per-image Flickr license, filtered to BY/BY-SA/no-known/US-Gov | ✓ Yes (`ATTRIBUTION.csv` written alongside the fetched sample) |
+| Open Images V7 (annotations) | CC BY 4.0 (Google LLC) | ✓ Yes (this file) |
+| Open Images V7 (images) | Listed CC BY 2.0, verified per image | ✓ Yes (`ATTRIBUTION.csv` written alongside the fetched sample) |
+| Ultralytics test images (`bus.jpg`, `zidane.jpg`) | AGPL-3.0 | ✓ Yes (this file) |
+
+### Per-model weight-license summary (redistributable vs. user-fetched)
+
+| Model (Triton name) | Weights source | Weight license | Redistributable? |
+|---|---|---|---|
+| YOLO11s end2end (`yolov11_small_trt_end2end`) | Ultralytics release assets | AGPL-3.0 | Yes, under AGPL |
+| YOLO26 (`yolo26_small_trt` / trainer base `yolo26s.pt`, `yolo26n.pt`) | Ultralytics | AGPL-3.0 | Yes, under AGPL |
+| SCRFD-10G (`scrfd_10g_bnkps`), ArcFace w600k_r50 (`arcface_w600k_r50`) | InsightFace model zoo (`buffalo_l`) | Non-commercial research only | No — user downloads them |
+| MobileCLIP2-S2 image/text | `apple/MobileCLIP2-S2` (HF) | `apple-amlr` | No — user downloads them |
+| PE-Core-L14-336 (`pe_image_encoder`, text ONNX) | `facebook/PE-Core-L14-336` (HF, not gated) | Apache-2.0 | Yes |
+| PP-OCRv5 det/rec (`paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline`) | PaddleOCR (via third-party ONNX repackaging) | Apache-2.0 | Yes |
+| SAM 3 (segmenter) | `facebook/sam3` (HF, gated, needs `HF_TOKEN`) | SAM License | Yes, with the SAM License attached, but gated |
+| VLM (labeling assist, BYO -- see `OP_VLM_URL`/`OP_VLM_MODEL`) | Whatever OpenAI-compatible model you configure | Depends on your chosen model/quant | Verify the model card you deploy |
 
 **Note:** The use of AGPL-3.0 licensed code (ultralytics fork) may impose obligations on derivative works. Consult the AGPL-3.0 license for details: https://www.gnu.org/licenses/agpl-3.0.en.html
 

@@ -330,7 +330,9 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=64):
         print('    docker compose exec triton-server trtexec \\')
         print(f'      --onnx={onnx_path} \\')
         print(f'      --saveEngine={plan_path} \\')
-        print('      --fp16 \\')
+        # TRT 11.1 is strongly typed: trtexec has no --fp16 flag anymore.
+        # The text encoder stays FP32 by design (see module docstring), so
+        # this fallback command needs no precision flag at all.
         print(f'      --minShapes=text_tokens:1x{CONTEXT_LENGTH} \\')
         print(f'      --optShapes=text_tokens:8x{CONTEXT_LENGTH} \\')
         print(f'      --maxShapes=text_tokens:{max_batch_size}x{CONTEXT_LENGTH}')

@@ -195,7 +195,9 @@ def convert_to_tensorrt(
         print('    docker compose exec triton-server trtexec \\')
         print(f'      --onnx={onnx_path} \\')
         print(f'      --saveEngine={plan_path} \\')
-        print('      --fp16 \\')
+        # TRT 11.1 is strongly typed: trtexec has no --fp16 flag anymore.
+        # Re-run this script's own --fp16 flag to bake precision into the
+        # ONNX before falling back to a bare trtexec build.
         print(f'      --minShapes={INPUT_NAME}:1x3x{MIN_RESOLUTION}x{MIN_RESOLUTION} \\')
         print(f'      --optShapes={INPUT_NAME}:1x3x{OPTIMAL_RESOLUTION}x{OPTIMAL_RESOLUTION} \\')
         print(

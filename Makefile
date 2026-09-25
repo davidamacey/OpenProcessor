@@ -1090,11 +1090,32 @@ curation-status: ## Show running curation worker containers
 		curation-detection-worker curation-vlm-worker \
 		curation-auto-label-worker curation-cluster-refresh curation-evaluator
 
+.PHONY: sample-coco
+sample-coco: ## Fetch the public COCO sample set (800 images, 10 classes + upload/post_promote side sets)
+	$(PYTHON) scripts/datasets/fetch_coco_subset.py --out data/samples/coco_va \
+		--per-class 80 --side-sets upload=12,post_promote=24 \
+		--manifest scripts/datasets/manifests/coco_va_800.json
+
+.PHONY: sample-coco-readme
+sample-coco-readme: ## Fetch the small public COCO sample set for the README quick start (200 images)
+	$(PYTHON) scripts/datasets/fetch_coco_subset.py --out data/samples/coco_va_readme \
+		--n 200 --manifest scripts/datasets/manifests/coco_va_200.json
+
+.PHONY: sample-plates
+sample-plates: ## Fetch the public Open Images V7 "Vehicle registration plate" sample set (300 images)
+	$(PYTHON) scripts/datasets/fetch_openimages_plates.py --out data/samples/oi_plates \
+		--n 300 --manifest scripts/datasets/manifests/oi_plates_300.json
+
+.PHONY: sample-clean
+sample-clean: ## Remove fetched public sample datasets (data/samples/, gitignored)
+	rm -rf data/samples
+
 .PHONY: curation-seed
-curation-seed: ## Seed a demo curation dataset (not yet implemented)
-	@echo "curation-seed: not yet implemented."
-	@echo "scripts/curation/seed_live_harness.py does not exist on this branch yet"
-	@echo "(live write-path verification harness). Nothing was run."
+curation-seed: sample-coco ## Seed a demo curation dataset from the public COCO sample (alias for sample-coco)
+	@echo "curation-seed: fetched the public COCO sample into data/samples/coco_va."
+	@echo "Next: create classes (see docs/CURATION.md 'Create classes from zero'),"
+	@echo "set OP_INGEST_PRIMARY_DETECTOR_MODEL, then ingest with scripts/curation/ingest_walker.py"
+	@echo "--root data/samples/coco_va/images (or the container-mounted equivalent path)."
 
 # ==================================================================================
 # Phony targets (targets that don't create files)
@@ -1123,4 +1144,5 @@ curation-seed: ## Seed a demo curation dataset (not yet implemented)
         opensearch-reset opensearch-status opensearch-indices opensearch-reset-indexes \
         info docs \
         clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref \
-        curation-up curation-down curation-logs curation-status curation-seed
+        curation-up curation-down curation-logs curation-status curation-seed \
+        sample-coco sample-coco-readme sample-plates sample-clean

@@ -227,12 +227,21 @@ def quantize_int8_qdq(fp32_onnx: Path, out: Path, calib_images: list[Path], imgs
 
 
 def export_trt_plan(onnx_path: Path, out: Path, *, int8: bool) -> Path | None:
-    """Optional local-only TensorRT engine via ``trtexec`` (None if unavailable)."""
+    """Optional local-only TensorRT engine via ``trtexec`` (None if unavailable).
+
+    TensorRT 11.1 is strongly typed: ``trtexec --fp16`` (and the
+    ``BuilderFlag.FP16``/``platform_has_fast_fp16`` Python-API equivalents
+    used elsewhere in ``export/trt_utils.py``) no longer exist. Precision
+    is decided entirely by ``onnx_path``'s own tensor dtypes, so the
+    caller is responsible for passing an already fp16-baked ONNX (e.g.
+    ``fp16.onnx`` from Ultralytics' ``half=True`` export) when it wants a
+    reduced-precision engine; this function never adds a precision flag.
+    """
     trtexec = shutil.which('trtexec') or '/usr/src/tensorrt/bin/trtexec'
     if not Path(trtexec).exists():
         logger.warning('trtexec not found; skipping .plan')
         return None
-    cmd = [trtexec, f'--onnx={onnx_path}', f'--saveEngine={out}', '--fp16']
+    cmd = [trtexec, f'--onnx={onnx_path}', f'--saveEngine={out}']
     if int8:
         cmd.append('--int8')  # reads the QDQ scales embedded in int8_qdq.onnx
     logger.warning('building device-locked .plan (local Triton only): %s', ' '.join(cmd))
@@ -312,8 +321,17 @@ def run(
         )
 
     if 'plan' in formats:
+        # TRT 11.1 builds follow the source ONNX's own dtypes (no trtexec
+        # --fp16 flag anymore), so prefer the fp16-baked ONNX when one was
+        # produced -- otherwise the plan silently stays FP32/TF32.
         int8_src = out_dir / 'int8_qdq.onnx'
-        src = int8_src if int8_src.is_file() else fp32_path
+        fp16_src = out_dir / 'fp16.onnx'
+        if int8_src.is_file():
+            src = int8_src
+        elif fp16_src.is_file():
+            src = fp16_src
+        else:
+            src = fp32_path
         plan = export_trt_plan(src, out_dir / 'model.plan', int8=src == int8_src)
         if plan is not None:
             entries.append(_artifact_entry('plan', plan, distributable=False))

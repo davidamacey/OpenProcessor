@@ -11,7 +11,7 @@ the pipeline by hand.
 
 Defaults match the design discussion in Task #92:
 
-* poll interval: 5 minutes
+* poll interval: 120 seconds (2 minutes)
 * growth threshold: 1000 new crops
 * incremental auto-label: off (turn on with ``--auto-label``)
 
