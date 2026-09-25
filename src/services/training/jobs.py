@@ -45,6 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from src.config import get_curation_config, get_gpu_arbiter_config
 from src.core.logging import get_logger
+from src.services.training import lineage
 from src.services.training.augmentation_presets import DEFAULT_AUGMENTATION_PRESET
 
 
@@ -243,17 +244,30 @@ class TrainJobSpec(BaseModel):
     mlflow_run_name: str | None = None
 
     # Lineage -----------------------------------------------------------------
-    # Both are normally auto-filled by ``write_job`` at submit time and
-    # should not be set by API callers directly:
-    #   - frozen_test_sha: copied from the export's manifest.json
-    #     (``frozen_test_sha``) so the trainer's run manifest records which
-    #     frozen test split this run was evaluated against, instead of
-    #     always recording None.
+    # All of these are normally auto-filled by ``write_job`` at submit time
+    # and should not be set by API callers directly:
+    #   - dataset_sha / frozen_test_sha / test_label_sha / dataset_version_tag:
+    #     copied from the export's manifest.json (``src.services.training.
+    #     lineage.read_export_identity``), so the trainer's run manifest
+    #     records exactly which export, and which frozen test split, this
+    #     run trained/evaluated against instead of always recording None.
+    #     ``dataset_sha`` is the export's own claim and is never computed;
+    #     the two test-split hashes are computed from disk when an older
+    #     export's manifest lacks them.
+    #   - api_sha / trainer_image_id / trainer_image_revision: this API
+    #     process's own build identity plus the trainer container's image
+    #     id and baked-in revision label (``lineage.stamp_code_versions``).
     #   - registry_sha / registry_snapshot_path: a sha256 + on-disk copy of
     #     the class registry *at submit time*, so a class rename between
     #     export and promote can't silently relabel the served model
     #     (promote prefers this pinned snapshot over the live registry).
+    dataset_sha: str | None = None
     frozen_test_sha: str | None = None
+    test_label_sha: str | None = None
+    dataset_version_tag: str | None = None
+    api_sha: str | None = None
+    trainer_image_id: str | None = None
+    trainer_image_revision: str | None = None
     registry_sha: str | None = None
     registry_snapshot_path: str | None = None
 
@@ -303,8 +317,16 @@ class TrainJobStatus(BaseModel):
     current_epoch: int | None = None
     total_epochs: int | None = None
     epoch_time_s: float | None = None
-    best_metric: dict[str, float] | None = None
-    last_metric: dict[str, float] | None = None
+    # The true last TRAINING epoch's metrics (``{'epoch': N, 'map50': ...,
+    # 'map50_95': ...}``) -- distinct from best_checkpoint_metric because
+    # Ultralytics re-validates best.pt once more after training and that
+    # call does not advance the epoch counter (see docker/trainer/
+    # trainer.py's on_fit_epoch_end for how the two are told apart).
+    last_epoch_metric: dict[str, Any] | None = None
+    # The best checkpoint's (best.pt) own re-validation metrics, as one
+    # coherent row -- not a per-key running max across every epoch, which
+    # could mix map50 from one epoch with map50_95 from another.
+    best_checkpoint_metric: dict[str, Any] | None = None
     mlflow_run_id: str | None = None
     # Served value is rewritten before it reaches the wire -- see
     # ``_public_mlflow_url``/``_prepare_status_for_wire`` below. The trainer
@@ -327,29 +349,33 @@ class TrainJobStatus(BaseModel):
     heartbeat_at: str | None = None
 
     @model_validator(mode='after')
-    def _backfill_best_metric_from_eval(self) -> TrainJobStatus:
-        """Back-fill ``best_metric`` from the final ``eval`` block.
+    def _backfill_best_checkpoint_metric_from_eval(self) -> TrainJobStatus:
+        """Back-fill ``best_checkpoint_metric`` from the final ``eval`` block.
 
-        Recent trainer builds write the run's mAP into ``eval`` (map50 /
-        map50_95) but no longer populate ``best_metric``/``last_metric``,
-        so the runs list and any bake-off model picker showed a blank mAP.
-        When ``best_metric`` is absent we derive it from ``eval`` so every
-        consumer shows it. Note this is a best-effort fallback for an
-        anomalous status write (a normal run always populates
-        ``best_metric`` per-epoch during training) -- ``eval``'s numbers
-        may be the test split (``eval.split == 'test'``) rather than the
-        training-time validation split ``best_metric`` traditionally
-        means; check ``eval.split``/``eval.val_last`` if that distinction
-        matters for a given consumer.
+        Some trainer builds write the run's mAP into ``eval`` (map50 /
+        map50_95) but leave ``best_checkpoint_metric`` unset (e.g. a run
+        whose status.json predates this field), so the runs list and any
+        bake-off model picker would show a blank mAP. When
+        ``best_checkpoint_metric`` is absent we derive it from ``eval`` so
+        every consumer shows it.
+
+        This is a best-effort fallback for an anomalous status write -- a
+        normal run always populates ``best_checkpoint_metric`` per-epoch
+        during training (``docker/trainer/trainer.py``'s
+        ``on_fit_epoch_end``). ``eval``'s numbers may be the test split
+        (``eval.split == 'test'``) rather than the training-time
+        validation split ``best_checkpoint_metric`` otherwise means; check
+        ``eval.split``/``eval.val_last`` if that distinction matters for a
+        given consumer.
         """
-        if not self.best_metric and isinstance(self.eval, dict):
+        if not self.best_checkpoint_metric and isinstance(self.eval, dict):
             derived = {
                 k: float(self.eval[k])
                 for k in ('map50', 'map50_95')
                 if isinstance(self.eval.get(k), (int, float))
             }
             if derived:
-                self.best_metric = derived
+                self.best_checkpoint_metric = derived
         return self
 
 
@@ -685,23 +711,6 @@ async def _read_json(path: Path) -> dict[str, Any] | None:
     return await asyncio.to_thread(_do)
 
 
-def _read_frozen_test_sha(dataset_export_dir: str) -> str | None:
-    """Best-effort read of ``frozen_test_sha`` from the export's manifest.json.
-
-    The trainer's run manifest reads ``spec.raw['frozen_test_sha']`` -- if
-    nothing populates it, every run records ``dataset_sha: None``. A
-    dataset-export service that writes ``manifest.json`` should include
-    this field; this is a best-effort read mirroring the preflight's own
-    export-manifest reader.
-    """
-    try:
-        manifest = json.loads((Path(dataset_export_dir) / 'manifest.json').read_text())
-    except Exception:
-        return None
-    sha = manifest.get('frozen_test_sha')
-    return str(sha) if sha else None
-
-
 def _pin_registry_snapshot_sync(job_id: str) -> tuple[str | None, str | None]:
     """Snapshot the live class registry to a job-scoped file; return (sha, path).
 
@@ -753,10 +762,14 @@ async def write_job(job: TrainJobSpec) -> str:
     """Materialize ``<job_id>.job.json`` and return the assigned ``job_id``.
 
     If ``job.job_id`` is unset, we generate one of the form
-    ``<isoslug>_<family><size>``. Also auto-fills two lineage fields the
-    caller normally doesn't set directly: ``frozen_test_sha`` from the
-    export manifest, and ``registry_sha``/``registry_snapshot_path`` by
-    pinning the live class registry at this exact moment.
+    ``<isoslug>_<family><size>``. Also auto-fills the lineage fields the
+    caller normally doesn't set directly: ``dataset_sha`` /
+    ``frozen_test_sha`` / ``test_label_sha`` / ``dataset_version_tag`` from
+    the export manifest (:func:`~src.services.training.lineage.read_export_identity`),
+    ``api_sha`` / ``trainer_image_id`` / ``trainer_image_revision`` from this
+    build's own identity (:func:`~src.services.training.lineage.stamp_code_versions`),
+    and ``registry_sha``/``registry_snapshot_path`` by pinning the live class
+    registry at this exact moment.
     """
     spec = job.model_copy(deep=True)
     if not spec.job_id:
@@ -773,10 +786,24 @@ async def write_job(job: TrainJobSpec) -> str:
 
     # Pin lineage AFTER the duplicate check so a rejected duplicate submit
     # never leaves an orphaned registry-snapshot file behind.
-    if spec.frozen_test_sha is None:
-        spec.frozen_test_sha = await asyncio.to_thread(
-            _read_frozen_test_sha, spec.dataset_export_dir
-        )
+    if spec.dataset_sha is None or spec.frozen_test_sha is None or spec.test_label_sha is None:
+        identity = await asyncio.to_thread(lineage.read_export_identity, spec.dataset_export_dir)
+        if spec.dataset_sha is None:
+            spec.dataset_sha = identity.dataset_sha
+        if spec.frozen_test_sha is None:
+            spec.frozen_test_sha = identity.frozen_test_sha
+        if spec.test_label_sha is None:
+            spec.test_label_sha = identity.test_label_sha
+        if spec.dataset_version_tag is None:
+            spec.dataset_version_tag = identity.version_tag
+    if spec.api_sha is None or spec.trainer_image_id is None:
+        code_versions = await asyncio.to_thread(lineage.stamp_code_versions)
+        if spec.api_sha is None:
+            spec.api_sha = code_versions['api_sha']
+        if spec.trainer_image_id is None:
+            spec.trainer_image_id = code_versions['trainer_image_id']
+        if spec.trainer_image_revision is None:
+            spec.trainer_image_revision = code_versions['trainer_image_revision']
     if spec.registry_sha is None:
         spec.registry_sha, spec.registry_snapshot_path = await asyncio.to_thread(
             _pin_registry_snapshot_sync, spec.job_id

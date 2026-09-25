@@ -91,6 +91,7 @@ from src.services.curation.export_support import (
     atomic_symlink_flip,
     atomic_write_text,
     even_stratified_sample,
+    frozen_test_sha_of,
     hash_split,
     label_content_sha,
     scroll_hits,
@@ -554,6 +555,10 @@ class GenericYoloExportService:
         # names, not just which item ids were selected. See
         # export_support.label_content_sha.
         checksum = label_content_sha(resolved_export_dir, names, truncate=None)
+        frozen_test_sha = await asyncio.to_thread(frozen_test_sha_of, resolved_export_dir)
+        test_label_sha = await asyncio.to_thread(
+            label_content_sha, resolved_export_dir, None, truncate=16, split='test'
+        )
         finished_at = datetime.now(UTC).isoformat()
 
         data_yaml_path = resolved_export_dir / ARTIFACT_FILENAMES['data_yaml']
@@ -602,6 +607,8 @@ class GenericYoloExportService:
             'seed': seed,
             'group_key': DEFAULT_SPLIT_GROUP_KEY,
             'dataset_sha': checksum,
+            'frozen_test_sha': frozen_test_sha,
+            'test_label_sha': test_label_sha,
             'image_count': len(images),
             'object_count': len(item_ids),
             'split_counts': counts.to_dict(),
@@ -664,6 +671,7 @@ __all__ = [
     'atomic_symlink_flip',
     'atomic_write_text',
     'even_stratified_sample',
+    'frozen_test_sha_of',
     'hash_split',
     'label_content_sha',
     'resolve_current_export_dir',

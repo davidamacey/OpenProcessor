@@ -29,8 +29,6 @@ from src.config.region_state import RegionStatus
 from src.services.curation.export_single_class import (
     SingleClassExportProfile,
     SingleClassExportService,
-    frozen_test_sha_of,
-    label_content_sha,
     resolve_current_single_class_dir,
 )
 from src.services.curation.export_single_class_rows import (
@@ -38,6 +36,7 @@ from src.services.curation.export_single_class_rows import (
     reproject_into_crop,
     xyxy_to_yolo,
 )
+from src.services.curation.export_support import frozen_test_sha_of, label_content_sha
 
 
 # ---------------------------------------------------------------------------
@@ -725,8 +724,12 @@ async def test_manifest_shape_matches_reference_single_class_export(tmp_path):
         export_dir, class_names=manifest['class_names']
     )
     assert manifest['frozen_test_sha'] == frozen_test_sha_of(export_dir)
+    assert manifest['test_label_sha'] == label_content_sha(
+        export_dir, None, truncate=16, split='test'
+    )
     assert manifest['dataset_sha']
     assert manifest['frozen_test_sha']
+    assert manifest['test_label_sha']
 
     # ...and the atomically-flipped current symlink the reference export
     # also guaranteed.

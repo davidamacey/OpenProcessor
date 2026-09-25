@@ -198,6 +198,50 @@ def test_invalid_job_gets_a_terminal_failed_status(jobs_dir: Path) -> None:
 
 
 # =============================================================================
+# on_fit_epoch_end metric semantics
+# =============================================================================
+
+
+class _SpecStub:
+    """Just enough of ``JobSpec`` for ``_make_ultralytics_callbacks``:
+    ``on_fit_epoch_end`` itself never reads ``spec`` at all, but the shared
+    closure factory takes one positional argument."""
+
+    cancel_path = Path('/nonexistent/does-not-exist.cancel')
+
+
+class _FakeUltralyticsTrainer:
+    def __init__(self, epoch: int, map50: float, map50_95: float) -> None:
+        self.epoch = epoch  # 0-indexed, as Ultralytics reports it
+        self.metrics = {'metrics/mAP50(B)': map50, 'metrics/mAP50-95(B)': map50_95}
+
+
+def test_on_fit_epoch_end_tells_the_best_checkpoint_revalidation_apart_from_a_real_epoch() -> None:
+    """Ultralytics' final_eval() re-validates best.pt and fires
+    on_fit_epoch_end once more after training, WITHOUT advancing
+    trainer.epoch. Before the fix, this call silently overwrote
+    last_epoch_metric with the best checkpoint's own metrics (not the true
+    last epoch's) -- live evidence: last_metric mAP50-95 0.857 vs
+    results.csv's actual last-epoch row of 0.855. It must instead land in
+    a distinct, single coherent best_checkpoint_metric row."""
+    state = job_protocol.StatusState(job_id='x', state='running')
+    _, _, on_fit_epoch_end = trainer._make_ultralytics_callbacks(_SpecStub(), state, total_epochs=2)
+
+    # Epoch 1 (Ultralytics reports epoch=0).
+    on_fit_epoch_end(_FakeUltralyticsTrainer(epoch=0, map50=0.70, map50_95=0.40))
+    # Epoch 2, the true LAST training epoch (Ultralytics reports epoch=1).
+    on_fit_epoch_end(_FakeUltralyticsTrainer(epoch=1, map50=0.855, map50_95=0.80))
+    # final_eval()'s post-training re-validation of best.pt: same epoch=1,
+    # different (better) metrics because it validates the BEST checkpoint,
+    # not necessarily the last in-training epoch's weights.
+    on_fit_epoch_end(_FakeUltralyticsTrainer(epoch=1, map50=0.86, map50_95=0.857))
+
+    assert state.last_epoch_metric == {'epoch': 2, 'map50': 0.855, 'map50_95': 0.80}
+    assert state.best_checkpoint_metric == {'epoch': 2, 'map50': 0.86, 'map50_95': 0.857}
+    assert state.current_epoch == 2  # not clobbered by the revalidation call
+
+
+# =============================================================================
 # status.json: trainer writer -> API reader
 # =============================================================================
 
@@ -219,8 +263,8 @@ def test_trainer_status_payload_parses_in_the_api_reader(jobs_dir: Path, export_
     assert status.current_epoch == 2
     assert status.total_epochs == 3
     assert status.checkpoint_path == '/runs/x/weights/best.pt'
-    # The API back-fills best_metric from eval when the trainer omits it.
-    assert status.best_metric == {'map50': 0.71, 'map50_95': 0.42}
+    # The API back-fills best_checkpoint_metric from eval when the trainer omits it.
+    assert status.best_checkpoint_metric == {'map50': 0.71, 'map50_95': 0.42}
     assert status.heartbeat_at is not None
 
 
@@ -768,6 +812,126 @@ def stub_ultralytics(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type[_S
     return _StubYOLO
 
 
+def test_finalize_run_forces_the_end2end_head_for_yolo26_test_split_eval(
+    jobs_dir: Path, export_dir: Path, tmp_path: Path
+) -> None:
+    """The trainer's own post-training test-split re-validation must score
+    the served (NMS-free, one-to-one) head -- not whichever head
+    Ultralytics' .val() defaults to for the reloaded checkpoint -- or the
+    comparison metric silently doesn't match what Triton actually serves.
+    ``.val()`` has no ``end2end=`` kwarg; the real toggle is the loaded
+    model's own ``.end2end`` property."""
+    job_id = _write_job(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
+    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    state = job_protocol.StatusState(
+        job_id=spec.job_id, campaign_id=spec.campaign_id, state='running'
+    )
+
+    save_dir = tmp_path / 'run'
+    (save_dir / 'weights').mkdir(parents=True)
+    best_pt = save_dir / 'weights' / 'best.pt'
+    best_pt.write_bytes(b'stub-checkpoint')
+    (save_dir / 'results.csv').write_text('epoch,metrics/mAP50(B),metrics/mAP50-95(B)\n1,0.5,0.3\n')
+    data_yaml_path = export_dir / 'data.yaml'
+
+    class _Head:
+        """A genuine dual-head build: one2one only exists once end2end
+        training actually created it -- same as Ultralytics' real head."""
+
+        def __init__(self) -> None:
+            self.end2end = False
+
+        @property
+        def one2one(self) -> dict[str, Any]:
+            return {'box_head': None, 'cls_head': None}
+
+    class _InnerModel:
+        def __init__(self) -> None:
+            self._head = _Head()
+            self.model = [self._head]  # DetectionModel.model[-1] is the head
+
+        @property
+        def end2end(self) -> bool:
+            return self._head.end2end
+
+        @end2end.setter
+        def end2end(self, value: bool) -> None:
+            self._head.end2end = value
+
+    class _RecordingYOLO:
+        observed_end2end: bool | None = None
+
+        def __init__(self, weights: str) -> None:
+            self.weights = weights
+            self.model = _InnerModel()
+            self.trainer: _StubTrainer | None = None
+
+        def export(self, **_kwargs: Any) -> None:
+            pass  # not under test here
+
+        def val(self, **_kwargs: Any) -> str:
+            _RecordingYOLO.observed_end2end = self.model.end2end
+            return 'val-result-sentinel'
+
+    model = _RecordingYOLO(str(best_pt))
+    model.trainer = _StubTrainer(save_dir)
+
+    trainer._finalize_run(spec, state, model, data_yaml_path)
+
+    assert _RecordingYOLO.observed_end2end is True
+    assert state.eval is not None
+    assert state.eval['head'] == 'end2end'
+
+
+def test_finalize_run_does_not_force_end2end_on_a_non_dual_head_model(
+    jobs_dir: Path, export_dir: Path, tmp_path: Path
+) -> None:
+    """A model with no one2one branch (not end2end-capable) must be left
+    alone -- forcing end2end=True on it would break inference, since it
+    has no one-to-one head to switch to."""
+    job_id = _write_job(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
+    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    state = job_protocol.StatusState(
+        job_id=spec.job_id, campaign_id=spec.campaign_id, state='running'
+    )
+
+    save_dir = tmp_path / 'run'
+    (save_dir / 'weights').mkdir(parents=True)
+    best_pt = save_dir / 'weights' / 'best.pt'
+    best_pt.write_bytes(b'stub-checkpoint')
+    (save_dir / 'results.csv').write_text('epoch,metrics/mAP50(B),metrics/mAP50-95(B)\n1,0.5,0.3\n')
+    data_yaml_path = export_dir / 'data.yaml'
+
+    class _NonEndToEndHead:
+        end2end = False  # no one2one property at all -- a plain single head
+
+    class _InnerModel:
+        def __init__(self) -> None:
+            self.model = [_NonEndToEndHead()]
+            self.end2end = False
+
+    class _RecordingYOLO:
+        def __init__(self, weights: str) -> None:
+            self.weights = weights
+            self.model = _InnerModel()
+            self.trainer: _StubTrainer | None = None
+
+        def export(self, **_kwargs: Any) -> None:
+            pass
+
+        def val(self, **_kwargs: Any) -> str:
+            return 'val-result-sentinel'
+
+    model = _RecordingYOLO(str(best_pt))
+    model.trainer = _StubTrainer(save_dir)
+
+    trainer._finalize_run(spec, state, model, data_yaml_path)
+
+    assert model.model.end2end is False  # left untouched
+    assert state.eval is not None
+    assert 'head' not in state.eval
+
+
 @pytest.mark.integration
 def test_run_job_drives_a_whole_export_run_to_finished(
     jobs_dir: Path, export_dir: Path, stub_ultralytics: type[_StubYOLO], tmp_path: Path
@@ -803,7 +967,11 @@ def test_run_job_drives_a_whole_export_run_to_finished(
 
     manifest = asyncio.run(train_jobs.read_manifest(job_id))
     assert manifest is not None
-    assert manifest['lineage']['dataset_sha'] == 'sha-frozen-test'
+    # The export fixture's manifest.json only sets frozen_test_sha -- no
+    # dataset_sha key, and dataset_sha is never computed (it's the export's
+    # own claim), so it stays None.
+    assert manifest['lineage']['dataset_sha'] is None
+    assert manifest['lineage']['frozen_test_sha'] == 'sha-frozen-test'
     assert manifest['lineage']['class_remap'] is None  # whole-export run
     assert manifest['lineage']['training_seed'] == 7
     assert manifest['lineage']['deterministic'] is True
@@ -820,6 +988,74 @@ def test_run_job_drives_a_whole_export_run_to_finished(
     )
     # tmp scratch is always cleaned.
     assert not spec.tmp_root.exists()
+
+
+@pytest.mark.integration
+def test_normal_run_manifest_has_no_null_lineage(
+    jobs_dir: Path,
+    export_dir: Path,
+    stub_ultralytics: type[_StubYOLO],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A run submitted against a full export manifest, with a build sha and
+    a reachable docker client, must not leave any lineage/code_versions
+    field null -- a null here silently degrades a run's reproducibility
+    envelope with no visible signal. ``trainer_image_id`` is the one field
+    that legitimately stays null when the API has no docker socket; here
+    the socket is faked reachable so it, too, must be non-null."""
+    from src.config import GpuArbiterConfig
+    from src.services.training import lineage
+
+    (export_dir / 'manifest.json').write_text(
+        json.dumps(
+            {
+                'dataset_sha': 'dataset-sha-x',
+                'frozen_test_sha': 'sha-frozen-test',
+                'test_label_sha': 'label-sha-x',
+                'version_tag': 'v9',
+            }
+        )
+    )
+    monkeypatch.setenv('OP_BUILD_SHA', 'apisha-x')
+
+    class _FakeImage:
+        id = 'sha256:trainerimg'
+        labels = {'org.opencontainers.image.revision': 'trainerrev-x'}
+
+    class _FakeContainer:
+        image = _FakeImage()
+
+    class _FakeContainers:
+        def get(self, _name: str) -> _FakeContainer:
+            return _FakeContainer()
+
+    class _FakeDockerClient:
+        containers = _FakeContainers()
+
+    monkeypatch.setattr(
+        lineage,
+        'get_gpu_arbiter_config',
+        lambda: GpuArbiterConfig(trainer_container='curation-trainer'),
+    )
+    monkeypatch.setattr(lineage, '_docker_client', lambda: _FakeDockerClient())
+
+    job_id = _write_job(
+        dataset_export_dir=str(export_dir),
+        model_size='n',
+        profile='probe',
+        hyperparameters={'epochs': 1, 'batch': 2, 'optimizer': 'MuSGD', 'seed': 3},
+    )
+    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+
+    trainer.run_job(spec)
+
+    manifest = asyncio.run(train_jobs.read_manifest(job_id))
+    assert manifest is not None
+    for key in ('dataset_sha', 'frozen_test_sha', 'test_label_sha', 'registry_sha'):
+        assert manifest['lineage'][key] is not None, key
+    for key in ('api_sha', 'trainer_sha', 'trainer_image_id'):
+        assert manifest['code_versions'][key] is not None, key
 
 
 @pytest.mark.integration

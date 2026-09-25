@@ -29,6 +29,12 @@ LABEL org.opencontainers.image.title="OpenProcessor Curation Evaluator" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor"
 
+# Build identity: the commit this evaluator image was built from -- see
+# docker-compose.yml build.args and the same block in the root Dockerfile.
+ARG OP_BUILD_SHA=""
+ENV OP_BUILD_SHA=${OP_BUILD_SHA}
+LABEL org.opencontainers.image.revision=${OP_BUILD_SHA}
+
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \

@@ -153,3 +153,42 @@ def test_no_duplicate_host_ports() -> None:
         else:
             seen[port] = name
     assert not dupes, 'duplicate host ports:\n' + '\n'.join(dupes)
+
+
+# =============================================================================
+# Build identity (plan W1 §8) -- OP_BUILD_SHA baked in at build time so
+# code_versions.api_sha/trainer_sha reflect the actual built commit rather
+# than a dev checkout's live `git rev-parse HEAD` fallback.
+# =============================================================================
+
+_BUILD_SHA_SERVICES = ('yolo-api', 'curation-trainer', 'curation-evaluator')
+
+_BUILD_SHA_DOCKERFILES = (
+    REPO_ROOT / 'Dockerfile',
+    REPO_ROOT / 'docker' / 'trainer' / 'Dockerfile',
+    REPO_ROOT / 'docker' / 'evaluator' / 'Dockerfile',
+)
+
+
+def test_build_sha_passed_as_a_build_arg_on_core_services() -> None:
+    services = _services()
+    missing: list[str] = []
+    for name in _BUILD_SHA_SERVICES:
+        assert name in services, f'expected service {name!r} in docker-compose.yml'
+        args = (services[name].get('build') or {}).get('args') or {}
+        if 'OP_BUILD_SHA' not in args:
+            missing.append(name)
+    assert not missing, f'services missing build.args.OP_BUILD_SHA: {missing}'
+
+
+def test_build_sha_baked_into_the_final_stage_of_every_dockerfile() -> None:
+    for path in _BUILD_SHA_DOCKERFILES:
+        lines = path.read_text(encoding='utf-8').splitlines()
+        from_indices = [i for i, line in enumerate(lines) if line.startswith('FROM ')]
+        assert from_indices, f'{path}: no FROM instruction found'
+        tail = '\n'.join(lines[from_indices[-1] :])
+        assert 'ARG OP_BUILD_SHA' in tail, f'{path}: missing ARG OP_BUILD_SHA after final FROM'
+        assert 'ENV OP_BUILD_SHA=${OP_BUILD_SHA}' in tail, f'{path}: missing ENV OP_BUILD_SHA'
+        assert 'org.opencontainers.image.revision=${OP_BUILD_SHA}' in tail, (
+            f'{path}: missing revision LABEL binding OP_BUILD_SHA'
+        )

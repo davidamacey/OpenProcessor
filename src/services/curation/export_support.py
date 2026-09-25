@@ -334,6 +334,7 @@ def label_content_sha(
     class_names: Sequence[str] | None = None,
     *,
     truncate: int | None = 16,
+    split: str | None = None,
 ) -> str:
     """Checksum over the exported label *content* (not just item identity).
 
@@ -358,8 +359,18 @@ def label_content_sha(
     collision is not a practical concern while staying short enough to
     read in a log line or a manifest diff; pass ``None`` for the full
     64-char sha256 hex digest.
+
+    ``split=None`` (default) hashes every label file under ``labels/``.
+    ``split='test'`` scopes the hash to ``labels/test/`` only, and -- with
+    ``class_names=None`` and the default ``truncate=16`` -- is then
+    byte-for-byte identical to
+    :func:`scripts.curation.bakeoff.freeze.test_sha`. That parity is what
+    lets the trainer-side lock file and this exporter's own
+    ``test_label_sha`` manifest field agree on the same value without
+    either importing the other; it only holds when ``class_names`` is
+    omitted, since ``freeze.test_sha`` never folds class names in.
     """
-    labels_dir = export_dir / 'labels'
+    labels_dir = (export_dir / 'labels' / split) if split else (export_dir / 'labels')
     if not labels_dir.is_dir():
         return ''
     h = hashlib.sha256()
@@ -376,6 +387,29 @@ def label_content_sha(
             h.update(b'\n')
     digest = h.hexdigest()
     return digest[:truncate] if truncate else digest
+
+
+def frozen_test_sha_of(export_dir: Path) -> str:
+    """Checksum over the test split's *identity* — which frames are in it.
+
+    Deliberately filenames only, not content: the guarantee being made is
+    "the held-out evaluation set is the same set of frames as last time",
+    which must keep holding after a label correction inside the test set.
+    Content changes there are caught by ``test_label_sha``
+    (:func:`label_content_sha` with ``split='test'``) instead. Returns
+    ``''`` when there is no test split.
+    """
+    test_labels = export_dir / 'labels' / 'test'
+    if not test_labels.is_dir():
+        return ''
+    names = sorted(p.name for p in test_labels.glob('*.txt'))
+    if not names:
+        return ''
+    h = hashlib.sha256()
+    for name in names:
+        h.update(name.encode('utf-8'))
+        h.update(b'\n')
+    return h.hexdigest()[:16]
 
 
 def _build_export_id_map(classes: list[RegistryClassEntry]) -> dict[int, int]:
@@ -574,6 +608,7 @@ __all__ = [
     'atomic_symlink_flip',
     'atomic_write_text',
     'even_stratified_sample',
+    'frozen_test_sha_of',
     'hash_split',
     'label_content_sha',
     'scroll_hits',
