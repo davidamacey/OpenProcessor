@@ -148,6 +148,15 @@ class CurationConfig:
     # own ``drop_score`` default for its end-to-end system.
     item_text_min_confidence: float = 0.5
 
+    # Browser-reachable MLflow base URL (e.g. ``https://mlflow.example.com``).
+    # The trainer only ever sees ``MLFLOW_TRACKING_URI``, a container
+    # hostname (e.g. ``http://curation-mlflow:5000``) unreachable from a
+    # browser -- ``src/services/training/jobs.py`` rewrites the served
+    # ``mlflow_run_url`` to use this base instead. ``None`` (the default)
+    # means "no public MLflow UI configured" -- the served field is then
+    # ``null`` rather than leaking the internal hostname.
+    mlflow_public_url: str | None = None
+
     @property
     def pause_sentinel_path(self) -> Path:
         """S-4: the ONE path every pause-sentinel writer/reader must agree on.
@@ -188,6 +197,10 @@ class CurationConfig:
         def _optional_path(name: str, default: Path | None) -> Path | None:
             value = os.environ.get(f'{prefix}{name}')
             return Path(value) if value else default
+
+        def _optional_str(name: str, default: str | None) -> str | None:
+            value = os.environ.get(f'{prefix}{name}')
+            return value.strip() if value and value.strip() else default
 
         def _int(name: str, default: int) -> int:
             value = os.environ.get(f'{prefix}{name}')
@@ -239,6 +252,7 @@ class CurationConfig:
             item_text_min_confidence=_float(
                 'ITEM_TEXT_MIN_CONFIDENCE', defaults.item_text_min_confidence
             ),
+            mlflow_public_url=_optional_str('MLFLOW_PUBLIC_URL', defaults.mlflow_public_url),
         )
 
 

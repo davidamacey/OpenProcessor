@@ -210,6 +210,58 @@ The other `AugmentationSpec` fields aren't enumerable here:
 trainer logs and skips unknown ones), and `multiplier` is range-checked
 (`1..20`) by the model.
 
+### Training `eval` block — `GET /train/status*`, `GET /train/manifest/{job_id}`
+
+`status.json`'s (and the manifest's `results.eval`) `eval` block reports the
+result of the trainer's post-training evaluation, and is deliberately
+explicit about which split every number came from:
+
+```json
+{
+  "map50": 0.62,
+  "map50_95": 0.41,
+  "precision": 0.71,
+  "recall": 0.55,
+  "split": "test",
+  "val_last": {"map50": 0.9191, "map50_95": 0.742},
+  "per_class": [{"class_id": 0, "name": "widget", "precision": 0.8,
+                 "recall": 0.7, "f1": 0.75, "ap50": 0.79, "support": 12}],
+  "confusion_matrix_url": "/curation/train/artifacts/<job_id>/confusion_matrix.png"
+}
+```
+
+- `map50` / `map50_95` / `precision` / `recall` / `per_class` are the
+  **frozen test-split** numbers (a fresh `model.val(..., split='test')` pass,
+  Ultralytics' `DetMetrics.box.{map50,map,mp,mr}` + per-class rows) whenever
+  that pass ran and produced usable metrics. `split: "test"` marks this case.
+- When the test pass fails or the export has no `test` split, the same four
+  overall keys instead carry the **training-time validation** numbers (the
+  last row of `results.csv` — Ultralytics' per-epoch model-selection metric,
+  recorded every epoch against the `val` split) and `per_class` is absent.
+  `split: "val"` marks this case — a consumer MUST check `split` before
+  treating `map50`/`map50_95` as "how the model does on unseen data."
+- `val_last` (`{map50, map50_95}`) is **always** present when `results.csv`
+  had a row, regardless of `split` — the training-time validation numbers,
+  unambiguously named, for a consumer that specifically wants the training
+  curve rather than the headline metric.
+- `confusion_matrix_url` points at `GET
+  {api_prefix}/train/artifacts/{job_id}/{name}` (whitelisted filenames only:
+  `confusion_matrix.png`, `confusion_matrix_normalized.png`, `results.png`,
+  `results.csv`, `BoxP_curve.png`, `BoxR_curve.png`, `BoxF1_curve.png`,
+  `BoxPR_curve.png`) or `null` when the trainer never wrote one. The
+  underlying server filesystem path is never on the wire.
+- The promote gate (`POST /train/promote/{job_id}`, §15.2) reads this same
+  block — a run whose test pass failed (`split: "val"`, no `per_class`)
+  fails the gate's per-class check outright rather than silently passing on
+  val-split numbers relabeled as test.
+
+`mlflow_run_url` on the same payloads is rebuilt from `CurationConfig.
+mlflow_public_url` (`OP_MLFLOW_PUBLIC_URL`) + `mlflow_run_id` +
+`mlflow_experiment_id`; `null` when the public base isn't configured or
+either id is missing (older run) — the trainer's internal tracking-server
+hostname (`MLFLOW_TRACKING_URI`, a container name unreachable from a
+browser) never reaches the wire. `mlflow_run_id` is served either way.
+
 ### VLM-label one cluster — `POST /vlm/label_cluster/{cluster_id}`
 
 Queues the auto-label job (same job, same `GET /pipeline/auto_label/status`

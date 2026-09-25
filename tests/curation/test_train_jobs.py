@@ -569,3 +569,317 @@ async def test_tail_run_log_returns_last_n(jobs_dir: Path) -> None:
 async def test_tail_run_log_missing_file_returns_empty(jobs_dir: Path) -> None:
     out = await train_jobs.tail_run_log('absent', lines=5)
     assert out == []
+
+
+# =============================================================================
+# mlflow_run_url: rebuilt from a public base at serving time, never the
+# trainer's internal container hostname
+# =============================================================================
+
+
+class _FakeCurationConfig:
+    def __init__(self, mlflow_public_url: str | None = None, api_prefix: str = '/curation') -> None:
+        self.mlflow_public_url = mlflow_public_url
+        self.api_prefix = api_prefix
+
+
+def test_public_mlflow_url_builds_from_configured_base(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        train_jobs,
+        'get_curation_config',
+        lambda: _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'),
+    )
+    url = train_jobs._public_mlflow_url(run_id='abc123', experiment_id='7')
+    assert url == 'https://mlflow.example.com/#/experiments/7/runs/abc123'
+
+
+def test_public_mlflow_url_none_when_base_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        train_jobs, 'get_curation_config', lambda: _FakeCurationConfig(mlflow_public_url=None)
+    )
+    assert train_jobs._public_mlflow_url(run_id='abc123', experiment_id='7') is None
+
+
+def test_public_mlflow_url_none_when_run_or_experiment_id_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        train_jobs,
+        'get_curation_config',
+        lambda: _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'),
+    )
+    assert train_jobs._public_mlflow_url(run_id=None, experiment_id='7') is None
+    assert train_jobs._public_mlflow_url(run_id='abc123', experiment_id=None) is None
+
+
+def test_public_mlflow_url_never_leaks_the_internal_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The internal tracking URI (a container hostname) must never be the
+    fallback -- unset public base means null, full stop."""
+    monkeypatch.setattr(
+        train_jobs, 'get_curation_config', lambda: _FakeCurationConfig(mlflow_public_url=None)
+    )
+    url = train_jobs._public_mlflow_url(run_id='abc123', experiment_id='7')
+    assert url is None
+    assert url != 'http://curation-mlflow:5000/#/experiments/7/runs/abc123'
+
+
+@pytest.mark.asyncio
+async def test_read_status_rewrites_mlflow_url_and_confusion_matrix(
+    jobs_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        train_jobs,
+        'get_curation_config',
+        lambda: _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'),
+    )
+    (jobs_dir / 'realmlf.status.json').write_text(
+        json.dumps(
+            {
+                'job_id': 'realmlf',
+                'state': 'finished',
+                'mlflow_run_id': 'run-42',
+                'mlflow_experiment_id': '3',
+                'mlflow_run_url': 'http://curation-mlflow:5000/#/experiments/3/runs/run-42',
+                'eval': {
+                    'map50': 0.62,
+                    'split': 'test',
+                    'confusion_matrix_path': '/var/lib/openprocessor/training_runs/realmlf/'
+                    'confusion_matrix.png',
+                },
+            }
+        )
+    )
+
+    status = await train_jobs.read_status('realmlf')
+
+    assert status is not None
+    assert status.mlflow_run_url == 'https://mlflow.example.com/#/experiments/3/runs/run-42'
+    assert status.eval is not None
+    assert 'confusion_matrix_path' not in status.eval  # the fs path never reaches the wire
+    assert (
+        status.eval['confusion_matrix_url']
+        == '/curation/train/artifacts/realmlf/confusion_matrix.png'
+    )
+    assert status.eval['map50'] == 0.62  # untouched
+
+
+@pytest.mark.asyncio
+async def test_read_status_serves_null_mlflow_url_when_public_base_unset(
+    jobs_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        train_jobs, 'get_curation_config', lambda: _FakeCurationConfig(mlflow_public_url=None)
+    )
+    (jobs_dir / 'nourl.status.json').write_text(
+        json.dumps(
+            {
+                'job_id': 'nourl',
+                'state': 'finished',
+                'mlflow_run_id': 'run-1',
+                'mlflow_experiment_id': '1',
+                'mlflow_run_url': 'http://curation-mlflow:5000/#/experiments/1/runs/run-1',
+            }
+        )
+    )
+
+    status = await train_jobs.read_status('nourl')
+
+    assert status is not None
+    assert status.mlflow_run_url is None
+    assert status.mlflow_run_id == 'run-1'  # kept even though the URL is null
+
+
+@pytest.mark.asyncio
+async def test_read_status_confusion_matrix_url_null_when_absent(
+    jobs_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        train_jobs, 'get_curation_config', lambda: _FakeCurationConfig(mlflow_public_url=None)
+    )
+    (jobs_dir / 'noeval.status.json').write_text(
+        json.dumps(
+            {'job_id': 'noeval', 'state': 'finished', 'eval': {'map50': 0.5, 'split': 'val'}}
+        )
+    )
+
+    status = await train_jobs.read_status('noeval')
+
+    assert status is not None
+    assert status.eval is not None
+    assert status.eval['confusion_matrix_url'] is None
+
+
+@pytest.mark.asyncio
+async def test_read_manifest_rewrites_eval_and_mlflow_url(
+    jobs_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        train_jobs,
+        'get_curation_config',
+        lambda: _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'),
+    )
+    (jobs_dir / 'manifjob.manifest.json').write_text(
+        json.dumps(
+            {
+                'job_id': 'manifjob',
+                'results': {
+                    'final_state': 'finished',
+                    'mlflow_run_id': 'run-9',
+                    'mlflow_experiment_id': '2',
+                    'mlflow_run_url': 'http://curation-mlflow:5000/#/experiments/2/runs/run-9',
+                    'eval': {
+                        'map50': 0.7,
+                        'split': 'test',
+                        'confusion_matrix_path': '/var/lib/openprocessor/training_runs/'
+                        'manifjob/confusion_matrix.png',
+                    },
+                },
+            }
+        )
+    )
+
+    manifest = await train_jobs.read_manifest('manifjob')
+
+    assert manifest is not None
+    results = manifest['results']
+    assert results['mlflow_run_url'] == 'https://mlflow.example.com/#/experiments/2/runs/run-9'
+    assert 'confusion_matrix_path' not in results['eval']
+    assert (
+        results['eval']['confusion_matrix_url']
+        == '/curation/train/artifacts/manifjob/confusion_matrix.png'
+    )
+
+
+# =============================================================================
+# Run-artifact resolution (GET {api_prefix}/train/artifacts/{job_id}/{name})
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_resolve_run_dir_from_checkpoint_path(jobs_dir: Path) -> None:
+    run_dir = jobs_dir / 'a_run'
+    (run_dir / 'weights').mkdir(parents=True)
+    (jobs_dir / 'ck.status.json').write_text(
+        json.dumps(
+            {
+                'job_id': 'ck',
+                'state': 'finished',
+                'checkpoint_path': str(run_dir / 'weights' / 'best.pt'),
+            }
+        )
+    )
+    resolved = await train_jobs.resolve_run_dir('ck')
+    assert resolved == run_dir.resolve()
+
+
+@pytest.mark.asyncio
+async def test_resolve_run_dir_falls_back_to_confusion_matrix_path(jobs_dir: Path) -> None:
+    run_dir = jobs_dir / 'b_run'
+    run_dir.mkdir()
+    (jobs_dir / 'cm.status.json').write_text(
+        json.dumps(
+            {
+                'job_id': 'cm',
+                'state': 'failed',
+                'eval': {'confusion_matrix_path': str(run_dir / 'confusion_matrix.png')},
+            }
+        )
+    )
+    resolved = await train_jobs.resolve_run_dir('cm')
+    assert resolved == run_dir.resolve()
+
+
+@pytest.mark.asyncio
+async def test_resolve_run_dir_none_when_no_hints(jobs_dir: Path) -> None:
+    (jobs_dir / 'bare.status.json').write_text(json.dumps({'job_id': 'bare', 'state': 'running'}))
+    assert await train_jobs.resolve_run_dir('bare') is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_run_dir_none_when_no_status(jobs_dir: Path) -> None:
+    assert await train_jobs.resolve_run_dir('never_ran') is None
+
+
+@pytest.mark.asyncio
+async def test_read_artifact_serves_a_whitelisted_file(jobs_dir: Path) -> None:
+    run_dir = jobs_dir / 'good_run'
+    run_dir.mkdir()
+    (run_dir / 'confusion_matrix.png').write_bytes(b'fake-png')
+    (jobs_dir / 'good.status.json').write_text(
+        json.dumps(
+            {
+                'job_id': 'good',
+                'state': 'finished',
+                'eval': {'confusion_matrix_path': str(run_dir / 'confusion_matrix.png')},
+            }
+        )
+    )
+    path = await train_jobs.read_artifact('good', 'confusion_matrix.png')
+    assert path == (run_dir / 'confusion_matrix.png').resolve()
+
+
+@pytest.mark.asyncio
+async def test_read_artifact_rejects_a_non_whitelisted_name(jobs_dir: Path) -> None:
+    run_dir = jobs_dir / 'good_run2'
+    run_dir.mkdir()
+    (run_dir / 'best.pt').write_bytes(b'weights')
+    (jobs_dir / 'good2.status.json').write_text(
+        json.dumps(
+            {'job_id': 'good2', 'state': 'finished', 'checkpoint_path': str(run_dir / 'best.pt')}
+        )
+    )
+    assert await train_jobs.read_artifact('good2', 'best.pt') is None
+
+
+@pytest.mark.asyncio
+async def test_read_artifact_none_for_unknown_job(jobs_dir: Path) -> None:
+    assert await train_jobs.read_artifact('does_not_exist', 'confusion_matrix.png') is None
+
+
+@pytest.mark.asyncio
+async def test_read_artifact_none_when_file_never_written(jobs_dir: Path) -> None:
+    run_dir = jobs_dir / 'no_file_run'
+    run_dir.mkdir()
+    (jobs_dir / 'nofile.status.json').write_text(
+        json.dumps(
+            {
+                'job_id': 'nofile',
+                'state': 'running',
+                'eval': {'confusion_matrix_path': str(run_dir / 'confusion_matrix.png')},
+            }
+        )
+    )
+    assert await train_jobs.read_artifact('nofile', 'confusion_matrix.png') is None
+
+
+@pytest.mark.asyncio
+async def test_read_artifact_rejects_traversal_attempt(jobs_dir: Path) -> None:
+    run_dir = jobs_dir / 'traversal_run'
+    run_dir.mkdir()
+    secret = jobs_dir / 'confusion_matrix.png'  # sibling of run_dir, outside it
+    secret.write_bytes(b'not-this-one')
+    (jobs_dir / 'trav.status.json').write_text(
+        json.dumps(
+            {
+                'job_id': 'trav',
+                'state': 'finished',
+                'eval': {'confusion_matrix_path': str(run_dir / 'confusion_matrix.png')},
+            }
+        )
+    )
+    # Not in the whitelist (a slash isn't a valid character in any
+    # whitelisted basename), so this must resolve to None rather than
+    # escaping run_dir to serve the sibling file.
+    assert await train_jobs.read_artifact('trav', '../confusion_matrix.png') is None
+
+
+@pytest.mark.asyncio
+async def test_read_artifact_rejects_invalid_job_id() -> None:
+    with pytest.raises(ValueError, match='invalid job_id'):
+        await train_jobs.read_artifact('../escaping', 'confusion_matrix.png')
+
+
+def test_artifact_media_type_png_and_csv() -> None:
+    assert train_jobs.artifact_media_type('confusion_matrix.png') == 'image/png'
+    assert train_jobs.artifact_media_type('results.csv') == 'text/csv'
+    assert train_jobs.artifact_media_type('unknown.bin') == 'application/octet-stream'
