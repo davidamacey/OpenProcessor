@@ -30,6 +30,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { registeredSlots } from '../../lib/annotations/registeredSlots';
+import { reservedHotkeyLetters } from '../../lib/classHotkey';
+import { REVIEW_TABS, tabFromUrlId } from '../../lib/reviewTabs';
+import { classesStore } from '../../lib/stores/classes.svelte';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const reviewPageSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
@@ -70,8 +73,6 @@ describe('T4: slot-tab keymap + reserved-letters invariant (Finding C.2)', () =>
       'keymap combos even with no served reserved_hotkeys (W4, 2026-09-24) — the ' +
       'registry union is what closes Finding C.2, independent of the server response',
     async () => {
-      const { reservedHotkeyLetters } = await import('../../lib/classHotkey');
-      const { classesStore } = await import('../../lib/stores/classes.svelte');
       // RESERVED_HOTKEY_LETTERS (the hand-maintained base constant) is gone —
       // GET {API_PREFIX}/classes's own `reserved_hotkeys` is the base now
       // (classesStore.reservedHotkeys). Simulate the pre-fetch/offline state
@@ -137,7 +138,6 @@ describe('T1-adjacent: frozen-viewport effect uses untrack for the seed read', (
 
 describe('T7 (adapted, P2.8b): a slot tab id is slot-derived, urlId keeps the bookmark contract', () => {
   it('each queue slot tab is slot:<key> internally, with its own urlId preserved', async () => {
-    const { REVIEW_TABS, tabFromUrlId } = await import('../../lib/reviewTabs');
     const ids = REVIEW_TABS.map((t: { id: string }) => t.id);
     for (const slot of queueSlots) {
       const urlId = slot.capabilities.queue!.urlId;
