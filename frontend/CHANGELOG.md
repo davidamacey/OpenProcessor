@@ -8,6 +8,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`/train` finished-run Results view.** A live train smoke (job
+  `2026-09-24T23-47-55_yolo26n`) found that the backend already serves
+  test-split evaluation (`GET {API_PREFIX}/train/status/{id}`'s `eval`)
+  and full lineage (`GET {API_PREFIX}/train/manifest/{id}`) for a
+  finished run, but `/train` rendered neither. Every terminal past-run
+  row (`finished`/`failed`/`cancelled`/`skipped`/`lost`) now gets a
+  collapsed "Results" section (`RunResults.svelte`) that expands to:
+  - `best_metric`/`last_metric`, explicitly labelled **validation**.
+  - `eval`'s overall figures and per-class table, each labelled by
+    whichever pass actually produced it: today's backend serves no
+    `eval.split`, and the backend confirmed the overall
+    `map50`/`map50_95` on that shape are really the last **val** epoch's
+    numbers while `per_class` really is the frozen **test** split — two
+    different passes under one object, so the two halves get different
+    labels from the same eval (`evalOverallLabel`/`evalPerClassLabel`,
+    `src/lib/trainResults.ts`). A forward-compat `eval.split: 'test' |
+'val'` (upcoming train-eval cutover) labels both halves by the served
+    split directly once it lands.
+  - `mlflow_run_id`/`mlflow_run_url` — a non-null url renders as a
+    link; a null url with a run id renders the id as copyable text; a
+    null id while the run is still active shows "pending". TODO in
+    `types_train.ts`/`RunResults.svelte`: the backend is being asked to
+    serve `mlflow_run_url` as `null` unless `OP_MLFLOW_PUBLIC_URL` is
+    set — never the docker-internal hostname the live fixture still
+    carries today (`http://op-mlflow:5000/...`).
+  - `checkpoint_sha256` (status, falling back to the manifest's
+    `results.checkpoint_sha256`).
+  - `eval.confusion_matrix_path` renders as **text only** — never an
+    `<img>` — with a TODO for the backend-served `confusion_matrix_url`
+    (`GET /train/artifacts/{job_id}/{name}`); once present, an `<img>`
+    renders from that URL and never from the filesystem path.
+  - Lineage from the manifest (loaded lazily, only when the section is
+    opened): `export_dir`, `dataset_sha`, `include_classes`,
+    `training_seed`, `code_versions.{api_sha,trainer_image}`, and a
+    class-remap table (new id → original id → name) built from the
+    served `class_remap.new_to_original`/`names` — no client remap math.
+  - A failed run's served `error` renders as a banner inside the same
+    section.
+  - Thin frontend throughout: every value is rendered exactly as
+    served, `formatMetric`/`formatScalar` (`src/lib/trainResults.ts`)
+    turn a missing value into "—", never a false 0 — same pattern as
+    the existing `formatCount()`.
+  - New types: `TrainEval`/`TrainEvalPerClass`/`TrainEvalSplit`,
+    `TrainManifest`/`TrainManifestLineage`/`TrainManifestClassRemap`/
+    `TrainManifestCodeVersions`/`TrainManifestResults` (`types_train.ts`);
+    `getTrainManifest` (`api.ts`) is now typed `Promise<TrainManifest>`
+    instead of `Record<string, unknown>`.
+  - Tests: `trainResults.test.ts` (label/format helpers),
+    `RunResults.test.ts` (mount-based, using the real served fixture
+    JSON from the live run — `src/lib/test/fixtures/trainRun.ts`), and
+    `e2e/stubbed/test_train_results.py` (finished + failed runs).
+    Verified live via a temporary `vite preview` proxy to
+    `http://localhost:5184` against the real
+    `2026-09-24T23-47-55_yolo26n` run (`vite.config.ts` reverted before
+    commit, never shipped) and `CROPWRIGHT_LIVE_URL=http://localhost:5184
+npm run test:live` (still green, read-only).
+
 - Adopted OpenProcessor `main` d5343cb ("export one image + one label
   file per source image (standard YOLO layout), partial-frame policy and
   counts"; contracts synced via `npm run contract:sync`). Landed live

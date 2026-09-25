@@ -75,6 +75,7 @@ import type {
   TrainCampaignSpec,
   TrainJobSpec,
   TrainJobStatus,
+  TrainManifest,
 } from './types_train';
 
 // Vite exposes only PUBLIC_-prefixed env vars to the client. SvelteKit uses
@@ -3448,8 +3449,8 @@ export function promoteTrainJob(
 export function getTrainManifest(
   jobId: string,
   signal?: AbortSignal,
-): Promise<Record<string, unknown>> {
-  return apiFetch<Record<string, unknown>>(
+): Promise<TrainManifest> {
+  return apiFetch<TrainManifest>(
     `${API_PREFIX}/train/manifest/${encodeURIComponent(jobId)}`,
     {},
     signal,

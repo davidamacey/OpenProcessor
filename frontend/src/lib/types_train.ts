@@ -106,6 +106,62 @@ export interface GpuInfo {
   [extra: string]: unknown;
 }
 
+/**
+ * Which pass produced `TrainEval`'s overall figures. Absent on today's
+ * backend — see `TrainEval`'s doc comment for what that means. Present
+ * once the trainer's train-eval cutover lands (branch `cutover/train-
+ * eval`), naming whichever pass actually won.
+ */
+export type TrainEvalSplit = 'test' | 'val';
+
+/** One row of `TrainEval.per_class`. */
+export interface TrainEvalPerClass {
+  class_id: number;
+  name: string;
+  precision?: number | null;
+  recall?: number | null;
+  f1?: number | null;
+  ap50?: number | null;
+  support?: number | null;
+}
+
+/**
+ * `TrainJobStatus.eval` / `TrainManifest.results.eval` — test-split
+ * evaluation the trainer writes after the run finishes.
+ *
+ * **Today's backend (no `split` field):** `map50`/`map50_95` (and any
+ * other overall figure) are actually the *last VAL epoch's* numbers,
+ * while `per_class` really is computed over the frozen test holdout.
+ * Two different passes under one object — render each half labelled by
+ * what it actually is (`src/lib/trainResults.ts`'s `evalOverallLabel`/
+ * `evalPerClassLabel`), never both as "test".
+ *
+ * **Upcoming backend** (train-eval cutover): `split` names the pass
+ * that produced `map50`/`map50_95`/`precision`/`recall` — `'test'`
+ * when a test pass ran, falling back to `'val'` otherwise. Once present,
+ * both the overall figures and the per-class table are labelled by this
+ * field instead of the pre-cutover guess above.
+ *
+ * `confusion_matrix_url` is the servable artifact URL
+ * (`GET /train/artifacts/{job_id}/{name}`) — render an `<img>` from
+ * this only, never from `confusion_matrix_path` (a server filesystem
+ * path, text-only).
+ */
+export interface TrainEval {
+  map50?: number | null;
+  map50_95?: number | null;
+  precision?: number | null;
+  recall?: number | null;
+  /** TODO(train-eval cutover): absent on today's backend — see doc comment above. */
+  split?: TrainEvalSplit | null;
+  per_class?: TrainEvalPerClass[] | null;
+  /** Server filesystem path — text only, never an `<img src>`. */
+  confusion_matrix_path?: string | null;
+  /** TODO(train-eval cutover): servable URL once the backend ships it. */
+  confusion_matrix_url?: string | null;
+  [extra: string]: unknown;
+}
+
 /** Status JSON the trainer writes; nullable everywhere except job_id+state. */
 export interface TrainJobStatus {
   job_id: string;
@@ -127,13 +183,86 @@ export interface TrainJobStatus {
     [k: string]: number | undefined;
   } | null;
   mlflow_run_id?: string | null;
+  /**
+   * TODO: backend is being asked to serve this as `null` unless
+   * `OP_MLFLOW_PUBLIC_URL` is set — never the docker-internal hostname
+   * (e.g. `http://op-mlflow:5000/...`). Until that lands, this may be a
+   * URL a browser can't reach; we render it as a link whenever it's
+   * non-null anyway, per that request — see `RunResults.svelte`.
+   */
   mlflow_run_url?: string | null;
   checkpoint_path?: string | null;
+  /** Forward-compat: not served on `TrainJobStatus` today (only on the
+   *  manifest's `results.checkpoint_sha256`) — kept here too so a future
+   *  backend that starts serving it on status needs no frontend change. */
+  checkpoint_sha256?: string | null;
   gpu?: GpuInfo[];
-  eval?: Record<string, unknown> | null;
+  eval?: TrainEval | null;
   error?: string | null;
   heartbeat_at?: string | null;
   /** Forward-compat: extra fields server may add. */
+  [extra: string]: unknown;
+}
+
+/** `GET {API_PREFIX}/train/manifest/{job_id}` — full lineage envelope:
+ *  dataset SHA, class remap, code versions, eval results. 404 means the
+ *  run finished before the manifest writer was added. */
+export interface TrainManifestClassRemap {
+  include_classes?: number[] | null;
+  names?: string[] | null;
+  /** new class id (string key, index into `names`) -> original registry id */
+  new_to_original?: Record<string, number> | null;
+  /** original registry id (string key) -> new class id */
+  original_to_new?: Record<string, number> | null;
+  single_cls?: boolean | null;
+}
+
+export interface TrainManifestLineage {
+  augmentation_seed?: number | null;
+  class_remap?: TrainManifestClassRemap | null;
+  dataset_sha?: string | null;
+  deterministic?: boolean | null;
+  export_dir?: string | null;
+  include_classes?: number[] | null;
+  registry_sha?: string | null;
+  single_cls?: boolean | null;
+  training_seed?: number | null;
+}
+
+export interface TrainManifestCodeVersions {
+  api_sha?: string | null;
+  trainer_image?: string | null;
+  ultralytics_pkg?: string | null;
+  ultralytics_sha?: string | null;
+  [extra: string]: unknown;
+}
+
+export interface TrainManifestResults {
+  best_metric?: {
+    map50?: number;
+    map50_95?: number;
+    [k: string]: number | undefined;
+  } | null;
+  checkpoint_path?: string | null;
+  checkpoint_sha256?: string | null;
+  compare?: unknown;
+  eval?: TrainEval | null;
+  final_state?: TrainState | null;
+  mlflow_run_id?: string | null;
+  mlflow_run_url?: string | null;
+  [extra: string]: unknown;
+}
+
+export interface TrainManifest {
+  campaign_id?: string | null;
+  code_versions?: TrainManifestCodeVersions | null;
+  created_at?: string | null;
+  job_id: string;
+  kind?: string;
+  lineage?: TrainManifestLineage | null;
+  promoted_to?: string | null;
+  results?: TrainManifestResults | null;
+  spec?: Record<string, unknown>;
   [extra: string]: unknown;
 }
 
