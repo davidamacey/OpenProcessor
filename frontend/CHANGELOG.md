@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Class merge carries validations over; merged classes say where they
+  went (OpenProcessor d817605).** The merge dry-run's
+  `validations_carried_over` (it replaces `would_unvalidate`, with no shim) now
+  reads "N human validations will carry over" in the merge dialog. A
+  deprecated class with a served `merged_into` shows "merged into
+  `<name>`" instead of a Restore button. The restore 409 `class_merged`
+  message still covers a stale page. An in-request byte-identical
+  duplicate upload (served `status: 'duplicate'`) already counts as a
+  duplicate in the ingest results, and the served `stall_reason` still
+  renders verbatim, so neither needed a change.
+
 - **Probe opinion on review items (F8 D1, OpenProcessor d817605).** Items
   carry the served `probe_disagreement`, `probe_in_scope` and
   `probe_model_version`. An item outside the probe's classes reads "Model

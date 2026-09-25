@@ -43,6 +43,10 @@ export interface RegistryClass {
   color?: string | null;
   /** True when the class has been merged into another and should be hidden by default. */
   deprecated?: boolean;
+  /** OpenProcessor d817605: the class this one was merged into (its crops
+   *  now carry that class). Null/absent for a class never merged. A merged
+   *  class can't be restored (restore 409s `class_merged`). */
+  merged_into?: number | null;
   /** Server-computed adequacy tier from `GET {API_PREFIX}/classes`
    *  (`block` | `warn` | `ok`, against the served `thresholds`). Never
    *  recomputed client-side from `validated_count`. */
@@ -113,7 +117,9 @@ export interface ClassMergeDryRun {
   source_id: number;
   target_id: number;
   would_relabel: number;
-  would_unvalidate: number;
+  /** OpenProcessor d817605: human validations KEPT on the relabeled crops
+   *  (a merge now carries validations over; was `would_unvalidate`). */
+  validations_carried_over: number;
   holdout_blocking: number;
   blocked: boolean;
 }

@@ -1189,6 +1189,7 @@ export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse>
     kind?: 'item' | 'region';
     trainable?: number;
     trainable_gap?: number;
+    merged_into?: number | null;
   };
   const res = await apiFetch<{
     classes: RawClass[];
@@ -1211,6 +1212,7 @@ export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse>
     kind: c.kind,
     trainable: c.trainable,
     trainable_gap: c.trainable_gap,
+    merged_into: c.merged_into ?? null,
   }));
   // Old-shape (bare array) or pre-cutover backend responses omit these —
   // an empty threshold/reserved set just means the adequacy chip and the
@@ -3438,7 +3440,7 @@ export function mergeClasses(
 
 /**
  * `POST {API_PREFIX}/classes/merge?dry_run=true` — reports what a real merge
- * would do (`would_relabel`, `would_unvalidate`, `holdout_blocking`,
+ * would do (`would_relabel`, `validations_carried_over`, `holdout_blocking`,
  * `blocked`) and writes nothing. The merge dialog calls this before every
  * real merge so the operator sees the blast radius first.
  */

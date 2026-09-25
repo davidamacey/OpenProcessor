@@ -260,7 +260,7 @@
   );
 
   // Dry-run preview: every time the pair changes, ask the server what a
-  // real merge would do (would_relabel / would_unvalidate / holdout_blocking
+  // real merge would do (would_relabel / validations_carried_over / holdout_blocking
   // / blocked) before it's possible to confirm. Never guessed client-side —
   // the backend already knows about holdout-blocking rows the frontend has
   // no visibility into.
@@ -769,15 +769,27 @@
                   <td class="px-3 py-1.5 line-through">{cls.name}</td>
                   <td class="px-3 py-1.5">{cls.group ?? '—'}</td>
                   <td class="px-3 py-1.5 text-right">
-                    <button
-                      type="button"
-                      class="btn"
-                      data-testid="restore-{cls.id}"
-                      onclick={() => void restoreClassAction(cls)}
-                      disabled={busy}
-                    >
-                      Restore
-                    </button>
+                    {#if cls.merged_into != null}
+                      <!-- d817605: a merged class can't be restored (its
+                           crops live on the target); say where they went. -->
+                      <span
+                        class="text-xs text-zinc-500"
+                        data-testid="merged-into-{cls.id}"
+                      >
+                        merged into {classesStore.byId(cls.merged_into)?.name ??
+                          `#${cls.merged_into}`}
+                      </span>
+                    {:else}
+                      <button
+                        type="button"
+                        class="btn"
+                        data-testid="restore-{cls.id}"
+                        onclick={() => void restoreClassAction(cls)}
+                        disabled={busy}
+                      >
+                        Restore
+                      </button>
+                    {/if}
                   </td>
                 </tr>
               {/each}
@@ -1017,8 +1029,11 @@
           >
             Will relabel <strong>{mergePreview.would_relabel}</strong> crops from
             <strong>{mergeSource.name}</strong> to <strong>{mergeTarget.name}</strong>
-            {#if mergePreview.would_unvalidate > 0}
-              &middot; <strong>{mergePreview.would_unvalidate}</strong> lose validation
+            {#if mergePreview.validations_carried_over > 0}
+              <!-- d817605: a merge keeps human validations. -->
+              &middot; <strong>{mergePreview.validations_carried_over}</strong> human
+              validation{mergePreview.validations_carried_over === 1 ? '' : 's'} will carry
+              over
             {/if}
             {#if mergePreview.holdout_blocking > 0}
               &middot; <strong>{mergePreview.holdout_blocking}</strong> test-holdout crops block
