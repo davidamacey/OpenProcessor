@@ -353,6 +353,65 @@ the **Model Disagreements** tab on `/review` surfaces validated crops
 where the new model and the human label diverge — high-signal candidates
 for the next training cycle.
 
+### Finished-run results (`RunResults.svelte`, 2026-09-24)
+
+A live train smoke found the backend already serves test-split
+evaluation and full lineage for a finished run but `/train` rendered
+neither. Every terminal past-run row (`finished`/`failed`/`cancelled`/
+`skipped`/`lost`) gets a collapsed "Results" section, `RunResults.svelte`,
+rendered as its own table row right under that run — everything except
+lineage comes straight off the already-loaded `TrainJobStatus`
+(`best_metric`/`last_metric`/`eval`/`mlflow_run_*`/`checkpoint_sha256`/
+`error`), so it renders instantly on open; the manifest
+(`GET {API_PREFIX}/train/manifest/{job_id}`, for lineage) is fetched
+lazily, only the first time the section is opened.
+
+- **Val vs. test labelling.** `eval`'s overall figures
+  (`map50`/`map50_95`/`precision`/`recall`) and its `per_class` table
+  are labelled independently by `evalOverallLabel`/`evalPerClassLabel`
+  (`src/lib/trainResults.ts`), never assumed to both mean "test". Today's
+  backend serves no `eval.split` — confirmed live: on that shape the
+  overall figures are actually the last **val** epoch's numbers, while
+  `per_class` really is computed over the frozen **test** holdout, two
+  different passes under one object. TODO(train-eval cutover, branch
+  `cutover/train-eval`): once `eval.split: 'test' | 'val'` is served,
+  both halves are labelled by it directly instead of the pre-cutover
+  guess — `types_train.ts`'s `TrainEval` doc comment has the full
+  contract both shapes must satisfy.
+- **MLflow.** A non-null `mlflow_run_url` renders as a link; a null url
+  with a non-null `mlflow_run_id` renders the id as copyable text; a
+  null id while the run is still active (non-terminal state) shows
+  "pending" rather than "—". TODO: the backend is being asked to serve
+  `mlflow_run_url` as `null` unless `OP_MLFLOW_PUBLIC_URL` is set — never
+  the docker-internal hostname the live fixture still carries today
+  (`http://op-mlflow:5000/...`); this view already renders any non-null
+  value as a link on the assumption that contract lands.
+- **Confusion matrix.** `eval.confusion_matrix_path` (a server
+  filesystem path) renders as text only — never an `<img>`. TODO: once
+  the backend serves `eval.confusion_matrix_url`
+  (`GET /train/artifacts/{job_id}/{name}`), an `<img src>` renders from
+  that URL only.
+- **Lineage** (manifest, lazy): `export_dir`, `dataset_sha`,
+  `include_classes`, `training_seed`, `code_versions.{api_sha,
+trainer_image}`, and a class-remap table (new id → original id → name)
+  built from the served `class_remap.new_to_original`/`names` — no
+  client-side remap math.
+- Thin frontend throughout — `formatMetric`/`formatScalar`
+  (`src/lib/trainResults.ts`) turn a missing value into "—", never a
+  false 0, same pattern as the existing `formatCount()`.
+- New types on `types_train.ts`: `TrainEval`/`TrainEvalPerClass`/
+  `TrainEvalSplit`, `TrainManifest` and its `Lineage`/`ClassRemap`/
+  `CodeVersions`/`Results` sub-types; `getTrainManifest` (`api.ts`) is
+  now typed `Promise<TrainManifest>` (was `Record<string, unknown>`).
+- Tests: `trainResults.test.ts`, `RunResults.test.ts` (mount-based,
+  against the real served fixture JSON from the live
+  `2026-09-24T23-47-55_yolo26n` run —
+  `src/lib/test/fixtures/trainRun.ts`), `e2e/stubbed/
+test_train_results.py`. Verified against the real deployed backend at
+  `:5184` via a temporary `vite preview` proxy (reverted before commit,
+  never shipped) and `CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run
+test:live`.
+
 ### Training cohorts (2026-09-24 logic-moves W6; originally P2.12-P2.14,
 
 docs/genericization-plan-2026-09-13.md §9.2/§9.3)

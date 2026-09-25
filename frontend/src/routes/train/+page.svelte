@@ -50,6 +50,7 @@
   import SlotCard from '$components/SlotCard.svelte';
   import CropCard from '$components/CropCard.svelte';
   import PromoteModal from '$components/PromoteModal.svelte';
+  import RunResults from '$components/RunResults.svelte';
   import TrainForm from '$components/TrainForm.svelte';
   import TrainProgress from '$components/TrainProgress.svelte';
   import { classesStore } from '$stores/classes.svelte';
@@ -65,6 +66,7 @@
   } from '$lib/annotations/cohorts';
   import { datasetExportForSlot } from '$lib/annotations/datasetExport';
   import { isDatasetExportAvailable } from '$lib/strategies';
+  import { isTerminalTrainState } from '$lib/trainResults';
   import { strategiesStore } from '$stores/strategies.svelte';
   import type { Crop, ExportDataset, ExportStatus, ReviewItem } from '$lib/types';
   import type {
@@ -562,16 +564,13 @@
     if (!ok) return;
     reproducingId = r.job_id;
     try {
-      const manifest = (await getTrainManifest(r.job_id)) as {
-        spec?: Record<string, unknown>;
-        lineage?: Record<string, unknown>;
-      };
+      const manifest = await getTrainManifest(r.job_id);
       const spec = (manifest.spec ?? {}) as Record<string, unknown>;
-      const lineage = (manifest.lineage ?? {}) as Record<string, unknown>;
+      const lineage = manifest.lineage ?? {};
       const body: Partial<TrainJobSpec> = {
         dataset_export_dir: lineage.export_dir as string,
-        include_classes: (lineage.include_classes as number[] | null) ?? null,
-        single_cls: (lineage.single_cls as boolean | null) ?? false,
+        include_classes: lineage.include_classes ?? null,
+        single_cls: lineage.single_cls ?? false,
         cuda_visible_devices:
           (spec.cuda_visible_devices as string | undefined) ?? undefined,
         model_family: (spec.model_family as TrainJobSpec['model_family']) ?? 'yolo26',
@@ -1457,6 +1456,13 @@
                   </div>
                 </td>
               </tr>
+              {#if isTerminalTrainState(r.state)}
+                <tr class="border-t-0">
+                  <td colspan="5" class="p-0">
+                    <RunResults status={r} />
+                  </td>
+                </tr>
+              {/if}
             {/each}
           </tbody>
         </table>
