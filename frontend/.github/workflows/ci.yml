@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main, master]
   pull_request:
-    branches: [master]
+    branches: [main, master]
 
 jobs:
   check:
@@ -30,7 +30,7 @@ jobs:
         run: npm test
 
       # Harmless in CI: the OpenProcessor checkout this compares against
-      # (../openprocessor by default) isn't present here, so contract-sync.mjs
+      # (OPENPROCESSOR_REPO, ../OpenProcessor by default) isn't present here, so contract-sync.mjs
       # prints a skip message and exits 0 — see contracts/openprocessor/SOURCE.md.
       - name: Contract drift check (local-only; skips when the backend repo is absent)
         run: npm run contract:check
@@ -110,3 +110,25 @@ jobs:
             echo "::error::This push/PR changes src/ or scripts/ but does not update CHANGELOG.md. Add an entry under ## [Unreleased] (see CLAUDE.md's 'Documentation & changelog discipline'), or add [skip-changelog] to the last commit message if this truly has no user-facing/architectural effect."
             exit 1
           fi
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The container image, not gitleaks-action: the action needs a
+      # license key on organization-owned repositories.
+      - name: gitleaks (full history)
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git /repo --no-banner --redact
+  # >>> private-export-gate (this block is removed by scripts/oss-export/export.sh)
+
+  export-leak-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Leak gate over every file the public export would ship
+        run: bash scripts/oss-export/leak-scan.sh --tree .
+  # <<< private-export-gate
