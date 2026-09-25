@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   itemHintClassIds,
   quickAssignClasses,
@@ -6,7 +6,12 @@ import {
   searchClasses,
 } from './classPicker';
 import { isItemClassTarget } from '$lib/classVisibility';
-import { registeredSlots } from '$lib/annotations/registeredSlots';
+import {
+  installServedRegionProfile,
+  registeredSlots,
+  resetDeploymentSlots,
+} from '$lib/annotations/registeredSlots';
+import { WIDGET_TAG_PROFILE } from '$lib/test/fixtures/regionSlot';
 import type { RegistryClass } from '$lib/types';
 
 function cls(over: Partial<RegistryClass> & { id: number; name: string }): RegistryClass {
@@ -115,13 +120,29 @@ describe('resolveConfirmClassId', () => {
   });
 });
 
+describe('item-class targets with no region profile', () => {
+  it('excludes no class: the region class is only special when the backend serves a profile for it', () => {
+    resetDeploymentSlots();
+    installServedRegionProfile(null);
+    try {
+      expect(isItemClassTarget({ name: WIDGET_TAG_PROFILE.region_class_name })).toBe(
+        true,
+      );
+    } finally {
+      resetDeploymentSlots();
+    }
+  });
+});
+
 // R1 (docs/design/visual-audit-2026-09-24.md): the slot-bound region class
 // topped the picker and quick-assign row (most validated), so `/` + Enter
 // labeled an item as a region. Resolved through the live slot registry,
 // never a hardcoded name.
 describe('item-class targets (visual audit R1)', () => {
-  const slotClassName = registeredSlots.find((s) => s.bind.className)?.bind
-    .className as string;
+  // The served region profile binds the region slot to its class.
+  beforeAll(() => installServedRegionProfile(WIDGET_TAG_PROFILE));
+  afterAll(() => resetDeploymentSlots());
+  const slotClassName = WIDGET_TAG_PROFILE.region_class_name;
 
   function poolWithSlotClass(): RegistryClass[] {
     return [
@@ -133,7 +154,7 @@ describe('item-class targets (visual audit R1)', () => {
   }
 
   it('the registry binds at least one slot to a class (precondition)', () => {
-    expect(slotClassName).toBeTruthy();
+    expect(registeredSlots.some((s) => s.bind.className === slotClassName)).toBe(true);
     expect(isItemClassTarget({ name: slotClassName })).toBe(false);
     expect(isItemClassTarget({ name: 'miata' })).toBe(true);
   });

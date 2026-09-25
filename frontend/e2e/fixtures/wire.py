@@ -37,16 +37,23 @@ REGION_STATUS_VALUES = [
 
 _BBOX = [0.1, 0.2, 0.6, 0.8]
 
-# The region slot as the app build registers it: its bound class name and
-# its review tab's `?tab=` bookmark id. These are the built-in example
-# profile's values until audit steps 9-10
-# (docs/design/domain-neutral-audit-2026-09-24.md) replace the built-in
-# with the served `widget_tag` region profile; this is the one place e2e
-# names them. The tab's LABEL is served (conftest.py's default
-# `/review/tabs`), so tests find the tab by REGION_TAB_LABEL.
-REGION_CLASS = "license_plate"
-REGION_TAB_URL_ID = "plates"
-REGION_TAB_LABEL = "Widget tags"
+# The served region profile (`{API_PREFIX}/health` `region_profile`,
+# OpenProcessor naming-w2) of the neutral fixture domain: widgets carrying
+# a tag region (docs/design/domain-neutral-audit-2026-09-24.md §4.4).
+# conftest.py serves it by default; a test that needs a deployment with no
+# region profile overrides `/health` with `region_profile: None`.
+REGION_PROFILE: dict[str, Any] = {
+    "name": "widget_tag",
+    "display_name": "Widget tags",
+    "region_class_name": "widget_tag",
+    "text_reader": "ocr",
+}
+# What the app derives from it: the bound class, the region tab's `?tab=`
+# id (the backend's own `regions` tab id) and its label (the served
+# display name; conftest's default `/review/tabs` serves the same label).
+REGION_CLASS = REGION_PROFILE["region_class_name"]
+REGION_TAB_URL_ID = "regions"
+REGION_TAB_LABEL = REGION_PROFILE["display_name"]
 
 # Every non-default value below is distinct on purpose (same rationale as
 # makeItem.ts): a mapping bug that drops a field to a hardcoded default is

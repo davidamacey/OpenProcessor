@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { datasetExportForSlot } from './datasetExport';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
-import { defectCodeSlot } from './profiles/defectCode';
+import { defectCodeSlot } from '$lib/test/fixtures/defectCodeSlot';
 import type { SlotSpec } from './types';
 
 describe('datasetExportForSlot', () => {

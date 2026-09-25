@@ -9,11 +9,17 @@ baked at build time — safe to intercept against a `vite preview` build):
            nginx's/adapter-static's SPA fallback for a file that doesn't
            exist). Only the core tabs + the region tab render.
   Pass 2 — the shipped `static/annotation-profiles.example.json` served
-           with `content-type: application/json`. A "Pallet labels" tab
-           appears, is clickable, and drives a real
-           `GET /curation/review/pallet_labels` request.
+           with `content-type: application/json`, against a backend whose
+           served region profile is `pallet_label` (the example customizes
+           that profile's region slot). A "Pallet labels" tab replaces the
+           plain served one, is clickable, and drives a real
+           `GET /curation/review/regions` request.
   Pass 3 — a malformed profile. The page still renders, the region tab still
            works, and a toast mentions the deployment annotation profile.
+  Pass 4 — the same example against a backend serving a DIFFERENT region
+           profile, or none: the region-profile rule drops it with a
+           warning (the backend has exactly one region profile and 409s
+           region routes without one).
 """
 
 from __future__ import annotations
@@ -26,12 +32,18 @@ import json
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+PALLET_REGION_PROFILE = {
+    "name": "pallet_label",
+    "display_name": "Pallet labels",
+    "region_class_name": "pallet_label",
+    "text_reader": "ocr",
+}
 EXAMPLE_PROFILE = json.loads((REPO_ROOT / "static" / "annotation-profiles.example.json").read_text())
 MALFORMED_PROFILE = {"version": 1, "slots": [{"key": "bad"}]}
 
 CLASSES = [
     {"id": 1, "name": REGION_CLASS, "group": "widgets", "hotkey_letter": "l", "count": 40, "validated_count": 12, "cluster_size": 44, "deprecated": False},
-    {"id": 2, "name": "wooden_pallet", "group": "warehouse", "hotkey_letter": "w", "count": 20, "validated_count": 5, "cluster_size": 22, "deprecated": False},
+    {"id": 2, "name": "pallet_label", "group": "warehouse", "hotkey_letter": "w", "count": 20, "validated_count": 5, "cluster_size": 22, "deprecated": False},
 ]
 
 METHODS = {"strategies": [], "flags": {}}
@@ -94,19 +106,24 @@ def test_tier2_profile_absent(stub, page, app_url):
 
 def test_tier2_profile_served(stub, page, app_url):
     review_calls = register_curation(stub)
+    stub.on("GET", r"/health$", {"status": "ok", "region_profile": PALLET_REGION_PROFILE})
+    # No served label: the tab label comes from the tier-2 entry.
+    stub.on("GET", r"/review/tabs(\?|$)", {"tabs": []})
     register_profile_route(page, status=200, body=json.dumps(EXAMPLE_PROFILE), content_type="application/json")
 
     page.goto(f"{app_url}/review")
     labels = tab_labels(page)
     assert "Pallet labels" in labels, f"'Pallet labels' tab should be present: {labels}"
+    assert REGION_TAB_LABEL not in labels, f"the example replaces the served slot: {labels}"
+    assert labels.count("Pallet labels") == 1, labels
 
     pallet_tab = page.get_by_role("button", name="Pallet labels")
     assert pallet_tab.count() > 0
     review_calls.clear()
     pallet_tab.first.click()
     page.wait_for_timeout(800)
-    assert any("/curation/review/pallet_labels" in c for c in review_calls), (
-        f"clicking it should drive GET /curation/review/pallet_labels: {review_calls}"
+    assert any("/curation/review/regions" in c for c in review_calls), (
+        f"clicking it should drive GET /curation/review/regions: {review_calls}"
     )
 
     assert page.get_by_text("SSCC", exact=True).count() > 0, "the text-filter input's label should read 'SSCC'"
@@ -140,3 +157,31 @@ def test_tier2_profile_malformed(stub, page, app_url):
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, f"a malformed doc must not crash the app: {errors[:3]}"
+
+
+def _assert_dropped(stub, page, app_url, *, expect_region_tab: bool, reason: str) -> None:
+    register_profile_route(page, status=200, body=json.dumps(EXAMPLE_PROFILE), content_type="application/json")
+    page.goto(f"{app_url}/review")
+    labels = tab_labels(page)
+    assert "Pallet labels" not in labels, f"the example must be dropped: {labels}"
+    assert (REGION_TAB_LABEL in labels) is expect_region_tab, labels
+    page.locator("text=/annotation profile/i").first.wait_for(timeout=5000)
+    warn_msgs = [c for c in stub.console_errors if "annotation-profiles" in c.lower()]
+    assert any(reason in m and "dropped" in m for m in warn_msgs), warn_msgs
+    assert not [c for c in stub.console_errors if c.startswith("pageerror")]
+    page.unroute("**/annotation-profiles.json")
+
+
+def test_tier2_region_slot_dropped_under_another_served_profile(stub, page, app_url):
+    register_curation(stub)
+    # conftest's default /health serves the widget_tag profile.
+    _assert_dropped(stub, page, app_url, expect_region_tab=True, reason='"widget_tag"')
+
+
+def test_tier2_region_slot_dropped_without_a_region_profile(stub, page, app_url):
+    register_curation(stub)
+    stub.on("GET", r"/health$", {"status": "ok", "region_profile": None})
+    stub.on("GET", r"/review/tabs(\?|$)", {"tabs": []})
+    _assert_dropped(stub, page, app_url, expect_region_tab=False, reason="no region profile")
+    paths = [p for (_m, p) in stub.handled]
+    assert not [p for p in paths if "/regions" in p], paths

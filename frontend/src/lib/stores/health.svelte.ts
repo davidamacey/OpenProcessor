@@ -8,6 +8,7 @@
 
 import { getHealth } from '$lib/api';
 import type { ApiHealth } from '$lib/types';
+import { regionProfileStore } from '$stores/regionProfile.svelte';
 
 const POLL_INTERVAL_MS = 15_000;
 
@@ -77,6 +78,7 @@ class HealthStore {
     try {
       const h = await getHealth(ctrl.signal);
       this.health = h;
+      regionProfileStore.observe(h?.region_profile);
       // Only 'down' or a network error surfaces the red banner: 'degraded'
       // means a non-critical dependency (e.g. the VLM) is intermittent
       // and labeling still works.

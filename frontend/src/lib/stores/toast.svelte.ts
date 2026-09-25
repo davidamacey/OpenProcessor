@@ -3,6 +3,7 @@
  */
 
 import type { ToastMessage } from '$lib/types';
+import { mentionsRegionProfileUnavailable } from '$lib/regionProfileUnavailable';
 
 /**
  * `crypto.randomUUID` only exists in "secure contexts" (HTTPS or
@@ -25,6 +26,11 @@ class ToastStore {
   toasts = $state<ToastMessage[]>([]);
 
   push(t: Omit<ToastMessage, 'id'>): string {
+    // A caller's "X failed: <error message>" for a region route that 409'd
+    // because the backend has no region profile. The region-profile store
+    // already shows one notice for that; a per-call-site error toast would
+    // just repeat it as a failure.
+    if (mentionsRegionProfileUnavailable(t.text)) return '';
     const id = makeId();
     const ttl = t.ttl_ms ?? 4500;
     const msg: ToastMessage = { id, ttl_ms: ttl, ...t };

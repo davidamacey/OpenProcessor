@@ -12,6 +12,12 @@ import { mount, unmount, flushSync } from 'svelte';
 import CropCard from './CropCard.svelte';
 import { classSourcesStore } from '$stores/classSources.svelte';
 import type { Crop } from '$lib/types';
+import {
+  installServedRegionProfile,
+  resetDeploymentSlots,
+} from '$lib/annotations/registeredSlots';
+import { mapCropSlots } from '$lib/annotations/cropSlots';
+import { WIDGET_TAG_PROFILE } from '$lib/test/fixtures/regionSlot';
 
 function baseCrop(overrides: Partial<Crop> = {}): Crop {
   return {
@@ -204,5 +210,25 @@ describe('CropCard — K4: readable VLM empty reason', () => {
     });
     expect(el.textContent).toContain('VLM gave no answer');
     expect(el.textContent).not.toContain('no_answer');
+  });
+});
+
+describe('CropCard — region sub-box editing follows the served region profile (audit §5.4)', () => {
+  const editButton = (el: HTMLElement) => el.querySelector('button[aria-label^="Edit "]');
+
+  afterEach(() => resetDeploymentSlots());
+
+  it('no region profile: no ✎ button and no region ring, even with region_* values on the item', () => {
+    installServedRegionProfile(null);
+    const slots = mapCropSlots({ region_bbox_norm: [0.4, 0.4, 0.6, 0.6] }, [0, 0, 1, 1]);
+    const el = renderCard({ crop: baseCrop({ slots } as Partial<Crop>) });
+    expect(editButton(el)).toBeNull();
+    expect(el.textContent).not.toContain('✎');
+  });
+
+  it('a served region profile: the ✎ button edits that region', () => {
+    installServedRegionProfile(WIDGET_TAG_PROFILE);
+    const el = renderCard({ crop: baseCrop() });
+    expect(editButton(el)?.getAttribute('aria-label')).toBe('Edit region');
   });
 });

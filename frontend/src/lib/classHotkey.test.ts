@@ -4,6 +4,11 @@ import { classesStore } from '$stores/classes.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import { ApiError } from '$lib/api';
 import type { RegistryClass } from '$lib/types';
+import {
+  installServedRegionProfile,
+  resetDeploymentSlots,
+} from '$lib/annotations/registeredSlots';
+import { WIDGET_TAG_PROFILE } from '$lib/test/fixtures/regionSlot';
 
 vi.mock('$lib/api', async () => {
   const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
@@ -59,6 +64,26 @@ describe('reservedHotkeyLetters — server-served base, registry union on top', 
   it('a letter absent from the served set is NOT reserved — this module never invents its own base', () => {
     classesStore.reservedHotkeys = ['g']; // deliberately narrow
     expect(reservedHotkeyLetters().has('n')).toBe(false);
+  });
+
+  it('no region profile: exactly the served set (no region keymap letters)', () => {
+    classesStore.reservedHotkeys = ['g'];
+    installServedRegionProfile(null);
+    try {
+      expect([...reservedHotkeyLetters()]).toEqual(['g']);
+    } finally {
+      resetDeploymentSlots();
+    }
+  });
+
+  it('a served region profile adds its review keymap letters (d/f/e/b) to the served set', () => {
+    classesStore.reservedHotkeys = ['g'];
+    installServedRegionProfile(WIDGET_TAG_PROFILE);
+    try {
+      expect([...reservedHotkeyLetters()].sort()).toEqual(['b', 'd', 'e', 'f', 'g']);
+    } finally {
+      resetDeploymentSlots();
+    }
   });
 });
 

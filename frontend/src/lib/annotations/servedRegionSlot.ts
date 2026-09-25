@@ -1,0 +1,245 @@
+/**
+ * The region slot, synthesized from the backend's served region profile
+ * (`GET {API_PREFIX}/health` `region_profile`, OpenProcessor naming-w2;
+ * docs/design/domain-neutral-audit-2026-09-24.md §5.3).
+ *
+ * The backend supports exactly one region profile, and every region wire
+ * name (`region_*` item keys, `/regions`, `/crops/{id}/region*`) is the
+ * same whatever that profile detects. So the wire half of the slot is a
+ * constant, `REGION_WIRE_CAPABILITIES`, and the only per-deployment parts
+ * come from the served profile: the slot key (`name`), the bound class
+ * (`region_class_name`) and the noun shown to operators (`display_name`).
+ *
+ * A deployment that wants richer copy (a singular noun, a text
+ * placeholder, hand-tuned cohorts) registers a tier-2 profile whose `key`
+ * equals the served `name`; it replaces this slot wholesale (see
+ * `examples/annotation-profiles/`).
+ */
+
+import type { ServedRegionProfile } from '$lib/types';
+import type { SlotSpec, SlotState, SubBoxCapability, TextCapability } from './types';
+
+const encode = encodeURIComponent;
+
+/** Wire field names for the region sub-box, identical for every profile. */
+export const REGION_SUB_BOX: SubBoxCapability = {
+  bboxField: 'region_bbox_norm',
+  storedFrame: 'source',
+  frameField: 'region_bbox_frame',
+  scoreField: 'region_score',
+  visibleField: 'region_visible',
+  bboxInParentField: 'region_bbox_in_parent',
+  candidateBboxField: 'region_candidate_bbox_norm',
+  candidateBboxInParentField: 'region_candidate_bbox_in_parent',
+  candidateScoreField: 'region_candidate_score',
+  candidateDetectorField: 'region_candidate_detector',
+  candidateDetectorVersionField: 'region_candidate_detector_version',
+  candidateSourceField: 'region_candidate_source',
+  thumbnail: {
+    path: (id, size) => `/crops/${encode(id)}/region_thumbnail?size=${size}`,
+    aspect: '2 / 1',
+    defaultSize: 160,
+  },
+  ring: {
+    confirmed: 'border-green-400 shadow-[0_0_0_1px_rgba(34,197,94,0.45)]',
+    proposed: 'border-yellow-400 shadow-[0_0_0_1px_rgba(250,204,21,0.45)]',
+    rejected: 'border-zinc-600 shadow-none',
+  },
+  editor: { thumbSize: 512, viewPadding: 2.5, nudgeStep: 1 / 512 },
+};
+
+/** Wire field names for the region text reading. `label`/`placeholder`
+ *  are generic; the served profile carries no text noun. The placeholder
+ *  is an instruction, never a sample reading (visual audit R9: a sample
+ *  value in an empty field read as a VLM reading). */
+export const REGION_TEXT: TextCapability = {
+  valueField: 'region_text',
+  rawField: 'region_text_raw',
+  sourceField: 'region_text_source',
+  confidenceField: 'region_text_confidence',
+  engineVersionField: 'region_text_engine_version',
+  vlmValueField: 'region_text_vlm',
+  ocrValueField: 'region_text_ocr',
+  disagreementField: 'region_text_disagreement',
+  choiceField: 'region_text_choice',
+  invalidReasonField: 'region_text_vlm_invalid',
+  label: 'Text',
+  placeholder: 'type the text…',
+  transform: 'none',
+  monospace: true,
+};
+
+/**
+ * The backend's `RegionStatus` values (contracts/openprocessor/ts/
+ * regionStatus.ts) with neutral labels. The served `/regions/statuses`
+ * vocabulary is the primary source for labels and human-writable flags
+ * (`$lib/review/slotPanel.ts`); this list is the synchronous fallback
+ * `readSlot` uses for a status's role/dim/badge.
+ */
+export const REGION_STATES: SlotState[] = [
+  {
+    value: 'pending_detection',
+    label: 'pending detection',
+    humanWritable: false,
+    role: 'pending',
+  },
+  {
+    value: 'pending_verification',
+    label: 'pending verification',
+    humanWritable: false,
+    role: 'pending',
+  },
+  { value: 'detected', label: 'detected', humanWritable: true, role: 'proposed' },
+  {
+    value: 'verify_rejected',
+    label: 'rejected (bad detection)',
+    humanWritable: true,
+    role: 'rejected',
+  },
+  { value: 'no_region_box', label: 'no box found', humanWritable: false, role: 'absent' },
+  {
+    value: 'no_region_visible',
+    label: 'none visible',
+    humanWritable: true,
+    role: 'absent',
+  },
+  {
+    value: 'detection_failed',
+    label: 'detection failed',
+    humanWritable: false,
+    role: 'pending',
+  },
+  {
+    value: 'false_positive',
+    label: 'false positive (keep box)',
+    humanWritable: true,
+    role: 'falsePositive',
+    dim: true,
+    badge: 'false pos',
+  },
+];
+
+/** The region capabilities that do not depend on the served profile. */
+export const REGION_WIRE_CAPABILITIES: Pick<
+  SlotSpec['capabilities'],
+  'subBox' | 'text' | 'provenance' | 'lifecycle'
+> = {
+  subBox: REGION_SUB_BOX,
+  text: REGION_TEXT,
+  provenance: {
+    detectorField: 'region_detector',
+    detectorVersionField: 'region_detector_version',
+    chainField: 'region_detector_chain',
+    verifierField: 'region_verifier',
+    verifierVersionField: 'region_verifier_version',
+    verifiedAtField: 'region_verified_at',
+    detectedAtField: 'region_detected_at',
+    showChainOnCard: true,
+  },
+  lifecycle: {
+    statusField: 'region_status',
+    verifiedField: 'region_verified',
+    validatedField: 'region_validated',
+    autoConfirmedField: 'region_auto_confirmed',
+    rejectionReasonField: 'region_rejection_reason',
+    boxCorrectField: 'region_bbox_correct',
+    labelSourceField: 'region_label_source',
+    states: REGION_STATES,
+    confirmState: 'detected',
+    rejectState: 'no_region_visible',
+    falsePositiveState: 'false_positive',
+  },
+};
+
+export const REGION_ENDPOINTS: SlotSpec['endpoints'] = {
+  setBox: (id) => `/crops/${encode(id)}/region`,
+  clearBox: (id) => `/crops/${encode(id)}/region`,
+  patchMeta: (id) => `/crops/${encode(id)}/region_meta`,
+  batchStatus: () => `/regions/batch_status`,
+};
+
+/** The review-queue / tab id the backend serves region items under. */
+export const REGION_TAB_ID = 'regions';
+
+/** Fallback noun when the profile sets no `display_name` (the backend's
+ *  own `/review/tabs` fallback label is the same word). */
+const GENERIC_NOUN = 'Regions';
+
+export function regionSlotFromServedProfile(p: ServedRegionProfile): SlotSpec {
+  const noun = p.display_name.trim() || GENERIC_NOUN;
+  // A profile without a region class still gets its review tab; binding
+  // falls back to the profile name so the slot is never keyless.
+  const className = p.region_class_name.trim() || p.name;
+  const hasText = p.text_reader.trim().length > 0;
+
+  return {
+    key: p.name,
+    bind: { className },
+    label: { singular: 'region', plural: noun, title: noun },
+    capabilities: {
+      ...REGION_WIRE_CAPABILITIES,
+      text: hasText ? REGION_TEXT : undefined,
+      queue: {
+        endpointId: REGION_TAB_ID,
+        urlId: REGION_TAB_ID,
+        tabLabel: noun,
+        browsePath: '/regions',
+        keymap: {
+          confirm: ['enter'],
+          reject: ['d'],
+          markFalsePositive: ['f'],
+          editBox: ['e'],
+          back: ['arrowleft', 'b'],
+        },
+        textFilter: hasText
+          ? { param: 'text', label: 'Text', placeholder: '' }
+          : undefined,
+        alwaysVisible: true,
+      },
+    },
+    // The single-class export of this profile's region boxes. `/train`
+    // still gates the panel on `/methods` advertising `single_class`.
+    // `profileName` is the served profile name, so the export's output
+    // root (and every past export under it) stays where it was.
+    extras: {
+      datasetExport: {
+        kind: 'single_class',
+        label: `${noun} dataset`,
+        buildPath: '/export/single_class',
+        statusPath: '/export/single_class/status',
+        datasetKind: p.name,
+        profileName: p.name,
+        boxSource: 'region',
+        regionClassName: className,
+        classIds: [],
+        singleClass: true,
+        blurb: `Single-class ${noun} dataset: confirmed region boxes, human-marked false positives as hard negatives, and a sample of items with no region as backgrounds.`,
+        options: [
+          {
+            key: 'image_mode',
+            label: 'image mode',
+            kind: 'select',
+            choices: ['whole_frame', 'item_crop'],
+            default: 'whole_frame',
+          },
+          {
+            key: 'img_max_side',
+            label: 'image size',
+            kind: 'select',
+            choices: [640, 1280],
+            default: 1280,
+          },
+          { key: 'max_positive_images', label: 'sample N positives', kind: 'number' },
+          {
+            key: 'dedup_threshold',
+            label: 'dedup near-dup frames',
+            kind: 'toggle',
+            onValue: 0.98,
+          },
+        ],
+      },
+    },
+    endpoints: REGION_ENDPOINTS,
+    stats: { key: 'regions', panelTitle: noun, coverageTitle: `${noun} coverage` },
+  };
+}

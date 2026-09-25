@@ -9,23 +9,17 @@
  * test's assertions.
  */
 
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { parseSlotConfig } from './parseSlotConfig';
-import { aircraftTailNumberSlot } from '../profiles/aircraftTailNumber';
+import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
 import { derivedCohorts } from '../cohorts';
 import { buildSlotKeymap } from '../../review/slotKeymap';
 import type { SlotSpec } from '../types';
+import { readExampleDocument } from '$lib/test/fixtures/exampleProfiles';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const fixture = JSON.parse(
-  readFileSync(
-    path.resolve(here, '__fixtures__/aircraftTailNumber.profile.json'),
-    'utf-8',
-  ),
-);
+// The operator-facing example document; its one slot is the fixture.
+const fixture = (readExampleDocument('aircraft-tail-number.json') as { slots: unknown[] })
+  .slots[0];
 
 describe('round-trip: JSON aircraftTailNumber profile === hand-written TypeScript', () => {
   const result = parseSlotConfig(fixture);

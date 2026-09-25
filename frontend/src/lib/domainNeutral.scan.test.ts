@@ -5,11 +5,11 @@
  * comments — names one domain (license plates) or the private deployment
  * it came from. Comments count too: the scan reads raw source text.
  *
- * `ALLOWED` is exact and per-file, each entry with the reason it is still
- * allowed. The example profiles move to `examples/` (audit steps 7-11,
- * which wait on the backend's naming-w2); every entry below goes away with
- * the step named in its reason. Never add an entry to make a red run
- * green — fix the file.
+ * `ALLOWED` is exact and per-file, each entry with the reason it is
+ * allowed. Domain profiles live under `examples/` (outside `src/`, never
+ * bundled), so the only entries are this file and the one test that
+ * exercises those examples. Never add an entry to make a red run green —
+ * fix the file.
  *
  * Mutation-check: add a `// plate` line to a scratch copy of any product
  * file under `src/` and this test goes red.
@@ -37,18 +37,8 @@ const PRIVATE_OP_PATTERN = /\bkb\b/;
 /** `src/`-relative path -> why it may still match. */
 const ALLOWED: Record<string, string> = {
   'lib/domainNeutral.scan.test.ts': 'this file: it spells out the patterns it scans for',
-  'lib/annotations/profiles/licensePlate.ts':
-    'the license-plate example profile; moves to examples/ in audit step 9',
-  'lib/annotations/profiles/aircraftTailNumber.ts':
-    'a demo profile that describes itself against the license-plate example; moves to examples/ in audit step 9',
-  'lib/annotations/profiles/defectCode.ts':
-    'a demo profile that describes itself against the license-plate example; moves to examples/ in audit step 9',
-  'lib/annotations/registeredSlots.ts':
-    'builtinSlots still registers the license-plate example profile until audit step 9 empties it',
-  'lib/test/fixtures/regionSlot.ts':
-    "reuses the example profile's region_* wire map until audit step 8's regionSlotFromServedProfile",
   'lib/annotations/profiles.falsification.test.ts':
-    'the one test that exercises the example profiles themselves (audit §3.9 KEEP-example)',
+    'the one test that exercises the example profiles under examples/ (audit §3.9 KEEP-example)',
 };
 
 function walk(dir: string, out: string[] = []): string[] {

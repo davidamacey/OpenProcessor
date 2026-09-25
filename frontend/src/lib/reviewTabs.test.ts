@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { API_PREFIX, getReviewQueue } from './api';
-import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
+import { WIDGET_TAG_PROFILE, widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { registeredSlots } from './annotations/registeredSlots';
 import {
   buildReviewTabs,
@@ -49,6 +49,36 @@ describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
       urlId: 'new_class_proposals',
       endpointId: 'new_class_proposals',
     });
+  });
+
+  it('no region profile: exactly the core tabs (audit §5.4)', async () => {
+    const reg = await import('./annotations/registeredSlots');
+    const tabs = await import('./reviewTabs');
+    reg.installServedRegionProfile(null);
+    try {
+      expect(tabs.REVIEW_TABS).toEqual(CORE_REVIEW_TABS);
+      expect(tabs.tabFromUrlId('regions')).toBeUndefined();
+    } finally {
+      reg.resetDeploymentSlots();
+    }
+  });
+
+  it('a served region profile adds one region tab labelled by its display_name', async () => {
+    const reg = await import('./annotations/registeredSlots');
+    const tabs = await import('./reviewTabs');
+    reg.installServedRegionProfile(WIDGET_TAG_PROFILE);
+    try {
+      expect(tabs.REVIEW_TABS).toHaveLength(CORE_REVIEW_TABS.length + 1);
+      expect(tabs.REVIEW_TABS.at(-1)).toMatchObject({
+        id: `slot:${WIDGET_TAG_PROFILE.name}`,
+        label: WIDGET_TAG_PROFILE.display_name,
+        urlId: 'regions',
+        endpointId: 'regions',
+      });
+      expect(tabs.tabFromUrlId('regions')).toBe(`slot:${WIDGET_TAG_PROFILE.name}`);
+    } finally {
+      reg.resetDeploymentSlots();
+    }
   });
 
   it('every core tab uses the served tab id for its id, urlId and endpointId (naming-w2 F7: classifier_blind_spots)', () => {

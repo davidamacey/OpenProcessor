@@ -18,7 +18,7 @@ import { describe, it, expect } from 'vitest';
 import { resolveSlotRegistry } from './registry';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { registeredSlots } from './registeredSlots';
-import { aircraftTailNumberSlot } from './profiles/aircraftTailNumber';
+import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
 import { buildReviewTabs, isSlotTab, slotTabId, tabFromUrlId } from '../reviewTabs';
 import { buildSlotKeymap, singleCharCombos } from '../review/slotKeymap';
 import {

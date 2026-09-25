@@ -31,6 +31,7 @@
   import ClusteringHandoff from '$lib/components/ingest/ClusteringHandoff.svelte';
   import { ingestAvailability } from '$lib/ingest/ingestAvailability.svelte';
   import { resolveIngestConfig } from '$lib/ingest/ingestConfig';
+  import { regionProfileStore } from '$stores/regionProfile.svelte';
   import type { IngestFile } from '$lib/ingest/fileSource';
   import type { IngestRunState } from '$lib/ingest/ingestRunController.svelte';
   import type { RegionDrain } from '$lib/types';
@@ -110,16 +111,21 @@
       />
     </section>
 
-    <section class="grid gap-6 sm:grid-cols-2">
+    <!-- The region drain only exists with a served region profile; without
+         one there is no region worklog to wait on, so the panel (and its
+         poll) is absent and the clustering gate sees no drain. -->
+    <section class="grid gap-6" class:sm:grid-cols-2={regionProfileStore.configured}>
       <div class="rounded-lg border border-zinc-800 p-4">
         <IngestStatusTable refreshToken={statusRefreshToken} />
       </div>
-      <div class="rounded-lg border border-zinc-800 p-4">
-        <RegionDrainPanel
-          pollIntervalS={config.regionDrainPollIntervalS}
-          onUpdate={onDrainUpdate}
-        />
-      </div>
+      {#if regionProfileStore.configured}
+        <div class="rounded-lg border border-zinc-800 p-4">
+          <RegionDrainPanel
+            pollIntervalS={config.regionDrainPollIntervalS}
+            onUpdate={onDrainUpdate}
+          />
+        </div>
+      {/if}
     </section>
 
     <section class="rounded-lg border border-zinc-800 p-4">

@@ -6,7 +6,7 @@ import {
   panelLabels,
 } from './slotPanel';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
-import { aircraftTailNumberSlot } from '../annotations/profiles/aircraftTailNumber';
+import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
 import type { RegionStatusEntry } from '../api';
 
 const SERVED: RegionStatusEntry[] = [

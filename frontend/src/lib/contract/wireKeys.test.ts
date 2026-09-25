@@ -14,7 +14,9 @@
 import { describe, expect, it } from 'vitest';
 import itemWire from '../../../contracts/openprocessor/json/item_wire.json';
 import { RAW_CROP_KEYS } from '../api';
-import { builtinSlots } from '../annotations/registeredSlots';
+import { regionContractSlots } from '$lib/test/fixtures/exampleProfiles';
+
+const regionSlots = regionContractSlots();
 
 const ITEM_KEYS = new Set<string>(itemWire.item_keys);
 const REGION_KEYS = new Set<string>(itemWire.region_keys);
@@ -93,8 +95,8 @@ function declaredWireFields(v: unknown, out: string[] = []): string[] {
   return out;
 }
 
-describe('built-in slot profiles vs the backend region wire', () => {
-  for (const slot of builtinSlots) {
+describe('region slots (served synthesis + region example profiles) vs the backend region wire', () => {
+  for (const slot of regionSlots) {
     describe(slot.key, () => {
       const fields = declaredWireFields(slot.capabilities);
 

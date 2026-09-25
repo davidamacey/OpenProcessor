@@ -611,6 +611,26 @@ export interface ApiHealth {
   opensearch?: { reachable: boolean; indexes?: Record<string, boolean> };
   vlm?: { reachable: boolean; model?: string | null };
   registry?: { path?: string; exists?: boolean; mtime?: string | null };
+  /** The backend's active region profile, or `null` when none is
+   *  configured (then every region route answers 409). Absent on a
+   *  backend older than OpenProcessor naming-w2, which the UI treats the
+   *  same as `null`. The only signal region features key on. */
+  region_profile?: ServedRegionProfile | null;
+}
+
+/** `RegionProfileSummary` on `GET {API_PREFIX}/health` and
+ *  `GET {API_PREFIX}/regions/vocabulary`. */
+export interface ServedRegionProfile {
+  /** Profile id; the region slot's key. */
+  name: string;
+  /** The region noun shown to operators (tab label, gallery copy). May be
+   *  empty when the profile doesn't set one. */
+  display_name: string;
+  /** The class whose items ARE regions (e.g. the class a region export
+   *  writes). May be empty. */
+  region_class_name: string;
+  /** How region text is read (`vlm` / `ocr` / `vlm_then_ocr` / `both`). */
+  text_reader: string;
 }
 
 // 'outliers' was retired from the UI in the 2026-09 tab consolidation

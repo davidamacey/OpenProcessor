@@ -20,7 +20,8 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { builtinSlots } from './annotations/registeredSlots';
+import { regionSlotFromServedProfile } from './annotations/servedRegionSlot';
+import { WIDGET_TAG_PROFILE } from './test/fixtures/regionSlot';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const libRoot = here;
@@ -68,7 +69,11 @@ function isExcluded(file: string): boolean {
   // site — see annotations/cohorts.ts:36). That is the sanctioned
   // declaration point, not a hand-rolled fetch URL.
   if (rel.startsWith(path.join('lib', 'annotations', 'profiles') + path.sep)) return true;
+  // The served region slot's wire map is the same kind of declaration.
+  if (rel === path.join('lib', 'annotations', 'servedRegionSlot.ts')) return true;
   if (rel.endsWith('.test.ts') || rel.endsWith('.svelte-kit')) return true;
+  // Test fixtures (test-only slot declarations).
+  if (rel.startsWith(path.join('lib', 'test') + path.sep)) return true;
   return false;
 }
 
@@ -113,19 +118,17 @@ describe('SlotCard.svelte uses the shared helpers, not a bare fallback string', 
 });
 
 /**
- * `isExcluded()` skips `lib/annotations/profiles/` — profiles declare
+ * `isExcluded()` skips the slot declarations — they declare
  * prefix-relative path templates by design, so the scan above cannot
- * distinguish a sanctioned declaration from a rogue one. Pin every
- * built-in slot's rendered thumbnail path to the segment the backend
+ * distinguish a sanctioned declaration from a rogue one. Pin the served
+ * region slot's rendered thumbnail path to the segment the backend
  * actually registers instead.
  */
-describe('built-in slots declare the registered region-thumbnail segment', () => {
-  it('renders /crops/{id}/region_thumbnail for every sub-box slot', () => {
-    const paths = builtinSlots
-      .map((s) => s.capabilities.subBox?.thumbnail?.path('x', 160))
-      .filter((p): p is string => p != null);
-    for (const p of paths) {
-      expect(p).toMatch(/^\/crops\/x\/region_thumbnail\b/);
-    }
+describe('the served region slot declares the registered region-thumbnail segment', () => {
+  it('renders /crops/{id}/region_thumbnail', () => {
+    const slot = regionSlotFromServedProfile(WIDGET_TAG_PROFILE);
+    expect(slot.capabilities.subBox?.thumbnail?.path('x', 160)).toMatch(
+      /^\/crops\/x\/region_thumbnail\b/,
+    );
   });
 });

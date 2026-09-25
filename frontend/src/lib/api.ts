@@ -20,6 +20,11 @@ import { parseCurationSettings, type CurationSettings } from '$lib/curationSetti
 import { mapCropSlots } from './annotations/cropSlots';
 import type { XYXY, SlotKey, SlotData, SlotSpec, SlotFrame } from './annotations/types';
 import type { DatasetExportSpec } from './annotations/datasetExport';
+import {
+  isNoRegionProfileDetail,
+  notifyRegionProfileUnavailable,
+  REGION_PROFILE_UNAVAILABLE_MESSAGE,
+} from './regionProfileUnavailable';
 import type {
   BulkLabelConflict,
   BulkLabelResult,
@@ -45,6 +50,7 @@ import type {
   ExportResult,
   ExportStatus,
   ApiHealth,
+  ServedRegionProfile,
   SingleClassExportResult,
   SingleClassExportStatus,
   ModelsStatus,
@@ -235,6 +241,15 @@ export class ApiError extends Error {
   }
 }
 
+/** A region route's 409 when the backend has no region profile. See
+ *  `./regionProfileUnavailable.ts` for how the UI absorbs it. */
+export class RegionProfileUnavailableError extends ApiError {
+  constructor(url: string, body: unknown) {
+    super(409, url, body, REGION_PROFILE_UNAVAILABLE_MESSAGE);
+    this.name = 'RegionProfileUnavailableError';
+  }
+}
+
 const RETRY_DELAYS_MS = [250, 500, 1000];
 
 async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -317,6 +332,10 @@ export async function apiFetch<T>(
         } catch {
           /* ignore */
         }
+      }
+      if (res.status === 409 && isNoRegionProfileDetail(errorDetail(body))) {
+        notifyRegionProfileUnavailable();
+        throw new RegionProfileUnavailableError(url, body);
       }
       const err = new ApiError(res.status, url, body);
       // Don't retry on 4xx — they won't get better.
@@ -958,9 +977,10 @@ export function getModelsStatus(signal?: AbortSignal): Promise<ModelsStatus> {
 /**
  * Unload a Triton model and remove its repo directory (follow-up gap 2,
  * docs/design/audit-remediation-plan-2026-09.md Appendix D item 3,
- * 2026-09-11). The backend enforces the real guard (LPR models never,
- * active/core models need `force`) — `force` here only matters for the
- * latter; passing it for an LPR model still 403s.
+ * 2026-09-11). The backend enforces the real guard (region-protected
+ * models never, active/core models need `force`) — `force` here only
+ * matters for the latter; passing it for a region-protected model still
+ * 403s.
  */
 export function unloadModel(
   modelName: string,
@@ -2102,6 +2122,9 @@ export interface RegionVocabularyResponse {
   text_rules: RegionTextRules | null;
   /** Labeled `region_rejection_reason` vocabulary (openprocessor fix #29). */
   rejection_reasons: RejectionReasonEntry[];
+  /** The active region profile (same value `/health` serves), or `null`
+   *  when none is configured, in which case every list above is empty. */
+  region_profile: ServedRegionProfile | null;
 }
 
 /** The deployment-configured detector/segmenter/verifier vocabulary
@@ -2123,6 +2146,7 @@ export async function getRegionVocabulary(
     text_choices: res.text_choices ?? [],
     text_rules: res.text_rules ?? null,
     rejection_reasons: res.rejection_reasons ?? [],
+    region_profile: res.region_profile ?? null,
   };
 }
 
