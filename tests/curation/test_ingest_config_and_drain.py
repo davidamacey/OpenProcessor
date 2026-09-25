@@ -15,7 +15,10 @@ from src.services.curation import region_drain
 
 
 @pytest.fixture(autouse=True)
-def _reset_drain():
+def _reset_drain(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    # Persisted state (2026-09-25 multi-worker fix) -- point it at a
+    # per-test tmp_path rather than the real /jobs mount.
+    monkeypatch.setenv('OP_REGION_DRAIN_STATE_DIR', str(tmp_path / 'region_drain'))
     region_drain._reset_for_tests()
     yield
     region_drain._reset_for_tests()
