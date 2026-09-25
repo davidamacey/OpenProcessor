@@ -648,7 +648,10 @@
   {/if}
 
   <!-- Active classes -->
-  <section class="surface flex-1 overflow-auto">
+  <!-- Visual audit 2026-09-24 (L5 follow-up): with a long proposals list
+       above, flex-1 + overflow-auto let this section shrink to nothing;
+       the floor keeps the class table on screen. -->
+  <section class="surface min-h-[60vh] flex-1 overflow-auto">
     {#if classesStore.loading && allClasses.length === 0}
       <div class="p-6 text-sm text-zinc-500">Loading classes…</div>
     {:else if classesStore.error}
@@ -662,12 +665,12 @@
         >
           <tr>
             <!-- L5: ID and Added hide below lg (1024px) so the table fits 800px. -->
-            <th class="hidden px-3 py-2 font-medium lg:table-cell">ID</th>
-            <th class="px-3 py-2 font-medium">Name</th>
-            <th class="px-3 py-2 font-medium">Group</th>
-            <th class="px-3 py-2 text-center font-medium">Hotkey</th>
+            <th class="hidden px-2 py-2 lg:px-3 font-medium lg:table-cell">ID</th>
+            <th class="px-2 py-2 lg:px-3 font-medium">Name</th>
+            <th class="px-2 py-2 lg:px-3 font-medium">Group</th>
+            <th class="px-2 py-2 lg:px-3 text-center font-medium">Hotkey</th>
             <th
-              class="px-3 py-2 text-right font-medium"
+              class="px-2 py-2 lg:px-3 text-right font-medium"
               title="Human-validated crops, including any frozen as test holdout (shown as incl. N test)"
             >
               Validated
@@ -682,13 +685,13 @@
                  counted in the cluster bucket) here but 0 on /export (no
                  crop's own class_id is the region class). -->
             <th
-              class="px-3 py-2 text-right font-medium"
+              class="px-2 py-2 lg:px-3 text-right font-medium"
               title="Class-cluster size (cluster_size) — the same number the cluster page and sidebar show as &quot;in cluster&quot;. Not the same as /export's Total column."
             >
               Total (in cluster)
             </th>
-            <th class="hidden px-3 py-2 font-medium lg:table-cell">Added</th>
-            <th class="px-3 py-2"></th>
+            <th class="hidden px-2 py-2 lg:px-3 font-medium lg:table-cell">Added</th>
+            <th class="px-2 py-2 lg:px-3"></th>
           </tr>
         </thead>
         <tbody>
@@ -698,10 +701,11 @@
               class="border-b border-zinc-900 hover:bg-zinc-900/40"
               data-testid="class-row-{cls.id}"
             >
-              <td class="hidden px-3 py-1.5 font-mono text-xs text-zinc-400 lg:table-cell"
+              <td
+                class="hidden px-2 py-1.5 lg:px-3 font-mono text-xs text-zinc-400 lg:table-cell"
                 >{cls.id}</td
               >
-              <td class="px-3 py-1.5">
+              <td class="px-2 py-1.5 lg:px-3">
                 {#if editingId === cls.id}
                   <input
                     type="text"
@@ -729,7 +733,7 @@
                   </button>
                 {/if}
               </td>
-              <td class="px-3 py-1.5">
+              <td class="px-2 py-1.5 lg:px-3">
                 <select
                   class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs focus:border-blue-500 focus:outline-none"
                   value={cls.group ?? ''}
@@ -745,7 +749,7 @@
                   {/if}
                 </select>
               </td>
-              <td class="px-3 py-1.5 text-center">
+              <td class="px-2 py-1.5 lg:px-3 text-center">
                 <input
                   type="text"
                   maxlength="1"
@@ -758,7 +762,7 @@
                   disabled={busy}
                 />
               </td>
-              <td class="px-3 py-1.5 text-right font-mono">
+              <td class="px-2 py-1.5 lg:px-3 text-right font-mono">
                 <span
                   class="rounded-md border px-1.5 py-0.5 text-xs {adequacyChipClass(
                     cls.adequacy,
@@ -778,13 +782,13 @@
                    (bmw 271) under a header promising the cluster page's
                    "in cluster" number (270) — it now shows cluster_size. -->
               <td
-                class="px-3 py-1.5 text-right font-mono text-zinc-400"
+                class="px-2 py-1.5 lg:px-3 text-right font-mono text-zinc-400"
                 data-testid="in-cluster">{cls.cluster_size ?? 0}</td
               >
-              <td class="hidden px-3 py-1.5 text-xs text-zinc-500 lg:table-cell">
+              <td class="hidden px-2 py-1.5 lg:px-3 text-xs text-zinc-500 lg:table-cell">
                 {formatDateOnly(cls.added_at)}
               </td>
-              <td class="px-3 py-1.5 text-right">
+              <td class="px-2 py-1.5 lg:px-3 text-right">
                 {#if editingId === cls.id}
                   <button
                     type="button"

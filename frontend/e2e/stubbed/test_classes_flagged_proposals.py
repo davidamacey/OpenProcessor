@@ -119,7 +119,7 @@ def test_classes_flagged_terms_are_listed_with_no_create_action(stub, page, app_
 
 def test_classes_table_fits_800px(stub, page, app_url):
     """Visual audit 2026-09-24 L5: at 800px the class table was 932px wide
-    and scrolled sideways; the ID and Added columns now hide below md."""
+    and scrolled sideways; the ID and Added columns now hide below lg."""
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on("GET", r"/review/new_class_proposals/summary(\?|$)", PROPOSALS_SUMMARY)
     stub.on(
@@ -138,3 +138,29 @@ def test_classes_table_fits_800px(stub, page, app_url):
     headers = [h.strip().lower() for h in table.locator("thead th:visible").all_inner_texts()]
     assert "id" not in headers and "added" not in headers, headers
     assert "validated" in headers, headers
+
+
+def test_class_table_keeps_its_height_under_a_long_proposals_list(stub, page, app_url):
+    """With ~60 proposal rows above it, the flex-1/overflow-auto table
+    section used to collapse to almost nothing (seen live at 800px)."""
+    many = dict(PROPOSALS_SUMMARY)
+    many["top_terms"] = [
+        {
+            "label": f"term_{i:02d}",
+            "count": 1,
+            "sample_crop_ids": [],
+            "flag": None,
+            "class_id": None,
+        }
+        for i in range(60)
+    ]
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
+    stub.on("GET", r"/review/new_class_proposals/summary(\?|$)", many)
+    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
+    page.set_viewport_size({"width": 800, "height": 1000})
+    page.goto(f"{app_url}/classes")
+    table = page.locator("table").first
+    table.wait_for(timeout=15000)
+    page.get_by_test_id("proposal-row").nth(59).wait_for(timeout=10000)
+    height = table.evaluate("t => t.closest('section').getBoundingClientRect().height")
+    assert height >= 300, height
