@@ -426,6 +426,13 @@ async def start_gpu_services(
 
 
 # ---- trainer reachability (preflight) ---------------------------------
+#
+# The probe itself lives in trainer_reachability.py (kept out of this file
+# to stay under the 700-LOC ratchet) -- it borrows _container_status_sync/
+# _docker_client below for its optional docker-confirmation path. Imported
+# and re-exported at the bottom of this module so existing callers
+# (src.routers.curation_train, this module's own __all__) don't need to
+# know it moved.
 
 
 def _container_status_sync(client: Any, name: str) -> str | None:
@@ -438,46 +445,6 @@ def _container_status_sync(client: Any, name: str) -> str | None:
         return None
     container.reload()
     return container.status
-
-
-async def probe_trainer_reachable(
-    *,
-    container_name: str | None = None,
-) -> tuple[bool, str]:
-    """Check whether the configured trainer container is up and running.
-
-    Without this, submitting a job writes ``job.json`` and sits in
-    ``queued`` forever with no error if the trainer was never started;
-    preflight calls this to make that a blocking failure instead.
-
-    ``container_name`` defaults to ``GpuArbiterConfig.trainer_container``.
-    Unset (generic-install default, no sibling container to probe) ->
-    ``(True, ...)`` rather than treating "not configured" as a failure.
-
-    Returns ``(reachable, detail)``. Any failure to determine the real
-    state (missing SDK, no socket, permission error) reports
-    ``reachable=False`` -- we can't tell "fine" from "can't see it."
-    """
-    name = (
-        container_name if container_name is not None else get_gpu_arbiter_config().trainer_container
-    )
-    if not name:
-        return True, 'no trainer container configured -- reachability probe not applicable'
-    client = _docker_client()
-    if client is None:
-        return (
-            False,
-            f'docker SDK/socket unavailable in the API container -- cannot verify {name!r} is running',
-        )
-    try:
-        state = await asyncio.to_thread(_container_status_sync, client, name)
-    except Exception as exc:
-        return False, f'{name!r} probe failed: {exc}'
-    if state is None:
-        return False, f'{name!r} container does not exist'
-    if state != 'running':
-        return False, f'{name!r} container status={state!r} (expected running)'
-    return True, f'{name!r} is running'
 
 
 # ---- top-level dispatch ------------------------------------------------
@@ -671,9 +638,23 @@ async def reconcile_on_startup(
     return await start_gpu_services()
 
 
+# Re-exported for backward compat -- probe_trainer_reachable used to live
+# in this module; split out to trainer_reachability.py to stay under the
+# 700-LOC ratchet (see the comment above _container_status_sync). Imported
+# at the bottom, after _container_status_sync/_docker_client are already
+# bound in this module's namespace, so the circular import resolves.
+from src.services.training.trainer_reachability import (  # noqa: E402
+    TRAINER_CAPABILITIES_FILENAME,
+    TRAINER_HEARTBEAT_STALE_SECONDS,
+    probe_trainer_reachable,
+)
+
+
 __all__ = [
     'HEALTH_WAIT_SECONDS',
     'LOCK_GRACE_SECONDS',
+    'TRAINER_CAPABILITIES_FILENAME',
+    'TRAINER_HEARTBEAT_STALE_SECONDS',
     'TRAINER_TERMINAL_STATES',
     'ArbiterAction',
     'GpuArbiterStopFailedError',

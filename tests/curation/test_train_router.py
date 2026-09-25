@@ -143,7 +143,7 @@ def test_preflight_blocks_when_trainer_unreachable(
     it forever with no error. Simulate "container not running"."""
     monkeypatch.setattr(
         'src.routers.curation_train.probe_trainer_reachable',
-        AsyncMock(return_value=(False, "'trainer' container does not exist")),
+        AsyncMock(return_value=('block', "'trainer' container does not exist")),
     )
     body = {'dataset_export_dir': '/data/exports/x', 'profile': 'medium'}
     r = app_client.post('/curation/train/preflight', json=body)
@@ -159,7 +159,7 @@ def test_preflight_ok_when_trainer_reachable(
 ) -> None:
     monkeypatch.setattr(
         'src.routers.curation_train.probe_trainer_reachable',
-        AsyncMock(return_value=(True, "'trainer' is running")),
+        AsyncMock(return_value=('ok', "'trainer' is running")),
     )
     body = {'dataset_export_dir': '/data/exports/x', 'profile': 'medium'}
     r = app_client.post('/curation/train/preflight', json=body)
@@ -270,7 +270,7 @@ def test_start_returns_422_when_trainer_unreachable(
     """/start must refuse (not silently queue) when the trainer is down."""
     monkeypatch.setattr(
         'src.routers.curation_train.probe_trainer_reachable',
-        AsyncMock(return_value=(False, "'trainer' container does not exist")),
+        AsyncMock(return_value=('block', "'trainer' container does not exist")),
     )
     body = {'dataset_export_dir': '/data/exports/x', 'profile': 'medium'}
     r = app_client.post('/curation/train/start', json=body)
