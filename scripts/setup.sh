@@ -36,6 +36,30 @@ source "${SCRIPT_DIR}/lib/download.sh"
 source "${SCRIPT_DIR}/lib/export.sh"
 source "${SCRIPT_DIR}/lib/config.sh"
 
+# G-04: read a single KEY=value out of .env without sourcing the whole
+# file (.env may hold JSON-ish values in commented-out advanced settings
+# that aren't safe to `source`). Smoke tests below hit whatever ports
+# THIS deployment's .env actually configured, not the hardcoded
+# defaults -- a remapped API_PORT/TRITON_HTTP_PORT/OPENSEARCH_PORT (e.g.
+# a second isolated stack) must still smoke-test correctly.
+env_port() {
+    local key="$1" default="$2" env_file="$PROJECT_DIR/.env"
+    if [[ -f "$env_file" ]]; then
+        local value
+        value="$(grep -E "^${key}=" "$env_file" | tail -n1 | cut -d= -f2-)"
+        if [[ -n "$value" ]]; then
+            echo "$value"
+            return 0
+        fi
+    fi
+    echo "$default"
+}
+
+API_PORT="$(env_port API_PORT 4603)"
+TRITON_HTTP_PORT="$(env_port TRITON_HTTP_PORT 4600)"
+OPENSEARCH_PORT="$(env_port OPENSEARCH_PORT 4607)"
+GRAFANA_PORT="$(env_port GRAFANA_PORT 4605)"
+
 # Default options
 AUTO_YES=false
 SKIP_EXPORT=false
@@ -43,6 +67,14 @@ SKIP_DOWNLOAD=false
 SKIP_START=false
 SELECTED_GPU=""
 FORCE_PROFILE=""
+# G-04: never clobber an existing .env on a shared host without an
+# explicit --force -- a re-run (or a second operator on the same
+# checkout) must not silently overwrite someone else's port/GPU choices.
+FORCE_ENV=false
+# G-04: print the curation-subsystem next steps at the end of setup
+# instead of leaving it undiscoverable. Runs the core pipeline setup
+# either way; this only controls whether the extra printout happens.
+SHOW_CURATION_NEXT_STEPS=false
 
 # =============================================================================
 # Argument Parsing
@@ -75,6 +107,14 @@ parse_args() {
                 SKIP_START=true
                 shift
                 ;;
+            --force)
+                FORCE_ENV=true
+                shift
+                ;;
+            --curation)
+                SHOW_CURATION_NEXT_STEPS=true
+                shift
+                ;;
             --help|-h)
                 show_help
                 exit 0
@@ -104,6 +144,8 @@ Options:
   --skip-export       Skip TensorRT export (use existing models)
   --skip-download     Skip model download (use existing)
   --skip-start        Don't start services after setup
+  --force             Overwrite an existing .env (default: never touch one)
+  --curation          Print the curation/labeling subsystem next steps at the end
   --help, -h          Show this help
 
 Examples:
@@ -112,6 +154,14 @@ Examples:
   ./scripts/setup.sh --profile=minimal --yes  # Minimal profile, non-interactive
   ./scripts/setup.sh --skip-export            # Skip long TensorRT export
   ./scripts/setup.sh --profile=standard --gpu=1 --yes  # Use GPU 1
+  ./scripts/setup.sh --curation --yes         # Also print curation setup steps
+
+Shared-host note: this script only ever stops/removes containers in ITS
+OWN compose project (the directory it runs from, or COMPOSE_PROJECT_NAME
+if set) and never touches an existing .env unless you pass --force.
+Running a second isolated stack on the same host? Clone to a second
+directory (or set COMPOSE_PROJECT_NAME) and re-map any port this .env
+already claims -- see env.template's "Isolation" section.
 
 GPU Profiles:
   minimal   6-8GB VRAM (RTX 3060, RTX 4060) - core models only
@@ -467,8 +517,9 @@ generate_configs_step() {
     # Generate Triton model configs
     generate_all_configs "$SELECTED_PROFILE" "$GPU_ID"
 
-    # Generate .env file
-    generate_env_file "$SELECTED_PROFILE" "$GPU_ID"
+    # Generate .env file (G-04: never overwrites an existing one unless
+    # --force was passed)
+    generate_env_file "$SELECTED_PROFILE" "$GPU_ID" "$FORCE_ENV"
 
     # Generate docker-compose.override.yml
     generate_compose_override "$SELECTED_PROFILE" "$GPU_ID"
@@ -495,8 +546,15 @@ start_services_step() {
         fi
     fi
 
-    # Stop any running containers first
-    log_info "Stopping existing containers..."
+    # Stop any running containers first. G-01/G-04: scoped to THIS
+    # project only -- docker-compose.yml no longer pins a fixed `name:`,
+    # so compose resolves the project from COMPOSE_PROJECT_NAME (.env or
+    # shell) or, absent that, this directory's name. It never reaches a
+    # different project's containers, even on a host running several
+    # OpenProcessor stacks.
+    local compose_project
+    compose_project="$(docker compose config --format json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("name",""))' 2>/dev/null || true)"
+    log_info "Stopping existing containers in project '${compose_project:-<unresolved>}'..."
     docker compose stop 2>/dev/null || true
     docker compose rm -f 2>/dev/null || true
 
@@ -515,7 +573,7 @@ wait_for_services() {
     log_info "Waiting for Triton HTTP endpoint..."
     local triton_http=false
     for i in {1..150}; do
-        if curl -s localhost:4600/v2/health/ready > /dev/null 2>&1; then
+        if curl -s localhost:${TRITON_HTTP_PORT}/v2/health/ready > /dev/null 2>&1; then
             triton_http=true
             break
         fi
@@ -544,7 +602,7 @@ wait_for_services() {
 
         for model in "${required_models[@]}"; do
             # Triton returns HTTP 200 with empty body when model is ready
-            if curl -s -o /dev/null -w "%{http_code}" "localhost:4600/v2/models/${model}/ready" 2>/dev/null | grep -q "200"; then
+            if curl -s -o /dev/null -w "%{http_code}" "localhost:${TRITON_HTTP_PORT}/v2/models/${model}/ready" 2>/dev/null | grep -q "200"; then
                 loaded=$((loaded + 1))
             fi
         done
@@ -565,7 +623,7 @@ wait_for_services() {
         log_warn "Some models may not be loaded yet - continuing anyway"
         log_info "Loaded models:"
         for model in "${required_models[@]}"; do
-            if curl -s -o /dev/null -w "%{http_code}" "localhost:4600/v2/models/${model}/ready" 2>/dev/null | grep -q "200"; then
+            if curl -s -o /dev/null -w "%{http_code}" "localhost:${TRITON_HTTP_PORT}/v2/models/${model}/ready" 2>/dev/null | grep -q "200"; then
                 log_success "  $model"
             else
                 log_warn "  $model (not ready)"
@@ -577,7 +635,7 @@ wait_for_services() {
     log_info "Waiting for API service..."
     local api_ready=false
     for i in {1..30}; do
-        if curl -s localhost:4603/health 2>/dev/null | grep -qE "ready|healthy"; then
+        if curl -s localhost:${API_PORT}/health 2>/dev/null | grep -qE "ready|healthy"; then
             api_ready=true
             break
         fi
@@ -596,7 +654,7 @@ wait_for_services() {
     log_info "Waiting for OpenSearch..."
     local opensearch_ready=false
     for i in {1..30}; do
-        if curl -s localhost:4607 > /dev/null 2>&1; then
+        if curl -s localhost:${OPENSEARCH_PORT} > /dev/null 2>&1; then
             opensearch_ready=true
             break
         fi
@@ -633,7 +691,7 @@ run_smoke_test() {
 
     # Test 1: Health endpoint
     log_info "Testing /health endpoint..."
-    if curl -s localhost:4603/health | grep -qE "ready|healthy"; then
+    if curl -s localhost:${API_PORT}/health | grep -qE "ready|healthy"; then
         log_success "[1/8] Health check - PASS"
         passed=$((passed + 1))
     else
@@ -644,7 +702,7 @@ run_smoke_test() {
     # Test 2: Object detection
     log_info "Testing object detection..."
     local detect_result
-    detect_result=$(curl -s -X POST localhost:4603/detect -F "image=@$test_image" 2>/dev/null)
+    detect_result=$(curl -s -X POST localhost:${API_PORT}/detect -F "image=@$test_image" 2>/dev/null)
     if echo "$detect_result" | grep -q "detections"; then
         local det_count
         det_count=$(echo "$detect_result" | grep -o '"class_name"' | wc -l)
@@ -660,7 +718,7 @@ run_smoke_test() {
     if [[ -f "$face_image" ]]; then
         log_info "Testing face detection..."
         local face_result
-        face_result=$(curl -s -X POST localhost:4603/faces/recognize -F "image=@$face_image" 2>/dev/null)
+        face_result=$(curl -s -X POST localhost:${API_PORT}/faces/recognize -F "image=@$face_image" 2>/dev/null)
         if echo "$face_result" | grep -q "faces"; then
             local face_count
             face_count=$(echo "$face_result" | grep -o '"box"' | wc -l)
@@ -678,7 +736,7 @@ run_smoke_test() {
     # Test 4: CLIP embedding
     log_info "Testing CLIP embedding..."
     local embed_result
-    embed_result=$(curl -s -X POST localhost:4603/embed/image -F "image=@$test_image" 2>/dev/null)
+    embed_result=$(curl -s -X POST localhost:${API_PORT}/embed/image -F "image=@$test_image" 2>/dev/null)
     if echo "$embed_result" | grep -q "embedding"; then
         log_success "[4/8] CLIP embedding - PASS"
         passed=$((passed + 1))
@@ -691,7 +749,7 @@ run_smoke_test() {
     # Test 5: Full analysis
     log_info "Testing full analysis..."
     local analyze_result
-    analyze_result=$(curl -s -X POST localhost:4603/analyze -F "image=@$test_image" 2>/dev/null)
+    analyze_result=$(curl -s -X POST localhost:${API_PORT}/analyze -F "image=@$test_image" 2>/dev/null)
     if echo "$analyze_result" | grep -q "status"; then
         log_success "[5/8] Full analysis - PASS"
         passed=$((passed + 1))
@@ -704,7 +762,7 @@ run_smoke_test() {
     # Test 6: Triton model count
     log_info "Checking Triton models..."
     local model_count
-    model_count=$(curl -s -X POST localhost:4600/v2/repository/index 2>/dev/null | grep -o '"name"' | wc -l)
+    model_count=$(curl -s -X POST localhost:${TRITON_HTTP_PORT}/v2/repository/index 2>/dev/null | grep -o '"name"' | wc -l)
     if [[ "$model_count" -ge 5 ]]; then
         log_success "[6/8] Triton models - PASS ($model_count models loaded)"
         passed=$((passed + 1))
@@ -715,7 +773,7 @@ run_smoke_test() {
     # Test 7: Ingest (indexes image into OpenSearch)
     log_info "Testing image ingestion..."
     local ingest_result
-    ingest_result=$(curl -s -X POST localhost:4603/ingest -F "image=@$test_image" 2>/dev/null)
+    ingest_result=$(curl -s -X POST localhost:${API_PORT}/ingest -F "image=@$test_image" 2>/dev/null)
     if echo "$ingest_result" | grep -q '"global": true'; then
         local face_count
         face_count=$(echo "$ingest_result" | grep -o '"faces": [0-9]*' | grep -o '[0-9]*')
@@ -730,7 +788,7 @@ run_smoke_test() {
     # Test 8: OpenSearch index verification
     log_info "Checking OpenSearch indexes..."
     local index_count
-    index_count=$(curl -s localhost:4607/_cat/indices 2>/dev/null | grep -c "visual_search" || echo "0")
+    index_count=$(curl -s localhost:${OPENSEARCH_PORT}/_cat/indices 2>/dev/null | grep -c "visual_search" || echo "0")
     if [[ "$index_count" -ge 1 ]]; then
         log_success "[8/8] OpenSearch indexes - PASS ($index_count visual_search indexes)"
         passed=$((passed + 1))
@@ -763,14 +821,14 @@ print_success_summary() {
     echo -e "${GREEN}OpenProcessor is ready to use!${NC}"
     echo ""
     echo "Services running:"
-    echo "  API:         http://localhost:4603"
-    echo "  API Docs:    http://localhost:4603/docs"
-    echo "  Triton:      http://localhost:4600"
-    echo "  Grafana:     http://localhost:4605 (admin/admin)"
-    echo "  OpenSearch:  http://localhost:4607"
+    echo "  API:         http://localhost:${API_PORT}"
+    echo "  API Docs:    http://localhost:${API_PORT}/docs"
+    echo "  Triton:      http://localhost:${TRITON_HTTP_PORT}"
+    echo "  Grafana:     http://localhost:${GRAFANA_PORT} (admin/admin)"
+    echo "  OpenSearch:  http://localhost:${OPENSEARCH_PORT}"
     echo ""
     echo "Quick test:"
-    echo "  curl http://localhost:4603/health"
+    echo "  curl http://localhost:${API_PORT}/health"
     echo ""
     echo "Documentation:"
     echo "  README.md        - API overview and examples"
@@ -782,6 +840,55 @@ print_success_summary() {
     echo "  ./scripts/openprocessor.sh logs     - View logs"
     echo "  ./scripts/openprocessor.sh restart  - Restart services"
     echo ""
+
+    if [[ "$SHOW_CURATION_NEXT_STEPS" == "true" ]]; then
+        print_curation_next_steps
+    else
+        log_info "Curation/labeling subsystem next steps: re-run with --curation, or see docs/CURATION.md"
+    fi
+}
+
+# G-04: this script only ever brings up the core inference stack (detect/
+# faces/embed/ocr). The curation/active-learning subsystem is a separate,
+# opt-in stack (--profile curation) with its own prerequisites this
+# script does NOT run for you -- print the exact next commands instead of
+# leaving it a silent gap. See docs/CURATION.md for the full walkthrough.
+print_curation_next_steps() {
+    print_header "Curation / Labeling Subsystem — Next Steps"
+    cat << EOF
+The steps above set up core inference only. To also get curation
+(active-learning labeling, clustering, region detection, training):
+
+  1. Export the semantic-search encoder (required, not optional):
+       make export-pe
+     Then add pe_image_encoder to triton-server's --load-model list in
+     docker-compose.yml (already listed by default in this repo) and
+     restart Triton: make restart-triton
+
+  2. Seed a class registry (there is no default one):
+       Add classes via POST {API}/curation/classes, or via the
+       Cropwright UI's /classes page. See docs/CURATION.md "Class
+       registry from zero".
+
+  3. VLM (auto-labeling / region verification) -- pick one:
+       - docker compose --profile vlm up -d      # runs vLLM in this compose
+       - or set OP_VLM_URL in .env to a VLM you already run elsewhere
+     See docs/CURATION.md "VLM" and env.template's VLM section.
+
+  4. Segmenter (region-of-interest cascade), if your use case needs one:
+       HF_TOKEN=<your-hf-token-with-SAM3-access> \\
+         docker compose --profile curation --profile segmenter up -d
+     See docs/CURATION.md "Segmenter" and env.template's Segmenter section.
+
+  5. Start the curation workers:
+       docker compose --profile curation up -d
+
+  6. Bring up Cropwright (the labeling UI) against this API -- see
+     docs/CURATION.md "Wiring up Cropwright" for the exact env vars
+     (API_UPSTREAM, PUBLIC_API_PREFIX, docker network name).
+
+Full walkthrough: docs/CURATION.md
+EOF
 }
 
 # =============================================================================
