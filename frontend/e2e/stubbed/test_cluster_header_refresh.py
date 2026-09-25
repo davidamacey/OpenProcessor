@@ -135,6 +135,13 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
     assert "34" in header.inner_text(), (
         f"header should show the refreshed server count without a reload: {header.inner_text()!r}"
     )
+    # K1 (visual audit 2026-09-24): the class registry's counts (161
+    # labeled) and the cluster's own size (2) are different scopes; each
+    # must say which one it is, so "labeled" can't read as a share of
+    # "in cluster".
+    text = " ".join(header.inner_text().split())
+    assert "class-wide: 34 validated · 161 labeled" in text, text
+    assert "2 in this cluster" in text, text
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, f"no pageerror expected in the label/header-refresh flow: {errors[:3]}"

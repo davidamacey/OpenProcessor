@@ -252,8 +252,16 @@
           Select all
         </button>
       {/if}
-      <span class="font-mono text-[11px] text-zinc-500">
+      <!-- C4 (visual audit 2026-09-24): name this count's scope — it is the
+           browse endpoint's filtered, holdout-excluded total, which differs
+           from the sidebar/dashboard/review-queue counts. -->
+      <span
+        class="font-mono text-[11px] text-zinc-500"
+        title="Regions the browse endpoint lists: test-holdout items and active filters excluded. The sidebar's class count and the dashboard total include test-holdout items, and the review queue applies its own queue filters, so those can differ."
+        data-testid="slot-gallery-count"
+      >
         {gallery.pager.items.length.toLocaleString()} / {gallery.pager.total.toLocaleString()}
+        listed
       </span>
     </div>
 
@@ -310,9 +318,7 @@
          bulk toolbar + AHC Refine). Buckets with sub-clusters (refined)
          get a blue border so refined buckets are easy to spot. The
          permanent false-positive bucket gets a red border + label. -->
-    <ul
-      class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-    >
+    <ul class="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
       {#each gallery.clusters as c (c.id)}
         <li style="content-visibility:auto;contain-intrinsic-size:auto 200px">
           <button
@@ -404,9 +410,7 @@
           <span class="h-px grow bg-zinc-800"></span>
         </div>
       {/if}
-      <div
-        class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-      >
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
         {#each g.items as p (p.crop_id)}
           <SlotCard
             crop={p}
