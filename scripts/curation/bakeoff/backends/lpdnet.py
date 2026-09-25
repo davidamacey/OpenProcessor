@@ -40,6 +40,7 @@ class LpdnetDetector:
     """Run NVIDIA LPDNet (DetectNet_v2 ONNX) as a bake-off Detector."""
 
     runtime = 'onnxruntime'
+    class_names: dict[int, str] | None = None
 
     def __init__(
         self,

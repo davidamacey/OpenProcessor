@@ -25,6 +25,7 @@ class OpenImageModelsDetector:
     """Wrap ankandrew/open-image-models LicensePlateDetector."""
 
     runtime = 'open-image-models'
+    class_names: dict[int, str] | None = None
 
     def __init__(
         self,

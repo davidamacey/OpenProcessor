@@ -28,7 +28,6 @@ def _build_detector(args: argparse.Namespace, backend: str) -> Detector:
             device=args.device,
             conf=args.conf_floor,
             iou=args.nms_iou,
-            pred_class_id=args.pred_class_id,
         )
     if backend == 'triton':
         from .triton_trt import TritonYoloDetector
@@ -55,7 +54,7 @@ def _build_detector(args: argparse.Namespace, backend: str) -> Detector:
         return LpdnetDetector(
             args.weights,
             name=args.name,
-            variant=args.lpdnet_variant,
+            variant=str(args.backend_options.get('variant', 'usa')),
             conf=args.conf_floor,
             iou=args.nms_iou,
             device='cpu' if str(args.device) == 'cpu' else 'cuda',

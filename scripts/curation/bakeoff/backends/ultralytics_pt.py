@@ -1,7 +1,8 @@
 """Ultralytics backend — runs any ``.pt``/``.onnx`` Ultralytics model.
 
-For multi-class public models, pass ``pred_class_id`` to keep only the
-target class; single-class models keep everything.
+Returns every class with its model class id; the harness maps model
+classes to the eval dataset's classes. ``keep_classes`` restricts output to
+a set of model class ids (the crop-mode coarse stage's context classes).
 """
 
 from __future__ import annotations
@@ -29,7 +30,6 @@ class UltralyticsDetector:
         device: str | int = 0,
         conf: float = 0.001,
         iou: float = 0.7,
-        pred_class_id: int | None = None,
         keep_classes: set[int] | None = None,
         half: bool = True,
     ) -> None:
@@ -40,12 +40,15 @@ class UltralyticsDetector:
         self.device = device
         self.conf = conf
         self.iou = iou
-        self.pred_class_id = pred_class_id
         # When set, keep only these class ids (a profile's context_class_ids
-        # for a crop-mode coarse stage). Takes precedence over pred_class_id.
+        # for a crop-mode coarse stage).
         self.keep_classes = keep_classes
         self.half = half
         self._model = YOLO(weights)
+        names = getattr(self._model, 'names', None)
+        self.class_names: dict[int, str] | None = (
+            {int(k): str(v) for k, v in dict(names).items()} if names else None
+        )
 
     def detect(self, image_rgb: np.ndarray) -> list[Detection]:
         # Ultralytics accepts an RGB ndarray directly and returns boxes in
@@ -69,10 +72,9 @@ class UltralyticsDetector:
         classes = boxes.cls.cpu().numpy().astype(int)
         out: list[Detection] = []
         for (x1, y1, x2, y2), score, cls in zip(xyxy, scores, classes, strict=True):
-            if self.keep_classes is not None:
-                if cls not in self.keep_classes:
-                    continue
-            elif self.pred_class_id is not None and cls != self.pred_class_id:
+            if self.keep_classes is not None and cls not in self.keep_classes:
                 continue
-            out.append(Detection(float(x1), float(y1), float(x2), float(y2), float(score)))
+            out.append(
+                Detection(float(x1), float(y1), float(x2), float(y2), float(score), int(cls))
+            )
         return out

@@ -19,6 +19,8 @@ from fastapi.testclient import TestClient
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# The license_plate example profile is opt-in: loaded by path, never listed.
+PLATE_PROFILE = REPO_ROOT / 'scripts/curation/bakeoff/examples/license_plate/profile.json'
 
 # CFG-6: this harness used to default to owner-private absolute paths --
 # one of which named the location of a licensed proprietary image corpus
@@ -193,13 +195,13 @@ def test_bakeoff_run_writes_profile_into_job_spec(
         json={
             'dataset': '/data/ds',
             'job_id': 'jp1',
-            'profile': 'license_plate',
+            'profile': str(PLATE_PROFILE),
             'models': [{'backend': 'ultralytics', 'name': 'm1', 'profile': 'generic'}],
         },
     )
     assert r.status_code == 200, r.text
     spec = json.loads((tmp_path / 'jobs' / 'jp1.job.json').read_text())
-    assert spec['profile'] == 'license_plate'
+    assert spec['profile'] == str(PLATE_PROFILE)
     assert spec['models'][0]['profile'] == 'generic'
 
 
@@ -254,27 +256,28 @@ def clean_profile_env(monkeypatch) -> None:
 
 
 @pytest.mark.usefixtures('clean_profile_env')
-def test_bakeoff_profiles_lists_generic_and_examples(app_client: TestClient) -> None:
+def test_bakeoff_profiles_lists_generic_only_by_default(app_client: TestClient) -> None:
     r = app_client.get('/curation/bakeoff/profiles')
     assert r.status_code == 200
     by_name = {p['name']: p for p in r.json()['profiles']}
+    assert set(by_name) == {'generic'}  # example profiles are opt-in, never listed
     assert by_name['generic']['kind'] == 'registered'
     assert by_name['generic']['context_class_ids'] == []
-    assert by_name['license_plate']['kind'] == 'example'
-    assert by_name['license_plate']['context_class_ids'] == [2, 3, 5, 7]
+    assert by_name['generic']['class_filter'] == []
     assert r.json()['default_profile'] == 'generic'
     assert by_name['generic']['default'] is True
-    assert by_name['license_plate']['default'] is False
 
 
 @pytest.mark.usefixtures('clean_profile_env')
-def test_bakeoff_profiles_default_follows_env_example(app_client: TestClient, monkeypatch) -> None:
-    monkeypatch.setenv('OP_BAKEOFF_PROFILE', 'license_plate')
+def test_bakeoff_profiles_default_follows_env_example_path(
+    app_client: TestClient, monkeypatch
+) -> None:
+    monkeypatch.setenv('OP_BAKEOFF_PROFILE', str(PLATE_PROFILE))
     body = app_client.get('/curation/bakeoff/profiles').json()
     by_name = {p['name']: p for p in body['profiles']}
     assert body['default_profile'] == 'license_plate'
     assert by_name['license_plate']['default'] is True
-    assert by_name['license_plate']['kind'] == 'example'  # kind stays honest
+    assert by_name['license_plate']['kind'] == 'configured'
     assert by_name['generic']['default'] is False
     assert sum(p['default'] for p in body['profiles']) == 1
 
@@ -284,14 +287,14 @@ def test_bakeoff_profiles_default_from_json_path_and_field_overrides(
     app_client: TestClient, monkeypatch, tmp_path: Path
 ) -> None:
     f = tmp_path / 'widgets.json'
-    f.write_text(json.dumps({'name': 'widgets', 'target_class_name': 'widget'}))
+    f.write_text(json.dumps({'name': 'widgets', 'class_filter': ['widget']}))
     monkeypatch.setenv('OP_BAKEOFF_PROFILE', str(f))
     body = app_client.get('/curation/bakeoff/profiles').json()
     [row] = [p for p in body['profiles'] if p['default']]
-    assert (row['name'], row['kind'], row['target_class_name']) == (
+    assert (row['name'], row['kind'], row['class_filter']) == (
         'widgets',
         'configured',
-        'widget',
+        ['widget'],
     )
     assert body['count'] == len(body['profiles'])
 
@@ -335,11 +338,12 @@ def test_default_baseline_registry_is_domain_neutral(app_client: TestClient) -> 
 
 
 def test_baseline_models_per_profile(app_client: TestClient) -> None:
+    # Example profiles are not resolvable by name any more (opt-in, by path).
     r = app_client.get('/curation/bakeoff/baseline_models', params={'profile': 'license_plate'})
+    assert r.status_code == 400
+    r = app_client.get('/curation/bakeoff/baseline_models', params={'profile': 'generic'})
     assert r.status_code == 200
-    names = {b['name'] for b in r.json()['baselines']}
-    assert 'lpdnet-usa' in names
-    assert 'lpr_nanov11_640' not in names
+    assert 'lpr_nanov11_640' not in {b['name'] for b in r.json()['baselines']}
     assert (
         app_client.get('/curation/bakeoff/baseline_models', params={'profile': 'nope'}).status_code
         == 400

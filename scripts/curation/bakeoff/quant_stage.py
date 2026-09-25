@@ -28,33 +28,42 @@ def _quant_root(quant: dict[str, Any], out_dir: Path) -> Path:
     return Path(quant['out_root']) if quant.get('out_root') else out_dir / 'quant'
 
 
+def _quant_model_id(quant: dict[str, Any]) -> str:
+    """Artifact dir name under the quant root: the run id."""
+    return str(quant.get('run_id') or 'candidate')
+
+
 def _quantize_and_variant_models(
-    quant: dict[str, Any], datasets: list[dict[str, str]], out_dir: Path
+    quant: dict[str, Any], datasets: list[dict[str, Any]], out_dir: Path
 ) -> list[dict[str, Any]]:
-    """Export a checkpoint to ONNX variants (``quantize.py``); return their model specs.
+    """Export a checkpoint to ONNX variants (``quantize.py``); return their v2 model specs.
 
     Lets a single bake-off job export a trained model to portable ONNX
     (fp32/fp16/int8) and score those variants alongside the other models, so
-    the matrix shows size / speed / accuracy with no manual step. The
-    ``quantize`` block::
+    the matrix shows size / speed / accuracy with no manual step. The job
+    spec v2 ``quantize`` block::
 
         {
-            'model_id': 'my_model',
-            'checkpoint': '/runs/.../best.pt',
-            'formats': ['fp32_onnx', 'fp16_onnx', 'int8_onnx'],
-            'n_calib': 1000,
-            'calib_dataset': '/data/exports/<run>',  # default: first dataset
-            'calib_split': 'train',
+            'run_id': '<run_id>',
+            'model_key_prefix': 'run:<run_id>',  # variant keys: '<prefix>:<fmt>'
+            'checkpoint': '/.../weights/best.pt',
             'imgsz': 640,
-            'out_root': '/data/quant',
-        }  # default: <out_dir>/quant
+            'calib_dataset': '/exports/<export>',  # default: first dataset
+            'calib_split': 'train',
+            'n_calib': 1000,
+            'formats': ['fp32_onnx', 'fp16_onnx', 'int8_onnx'],
+            'throughput': False,
+            'out_root': '<out_dir>/quant',  # default
+            'class_map_by_dataset': {'<dataset id>': {'0': 37}},  # to every variant
+        }
 
     Raises :class:`quantize.QuantizeError` (or the exporter's own error) on
     failure; the caller records it in the job status.
     """
     from .quantize import run as quantize_run
 
-    model_id = quant.get('model_id') or 'candidate'
+    model_id = _quant_model_id(quant)
+    prefix = str(quant.get('model_key_prefix') or f'run:{model_id}')
     formats = quant.get('formats') or ['fp32_onnx', 'fp16_onnx', 'int8_onnx']
     out_root = _quant_root(quant, out_dir)
     calib = quant.get('calib_dataset') or (datasets[0]['path'] if datasets else None)
@@ -95,30 +104,33 @@ def _quantize_and_variant_models(
             continue
         out.append(
             {
+                'model': f'{prefix}:{fmt}',
+                'display_name': f'{model_id} {label}',
+                'source': 'run',
+                'run_id': quant.get('run_id'),
                 'backend': 'onnxruntime',
-                'name': f'ours_{fmt.replace("_onnx", "")}_onnx',
                 'weights': str(weights),
                 'imgsz': quant.get('imgsz', 640),
-                'device': 'cuda',
-                'coords_normalized': False,
-                'ort_providers': providers,
                 'mode': 'full',
+                'backend_options': {'providers': providers, 'coords_normalized': False},
+                'triton_model': None,
                 'training_data': label,
+                'class_map_by_dataset': dict(quant.get('class_map_by_dataset') or {}),
+                'train_test_overlap_by_dataset': {},
             }
         )
     return out
 
 
 def _run_throughput_sweep(
-    quant: dict[str, Any], datasets: list[dict[str, str]], out_dir: Path
+    quant: dict[str, Any], datasets: list[dict[str, Any]], out_dir: Path
 ) -> None:
     """Steady-state img/s for every exported variant on CPU + GPU (best-effort).
 
     Runs ``throughput.py`` per variant/EP so the auto pipeline captures model
     *speed* (not just accuracy) -- the JSONs land in ``<out_dir>/throughput/``.
     """
-    model_id = quant.get('model_id') or 'candidate'
-    qdir = _quant_root(quant, out_dir) / model_id
+    qdir = _quant_root(quant, out_dir) / _quant_model_id(quant)
     imgsz = str(quant.get('imgsz', 640))
     if not datasets:
         return

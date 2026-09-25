@@ -4,10 +4,12 @@ Same pattern as :class:`src.config.DetectionProfile`: a frozen dataclass
 describing one deployment's parameters, a ``from_env`` classmethod for
 per-field overrides, and a small registry of named profiles. The harness
 code (``run``, ``datasets``, ``bakeoff_runner``) reads everything
-domain-specific from a profile -- target class, the context classes a
-coarse->fine cascade crops on, the Triton model under test, backend
-defaults, and metric thresholds -- so benchmarking a different object
-type means writing a profile, not editing the harness.
+deployment-specific from a profile -- which eval classes to score, the
+context classes a coarse->fine cascade crops on, the Triton model under
+test, backend defaults, metric thresholds and plugin modules -- so
+benchmarking a different domain means writing a profile, not editing the
+harness. Every class present in the eval split is scored unless
+``class_filter`` narrows it.
 
 It lives next to the harness rather than under ``src/config`` on purpose:
 the harness is meant to run in a standalone evaluator/trainer image, and
@@ -21,9 +23,8 @@ Resolution order for :func:`resolve_profile` (``spec`` is a CLI
    :data:`GENERIC_PROFILE` plus any ``OP_BAKEOFF_PROFILE_*`` overrides.
 2. A registered profile name (``generic``, or anything registered via
    :func:`register_profile`).
-3. The name of an example directory under ``examples/`` that ships a
-   ``profile.json`` (the shipped reference examples).
-4. A path to a profile JSON file.
+3. A path to a profile JSON file (e.g. an opt-in example profile under the
+   repo's ``examples/`` tree; in containers it must be mounted there).
 """
 
 from __future__ import annotations
@@ -36,88 +37,81 @@ from pathlib import Path
 from typing import Any
 
 
-EXAMPLES_DIR = Path(__file__).resolve().parent / 'examples'
 ENV_PREFIX = 'OP_BAKEOFF_PROFILE_'
+GENERIC_DESCRIPTION = 'All classes present in the eval split'
 
-BACKENDS: tuple[str, ...] = (
-    'ultralytics',
-    'triton',
-    'open-image-models',
-    'two-stage',
-    'lpdnet',
-    'onnxruntime',
-    'coreml',
-)
+# Built-in detector backends (see backends/factory.py). A profile's
+# backend_modules can register more.
+BACKENDS: tuple[str, ...] = ('ultralytics', 'triton', 'two-stage', 'onnxruntime', 'coreml')
 
-# Metrics a comparison may be ranked by (keys of compare._row).
-RANKABLE_METRICS: tuple[str, ...] = (
-    'map_50_95',
-    'map_50',
-    'ap_small',
-    'mean_iou',
-    'precision',
-    'recall',
-    'f1',
-)
+# Metrics a comparison may be ranked by (keys of a comparison row's
+# ``overall`` / ``common`` block).
+RANKABLE_METRICS: tuple[str, ...] = ('map_50_95', 'map_50', 'precision', 'recall', 'f1')
 
 
 @dataclass(frozen=True)
 class BakeoffProfile:
-    """Target class, cascade context, model identity and metric config.
+    """Eval-class scope, cascade context, model identity and metric config.
 
     Attributes:
         name: Profile identifier (reports, registry key).
-        target_class_id: Class id under test in the GT label files.
-        target_class_name: Display name for that class.
-        class_names: Full label space written into converted datasets'
-            ``data.yaml`` (index = class id). Empty means single-class:
-            ``(target_class_name,)``, which requires ``target_class_id == 0``.
+        description: One-line human description.
+        class_filter: Eval class NAMES to score; empty = every class present
+            in the eval split's test labels.
+        class_names: Label space written by dataset CONVERTERS into
+            ``data.yaml`` (index = class id); empty = ``('object',)``.
+            Not used for scoring (eval datasets carry their own names).
+        imgsz: Default detector input size (training runs override it from
+            their own manifest).
+        conf_floor: Detection floor (low, so COCOeval sees the full PR curve).
+        nms_iou: NMS IoU during inference.
+        op_conf: Operating-point confidence for P/R/F1.
+        op_iou: Operating-point match IoU.
+        rank_metric: Metric the per-dataset comparison is ranked by.
+        default_backend: Backend used when ``--backend`` is omitted.
+        triton_model: Triton model scored by ``--backend triton``.
+            Deliberately empty: there is no sensible default model, so the
+            triton backend requires it from the profile or ``--triton-model``.
         context_class_ids: Class ids the coarse stage keeps in ``--mode
             crop`` / ``two-stage`` (the "parent" objects the target is
             cropped from). Empty keeps every coarse-stage class.
         context_weights: Weights for the coarse-stage detector.
         context_imgsz: Coarse-stage input size.
         context_conf: Coarse-stage confidence floor.
-        triton_model: Triton model scored by ``--backend triton``.
-            Deliberately empty: there is no sensible default model, so the
-            triton backend requires it from the profile or ``--triton-model``.
-        default_backend: Backend used when ``--backend`` is omitted.
-        imgsz: Default detector input size.
-        conf_floor: Detection floor (low, so COCOeval sees the full PR curve).
-        nms_iou: NMS IoU during inference.
-        op_conf: Operating-point confidence for P/R/F1.
-        op_iou: Operating-point match IoU.
-        rank_metric: Metric the per-dataset comparison is ranked by.
         converter_modules: Importable modules that register extra dataset
-            converters (see ``datasets.register_converter``) for this profile.
+            converters (see ``datasets.register_converter``).
+        backend_modules: Importable modules that register extra detector
+            backends.
         baselines_path: Optional baseline-model registry JSON for this profile.
     """
 
     name: str
-    target_class_id: int = 0
-    target_class_name: str = 'object'
+    description: str = ''
+    class_filter: tuple[str, ...] = ()
     class_names: tuple[str, ...] = ()
-    context_class_ids: tuple[int, ...] = ()
-    context_weights: str = './weights/yolo11n.pt'
-    context_imgsz: int = 960
-    context_conf: float = 0.25
-    triton_model: str = ''
-    default_backend: str = 'ultralytics'
-    imgsz: int = 1280
+    imgsz: int = 640
     conf_floor: float = 0.001
     nms_iou: float = 0.7
     op_conf: float = 0.25
     op_iou: float = 0.45
     rank_metric: str = 'map_50_95'
+    default_backend: str = 'ultralytics'
+    triton_model: str = ''
+    context_class_ids: tuple[int, ...] = ()
+    context_weights: str = './weights/yolo11n.pt'
+    context_imgsz: int = 960
+    context_conf: float = 0.25
     converter_modules: tuple[str, ...] = ()
+    backend_modules: tuple[str, ...] = ()
     baselines_path: str = ''
 
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError('BakeoffProfile.name must be non-empty')
-        if self.target_class_id < 0:
-            raise ValueError(f'target_class_id must be >= 0, got {self.target_class_id}')
-        if self.default_backend not in BACKENDS:
+        # A plugin backend is registered only once its module is imported, so
+        # the default can only be checked against the built-ins when the
+        # profile brings no backend modules.
+        if not self.backend_modules and self.default_backend not in BACKENDS:
             raise ValueError(
                 f'default_backend {self.default_backend!r} not one of {", ".join(BACKENDS)}'
             )
@@ -125,16 +119,6 @@ class BakeoffProfile:
             raise ValueError(
                 f'rank_metric {self.rank_metric!r} not one of {", ".join(RANKABLE_METRICS)}'
             )
-        names = self.label_names()
-        if self.target_class_id >= len(names):
-            raise ValueError(
-                f'target_class_id {self.target_class_id} is outside class_names '
-                f'(nc={len(names)}); list the full label space in class_names'
-            )
-
-    def label_names(self) -> tuple[str, ...]:
-        """The dataset label space (index = class id)."""
-        return self.class_names or (self.target_class_name,)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -165,11 +149,14 @@ class BakeoffProfile:
         """Build from ``{prefix}*`` env vars over the dataclass defaults.
 
         Mirrors :meth:`src.config.DetectionProfile.from_env`: ints/floats
-        via their constructors, tuples from comma-separated lists (element
-        type from the field's annotation: ``int`` for ``context_class_ids``,
-        ``str`` otherwise), everything else as a string.
+        via their constructors, tuples from comma-separated lists (``int``
+        elements for ``context_class_ids``; ``str`` for ``class_filter``,
+        ``class_names``, ``converter_modules``, ``backend_modules``),
+        everything else as a string.
         """
         overrides: dict[str, Any] = {'name': os.environ.get(f'{prefix}NAME', name)}
+        if overrides['name'] == 'generic':
+            overrides['description'] = GENERIC_DESCRIPTION
         for f in fields(cls):
             if f.name == 'name':
                 continue
@@ -190,7 +177,7 @@ class BakeoffProfile:
         return cls(**overrides)
 
 
-GENERIC_PROFILE = BakeoffProfile(name='generic')
+GENERIC_PROFILE = BakeoffProfile(name='generic', description=GENERIC_DESCRIPTION)
 
 _REGISTRY: dict[str, BakeoffProfile] = {GENERIC_PROFILE.name: GENERIC_PROFILE}
 
@@ -206,13 +193,6 @@ def registered_profiles() -> dict[str, BakeoffProfile]:
     return dict(_REGISTRY)
 
 
-def example_profile_names() -> list[str]:
-    """Example profiles shipped under ``examples/<name>/profile.json``."""
-    if not EXAMPLES_DIR.is_dir():
-        return []
-    return sorted(p.parent.name for p in EXAMPLES_DIR.glob('*/profile.json'))
-
-
 def resolve_profile(spec: str | None = None) -> BakeoffProfile:
     """Resolve a profile spec (see module docstring for the order)."""
     if spec is None or not str(spec).strip():
@@ -221,13 +201,10 @@ def resolve_profile(spec: str | None = None) -> BakeoffProfile:
     spec = str(spec).strip()
     if spec in _REGISTRY:
         return _REGISTRY[spec]
-    example = EXAMPLES_DIR / spec / 'profile.json'
-    if '/' not in spec and example.is_file():
-        return BakeoffProfile.from_json_file(example)
     path = Path(spec)
     if path.suffix == '.json' and path.is_file():
         return BakeoffProfile.from_json_file(path)
-    known = sorted({*_REGISTRY, *example_profile_names()})
+    known = sorted(_REGISTRY)
     raise ValueError(
         f'unknown bake-off profile {spec!r}: not a registered name ({", ".join(known)}) '
         'or an existing profile .json file'
@@ -241,7 +218,12 @@ def load_converter_plugins(profile: BakeoffProfile) -> None:
 
 
 def resolve_baselines_path(profile: BakeoffProfile, default: Path) -> Path:
-    """The profile's baseline registry (relative paths resolve against the repo root)."""
+    """The profile's baseline registry (relative paths resolve against the repo root).
+
+    In a container the repo root is ``/app``: an example profile's relative
+    ``baselines_path`` (e.g. ``examples/...``) needs ``examples/`` mounted at
+    ``/app/examples``.
+    """
     if not profile.baselines_path:
         return default
     path = Path(profile.baselines_path)
@@ -255,7 +237,6 @@ __all__ = [
     'GENERIC_PROFILE',
     'RANKABLE_METRICS',
     'BakeoffProfile',
-    'example_profile_names',
     'load_converter_plugins',
     'register_profile',
     'registered_profiles',

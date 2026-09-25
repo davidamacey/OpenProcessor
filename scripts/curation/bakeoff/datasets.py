@@ -62,7 +62,7 @@ class YoloWriter:
 
     Args:
         out_root: Output dataset root.
-        class_names: Label space, index = class id (``profile.label_names()``).
+        class_names: Label space, index = class id (``profile.class_names``).
         split: Split directory name.
         target_class_id: Class id used for single-class sources and as the
             collapse target when ``class_names`` has one entry.
@@ -88,12 +88,7 @@ class YoloWriter:
 
     @classmethod
     def for_profile(cls, out_root: Path, profile: BakeoffProfile, *, split: str) -> YoloWriter:
-        return cls(
-            out_root,
-            profile.label_names(),
-            split=split,
-            target_class_id=profile.target_class_id,
-        )
+        return cls(out_root, profile.class_names or ('object',), split=split)
 
     @property
     def nc(self) -> int:

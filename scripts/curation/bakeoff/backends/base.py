@@ -1,4 +1,4 @@
-"""Backend abstraction: a detector maps an RGB frame to target-class boxes."""
+"""Backend abstraction: a detector maps an RGB frame to class-labelled boxes."""
 
 from __future__ import annotations
 
@@ -12,10 +12,12 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class Detection:
-    """One predicted target-class box in absolute pixel coords (xyxy) + score.
+    """One predicted box in absolute pixel coords (xyxy) + score + class.
 
     Coordinates are in the original frame's pixel space (not normalized,
     not letterboxed) so the harness can score every backend the same way.
+    ``class_id`` is in the MODEL's own label space; the harness maps it to
+    the eval dataset's classes (``class_map.py``) before scoring.
     """
 
     x1: float
@@ -23,6 +25,7 @@ class Detection:
     x2: float
     y2: float
     score: float
+    class_id: int = 0
 
     @property
     def coco_bbox(self) -> list[float]:
@@ -32,11 +35,14 @@ class Detection:
 
 @runtime_checkable
 class Detector(Protocol):
-    """A single-target-class detector that runs in its own native runtime.
+    """A detector that runs in its own native runtime.
 
     Implementations load weights at construction and expose a stable
-    ``name`` (used in reports) and a ``runtime`` tag (e.g. ``ultralytics``,
-    ``onnxruntime``, ``triton-trt``) so latency can be read in context.
+    ``name`` (used in reports), a ``runtime`` tag (e.g. ``ultralytics``,
+    ``onnxruntime``, ``triton-trt``) so latency can be read in context, and
+    ``class_names`` (``{model_class_id: name}``, or ``None`` when the
+    runtime does not carry names -- such a model needs an explicit class
+    map unless the eval split has a single scored class).
     Detection must run at a LOW score threshold (e.g. 0.001) so the full
     precision/recall curve is available to COCOeval; the operating-point
     filter (conf=0.25) is applied later by the harness, not the backend.
@@ -44,7 +50,8 @@ class Detector(Protocol):
 
     name: str
     runtime: str
+    class_names: dict[int, str] | None
 
     def detect(self, image_rgb: np.ndarray) -> list[Detection]:
-        """Return all target-class boxes for one HxWx3 uint8 RGB frame."""
+        """Return every box (any class) for one HxWx3 uint8 RGB frame."""
         ...

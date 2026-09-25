@@ -315,25 +315,14 @@ async def bakeoff_profiles() -> dict[str, Any]:
     API process's environment, which the deployment is expected to share
     with the evaluator.
     """
-    from scripts.curation.bakeoff.profile import (
-        example_profile_names,
-        registered_profiles,
-        resolve_profile,
-    )
+    from scripts.curation.bakeoff.profile import registered_profiles, resolve_profile
 
-    registered = registered_profiles()
+    # Example profiles are opt-in (loaded by path), so they are no longer
+    # listed; the typed rewrite of this route lands with the W4 API wave.
     profiles: list[dict[str, Any]] = [
-        {**prof.to_dict(), 'kind': 'registered', 'default': False} for prof in registered.values()
+        {**prof.to_dict(), 'kind': 'registered', 'default': False}
+        for prof in registered_profiles().values()
     ]
-    for name in example_profile_names():
-        if name in registered:
-            continue
-        try:
-            profiles.append(
-                {**resolve_profile(name).to_dict(), 'kind': 'example', 'default': False}
-            )
-        except (OSError, ValueError, TypeError) as exc:
-            logger.warning('bakeoff_profile_invalid', profile=name, error=str(exc))
 
     body: dict[str, Any] = {'default_profile': None}
     try:
