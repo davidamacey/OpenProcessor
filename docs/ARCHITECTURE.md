@@ -188,8 +188,8 @@ those routes do something.
 `/import_labels(/batch)` exist and create items (duplicate detection, a
 quality gate, crop-cache population, bulk indexing, YOLO-format label
 import). What is deliberately not included: any single-class /
-domain-specific dataset export (`/export/lpr` has no generic
-equivalent — a single-class exporter is inherently domain-shaped), a
+domain-specific dataset export (a proprietary single-class export has no
+generic equivalent — a single-class exporter is inherently domain-shaped), a
 fixed class allowlist, or a region-status assignment policy tuned to
 one domain. The **backbone-embedding** (`backbone_embedding`) chain is also
 only half-wired: the producer side exists

@@ -1,6 +1,6 @@
 """On-the-fly outlier ranking for a cluster, by distance from its centroid.
 
-Vehicle CLASS clusters (cluster_id == class_id) are populated from v6/human
+CLASS clusters (cluster_id == class_id) are populated from classifier/human
 labels, not from a FAISS centroid, so they carry no ``cluster_distance``.
 To let operators cherry-pick the worst offenders (a car sitting in the
 "pickup" cluster, a mislabel, a junk crop), we compute the class centroid as

@@ -26,7 +26,7 @@ Why complete + cosine + threshold (for the refine path):
 - **Complete linkage** uses the *maximum* pairwise distance when merging,
   so a sub-cluster only grows if every member stays within
   ``distance_threshold`` of every other member.
-- **Cosine distance** matches the PE / v6 training objective.
+- **Cosine distance** matches the PE / classifier training objective.
 - **distance_threshold=0.25** (~75 % cosine similarity) — shared between
   refine and the AHC residual fallback so both surfaces are calibrated
   identically.
@@ -582,7 +582,7 @@ async def refine_cluster(
 
 # auto_promote_clusters moved to src.services.curation.clustering.auto_promote
 # on 2026-05-22 — it's opt-in / disabled-by-default in the pipeline
-# pending a v6-confidence-floor rewrite. Re-export the public name here
+# pending a classifier-confidence-floor rewrite. Re-export the public name here
 # so existing callers keep
 # working without churn.
 from src.services.curation.clustering.auto_promote import auto_promote_clusters  # noqa: E402

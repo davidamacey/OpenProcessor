@@ -134,7 +134,7 @@ async def occ_update_one(
             Workers use ``occ_skip_on_conflict_bulk`` (max_retries=0).
         refresh: OpenSearch refresh policy. ``True`` for immediate
             visibility (human PUTs), ``False`` for batch writes.
-        writer_id: Identifier for structured logs (``human``, ``sam_worker``,
+        writer_id: Identifier for structured logs (``human``, ``region_worker``,
             ``vlm_pipeline``, etc.).
 
     Raises:
@@ -391,10 +391,10 @@ CLASS_WRITE_FIELDS = frozenset(
 def strip_class_write_fields(update: dict[str, Any]) -> dict[str, Any]:
     """Drop every ``CLASS_WRITE_FIELDS`` key from an update doc.
 
-    Used by writers that may carry both class and plate fields in the
-    same update (the SAM worker's combined path) so a human-label guard
-    never leaks into suppressing an unrelated plate write — the
-    LPR-scope requirement from Phase 1.
+    Used by writers that may carry both class and region fields in the
+    same update (the region worker's combined path) so a human-label guard
+    never leaks into suppressing an unrelated region write — the
+    region-detector-scope requirement from Phase 1.
     """
     return {k: v for k, v in update.items() if k not in CLASS_WRITE_FIELDS}
 
