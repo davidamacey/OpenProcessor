@@ -174,21 +174,21 @@ DATASET_STATS = {
     ],
     "labeled": {
         "by_human": 6320,
-        "by_gemma": 3100,
-        "by_v6": 2900,
-        "by_yolo11_proposal": 160,
+        "by_vlm": 3100,
+        "by_classifier": 2900,
+        "by_proposal": 160,
         "other": 0,
     },
     "regions": {
         "boxed": 1800,
         "confirmed": 1500,
         "total_detected": 1900,
-        "by_lpr": 1200,
-        "by_sam3": 600,
+        "by_detector": 1200,
+        "by_segmenter": 600,
         "by_human": 100,
         "by_human_drew": 60,
         "verified_by_human": 900,
-        "verified_by_gemma": 600,
+        "verified_by_vlm": 600,
         "validated_by_human": 960,
     },
     "unlabeled": {
@@ -241,13 +241,13 @@ def crop(i: int, cluster_id: int = 1, with_region: bool = False) -> dict[str, An
                 "region_score": 0.91,
                 "region_status": "detected",
                 "region_verified": bool(i % 2),
-                "region_detector": "lpr_nanov11_640",
+                "region_detector": "tag_detector_v1",
                 "region_detector_version": "1.0",
-                "region_detector_chain": ["lpr_nanov11_640:hit", "gemma:verify_ok"],
+                "region_detector_chain": ["tag_detector_v1:hit", "tag_verifier:verify_ok"],
                 "region_bbox_frame": "source",
-                "region_verifier": "gemma-4-e4b",
+                "region_verifier": "tag_verifier",
                 "region_text": f"SSCC-{100000 + i}",
-                "region_text_source": "gemma",
+                "region_text_source": "vlm",
                 "region_text_confidence": 0.83,
             }
         )
@@ -372,8 +372,8 @@ MODELS_STATUS = {
             "endpoint": "http://openprocessor:8000",
         },
         {
-            "name": "lpr_nanov11_640",
-            "friendly_name": "LPR detector",
+            "name": "tag_detector_v1",
+            "friendly_name": "Tag detector",
             "role": "detector",
             "kind": "triton",
             "model_type": "detector",
@@ -392,8 +392,8 @@ MODELS_STATUS = {
 BAKEOFF_EVAL_DATASETS = {
     "datasets": [
         {
-            "name": "20260901T000000Z_lpr",
-            "path": "eval/20260901T000000Z_lpr",
+            "name": "20260901T000000Z_tag",
+            "path": "eval/20260901T000000Z_tag",
             "kind": "curated",
             "n_test": 5000,
             "frozen_sha": "sha256:abc123",
@@ -404,7 +404,7 @@ BAKEOFF_EVAL_DATASETS = {
 
 BAKEOFF_BASELINES = {
     "baselines": [
-        {"backend": "ultralytics", "name": "yolo11n-lpr", "mode": "full"},
+        {"backend": "ultralytics", "name": "yolo11n-tag", "mode": "full"},
     ],
     "count": 1,
 }
@@ -429,7 +429,7 @@ BAKEOFF_RUNS = {
         {
             "job_id": "bakeoff-job-9",
             "state": "finished",
-            "models": ["yolo11n-lpr", "vehicle-v1"],
+            "models": ["yolo11n-tag", "vehicle-v1"],
             "started_at": "2026-09-21T02:00:00+00:00",
             "finished_at": "2026-09-21T02:20:00+00:00",
         }
@@ -437,16 +437,16 @@ BAKEOFF_RUNS = {
 }
 
 BAKEOFF_MATRIX = {
-    "datasets": ["20260901T000000Z_lpr"],
-    "models": ["yolo11n-lpr", "vehicle-v1"],
+    "datasets": ["20260901T000000Z_tag"],
+    "models": ["yolo11n-tag", "vehicle-v1"],
     "metrics": ["map50"],
     "cells": {
-        "20260901T000000Z_lpr": {
-            "yolo11n-lpr": {"map50": 0.81},
+        "20260901T000000Z_tag": {
+            "yolo11n-tag": {"map50": 0.81},
             "vehicle-v1": {"map50": 0.91},
         }
     },
-    "best": {"20260901T000000Z_lpr": {"map50": "vehicle-v1"}},
+    "best": {"20260901T000000Z_tag": {"map50": "vehicle-v1"}},
 }
 
 BAKEOFF_RESULTS = {
