@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from src.config import GpuArbiterConfig, get_gpu_arbiter_config
+from src.config import GpuArbiterConfig, get_curation_config, get_gpu_arbiter_config
 from src.services.training import gpu_arbiter
 
 
@@ -27,7 +27,9 @@ def test_defaults_are_empty_and_permissive() -> None:
     assert cfg.containers == ()
     assert cfg.container_gpus == ()
     assert cfg.trainer_container is None
-    assert cfg.bakeoff_jobs_dir is None
+    # Never None: the router and the reconcile loop must watch the same dir
+    # even when OP_BAKEOFF_JOBS_DIR is unset (plan section 5, bug 4).
+    assert cfg.bakeoff_jobs_dir == str(get_curation_config().state_dir / 'bakeoff_jobs')
     assert cfg.gpu_labels == {}
     assert cfg.default_train_gpus is None
 
@@ -188,3 +190,16 @@ def test_env_bakeoff_jobs_dir_reaches_reconcile_check(
     assert gpu_arbiter.bakeoff_active() is False
     (tmp_path / 'x.job.json').write_text('{}')
     assert gpu_arbiter.bakeoff_active() is True
+
+
+def test_bakeoff_jobs_dir_default_is_shared_with_the_router(
+    clean_arbiter_env: pytest.MonkeyPatch,
+) -> None:
+    """With no env set, the router's JOBS_DIR is the arbiter's bakeoff_jobs_dir."""
+    from pathlib import Path
+
+    from src.routers.curation import bakeoff
+
+    cfg = GpuArbiterConfig.from_env()
+    assert cfg.bakeoff_jobs_dir == str(get_curation_config().state_dir / 'bakeoff_jobs')
+    assert Path(get_gpu_arbiter_config().bakeoff_jobs_dir) == bakeoff.JOBS_DIR
