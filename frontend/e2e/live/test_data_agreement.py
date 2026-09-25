@@ -122,6 +122,29 @@ def test_region_queue_total_agrees_with_filtered_region_status(guarded_page: Any
     )
 
 
+def test_region_tab_label_is_the_served_display_name(
+    guarded_page: Any, live_url: str, live_region_profile: dict[str, Any] | None
+) -> None:
+    """naming-w2: the region tab exists exactly when `/health` serves a
+    region profile, and reads the served label (the `/review/tabs` entry
+    for `regions` when there is one, else the profile's display_name)."""
+    page = guarded_page.page
+    page.goto(f"{live_url}/review", wait_until="domcontentloaded")
+    page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
+    labels = [
+        re.sub(r"\s+[\d,]+$", "", t.strip())
+        for t in page.get_by_test_id("review-tabs").locator("button").all_inner_texts()
+    ]
+    if live_region_profile is None:
+        assert len(labels) == 5, labels
+        return
+    served_tab = next(
+        (t for t in api_get(live_url, "/review/tabs")["tabs"] if t["id"] == "regions"), None
+    )
+    expected = (served_tab or {}).get("label") or live_region_profile["display_name"]
+    assert labels[-1] == expected, (labels, expected)
+
+
 def test_regions_filter_spec_select_matches_served_options(guarded_page: Any, live_url: str) -> None:
     tabs = api_get(live_url, "/review/tabs")["tabs"]
     regions_tab = next((t for t in tabs if t["id"] == "regions"), None)

@@ -44,7 +44,7 @@ from typing import Any
 import pytest
 
 from conftest import is_allowlisted_bad_response
-from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID
+from fixtures.wire import REGION_TAB_URL_ID
 
 # Viewport widths every route is screenshotted at; height is fixed so a
 # route's screenshot is comparable across runs regardless of content
@@ -58,12 +58,14 @@ def _route_slug(path: str) -> str:
     return slug or "root"
 
 # (path, a selector proving the route actually mounted its real content,
-# not just an empty shell / loading spinner).
+# not just an empty shell / loading spinner). `{region_class}` is filled
+# from the deployment's served region profile; routes that need one skip
+# on a deployment without it.
 ROUTES: list[tuple[str, str]] = [
     ("/dashboard", 'h1:has-text("Dashboard")'),
     ("/ingest", 'h1:has-text("Ingest")'),
     ("/clusters", 'h1:has-text("Clusters")'),
-    (f"/clusters?class={REGION_CLASS}", 'h1:has-text("Clusters")'),
+    ("/clusters?class={region_class}", 'h1:has-text("Clusters")'),
     ("/review?tab=all", '[data-testid="queue-counter"]'),
     ("/review?tab=uncertainty", '[data-testid="queue-counter"]'),
     ("/review?tab=model_disagreements", '[data-testid="queue-counter"]'),
@@ -89,10 +91,16 @@ def _bad_responses(gp: Any) -> list[tuple[str, str, int]]:
 def test_route_mounts_cleanly(
     guarded_page: Any,
     live_url: str,
+    live_region_profile: dict[str, Any] | None,
     path: str,
     ready_selector: str,
     screenshot_run_dir: Path,
 ) -> None:
+    needs_region = "{region_class}" in path or path == f"/review?tab={REGION_TAB_URL_ID}"
+    if needs_region and live_region_profile is None:
+        pytest.skip("this deployment serves no region profile")
+    if live_region_profile is not None:
+        path = path.replace("{region_class}", live_region_profile["region_class_name"])
     gp = guarded_page
     page = gp.page
 

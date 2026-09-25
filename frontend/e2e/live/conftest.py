@@ -140,6 +140,15 @@ def screenshot_run_dir() -> Path:
     return d
 
 
+@pytest.fixture(scope="session")
+def live_region_profile(live_url: str) -> dict[str, Any] | None:
+    """The deployment's served region profile (`{API_PREFIX}/health`
+    `region_profile`, OpenProcessor naming-w2), or None when it has none.
+    Region-dependent tests read the region class / tab label from here
+    rather than assuming one domain."""
+    return api_get(live_url, "/health").get("region_profile")
+
+
 def api_get(live_url: str, path: str) -> Any:
     """A plain GET against the live backend, outside the browser — used
     by data-agreement tests to fetch the "expected" side of a comparison.
