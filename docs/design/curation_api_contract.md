@@ -1427,3 +1427,222 @@ renamed to `backbone_embedding` in the naming sweep's W1 (S1) — the
   only) and the route-parity CI guard
   (`tests/integration/test_labeler_route_parity.py`) that keeps this
   doc's route table honest against `app.routes`.
+
+### 2026-09-24/25 visual + ingest audit batch (X2, D1, R5, R10, L3, M2, R4, E2, K6, K3, BA-1..7, C1, C3)
+
+Fixes and new routes from the 2026-09-24 visual audit
+(`cropwright/docs/design/visual-audit-2026-09-24.md`) and the ingest
+plan (`ingest-ui-and-acceptance-plan-2026-09-24.md` §C). Grouped by area;
+each item's wire shape is exact JSON, not illustrative.
+
+**`GET /classes` / `GET /classes/{id}` (X2)** — `ClassEntry` gained
+`kind: 'item' | 'region'` and `trainable` / `trainable_gap`. A class
+whose name equals the active region profile's `region_class_name` is
+marked `kind: 'region'`; its `sample_count` / `validated_count` /
+`cluster_size` are the real (usually 0) item-class-aggregation numbers,
+**no longer** overridden with the region inventory total — that
+inflated `/train`'s class picker and `/export`'s per-class table.
+`trainable = validated_count - test_holdout - class_excluded`,
+`trainable_gap = max(0, block_below - trainable)`. Same two fields added
+to `GET /stats/classes`'s `classes[]` rows.
+
+```json
+{"class_id": 80, "class_name": "license_plate", "kind": "region",
+ "sample_count": 0, "validated_count": 0, "cluster_size": 0,
+ "trainable": 0, "trainable_gap": 20}
+```
+
+**`GET /stats/dataset` (D1)** — `labeled.*` is now built only from docs
+that carry a `class_id`; a `class_source` alone (e.g. `vlm_unmatched` /
+`vlm_new_class_pending` with no class) no longer counts as
+`labeled.by_vlm`. New `unlabeled.vlm_no_class`: the subset of
+`no_label_source` where a VLM answered/proposed but never landed a
+class.
+
+```json
+{"labeled": {"by_human": 174, "by_vlm": 3200, "by_classifier": 3551, "by_proposal": 0, "other": 0},
+ "unlabeled": {"pending_detection": 0, "pending_verification": 0, "no_label_source": 1252, "vlm_no_class": 1036}}
+```
+
+**`GET /review/new_class_proposals` + `/summary` (R5)** — the queue
+(and everything built on `build_tab_query`'s `new_class_proposals`
+branch) now excludes: an item whose last VLM attempt was
+`vlm_class_empty_reason=no_answer` (nothing was proposed), and an item
+that already carries a resolved `class_id` (a later write settled it;
+`needs_new_class` was stale). No field removed; fewer rows.
+
+**`GET /review/regions` / any tab's per-item `reason` on a
+`verify_rejected` region (R10)** — reworded from the served
+rejection-reason vocabulary (`region_rejection_reason` +
+`GET /regions/vocabulary`'s `kind`: `model_verdict` / `automatic` /
+`needs_human`) instead of embedding the raw id. Exactly one verb per
+reason: `needs human review: ...` for `needs_human`, `rejected: ...`
+otherwise.
+
+```json
+{"reason": "needs human review: verifier gave no verdict"}
+{"reason": "rejected: the detection is wrong (region is elsewhere)"}
+```
+
+**`GET /review/new_class_proposals/summary`'s `term_rules` (L3)** — the
+served non-object term rules now support a prefix (`unidentifiable_*`)
+and suffix (`*_scene`) form, matched against the whole term or any of
+its `_`-separated tokens — one configured rule now flags a family of
+terms instead of needing every literal enumerated. Shape unchanged
+(`non_object_terms: string[]`); only the matching semantics of entries
+ending/starting with `*` changed.
+
+**`GET /models/status` (M2)** — the fixed roster now also includes the
+configured primary item proposer (`OP_INGEST_PRIMARY_*`), the optional
+secondary classifier (`OP_INGEST_SECONDARY_*`, omitted when
+unconfigured) and the segmenter (`DetectionProfile.segmenter_name`), in
+addition to the region detector and OCR det/rec already served. Same
+entry shape as every other model (`name`, `friendly_name`, `role`,
+`kind`, ...).
+
+**`GET /methods` sort catalog (R4)** — `classifier_blind_spots_default`'s
+served `label` changed from `"Largest COCO blind spot"` to `"Largest
+classifier blind spot"`.
+
+**Export manifest / `GET /export/datasets` / `GET /export/status`
+(E2)** — new `classes_with_objects` alongside `class_count`.
+`class_count` stays the registry size written into `data.yaml`'s `nc`;
+`classes_with_objects` is how many of those classes have at least one
+labeled object in this export.
+
+```json
+{"class_count": 84, "classes_with_objects": 5}
+```
+
+**`GET /curation/health` (T1)** — new `mlflow_public_url: string | null`
+(`CurationConfig.mlflow_public_url` / `OP_MLFLOW_PUBLIC_URL`), the
+browser-reachable MLflow base a client should build run links from
+instead of guessing a port.
+
+**`GET /crops/{id}/image` (K6, BREAKING)** — no longer draws any
+overlay. Always the clean source render (EXIF-transpose + RGB-convert +
+optional `max_dim` downscale), byte-identical regardless of the item's
+`bbox_norm` / region box. A client draws every box itself from
+`GET /crops/{id}/context`, which already serves `bbox_norm`,
+`region_bbox_norm`, `region_candidate_bbox_norm` (all source-image
+normalized, per-item `region_bbox_frame='source'`), `class_id` /
+`class_name`, `region_status`, `region_rejection_reason` and validation
+flags for every item on the frame — plus the image's `width`/`height`,
+now filled from the file header when the images-index doc doesn't carry
+them and the image is servable.
+
+**K3 (data hygiene, no wire change)** — writers audited: an empty VLM
+class answer already leaves `label_source` untouched (records only the
+attempt, per `vlm_class_attempt.py`). A new operator script,
+`scripts/curation/repair_stale_label_source.py`, clears a stale
+`label_source` on any class-less item (`class_id` missing) regardless of
+`class_source` — dry-run by default.
+
+**`POST /probe/run`, `GET /probe/status`, `POST /probe/cancel` (C1,
+new)** — wraps `run_probe_inference` as a background job instead of
+blocking the request. `POST /probe/run` resolves `job_id`'s
+`checkpoint_path` from the training job's status (409 if the run isn't
+`finished` or has no checkpoint on disk); `probe_model_version` is
+stamped as the job id. `gpu` (a `cuda_visible_devices` string) claims
+through the same arbiter `POST /train/start` uses — a claim failure is
+`409`, never silent. One job at a time (`409` otherwise).
+
+```json
+// POST /probe/run {"job_id": "2026-09-25T00-46-20_yolo26n", "gpu": null}
+{"job_id": "2026-09-25T00-46-20_yolo26n", "status": "running",
+ "train_job_id": "2026-09-25T00-46-20_yolo26n",
+ "model_path": "/jobs/.../weights/best.onnx", "gpu": null,
+ "started_at": "2026-09-25T00:00:00+00:00", "finished_at": null,
+ "updated_count": null, "error": null}
+```
+
+**`GET /review/{tab}` + `GET /review/tabs` (C3, new field)** — a
+zero-result page now carries `empty_reason`, computed from live index
+state: `"no probe predictions — run a probe"` (uncertainty /
+model_disagreements with no probe-scored item), `"item scores never
+computed"` (a `min_mistakenness` filter was set but no item has
+`mistakenness_score`), `"no unclassified proposals"`
+(`new_class_proposals`), else `"no items match"`. `GET /review/tabs`
+gained `empty_state: {has_probe_predictions, has_item_scores}` so a
+client can word ANY tab's empty state without a per-tab round trip.
+`GET /review/{tab}=all` when items exist: `empty_reason: null`.
+
+### BA-1..BA-7 — ingest hardening (`ingest-ui-and-acceptance-plan-2026-09-24.md` §C)
+
+**BA-1 (blocking, breaking wire shape for uploads)** —
+`POST /ingest/upload` now persists uploaded bytes server-side, content
+addressed, under `CurationConfig.upload_root` /
+`OP_UPLOAD_ROOT` (default under the state dir):
+`<upload_root>/<imohash[:2]>/<imohash><ext>`, written atomically
+(temp file + `os.replace`), so the same bytes are only ever stored
+once. `image_path` on the images doc and in every `IngestImageResponse`
+is now that persisted, servable path — **not** the client's identifier.
+The client's identifier moves to a new field, `source_identifier`
+(images-index mapping migration `ensure_images_upload_fields`, wired
+into the existing startup migration sequence).
+`POST /ingest/path_lookup` matches on `image_path` **or**
+`source_identifier`, keying its result by whichever field matched.
+
+```json
+// POST /ingest/upload response row
+{"status": "success", "image_id": "...", 
+ "image_path": "/var/lib/openprocessor/uploads/ab/ab12.../ab12....jpg",
+ "source_identifier": "remote://shoot1/a.jpg",
+ "imohash": "ab12...", "n_crops": 3, "n_regions": 0,
+ "error": null, "error_kind": null}
+```
+
+**BA-2** — `GET /ingest/config` (new), typed:
+
+```json
+{"upload": {"enabled": true, "max_images_per_request": 128,
+            "max_bytes_per_request": 536870912,
+            "accepted_extensions": [".jpg", ".jpeg", ".png"],
+            "persists_bytes": true},
+ "batch": {"enabled": true, "max_items": 512, "source_roots": ["/data/images", "/var/lib/openprocessor/uploads"]},
+ "region_drain": {"poll_interval_s": 10.0, "stable_polls": 3}}
+```
+
+All three limits are real `CurationConfig` fields
+(`OP_UPLOAD_MAX_IMAGES_PER_REQUEST`, `OP_UPLOAD_MAX_BYTES_PER_REQUEST`,
+`OP_UPLOAD_ACCEPTED_EXTENSIONS`, `OP_BATCH_MAX_ITEMS_PER_REQUEST`) and
+enforced: `POST /ingest/upload` 413s over the image-count or
+total-request-byte limit, and fails an individual item
+`error_kind: 'unsupported_type'` for an extension outside
+`accepted_extensions`.
+
+**BA-3** — `GET /ingest/region_drain` gained a server-computed
+stability verdict (`src/services/curation/region_drain.py`):
+
+```json
+{"pending_detection": 0, "pending_verification": 0, "total_unfinished": 0,
+ "drained": true, "stable_for_s": 32.4, "observed_at": "2026-09-25T00:00:32+00:00"}
+```
+
+`drained` is true only after `total_unfinished` has read `0` for
+`region_drain.stable_polls` (`OP_REGION_DRAIN_STABLE_POLLS`, default 3)
+consecutive polls of this endpoint — single-process, in-memory; a
+multi-worker deployment polling from different processes tracks
+independent streaks (each worker's own view of "stable", never a
+correctness issue for the raw counts).
+
+**BA-4** — `POST /ingest/upload` gained an optional `run_id` form
+field, recorded as `ingest_run_id` on every image doc from that call.
+`GET /ingest/status?run_id=` scopes `total`/`by_source`/`by_day` to it.
+
+**BA-5** — `label_txt_path` on `IngestBatchItem` (`POST /ingest/batch`)
+now gets the same root guard `image_path` already had — a
+label file path outside the configured source roots fails that item
+(`error_kind: 'unservable_path'`) before any read. Batch item cap (`CurationConfig.batch_max_items_per_request`) served on
+`GET /ingest/config` and enforced on `POST /ingest/batch` (413 over the
+cap).
+
+**BA-6** — `GET /ingest/status` is now a typed `IngestStatusResponse`
+(`total`, `by_source`, `by_day`); shape unchanged, just declared.
+
+**BA-7** — every `IngestImageResponse` / batch result row gained
+`error_kind: string | null` — one of `empty`, `unservable_path`,
+`unsupported_type`, `decode_failed`, `detector_infer`, `bulk_index`
+(non-exhaustive; always present alongside `error` when
+`status == 'failed'`). `unidentified_image` and `decode_error` were
+merged into `decode_failed`.

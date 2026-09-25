@@ -27,7 +27,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation._review_tab_models import ReviewTabsResponse
-from src.services.curation import review_queries
+from src.services.curation import review_empty_reason, review_queries
 from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
 from src.services.curation.holdout import (
     build_cohort_query,
@@ -307,14 +307,21 @@ async def _request(tab: str, filters: ReviewFilters, sort: str | None, opensearc
 
 
 @router.get('/review/tabs', response_model=ReviewTabsResponse)
-async def review_tabs() -> dict[str, list[dict[str, Any]]]:
+async def review_tabs(opensearch: OpenSearchDep) -> dict[str, Any]:
     """Every review tab's ``id``/``label``/``description`` (W0: naming
     sweep finding m9) plus ``filters`` (the query parameters it honours)
     ``filter_defaults`` (values it applies when one is omitted) and
     ``filter_specs`` (self-describing enum filters) — the frontend renders this instead of hardcoding tab labels or assuming a
     filter works everywhere. Must be registered before ``GET /review/{tab}``
-    so it isn't shadowed as ``tab='tabs'``."""
-    return {'tabs': review_queries.review_tab_catalog()}
+    so it isn't shadowed as ``tab='tabs'``.
+
+    C3: also carries ``empty_state`` -- ``{has_probe_predictions,
+    has_item_scores}`` -- computed once here so a client can annotate any
+    tab's zero-result state (the same reasons ``GET /review/{tab}``'s own
+    ``empty_reason`` uses) without a per-tab round trip.
+    """
+    empty_state = await review_empty_reason.review_tabs_empty_state(opensearch)
+    return {'tabs': review_queries.review_tab_catalog(), 'empty_state': empty_state}
 
 
 @router.get('/review/{tab}')
@@ -404,6 +411,14 @@ async def review_queue(
         else:
             item['reason'] = req.reason
         items.append(item)
+    # C3: a real-state reason a bare "Queue empty." can't tell the
+    # operator -- only computed on the empty path (a few extra `count`
+    # calls that only fire when there's nothing else to show anyway).
+    empty_reason = (
+        await review_empty_reason.compute_empty_reason(tab, filters, opensearch)
+        if total == 0
+        else None
+    )
     return {
         'total': int(total),
         'page': page,
@@ -413,6 +428,7 @@ async def review_queue(
         # Set when the default sort's field has 0% coverage and
         # sort_applied is its fallback.
         'sort_fallback_reason': req.sort_fallback_reason,
+        'empty_reason': empty_reason,
     }
 
 

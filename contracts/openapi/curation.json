@@ -3099,6 +3099,141 @@
         "title": "PresetsResponse",
         "type": "object"
       },
+      "ProbeRunRequest": {
+        "properties": {
+          "architecture": {
+            "default": "yolo11",
+            "title": "Architecture",
+            "type": "string"
+          },
+          "gpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "resume": {
+            "default": false,
+            "title": "Resume",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "ProbeRunRequest",
+        "type": "object"
+      },
+      "ProbeStatusResponse": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "gpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "model_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Path"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "train_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Train Job Id"
+          },
+          "updated_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated Count"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ProbeStatusResponse",
+        "type": "object"
+      },
       "Profile": {
         "description": "Profile envelope returned by ``GET /curation/train/profiles``.",
         "properties": {
@@ -3585,6 +3720,25 @@
         "title": "ResolveNewClassResponse",
         "type": "object"
       },
+      "ReviewEmptyState": {
+        "description": "C3: underlying-state flags a client uses to word ANY tab's\nzero-result state without a per-tab round trip -- the same signals\n``GET /review/{tab}``'s own ``empty_reason`` is derived from.",
+        "properties": {
+          "has_item_scores": {
+            "title": "Has Item Scores",
+            "type": "boolean"
+          },
+          "has_probe_predictions": {
+            "title": "Has Probe Predictions",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_probe_predictions",
+          "has_item_scores"
+        ],
+        "title": "ReviewEmptyState",
+        "type": "object"
+      },
       "ReviewFilterOption": {
         "properties": {
           "label": {
@@ -3686,6 +3840,9 @@
       },
       "ReviewTabsResponse": {
         "properties": {
+          "empty_state": {
+            "$ref": "#/components/schemas/ReviewEmptyState"
+          },
           "tabs": {
             "items": {
               "$ref": "#/components/schemas/ReviewTab"
@@ -3695,7 +3852,8 @@
           }
         },
         "required": [
-          "tabs"
+          "tabs",
+          "empty_state"
         ],
         "title": "ReviewTabsResponse",
         "type": "object"
@@ -9492,6 +9650,94 @@
         ]
       }
     },
+    "/curation/probe/cancel": {
+      "post": {
+        "description": "Best-effort cancel of the active probe job.",
+        "operationId": "probe_cancel_curation_probe_cancel_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Probe Cancel Curation Probe Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Probe Cancel",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/probe/run": {
+      "post": {
+        "description": "Start a probe pass from a finished training run's export.\n\n``409`` when: the referenced training job isn't finished or has no\nexported checkpoint, or a probe job is already running. GPU claim\n(when ``gpu`` is given) goes through the same arbiter\n``POST /train/start`` uses; a claim failure is also ``409`` (never\nsilent -- see ``src.services.curation.probe_job``).",
+        "operationId": "probe_run_curation_probe_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProbeRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Probe Run",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/probe/status": {
+      "get": {
+        "description": "Poll the current/last probe job.",
+        "operationId": "probe_status_curation_probe_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Probe Status",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/regions": {
       "get": {
         "description": "Browse crops that have a region bbox, filtered by provenance/score/text.\n\nUsed by the labeler's /clusters page when the region-of-interest\nclass is the selected class filter, and by any region-centric\nreview tooling. ``status`` selects one lifecycle status instead of\n\"has a box\" (a rejected or absent region has none).",
@@ -10486,7 +10732,7 @@
     },
     "/curation/review/tabs": {
       "get": {
-        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) plus ``filters`` (the query parameters it honours)\n``filter_defaults`` (values it applies when one is omitted) and\n``filter_specs`` (self-describing enum filters) — the frontend renders this instead of hardcoding tab labels or assuming a\nfilter works everywhere. Must be registered before ``GET /review/{tab}``\nso it isn't shadowed as ``tab='tabs'``.",
+        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) plus ``filters`` (the query parameters it honours)\n``filter_defaults`` (values it applies when one is omitted) and\n``filter_specs`` (self-describing enum filters) — the frontend renders this instead of hardcoding tab labels or assuming a\nfilter works everywhere. Must be registered before ``GET /review/{tab}``\nso it isn't shadowed as ``tab='tabs'``.\n\nC3: also carries ``empty_state`` -- ``{has_probe_predictions,\nhas_item_scores}`` -- computed once here so a client can annotate any\ntab's zero-result state (the same reasons ``GET /review/{tab}``'s own\n``empty_reason`` uses) without a per-tab round trip.",
         "operationId": "review_tabs_curation_review_tabs_get",
         "responses": {
           "200": {
