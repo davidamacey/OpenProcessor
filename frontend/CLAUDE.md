@@ -505,12 +505,16 @@ for a class cluster by construction), alongside `labelled_share`
 by this — still server-banded against `purity_thresholds`, still the
 single signal driving `/clusters`' card border and badge.
 
-- `/clusters` cards show `"<purity_tier text> NN% · n=NNN"` next to the
-  size chip, with `purity_basis`/`label_purity`/`labelled_share` in the
-  chip's tooltip. The legend strip's tooltip also names the basis now.
-- `/clusters/[id]`'s header gained a `"purity (nearest-centroid) NN% ·
-n=NNN"` line it previously lacked entirely (label_purity/
-  labelled_share in its tooltip).
+- **Displayed as "cohesion" (F-37, 2026-09-25).** "purity 19% · noisy" on
+  a class cluster whose labels were 90% right read as "bad labels", so the
+  UI calls the served `purity` cohesion: `/clusters` cards show
+  `"<purity_tier text> · cohesion NN% · n=NNN"` (`cohesionText`,
+  `$lib/clusters/clusterCardText.ts`), `/clusters/[id]`'s header shows
+  `"· cohesion NN% · n=NNN"`, and both tooltips start with
+  `COHESION_TOOLTIP` ("share of measured members whose nearest cluster
+  centre is this one") plus label agreement (`label_purity`) and labelled
+  share. The sort options read "cohesion asc/desc". Values and tier bands
+  are still the served ones; only the word changed.
 - All four new fields (`purity_n`, `purity_basis`, `label_purity`,
   `labelled_share`) are optional on `RawCluster`/`Cluster` and render
   gated on non-null — an older backend that doesn't serve them shows the

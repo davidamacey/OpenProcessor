@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Copy and layout (F8 D5, D7, D9, D10; F-37, F-51, F-69).** The route
+  crumb next to the logo no longer truncates at 800px ("reviev"); the
+  primary nav strip scrolls instead. `/bakeoff` result tables show a
+  "scroll →" cue and edge marker while columns are hidden (`ScrollX`).
+  The `/clusters` region inventory card is titled by the served display
+  name, with the class id once below it. Cluster purity reads as
+  "cohesion NN% · n=N" with an explaining tooltip on `/clusters` and
+  `/clusters/[id]` (values and tier bands unchanged, served). The
+  `/settings` scores card no longer says the Uncertainty and Model
+  Disagreements queues need a scorer (they fill from probe predictions),
+  and an unset review-sort default reads "not set: each view uses its own
+  default" instead of a blank select.
+
 - **`/review` layout and counter (V-3, F8 D4, F8 D6).** The source image
   is top-aligned instead of floating mid-way down a tall empty pane
   (`SourceImageOverlay`'s new `align` prop). Below the `lg` breakpoint the

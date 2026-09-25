@@ -7,6 +7,7 @@
    * computed client-side.
    */
   import type { BakeoffComparison, ComparisonRow, PerClassRow } from '$lib/types_bakeoff';
+  import ScrollX from '$lib/components/ScrollX.svelte';
   import {
     formatCount,
     formatMetric,
@@ -85,7 +86,7 @@
       </ul>
     {/if}
 
-    <div class="overflow-x-auto rounded-lg border border-zinc-800">
+    <ScrollX class="rounded-lg border border-zinc-800" testId="comparison-scroll">
       <table class="w-full text-sm" data-testid="comparison-rows">
         <thead class="bg-zinc-900 text-xs text-zinc-400">
           <tr>
@@ -147,7 +148,7 @@
           {/each}
         </tbody>
       </table>
-    </div>
+    </ScrollX>
 
     {#if c.failed.length}
       <ul
@@ -175,7 +176,7 @@
         </select>
       </label>
     </div>
-    <div class="overflow-x-auto rounded-lg border border-zinc-800">
+    <ScrollX class="rounded-lg border border-zinc-800">
       <table class="w-full text-sm" data-testid="per-class-table">
         <thead class="bg-zinc-900 text-xs text-zinc-400">
           <tr>
@@ -213,7 +214,7 @@
           {/each}
         </tbody>
       </table>
-    </div>
+    </ScrollX>
 
     {#if c.models.some((r) => r.coverage.unmapped_model_classes.length)}
       <div class="mt-3 text-xs text-zinc-400" data-testid="unmapped-classes">

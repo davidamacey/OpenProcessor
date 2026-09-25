@@ -594,6 +594,10 @@ export interface Cluster {
    *  must not draw a pure/mixed/noisy badge for it or key it against a
    *  real cluster id. Absent (not false) on every server-served Cluster. */
   isSlotCard?: boolean;
+  /** The slot's served display name (e.g. its tab label), set only on
+   *  that inventory entry (F8 D7): the card is titled by it, not by the
+   *  raw class id. */
+  slotDisplayName?: string;
 }
 
 export interface StatsSummary {

@@ -236,6 +236,14 @@
                 onchange={(e) =>
                   onSelectChange(spec, (e.currentTarget as HTMLSelectElement).value)}
               >
+                {#if selected == null}
+                  <!-- F-69: nothing pinned and no served default for this
+                       axis (e.g. review sort: each tab keeps its own), so
+                       say that instead of rendering a blank select. -->
+                  <option value="" disabled
+                    >not set: each view uses its own default</option
+                  >
+                {/if}
                 {#each options as opt (opt.id)}
                   <option value={opt.id}>
                     {opt.label}{opt.status === 'experimental'

@@ -19,20 +19,17 @@ const gridSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
 const detailSrc = readFileSync(path.join(here, '[id]/+page.svelte'), 'utf-8');
 
 describe('/clusters cards show purity_n/purity_basis and label_purity/labelled_share', () => {
-  it('the purity chip shows purity_n next to the percentage', () => {
-    const idx = gridSrc.indexOf('{pb.text}');
-    expect(idx).toBeGreaterThan(-1);
-    const block = gridSrc.slice(idx, idx + 300);
-    expect(block).toMatch(/c\.purity_n/);
+  it('F-37: the chip reads "<served tier> · cohesion NN% · n=N" (cohesionText)', () => {
+    expect(gridSrc).toContain("{pb.text} · {cohesionText(c) ?? 'cohesion —'}");
   });
 
-  it('the purity chip tooltip carries purity_basis, label_purity and labelled_share', () => {
-    const idx = gridSrc.indexOf('title="{c.purity_basis');
+  it('the chip tooltip explains cohesion and carries label_purity and labelled_share', () => {
+    const idx = gridSrc.indexOf('title="{COHESION_TOOLTIP}');
     expect(idx).toBeGreaterThan(-1);
     const block = gridSrc.slice(idx, idx + 400);
-    expect(block).toMatch(/c\.purity_n/);
     expect(block).toMatch(/c\.label_purity/);
     expect(block).toMatch(/c\.labelled_share/);
+    expect(gridSrc).not.toMatch(/>purity (asc|desc)</);
   });
 
   it('purity_tier is still what drives the badge color/text (unchanged by DQ-M2)', () => {
@@ -46,10 +43,9 @@ describe('/clusters/[id] header shows purity with basis/n and label_purity/label
     const idx = detailSrc.indexOf('{#if cluster.purity != null}');
     expect(idx).toBeGreaterThan(-1);
     const block = detailSrc.slice(idx, idx + 700);
-    // Visual audit K4: the basis is rendered through geometryPurityText
-    // (which reads cluster.purity_basis), not as the raw id.
-    expect(block).toMatch(/geometryPurityText\(cluster\)/);
-    expect(block).toMatch(/cluster\.purity_n/);
+    // F-37: rendered as cohesion (cohesionText reads purity/purity_n).
+    expect(block).toMatch(/cohesionText\(cluster\)/);
+    expect(block).toMatch(/COHESION_TOOLTIP/);
   });
 
   it('carries label_purity/labelled_share in the tooltip', () => {

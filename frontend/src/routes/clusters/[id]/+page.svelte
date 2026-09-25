@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { trapFocus } from '$lib/actions/trapFocus';
-  import { geometryPurityText } from '$lib/clusters/clusterCardText';
+  import { cohesionText, COHESION_TOOLTIP } from '$lib/clusters/clusterCardText';
   import { dndzone, SOURCES, TRIGGERS } from 'svelte-dnd-action';
   import {
     flagNeedsNewClass,
@@ -867,14 +867,14 @@
       {#if cluster.purity != null}
         <span
           class="font-mono text-xs text-zinc-500"
-          title="label purity {cluster.label_purity != null
+          data-testid="cluster-cohesion"
+          title="{COHESION_TOOLTIP} · label agreement {cluster.label_purity != null
             ? `${(cluster.label_purity * 100).toFixed(0)}%`
             : '—'} · labelled share {cluster.labelled_share != null
             ? `${(cluster.labelled_share * 100).toFixed(0)}%`
             : '—'}"
         >
-          · {geometryPurityText(cluster)} purity
-          {#if cluster.purity_n != null}· n={cluster.purity_n}{/if}
+          · {cohesionText(cluster)}
         </span>
       {/if}
     {/if}

@@ -270,9 +270,13 @@
 
     <AboutModal open={aboutOpen} onclose={() => (aboutOpen = false)} {appName} />
 
+    <!-- F8 D10 / F-51: the crumb never shrinks (it truncated to "reviev" /
+         "classe" at 800px); the primary nav strip to its right scrolls
+         with a chevron instead. -->
     <nav
-      class="flex min-w-0 shrink items-center gap-1 overflow-x-auto whitespace-nowrap text-sm"
+      class="flex shrink-0 items-center gap-1 whitespace-nowrap text-sm"
       aria-label="Breadcrumb"
+      data-testid="breadcrumb"
     >
       {#each crumbs as c, i (c.href)}
         {#if i > 0}

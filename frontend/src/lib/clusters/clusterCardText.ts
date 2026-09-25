@@ -33,15 +33,19 @@ export function dominantShareTitle(
   return `Share of labeled members that are ${name}`;
 }
 
-/** Human name for the served `purity_basis` id. */
-export function purityBasisLabel(basis: string | null | undefined): string {
-  if (basis == null || basis === 'nearest_centroid') return 'geometry';
-  return basis.replace(/_/g, ' ');
-}
+/**
+ * F-37 (fresh-start findings 2026-09-25): "purity 19% · noisy" on a class
+ * cluster whose labels are 90% right read as "bad labels". The served
+ * `purity` measures geometry, so the UI calls it cohesion. The value is
+ * still the served `purity`/`purity_n`; the tier word stays the served
+ * band.
+ */
+export const COHESION_TOOLTIP =
+  'Cohesion: share of measured members whose nearest cluster centre is this one. It measures how tight the cluster is in embedding space, not whether its labels are right.';
 
-/** "3% geometry", or null when the cluster has no measured purity. */
-export function geometryPurityText(
-  c: Pick<Cluster, 'purity' | 'purity_basis'>,
-): string | null {
-  return c.purity == null ? null : `${pct(c.purity)} ${purityBasisLabel(c.purity_basis)}`;
+/** "cohesion 19% · n=984", "cohesion 19%", or null with no served value. */
+export function cohesionText(c: Pick<Cluster, 'purity' | 'purity_n'>): string | null {
+  if (c.purity == null) return null;
+  const base = `cohesion ${pct(c.purity)}`;
+  return c.purity_n != null ? `${base} · n=${c.purity_n}` : base;
 }
