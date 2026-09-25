@@ -60,7 +60,10 @@
     <p class="text-xs text-zinc-500">Loading…</p>
   {:else}
     <p class="mb-2 text-xs text-zinc-400">
-      Total images: <span class="font-mono text-zinc-200">{status.total}</span>
+      Total images:
+      <span class="font-mono text-zinc-200" data-testid="ingest-status-total"
+        >{status.total}</span
+      >
     </p>
     {#if status.by_source.length === 0}
       <p class="text-xs text-zinc-500">No sources yet.</p>

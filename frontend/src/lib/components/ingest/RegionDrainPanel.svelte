@@ -82,6 +82,7 @@
           class="font-mono {drain.total_unfinished === 0
             ? 'text-emerald-400'
             : 'text-zinc-200'}"
+          data-testid="region-drain-total-unfinished"
         >
           {drain.total_unfinished}
         </div>

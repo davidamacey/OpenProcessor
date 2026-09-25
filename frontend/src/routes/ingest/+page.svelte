@@ -58,7 +58,12 @@
   }
 </script>
 
-<div class="mx-auto max-w-4xl space-y-6 p-6">
+<!-- max-w-7xl matches /dashboard, not the narrower content pages —
+     ClusteringHandoff embeds the real AutoLabelPanel, whose internal
+     `justify-between` description/controls row was designed for that
+     width and wraps badly in anything narrower (caught by the piece-9
+     live-build screenshot review). -->
+<div class="mx-auto max-w-7xl space-y-6 p-6">
   <h1 class="text-lg font-semibold text-zinc-100">Ingest</h1>
 
   {#if ingestAvailability.available === false}

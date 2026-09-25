@@ -206,3 +206,41 @@ def test_rejection_reason_label_renders_for_a_live_item(guarded_page: Any, live_
         f"labels {sorted(expected_labels)} the served rejection_reasons vocabulary "
         f"maps this cohort's items to"
     )
+
+
+def test_ingest_status_agrees(guarded_page: Any, live_url: str) -> None:
+    """docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.5 —
+    the /ingest status table's total agrees with GET {API_PREFIX}/ingest/status."""
+    page = guarded_page.page
+    page.goto(f"{live_url}/ingest", wait_until="domcontentloaded")
+    total_el = page.locator('[data-testid="ingest-status-total"]')
+    total_el.wait_for(timeout=15_000)
+    wait_for_stable_text(page, '[data-testid="ingest-status-total"]')
+    displayed = int(total_el.inner_text().strip().replace(",", ""))
+
+    ok, first, second = agrees_with_retry(live_url, "/ingest/status", ("total",), displayed)
+    assert ok, (
+        f"/ingest status table showed total={displayed}, but GET "
+        f"{{API_PREFIX}}/ingest/status total was {first} (and, on retry, {second})"
+    )
+
+
+def test_region_drain_agrees(guarded_page: Any, live_url: str) -> None:
+    """The /ingest region-drain panel's total_unfinished agrees with GET
+    {API_PREFIX}/ingest/region_drain. Uses wait_for_stable_text — the
+    value moves during a live cascade, per the plan."""
+    page = guarded_page.page
+    page.goto(f"{live_url}/ingest", wait_until="domcontentloaded")
+    el = page.locator('[data-testid="region-drain-total-unfinished"]')
+    el.wait_for(timeout=15_000)
+    wait_for_stable_text(page, '[data-testid="region-drain-total-unfinished"]')
+    displayed = int(el.inner_text().strip().replace(",", ""))
+
+    ok, first, second = agrees_with_retry(
+        live_url, "/ingest/region_drain", ("total_unfinished",), displayed
+    )
+    assert ok, (
+        f"/ingest region-drain panel showed total_unfinished={displayed}, but GET "
+        f"{{API_PREFIX}}/ingest/region_drain total_unfinished was {first} (and, on "
+        f"retry, {second})"
+    )
