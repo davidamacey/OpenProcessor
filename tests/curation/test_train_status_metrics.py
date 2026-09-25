@@ -8,9 +8,16 @@ per-key running max that could mix epochs) must not reach the wire.
 
 from __future__ import annotations
 
+import json
+from typing import TYPE_CHECKING
+
 import pytest
 
 from src.services.training.jobs import TrainJobStatus
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _legacy_status() -> dict:
@@ -54,28 +61,35 @@ def test_current_metric_fields_pass_through_unchanged() -> None:
 
 
 @pytest.mark.asyncio
-async def test_trained_models_reports_the_eval_score_with_its_split(monkeypatch) -> None:
+async def test_trained_models_reports_the_eval_score_with_its_split(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``trainer_map50`` is ``eval.map50`` (labelled by ``eval.split``), never the
+    best checkpoint's validation score."""
     from src.routers.curation import bakeoff
-    from src.services.training import jobs
+    from src.services.curation import bakeoff_jobs
 
-    run = TrainJobStatus.model_validate(
-        {
-            'job_id': 'run-3',
-            'state': 'finished',
-            'checkpoint_path': '/runs/run-3/weights/best.pt',
-            'best_checkpoint_metric': {'epoch': 18, 'map50': 0.99, 'map50_95': 0.86},
-            'eval': {'split': 'test', 'map50': 0.92, 'map50_95': 0.81},
-        }
+    ckpt = tmp_path / 'runs' / 'run-3' / 'weights' / 'best.pt'
+    ckpt.parent.mkdir(parents=True)
+    ckpt.write_bytes(b'pt')
+    jobs_dir = tmp_path / 'jobs'
+    jobs_dir.mkdir()
+    (jobs_dir / 'run-3.status.json').write_text(
+        json.dumps(
+            {
+                'job_id': 'run-3',
+                'state': 'finished',
+                'checkpoint_path': '/runs/run-3/weights/best.pt',
+                'best_checkpoint_metric': {'epoch': 18, 'map50': 0.99, 'map50_95': 0.86},
+                'eval': {'split': 'test', 'map50': 0.92, 'map50_95': 0.81},
+            }
+        )
     )
-
-    async def fake_list_runs(limit: int, offset: int) -> list[TrainJobStatus]:
-        return [run]
-
-    monkeypatch.setattr(jobs, 'list_runs', fake_list_runs)
-    monkeypatch.setattr(bakeoff, '_checkpoint_exists', lambda _path: True)
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(jobs_dir))
+    monkeypatch.setattr(bakeoff_jobs, 'RUNS_HOST_ROOT', tmp_path / 'runs')
 
     body = await bakeoff.bakeoff_trained_models()
 
-    model = body['models'][0]
-    assert model['map50'] == 0.92
-    assert model['map50_split'] == 'test'
+    model = body.models[0]
+    assert model.trainer_map50 == 0.92
+    assert model.trainer_map50_split == 'test'

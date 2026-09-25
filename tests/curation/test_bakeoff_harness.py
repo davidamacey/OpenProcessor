@@ -985,7 +985,9 @@ def test_runner_v2_end_to_end_with_fake_backend(tmp_path: Path, monkeypatch) -> 
 # backends) and joins this scan there; the two W4 service modules are scanned
 # as soon as they exist.
 _DOMAIN_WORDS = re.compile(r'(?i)plate|lpr|lpdnet|vehicle|open[_-]?image')
-_W4_SERVICE_FILES = (
+_BAKEOFF_API_FILES = (
+    'src/routers/curation/bakeoff.py',
+    'src/routers/curation/_bakeoff_models.py',
     'src/services/curation/eval_datasets.py',
     'src/services/curation/bakeoff_jobs.py',
 )
@@ -993,7 +995,7 @@ _W4_SERVICE_FILES = (
 
 def test_harness_core_has_no_domain_vocabulary() -> None:
     files = [p for p in sorted(HARNESS.rglob('*')) if p.suffix in {'.py', '.json', '.txt', '.md'}]
-    files += [REPO_ROOT / f for f in _W4_SERVICE_FILES if (REPO_ROOT / f).exists()]
+    files += [REPO_ROOT / f for f in _BAKEOFF_API_FILES]
     offenders: list[str] = []
     for path in files:
         rel = path.relative_to(REPO_ROOT).as_posix()
