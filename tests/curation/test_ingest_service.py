@@ -426,6 +426,27 @@ class TestBatchIngest:
         assert result.status == 'success'
         assert len(result.results) == 2
 
+    @pytest.mark.asyncio
+    async def test_batch_dedups_byte_identical_files_within_the_same_request(self) -> None:
+        """D3: two byte-identical files uploaded together must not both
+        ingest as 'success' — the second is reported as a duplicate of the
+        first (same image_id, same wire field the cross-batch duplicate
+        path uses), and exactly one item is created."""
+        data = _jpeg_bytes(seed=7)
+        svc, os_fake, _ = _make_service()
+
+        result = await svc.ingest_batch([data, data], ['/tmp/x.jpg', '/tmp/y.jpg'])
+
+        assert result.summary.successful == 1
+        assert result.summary.duplicates == 1
+        first, second = result.results
+        assert first.status == 'success'
+        assert second.status == 'duplicate'
+        assert second.image_id == first.image_id
+        assert first.image_id
+        # Only one image doc was ever created for the two identical uploads.
+        assert len(os_fake.images) == 1
+
 
 class TestBatchedTritonInference:
     """Regression guards for G11 — ``ingest_batch`` must issue *batched*

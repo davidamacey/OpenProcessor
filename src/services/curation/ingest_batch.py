@@ -10,7 +10,11 @@ of images is fanned out efficiently.
 Triton round-trips and is measurably slower for identical output. It is:
 
 1. **Dedup once, for everyone** — a single ``msearch`` resolves every
-   image's imohash instead of N term queries.
+   image's imohash instead of N term queries. This ONLY resolves against
+   the index, i.e. images already committed before this batch started —
+   see :func:`run_ingest_batch` for the separate in-batch dedup pass (D3)
+   that also collapses byte-identical repeats *within* one request onto a
+   single representative.
 2. **Decode once** — non-duplicates are decoded up front, and the PIL
    image is handed to ``ingest_one`` so it does not decode again.
 3. **Batched whole-image inference** — the decoded images go through
@@ -220,14 +224,43 @@ async def run_ingest_batch(
     hashes = [_imohash_bytes(b) for b in images]
     hash_to_existing = await service._check_duplicates_msearch(hashes)
 
+    # D3: `hash_to_existing` only resolves hashes already committed to the
+    # index *before* this batch started — two byte-identical files
+    # uploaded together share a hash neither has seen yet, and since every
+    # image in the batch is ingested concurrently below, both would
+    # otherwise land as separate 'success' items with 0 duplicates
+    # reported. Collapse same-batch repeats onto one representative index
+    # per hash (the first occurrence) before deciding what needs
+    # detection/inference at all.
+    first_seen: dict[str, int] = {}
+    batch_dup_of: dict[int, int] = {}
+    non_dup: list[int] = []
+    for i, h in enumerate(hashes):
+        if hash_to_existing.get(h) is not None:
+            continue
+        rep = first_seen.get(h)
+        if rep is None:
+            first_seen[h] = i
+            non_dup.append(i)
+        else:
+            batch_dup_of[i] = rep
+
     # Only pay the (expensive) batched decode + inference for images that
-    # dedup did not already resolve to an existing document.
-    non_dup = [i for i, h in enumerate(hashes) if hash_to_existing.get(h) is None]
+    # dedup did not already resolve to an existing document or an
+    # earlier-in-batch representative.
     prefilled_imgs, prefilled_items, prefilled_secondary = await _prefill_detections(
         service, images, image_paths, non_dup
     )
 
     sem = asyncio.Semaphore(MAX_INGEST_CONCURRENCY)
+
+    # Representatives with an in-batch follower publish their finished
+    # IngestResult here so the follower can report the same image_id
+    # (the same wire field the cross-batch duplicate path uses) instead of
+    # re-ingesting byte-identical content.
+    rep_futures: dict[int, asyncio.Future[IngestResult]] = {
+        rep: asyncio.get_running_loop().create_future() for rep in set(batch_dup_of.values())
+    }
 
     async def _one(i: int, image_bytes: bytes, image_path: str, image_hash: str) -> IngestResult:
         existing_id = hash_to_existing.get(image_hash)
@@ -238,8 +271,22 @@ async def run_ingest_batch(
                 image_path=image_path,
                 imohash=image_hash,
             )
+        rep = batch_dup_of.get(i)
+        if rep is not None:
+            rep_result = await rep_futures[rep]
+            if rep_result.status == 'success':
+                return IngestResult(
+                    status='duplicate',
+                    image_id=rep_result.image_id,
+                    image_path=image_path,
+                    imohash=image_hash,
+                )
+            # The representative failed (e.g. undecodable bytes) — don't
+            # guess a duplicate-of relationship against a failed ingest;
+            # give this copy its own real attempt instead (falls back to
+            # ingest_one's own decode/detect since it wasn't prefilled).
         async with sem:
-            return await service.ingest_one(
+            result = await service.ingest_one(
                 image_bytes,
                 image_path,
                 source=source,
@@ -250,6 +297,9 @@ async def run_ingest_batch(
                 source_identifier=source_identifiers[i] if source_identifiers else None,
                 ingest_run_id=ingest_run_id,
             )
+        if i in rep_futures:
+            rep_futures[i].set_result(result)
+        return result
 
     results = list(
         await asyncio.gather(

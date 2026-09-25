@@ -104,6 +104,18 @@ class ItemDoc(BaseModel):
     probe_pred_class: Any = None
     probe_pred_class_id: int | None = None
     probe_pred_entropy: float | None = None
+    # D1: null = the probe has no opinion (not scored yet, or the item's
+    # class is outside the probe's class set — see probe_in_scope). The UI
+    # must not offer an "accept model's class" action when this is null.
+    probe_disagreement: bool | None = None
+    # True once the probe has scored this item AND its class is one the
+    # probe was trained on (probe_disagreement is then a real bool); False
+    # when scored but out of the probe's class set (probe_disagreement is
+    # then null, not agreement); null before the probe has scored it.
+    probe_in_scope: bool | None = None
+    # Probe checkpoint version tag -- the closest thing to a "probe run
+    # id" today (see src.services.curation.probe_predictions).
+    probe_model_version: str | None = None
     mistakenness_score: float | None = None
     mistakenness_method: str | None = None
     mistakenness_version: str | None = None

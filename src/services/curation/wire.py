@@ -263,6 +263,31 @@ def serialize_item(
         'probe_pred_class': src.get('probe_pred_class'),
         'probe_pred_class_id': src.get('probe_pred_class_id'),
         'probe_pred_entropy': src.get('probe_pred_entropy'),
+        # D1: null means the probe has no opinion (either it hasn't scored
+        # this item, or — when this item's current class isn't one the probe
+        # was trained on — it structurally can't disagree with a class it
+        # was never shown). The UI must treat null as "no opinion" and never
+        # offer an "accept model's class" action for it; only a real
+        # True/False value is an actual probe opinion. See
+        # src.services.curation.probe_predictions for how this is computed.
+        'probe_disagreement': src.get('probe_disagreement'),
+        # Explicit, so a client never has to infer scope from
+        # probe_disagreement being null: None when the probe hasn't scored
+        # this item at all; once scored, True iff the item's class was one
+        # the probe was trained on (probe_disagreement is then a real
+        # True/False), False when the probe scored the item but the item's
+        # class is outside the probe's class set (probe_disagreement is
+        # then null — structurally no opinion, not an agreement).
+        'probe_in_scope': (
+            None
+            if src.get('probe_pred_class') is None
+            else src.get('probe_disagreement') is not None
+        ),
+        # The probe checkpoint's version tag (see probe_predictions.py's
+        # probe_model_version) -- the closest thing this system has to a
+        # "probe run id" today; null before the probe has ever scored this
+        # item.
+        'probe_model_version': src.get('probe_model_version'),
         'mistakenness_score': src.get('mistakenness_score'),
         'mistakenness_method': src.get('mistakenness_method'),
         'mistakenness_version': src.get('mistakenness_version'),

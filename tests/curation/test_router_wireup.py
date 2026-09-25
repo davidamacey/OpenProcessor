@@ -206,11 +206,17 @@ def test_classes_merge_refuses_when_source_has_frozen_holdout_crops(
 def test_classes_merge_resets_stale_human_provenance_on_crops_only(
     app_client: Any, tmp_path: Path, fake_opensearch: AsyncMock
 ) -> None:
-    """A merge must reset label_source/class_validated on the items index
-    (else a merged crop keeps reading as human-validated ground truth),
-    but must NOT touch the confirmed-labels index, which has no
+    """A merge must reset label_source on the items index (else a merged
+    crop keeps reading as though its old class_source/label writer still
+    applies), but must NOT touch the confirmed-labels index, which has no
     class_validated field and whose label_source means something else
     (original label provenance).
+
+    F-56 follow-up (owner-aligned semantics, 2026-09-25): class_validated
+    is carried over, not cleared -- a human-validated crop of the source
+    class stays validated under the target. See
+    test_merge_class_carries_over_validation_to_the_target in
+    test_history.py for the class_validated=False case.
 
     The items-index leg is a per-doc OCC bulk pass (via
     occ_skip_on_conflict_bulk) so class_id_history gets appended through
@@ -285,7 +291,9 @@ def test_classes_merge_resets_stale_human_provenance_on_crops_only(
     bulk_body = bulk_calls[0]
     assert bulk_body[0]['update']['_index'] == 'op_items'
     crop_doc = bulk_body[1]['doc']
-    assert crop_doc['class_validated'] is False
+    # F-56 follow-up: merge_source above is class_validated=True -- that
+    # carries over to the target, it is not cleared.
+    assert crop_doc['class_validated'] is True
     assert crop_doc['label_source'] == 'class_merge'
     assert crop_doc['class_id'] == tgt_id
 

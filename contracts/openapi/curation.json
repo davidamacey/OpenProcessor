@@ -1069,7 +1069,7 @@
           "images": {
             "description": "Encoded image files (JPEG/PNG)",
             "items": {
-              "contentMediaType": "application/octet-stream",
+              "format": "binary",
               "type": "string"
             },
             "title": "Images",
@@ -4069,6 +4069,39 @@
               }
             ],
             "title": "Needs New Class Note"
+          },
+          "probe_disagreement": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Disagreement"
+          },
+          "probe_in_scope": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe In Scope"
+          },
+          "probe_model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Model Version"
           },
           "probe_pred_class": {
             "title": "Probe Pred Class"
@@ -8039,13 +8072,6 @@
       },
       "ValidationError": {
         "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
           "loc": {
             "items": {
               "anyOf": [
@@ -9018,7 +9044,7 @@
     },
     "/curation/classes/merge": {
       "post": {
-        "description": "Mark source deprecated; bulk-relabel matching crops + labels.\n\n``dry_run=true`` returns ``{dry_run, source_id, target_id,\nwould_relabel, would_unvalidate, holdout_blocking, blocked}`` and\nwrites nothing (a real merge 409s when ``holdout_blocking > 0``).",
+        "description": "Mark source deprecated; bulk-relabel matching crops + labels.\n\n``dry_run=true`` returns ``{dry_run, source_id, target_id,\nwould_relabel, validations_carried_over, holdout_blocking, blocked}``\nand writes nothing (a real merge 409s when ``holdout_blocking > 0``).\nA human-validated crop of the source class stays validated under the\ntarget — ``validations_carried_over`` counts how many crops keep their\nvalidation this way, not (unlike the retired ``would_unvalidate``\nfield) how many lose it.",
         "operationId": "merge_class_curation_classes_merge_post",
         "parameters": [
           {
