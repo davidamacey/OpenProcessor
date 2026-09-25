@@ -132,6 +132,7 @@ class UniquenessScorer:
         'uniqueness_scored_at',
     )
     version: ClassVar[str] = UNIQUENESS_VERSION
+    pool: ClassVar[str] = 'residual'
 
     def __init__(self, centroids: np.ndarray | None = None) -> None:
         """``centroids`` overrides the persisted IVF store — used by tests
