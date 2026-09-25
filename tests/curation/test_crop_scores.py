@@ -163,8 +163,8 @@ def test_no_scorer_writes_cluster_fields(scorer_name: str) -> None:
 
 
 def test_scorer_metadata_writes_match_scorer_class_writes() -> None:
-    """SCORER_METADATA (feeds /legacy/methods) must not drift from the actual
-    CropScorer.writes ClassVar."""
+    """SCORER_METADATA (feeds /curation/methods) must not drift from the
+    actual CropScorer.writes ClassVar."""
     for name in available_scorers():
         scorer = get_scorer(name)
         assert set(SCORER_METADATA[name]['writes']) == set(scorer.writes)

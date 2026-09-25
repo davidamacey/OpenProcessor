@@ -230,29 +230,55 @@ def populate_eval_block(
 ) -> None:
     """Parse Ultralytics' artifacts off disk into ``state.eval`` (+ ``compare``).
 
-    The eval block carries top-level mAP (from ``results.csv``), per-class
-    P/R/F1/AP50/support (from a fresh ``val()`` pass), and the path to the
-    confusion-matrix PNG. When an incumbent is configured and reachable, the
-    side-by-side comparison lands in ``state.compare``.
+    ``results.csv``'s last row is Ultralytics' per-epoch **validation** metric
+    (the split reserved for early-stopping/model-selection during training,
+    recorded every epoch). ``val_results`` -- when the caller passed one -- is
+    a fresh ``model.val(..., split='test')`` pass against the frozen holdout
+    the run was never trained or tuned against. These are NOT
+    interchangeable: labeling the val number as "test" overstates how the
+    model will do on unseen data.
+
+    The overall ``eval.map50`` / ``eval.map50_95`` (+ ``precision`` /
+    ``recall`` / ``per_class`` when available) come from the test pass
+    whenever it succeeded (``eval.split == 'test'``). When it didn't run or
+    produced no usable ``box`` metrics, they fall back to the training-time
+    validation numbers (``eval.split == 'val'``, no ``per_class`` -- those
+    would silently be val-split numbers mislabeled as test). The val numbers
+    are always additionally kept, clearly named, under ``eval.val_last`` so a
+    consumer that specifically wants the training-time curve still can. The
+    confusion-matrix PNG path (server filesystem; the API rewrites this to a
+    servable URL before it reaches the wire) rounds out the block. When an
+    incumbent is configured and reachable, the side-by-side comparison lands
+    in ``state.compare``.
 
     ``eval_head`` (from :func:`_finalize_run`) records which detection head
-    the fresh ``val()`` pass scored -- ``"end2end"`` when the loaded
-    checkpoint's NMS-free one-to-one head was explicitly forced to match
-    what's actually served (see ``_finalize_run``), ``None`` for a model
-    family with no such distinction. Making this explicit means a
+    that same test-split ``val()`` pass scored -- ``"end2end"`` when the
+    loaded checkpoint's NMS-free one-to-one head was explicitly forced to
+    match what's actually served (see ``_finalize_run``), ``None`` for a
+    model family with no such distinction. Making this explicit means a
     comparison result never silently depends on Ultralytics' own
     checkpoint-dependent ``.val()`` default.
     """
     eval_block: dict[str, Any] = {}
     row = incumbent_compare.read_results_csv_last_row(save_dir / 'results.csv')
-    if row is not None:
-        eval_block.update(incumbent_compare.extract_top_level_metrics(row))
+    val_last = incumbent_compare.extract_top_level_metrics(row) if row is not None else {}
 
+    test_summary: dict[str, float] = {}
     per_class: list[dict[str, Any]] = []
     if val_results is not None:
+        test_summary = incumbent_compare.extract_test_summary(val_results)
         per_class = incumbent_compare.per_class_from_val_results(val_results)
-    if per_class:
+
+    if test_summary and per_class:
+        eval_block.update(test_summary)
+        eval_block['split'] = 'test'
         eval_block['per_class'] = per_class
+    else:
+        eval_block.update(val_last)
+        eval_block['split'] = 'val'
+
+    if val_last:
+        eval_block['val_last'] = val_last
 
     cm_path = save_dir / 'confusion_matrix.png'
     if cm_path.is_file():

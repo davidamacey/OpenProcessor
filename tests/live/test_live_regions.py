@@ -1,10 +1,11 @@
 """Live cohort-(a) scenarios: the region-of-interest human edit surface.
 
-The HTTP wire model still spells these fields ``plate_*`` (a frozen API
-contract); the OpenSearch documents spell them ``region_*`` via
-``RegionFields``. Every assertion below deliberately checks the *stored*
-name, because the whole point of the indirection is that the two can
-differ without anything silently falling through.
+The HTTP wire model spells these fields ``region_*``; the OpenSearch
+documents also spell them ``region_*`` via ``RegionFields``, but a
+deployment can override the *storage* key via ``RegionFields`` while the
+wire shape stays fixed. Every assertion below deliberately checks the
+*stored* name, because the whole point of the indirection is that the two
+can differ without anything silently falling through.
 """
 
 from __future__ import annotations
@@ -100,7 +101,7 @@ def test_patch_region_metadata_writes_text_and_source(
         json={'region_text_reply': 'LIVE-HARNESS-7', 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
-    # updated_fields echoes the frozen plate_* wire contract, never the
+    # updated_fields echoes the frozen region_* wire contract, never the
     # RegionFields storage key (region_text) checked below via `src`.
     assert 'region_text_reply' in resp.json()['updated_fields']
 
@@ -205,8 +206,8 @@ def test_region_browse_reflects_the_human_edits(api_client: Any) -> None:
     body = resp.json()
     assert body['total'] >= 1, body
     item = body['items'][0]
-    assert item['plate_detector'] == HUMAN_DETECTOR
-    assert item['plate_thumbnail_url'].endswith('/region_thumbnail')
+    assert item['region_detector'] == HUMAN_DETECTOR
+    assert item['region_thumbnail_url'].endswith('/region_thumbnail')
 
 
 def test_training_candidate_cohorts_are_queryable(api_client: Any) -> None:

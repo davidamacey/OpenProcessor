@@ -77,7 +77,7 @@ _RELEASED_AT_TTL_S = 300.0
 # path's own low-confidence threshold. The 0.70-0.80 band was sending high-confidence classifier crops
 # to the VLM and surfacing them in the vlm_low_conf review tab as
 # "classifier 95.9 %, VLM medium" — noise the human review queue doesn't need.
-# See docs/design/plate_detection_strategy.md Wave 1 chained tuning.
+# See the Wave 1 chained-tuning notes in the region-detection design docs.
 DEFAULT_CLASSIFIER_CONF_SKIP = 0.80
 
 

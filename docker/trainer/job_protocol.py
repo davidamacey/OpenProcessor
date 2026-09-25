@@ -169,6 +169,11 @@ class StatusState:
     best_checkpoint_metric: dict[str, Any] | None = None
     mlflow_run_id: str | None = None
     mlflow_run_url: str | None = None
+    # Needed alongside ``mlflow_run_id`` for the API to rebuild a
+    # browser-reachable deep link (see ``src/services/training/jobs.py``'s
+    # ``_public_mlflow_url``) -- the run URL's path embeds both ids and the
+    # API has no other way to recover the experiment id.
+    mlflow_experiment_id: str | None = None
     checkpoint_path: str | None = None
     eval: dict[str, Any] | None = None
     compare: dict[str, Any] | None = None
@@ -382,6 +387,7 @@ def build_status_payload(s: StatusState) -> dict[str, Any]:
             'best_checkpoint_metric': s.best_checkpoint_metric,
             'mlflow_run_id': s.mlflow_run_id,
             'mlflow_run_url': s.mlflow_run_url,
+            'mlflow_experiment_id': s.mlflow_experiment_id,
             'checkpoint_path': s.checkpoint_path,
             'class_remap_copy_failed': s.class_remap_copy_failed,
             'gpu': _gpu_telemetry(),
@@ -461,6 +467,13 @@ def _capture_mlflow_run_id(spec: JobSpec, state: StatusState) -> None:
         run = runs[0]
         with state.lock:
             state.mlflow_run_id = run.info.run_id
+            state.mlflow_experiment_id = str(experiment.experiment_id)
+            # Internal-network URL -- a browser behind the deployment can't
+            # reach ``tracking_uri`` (it's a container hostname). Kept here
+            # for operators inspecting status.json/manifest.json directly
+            # (e.g. ``docker exec``); the API rewrites this to a public URL
+            # (or null) before it ever reaches the wire -- see
+            # ``src/services/training/jobs.py``'s ``_public_mlflow_url``.
             state.mlflow_run_url = (
                 f'{tracking_uri.rstrip("/")}/#/experiments/'
                 f'{experiment.experiment_id}/runs/{run.info.run_id}'
@@ -659,6 +672,7 @@ def write_manifest(
                 'checkpoint_sha256': checkpoint_sha,
                 'mlflow_run_id': state.mlflow_run_id,
                 'mlflow_run_url': state.mlflow_run_url,
+                'mlflow_experiment_id': state.mlflow_experiment_id,
             },
             # Stamped by POST {api_prefix}/train/promote/{job_id}.
             'promoted_to': None,

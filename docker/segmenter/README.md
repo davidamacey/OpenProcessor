@@ -89,15 +89,15 @@ docker compose --profile segmenter build segmenter
 docker compose --profile segmenter build --build-arg SAM3_SHA=<sha> segmenter
 
 # Run it alongside the curation workers, and point them at it.
-SAM3_URL=http://segmenter:8000 \
+OP_SEGMENTER_URL=http://segmenter:8000 \
   docker compose --profile curation --profile segmenter up -d
 ```
 
 The service ships under its own compose profile rather than `curation`
 because it needs a GPU and a HuggingFace token — enabling it is an
-explicit choice, and the cascade runs without it (`SAM3_URL` empty ⇒ the
+explicit choice, and the cascade runs without it (`OP_SEGMENTER_URL` empty ⇒ the
 segmenter leg is a clean no-op; see
-`tests/curation/test_sam3_optional.py`).
+`tests/curation/test_segmenter_optional.py`).
 
 ## Environment
 

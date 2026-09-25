@@ -43,9 +43,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from src.config import get_gpu_arbiter_config
+from src.config import get_curation_config, get_gpu_arbiter_config
 from src.core.logging import get_logger
 from src.services.training import lineage
+from src.services.training.augmentation_presets import DEFAULT_AUGMENTATION_PRESET
 
 
 logger = get_logger(__name__)
@@ -88,6 +89,31 @@ TRAIN_STATES = (
 # we accept a job-id in path params so we don't end up reading arbitrary
 # files via ``..`` injection.
 JOB_ID_RE = re.compile(r'^[A-Za-z0-9_.\-:+T]{1,128}$')
+
+# GET {api_prefix}/train/artifacts/{job_id}/{name} -- exact basenames only
+# (no path traversal is even expressible: no ``/`` is a valid character in
+# any of these). Metrics/plots only -- deliberately excludes Ultralytics'
+# ``train_batch*.jpg``/``val_batch*.jpg`` (actual training/validation
+# images, not aggregate metrics) and ``labels.jpg`` (a dataset-content
+# visualization), any of which could leak imagery a deployment doesn't want
+# served over this route.
+RUN_ARTIFACT_WHITELIST = frozenset(
+    {
+        'confusion_matrix.png',
+        'confusion_matrix_normalized.png',
+        'results.png',
+        'results.csv',
+        'BoxF1_curve.png',
+        'BoxP_curve.png',
+        'BoxPR_curve.png',
+        'BoxR_curve.png',
+    }
+)
+
+_ARTIFACT_MEDIA_TYPES = {
+    '.png': 'image/png',
+    '.csv': 'text/csv',
+}
 
 
 def _validate_gpu_device_string(v: str) -> str:
@@ -154,7 +180,9 @@ class AugmentationSpec(BaseModel):
 
     enabled: bool = True
     multiplier: int = Field(default=1, ge=1, le=20)
-    preset: str = Field(default='balanced_default')
+    # Validated against the catalog by preflight and /start (not here, so
+    # preflight can report it as a check); GET /train/augmentation_presets.
+    preset: str = Field(default=DEFAULT_AUGMENTATION_PRESET)
     albumentations: dict[str, Any] = Field(default_factory=dict)
     per_class_multiplier: dict[str, int] = Field(default_factory=dict)
 
@@ -300,9 +328,18 @@ class TrainJobStatus(BaseModel):
     # could mix map50 from one epoch with map50_95 from another.
     best_checkpoint_metric: dict[str, Any] | None = None
     mlflow_run_id: str | None = None
+    # Served value is rewritten before it reaches the wire -- see
+    # ``_public_mlflow_url``/``_prepare_status_for_wire`` below. The trainer
+    # writes an internal container hostname here (unreachable from a
+    # browser); a caller of ``read_status``/``list_runs`` always gets either
+    # a browser-reachable URL (``CurationConfig.mlflow_public_url`` set) or
+    # ``null``, never the internal host.
     mlflow_run_url: str | None = None
+    mlflow_experiment_id: str | None = None
     checkpoint_path: str | None = None
     gpu: list[dict[str, Any]] = Field(default_factory=list)
+    # Served value has ``confusion_matrix_path`` (a server filesystem path)
+    # replaced with ``confusion_matrix_url`` -- see ``_rewrite_eval_for_wire``.
     eval: dict[str, Any] | None = None
     # Side-by-side comparison vs the incumbent Triton model. Populated by
     # the trainer at the end of a finished run; null if Triton was
@@ -321,6 +358,15 @@ class TrainJobStatus(BaseModel):
         bake-off model picker would show a blank mAP. When
         ``best_checkpoint_metric`` is absent we derive it from ``eval`` so
         every consumer shows it.
+
+        This is a best-effort fallback for an anomalous status write -- a
+        normal run always populates ``best_checkpoint_metric`` per-epoch
+        during training (``docker/trainer/trainer.py``'s
+        ``on_fit_epoch_end``). ``eval``'s numbers may be the test split
+        (``eval.split == 'test'``) rather than the training-time
+        validation split ``best_checkpoint_metric`` otherwise means; check
+        ``eval.split``/``eval.val_last`` if that distinction matters for a
+        given consumer.
         """
         if not self.best_checkpoint_metric and isinstance(self.eval, dict):
             derived = {
@@ -422,12 +468,77 @@ def _registry_snapshot_path(job_id: str) -> Path:
     return _resolve_jobs_dir() / f'{job_id}.registry_snapshot.json'
 
 
+# =============================================================================
+# Wire rewriting -- internal hostnames / server filesystem paths never reach
+# the wire. Applied to every ``TrainJobStatus`` returned by ``read_status``/
+# ``list_runs`` and to the raw manifest dict returned by ``read_manifest``.
+# =============================================================================
+
+
+def _public_mlflow_url(run_id: str | None, experiment_id: str | None) -> str | None:
+    """Rebuild a browser-reachable MLflow run URL, or ``None``.
+
+    The trainer only knows ``MLFLOW_TRACKING_URI``, a container hostname
+    (e.g. ``http://curation-mlflow:5000``) a browser can never resolve.
+    ``None`` whenever ``CurationConfig.mlflow_public_url`` is unset, or
+    ``run_id``/``experiment_id`` (needed to build the deep-link path)
+    aren't both available -- this never falls back to the internal URL.
+    """
+    if not run_id or not experiment_id:
+        return None
+    base = get_curation_config().mlflow_public_url
+    if not base:
+        return None
+    return f'{base.rstrip("/")}/#/experiments/{experiment_id}/runs/{run_id}'
+
+
+def artifact_media_type(name: str) -> str:
+    """Content type for a whitelisted run-artifact filename."""
+    return _ARTIFACT_MEDIA_TYPES.get(Path(name).suffix.lower(), 'application/octet-stream')
+
+
+def _artifact_url(job_id: str, artifact_name: str) -> str:
+    api_prefix = get_curation_config().api_prefix
+    return f'{api_prefix}/train/artifacts/{job_id}/{artifact_name}'
+
+
+def _rewrite_eval_for_wire(eval_block: Any, job_id: str) -> Any:
+    """Replace ``eval.confusion_matrix_path`` (a server filesystem path)
+    with ``eval.confusion_matrix_url`` (this route), or ``None``.
+
+    Returns ``eval_block`` unchanged when it isn't a dict (``None``, or a
+    validation artifact from a badly-shaped status write).
+    """
+    if not isinstance(eval_block, dict):
+        return eval_block
+    out = dict(eval_block)
+    cm_path = out.pop('confusion_matrix_path', None)
+    out['confusion_matrix_url'] = (
+        _artifact_url(job_id, Path(cm_path).name) if isinstance(cm_path, str) and cm_path else None
+    )
+    return out
+
+
+def _prepare_status_for_wire(s: TrainJobStatus) -> TrainJobStatus:
+    """Apply every serve-time rewrite to a ``TrainJobStatus`` before it's returned."""
+    return s.model_copy(
+        update={
+            'eval': _rewrite_eval_for_wire(s.eval, s.job_id),
+            'mlflow_run_url': _public_mlflow_url(s.mlflow_run_id, s.mlflow_experiment_id),
+        }
+    )
+
+
 async def read_manifest(job_id: str) -> dict[str, Any] | None:
     """Return the parsed run manifest or None if absent.
 
     The trainer writes the manifest at job-end. The promote endpoint reads
     + updates the ``promoted_to`` field so callers can trace which Triton
-    model name a checkpoint shipped under.
+    model name a checkpoint shipped under. The served ``results.eval`` /
+    ``results.mlflow_run_url`` go through the same wire rewrite as
+    ``TrainJobStatus`` (see ``_rewrite_eval_for_wire``/``_public_mlflow_url``)
+    -- the manifest is a raw dict, not that model, so it isn't covered by
+    ``_prepare_status_for_wire`` automatically.
     """
     _validate_job_id(job_id)
     path = _manifest_path(job_id)
@@ -440,6 +551,66 @@ async def read_manifest(job_id: str) -> dict[str, Any] | None:
         except (OSError, ValueError):
             return None
         return payload if isinstance(payload, dict) else None
+
+    manifest = await asyncio.to_thread(_do)
+    if manifest is None:
+        return None
+    results = manifest.get('results')
+    if isinstance(results, dict):
+        results = dict(results)
+        results['eval'] = _rewrite_eval_for_wire(results.get('eval'), job_id)
+        results['mlflow_run_url'] = _public_mlflow_url(
+            results.get('mlflow_run_id'), results.get('mlflow_experiment_id')
+        )
+        manifest = {**manifest, 'results': results}
+    return manifest
+
+
+async def resolve_run_dir(job_id: str) -> Path | None:
+    """Resolve the on-disk training-run directory for ``job_id``, best-effort.
+
+    Used only by :func:`read_artifact` to locate metrics/plot files a
+    finished (or partially finished) run wrote -- never exposed on the wire
+    itself. Derived from the *raw* (unrewritten) ``status.json``:
+    ``checkpoint_path`` (``<run_dir>/weights/best.pt``) first, falling back
+    to ``eval.confusion_matrix_path`` for a run that failed before export.
+    ``None`` if neither is on disk yet.
+    """
+    _validate_job_id(job_id)
+    raw = await _read_json(_status_path(job_id))
+    if raw is None:
+        return None
+    ckpt = raw.get('checkpoint_path')
+    if isinstance(ckpt, str) and ckpt:
+        return Path(ckpt).resolve().parent.parent
+    eval_block = raw.get('eval')
+    if isinstance(eval_block, dict):
+        cm_path = eval_block.get('confusion_matrix_path')
+        if isinstance(cm_path, str) and cm_path:
+            return Path(cm_path).resolve().parent
+    return None
+
+
+async def read_artifact(job_id: str, name: str) -> Path | None:
+    """Return the absolute path of a whitelisted run artifact, or ``None``.
+
+    ``None`` covers every "don't serve this" case alike (name not in
+    :data:`RUN_ARTIFACT_WHITELIST`, unresolvable run dir, missing file, or a
+    resolved path that escaped the run dir) -- the router turns any of them
+    into a plain 404 so a probe can't learn more than "nothing there."
+    """
+    _validate_job_id(job_id)
+    if name not in RUN_ARTIFACT_WHITELIST:
+        return None
+    run_dir = await resolve_run_dir(job_id)
+    if run_dir is None:
+        return None
+
+    def _do() -> Path | None:
+        candidate = (run_dir / name).resolve()
+        if candidate.parent != run_dir or not candidate.is_file():
+            return None
+        return candidate
 
     return await asyncio.to_thread(_do)
 
@@ -719,7 +890,7 @@ async def read_status(job_id: str) -> TrainJobStatus | None:
             error=str(exc),
         )
         return None
-    return _maybe_lost(status)
+    return _prepare_status_for_wire(_maybe_lost(status))
 
 
 def _list_status_files() -> list[Path]:
@@ -818,7 +989,7 @@ async def list_runs(limit: int = 50, offset: int = 0) -> list[TrainJobStatus]:
                             )
                     except (OSError, json.JSONDecodeError):
                         pass
-            results.append(_maybe_lost(status))
+            results.append(_prepare_status_for_wire(_maybe_lost(status)))
         else:
             results.append(
                 TrainJobStatus(

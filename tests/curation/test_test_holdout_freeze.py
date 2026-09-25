@@ -501,3 +501,48 @@ async def test_fetch_cohort_strata_missing_class_id_and_source_get_a_stratum() -
     assert strata[0]['class_id'] == _MISSING_CLASS_ID_STRATUM
     assert strata[0]['source'] == _MISSING_HOLDOUT_SOURCE_STRATUM
     assert strata[0]['crop_ids'] == _crop_ids('m', 2)
+
+
+# =============================================================================
+# Seed handling: selection is SHA1-deterministic, so a seed is refused
+# =============================================================================
+
+
+def test_freeze_rejects_a_seed_with_422(app_client: Any, fake_opensearch: AsyncMock) -> None:
+    """A ``seed`` used to be accepted and silently ignored, so the UI kept
+    showing a Seed field that changed nothing. It's now an unknown field:
+    ``422`` before anything is read or written."""
+    buckets = [_bucket(3, 'src-a', 6)]
+    fake_opensearch.search = AsyncMock(
+        side_effect=_make_search_dispatcher([(buckets, None)], {(3, 'src-a'): _crop_ids('a', 6)})
+    )
+    r = app_client.post('/curation/test_holdout/freeze', json={'percent': 20, 'seed': 42})
+    assert r.status_code == 422, r.text
+    assert 'seed' in r.text
+    fake_opensearch.bulk.assert_not_called()
+
+
+def test_freeze_response_names_the_selection_method(
+    app_client: Any, fake_opensearch: AsyncMock
+) -> None:
+    buckets = [_bucket(3, 'src-a', 6)]
+    fake_opensearch.search = AsyncMock(
+        side_effect=_make_search_dispatcher([(buckets, None)], {(3, 'src-a'): _crop_ids('a', 6)})
+    )
+    r = app_client.post('/curation/test_holdout/freeze', json={'percent': 20})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body['selection'] == 'sha1_per_class'
+    assert body['min_per_class'] == test_holdout_module.MIN_TEST_PER_CLASS
+    assert body['percent'] == 20
+
+
+def test_freeze_contract_has_no_seed(app_client: Any) -> None:
+    spec = app_client.get('/openapi.json').json()
+    schemas = spec['components']['schemas']
+    request = schemas['TestHoldoutFreezeRequest']
+    assert 'seed' not in request['properties']
+    assert request.get('additionalProperties') is False
+    response = schemas['TestHoldoutFreezeResponse']
+    selection = response['properties']['selection']
+    assert selection.get('const') == 'sha1_per_class' or selection.get('enum') == ['sha1_per_class']

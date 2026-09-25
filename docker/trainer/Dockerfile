@@ -126,6 +126,9 @@ ENV PATH=/home/appuser/.local/bin:$PATH \
 # Flat module layout: /app is on PYTHONPATH, so `python -m trainer` resolves
 # trainer.py and its siblings as top-level modules.
 COPY --chown=appuser:appuser docker/trainer/*.py ./
+# The augmentation preset catalog is shared with the API (which validates and
+# serves it); copied flat so augment.py imports it as a top-level module.
+COPY --chown=appuser:appuser src/services/training/augmentation_presets.py ./augmentation_presets.py
 
 USER appuser
 

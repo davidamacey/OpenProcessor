@@ -201,6 +201,48 @@ def test_label_content_sha_tracks_content_not_just_filenames(tmp_path):
     assert before != after
 
 
+@pytest.mark.asyncio
+async def test_single_class_dataset_sha_differs_for_a_class_rename_with_byte_identical_labels(
+    tmp_path,
+):
+    """This exporter's dense id is the row's position in
+    ``profile.class_ids`` (fixed by the caller, not derived from the live
+    registry's id ordering), so the same investigation the multi-class
+    exporter needed applies here too: a pure registry rename (same
+    class_id, same class_ids tuple) leaves the label bytes unchanged but
+    must still change dataset_sha, because the ordered class_names are
+    folded into the digest."""
+    docs = [_item(1, 0)]
+    registry = _registry(tmp_path / 'registry', ['car'])
+    profile = SingleClassExportProfile(class_ids=(0,))
+
+    service_a = SingleClassExportService(
+        _FakeOpenSearch(docs),
+        profile=profile,
+        config=CurationConfig(export_root=tmp_path / 'a', source_root=tmp_path / 'images'),
+        registry=registry,
+        region_fields=_F,
+    )
+    result_a = await service_a.export(seed=1, copy_images=False)
+
+    registry.rename_class(0, 'automobile')
+
+    service_b = SingleClassExportService(
+        _FakeOpenSearch(docs),
+        profile=profile,
+        config=CurationConfig(export_root=tmp_path / 'b', source_root=tmp_path / 'images'),
+        registry=registry,
+        region_fields=_F,
+    )
+    result_b = await service_b.export(seed=1, copy_images=False)
+
+    label_a = next((Path(result_a.export_dir) / 'labels').rglob('img-1.txt')).read_bytes()
+    label_b = next((Path(result_b.export_dir) / 'labels').rglob('img-1.txt')).read_bytes()
+    assert label_a == label_b
+
+    assert result_a.dataset_sha != result_b.dataset_sha
+
+
 def test_frozen_test_sha_ignores_content_changes_inside_the_test_split(tmp_path):
     """The guarantee is 'the same frames are held out', which must keep
     holding after a label correction inside the test set."""
@@ -678,7 +720,9 @@ async def test_manifest_shape_matches_reference_single_class_export(tmp_path):
     # written files alone, which is what makes them checkable by a third
     # party who only has the export directory.
     export_dir = Path(result.export_dir)
-    assert manifest['dataset_sha'] == label_content_sha(export_dir)
+    assert manifest['dataset_sha'] == label_content_sha(
+        export_dir, class_names=manifest['class_names']
+    )
     assert manifest['frozen_test_sha'] == frozen_test_sha_of(export_dir)
     assert manifest['test_label_sha'] == label_content_sha(
         export_dir, None, truncate=16, split='test'

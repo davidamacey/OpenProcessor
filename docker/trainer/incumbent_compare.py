@@ -107,6 +107,37 @@ def extract_top_level_metrics(row: dict[str, str]) -> dict[str, float]:
     return out
 
 
+def extract_test_summary(val_results: Any) -> dict[str, float]:
+    """Pull overall mAP50 / mAP50-95 / precision / recall off a fresh ``val()`` pass.
+
+    Unlike :func:`extract_top_level_metrics` (which reads ``results.csv``'s
+    last row -- the training-time *validation* split), this reads Ultralytics'
+    ``DetMetrics.box`` properties directly off the object returned by
+    ``model.val(..., split='test')`` -- ``map50``, ``map`` (mAP50-95), ``mp``
+    (mean precision), ``mr`` (mean recall). Returns ``{}`` if ``val_results``
+    has no usable ``box`` (older Ultralytics or a failed pass) so callers can
+    fall back to the training-time validation numbers instead.
+    """
+    box = getattr(val_results, 'box', None)
+    if box is None:
+        return {}
+    out: dict[str, float] = {}
+    for key, attr in (
+        ('map50', 'map50'),
+        ('map50_95', 'map'),
+        ('precision', 'mp'),
+        ('recall', 'mr'),
+    ):
+        value = getattr(box, attr, None)
+        if value is None:
+            continue
+        try:
+            out[key] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def per_class_from_val_results(val_results: Any) -> list[dict[str, Any]]:
     """Convert Ultralytics' ``DetMetrics`` object into our per-class shape.
 

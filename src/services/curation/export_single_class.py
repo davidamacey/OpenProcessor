@@ -311,7 +311,7 @@ class SingleClassExportService:
         self._write_class_registry(resolved_dir, names)
         self._write_label_stats(resolved_dir, names)
 
-        dataset_sha = await asyncio.to_thread(label_content_sha, resolved_dir)
+        dataset_sha = await asyncio.to_thread(label_content_sha, resolved_dir, names)
         frozen_test_sha = await asyncio.to_thread(frozen_test_sha_of, resolved_dir)
         test_label_sha = await asyncio.to_thread(
             label_content_sha, resolved_dir, None, truncate=16, split='test'

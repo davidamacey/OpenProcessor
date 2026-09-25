@@ -21,7 +21,6 @@ from src.config import CurationConfig
 from src.services.curation.export import (
     GenericYoloExportService,
     _ExportRow,
-    dataset_checksum,
     even_stratified_sample,
     frozen_test_sha_of,
     hash_split,
@@ -77,9 +76,22 @@ def test_hash_split_changes_with_seed_sometimes():
     assert a != b
 
 
-def test_dataset_checksum_is_order_independent():
-    assert dataset_checksum(['a', 'b', 'c']) == dataset_checksum(['c', 'a', 'b'])
-    assert dataset_checksum(['a', 'b']) != dataset_checksum(['a', 'b', 'c'])
+def test_label_content_sha_tracks_content_and_class_names(tmp_path: Path):
+    """Base sanity check on the shared primitive before exercising it
+    through the full exporter below: same label bytes -> same digest,
+    different ``class_names`` -> different digest."""
+    (tmp_path / 'labels' / 'train').mkdir(parents=True)
+    label = tmp_path / 'labels' / 'train' / 'a.txt'
+    label.write_text('0 0.5 0.5 0.1 0.1\n')
+
+    assert label_content_sha(tmp_path) == label_content_sha(tmp_path)
+    assert label_content_sha(tmp_path, ['car']) != label_content_sha(tmp_path, ['truck'])
+    assert label_content_sha(tmp_path) != label_content_sha(tmp_path, ['car'])
+    # truncate=None yields the full 64-char sha256 hex digest the
+    # multi-class exporter records (a 64-hex dataset_sha is what every
+    # existing consumer assumes).
+    assert len(label_content_sha(tmp_path, truncate=None)) == 64
+    assert len(label_content_sha(tmp_path)) == 16
 
 
 def test_resolve_current_export_dir_missing_raises(tmp_path):
@@ -297,8 +309,10 @@ async def test_frozen_holdout_rows_land_in_test_split(tmp_path):
 
     result = await service.export_dataset(seed=42, copy_images=False)
 
-    label_path = Path(result.export_dir) / 'labels' / 'test' / 'crop-0.txt'
+    # Files are per source image: crop-0 sits on img-0.
+    label_path = Path(result.export_dir) / 'labels' / 'test' / 'img-0.txt'
     assert label_path.is_file()
+    assert not list((Path(result.export_dir) / 'labels').glob('*/crop-*.txt'))
 
 
 @pytest.mark.asyncio
@@ -338,40 +352,56 @@ def test_stratified_split_keeps_group_together():
     rows = [
         _ExportRow(
             item_id=f'crop-{i}',
-            image_id=f'img-{i}',
-            image_path=f'{i}.jpg',
+            image_id='img-shared',  # all ten items were cut from one image
+            image_path='shared.jpg',
             bbox_norm=[0.0, 0.0, 1.0, 1.0],
             class_id=0,
             class_name='car',
-            cluster_id=1,  # all ten rows share one burst
         )
         for i in range(10)
     ]
-    splits = stratified_split(rows, seed=3, train_ratio=0.8, val_ratio=0.1, group_key='cluster_id')
+    splits = stratified_split(rows, seed=3, train_ratio=0.8, val_ratio=0.1)
     assert len(set(splits.values())) == 1  # every row in the shared group got the same split
 
 
 def test_region_bbox_round_trip():
     """normalized bbox -> YOLO cx/cy/w/h text -> back to a normalized bbox."""
-    from src.services.curation.export import _write_yolo_label
+    from src.services.curation.export_images import normalized_box, yolo_line
 
     bbox = [0.1, 0.2, 0.5, 0.6]
 
     def _yolo_to_norm(cx, cy, w, h):
         return [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2]
 
-    tmp_txt = Path('/tmp') / 'round_trip_test.txt'
-    try:
-        _write_yolo_label(tmp_txt, 3, bbox)
-        parts = tmp_txt.read_text().split()
-        cid = int(parts[0])
-        cx, cy, w, h = (float(x) for x in parts[1:])
-        recovered = _yolo_to_norm(cx, cy, w, h)
-        assert cid == 3
-        for a, b in zip(bbox, recovered, strict=True):
-            assert a == pytest.approx(b, abs=1e-5)
-    finally:
-        tmp_txt.unlink(missing_ok=True)
+    box = normalized_box(bbox)
+    assert box is not None
+    parts = yolo_line(3, box).split()
+    cid = int(parts[0])
+    cx, cy, w, h = (float(x) for x in parts[1:])
+    recovered = _yolo_to_norm(cx, cy, w, h)
+    assert cid == 3
+    for a, b in zip(bbox, recovered, strict=True):
+        assert a == pytest.approx(b, abs=1e-5)
+
+
+def test_normalized_box_clamps_to_the_frame_and_rejects_empty_boxes():
+    from src.services.curation.export_images import normalized_box
+
+    assert normalized_box([-0.1, 0.2, 0.5, 1.2]) == (0.0, 0.2, 0.5, 1.0)
+    assert normalized_box([0.5, 0.2, 0.5, 0.6]) is None  # zero width
+    assert normalized_box([0.6, 0.2, 0.5, 0.6]) is None  # inverted
+    assert normalized_box([1.1, 0.2, 1.5, 0.6]) is None  # wholly outside the frame
+    assert normalized_box([0.1, 0.2, 0.5]) is None
+    assert normalized_box(None) is None
+
+
+@pytest.mark.asyncio
+async def test_letterbox_resize_is_refused(tmp_path):
+    """Labels are normalized to the source frame; a letterbox pad would
+    shift every box against them."""
+    service = _service(tmp_path, [], ['alpha'])
+    with pytest.raises(ValueError, match='letterbox'):
+        await service.export_dataset(resize_mode='letterbox')  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -396,8 +426,14 @@ async def test_manifest_structure_and_deterministic_sha(tmp_path, monkeypatch):
         'group_key',
         'dataset_sha',
         'image_count',
+        'object_count',
         'split_counts',
+        'split_object_counts',
         'class_count',
+        'require_fully_labeled_images',
+        'unlabeled_items_on_exported_images',
+        'images_with_unlabeled_items',
+        'images_dropped_not_fully_labeled',
         'started_at',
         'finished_at',
         'code_sha',
@@ -406,10 +442,14 @@ async def test_manifest_structure_and_deterministic_sha(tmp_path, monkeypatch):
         'max_images',
         'sampling_mode',
         'image_copy',
+        'skipped_items',
     ):
         assert key in manifest
     assert manifest['code_sha'] == 'deadbeef'
-    assert manifest['dataset_sha'] == dataset_checksum(['crop-1'])
+    assert len(manifest['dataset_sha']) == 64  # full sha256 hex, not the 16-char truncation
+    assert manifest['dataset_sha'] == label_content_sha(
+        Path(result.export_dir), ['car'], truncate=None
+    )
 
 
 @pytest.mark.asyncio
@@ -509,3 +549,179 @@ async def test_export_is_rederivable_from_recorded_seed(tmp_path):
     assert _label_bytes(Path(result1.export_dir)) == _label_bytes(Path(result2.export_dir))
     assert result1.dataset_sha == result2.dataset_sha
     assert result1.split_counts.to_dict() == result2.split_counts.to_dict()
+
+
+# ---------------------------------------------------------------------------
+# dataset_sha semantics: content-derived, not item-id-derived (export-sha cutover)
+# ---------------------------------------------------------------------------
+
+
+def _split_sensitive_docs() -> list[dict[str, Any]]:
+    """Many independent (single-item) image groups so a seed change is
+    overwhelmingly likely to move at least one group to a different split,
+    changing at least one label file's relative path."""
+    return [
+        {
+            'crop_id': f'{name}-{i}',
+            'image_id': f'{name}-img-{i}',
+            'image_path': f'{name}-{i}.jpg',
+            'bbox_norm': [0.0, 0.0, 1.0, 1.0],
+            'class_id': cls_idx,
+            'class_name': name,
+        }
+        for cls_idx, name in enumerate(['car', 'truck'])
+        for i in range(40)
+    ]
+
+
+@pytest.mark.asyncio
+async def test_dataset_sha_differs_for_the_same_items_with_different_splits(tmp_path):
+    """Requirement: same item set, different split assignment -> different
+    dataset_sha. The old ``dataset_checksum(item_ids)`` collided here."""
+    docs = _split_sensitive_docs()
+    service_a = _service(tmp_path / 'a', docs, ['car', 'truck'])
+    service_b = _service(tmp_path / 'b', docs, ['car', 'truck'])
+
+    result_a = await service_a.export_dataset(seed=1, copy_images=False)
+    result_b = await service_b.export_dataset(seed=2, copy_images=False)
+
+    def _split_of(export_dir: Path) -> dict[str, str]:
+        return {
+            f.stem: split
+            for split in ('train', 'val', 'test')
+            for f in (export_dir / 'labels' / split).glob('*.txt')
+        }
+
+    splits_a = _split_of(Path(result_a.export_dir))
+    splits_b = _split_of(Path(result_b.export_dir))
+    assert set(splits_a) == set(splits_b)  # exact same item/image set in both exports
+    # ...but at least one image landed in a different split between the two
+    # seeds (overwhelmingly likely with 80 independent groups).
+    assert splits_a != splits_b
+    assert result_a.dataset_sha != result_b.dataset_sha
+
+
+@pytest.mark.asyncio
+async def test_dataset_sha_differs_when_a_box_moves(tmp_path):
+    """Requirement: identical item set, one box moved -> different
+    dataset_sha (the split is pinned by using the same seed and a single
+    item, so only the label content differs)."""
+
+    def _docs(bbox: list[float]) -> list[dict[str, Any]]:
+        return [
+            {
+                'crop_id': 'crop-1',
+                'image_id': 'img-1',
+                'image_path': 'a.jpg',
+                'bbox_norm': bbox,
+                'class_id': 0,
+                'class_name': 'car',
+            }
+        ]
+
+    service_a = _service(tmp_path / 'a', _docs([0.1, 0.1, 0.5, 0.5]), ['car'])
+    service_b = _service(tmp_path / 'b', _docs([0.1, 0.1, 0.6, 0.6]), ['car'])
+
+    result_a = await service_a.export_dataset(seed=1, copy_images=False)
+    result_b = await service_b.export_dataset(seed=1, copy_images=False)
+
+    assert result_a.split_counts.to_dict() == result_b.split_counts.to_dict()
+    assert result_a.dataset_sha != result_b.dataset_sha
+
+
+@pytest.mark.asyncio
+async def test_dataset_sha_is_deterministic_for_an_identical_rerun(tmp_path):
+    """Requirement: same items, same splits, same label content, run
+    twice -> the SAME dataset_sha."""
+    docs = [
+        {
+            'crop_id': 'crop-1',
+            'image_id': 'img-1',
+            'image_path': 'a.jpg',
+            'bbox_norm': [0.1, 0.1, 0.5, 0.5],
+            'class_id': 0,
+            'class_name': 'car',
+        }
+    ]
+    service_a = _service(tmp_path / 'a', docs, ['car'])
+    service_b = _service(tmp_path / 'b', docs, ['car'])
+
+    result_a = await service_a.export_dataset(seed=1, copy_images=False)
+    result_b = await service_b.export_dataset(seed=1, copy_images=False)
+
+    assert result_a.dataset_sha == result_b.dataset_sha
+
+
+@pytest.mark.asyncio
+async def test_dataset_sha_differs_for_a_class_rename_with_byte_identical_labels(tmp_path):
+    """Requirement: identical label file bytes, but a different class map
+    (here, a pure rename — same registry class_id, same ascending
+    class_id order, so the dense export id written into the label file is
+    unchanged) -> different dataset_sha, because the ordered class-names
+    list is folded into the digest."""
+    docs = [
+        {
+            'crop_id': 'crop-1',
+            'image_id': 'img-1',
+            'image_path': 'a.jpg',
+            'bbox_norm': [0.1, 0.1, 0.5, 0.5],
+            'class_id': 0,
+            'class_name': 'car',
+        }
+    ]
+    registry = _make_registry(tmp_path / 'registry', ['car'])
+
+    cfg_a = CurationConfig(export_root=tmp_path / 'a')
+    service_a = GenericYoloExportService(_FakeOpenSearch(docs), config=cfg_a, registry=registry)
+    result_a = await service_a.export_dataset(seed=1, copy_images=False)
+
+    registry.rename_class(0, 'automobile')
+
+    cfg_b = CurationConfig(export_root=tmp_path / 'b')
+    service_b = GenericYoloExportService(_FakeOpenSearch(docs), config=cfg_b, registry=registry)
+    result_b = await service_b.export_dataset(seed=1, copy_images=False)
+
+    label_a = (Path(result_a.export_dir) / 'labels' / 'train' / 'img-1.txt').read_bytes()
+    label_b = (Path(result_b.export_dir) / 'labels' / 'train' / 'img-1.txt').read_bytes()
+    assert label_a == label_b  # same dense id, same box -- byte-identical label file
+
+    data_yaml_a = (Path(result_a.export_dir) / 'data.yaml').read_text()
+    data_yaml_b = (Path(result_b.export_dir) / 'data.yaml').read_text()
+    assert data_yaml_a != data_yaml_b  # the rename IS visible in the class map
+
+    assert result_a.dataset_sha != result_b.dataset_sha
+
+
+@pytest.mark.asyncio
+async def test_manifest_dataset_sha_equals_shared_label_content_sha(tmp_path):
+    """Requirement: the manifest's dataset_sha is exactly what a third
+    party gets from calling the shared hash function directly against the
+    export directory -- not some other computation that happens to agree."""
+    docs = [
+        {
+            'crop_id': 'crop-1',
+            'image_id': 'img-1',
+            'image_path': 'a.jpg',
+            'bbox_norm': [0.1, 0.1, 0.5, 0.5],
+            'class_id': 0,
+            'class_name': 'car',
+        },
+        {
+            'crop_id': 'crop-2',
+            'image_id': 'img-2',
+            'image_path': 'b.jpg',
+            'bbox_norm': [0.2, 0.2, 0.6, 0.6],
+            'class_id': 1,
+            'class_name': 'truck',
+        },
+    ]
+    service = _service(tmp_path, docs, ['car', 'truck'])
+
+    result = await service.export_dataset(seed=1, copy_images=False)
+    manifest = json.loads(Path(result.manifest_path).read_text())
+    data_yaml = (Path(result.export_dir) / 'data.yaml').read_text()
+    names = json.loads(data_yaml.splitlines()[-1].split('names: ', 1)[1])
+
+    assert manifest['dataset_sha'] == label_content_sha(
+        Path(result.export_dir), names, truncate=None
+    )

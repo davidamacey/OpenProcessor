@@ -30,6 +30,7 @@ from src.routers.curation._review_tab_models import ReviewTabsResponse
 from src.services.curation import review_queries
 from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
 from src.services.curation.holdout import (
+    MIN_TEST_PER_CLASS,
     build_cohort_query,
     compute_holdout_sha,
     fetch_cohort_strata,
@@ -512,7 +513,9 @@ async def freeze_test_holdout(
     sampling with a 5-crop floor via :func:`select_test_holdout` — the
     single canonical holdout algorithm shared with
     an offline promotion script (Appendix C
-    Decision 1). No seed: the same cohort always freezes the same set.
+    Decision 1). No seed (a ``seed`` field is a ``422``): the same cohort
+    always freezes the same set. The response names the method in
+    ``selection`` (``sha1_per_class``).
 
     Refuses to run if a holdout already exists unless ``force=true``.
     Refuses (422) to freeze zero rows — a freeze that freezes nothing is
@@ -585,6 +588,7 @@ async def freeze_test_holdout(
         sha=digest,
         cohort_spec={
             'query': cohort_query,
+            'selection': 'sha1_per_class',
             'percent': payload.percent,
             'fraction': fraction,
             'force': force,
@@ -597,6 +601,8 @@ async def freeze_test_holdout(
         n_classes_covered=len(per_class),
         test_holdout_sha=digest,
         per_class_counts=per_class,
+        percent=payload.percent,
+        min_per_class=MIN_TEST_PER_CLASS,
     )
 
 

@@ -7,9 +7,8 @@ into the worker / OCC / VLM code paths — the owning services are
 responsible for incrementing / observing them where appropriate.
 
 Metric names use the ``op_*`` prefix (renamed from the reference
-implementation's ``legacy_*`` during the OSS naming sweep — see
-``docs/design/naming_sweep_plan.md`` W4). See
-``docs/design/curation_design_rationale.md`` §6 (known gaps).
+implementation's original vendor-specific prefix during the naming
+sweep). See ``docs/design/curation_design_rationale.md`` §6 (known gaps).
 """
 
 from __future__ import annotations

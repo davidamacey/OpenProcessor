@@ -93,7 +93,7 @@ def test_test_holdout_freeze_rejects_re_run_without_force(
 ) -> None:
     # Pretend an existing holdout already exists.
     fake_opensearch.count = AsyncMock(return_value={'count': 1234})
-    r = app_client.post('/curation/test_holdout/freeze', json={'percent': 10, 'seed': 42})
+    r = app_client.post('/curation/test_holdout/freeze', json={'percent': 10})
     assert r.status_code == 409
     assert 'force' in r.text.lower()
 
@@ -115,7 +115,7 @@ def test_test_holdout_freeze_zero_cohort_raises_422_even_with_force(
     )
     r = app_client.post(
         '/curation/test_holdout/freeze?force=true',
-        json={'percent': 10, 'seed': 42},
+        json={'percent': 10},
     )
     assert r.status_code == 422, r.text
     assert 'zero' in r.text.lower()

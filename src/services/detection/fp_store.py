@@ -12,7 +12,7 @@ The on-disk subdirectory name is derived from
 :class:`~src.config.RegionFields.prefix` (default ``region`` ->
 ``region_fp``) rather than hardcoded, so a deployment with an existing
 store under a different prefix (e.g. a proprietary-dataset overlay
-using ``plate_fp``) can point at it without a code change — see
+using a different fixed prefix) can point at it without a code change — see
 ``docs/design/curation_design_rationale.md`` §4.
 """
 

@@ -598,6 +598,157 @@ def test_box_iou_matches_hand_computed_overlap() -> None:
 
 
 # =============================================================================
+# eval block -- test split vs training-time validation split (P1: these two
+# were previously conflated; eval.map50/map50_95 silently carried the val
+# number while per_class carried the test number).
+# =============================================================================
+
+
+class _FakeMetric:
+    """Stand-in for Ultralytics' ``Metric`` (``DetMetrics.box``)."""
+
+    def __init__(
+        self,
+        *,
+        map50: float,
+        map_: float,
+        mp: float,
+        mr: float,
+        ap_class_index: list[int],
+        p: list[float],
+        r: list[float],
+        f1: list[float],
+        ap50: list[float],
+    ) -> None:
+        self.map50 = map50
+        self.map = map_
+        self.mp = mp
+        self.mr = mr
+        self.ap_class_index = ap_class_index
+        self.p = p
+        self.r = r
+        self.f1 = f1
+        self.ap50 = ap50
+
+
+class _FakeDetMetrics:
+    """Stand-in for the object ``model.val(...)`` returns."""
+
+    def __init__(self, box: _FakeMetric, names: dict[int, str], nt_per_class: list[int]) -> None:
+        self.box = box
+        self.names = names
+        self.nt_per_class = nt_per_class
+
+
+def _fake_test_val_results() -> _FakeDetMetrics:
+    box = _FakeMetric(
+        map50=0.62,
+        map_=0.41,
+        mp=0.71,
+        mr=0.55,
+        ap_class_index=[0, 1],
+        p=[0.8, 0.6],
+        r=[0.7, 0.5],
+        f1=[0.75, 0.55],
+        ap50=[0.79, 0.5],
+    )
+    return _FakeDetMetrics(box, names={0: 'widget', 1: 'gadget'}, nt_per_class=[12, 8])
+
+
+def _write_results_csv(save_dir: Path, map50: float, map50_95: float) -> None:
+    save_dir.mkdir(parents=True, exist_ok=True)
+    (save_dir / 'results.csv').write_text(
+        f'epoch,metrics/mAP50(B),metrics/mAP50-95(B)\n1,{map50},{map50_95}\n'
+    )
+
+
+def test_extract_test_summary_reads_detmetrics_box_properties() -> None:
+    assert incumbent_compare.extract_test_summary(_fake_test_val_results()) == {
+        'map50': pytest.approx(0.62),
+        'map50_95': pytest.approx(0.41),
+        'precision': pytest.approx(0.71),
+        'recall': pytest.approx(0.55),
+    }
+
+
+def test_extract_test_summary_empty_when_box_missing() -> None:
+    class _NoBox:
+        pass
+
+    assert incumbent_compare.extract_test_summary(_NoBox()) == {}
+
+
+def test_populate_eval_block_prefers_the_test_split_over_the_training_time_val_split(
+    tmp_path: Path,
+) -> None:
+    """The bug: eval.map50/map50_95 must be the frozen TEST split (from a
+    fresh val() pass), not the per-epoch VALIDATION split recorded in
+    results.csv -- even though both are available."""
+    save_dir = tmp_path / 'run'
+    # Deliberately distinct from the test numbers so a conflation is
+    # unmistakable rather than a lucky coincidence.
+    _write_results_csv(save_dir, map50=0.9191, map50_95=0.85096)
+    state = job_protocol.StatusState(job_id='j-test-split', state='running')
+
+    trainer.populate_eval_block(
+        state, save_dir, val_results=_fake_test_val_results(), data_yaml_path=None
+    )
+
+    assert state.eval is not None
+    assert state.eval['split'] == 'test'
+    assert state.eval['map50'] == pytest.approx(0.62)
+    assert state.eval['map50_95'] == pytest.approx(0.41)
+    assert state.eval['precision'] == pytest.approx(0.71)
+    assert state.eval['recall'] == pytest.approx(0.55)
+    assert len(state.eval['per_class']) == 2
+    # The training-time validation numbers are kept, but clearly named --
+    # never under the headline map50/map50_95 keys.
+    assert state.eval['val_last'] == pytest.approx({'map50': 0.9191, 'map50_95': 0.85096})
+    assert state.eval['map50'] != pytest.approx(0.9191)
+    assert state.eval['map50_95'] != pytest.approx(0.85096)
+
+
+def test_populate_eval_block_falls_back_to_val_when_the_test_pass_is_missing(
+    tmp_path: Path,
+) -> None:
+    save_dir = tmp_path / 'run'
+    _write_results_csv(save_dir, map50=0.9191, map50_95=0.85096)
+    state = job_protocol.StatusState(job_id='j-no-test', state='running')
+
+    trainer.populate_eval_block(state, save_dir, val_results=None, data_yaml_path=None)
+
+    assert state.eval is not None
+    assert state.eval['split'] == 'val'
+    assert 'per_class' not in state.eval
+    assert state.eval['map50'] == pytest.approx(0.9191)
+    assert state.eval['map50_95'] == pytest.approx(0.85096)
+    assert state.eval['val_last'] == pytest.approx({'map50': 0.9191, 'map50_95': 0.85096})
+
+
+def test_populate_eval_block_falls_back_to_val_when_per_class_is_unavailable(
+    tmp_path: Path,
+) -> None:
+    """A test pass that ran but returned no usable per-class rows (older
+    Ultralytics, or a degenerate ``box``) must not be labeled 'test' --
+    that would silently ship an empty/absent per_class under a 'test'
+    label for the promote gate to trip over."""
+    save_dir = tmp_path / 'run'
+    _write_results_csv(save_dir, map50=0.5, map50_95=0.3)
+    empty_box = _FakeMetric(
+        map50=0.7, map_=0.5, mp=0.6, mr=0.4, ap_class_index=[], p=[], r=[], f1=[], ap50=[]
+    )
+    val_results = _FakeDetMetrics(empty_box, names={}, nt_per_class=[])
+    state = job_protocol.StatusState(job_id='j-no-per-class', state='running')
+
+    trainer.populate_eval_block(state, save_dir, val_results=val_results, data_yaml_path=None)
+
+    assert state.eval is not None
+    assert state.eval['split'] == 'val'
+    assert 'per_class' not in state.eval
+    assert state.eval['map50'] == pytest.approx(0.5)  # the val number, not the test box's 0.7
+
+
+# =============================================================================
 # End-to-end run_job against a stub Ultralytics
 # =============================================================================
 
@@ -800,7 +951,16 @@ def test_run_job_drives_a_whole_export_run_to_finished(
     assert status.state == 'finished', status.error
     assert status.checkpoint_path is not None
     assert status.checkpoint_path.endswith('weights/best.pt')
-    assert status.eval == {'map50': 0.77, 'map50_95': 0.44}
+    # The stub's val() returns None (no test-split pass), so eval falls
+    # back to the training-time validation numbers -- split must say 'val',
+    # never silently look like a test-split result.
+    assert status.eval == {
+        'map50': 0.77,
+        'map50_95': 0.44,
+        'split': 'val',
+        'val_last': {'map50': 0.77, 'map50_95': 0.44},
+        'confusion_matrix_url': None,
+    }
     assert status.class_remap_copy_failed is False  # type: ignore[attr-defined]
     # ONNX sibling is what promote actually copies into the Triton repo.
     assert Path(status.checkpoint_path).with_suffix('.onnx').is_file()

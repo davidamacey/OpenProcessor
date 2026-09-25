@@ -47,7 +47,7 @@ DEFAULT_SCAN_CAP = int(os.environ.get('OP_PREFLIGHT_SCAN_CAP', '200000'))
 # Small in-process cache: exports are immutable once written, so a repeat
 # preflight call for the same export dir (same manifest content) never
 # needs to re-scan the label files. Keyed on (export_dir, manifest sha256).
-_scan_cache: dict[tuple[str, str], ScanResult] = {}
+_scan_cache: dict[tuple[str, str, tuple[int, ...] | None], ScanResult] = {}
 
 
 @dataclass(frozen=True)
@@ -133,7 +133,9 @@ def scan_export_labels(
     if not export_dir.is_dir():
         return ScanResult('unknown', reason=f'{export_dir} not found or unreadable')
 
-    cache_key = (str(export_dir), _manifest_fingerprint(export_dir))
+    # The class filter changes the result, so it is part of the key.
+    class_filter = tuple(sorted(set(include_classes))) if include_classes else None
+    cache_key = (str(export_dir), _manifest_fingerprint(export_dir), class_filter)
     cached = _scan_cache.get(cache_key)
     if cached is not None:
         return cached

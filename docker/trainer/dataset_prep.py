@@ -103,7 +103,7 @@ def _resolve_aug_config(spec: JobSpec, text_classes: set[int]) -> Any:
     per_class_raw = aug.get('per_class_multiplier') or {}
     return augment_mod.AugConfig(
         enabled=bool(aug.get('enabled', False)),
-        preset=str(aug.get('preset') or 'balanced_default'),
+        preset=str(aug.get('preset') or augment_mod.DEFAULT_AUGMENTATION_PRESET),
         multiplier=int(aug.get('multiplier') or 1),
         per_class_multiplier={int(k): int(v) for k, v in per_class_raw.items()},
         text_classes=text_classes,
