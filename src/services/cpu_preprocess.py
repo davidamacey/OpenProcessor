@@ -11,6 +11,7 @@ Preprocessing functions:
 All tensors are CHW format, FP32, normalized to [0, 1] range.
 """
 
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
@@ -458,3 +459,56 @@ def preprocess_batch_for_triton(
     orig_shapes = [r.orig_shape for r in valid_results]
 
     return yolo_batch, clip_batch, scales, paddings, orig_shapes
+
+
+def embed_boxes_from_full_res(
+    img_array: np.ndarray,
+    normalized_boxes: np.ndarray,
+    embed_fn: Callable[[np.ndarray], np.ndarray],
+) -> np.ndarray:
+    """
+    Crop each detection box from the full-resolution decoded image and
+    return its MobileCLIP embedding, matching the /embed/boxes crop
+    pipeline (numpy crop + CPU bilinear resize/center-crop to 256x256).
+
+    Args:
+        img_array: HWC RGB uint8 full-resolution image
+        normalized_boxes: [N, 4] XYXY boxes normalized [0,1] against
+            img_array's own dimensions
+        embed_fn: batched embedding function, e.g.
+            ``TritonClient.infer_mobileclip_batch``, taking
+            [M, 3, 256, 256] FP32 and returning [M, 512] FP32
+
+    Returns:
+        [N, 512] FP32 embeddings (rows for out-of-bounds / degenerate boxes
+        are zero vectors, in the same order as input)
+    """
+    orig_h, orig_w = img_array.shape[:2]
+    n_boxes = normalized_boxes.shape[0]
+    if n_boxes == 0:
+        return np.empty((0, 512), dtype=np.float32)
+
+    preprocessed: list[np.ndarray] = []
+    valid_idx: list[int] = []
+    for i in range(n_boxes):
+        x1, y1, x2, y2 = normalized_boxes[i]
+        px1 = max(0, min(int(x1 * orig_w), orig_w - 1))
+        py1 = max(0, min(int(y1 * orig_h), orig_h - 1))
+        px2 = max(px1 + 1, min(int(x2 * orig_w), orig_w))
+        py2 = max(py1 + 1, min(int(y2 * orig_h), orig_h))
+        if px2 <= px1 or py2 <= py1:
+            continue
+        crop_rgb = img_array[py1:py2, px1:px2]
+        preprocessed.append(center_crop_cpu(crop_rgb, target_size=256))
+        valid_idx.append(i)
+
+    embeddings = np.zeros((n_boxes, 512), dtype=np.float32)
+    if not preprocessed:
+        return embeddings
+
+    batch_tensor = np.stack(preprocessed)  # [M, 3, 256, 256]
+    valid_embeddings = embed_fn(batch_tensor)  # [M, 512]
+    for out_i, box_i in enumerate(valid_idx):
+        embeddings[box_i] = valid_embeddings[out_i]
+
+    return embeddings
