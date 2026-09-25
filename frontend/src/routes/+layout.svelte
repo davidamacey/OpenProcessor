@@ -11,6 +11,7 @@
     slotRegistryWarnings,
   } from '$lib/annotations/registeredSlots';
   import { bakeoffAvailability } from '$lib/bakeoffAvailability.svelte';
+  import { ingestAvailability } from '$lib/ingest/ingestAvailability.svelte';
   import { isPickerHiddenClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import ShortcutOverlay from '$components/ShortcutOverlay.svelte';
@@ -57,6 +58,12 @@
   // "no runs yet") and why this whole mechanism is provisional.
   $effect(() => {
     void bakeoffAvailability.init();
+  });
+
+  // Same probe pattern as bakeoffAvailability above, for the /ingest
+  // nav link — see ingestAvailability.svelte.ts's doc comment.
+  $effect(() => {
+    void ingestAvailability.init();
   });
 
   // Tier-2 deployment-profile problems are the operator's to fix and are
@@ -299,6 +306,13 @@
         class={navLinkClass('/dashboard')}
         aria-current={navCurrent('/dashboard')}>Dashboard</a
       >
+      {#if ingestAvailability.available !== false}
+        <a
+          href="/ingest"
+          class={navLinkClass('/ingest')}
+          aria-current={navCurrent('/ingest')}>Ingest</a
+        >
+      {/if}
       <a
         href="/clusters"
         class={navLinkClass('/clusters')}

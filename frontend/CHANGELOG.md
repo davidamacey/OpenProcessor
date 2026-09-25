@@ -101,6 +101,60 @@ k6-frontend-overlay-plan-2026-09-24.md`).** OpenProcessor is removing
   (`getScoresCoverage`/`computeScores`/`getScoresStatus`/`cancelScores`)
   next to `selectDiverse`; new pure helpers in `src/lib/scores.ts`
   (`formatCoverageCounts`/`formatCoveragePct`/`classifyScoresPoll`).
+
+- **`/ingest` — bring images into the pool** (pieces 1-10 of
+  `docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md`; pieces
+  11-13 — server-path panel, served ingest config, a served
+  drain-stability verdict — wait on backend asks BA-2/BA-3/BA-5).
+  - Browser upload (files, folders, drag-drop) to
+    `POST {API_PREFIX}/ingest/upload`, chunked to a documented interim
+    cap with bounded concurrency (default 2), pause/resume/cancel, a
+    per-file result (ingested/duplicate/failed + served reason, paged,
+    CSV export), and a "retry failed" action. Pre-filters
+    already-indexed identifiers via
+    `POST {API_PREFIX}/ingest/path_lookup`.
+  - An ingest status table (`GET {API_PREFIX}/ingest/status`) and a
+    region-detection worklog panel
+    (`GET {API_PREFIX}/ingest/region_drain`), both polling while the
+    page is visible.
+  - A clustering handoff reusing `AutoLabelPanel` via its new, additive,
+    optional `gate` prop — blocked while an upload run is active or the
+    served region drain has unfinished work, with no client-side
+    stability window.
+  - `AutoLabelPanel.svelte`: new optional `gate?: {blocked, reason} |
+null` prop; every existing caller (the dashboard) is unaffected.
+  - `apiFetch` (`api.ts`) no longer forces a JSON `Content-Type` on a
+    `FormData` body — required for the multipart upload to carry its
+    own boundary.
+  - New wire types/wrappers: `IngestStatus`, `RegionDrain`,
+    `BatchIngestResponse`, `IngestPathLookupResponse`,
+    `IngestBatchRequest`/`IngestUploadRequest`, `IngestConfig`
+    (provisional, BA-2) — `getIngestStatus`/`getRegionDrain`/
+    `ingestPathLookup`/`ingestUpload`/`ingestBatch`.
+  - `nginx.conf`/`docker-entrypoint.sh`: a dedicated
+    `^__API_PREFIX__/ingest/` location with a 600s read timeout and a
+    deployment-owned `client_max_body_size`
+    (`CROPWRIGHT_INGEST_MAX_REQUEST_MB`, default 256MB), substituted
+    into both the proxy config and the served client bundle
+    (`window.__CROPWRIGHT_INGEST_MAX_REQUEST_MB__`) so they can't drift
+    apart.
+  - Nav: an "Ingest" link between Dashboard and Clusters, gated by a
+    one-shot `ingestAvailability` probe (absent, not disabled, when the
+    backend lacks the router) — same pattern as `/bakeoff`.
+  - **Security note:** the curation API has no request authentication.
+    Expose Cropwright only on a trusted network (see CLAUDE.md's
+    "Deployment" section).
+  - Until the backend persists uploaded bytes (BA-1, blocking), the
+    upload section always shows a caveat banner that uploaded images
+    can't be browsed/detected yet.
+  - `e2e/stubbed/test_ingest.py` (happy path, chunk-known-skip, a
+    served 503 auto-pause, an nginx-style 413 stop, the drain gate, the
+    absent-backend case) and live-tier additions
+    (`test_route_sweep.py`'s `/ingest`, `test_data_agreement.py`'s
+    `test_ingest_status_agrees`/`test_region_drain_agrees`) — the
+    live-tier ones fail against any backend build older than this
+    change, by design, until the next deploy.
+
 - **`/train` visual/UX pass + live-tier full-page screenshots.**
   - Confusion matrix (`RunResults.svelte`) was rendering at full panel
     width (~1094×821 at 1600px), dwarfing the past-runs table. Now a

@@ -24,7 +24,9 @@
     "src/lib/classPicker.ts",
     "src/lib/annotations/readSlot.ts",
     "src/lib/review/reviewController.svelte.ts",
-    "src/lib/clusters/clusterController.svelte.ts"
+    "src/lib/clusters/clusterController.svelte.ts",
+    "src/lib/ingest/uploadPlanner.ts",
+    "src/lib/ingest/ingestRunController.svelte.ts"
   ],
   "ignorePatterns": [
     "e2e/**",

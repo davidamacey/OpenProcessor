@@ -43,6 +43,16 @@
   import { toastStore } from '$stores/toast.svelte';
   import { summarizeRunStages } from '$lib/autoLabelRunSummary';
 
+  // Additive, optional (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md
+  // §A.5): `/ingest`'s ClusteringHandoff passes a gate computed from the
+  // upload run state + the served region drain; the dashboard passes
+  // nothing, so its behavior is unchanged. `null`/absent === unblocked,
+  // same as every other optional capability gate in this app.
+  interface Props {
+    gate?: { blocked: boolean; reason: string } | null;
+  }
+  let { gate = null }: Props = $props();
+
   let job: AutoLabelJobState | null = $state(null);
   let busy: boolean = $state(false);
   // p2 (2026-09-24 interactive pass): "Recluster now" used to fire on one
@@ -395,12 +405,16 @@
           class="btn btn-primary"
           type="button"
           onclick={requestStart}
-          disabled={busy}
+          disabled={busy || gate?.blocked}
+          title={gate?.blocked ? gate.reason : undefined}
         >
           {scopeClassName ? `Recluster · VLM: ${scopeClassName}` : 'Recluster now'}
         </button>
       {/if}
     </div>
+    {#if gate?.blocked}
+      <p class="mt-1 text-[11px] text-amber-300">{gate.reason}</p>
+    {/if}
   </div>
 
   {#if confirmOpen}

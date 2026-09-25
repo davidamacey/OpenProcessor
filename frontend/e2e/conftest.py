@@ -250,6 +250,10 @@ class Stub:
             {"tabs": [{"id": "regions", "label": REGION_TAB_LABEL}]},
         )
         self.on("GET", r"/bakeoff/runs(\?|$)", {"runs": []})
+        # The root layout's ingestAvailability probe fires on every route
+        # (same pattern as bakeoff/runs above) — every existing test needs
+        # this default so the /ingest nav link's probe doesn't 501.
+        self.on("GET", r"/ingest/status(\?|$)", {"total": 0, "by_source": [], "by_day": []})
 
         page.route(f"**{api_prefix}/**", self._dispatch)
         page.route("**/curation/**", self._dispatch_kb)
