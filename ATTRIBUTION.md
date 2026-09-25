@@ -129,10 +129,74 @@ The SCRFD face detection model and post-processing pipeline are based on Insight
 - **Face alignment** (`src/utils/face_align.py`): Umeyama similarity transform and ArcFace reference template from `insightface/utils/face_align.py`
 - **ArcFace model**: Pre-trained `w600k_r50` from InsightFace's buffalo_l model pack
 
+### Model-weight license note (separate from the code license)
+**The MIT License above covers InsightFace's code** (the SCRFD/ArcFace
+model architectures and the `insightface` Python package). The
+*pretrained weights* distributed through InsightFace's model zoo —
+including the `buffalo_l` pack this project uses for `scrfd_10g_bnkps`
+and `w600k_r50` — are published by the InsightFace project under a
+separate, more restrictive term: **non-commercial research use only**,
+per the model zoo's own license statement in the upstream repository
+(`insightface/model_zoo/`). This project does not vendor that license
+text, so **verify the current wording directly against
+https://github.com/deepinsight/insightface before any commercial
+deployment of these specific weights**, and swap in your own
+commercially-licensed detector/embedding weights if that use case
+applies to you.
+
 ### What This Enables
 - 5-point facial landmark detection (left eye, right eye, nose, left mouth, right mouth)
 - Umeyama similarity transform alignment for ArcFace (industry standard)
 - 95.2% Easy / 93.9% Medium / 83.1% Hard on WiderFace benchmark
+
+---
+
+## PaddlePaddle PaddleOCR (PP-OCRv5)
+
+The OCR subsystem (`docker/segmenter/` is unrelated; see
+[`docs/OCR.md`](docs/OCR.md)) uses PP-OCRv5 detection and recognition
+models exported to ONNX/TensorRT.
+
+### Repository Information
+- **Repository:** https://github.com/PaddlePaddle/PaddleOCR
+- **License:** Apache License 2.0
+- **Model:** PP-OCRv5 mobile detection + recognition (`paddleocr_det_trt`, `paddleocr_rec_trt`)
+- **Model source used by this project:** ONNX re-exports of the
+  official PP-OCRv5 mobile checkpoints, downloaded via
+  `export/download_paddleocr.py` from
+  `https://github.com/MeKo-Christian/paddleocr-onnx/releases` — a
+  third-party ONNX repackaging of the same upstream weights, not an
+  independently trained model. Verify that repackaging's release notes
+  against the upstream PaddleOCR license if you redistribute the
+  exported engines yourself.
+
+### Usage in This Project
+- `export/export_paddleocr_det.py` / `export/export_paddleocr_rec.py`: TensorRT export of the detection/recognition ONNX models
+- `export/download_paddleocr.py`: fetches the ONNX source models
+- No PaddleOCR source code is vendored into this repository; only the exported model weights are used, served behind Triton's `ocr_pipeline` BLS
+
+---
+
+## Meta Perception Encoder (PE-Core)
+
+PE-Core powers the curation subsystem's semantic (text-to-image) search
+(`src/clients/pe_encoder.py`, `export/export_pe_image_encoder.py`,
+`export/export_pe_text_encoder.py`).
+
+### Repository Information
+- **Repository:** https://github.com/facebookresearch/perception_models
+- **License:** Apache License 2.0
+- **Model:** `facebook/PE-Core-L14-336` on the HuggingFace Hub (not gated)
+- **Authors:** Meta AI (FAIR) Perception Encoder team
+
+### Usage in This Project
+- `export/download_pe_weights.py`: downloads and SHA-256-verifies the
+  pinned `PE-Core-L14-336.pt` checkpoint
+- `export/export_pe_image_encoder.py` / `export/export_pe_text_encoder.py`: export the vision/text towers to ONNX/TensorRT
+- `src/clients/pe_encoder.py`: runtime client (Triton, ONNX Runtime, or
+  an in-process PyTorch fallback via the upstream `perception_models` package)
+- No PE-Core source code is vendored into this repository; the
+  `perception_models` package is a pip dependency
 
 ---
 
@@ -220,6 +284,8 @@ Special thanks to:
 - **InsightFace Team (Jia Guo, Jiankang Deng et al.)** - For SCRFD face detection, ArcFace recognition, and face alignment algorithms
 - **Hien Nguyen (@hiennguyen9874)** - For the triton-face-recognition reference implementation
 - **OpenCLIP Contributors** - For the open-source CLIP implementation
+- **PaddlePaddle / PaddleOCR Team** - For PP-OCRv5 text detection and recognition models
+- **Meta AI (FAIR) Perception Encoder team** - For PE-Core, which powers curation semantic search
 - **Meta AI (FAIR)** - For Segment Anything 3, which powers the optional segmenter container
 
 ---
@@ -243,7 +309,10 @@ propagates to the combined work.
 | NVIDIA Triton | BSD 3-Clause | ✓ Yes |
 | NVIDIA TensorRT | NVIDIA DSLA | ✓ Yes |
 | Apple MobileCLIP | Apple Sample Code | ✓ Yes (this file) |
-| InsightFace (SCRFD, ArcFace) | MIT | ✓ Yes (this file) |
+| InsightFace (SCRFD, ArcFace) code | MIT | ✓ Yes (this file) |
+| InsightFace `buffalo_l` pretrained weights | Non-commercial research use only (verify upstream) | ✓ Yes (this file) — see the model-weight license note above |
+| PaddlePaddle PaddleOCR (PP-OCRv5) | Apache 2.0 | ✓ Yes (this file) |
+| Meta Perception Encoder (PE-Core) | Apache 2.0 | ✓ Yes (this file) |
 | OpenSearch | Apache 2.0 | ✓ Yes |
 | OpenCLIP | MIT | ✓ Yes |
 | Meta SAM 3 (optional segmenter image) | Apache 2.0 | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
@@ -255,9 +324,8 @@ propagates to the combined work.
 ## Contact and Questions
 
 For questions about attribution or licensing:
-1. Review the detailed analysis in [docs/Attribution/](docs/Attribution/)
-2. Consult the original repository licenses linked above
-3. For fork-specific questions, contact the fork maintainer: https://github.com/levipereira
+1. Consult the original repository licenses linked above
+2. For fork-specific questions, contact the fork maintainer: https://github.com/levipereira
 
 ---
 
