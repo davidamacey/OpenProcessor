@@ -96,3 +96,22 @@ describe('splitCohortGroups', () => {
     expect(zero).toEqual([a, c]);
   });
 });
+
+describe('splitCohortGroups pending (visual audit T4)', () => {
+  it('counts groups whose definitions or counts are not all served yet', () => {
+    const groups: G[] = [group(1), group(2), { classId: 3, cohorts: [] }];
+    const counts = {
+      '1:validated': 0,
+      '1:needs_labeling': 0,
+      '2:validated': 4,
+    };
+    const split = splitCohortGroups(groups, counts);
+    expect(split.zero.map((g) => g.classId)).toEqual([1]);
+    expect(split.pending).toBe(2);
+  });
+
+  it('is 0 once every group has every count served', () => {
+    const counts = { '1:validated': 0, '1:needs_labeling': 3 };
+    expect(splitCohortGroups([group(1)], counts).pending).toBe(0);
+  });
+});

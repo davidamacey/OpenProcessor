@@ -34,6 +34,10 @@ export function isAllZeroLoaded(
 export interface CohortGroupSplit<G extends CohortGroupLike> {
   visible: G[];
   zero: G[];
+  /** T4 (visual audit 2026-09-24): groups whose cohort definitions or
+   *  counts haven't all been served yet. While > 0 the "N classes with no
+   *  candidates" count is provisional and says so. */
+  pending: number;
 }
 
 export function splitCohortGroups<G extends CohortGroupLike>(
@@ -42,8 +46,13 @@ export function splitCohortGroups<G extends CohortGroupLike>(
 ): CohortGroupSplit<G> {
   const visible: G[] = [];
   const zero: G[] = [];
+  let pending = 0;
   for (const g of groups) {
     (isAllZeroLoaded(g, counts) ? zero : visible).push(g);
+    const loaded =
+      g.cohorts.length > 0 &&
+      g.cohorts.every((c) => typeof counts[cohortCountKey(g.classId, c.id)] === 'number');
+    if (!loaded) pending += 1;
   }
-  return { visible, zero };
+  return { visible, zero, pending };
 }
