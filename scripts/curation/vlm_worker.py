@@ -49,6 +49,8 @@ from pathlib import Path
 
 import httpx
 
+from src.services.curation.worker_liveness import heartbeat_loop
+
 
 DEFAULT_API = os.environ.get('OP_API', 'http://localhost:4603')
 # Same env + default as CurationConfig.api_prefix, so the worker follows the API's mount.
@@ -471,6 +473,16 @@ async def run(args: argparse.Namespace) -> int:
         for t in cons_tasks:
             t.add_done_callback(_crash_on_unhandled_exception)
         metrics_task = asyncio.create_task(metrics_reporter())
+        heartbeat_task = asyncio.create_task(
+            heartbeat_loop(
+                'vlm_worker',
+                lambda: {
+                    'producer': not prod_task.done(),
+                    'consumers': any(not t.done() for t in cons_tasks),
+                },
+                stop_event,
+            )
+        )
 
         # Wait for either signal-stop or producer-drain.
         await stop_event.wait()
@@ -485,6 +497,9 @@ async def run(args: argparse.Namespace) -> int:
         metrics_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await metrics_task
+        heartbeat_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await heartbeat_task
 
     elapsed_total = time.monotonic() - started_at
     rate_total = metrics['total_processed'] / max(elapsed_total, 1e-6)

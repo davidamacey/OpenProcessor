@@ -444,6 +444,7 @@ async def _process_crop(
                         auto_confirmed=bool(auto),
                         region_text_reply=outcome.text,
                         region_text_confidence=outcome.text_confidence,
+                        confidence=conf,
                     )
                     raise _CascadeDoneError
             else:
@@ -496,6 +497,7 @@ async def _process_crop(
                             auto_confirmed=bool(auto),
                             region_text_reply=outcome.text,
                             region_text_confidence=outcome.text_confidence,
+                            confidence=conf,
                         )
                         raise _CascadeDoneError
                     task.detection_trace.append(f'{det_model}:hit')
@@ -578,6 +580,7 @@ async def _process_crop(
                         auto_confirmed=bool(auto),
                         region_text_reply=outcome.text,
                         region_text_confidence=outcome.text_confidence,
+                        confidence=conf,
                     )
                     raise _CascadeDoneError
                 task.detection_trace.append(f'{seg_name}:hit')
@@ -656,6 +659,7 @@ async def _process_crop(
                             auto_confirmed=bool(auto),
                             region_text_reply=text_out,
                             region_text_confidence=text_conf_out,
+                            confidence=conf,
                         )
                         raise _CascadeDoneError
                     task.detection_trace.append(f'{seg_name}:text_hint:hit')

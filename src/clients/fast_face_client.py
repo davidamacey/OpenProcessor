@@ -149,7 +149,13 @@ class FastFaceClient:
         if img is None:
             return {'status': 'error', 'error': 'Failed to decode image'}
 
-        orig_h, orig_w = img.shape[:2]
+        # True original dimensions, reported to callers as `orig_shape`. The
+        # 1024 cap below only affects the working array used for detection;
+        # box/landmark normalization uses the (possibly capped) working
+        # dimensions, which is scale-equivalent to normalizing against the
+        # true original since the cap preserves aspect ratio.
+        true_orig_h, true_orig_w = img.shape[:2]
+        orig_h, orig_w = true_orig_h, true_orig_w
 
         # Cap image size for faster processing
         MAX_DIM = 1024
@@ -183,7 +189,7 @@ class FastFaceClient:
                 'face_embeddings': [],
                 'face_landmarks': [],
                 'face_quality': [],
-                'orig_shape': (orig_h, orig_w),
+                'orig_shape': (true_orig_h, true_orig_w),
             }
 
         # Align faces using Umeyama similarity transform
@@ -217,7 +223,7 @@ class FastFaceClient:
             'face_embeddings': embeddings.tolist(),
             'face_landmarks': lmk_flat.tolist(),
             'face_quality': quality.tolist(),
-            'orig_shape': (orig_h, orig_w),
+            'orig_shape': (true_orig_h, true_orig_w),
         }
 
 

@@ -16,6 +16,7 @@ import httpx
 from src.clients.occ import CLASS_WRITE_FIELDS, occ_skip_on_conflict_bulk, strip_class_write_fields
 from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger
+from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
 from src.services.curation.class_write_guard import class_write_allowed
 from src.services.curation.history import merge_region_chain, record_class_snapshot
 from src.services.curation.wire import region_event_payload
@@ -93,6 +94,13 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
         ):
             logger.info('class_write_stale_skip', doc_id=doc_id, writer_id='region_worker')
             update = strip_class_write_fields(update)
+        # A vlm_unmatched write must not keep the class the VLM's answer
+        # just contradicted (IT-2). Runs after the stale-write strip above
+        # so a stripped-of-class-fields update (stale/locked) never gets a
+        # class_id reset re-added; class_write_locked() inside the helper
+        # is a second, independent guard against a locked item.
+        if update.get('class_source') == VLM_UNMATCHED_CLASS_SOURCE:
+            update.update(unmatched_class_clear(current))
         # Phase 3 (b): the worker's combined-VLM path changes the class
         # without appending class_id_history unless we do it here — the
         # reset happens in the update dict itself (verify.py's
@@ -146,7 +154,16 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
 
 # Task #92 — module-level lazy client for the publish endpoint. Reused
 # across calls so we don't tear down the connection pool every batch.
-_EVENT_API_URL = os.environ.get('OP_EVENT_API_URL', '').rstrip('/')
+# S-3: fall back to whatever env var already names the API base — the
+# detection worker's own OP_API_BASE_URL/OP_API (used elsewhere for the
+# same host:port) is a zero-config default instead of requiring a
+# fourth, worker-specific env var just for this.
+_EVENT_API_URL = (
+    os.environ.get('OP_EVENT_API_URL')
+    or os.environ.get('OP_API_BASE_URL')
+    or os.environ.get('OP_API')
+    or ''
+).rstrip('/')
 _EVENT_CLIENT: httpx.AsyncClient | None = None
 
 

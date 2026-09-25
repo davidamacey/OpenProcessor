@@ -37,7 +37,7 @@ from ultralytics.data.augment import LetterBox
 from src.clients.model_adapters import DetectionAdapter, resolve_adapter
 from src.clients.triton_pool import TritonClientManager
 from src.config.settings import TritonModelConfig
-from src.utils.affine import format_detections_from_triton
+from src.utils.affine import format_detections_from_triton, inverse_letterbox_coords
 from src.utils.retry import retry_sync
 
 
@@ -268,12 +268,35 @@ class TritonClient:
         detections = adapter.parse(yolo_response, batch_size=1)[0]
         image_embedding = clip_response.as_numpy('image_embeddings')[0]
 
+        # DF1: per-box CLIP embeddings, cropped from the FULL-RESOLUTION
+        # image (not the 640x640 letterboxed YOLO input) — same approach as
+        # the /embed/boxes route. Without this, generic ingest indexed no
+        # per-box vectors at all (it read keys this method never returned).
+        num_dets = int(detections.get('num_dets', 0))
+        normalized_boxes = np.empty((0, 4), dtype=np.float32)
+        box_embeddings = np.empty((0, 512), dtype=np.float32)
+        if num_dets > 0:
+            normalized_boxes = inverse_letterbox_coords(
+                np.asarray(detections['boxes'], dtype=np.float64),
+                (orig_h, orig_w),
+                scale,
+                padding,
+                self.input_size,
+            ).astype(np.float32)
+            from src.services.cpu_preprocess import embed_boxes_from_full_res
+
+            box_embeddings = embed_boxes_from_full_res(
+                img_array, normalized_boxes, self.infer_mobileclip_batch
+            )
+
         return {
             **detections,
             'image_embedding': image_embedding,
             'orig_shape': (orig_h, orig_w),
             'scale': scale,
             'padding': padding,
+            'normalized_boxes': normalized_boxes,
+            'box_embeddings': box_embeddings,
         }
 
     def _preprocess_yolo_cpu(self, img_array: np.ndarray) -> tuple[np.ndarray, float, tuple]:

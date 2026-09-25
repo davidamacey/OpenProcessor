@@ -89,12 +89,17 @@ services:
       # a given request.
       - openprocessor-jobs:/jobs
       - ./cache/huggingface:/home/appuser/.cache/huggingface  # HuggingFace tokenizers (appuser)
+      # ST-1: shared tmpfs item-crop cache with curation-detection-worker.
+      # curation-vlm-worker doesn't need it -- it reads crops through the
+      # API's /vlm/label_batch.
+      - openprocessor-crop-cache:/var/cache/openprocessor/crops
     environment:
       # Triton gRPC endpoint (Docker service name)
       - TRITON_URL=triton-server:8001
       # HuggingFace cache configuration (appuser home directory)
       - HF_HOME=/home/appuser/.cache/huggingface
       - HF_HUB_CACHE=/home/appuser/.cache/huggingface/hub
+      - OP_CROP_CACHE_DIR=/var/cache/openprocessor/crops
       # Curation/labeling API prefix (CurationConfig.api_prefix, generic
       # default /curation — see env.template). Every curation router
       # builds its prefix at *module import*, so this must be set before
@@ -137,6 +142,15 @@ services:
     ulimits:
       memlock: -1
       stack: 67108864
+    healthcheck:
+      # S-7: curation workers gate startup on `condition: service_healthy`
+      # against this service; without a healthcheck here that condition
+      # can never resolve.
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
     deploy:
       resources:
         reservations:
@@ -182,9 +196,12 @@ services:
       - ./src:/app/src:ro
       - ./scripts:/app/scripts:ro
       - openprocessor-state:/var/lib/openprocessor
+      # ST-1: shared with yolo-api -- see that service's mount comment.
+      - openprocessor-crop-cache:/var/cache/openprocessor/crops
     environment:
       - TRITON_URL=triton-server:8001
       - OPENSEARCH_URL=http://opensearch:9200
+      - OP_CROP_CACHE_DIR=/var/cache/openprocessor/crops
       # D5: the segmenter leg is opt-in. Empty OP_SEGMENTER_URL makes it a
       # documented no-op (see scripts/curation/worker/client.py
       # SegmenterClient). Set OP_SEGMENTER_URL=http://segmenter:8000 to use the
@@ -196,19 +213,23 @@ services:
       - OP_VLM_URL=${OP_VLM_URL:-}
       - OP_VLM_MODEL=${OP_VLM_MODEL:-}
       - OP_VLM_API_KEY=${OP_VLM_API_KEY:-}
+      # S-3: lets the worker publish crop.region_verified events to every
+      # subscribed SSE client via POST {api_prefix}/events/publish, not
+      # just whichever uvicorn worker happened to handle a given POST.
+      - OP_EVENT_API_URL=http://yolo-api:8000
     command:
       - python
       - -m
       - scripts.curation.worker
       - --continuous
     healthcheck:
-      # No HTTP port is exposed by this worker; pgrep is the trivial
-      # process-alive check (procps is installed in the shared image —
-      # see Dockerfile).
-      test: ["CMD-SHELL", "pgrep -f 'scripts.curation.worker' || exit 1"]
+      # S-2: heartbeat file the worker touches every 15s on its main
+      # loop (including while idle) — pgrep can't see a deadlocked but
+      # still-running event loop.
+      test: ["CMD-SHELL", "python -m src.services.curation.worker_liveness check detection_worker --max-age 120"]
       interval: 30s
       timeout: 5s
-      start_period: 20s
+      start_period: 60s
       retries: 3
     depends_on:
       - triton-server
@@ -243,14 +264,16 @@ services:
       - scripts.curation.vlm_worker
       - --continuous
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'scripts.curation.vlm_worker' || exit 1"]
+      test: ["CMD-SHELL", "python -m src.services.curation.worker_liveness check vlm_worker --max-age 120"]
       interval: 30s
       timeout: 5s
-      start_period: 20s
+      start_period: 60s
       retries: 3
     depends_on:
-      - yolo-api
-      - opensearch
+      yolo-api:
+        condition: service_healthy
+      opensearch:
+        condition: service_started
     networks:
       - triton_net
 
@@ -277,6 +300,9 @@ services:
       - openprocessor-jobs:/jobs
     environment:
       - OPENSEARCH_URL=http://opensearch:9200
+      - OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
+      - OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-4}
+      - MKL_NUM_THREADS=${MKL_NUM_THREADS:-4}
     command:
       - python
       - -m
@@ -285,11 +311,11 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pgrep -f 'scripts.curation.auto_label_worker' || exit 1",
+          "python -m src.services.curation.worker_liveness check auto_label_worker --max-age 120",
         ]
       interval: 30s
       timeout: 5s
-      start_period: 20s
+      start_period: 60s
       retries: 3
     depends_on:
       - opensearch
@@ -322,15 +348,17 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pgrep -f 'scripts/curation/cluster_refresh_daemon.py' || exit 1",
+          "python -m src.services.curation.worker_liveness check cluster_refresh --max-age 120",
         ]
       interval: 30s
       timeout: 5s
-      start_period: 20s
+      start_period: 60s
       retries: 3
     depends_on:
-      - yolo-api
-      - opensearch
+      yolo-api:
+        condition: service_healthy
+      opensearch:
+        condition: service_started
     networks:
       - triton_net
 
@@ -389,6 +417,8 @@ services:
         required: false
     ports:
       - 4611:8000  # Segmentation HTTP API
+    volumes:
+      - ./cache/huggingface:/home/appuser/.cache/huggingface  # ST-2: nvme-backed HF cache (appuser, matches yolo-api)
     environment:
       # Gated weights: the service boots and logs a warning without a
       # token, then fails the download. Set HF_TOKEN in .env.
@@ -722,3 +752,13 @@ volumes:
   openprocessor-state:
   openprocessor-jobs:
   mlflow_data:
+  # ST-1: shared tmpfs item-crop cache (yolo-api + curation-detection-worker).
+  # Size is the OS-level ceiling; OP_CROP_CACHE_MAX_BYTES (default 3 GiB,
+  # see CurationConfig.crop_cache_max_bytes) prunes the *content* down
+  # before this fills.
+  openprocessor-crop-cache:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=4g,uid=1000,gid=999,mode=0770"

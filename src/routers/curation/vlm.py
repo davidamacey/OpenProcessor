@@ -36,6 +36,7 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
 from src.services.curation.class_write_guard import (
     CLASS_GUARD_SOURCE_FIELDS,
     ClassWriteGuard,
@@ -374,6 +375,11 @@ async def vlm_label_batch(
             # A registry class moves the item into its class cluster now,
             # as the worker's combined call does (DQ-m3).
             update.update(class_cluster_placement(update, current))
+            # IT-2: an unmatched VLM answer must not keep the class it
+            # just contradicted -- class_write_locked() inside the helper
+            # still protects a human-owned/validated item.
+            if update.get('class_source') == VLM_UNMATCHED_CLASS_SOURCE:
+                update.update(unmatched_class_clear(current))
             return with_class_snapshot(update, current, writer='vlm_label_batch')
 
         try:

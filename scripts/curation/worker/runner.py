@@ -30,6 +30,7 @@ from src.services.curation.metrics import (
     OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS,
     OP_STAGE_REGION_DETECTOR_DURATION_SECONDS,
 )
+from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.detection.cascade_detect import (
     PaddleOcrTextRecognizer,
     RegionDetector,
@@ -59,6 +60,7 @@ from scripts.curation.worker.no_verdict import (
     max_no_verdict_attempts,
     no_verdict_reject_doc,
 )
+from scripts.curation.worker.region_embed_stage import embed_written_regions
 from scripts.curation.worker.region_text_stage import (
     accept_without_vlm,
     apply_region_text,
@@ -228,6 +230,36 @@ async def run(args: argparse.Namespace) -> int:
 
     pool = _wkr.AsyncTritonPool(url=args.triton, pool_size=args.pool_size, max_concurrent=64)
     await pool.initialize()
+
+    # LG-1: write RegionFields.embedding at flush time so a fresh install
+    # doesn't depend solely on scripts/curation/backfill_region_embeddings.py
+    # (the one-off catch-up for items ingested before this stage existed).
+    # Gated: disabled entirely by OP_REGION_EMBED_ENABLED=false, or
+    # auto-disabled with a warning if Triton doesn't report pe_image_encoder
+    # READY at startup -- a missing/unloaded model must not spam a failure
+    # log every flush.
+    region_embed_pe = None
+    if os.environ.get('OP_REGION_EMBED_ENABLED', 'true').strip().lower() not in (
+        '0',
+        'false',
+        'no',
+    ):
+        from src.clients.pe_encoder import PE_IMAGE_MODEL, PEEncoder
+
+        try:
+            model_ready = bool(await pool.is_model_ready(PE_IMAGE_MODEL))
+        except Exception as exc:
+            logger.warning('region_embed_readiness_probe_failed', error=str(exc))
+            model_ready = False
+        if model_ready:
+            region_embed_pe = PEEncoder(triton_pool=pool)
+        else:
+            logger.warning(
+                'region_embed_disabled_model_not_ready',
+                model=PE_IMAGE_MODEL,
+                detail='region_embedding will not be written this run',
+            )
+
     detector = RegionDetector(pool, profile)
     # text-hinted re-pass: when the primary detector + secondary
     # segmenter both globally miss but the VLM confirmed the crop has a
@@ -1345,6 +1377,8 @@ async def run(args: argparse.Namespace) -> int:
                 return
             t0 = time.monotonic()
             batch_request_ids = [t.request_id for t in pending]
+            if region_embed_pe is not None:
+                await embed_written_regions(pending, region_embed_pe)
             try:
                 n_written, n_skipped = await _bulk_update(opensearch, pending)
             except Exception as exc:
@@ -1495,6 +1529,13 @@ async def run(args: argparse.Namespace) -> int:
         stage_b_tasks = [asyncio.create_task(stage_b_combined(i)) for i in range(vlm_concurrency)]
         writer_task = asyncio.create_task(writer())
         metrics_task = asyncio.create_task(metrics_reporter())
+        heartbeat_task = asyncio.create_task(
+            heartbeat_loop(
+                'detection_worker',
+                lambda: {'producer': not prod_task.done(), 'writer': not writer_task.done()},
+                stop_event,
+            )
+        )
         # Phase 4c: stand up an aiohttp /metrics endpoint inside the
         # worker process so Prometheus can scrape the stage-timing
         # histograms (the worker is not an HTTP server otherwise).
@@ -1543,10 +1584,13 @@ async def run(args: argparse.Namespace) -> int:
         # Now tell writer to flush + exit.
         await out_q.put(None)
         await writer_task
-        # Stop the metrics task.
+        # Stop the metrics + heartbeat tasks.
         metrics_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await metrics_task
+        heartbeat_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await heartbeat_task
         # Shut the /metrics HTTP server down cleanly.
         with contextlib.suppress(Exception):
             await metrics_server_runner.cleanup()

@@ -41,6 +41,7 @@ INVALID_CHARSET = 'charset'
 INVALID_TOO_SHORT = 'too_short'
 INVALID_TOO_LONG = 'too_long'
 INVALID_FORMAT = 'format'
+INVALID_STOPWORD = 'stopword'
 INVALID_REASONS: tuple[str, ...] = (
     INVALID_NO_READING,
     INVALID_PLACEHOLDER,
@@ -49,6 +50,7 @@ INVALID_REASONS: tuple[str, ...] = (
     INVALID_TOO_SHORT,
     INVALID_TOO_LONG,
     INVALID_FORMAT,
+    INVALID_STOPWORD,
 )
 
 # Generic "there is no reading" answers, compared as uppercase letters and
@@ -106,6 +108,7 @@ class RegionTextRules:
     format: str = ''
     reject_sequences: bool = False
     placeholders: frozenset[str] = frozenset()  # text_key() forms
+    stopwords: frozenset[str] = frozenset()  # text_key() forms
 
     @classmethod
     def from_profile(
@@ -124,6 +127,7 @@ class RegionTextRules:
             format=profile.text_format,
             reject_sequences=profile.text_reject_sequences,
             placeholders=frozenset(k for k in keys if len(k) >= 2),
+            stopwords=frozenset(text_key(w) for w in profile.text_stopwords),
         )
 
     def _is_placeholder(self, key: str) -> bool:
@@ -132,17 +136,20 @@ class RegionTextRules:
             for p in self.placeholders
         )
 
-    def invalid_reason(self, text: str | None) -> str | None:
-        """Why ``text`` is not a reading (one of :data:`INVALID_REASONS`),
-        or ``None`` when it is one. Empty / missing text is no reading."""
-        key = text_key(text or '')
+    def _key_invalid_reason(self, key: str) -> str | None:
+        """Checks against the ``text_key()`` form only -- no normalization."""
         if not key or key in NO_READING_WORDS:
             return INVALID_NO_READING
         if self._is_placeholder(key):
             return INVALID_PLACEHOLDER
+        if key in self.stopwords:
+            return INVALID_STOPWORD
         if self.reject_sequences and _is_run(key):
             return INVALID_SEQUENCE
-        normalized = self.normalizer.normalize(text or '')
+        return None
+
+    def _shape_invalid_reason(self, normalized: str) -> str | None:
+        """Checks against the profile-normalized form (length + format)."""
         n = len(normalized.replace(' ', ''))
         if n == 0:
             return INVALID_CHARSET
@@ -154,6 +161,14 @@ class RegionTextRules:
             return INVALID_FORMAT
         return None
 
+    def invalid_reason(self, text: str | None) -> str | None:
+        """Why ``text`` is not a reading (one of :data:`INVALID_REASONS`),
+        or ``None`` when it is one. Empty / missing text is no reading."""
+        key_reason = self._key_invalid_reason(text_key(text or ''))
+        if key_reason is not None:
+            return key_reason
+        return self._shape_invalid_reason(self.normalizer.normalize(text or ''))
+
     def catalog(self) -> dict[str, Any]:
         """The rules as served by ``GET {prefix}/regions/vocabulary``."""
         return {
@@ -164,6 +179,7 @@ class RegionTextRules:
             'format': self.format,
             'reject_sequences': self.reject_sequences,
             'placeholders': sorted(self.placeholders),
+            'stopwords': sorted(self.stopwords),
             'no_reading_words': sorted(NO_READING_WORDS),
             'invalid_reasons': list(INVALID_REASONS),
         }
@@ -186,6 +202,7 @@ __all__ = [
     'INVALID_PLACEHOLDER',
     'INVALID_REASONS',
     'INVALID_SEQUENCE',
+    'INVALID_STOPWORD',
     'INVALID_TOO_LONG',
     'INVALID_TOO_SHORT',
     'NO_READING_WORDS',

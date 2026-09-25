@@ -1141,9 +1141,17 @@ class PaddleOcrTextRecognizer:
         * ``ocr_images``: detection-network input. BGR, scaled to a
           multiple-of-32 size from :func:`ocr_det_input_size`,
           normalized to ``[-1, 1]``.
-        * ``original_image``: full-resolution RGB normalized to
-          ``[0, 1]``. The pipeline crops text regions from this when
-          feeding the recognition head.
+        * ``original_image``: full-resolution **BGR** normalized to
+          ``[0, 1]``. The BLS (``models*/ocr_pipeline/1/model.py``)
+          reads this tensor straight into HWC uint8 and perspective-warps
+          text crops from it with no channel swap; the recognition
+          network's preprocessing (``_resize_norm_img*``) documents its
+          input as BGR and never converts, so this tensor must already be
+          BGR on arrival (matches every other OCR caller — /ocr/*,
+          /analyze, generic ingest — which all decode via
+          ``cv2.imdecode`` and send the resulting BGR array unchanged).
+          DF4: this used to be sent RGB (PIL decodes RGB, and no swap was
+          applied), which channel-swapped every worker recognition crop.
         * ``orig_shape``: ``[H, W]`` of ``original_image``.
         """
         w, h = img.size
@@ -1154,8 +1162,10 @@ class PaddleOcrTextRecognizer:
         # [3, H, W], orig_shape as [2]). The model is a Python BLS
         # that does its own internal batching from the C-H-W input,
         # so the worker MUST NOT add a leading batch axis here.
-        orig_rgb = np.asarray(img, dtype=np.float32) / 255.0
-        orig_chw = np.transpose(orig_rgb, (2, 0, 1))
+        # `img` is a PIL image (RGB); flip to BGR to match the BLS's
+        # expected channel order (see docstring above).
+        orig_bgr = np.asarray(img, dtype=np.float32)[:, :, ::-1] / 255.0
+        orig_chw = np.transpose(orig_bgr, (2, 0, 1))
         orig_shape = np.asarray([h, w], dtype=np.int32)
 
         new_w, new_h = det_size or ocr_det_input_size(w, h)

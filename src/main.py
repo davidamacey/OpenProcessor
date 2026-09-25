@@ -86,6 +86,7 @@ class AppResources:
     async_triton_pool: AsyncTritonPool | None = None
     arbiter_task: asyncio.Task[None] | None = None
     curation_knn_warmup_task: asyncio.Task[None] | None = None
+    event_bus_started: bool = False
 
 
 def get_shared_executor() -> ThreadPoolExecutor:
@@ -212,6 +213,19 @@ async def lifespan(app: FastAPI):
         )
     except Exception as exc:
         logger.warning('curation_indexes_bootstrap_skipped', error=str(exc))
+
+    # S-3: tail the shared cross-process event log so this uvicorn
+    # worker's SSE clients see events published by any other worker or
+    # background job. No-op on the `process` bus; best-effort so a bad
+    # state dir degrades to in-process-only delivery, not a crash.
+    try:
+        from src.services.curation.event_hub import get_event_hub
+
+        await get_event_hub().start_tail()
+        AppResources.event_bus_started = True
+        logger.info('event_bus_tail_started')
+    except Exception as exc:
+        logger.warning('event_bus_tail_start_skipped', error=str(exc))
 
     # Reconcile job state.json files left at status='running' by a process
     # that was killed mid-job — see docs/design/curation_design_rationale.md
@@ -355,6 +369,17 @@ async def lifespan(app: FastAPI):
             await AppResources.arbiter_task
         AppResources.arbiter_task = None
         logger.info('gpu_arbiter_loop_stopped')
+
+    # Stop the event-bus tail task.
+    if AppResources.event_bus_started:
+        try:
+            from src.services.curation.event_hub import get_event_hub
+
+            await get_event_hub().stop_tail()
+            logger.info('event_bus_tail_stopped')
+        except Exception as exc:
+            logger.warning('event_bus_tail_stop_error', error=str(exc))
+        AppResources.event_bus_started = False
 
     # Close AsyncTritonPool
     if AppResources.async_triton_pool is not None:

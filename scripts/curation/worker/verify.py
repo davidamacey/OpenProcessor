@@ -155,6 +155,7 @@ def _region_write_doc(
     region_text_reply: str | None = None,
     region_text_confidence: str | None = None,
     region_text_source: str | None = None,
+    confidence: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compose the ``update_doc`` for a successful region-detection write.
@@ -163,6 +164,11 @@ def _region_write_doc(
     a consistent set of fields (incl. provenance + chain). The worker
     never validates a region -- ``RegionFields.validated`` is human-only;
     its auto-confirm policy's verdict is ``RegionFields.auto_confirmed``.
+
+    ``confidence`` is the VLM verifier's box-confidence verdict
+    (``high``/``medium``/``low``, ``RegionFields.confidence`` ==
+    ``reply.region_confidence`` / ``outcome.confidence``) -- distinct from
+    ``region_text_confidence``, which grades the *text reading*.
     """
     F = get_region_fields()
     doc: dict[str, Any] = {
@@ -173,6 +179,8 @@ def _region_write_doc(
         F.validated: False,
         F.auto_confirmed: auto_confirmed,
     }
+    if confidence:
+        doc[F.confidence] = confidence
     doc.update(
         region_provenance(
             detector=detector,
@@ -421,6 +429,7 @@ def _combined_write_doc(
         auto_confirmed=auto_confirmed,
         region_text_reply=reply.region_text_reply,
         region_text_confidence=reply.region_confidence,
+        confidence=reply.region_confidence,
     )
     region_doc.update(_combined_class_update(reply, class_names, now=ts, name_to_id=name_to_id))
     return region_doc

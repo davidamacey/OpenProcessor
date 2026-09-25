@@ -43,6 +43,7 @@ from job_protocol import (
     DEFAULT_JOBS_DIR,
     JobSpec,
     StatusState,
+    _atomic_write_json,
     _capture_mlflow_run_id,
     _heartbeat_loop,
     _utcnow_iso,
@@ -85,6 +86,47 @@ POLL_INTERVAL_S = 2.0
 def _gpu_order() -> tuple[int, ...]:
     raw = os.environ.get('OP_TRAIN_GPU_ORDER', '')
     return tuple(int(tok) for tok in raw.split(',') if tok.strip())
+
+
+# Sibling of the job-queue dir; the API's preflight reads this to reject a
+# training request for a host GPU this trainer container isn't actually
+# attached to (TR-2 GPU scoping fix) instead of accepting it and hanging in
+# `starting` forever.
+TRAINER_CAPABILITIES_FILENAME = '.trainer_capabilities.json'
+
+
+def write_trainer_capabilities(jobs_dir: Path) -> None:
+    """Publish this container's GPU attachment for the API's preflight check.
+
+    Writes ``<jobs_dir>/.trainer_capabilities.json`` atomically:
+    ``gpu_order`` (:func:`_gpu_order`, empty = unrestricted -- every GPU at
+    its host index), ``visible_count`` (``torch.cuda.device_count()``),
+    ``build_sha`` (this image's baked ``OP_BUILD_SHA``), and ``written_at``.
+
+    Best-effort: any failure (no CUDA, no write permission) is logged and
+    swallowed -- an older trainer image or a probe failure must only
+    downgrade the API's check to a warning, never crash trainer startup.
+    """
+    try:
+        import torch
+
+        visible_count: int | None = torch.cuda.device_count()
+    except Exception:
+        logger.warning('trainer_capabilities_cuda_probe_failed', exc_info=True)
+        visible_count = None
+    payload = {
+        'gpu_order': list(_gpu_order()),
+        'visible_count': visible_count,
+        'build_sha': os.environ.get('OP_BUILD_SHA'),
+        'written_at': _utcnow_iso(),
+    }
+    try:
+        jobs_dir.mkdir(parents=True, exist_ok=True)
+        _atomic_write_json(jobs_dir / TRAINER_CAPABILITIES_FILENAME, payload)
+    except OSError:
+        logger.warning('trainer_capabilities_write_failed', exc_info=True)
+    else:
+        logger.info('trainer_capabilities_written', gpu_order=list(_gpu_order()))
 
 
 # CUDA-OOM backoff: halve the batch and retry with a clean model, so an
@@ -887,6 +929,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     _setup_logging()
+    write_trainer_capabilities(args.watch)
 
     if args.once:
         if not process_one(args.watch):

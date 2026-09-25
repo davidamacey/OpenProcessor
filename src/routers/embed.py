@@ -366,7 +366,7 @@ def embed_boxes(
                 logger.warning(f'Invalid box dimensions: {box_coords}')
                 continue
 
-            # Lossless numpy crop + LANCZOS resize/center-crop to [3, 256, 256]
+            # Lossless numpy crop + BILINEAR (cv2.INTER_LINEAR) resize/center-crop to [3, 256, 256]
             crop_rgb = np_img[py1:py2, px1:px2]
             preprocessed.append(center_crop_cpu(crop_rgb, target_size=256))
             valid_boxes.append([x1, y1, x2, y2])

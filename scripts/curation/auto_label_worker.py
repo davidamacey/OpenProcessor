@@ -78,6 +78,7 @@ from src.services.curation.autolabel.job import (
     _JobState,
     _Progress,
 )
+from src.services.curation.worker_liveness import write_heartbeat as _write_container_heartbeat
 
 
 logging.basicConfig(
@@ -140,11 +141,17 @@ async def _build_opensearch():
 
 
 def _touch_heartbeat() -> None:
-    """Update HEARTBEAT_FILE mtime — used by the API to detect a dead worker."""
+    """Update HEARTBEAT_FILE mtime — used by the API to detect a dead worker.
+
+    Also writes the container-local liveness heartbeat (S-2) so the
+    compose healthcheck stays fresh for the whole duration of a run, not
+    just the idle poll loop.
+    """
     try:
         HEARTBEAT_FILE.touch()
     except OSError as exc:
         logger.warning('heartbeat touch failed: %s', exc)
+    _write_container_heartbeat('auto_label_worker', {'poll': True})
 
 
 async def _heartbeat_loop(stop: asyncio.Event) -> None:
@@ -332,9 +339,19 @@ async def _main_loop(stop: asyncio.Event) -> None:
     # big ingest doesn't immediately fire one. Next check after one
     # interval.
     last_retrain_check = time.monotonic()
+    # S-2: container healthcheck liveness — distinct from HEARTBEAT_FILE
+    # above, which only gets touched while a run is active
+    # (_heartbeat_loop is only started inside _run_one). This one fires
+    # here in the idle poll loop too, so `worker_liveness check
+    # auto_label_worker` only goes stale if this loop itself stalls.
+    last_liveness_heartbeat = 0.0
 
     try:
         while not stop.is_set():
+            now_monotonic = time.monotonic()
+            if now_monotonic - last_liveness_heartbeat >= 15.0:
+                last_liveness_heartbeat = now_monotonic
+                _write_container_heartbeat('auto_label_worker', {'poll': True})
             trigger = _claim_trigger()
             # Idle-time auto-retrain: only when no operator trigger is
             # pending, throttled by AUTO_RETRAIN_CHECK_INTERVAL_S (the

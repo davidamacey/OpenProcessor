@@ -202,3 +202,110 @@ def test_evaluator_sees_exports_at_the_api_path() -> None:
     evaluator_mounts = services['curation-evaluator'].get('volumes') or []
     assert any(str(v).startswith('./data:/app/data') for v in api_mounts)
     assert './data:/app/data:ro' in evaluator_mounts
+
+
+def test_auto_label_worker_caps_blas_threads() -> None:
+    """LG-3: AHC/UMAP on the residual pool otherwise spawns one BLAS thread
+    per host core (48 on the reference host) with nothing else configured.
+    Cap them on curation-auto-label-worker so a big recluster doesn't starve
+    the rest of a shared host."""
+    env = _services()['curation-auto-label-worker'].get('environment') or []
+    env_str = '\n'.join(str(e) for e in env)
+    assert 'OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}' in env_str
+    assert 'OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-4}' in env_str
+    assert 'MKL_NUM_THREADS=${MKL_NUM_THREADS:-4}' in env_str
+
+
+def test_api_and_detection_worker_share_crop_cache() -> None:
+    """ST-1: yolo-api and curation-detection-worker must mount the SAME
+    named crop-cache volume at the SAME target, with OP_CROP_CACHE_DIR set
+    to that target in both -- otherwise the worker's cache reads never see
+    what the API's ingest path wrote."""
+    services = _services()
+    target = '/var/cache/openprocessor/crops'
+    for name in ('yolo-api', 'curation-detection-worker'):
+        mounts = [str(v) for v in (services[name].get('volumes') or [])]
+        matching = [m for m in mounts if m.endswith(f':{target}')]
+        assert matching, f'{name} has no crop-cache mount at {target}: {mounts}'
+        volume_name = matching[0].split(':', 1)[0]
+        assert volume_name == 'openprocessor-crop-cache', (name, matching[0])
+
+        env = [str(e) for e in (services[name].get('environment') or [])]
+        assert f'OP_CROP_CACHE_DIR={target}' in env, (name, env)
+
+    top_level_volumes = _load_compose()['volumes']
+    assert 'openprocessor-crop-cache' in top_level_volumes
+
+
+def test_segmenter_hf_cache_mounted_at_appuser_home() -> None:
+    """ST-2: the segmenter container runs as uid 1000 (``appuser``) with
+    ``HF_HOME=/home/appuser/.cache/huggingface``. A cache bind at
+    ``/root/.cache/huggingface`` silently misses (wrong user), so the ~3.3G
+    of gated SAM3 weights land in the writable container layer and
+    re-download on every recreate instead of hitting the nvme bind."""
+    mounts = [str(v) for v in (_services()['segmenter'].get('volumes') or [])]
+    assert any(m.endswith(':/home/appuser/.cache/huggingface') for m in mounts), mounts
+    assert not any(m.endswith(':/root/.cache/huggingface') for m in mounts), mounts
+
+
+# =============================================================================
+# S-2 — heartbeat-based worker healthchecks (worker_liveness.py) replace
+# `pgrep -f <module>`, which can't see a deadlocked-but-alive event loop.
+# =============================================================================
+
+# name passed to `python -m src.services.curation.worker_liveness check <name>`
+# for each service, matching the names each worker's heartbeat_loop()/
+# write_heartbeat() call uses.
+_WORKER_LIVENESS_NAMES = {
+    'curation-detection-worker': 'detection_worker',
+    'curation-vlm-worker': 'vlm_worker',
+    'curation-auto-label-worker': 'auto_label_worker',
+    'curation-cluster-refresh': 'cluster_refresh',
+}
+
+
+def test_curation_worker_healthchecks_use_liveness() -> None:
+    services = _services()
+    bad: list[str] = []
+    for name, liveness_name in _WORKER_LIVENESS_NAMES.items():
+        assert name in services, f'expected service {name!r} in docker-compose.yml'
+        test = (services[name].get('healthcheck') or {}).get('test')
+        test_str = ' '.join(test) if isinstance(test, list) else str(test or '')
+        if 'worker_liveness' not in test_str or liveness_name not in test_str:
+            bad.append(f'{name}: {test_str!r}')
+    assert not bad, 'expected worker_liveness-based healthchecks:\n' + '\n'.join(bad)
+
+
+# Workers whose depends_on already names yolo-api directly (main compose
+# doesn't have every curation worker depend on yolo-api — e.g.
+# curation-detection-worker depends on triton-server/opensearch, and
+# curation-auto-label-worker only on opensearch, both by design, since
+# they're triggered via files, not a direct HTTP call at startup).
+_WORKERS_DEPENDING_ON_API = ('curation-vlm-worker', 'curation-cluster-refresh')
+
+
+def test_curation_workers_depend_on_healthy_api() -> None:
+    """S-7: workers that depend on `yolo-api` wait for it to report healthy,
+    not merely started."""
+    services = _services()
+    bad: list[str] = []
+    for name in _WORKERS_DEPENDING_ON_API:
+        depends_on = services[name].get('depends_on')
+        if not isinstance(depends_on, dict) or 'yolo-api' not in depends_on:
+            bad.append(name)
+            continue
+        condition = (depends_on.get('yolo-api') or {}).get('condition')
+        if condition != 'service_healthy':
+            bad.append(name)
+    assert not bad, f'expected depends_on.yolo-api.condition == service_healthy: {bad}'
+
+
+def test_yolo_api_has_a_healthcheck() -> None:
+    """A `service_healthy` dependency on yolo-api is meaningless without one."""
+    services = _services()
+    assert services['yolo-api'].get('healthcheck'), 'yolo-api needs a healthcheck'
+
+
+def test_curation_mlflow_has_a_healthcheck() -> None:
+    services = _services()
+    assert services['curation-mlflow'].get('healthcheck'), 'curation-mlflow needs a healthcheck'

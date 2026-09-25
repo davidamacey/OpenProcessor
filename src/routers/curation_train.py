@@ -32,6 +32,7 @@ the 422 body so the UI can render it inline.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from datetime import UTC
@@ -79,6 +80,7 @@ from src.services.training.gpu_arbiter import (
     containers_to_stop,
     docker_client_available,
     needs_service_stop,
+    parse_cuda_visible_devices,
     probe_trainer_reachable,
 )
 from src.services.training.jobs import (
@@ -342,6 +344,42 @@ def _training_volume_mount_sane(path: str) -> bool:
         return existing.stat().st_dev != Path('/').stat().st_dev
     except OSError:
         return False
+
+
+# Written by docker/trainer/trainer.py's write_trainer_capabilities() at
+# startup, next to job.json in the shared /jobs volume. Kept in sync with
+# TRAINER_CAPABILITIES_FILENAME there -- there is no shared import (the
+# trainer ships as its own image with no src/ dependency), so
+# test_trainer_protocol.py conformance-tests both halves against the
+# literal name.
+TRAINER_CAPABILITIES_FILENAME = '.trainer_capabilities.json'
+
+
+def _read_trainer_capabilities() -> dict[str, Any] | None:
+    """The trainer's published ``gpu_order``/``visible_count``/``build_sha``.
+
+    ``None`` (not an error) when the file is absent -- an older trainer
+    image that predates this fix, or a container that hasn't started yet.
+    Callers must treat that as "can't verify" (a warning), not "no GPUs
+    attached" (which would incorrectly block every request).
+    """
+    path = train_jobs._resolve_jobs_dir() / TRAINER_CAPABILITIES_FILENAME
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+
+
+def _trainer_gpu_order() -> list[int] | None:
+    """``gpu_order`` from the trainer capabilities file, or ``None`` if
+    unknown (missing file, or a non-empty-but-unparseable field)."""
+    caps = _read_trainer_capabilities()
+    if caps is None:
+        return None
+    order = caps.get('gpu_order')
+    if not isinstance(order, list) or not all(isinstance(i, int) for i in order):
+        return None
+    return order
 
 
 def _read_export_manifest(dataset_export_dir: str | None) -> dict[str, Any]:
@@ -623,6 +661,55 @@ async def _run_preflight(
                 name='gpu_arbiter',
                 severity='ok',
                 message=f'can stop: {", ".join(required_stop_names)}',
+            )
+        )
+
+    # ---- 2d. trainer is actually attached to the requested host GPU(s) --
+    # OP_GPU_ALLOWED_IDS only says a host id is *policy-permitted*; it says
+    # nothing about which container is physically pinned to it. Without
+    # this, a request for a GPU the trainer container was never attached to
+    # (device_ids/OP_TRAIN_GPU_ORDER drift, or a GPU-policy change that
+    # forgot to redeploy the trainer) writes job.json and sits in
+    # `queued`/`starting` forever with no error (the original TR-2 failure
+    # mode). The trainer publishes its attachment at startup
+    # (write_trainer_capabilities in docker/trainer/trainer.py); an absent
+    # file (older image) only downgrades this to a warning.
+    trainer_gpu_order = _trainer_gpu_order()
+    requested_ids = parse_cuda_visible_devices(spec.cuda_visible_devices)
+    if trainer_gpu_order is None:
+        checks.append(
+            PreflightCheck(
+                name='trainer_gpus',
+                severity='warn',
+                message=(
+                    'no trainer capabilities file found -- cannot verify the trainer '
+                    'is attached to the requested GPU(s) (older trainer image?)'
+                ),
+            )
+        )
+    elif trainer_gpu_order and (
+        unattached := [i for i in requested_ids if i not in trainer_gpu_order]
+    ):
+        checks.append(
+            PreflightCheck(
+                name='trainer_gpus',
+                severity='block',
+                message=(
+                    f'trainer is attached to host GPUs {trainer_gpu_order}; requested {unattached}'
+                ),
+                detail={'trainer_gpu_order': trainer_gpu_order, 'requested': requested_ids},
+            )
+        )
+    else:
+        checks.append(
+            PreflightCheck(
+                name='trainer_gpus',
+                severity='ok',
+                message=(
+                    f'trainer is attached to host GPUs {trainer_gpu_order}'
+                    if trainer_gpu_order
+                    else 'trainer reports no GPU restriction (attached to every GPU at its host index)'
+                ),
             )
         )
 
@@ -1404,11 +1491,24 @@ async def list_train_gpu_options() -> TrainGpuOptionsResponse:
     Backend owns these decisions -- the frontend must never hardcode a
     deployment's GPU topology. Unrestricted installs (no
     ``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.
+
+    When the trainer's published ``gpu_order`` (see ``_trainer_gpu_order``)
+    is known and non-empty, the option list is intersected with it -- a
+    trainer physically attached to only host GPU 2 must not offer GPU 0 as
+    selectable, even if ``OP_GPU_ALLOWED_IDS`` (a policy allowlist, not a
+    physical-attachment fact) says otherwise.
     """
     from src.services.training.jobs import default_train_gpu_value
 
     arbiter_cfg = get_gpu_arbiter_config()
     allowed_ids = sorted(arbiter_cfg.allowed_gpu_ids)
+    trainer_gpu_order = _trainer_gpu_order()
+    if trainer_gpu_order:
+        allowed_ids = (
+            [i for i in allowed_ids if i in trainer_gpu_order]
+            if allowed_ids
+            else sorted(trainer_gpu_order)
+        )
     default_value = default_train_gpu_value()
 
     if not allowed_ids:

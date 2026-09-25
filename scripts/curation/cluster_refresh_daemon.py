@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import os
 import signal
 import sys
@@ -37,6 +38,16 @@ import httpx
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+# ruff: noqa: E402
+from src.services.curation.worker_liveness import write_heartbeat
+
+
+# S-2: container healthcheck liveness. The daemon's real poll interval
+# (default 5 min) is far longer than any sane healthcheck max-age, so
+# the inter-iteration wait is sliced into chunks of this size and the
+# heartbeat is touched once per chunk — see run().
+_LIVENESS_TICK_S = 15.0
 
 
 DEFAULT_API = 'http://localhost:4603'
@@ -170,6 +181,7 @@ async def run(args: argparse.Namespace) -> int:
         loop.add_signal_handler(sig, _on_signal)
 
     last_count = 0
+    write_heartbeat('cluster_refresh', {'loop': True})
     async with httpx.AsyncClient(timeout=30.0) as client:
         while not stop.is_set():
             t0 = time.monotonic()
@@ -181,14 +193,21 @@ async def run(args: argparse.Namespace) -> int:
                 threshold=args.growth_threshold,
                 auto_label=args.auto_label,
             )
+            write_heartbeat('cluster_refresh', {'loop': True})
             if args.once:
                 break
             elapsed = time.monotonic() - t0
             sleep_s = max(args.interval_seconds - elapsed, 1.0)
-            try:
-                await asyncio.wait_for(stop.wait(), timeout=sleep_s)
-            except TimeoutError:
-                continue
+            # Slice the wait into <=_LIVENESS_TICK_S chunks so the
+            # container heartbeat stays fresh across a multi-minute
+            # inter-iteration wait, not just once per iteration.
+            remaining = sleep_s
+            while remaining > 0 and not stop.is_set():
+                chunk = min(remaining, _LIVENESS_TICK_S)
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(stop.wait(), timeout=chunk)
+                remaining -= chunk
+                write_heartbeat('cluster_refresh', {'loop': True})
     return 0
 
 

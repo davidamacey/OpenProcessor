@@ -456,6 +456,63 @@ def test_unattached_gpu_request_fails_instead_of_mis_scheduling(
 
 
 # =============================================================================
+# Trainer capabilities file (W5.2 -- the API's preflight reads this)
+# =============================================================================
+
+
+def test_write_trainer_capabilities_publishes_env_gpu_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv('OP_TRAIN_GPU_ORDER', '0,2')
+    monkeypatch.setenv('OP_BUILD_SHA', 'abc1234')
+    jobs_dir = tmp_path / 'jobs'
+
+    trainer.write_trainer_capabilities(jobs_dir)
+
+    payload = json.loads((jobs_dir / trainer.TRAINER_CAPABILITIES_FILENAME).read_text())
+    assert payload['gpu_order'] == [0, 2]
+    assert payload['build_sha'] == 'abc1234'
+    assert 'written_at' in payload
+    assert 'visible_count' in payload
+
+
+def test_write_trainer_capabilities_empty_order_is_unrestricted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv('OP_TRAIN_GPU_ORDER', raising=False)
+    jobs_dir = tmp_path / 'jobs'
+
+    trainer.write_trainer_capabilities(jobs_dir)
+
+    payload = json.loads((jobs_dir / trainer.TRAINER_CAPABILITIES_FILENAME).read_text())
+    assert payload['gpu_order'] == []
+
+
+def test_write_trainer_capabilities_survives_cuda_probe_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A missing/broken torch install must not crash trainer startup --
+    the file still gets written with visible_count=None."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _boom(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == 'torch':
+            msg = 'no CUDA runtime'
+            raise RuntimeError(msg)
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, '__import__', _boom)
+    jobs_dir = tmp_path / 'jobs'
+
+    trainer.write_trainer_capabilities(jobs_dir)
+
+    payload = json.loads((jobs_dir / trainer.TRAINER_CAPABILITIES_FILENAME).read_text())
+    assert payload['visible_count'] is None
+
+
+# =============================================================================
 # Orientation-sensitive class resolution (text classes resolve by name
 # against the dataset's data.yaml instead of a hardcoded class id)
 # =============================================================================

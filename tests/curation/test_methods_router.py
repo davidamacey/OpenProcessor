@@ -514,5 +514,45 @@ def test_methods_does_not_query_per_entry(app_client: TestClient) -> None:
     )
 
 
+def test_methods_contract_declares_field_coverage() -> None:
+    """The generated OpenAPI contract must type ``field_coverage`` /
+    ``field_coverage_total`` as real StrategyEntry properties, not leave
+    the whole response as a free-form (``additionalProperties: true``)
+    object -- that's the W2.3 contract gap this test locks down."""
+    import json
+    from pathlib import Path
+
+    contract_path = Path(__file__).parents[2] / 'contracts' / 'openapi' / 'curation.json'
+    spec = json.loads(contract_path.read_text())
+
+    schemas = spec['components']['schemas']
+    assert 'StrategyEntry' in schemas, (
+        'GET /curation/methods has no typed response_model in the contract'
+    )
+    entry_props = schemas['StrategyEntry']['properties']
+    assert 'field_coverage' in entry_props
+    assert 'field_coverage_total' in entry_props
+
+
+def test_every_sort_with_requires_field_has_integer_coverage(app_client: TestClient) -> None:
+    """Regression guard (passes before this change too, per the plan): every
+    ``axis == 'sort'`` entry with a ``requires_field`` gets a real int
+    ``field_coverage`` / ``field_coverage_total``, never left null just
+    because a sort happens to declare one."""
+    app_client.fake_os.search = _fake_field_counts(total=1000)  # type: ignore[attr-defined]
+
+    r = app_client.get('/curation/methods')
+    assert r.status_code == 200
+    body = r.json()
+    bad = [
+        e['id']
+        for e in body['strategies']
+        if e['axis'] == 'sort'
+        and e.get('requires_field')
+        and not isinstance(e.get('field_coverage'), int)
+    ]
+    assert bad == []
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

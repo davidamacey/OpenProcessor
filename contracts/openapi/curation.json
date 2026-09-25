@@ -5107,6 +5107,31 @@
         "title": "MatrixModel",
         "type": "object"
       },
+      "MethodsResponse": {
+        "description": "``GET /curation/methods`` response: every strategy across every axis\nplus the feature flags that gated each entry's status.",
+        "properties": {
+          "flags": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Flags",
+            "type": "object"
+          },
+          "strategies": {
+            "items": {
+              "$ref": "#/components/schemas/StrategyEntry"
+            },
+            "title": "Strategies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "strategies",
+          "flags"
+        ],
+        "title": "MethodsResponse",
+        "type": "object"
+      },
       "MetricBlock": {
         "description": "Metrics over a model's own covered classes (AP: class mean; P/R/F1: micro).",
         "properties": {
@@ -6618,6 +6643,91 @@
           "preflight"
         ],
         "title": "StartTrainResponse",
+        "type": "object"
+      },
+      "StrategyEntry": {
+        "additionalProperties": true,
+        "description": "One strategy/registry row across any axis (cluster / score / sort /\noverlay / export / detection_profile / prompt_pack).",
+        "properties": {
+          "axis": {
+            "title": "Axis",
+            "type": "string"
+          },
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "field_coverage": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Coverage"
+          },
+          "field_coverage_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Coverage Total"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "requires_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires Field"
+          },
+          "settable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settable"
+          },
+          "status": {
+            "enum": [
+              "stable",
+              "experimental",
+              "shadow",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "axis",
+          "label",
+          "status",
+          "default"
+        ],
+        "title": "StrategyEntry",
         "type": "object"
       },
       "StratumMetrics": {
@@ -11222,16 +11332,14 @@
     },
     "/curation/events/stats": {
       "get": {
-        "description": "Ops counters: subscribers, events_published, events_dropped.",
+        "description": "Ops counters: subscribers, events_published, events_dropped, plus\nthe active ``bus`` (``file``/``process``) and its ``log_path``.",
         "operationId": "curation_events_stats_curation_events_stats_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "integer"
-                  },
+                  "additionalProperties": true,
                   "title": "Response Curation Events Stats Curation Events Stats Get",
                   "type": "object"
                 }
@@ -12016,9 +12124,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Methods Curation Methods Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/MethodsResponse"
                 }
               }
             },
@@ -15308,7 +15414,7 @@
     },
     "/curation/train/gpus": {
       "get": {
-        "description": "Serve the training GPU picker: values, labels, and stop advisories.\n\nBackend owns these decisions -- the frontend must never hardcode a\ndeployment's GPU topology. Unrestricted installs (no\n``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.",
+        "description": "Serve the training GPU picker: values, labels, and stop advisories.\n\nBackend owns these decisions -- the frontend must never hardcode a\ndeployment's GPU topology. Unrestricted installs (no\n``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.\n\nWhen the trainer's published ``gpu_order`` (see ``_trainer_gpu_order``)\nis known and non-empty, the option list is intersected with it -- a\ntrainer physically attached to only host GPU 2 must not offer GPU 0 as\nselectable, even if ``OP_GPU_ALLOWED_IDS`` (a policy allowlist, not a\nphysical-attachment fact) says otherwise.",
         "operationId": "list_train_gpu_options_curation_train_gpus_get",
         "responses": {
           "200": {
