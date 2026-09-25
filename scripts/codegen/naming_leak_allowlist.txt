@@ -31,6 +31,7 @@ docs/design/train_gpu_options_plan.md # internal cutover-plan doc; removed in W9
 docs/design/full_stack_audit.md # internal cutover-plan doc; removed in W9 (plan D6)
 docs/design/curation_query_performance_audit.md # internal audit doc added by cutover/db-perf; W9 removal candidate (plan §7 re-inventory note)
 docs/design/segmenter_triton_feasibility.md # internal design doc; W9 scrub/removal candidate, same character as the other docs/design/*_plan.md artifacts
+docs/design/generic_model_comparison_plan.md # internal cutover-plan doc (#34 waves); names the example license-plate bake-off profile and the retired OP_BAKEOFF_PROFILE value on purpose; removed in W9 (plan D6)
 CHANGELOG.md # documents every rename with the actual old->new literals throughout; CHANGELOG rewrite is explicitly W9 scope
 
 # Negative/historical test docstrings (describe a retired literal or a past

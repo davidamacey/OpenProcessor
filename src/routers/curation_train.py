@@ -952,12 +952,12 @@ async def _run_preflight(
             'export_splits_nonempty)',
             {},
         )
-        if _is_lpr
+        if _is_single_class
         else export_class_split_check(export_manifest, spec.include_classes)
     )
     unlabeled_result = (
         ('ok', 'not applicable for this dataset kind (single-class)', {})
-        if _is_lpr
+        if _is_single_class
         else export_unlabeled_objects_check(export_manifest)
     )
     for name, (severity, message, detail) in (
