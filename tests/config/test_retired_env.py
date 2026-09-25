@@ -40,6 +40,9 @@ def test_retired_env_table_covers_every_section_3_name() -> None:
         'SAM_WORKER_METRICS_PORT',
         'OP_REGION_DETECTION_SAM_TEXT_PROMPT',
         'GEMMA_CROP_CACHE_DIR',
+        # generic model comparison W3: bake-offs score every class.
+        'OP_BAKEOFF_PROFILE_TARGET_CLASS_ID',
+        'OP_BAKEOFF_PROFILE_TARGET_CLASS_NAME',
     }
     assert expected_old_names <= set(RETIRED_ENV)
 
@@ -76,3 +79,28 @@ def test_multiple_retired_names_set_reports_all(monkeypatch: pytest.MonkeyPatch)
     msg = str(exc_info.value)
     assert 'SAM3_URL' in msg
     assert 'GEMMA_URL' in msg
+
+
+def test_removed_bakeoff_target_class_env_says_what_to_use(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('OP_BAKEOFF_PROFILE_TARGET_CLASS_NAME', 'object')
+    with pytest.raises(RuntimeError) as exc_info:
+        reject_retired_env()
+    msg = str(exc_info.value)
+    assert 'OP_BAKEOFF_PROFILE_TARGET_CLASS_NAME was removed' in msg
+    assert 'OP_BAKEOFF_PROFILE_CLASS_FILTER' in msg
+    assert 'renamed' not in msg
+
+
+def test_bakeoff_evaluator_entry_point_rejects_retired_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    import sys
+
+    from scripts.curation.bakeoff import bakeoff_runner
+
+    monkeypatch.setenv('OP_BAKEOFF_PROFILE_TARGET_CLASS_ID', '0')
+    monkeypatch.setattr(sys, 'argv', ['bakeoff_runner', '--job', str(tmp_path / 'none.json')])
+    with pytest.raises(RuntimeError, match='OP_BAKEOFF_PROFILE_TARGET_CLASS_ID'):
+        bakeoff_runner.main()

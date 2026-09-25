@@ -399,6 +399,10 @@ def _watch(jobs_dir: Path, poll: float) -> int:
 
 
 def main() -> int:
+    # The evaluator image ships src/ next to scripts/ (PYTHONPATH=/app).
+    from src.config.retired_env import reject_retired_env
+
+    reject_retired_env()
     p = argparse.ArgumentParser(description='Bake-off job runner (evaluator container).')
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument('--watch', type=Path, help='Watch a dir for *.job.json')
