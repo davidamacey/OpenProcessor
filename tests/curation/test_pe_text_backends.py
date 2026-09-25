@@ -262,6 +262,58 @@ class TestBackendSelection:
         assert enc.text_backend == 'torch'
         assert torch_backend.calls == 1
 
+    def test_auto_does_not_eagerly_load_torch_at_warm_time(self, tmp_path, monkeypatch) -> None:
+        """F-07 (fresh-start E2E findings, 2026-09-25).
+
+        Every uvicorn worker calls ``warm_text_encoder()`` from the FastAPI
+        lifespan at startup. Before this fix, ``auto`` mode's fallback path
+        called the ~2.7 GB ``pe.CLIP`` loader synchronously inside
+        ``warm_text_encoder()`` itself — with N workers and neither the
+        ONNX export nor Triton's ``pe_text_encoder`` available yet (every
+        fresh install until ``make export-pe`` runs), that's N eager loads
+        piling up at once before a single query has been made, which is
+        what drove container RSS to 153 GiB and OOM-killed a fresh install.
+        The loader must not run until a real query needs it.
+        """
+        torch_backend = _FakeTorchBackend()
+        enc = _encoder(
+            tmp_path,
+            triton=_FakeTritonClient(ready=False),
+            torch_backend=torch_backend,
+            monkeypatch=monkeypatch,
+        )
+        load_count = 0
+        real_load_torch_backend = enc._load_torch_backend
+
+        def counting_load_torch_backend():
+            nonlocal load_count
+            load_count += 1
+            return real_load_torch_backend()
+
+        monkeypatch.setattr(enc, '_load_torch_backend', counting_load_torch_backend)
+
+        enc.warm_text_encoder()
+
+        assert enc.text_ready is True
+        # Health/status already reports the backend that *will* serve
+        # queries -- observability doesn't need the weights loaded.
+        assert enc.text_backend == 'torch'
+        # ...but the actual multi-GB load has not happened yet.
+        assert load_count == 0
+        assert torch_backend.calls == 0
+
+        enc.encode_text(['red sedan'])
+
+        # Only now, on the first real query, does it load -- once.
+        assert load_count == 1
+        assert torch_backend.calls == 1
+
+        enc.encode_text(['blue truck'])
+
+        # A second query reuses the already-loaded backend.
+        assert load_count == 1
+        assert torch_backend.calls == 2
+
     def test_unreachable_triton_is_not_an_error(self, tmp_path, monkeypatch) -> None:
         enc = _encoder(
             tmp_path,
