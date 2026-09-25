@@ -46,6 +46,7 @@ from job_protocol import (
     _capture_mlflow_run_id,
     _heartbeat_loop,
     _utcnow_iso,
+    build_lineage,
     list_pending_jobs,
     parse_and_validate_job,
     reject_job,
@@ -459,12 +460,9 @@ def _build_model(
             run_name=spec.mlflow_run_name,
             profile=spec.profile,
             seed=int(spec.hyperparameters.get('seed') or 42),
-            manifest=spec.raw,
+            lineage=build_lineage(spec),
             data_cfg=data_cfg,
             data_yaml_path=data_yaml_path,
-            git_sha=os.environ.get('OP_BUILD_SHA'),
-            docker_digest=os.environ.get('OP_TRAINER_IMAGE_DIGEST'),
-            frozen_test_sha=spec.raw.get('frozen_test_sha'),
         )
     except Exception as exc:  # tracking is optional
         logger.warning('mlflow callback registration failed', error=str(exc))

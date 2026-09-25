@@ -152,18 +152,18 @@ def register_callbacks(  # four closures + wiring, cohesive by design
     run_name: str,
     profile: str,
     seed: int,
-    manifest: dict[str, Any],
+    lineage: dict[str, Any],
     data_cfg: dict[str, Any],
     data_yaml_path: Path,
-    git_sha: str | None,
-    docker_digest: str | None,
-    frozen_test_sha: str | None,
     model_registry_name: str = DEFAULT_MODEL_REGISTRY_NAME,
 ) -> None:
     """Wire all four hook handlers into the Ultralytics model.
 
     The closure captures the run metadata so handlers are pure-functional with
-    respect to the training loop.
+    respect to the training loop. ``lineage`` (``job_protocol.build_lineage``)
+    is the single source of dataset/build identity -- MLflow tags, params and
+    registry metadata read from it so they are byte-identical to the run
+    manifest's own ``lineage``/``code_versions`` blocks.
     """
     state: dict[str, Any] = {
         'class_dist': None,
@@ -175,11 +175,13 @@ def register_callbacks(  # four closures + wiring, cohesive by design
     def _tag_run(mlflow: Any) -> None:
         try:
             tags = {
-                'git_sha': git_sha or 'unknown',
-                'dataset_sha': str(manifest.get('dataset_sha', '')),
-                'dataset_version': str(manifest.get('version', '')),
-                'frozen_test_sha': frozen_test_sha or '',
-                'docker_digest_trainer': docker_digest or '',
+                'git_sha': lineage.get('trainer_sha') or 'unknown',
+                'dataset_sha': str(lineage.get('dataset_sha') or ''),
+                'dataset_version': str(lineage.get('dataset_version_tag') or ''),
+                'frozen_test_sha': str(lineage.get('frozen_test_sha') or ''),
+                'test_label_sha': str(lineage.get('test_label_sha') or ''),
+                'api_sha': str(lineage.get('api_sha') or ''),
+                'docker_digest_trainer': str(lineage.get('trainer_image_id') or ''),
                 'profile': profile,
                 'seed': str(seed),
                 'run_name': run_name,
@@ -294,13 +296,15 @@ def register_callbacks(  # four closures + wiring, cohesive by design
             class_dist = state['class_dist'] or {}
             names_by_id = state['names_by_id'] or {}
             metadata = {
-                'dataset_sha': str(manifest.get('dataset_sha', '')),
-                'dataset_version': str(manifest.get('version', '')),
+                'dataset_sha': str(lineage.get('dataset_sha') or ''),
+                'dataset_version': str(lineage.get('dataset_version_tag') or ''),
                 'class_count': len(names_by_id),
                 'class_names': json.dumps([names_by_id[i] for i in sorted(names_by_id)]),
-                'frozen_test_sha': frozen_test_sha or '',
-                'git_sha': git_sha or '',
-                'docker_digest_trainer': docker_digest or '',
+                'frozen_test_sha': str(lineage.get('frozen_test_sha') or ''),
+                'test_label_sha': str(lineage.get('test_label_sha') or ''),
+                'api_sha': str(lineage.get('api_sha') or ''),
+                'git_sha': str(lineage.get('trainer_sha') or ''),
+                'docker_digest_trainer': str(lineage.get('trainer_image_id') or ''),
                 'profile': profile,
                 'seed': seed,
                 'run_name': run_name,

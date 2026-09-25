@@ -536,6 +536,31 @@ def _ultralytics_version() -> str | None:
         return None
 
 
+def build_lineage(spec: JobSpec) -> dict[str, Any]:
+    """Byte-identical lineage dict shared by the run manifest and the
+    MLflow tags/params/registry metadata (``mlflow_callbacks.py``).
+
+    Reads straight off ``spec.raw`` -- the job.json the API wrote via
+    ``src.services.training.jobs.write_job`` -- so both consumers see the
+    exact same values with no second source of truth to drift out of sync.
+    ``trainer_sha`` prefers this container's own baked ``OP_BUILD_SHA``
+    (the trainer image actually running this code) over the API's stamped
+    ``trainer_image_revision`` (the trainer image the API *observed* at
+    submit time, via the docker socket) -- the two agree unless the
+    trainer image was rebuilt/redeployed between submit and run.
+    """
+    raw = spec.raw
+    return {
+        'dataset_sha': raw.get('dataset_sha'),
+        'frozen_test_sha': raw.get('frozen_test_sha'),
+        'test_label_sha': raw.get('test_label_sha'),
+        'dataset_version_tag': raw.get('dataset_version_tag'),
+        'api_sha': raw.get('api_sha'),
+        'trainer_sha': os.environ.get('OP_BUILD_SHA') or raw.get('trainer_image_revision') or None,
+        'trainer_image_id': raw.get('trainer_image_id'),
+    }
+
+
 def write_manifest(
     spec: JobSpec, state: StatusState, class_remap: dict[str, Any] | None = None
 ) -> None:
@@ -558,6 +583,7 @@ def write_manifest(
         checkpoint_sha = (
             _checkpoint_sha256(Path(state.checkpoint_path)) if state.checkpoint_path else None
         )
+        lineage = build_lineage(spec)
         manifest: dict[str, Any] = {
             'kind': 'train',
             'job_id': spec.job_id,
@@ -565,7 +591,10 @@ def write_manifest(
             'created_at': datetime.now(tz=UTC).isoformat(),
             'lineage': {
                 'export_dir': str(spec.dataset_export_dir),
-                'dataset_sha': spec.raw.get('frozen_test_sha'),
+                'dataset_sha': lineage['dataset_sha'],
+                'frozen_test_sha': lineage['frozen_test_sha'],
+                'test_label_sha': lineage['test_label_sha'],
+                'dataset_version_tag': lineage['dataset_version_tag'],
                 'include_classes': spec.include_classes,
                 'single_cls': spec.single_cls,
                 'class_remap': class_remap,
@@ -586,10 +615,9 @@ def write_manifest(
                 'registry_sha': spec.raw.get('registry_sha'),
             },
             'code_versions': {
-                # Injected by the trainer compose service (see
-                # docker-compose.yml); null when built outside a git checkout.
-                'api_sha': os.environ.get('OP_BUILD_SHA'),
-                'trainer_image': os.environ.get('OP_TRAINER_IMAGE_DIGEST'),
+                'api_sha': lineage['api_sha'],
+                'trainer_sha': lineage['trainer_sha'],
+                'trainer_image_id': lineage['trainer_image_id'],
                 'ultralytics_pkg': _ultralytics_version(),
                 'ultralytics_sha': os.environ.get('ULTRALYTICS_SHA'),
             },

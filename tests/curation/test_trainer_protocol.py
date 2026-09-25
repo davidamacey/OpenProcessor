@@ -643,7 +643,11 @@ def test_run_job_drives_a_whole_export_run_to_finished(
 
     manifest = asyncio.run(train_jobs.read_manifest(job_id))
     assert manifest is not None
-    assert manifest['lineage']['dataset_sha'] == 'sha-frozen-test'
+    # The export fixture's manifest.json only sets frozen_test_sha -- no
+    # dataset_sha key, and dataset_sha is never computed (it's the export's
+    # own claim), so it stays None.
+    assert manifest['lineage']['dataset_sha'] is None
+    assert manifest['lineage']['frozen_test_sha'] == 'sha-frozen-test'
     assert manifest['lineage']['class_remap'] is None  # whole-export run
     assert manifest['lineage']['training_seed'] == 7
     assert manifest['lineage']['deterministic'] is True
@@ -660,6 +664,74 @@ def test_run_job_drives_a_whole_export_run_to_finished(
     )
     # tmp scratch is always cleaned.
     assert not spec.tmp_root.exists()
+
+
+@pytest.mark.integration
+def test_normal_run_manifest_has_no_null_lineage(
+    jobs_dir: Path,
+    export_dir: Path,
+    stub_ultralytics: type[_StubYOLO],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A run submitted against a full export manifest, with a build sha and
+    a reachable docker client, must not leave any lineage/code_versions
+    field null -- a null here silently degrades a run's reproducibility
+    envelope with no visible signal. ``trainer_image_id`` is the one field
+    that legitimately stays null when the API has no docker socket; here
+    the socket is faked reachable so it, too, must be non-null."""
+    from src.config import GpuArbiterConfig
+    from src.services.training import lineage
+
+    (export_dir / 'manifest.json').write_text(
+        json.dumps(
+            {
+                'dataset_sha': 'dataset-sha-x',
+                'frozen_test_sha': 'sha-frozen-test',
+                'test_label_sha': 'label-sha-x',
+                'version_tag': 'v9',
+            }
+        )
+    )
+    monkeypatch.setenv('OP_BUILD_SHA', 'apisha-x')
+
+    class _FakeImage:
+        id = 'sha256:trainerimg'
+        labels = {'org.opencontainers.image.revision': 'trainerrev-x'}
+
+    class _FakeContainer:
+        image = _FakeImage()
+
+    class _FakeContainers:
+        def get(self, _name: str) -> _FakeContainer:
+            return _FakeContainer()
+
+    class _FakeDockerClient:
+        containers = _FakeContainers()
+
+    monkeypatch.setattr(
+        lineage,
+        'get_gpu_arbiter_config',
+        lambda: GpuArbiterConfig(trainer_container='curation-trainer'),
+    )
+    monkeypatch.setattr(lineage, '_docker_client', lambda: _FakeDockerClient())
+
+    job_id = _write_job(
+        dataset_export_dir=str(export_dir),
+        model_size='n',
+        profile='probe',
+        hyperparameters={'epochs': 1, 'batch': 2, 'optimizer': 'MuSGD', 'seed': 3},
+    )
+    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+
+    trainer.run_job(spec)
+
+    manifest = asyncio.run(train_jobs.read_manifest(job_id))
+    assert manifest is not None
+    for key in ('dataset_sha', 'frozen_test_sha', 'test_label_sha', 'registry_sha'):
+        assert manifest['lineage'][key] is not None, key
+    for key in ('api_sha', 'trainer_sha', 'trainer_image_id'):
+        assert manifest['code_versions'][key] is not None, key
 
 
 @pytest.mark.integration
