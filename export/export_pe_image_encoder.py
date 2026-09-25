@@ -311,6 +311,7 @@ def export_via_perception_models(
     import torch
     from core.vision_encoder import pe
     from download_pe_weights import resolve_checkpoint
+    from pe_rearrange_shim import static_batch_safe_rearrange
 
     ckpt = resolve_checkpoint(variant, checkpoint_path, verify=verify_checkpoint)
     logger.info(f'Loading {variant} via perception_models from {ckpt} ...')
@@ -343,18 +344,23 @@ def export_via_perception_models(
 
     onnx_path.parent.mkdir(parents=True, exist_ok=True)
     logger.info(f'Tracing with a batch-{TRACE_BATCH} dummy on {device} (opset {opset})...')
-    torch.onnx.export(
-        wrapper,
-        dummy,
-        str(onnx_path),
-        export_params=True,
-        opset_version=opset,
-        do_constant_folding=True,
-        input_names=[INPUT_TENSOR],
-        output_names=[OUTPUT_TENSOR],
-        dynamic_axes={INPUT_TENSOR: {0: 'batch'}, OUTPUT_TENSOR: {0: 'batch'}},
-        dynamo=False,
-    )
+    # The legacy TorchScript tracer bakes the traced batch size into
+    # SelfAttention's einops.rearrange reshapes as ONNX Reshape constants
+    # (see pe_rearrange_shim for the full mechanism); patch those two call
+    # sites to trace-safe unflatten/transpose equivalents for the export.
+    with static_batch_safe_rearrange():
+        torch.onnx.export(
+            wrapper,
+            dummy,
+            str(onnx_path),
+            export_params=True,
+            opset_version=opset,
+            do_constant_folding=True,
+            input_names=[INPUT_TENSOR],
+            output_names=[OUTPUT_TENSOR],
+            dynamic_axes={INPUT_TENSOR: {0: 'batch'}, OUTPUT_TENSOR: {0: 'batch'}},
+            dynamo=False,
+        )
     logger.info(f'ONNX saved: {onnx_path} ({onnx_path.stat().st_size / 1e6:.1f} MB)')
     return onnx_path
 
