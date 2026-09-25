@@ -14,6 +14,7 @@ roster and its own "never unload this" guard for free.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -39,6 +40,7 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.routers.curation._models_segmenter import build_segmenter_entry
 from src.routers.curation.vlm import _get_vlm_labeler
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.training.triton_promote import (
@@ -167,7 +169,7 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
             (
                 primary.detector_model,
                 'Primary Item Proposer',
-                'Proposes item boxes on ingest (configured via OP_INGEST_PRIMARY_*).',
+                'Proposes item boxes when images are ingested.',
                 'TensorRT detection',
             )
         )
@@ -177,7 +179,7 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
             (
                 secondary.detector_model,
                 'Secondary Classifier',
-                'Classifies proposed item boxes (configured via OP_INGEST_SECONDARY_*).',
+                'Classifies proposed item boxes.',
                 'TensorRT classification',
             )
         )
@@ -187,8 +189,7 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
             (
                 region.detector_model,
                 'Region Detector',
-                'Finds the configured region-of-interest (see DetectionProfile) '
-                'inside each item crop.',
+                'Finds the region of interest inside each item crop.',
                 'TensorRT detection',
             )
         )
@@ -197,8 +198,8 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
             (
                 region.segmenter_name,
                 'Segmenter',
-                'Refines/re-detects the region-of-interest box on crops the '
-                'primary detector missed (configured via DetectionProfile.segmenter_name).',
+                'Refines or re-detects the region of interest on crops the '
+                'primary detector missed.',
                 'Promptable segmentation',
             )
         )
@@ -249,18 +250,22 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
 # of truth, so the UI never has to re-derive (and possibly drift from)
 # the guard.
 
-# Region-detector + OCR pipeline models — never unloadable through the
-# unload endpoint, not even with force=true. "Never touch the configured
-# detection pipeline's models" is the standing constraint; which models
-# that means is driven by the active DetectionProfile, not a hardcoded
-# domain-specific prefix. S8: no hardcoded detector-name prefix is
-# dropped -- the code never names the deployed region-detector id; a
-# name is protected only via the active profile's detector_model (or
-# the fixed paddleocr_ OCR prefix).
+# Pipeline models the active configuration depends on for ingest and
+# region detection -- the primary item proposer, the (optional) secondary
+# classifier, the region detector, and OCR det/rec -- never unloadable
+# through the unload endpoint, not even with force=true. "Never touch the
+# configured pipeline's models" is the standing constraint; which models
+# that means is driven by the active ingest/detection profiles, not a
+# hardcoded domain-specific prefix. S8: no hardcoded detector-name prefix
+# is dropped -- the code never names the deployed detector ids; a name is
+# protected only via the active profiles' configured model fields (or the
+# fixed paddleocr_ OCR prefix).
 _REGION_PROTECTED_PREFIXES = ('paddleocr_',)
 
 
 def _region_protected_models() -> frozenset[str]:
+    primary = ingest_primary_profile()
+    secondary = ingest_secondary_profile()
     region = get_active_region_profile()
     region_models = (
         (region.detector_model, region.ocr_det_model, region.ocr_rec_model)
@@ -270,6 +275,8 @@ def _region_protected_models() -> frozenset[str]:
     names = {
         name
         for name in (
+            primary.detector_model,
+            secondary.detector_model if secondary is not None else None,
             *region_models,
             TritonModelConfig.OCR_DET_MODEL,
             TritonModelConfig.OCR_REC_MODEL,
@@ -301,6 +308,26 @@ def _core_pipeline_models() -> frozenset[str]:
             TritonModelConfig.ARCFACE_MODEL,
         }
     )
+
+
+def _external_service_model_names() -> frozenset[str]:
+    """Names of external-service roster entries (segmenter, VLM).
+
+    Neither is a Triton model — they're their own HTTP services (see
+    ``build_segmenter_entry`` / the VLM block in ``models_status``, both
+    of which carry ``'unloadable': False``). Shared here so
+    ``DELETE /models/{name}`` rejects them with the same source of truth
+    before ever calling Triton, instead of surfacing a confusing 404 from
+    a repository lookup that was never going to find them.
+    """
+    names: set[str] = set()
+    region = get_active_region_profile()
+    if region is not None and region.segmenter_name:
+        names.add(region.segmenter_name)
+    with contextlib.suppress(Exception):
+        # Best-effort; an unresolvable VLM pack just skips this entry.
+        names.add(_get_vlm_labeler().model)
+    return frozenset(names)
 
 
 def _discover_promoted_models(
@@ -392,9 +419,10 @@ async def models_status() -> dict[str, Any]:
     """Status + usage stats for the models that drive the curation labeling pipeline.
 
     Returns a single ``{"models": [...]}`` object describing each Triton model
-    the labeler depends on, plus the external VLM service. Each entry
-    carries enough metadata for the labeler ``/models`` page to render a
-    self-explanatory card without requiring access to Triton/Prometheus directly.
+    the labeler depends on, plus the external VLM and segmenter services.
+    Each entry carries enough metadata for the labeler ``/models`` page to
+    render a self-explanatory card without requiring access to
+    Triton/Prometheus directly.
     """
     triton_http = resolve_triton_http_url()
     triton_metrics_url = os.environ.get('TRITON_METRICS_URL', 'http://triton-server:8002/metrics')
@@ -462,12 +490,25 @@ async def models_status() -> dict[str, Any]:
             'requires_force_to_unload': name in _core_pipeline_models(),
             'job_id': job_id,
             'promoted_at': promoted_at,
+            # A real Triton model repository entry — DELETE /models/{name}
+            # can act on it (subject to the guard flags above). Contrast
+            # with external-service entries (segmenter, VLM), which have
+            # no Triton repository entry at all.
+            'unloadable': True,
         }
 
-    models: list[dict[str, Any]] = [
-        _build_triton_entry(name, friendly, role, mtype)
-        for name, friendly, role, mtype in _core_models()
-    ]
+    region = get_active_region_profile()
+    segmenter_name = region.segmenter_name if region is not None else None
+
+    models: list[dict[str, Any]] = []
+    for name, friendly, role, mtype in _core_models():
+        # The segmenter is its own HTTP service (OP_SEGMENTER_URL), never a
+        # Triton model — probing it via the Triton repository index always
+        # reported `not_ready` even while healthy. See build_segmenter_entry.
+        if segmenter_name and name == segmenter_name:
+            models.append(await build_segmenter_entry(name, friendly, role, mtype))
+        else:
+            models.append(_build_triton_entry(name, friendly, role, mtype))
 
     # Surface any additional model promoted through this pipeline (carries
     # promote.json) that isn't one of the fixed core models above, so a
@@ -513,6 +554,7 @@ async def models_status() -> dict[str, Any]:
             'avg_latency_ms': None,
             'last_error': vlm_error,
             'endpoint': os.environ.get('OP_VLM_URL', ''),
+            'unloadable': False,
         }
     )
 
@@ -552,6 +594,10 @@ async def unload_model(
     """Unload ``model_name`` from Triton and delete its model repo directory.
 
     Guardrails:
+    - External-service entries (the segmenter, the VLM) are rejected
+      unconditionally: there is no Triton repository entry to unload, and
+      treating their name as one would just surface a confusing Triton
+      404.
     - Region-detector + OCR models (per the active ``DetectionProfile``)
       can **never** be unloaded here, even with ``force=true`` — 403
       unconditionally.
@@ -560,6 +606,16 @@ async def unload_model(
       loud explanation. Unloading any of them breaks live serving until
       something else is loaded.
     """
+    if model_name in _external_service_model_names():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f'{model_name!r} is an external-service model (segmenter or VLM), '
+                'not a Triton model. It has no Triton repository entry to unload; '
+                'manage it out of band.'
+            ),
+        )
+
     if _is_region_protected_model(model_name):
         raise HTTPException(
             status_code=403,

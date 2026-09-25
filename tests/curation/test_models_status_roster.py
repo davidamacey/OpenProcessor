@@ -61,3 +61,39 @@ def test_core_models_includes_the_segmenter(
     profile_registry._reset_registry_for_tests()
     names = {name for name, *_ in models_mod._core_models()}
     assert 'seg9' in names
+
+
+# =============================================================================
+# Operator-facing `role` copy must not leak code identifiers
+#
+# Live UI screenshot review found role strings like "(configured via
+# OP_INGEST_PRIMARY_*)" and "(configured via DetectionProfile.segmenter_name)"
+# served straight to the labeler UI -- env var / class names have no
+# business in operator-facing text. Configuration provenance belongs in
+# docs/comments, not the served `role` string.
+# =============================================================================
+
+
+_LEAKY_SUBSTRINGS = (
+    'OP_INGEST_PRIMARY',
+    'OP_INGEST_SECONDARY',
+    'OP_SEGMENTER',
+    'DetectionProfile',
+    'os.environ',
+)
+
+
+def test_core_models_roles_do_not_leak_code_identifiers(
+    monkeypatch: pytest.MonkeyPatch, reference_region_profile: None
+) -> None:
+    import src.routers.curation.models as models_mod
+
+    monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'item_proposer_v9')
+    monkeypatch.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'secondary_classifier_x1')
+    profile_registry._reset_registry_for_tests()
+
+    entries = models_mod._core_models()
+    assert entries, 'expected a non-empty roster to actually exercise this check'
+    for name, _friendly, role, _mtype in entries:
+        for leaky in _LEAKY_SUBSTRINGS:
+            assert leaky not in role, f'{name!r} role leaks a code identifier: {role!r}'

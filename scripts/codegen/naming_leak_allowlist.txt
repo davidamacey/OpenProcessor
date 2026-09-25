@@ -145,6 +145,7 @@ tests/curation/test_curation_settings_router.py # exercises the example profile
 tests/curation/test_detection_profile.py # DetectionProfile tests use the public example name/shape
 tests/curation/test_detection_profile_second_profile.py # exercises the example profile as the "first profile" in a two-profile test
 tests/curation/test_gpu_arbiter.py # names the reference stack generically ("private reference vehicle/license-plate curation stack") -- W9/C10 prose cleanup, not yet done
+tests/curation/test_models_status_segmenter.py # exercises the segmenter roster entry via the reference_region_profile fixture; comments name its real segmenter_name ('sam3') from license_plate.json
 tests/curation/test_region_profile.py # exercises the example profile via EXAMPLE_LICENSE_PLATE_PROFILE_PATH
 tests/curation/test_region_sanity.py # exercises the example profile ("Ported from the reference license-plate sanity-gate tests")
 tests/curation/test_region_vocabulary.py # exercises the example profile's detector id + historical vendor-id docstring
