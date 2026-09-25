@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`/classes` (F-52, F-53, F-54, F-56, F-58).** The Add Class name
+  placeholder was a private-domain leftover; it is now "e.g.
+  delivery_van" (and the group placeholder "e.g. animals / tools /
+  furniture"), and `domainNeutral.scan.test.ts` now also fails on
+  `class_c|class_d|class_a|class_bs`. The proposals help line no
+  longer interpolates empty served lists as "(, plus …)" / "()"
+  (`termRulesText`). The class registry renders first; the proposals list
+  moved below it into a collapsed section, and the page scrolls as a
+  whole instead of an inner pane. The per-term "×" is now "Hide", labelled
+  as not saved. Restoring a merged class shows "Merged into
+  `<class>`; un-merge isn't supported." with the server's message and
+  hint instead of a bare `class_merged`.
+
 - **Adopted OpenProcessor a8a34aa..37b077f wire changes** (vendored
   contract synced to `37b077f`). `/stats/dataset`: `labeled.by_proposal`
   (always 0) is gone from `DatasetStats` and the dashboard, no shim;

@@ -162,3 +162,41 @@ def test_restore_conflict_shows_plain_string_detail_verbatim(stub, page, app_url
 
     toast = page.get_by_text('a live class already uses the name "wagon"')
     toast.wait_for(timeout=15000)
+
+
+def test_restore_merged_class_names_the_merge_target(stub, page, app_url):
+    """F-56 (OpenProcessor 70663c0): restoring a merged class 409s with a
+    structured `class_merged` detail; the toast names the served merge
+    target and says un-merge isn't supported, with the served hint."""
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES_WITH_DEPRECATED})
+    stub.on("GET", r"/review/new_class_proposals/summary(\?|$)", EMPTY_PROPOSALS)
+    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
+    stub.on(
+        "POST",
+        r"/classes/99/restore$",
+        (
+            409,
+            {
+                "detail": {
+                    "error": "class_merged",
+                    "message": "class_id 99 was merged into class_id 11",
+                    "class_id": 99,
+                    "merged_into": {"class_id": 11, "class_name": "sedan"},
+                    "hint": "relabel crops by hand to split them back out",
+                }
+            },
+        ),
+    )
+    _confirm_dialogs_yes(page)
+
+    page.goto(f"{app_url}/classes")
+    toggle = page.get_by_text("Deprecated classes (1)")
+    toggle.wait_for(timeout=15000)
+    toggle.click()
+    page.get_by_test_id("restore-99").click()
+
+    page.get_by_text("Merged into sedan; un-merge isn't supported.", exact=False).wait_for(
+        timeout=15000
+    )
+    body = page.locator("body").inner_text()
+    assert "relabel crops by hand to split them back out" in body

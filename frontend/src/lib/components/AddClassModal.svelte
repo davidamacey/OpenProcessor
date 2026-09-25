@@ -111,7 +111,7 @@
             type="text"
             bind:value={name}
             required
-            placeholder="e.g. class_c_class_d"
+            placeholder="e.g. delivery_van"
             class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
           />
           <span class="mt-1 block text-[11px] text-zinc-500">
@@ -125,7 +125,7 @@
             <input
               type="text"
               bind:value={groupNew}
-              placeholder="e.g. cars / class_a / class_bs"
+              placeholder="e.g. animals / tools / furniture"
               class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
             />
           {:else}

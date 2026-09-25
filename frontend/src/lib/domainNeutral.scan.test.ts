@@ -50,7 +50,7 @@ const DOMAIN_PATTERN = /(?<!tem)plate|\blpr\b|lpr_/i;
 const VEHICLE_DOMAIN_PATTERN =
   /\b(vehicle|sedan|suvs?|motorcycle|bmw|audi|brand_b|porsche|subaru|pickup|coupe|sidecar|car)\b|classic_car|sports_car|dumptruck/i;
 /** The private origin: its name, and its live dataset numbers/crop ids. */
-const PRIVATE_PATTERN = /legacy|1,000|00000000/i;
+const PRIVATE_PATTERN = /legacy|1,000|00000000|class_c|class_d|class_a|class_bs/i;
 /** The private stack's retired `/curation` prefix and `op_` names. Case-
  *  sensitive: an uppercase `KB` is a size unit. */
 const PRIVATE_OP_PATTERN = /\bkb\b/;

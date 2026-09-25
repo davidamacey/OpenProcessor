@@ -3327,6 +3327,50 @@ export function classStillReferencedDetail(
   };
 }
 
+/** `POST /classes/{id}/restore`'s structured 409 for a class that was
+ *  merged into another (OpenProcessor 70663c0, F-56). */
+export interface ClassMergedDetail {
+  error: 'class_merged';
+  message: string;
+  class_id: number;
+  merged_into: { class_id: number; class_name: string };
+  hint: string | null;
+}
+
+export function classMergedDetail(e: unknown): ClassMergedDetail | null {
+  if (!(e instanceof ApiError) || e.status !== 409) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const d = detail as Record<string, unknown>;
+  if (d.error !== 'class_merged' || typeof d.message !== 'string') return null;
+  const into = d.merged_into as Record<string, unknown> | null | undefined;
+  if (!into || typeof into.class_id !== 'number') return null;
+  return {
+    error: 'class_merged',
+    message: d.message,
+    class_id: typeof d.class_id === 'number' ? d.class_id : -1,
+    merged_into: {
+      class_id: into.class_id,
+      class_name:
+        typeof into.class_name === 'string' ? into.class_name : String(into.class_id),
+    },
+    hint: typeof d.hint === 'string' ? d.hint : null,
+  };
+}
+
+/** The operator-facing text for a merged-class restore refusal: the
+ *  merge target by its served name, then the server's own message and
+ *  hint verbatim. */
+export function classMergedRestoreText(d: ClassMergedDetail): string {
+  return [
+    `Merged into ${d.merged_into.class_name}; un-merge isn't supported.`,
+    d.message,
+    d.hint ?? '',
+  ]
+    .filter((s) => s.length > 0)
+    .join(' ');
+}
+
 /**
  * Retire a class with no data yet — no merge target needed. Idempotent
  * (calling on an already-deprecated class just returns it) and clears any
