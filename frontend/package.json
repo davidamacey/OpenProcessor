@@ -2,13 +2,27 @@
   "name": "cropwright",
   "private": true,
   "version": "0.1.0",
-  "description": "Cluster-based, keyboard-first web app for labeling image crops at scale — companion frontend to openprocessor.",
-  "license": "AGPL-3.0-or-later",
+  "description": "Domain-agnostic, cluster-based, keyboard-first web app for labeling image crops at scale. Frontend for OpenProcessor.",
+  "license": "MIT",
   "author": "example-org LLC",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/example-org/openprocessor.git"
+    "url": "git+https://github.com/davidamacey/OpenProcessor.git"
   },
+  "homepage": "https://github.com/davidamacey/OpenProcessor#readme",
+  "bugs": {
+    "url": "https://github.com/davidamacey/OpenProcessor/issues"
+  },
+  "keywords": [
+    "labeling",
+    "annotation",
+    "computer-vision",
+    "dataset",
+    "active-learning",
+    "sveltekit",
+    "yolo",
+    "openprocessor"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite dev",

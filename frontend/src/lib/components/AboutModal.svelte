@@ -237,7 +237,7 @@
 
       <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-zinc-400">
         <dt class="text-zinc-500">License</dt>
-        <dd>AGPL-3.0-or-later</dd>
+        <dd>MIT</dd>
         <dt class="text-zinc-500">Stack</dt>
         <dd>SvelteKit 2 · Svelte 5 runes · TypeScript</dd>
       </dl>
