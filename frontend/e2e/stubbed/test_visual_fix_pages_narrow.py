@@ -183,3 +183,71 @@ def test_ignored_mode_hides_cluster_grid_controls(stub, page, app_url):
     footer = page.locator('[data-testid="clusters-footer-count"]').inner_text()
     assert "ignored crops" in footer, footer
     _no_page_errors(stub)
+
+
+DASHBOARD_STATS = {
+    "as_of": "2026-09-24T00:00:00Z",
+    "total_crops": 3,
+    "validated": 0,
+    "test_holdout": 0,
+    "by_source": [],
+    "labeled": {"by_human": 0, "by_vlm": 0, "by_classifier": 0, "by_proposal": 0, "other": 0},
+    "regions": {"total_detected": 0, "by_detector": 0, "by_segmenter": 0, "by_human": 0},
+    "unlabeled": {"pending_detection": 0, "pending_verification": 0, "no_label_source": 0},
+    "in_progress": {"region_drain_total_unfinished": 0},
+    "clusters": {"last_run_at": None, "cluster_count": 0, "residual_count": 0,
+                 "noise_count": 0, "method": None},
+}
+
+COMPLETED_JOB = {
+    "job_id": "job-1",
+    "status": "completed",
+    "stage": "finalize",
+    "processed": 0,
+    "total": 0,
+    "started_at": 1,
+    "finished_at": 2,
+    "error": None,
+    "result": {
+        "stages": {
+            "cluster_residuals": {"status": "success", "method": "ivf", "n_clusters": 1},
+            "auto_promote": {"skipped": True, "reason": "disabled by default"},
+        }
+    },
+    "args": {},
+    "eta_seconds": None,
+    "elapsed_seconds": 1,
+}
+
+
+def test_dashboard_recluster_card_stacks_at_800(stub, page, app_url):
+    """D3: at 800px the recluster description was squeezed into a ~60px
+    column (one word per line). D5: the last-run summary is a stage table,
+    not a JSON dump."""
+    page.set_viewport_size(NARROW)
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
+    stub.on("GET", r"/stats/classes(\?|$)", {"classes": []})
+    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
+    stub.on("GET", r"/stats/dataset(\?|$)", DASHBOARD_STATS)
+    stub.on("GET", r"/crops(\?|$)", {"total": 0, "page": 1, "page_size": 20, "crops": []})
+    stub.on("GET", r"/pipeline/auto_label/status", COMPLETED_JOB)
+
+    page.goto(f"{app_url}/dashboard")
+    desc = page.locator('[data-testid="recluster-description"]')
+    desc.wait_for(timeout=15000)
+    page.wait_for_timeout(400)
+
+    # Stacked: the description spans its card's full content width.
+    ratio = desc.evaluate(
+        "el => el.getBoundingClientRect().width"
+        " / el.closest('section').getBoundingClientRect().width"
+    )
+    assert ratio >= 0.9, f"recluster description squeezed to {ratio:.0%} of its card at 800px"
+
+    page.get_by_text("Last run summary").click()
+    table = page.locator('[data-testid="last-run-stages"]')
+    table.wait_for(timeout=5000)
+    text = " ".join(table.inner_text().split())
+    assert "disabled by default" in text, text
+    assert '"stages"' not in text
+    _no_page_errors(stub)
