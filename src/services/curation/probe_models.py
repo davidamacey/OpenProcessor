@@ -143,7 +143,13 @@ def _summarize_prediction_raw(
     best_anchor = int(torch.argmax(top1_per_anchor).item())
     raw_row = cls_scores[:, best_anchor]  # (nc,)
 
-    probs = torch.softmax(raw_row, dim=0)
+    # Per-class scores are independent sigmoids; normalize by their sum. A
+    # softmax over values already in [0, 1] flattens every row toward uniform.
+    probs = raw_row.clamp_min(0.0)
+    total = float(probs.sum().item())
+    if total <= 0.0:
+        return None, 0.0, 0.0, 0.0
+    probs = probs / total
     top1_prob, top1_idx = torch.max(probs, dim=0)
     sorted_probs, _ = torch.sort(probs, descending=True)
     top2_prob = float(sorted_probs[1].item()) if probs.shape[0] > 1 else 0.0
@@ -213,8 +219,8 @@ def _summarize_prediction_yolov5_objectness_raw(
 
     Box-selection uses ``obj_conf * max(cls_conf)`` per anchor — the same
     criterion that family's own NMS applies (``x[:, 5:] *= x[:, 4:5]`` then
-    best-class-only ``.max(1)``) — but the posterior itself is softmax over
-    the anchor's *raw* (not objectness-scaled) per-class row, matching this
+    best-class-only ``.max(1)``) — but the posterior itself is the anchor's
+    *raw* (not objectness-scaled) per-class row normalized by its sum, matching this
     module's class-posterior convention (entropy/margin need a genuine
     distribution, not a detection score).
 
@@ -233,12 +239,12 @@ def _summarize_prediction_yolov5_objectness_raw(
     best_anchor = int(np.argmax(combined_top))
     raw_row = cls_conf[best_anchor].astype(np.float64)
 
-    shifted = raw_row - raw_row.max()
-    exp = np.exp(shifted)
-    total = exp.sum()
+    # Same sum-normalization of independent sigmoid scores as above.
+    clipped = np.clip(raw_row, 0.0, None)
+    total = clipped.sum()
     if total <= 0:
         return None, 0.0, 0.0, 0.0
-    probs = exp / total
+    probs = clipped / total
 
     top1_idx = int(np.argmax(probs))
     top1_prob = float(probs[top1_idx])
@@ -254,6 +260,11 @@ def _summarize_prediction_yolov5_objectness_raw(
 _PredictFn = Any  # Callable[[Any], tuple[str | None, float, float, float]]
 
 
+def _model_class_names(model: Any) -> list[str]:
+    names = getattr(model, 'names', {})
+    return list(names.values()) if isinstance(names, dict) else list(names)
+
+
 def _build_yolo11_predictor(model_path: Path) -> tuple[_PredictFn, str]:
     """``(predict_fn, default_version_tag)`` for an ultralytics-family probe
     checkpoint (the primary, validated path)."""
@@ -266,6 +277,7 @@ def _build_yolo11_predictor(model_path: Path) -> tuple[_PredictFn, str]:
         raw_results = raw_predictor(source=crop)
         return _summarize_prediction_raw(raw_results, model)
 
+    predict.class_names = tuple(_model_class_names(model))  # type: ignore[attr-defined]
     return predict, model_path.name
 
 
@@ -289,6 +301,7 @@ def _build_yolov5_objectness_predictor(model_path: Path) -> tuple[_PredictFn, st
         raw = raw[0] if raw.ndim == 3 else raw  # strip batch dim -> (num_anchors, 85)
         return _summarize_prediction_yolov5_objectness_raw(raw, class_names)
 
+    predict.class_names = tuple(class_names.values())  # type: ignore[attr-defined]
     return predict, model_path.name
 
 
