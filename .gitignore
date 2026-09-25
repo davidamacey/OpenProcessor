@@ -65,8 +65,9 @@ security-reports/
 # Pipeline output (mosaics, clusters, visualizations)
 outputs/
 
-# Triton Python backends (created by Docker at runtime)
-backends/
+# Triton Python backends (created by Docker at runtime, repo root only --
+# an unanchored `backends/` also hid source packages named backends/)
+/backends/
 # ...except the bake-off harness's `backends/` subpackage (source code,
 # not a runtime-generated dir) -- see docs/design/oss_genericization_
 # phase2_plan.md Chunk 6.
