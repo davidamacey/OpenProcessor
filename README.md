@@ -482,7 +482,7 @@ Client (Port 4603)
 - `yolo-api` (port 4603): FastAPI service handling all requests
 - `triton-server` (ports 4600-4602): NVIDIA Triton Inference Server with TensorRT models
 - `opensearch` (port 4607): Vector database for similarity search
-- `prometheus/grafana` (ports 4604/4605): Monitoring stack
+- `prometheus/grafana` (ports 4604/4605): Monitoring stack (opt-in — `docker compose --profile monitoring up -d` / `make up-monitoring`; not started by `make up`)
 
 ---
 

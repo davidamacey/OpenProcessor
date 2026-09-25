@@ -37,6 +37,20 @@ _CURATION_WORKER_SERVICES = (
     'curation-cluster-refresh',
 )
 
+# F-3 (fresh-start E2E findings 2026-09-25): the monitoring stack used to
+# start on a bare `docker compose up -d` alongside the core services --
+# a surprise on a shared host (alloy mounts /var/run/docker.sock and tails
+# EVERY container on the host; dcgm-exporter reserves `count: all` GPUs).
+_MONITORING_SERVICES = (
+    'prometheus',
+    'grafana',
+    'loki',
+    'alloy',
+    'node-exporter',
+    'dcgm-exporter',
+    'opensearch-dashboards',
+)
+
 
 def _load_compose() -> dict[str, Any]:
     with COMPOSE_PATH.open() as fh:
@@ -123,6 +137,32 @@ def test_default_compose_up_service_set_is_unchanged() -> None:
         )
 
 
+def test_monitoring_services_carry_monitoring_profile() -> None:
+    services = _services()
+    missing_profile: list[str] = []
+    for name in _MONITORING_SERVICES:
+        assert name in services, f'expected monitoring service {name!r} in docker-compose.yml'
+        profiles = services[name].get('profiles') or []
+        if 'monitoring' not in profiles:
+            missing_profile.append(name)
+    assert not missing_profile, (
+        f'monitoring services missing profiles: [monitoring]: {missing_profile}'
+    )
+
+
+def test_monitoring_does_not_start_on_a_bare_compose_up() -> None:
+    services = _services()
+    default_services = {name for name, spec in services.items() if not spec.get('profiles')}
+    for name in _MONITORING_SERVICES:
+        assert name not in default_services, (
+            f'{name} has no profiles set — it would start on a bare `docker compose up`, '
+            'mounting docker.sock (alloy) or reserving all GPUs (dcgm-exporter) by surprise'
+        )
+    # opensearch itself (the vector DB, not opensearch-dashboards) IS core
+    # and must still start by default.
+    assert 'opensearch' in default_services
+
+
 def test_no_duplicate_container_names() -> None:
     services = _services()
     names = [spec['container_name'] for spec in services.values() if spec.get('container_name')]
@@ -204,6 +244,46 @@ def test_evaluator_sees_exports_at_the_api_path() -> None:
     evaluator_mounts = services['curation-evaluator'].get('volumes') or []
     assert any(str(v).startswith('./data:/app/data') for v in api_mounts)
     assert './data:/app/data:ro' in evaluator_mounts
+
+
+def test_evaluator_gets_the_same_mlflow_tracking_url_as_the_trainer() -> None:
+    """F-46 (fresh-start E2E findings 2026-09-25): the trainer gets
+    MLFLOW_TRACKING_URI but the evaluator didn't, so bake-off runs always
+    logged 'mlflow logging skipped: ... port=5000' against localhost
+    instead of the curation-mlflow service."""
+    services = _services()
+    trainer_env = services['curation-trainer'].get('environment') or []
+    evaluator_env = services['curation-evaluator'].get('environment') or []
+
+    def _value(env: list[str], key: str) -> str | None:
+        for entry in env:
+            if entry.startswith(f'{key}='):
+                return entry.split('=', 1)[1]
+        return None
+
+    trainer_url = _value(trainer_env, 'MLFLOW_TRACKING_URI')
+    evaluator_url = _value(evaluator_env, 'MLFLOW_TRACKING_URI')
+    assert trainer_url is not None
+    assert evaluator_url == trainer_url
+
+
+def test_api_evaluator_segmenter_gpu_ids_are_env_driven_not_hardcoded() -> None:
+    """F-2 (fresh-start E2E findings 2026-09-25): yolo-api, curation-evaluator
+    and segmenter used to hardcode device_ids: ['0'] regardless of
+    TRITON_GPU_ID/VLM_GPU_ID, so a host whose free GPU wasn't 0 needed a
+    compose edit to run them at all."""
+    services = _services()
+    expectations = {
+        'yolo-api': 'API_GPU_ID',
+        'curation-evaluator': 'EVALUATOR_GPU_ID',
+        'segmenter': 'SEGMENTER_GPU_ID',
+    }
+    for service_name, env_var in expectations.items():
+        devices = services[service_name]['deploy']['resources']['reservations']['devices']
+        device_ids = devices[0]['device_ids']
+        assert device_ids == [f'${{{env_var}:-0}}'], (
+            f'{service_name}.deploy...device_ids should read {env_var}, got {device_ids}'
+        )
 
 
 def test_auto_label_worker_caps_blas_threads() -> None:

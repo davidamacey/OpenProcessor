@@ -44,6 +44,15 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 MODELS_DIR="$PROJECT_DIR/models"
 PYTORCH_MODELS_DIR="$PROJECT_DIR/pytorch_models/paddleocr"
 
+# shellcheck source=lib/ports.sh
+source "${SCRIPT_DIR}/lib/ports.sh"
+
+# F-66: resolve from THIS deployment's .env instead of hardcoding
+# localhost:4600/4603 -- a remapped port (second isolated stack) must
+# still export/test against the right containers.
+API_PORT="$(env_port API_PORT 4603)"
+TRITON_HTTP_PORT="$(env_port TRITON_HTTP_PORT 4600)"
+
 # Model paths
 DET_ONNX_NAME="ppocr_det_v5_mobile.onnx"
 REC_ONNX_NAME="ppocr_rec_v5_mobile.onnx"
@@ -99,7 +108,7 @@ check_container() {
 wait_for_triton() {
     log_info "Waiting for Triton to be ready..."
     for _ in {1..30}; do
-        if curl -s localhost:4600/v2/health/ready > /dev/null 2>&1; then
+        if curl -s "localhost:${TRITON_HTTP_PORT}/v2/health/ready" > /dev/null 2>&1; then
             log_success "Triton is ready"
             return 0
         fi
@@ -124,7 +133,7 @@ unload_models_for_memory() {
     )
 
     for model in "${models_to_unload[@]}"; do
-        curl -s -X POST "localhost:4600/v2/repository/models/${model}/unload" > /dev/null 2>&1 || true
+        curl -s -X POST "localhost:${TRITON_HTTP_PORT}/v2/repository/models/${model}/unload" > /dev/null 2>&1 || true
     done
 
     sleep 3
@@ -467,7 +476,7 @@ reload_models() {
 
     for model in "${models[@]}"; do
         log_info "Loading $model..."
-        curl -s -X POST "localhost:4600/v2/repository/models/${model}/load" > /dev/null 2>&1 || true
+        curl -s -X POST "localhost:${TRITON_HTTP_PORT}/v2/repository/models/${model}/load" > /dev/null 2>&1 || true
     done
 
     sleep 2
@@ -484,12 +493,12 @@ run_test() {
         local test_image="$PROJECT_DIR/test_images/ocr-synthetic/hello_world.jpg"
         if [ -f "$test_image" ]; then
             log_info "Testing with: $test_image"
-            curl -s -X POST http://localhost:4603/ocr/predict \
+            curl -s -X POST "http://localhost:${API_PORT}/ocr/predict" \
                 -F "image=@$test_image" | python -m json.tool
         else
             log_warn "No test image found at: $test_image"
             log_info "Testing model health..."
-            curl -s localhost:4600/v2/models/paddleocr_det_trt | python -m json.tool
+            curl -s "localhost:${TRITON_HTTP_PORT}/v2/models/paddleocr_det_trt" | python -m json.tool
         fi
     fi
 }
@@ -535,7 +544,7 @@ show_status() {
 
     for model in paddleocr_det_trt paddleocr_rec_trt ocr_pipeline; do
         local status
-        status=$(curl -s "localhost:4600/v2/models/$model" 2>/dev/null | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
+        status=$(curl -s "localhost:${TRITON_HTTP_PORT}/v2/models/$model" 2>/dev/null | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
         if [ "$status" = "READY" ]; then
             echo -e "  $model: ${GREEN}READY${NC}"
         elif [ -n "$status" ]; then

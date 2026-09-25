@@ -1128,7 +1128,8 @@ def test_promote_gate_blocks_low_map50() -> None:
     from src.routers.curation_train import _evaluate_promote_gate
 
     failures = _evaluate_promote_gate({'map50': 0.50, 'per_class': []})
-    assert any('mAP50' in m for m in failures)
+    assert any('mAP50' in f.message for f in failures)
+    assert any(f.code == 'map50_below_floor' for f in failures)
 
 
 def test_promote_gate_blocks_low_class_precision() -> None:
@@ -1142,7 +1143,8 @@ def test_promote_gate_blocks_low_class_precision() -> None:
             ],
         }
     )
-    assert any('precision' in m for m in failures)
+    assert any('precision' in f.message for f in failures)
+    assert any(f.code == 'per_class_precision_below_floor' for f in failures)
 
 
 def test_promote_gate_blocks_low_support() -> None:
@@ -1156,14 +1158,17 @@ def test_promote_gate_blocks_low_support() -> None:
             ],
         }
     )
-    assert any('support' in m for m in failures)
+    assert any('support' in f.message for f in failures)
+    assert any(f.code == 'per_class_support_below_floor' for f in failures)
 
 
 def test_promote_gate_blocks_missing_eval_block() -> None:
     from src.routers.curation_train import _evaluate_promote_gate
 
     failures = _evaluate_promote_gate(None)
-    assert failures == ['no eval block in status.json — trainer never ran val()']
+    assert len(failures) == 1
+    assert failures[0].code == 'no_eval_block'
+    assert failures[0].message == 'no eval block in status.json — trainer never ran val()'
 
 
 def test_promote_endpoint_returns_422_when_gate_fails(
@@ -1194,8 +1199,42 @@ def test_promote_endpoint_returns_422_when_gate_fails(
     assert r.status_code == 422, r.text
     detail = r.json()['detail']
     assert detail['message'] == 'promote gate failed'
-    assert any('mAP50' in f for f in detail['failures'])
+    assert any('mAP50' in f['message'] for f in detail['failures'])
+    assert any(f['code'] == 'map50_below_floor' for f in detail['failures'])
+    assert detail['force_allowed'] is True
     assert detail['thresholds']['map50_min'] == 0.65
+
+
+def test_promote_endpoint_job_not_ready_422_is_structured_and_force_disallowed(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-64 (fresh-start E2E findings 2026-09-25): every promote-blocking
+    422 -- not just the score gate -- must carry {code, message} failures
+    and say whether force=true can help. A job that isn't finished/exporting
+    yet can't be force-promoted (there's no export to promote)."""
+    from src.services.training.jobs import TrainJobStatus
+
+    fake_status = TrainJobStatus(
+        job_id='still-running-job',
+        state='running',
+        checkpoint_path=None,
+        eval=None,
+    )
+
+    async def _fake_read_status(job_id: str) -> TrainJobStatus | None:
+        return fake_status if job_id == 'still-running-job' else None
+
+    monkeypatch.setattr('src.services.training.jobs.read_status', _fake_read_status)
+
+    r = app_client.post(
+        '/curation/train/promote/still-running-job',
+        json={'triton_name': 'yolo26m_running', 'force': True},
+    )
+    assert r.status_code == 422, r.text
+    detail = r.json()['detail']
+    assert detail['force_allowed'] is False
+    assert detail['failures'][0]['code'] == 'job_not_promote_ready'
+    assert 'running' in detail['failures'][0]['message']
 
 
 def test_manifest_endpoint_returns_404_when_absent(app_client: TestClient) -> None:
@@ -1293,7 +1332,7 @@ def test_gate_blocks_null_precision() -> None:
             ],
         }
     )
-    assert any('pickup' in m and 'precision' in m for m in failures), failures
+    assert any('pickup' in f.message and 'precision' in f.message for f in failures), failures
 
 
 def test_gate_blocks_string_support() -> None:
@@ -1308,7 +1347,7 @@ def test_gate_blocks_string_support() -> None:
             ],
         }
     )
-    assert any('pickup' in m and 'support' in m for m in failures), failures
+    assert any('pickup' in f.message and 'support' in f.message for f in failures), failures
 
 
 # =============================================================================
@@ -1360,7 +1399,7 @@ def test_force_promote_returns_gate_report(
     out = r.json()
     assert out['force_used'] is True
     assert out['gate_report'] is not None
-    assert any('mAP50' in f for f in out['gate_report']['failures'])
+    assert any('mAP50' in f['message'] for f in out['gate_report']['failures'])
     assert out['gate_report']['thresholds']['map50_min'] == 0.65
 
 
@@ -1416,7 +1455,7 @@ def test_force_promote_records_force_used_in_manifest(
     promoted_to = manifest['promoted_to']
     assert promoted_to['force_used'] is True
     assert promoted_to['gate_report'] is not None
-    assert any('mAP50' in f for f in promoted_to['gate_report']['failures'])
+    assert any('mAP50' in f['message'] for f in promoted_to['gate_report']['failures'])
 
 
 # =============================================================================

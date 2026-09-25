@@ -1584,24 +1584,72 @@ PROMOTE_GATE_PER_CLASS_PRECISION_MIN = 0.50
 PROMOTE_GATE_PER_CLASS_SUPPORT_MIN = 5
 
 
-def _evaluate_promote_gate(eval_block: dict[str, Any] | None) -> list[str]:
-    """Return a list of human-readable failure messages, [] when the gate passes.
+class PromoteGateFailure(BaseModel):
+    """One machine-readable promote-gate failure.
+
+    F-64 (fresh-start E2E findings 2026-09-25): the 422 used to carry only
+    free-text strings in ``failures``; a UI-only user saw just "API 422"
+    because there was nothing structured to render. ``code`` is a stable
+    identifier a frontend can switch on without string-parsing;
+    ``message`` is still the human-readable detail for display.
+    """
+
+    code: str
+    message: str
+    class_name: str | None = None
+
+
+class PromoteGateFailedDetail(BaseModel):
+    """The ``detail`` body of every promote-blocking 422.
+
+    ``force_allowed`` tells the caller (and the UI) whether re-submitting
+    with ``force=true`` can get past *this specific* failure — some 422s
+    (e.g. the job simply isn't finished yet) force cannot bypass.
+    """
+
+    message: str
+    failures: list[PromoteGateFailure]
+    force_allowed: bool
+    override: str | None = None
+    thresholds: dict[str, float | int] | None = None
+
+
+class PromoteGateFailedResponse(BaseModel):
+    """Documents the actual FastAPI error envelope: ``{"detail": ...}``."""
+
+    detail: PromoteGateFailedDetail
+
+
+def _evaluate_promote_gate(eval_block: dict[str, Any] | None) -> list[PromoteGateFailure]:
+    """Return a list of structured gate failures, [] when the gate passes.
 
     The gate runs against ``status.json``'s ``eval`` block:
     mAP50 floor + per-class precision floor + per-class support floor.
     """
-    failures: list[str] = []
+    failures: list[PromoteGateFailure] = []
     if not eval_block:
-        failures.append('no eval block in status.json — trainer never ran val()')
+        failures.append(
+            PromoteGateFailure(
+                code='no_eval_block',
+                message='no eval block in status.json — trainer never ran val()',
+            )
+        )
         return failures
 
     map50 = eval_block.get('map50')
     if not isinstance(map50, int | float) or map50 < PROMOTE_GATE_MAP50_MIN:
-        failures.append(f'mAP50 {map50!r} < {PROMOTE_GATE_MAP50_MIN} (promote-gate floor)')
+        failures.append(
+            PromoteGateFailure(
+                code='map50_below_floor',
+                message=f'mAP50 {map50!r} < {PROMOTE_GATE_MAP50_MIN} (promote-gate floor)',
+            )
+        )
 
     per_class = eval_block.get('per_class') or []
     if not isinstance(per_class, list):
-        failures.append('eval.per_class is not a list')
+        failures.append(
+            PromoteGateFailure(code='per_class_not_list', message='eval.per_class is not a list')
+        )
         return failures
 
     for row in per_class:
@@ -1618,17 +1666,42 @@ def _evaluate_promote_gate(eval_block: dict[str, Any] | None) -> list[str]:
         # would (correctly) still gate-fail on the < comparison below it if
         # it ever slipped through as a bool.
         if not isinstance(precision, int | float):
-            failures.append(f'{name}: precision {precision!r} is not numeric (promote-gate floor)')
+            failures.append(
+                PromoteGateFailure(
+                    code='per_class_precision_not_numeric',
+                    message=f'{name}: precision {precision!r} is not numeric (promote-gate floor)',
+                    class_name=name,
+                )
+            )
         elif precision < PROMOTE_GATE_PER_CLASS_PRECISION_MIN:
             failures.append(
-                f'{name}: precision {precision:.3f} < {PROMOTE_GATE_PER_CLASS_PRECISION_MIN}'
+                PromoteGateFailure(
+                    code='per_class_precision_below_floor',
+                    message=(
+                        f'{name}: precision {precision:.3f} '
+                        f'< {PROMOTE_GATE_PER_CLASS_PRECISION_MIN}'
+                    ),
+                    class_name=name,
+                )
             )
         if not isinstance(support, int):
-            failures.append(f'{name}: support {support!r} is not an int (promote-gate floor)')
+            failures.append(
+                PromoteGateFailure(
+                    code='per_class_support_not_int',
+                    message=f'{name}: support {support!r} is not an int (promote-gate floor)',
+                    class_name=name,
+                )
+            )
         elif support < PROMOTE_GATE_PER_CLASS_SUPPORT_MIN:
             failures.append(
-                f'{name}: support {support} < {PROMOTE_GATE_PER_CLASS_SUPPORT_MIN} '
-                'test crops (promoting on no test data)'
+                PromoteGateFailure(
+                    code='per_class_support_below_floor',
+                    message=(
+                        f'{name}: support {support} < {PROMOTE_GATE_PER_CLASS_SUPPORT_MIN} '
+                        'test crops (promoting on no test data)'
+                    ),
+                    class_name=name,
+                )
             )
     return failures
 
@@ -1696,7 +1769,11 @@ class PromoteResponse(BaseModel):
     class_remap_source: str = 'none'
 
 
-@router.post('/promote/{job_id}', response_model=PromoteResponse)
+@router.post(
+    '/promote/{job_id}',
+    response_model=PromoteResponse,
+    responses={422: {'model': PromoteGateFailedResponse}},
+)
 async def promote_run(
     payload: PromoteRequest,
     job_id: Annotated[str, PathParam(description='Training job_id from {api_prefix}/train/runs')],
@@ -1715,7 +1792,13 @@ async def promote_run(
         404: job not found, or its ONNX export hasn't been written
         409: a Triton model with this name already exists (use
               ``overwrite=true`` to clobber)
-        422: status.json shows the run isn't in a promote-ready state
+        422: status.json shows the run isn't in a promote-ready state, or
+              the promote gate failed. The ``detail`` body always matches
+              ``PromoteGateFailedResponse``: ``failures`` is a list of
+              ``{code, message}`` (plus ``class_name`` where relevant) so
+              a caller never has to string-parse a message, and
+              ``force_allowed`` says whether resubmitting with
+              ``force=true`` can get past this specific failure.
         502: Triton refused the load (config or weights mismatch)
     """
     # Lazy import — keeps the API container slim if no one ever
@@ -1741,37 +1824,61 @@ async def promote_run(
     if job_status.state not in {'finished', 'exporting'}:
         raise HTTPException(
             status_code=422,
-            detail=(
-                f'job {job_id!r} is in state {job_status.state!r}; only '
-                "'finished' or 'exporting' runs can be promoted"
-            ),
+            detail=PromoteGateFailedDetail(
+                message=f'job {job_id!r} is not in a promote-ready state',
+                failures=[
+                    PromoteGateFailure(
+                        code='job_not_promote_ready',
+                        message=(
+                            f'job {job_id!r} is in state {job_status.state!r}; only '
+                            "'finished' or 'exporting' runs can be promoted"
+                        ),
+                    )
+                ],
+                # force=true only bypasses the promote-gate score thresholds
+                # and a missing class_remap -- it cannot invent a finished
+                # training run or an ONNX export that was never written.
+                force_allowed=False,
+            ).model_dump(),
         )
 
     if not job_status.checkpoint_path:
         raise HTTPException(
             status_code=422,
-            detail=f'job {job_id!r} has no checkpoint_path in status.json',
+            detail=PromoteGateFailedDetail(
+                message=f'job {job_id!r} has no checkpoint_path in status.json',
+                failures=[
+                    PromoteGateFailure(
+                        code='no_checkpoint_path',
+                        message=f'job {job_id!r} has no checkpoint_path in status.json',
+                    )
+                ],
+                force_allowed=False,
+            ).model_dump(),
         )
 
     # Promote gate. Refuses underqualified runs unless the
     # caller explicitly passes force=true.
     gate_failures = _evaluate_promote_gate(job_status.eval)
+    gate_thresholds = {
+        'map50_min': PROMOTE_GATE_MAP50_MIN,
+        'per_class_precision_min': PROMOTE_GATE_PER_CLASS_PRECISION_MIN,
+        'per_class_support_min': PROMOTE_GATE_PER_CLASS_SUPPORT_MIN,
+    }
     gate_report: dict[str, Any] = {
-        'thresholds': {
-            'map50_min': PROMOTE_GATE_MAP50_MIN,
-            'per_class_precision_min': PROMOTE_GATE_PER_CLASS_PRECISION_MIN,
-            'per_class_support_min': PROMOTE_GATE_PER_CLASS_SUPPORT_MIN,
-        },
-        'failures': gate_failures,
+        'thresholds': gate_thresholds,
+        'failures': [f.model_dump() for f in gate_failures],
     }
     if gate_failures and not payload.force:
         raise HTTPException(
             status_code=422,
-            detail={
-                'message': 'promote gate failed',
-                **gate_report,
-                'override': 'pass force=true in the request body',
-            },
+            detail=PromoteGateFailedDetail(
+                message='promote gate failed',
+                failures=gate_failures,
+                force_allowed=True,
+                override='pass force=true in the request body',
+                thresholds=gate_thresholds,
+            ).model_dump(),
         )
 
     # Resolve full-registry class names (id -> name), preferring the
@@ -1796,9 +1903,19 @@ async def promote_run(
 
     if class_remap.source == 'none' and is_subset_run:
         if not payload.force:
+            remap_missing_message = str(ClassRemapMissingError(job_id))
             raise HTTPException(
                 status_code=422,
-                detail=str(ClassRemapMissingError(job_id)),
+                detail=PromoteGateFailedDetail(
+                    message=remap_missing_message,
+                    failures=[
+                        PromoteGateFailure(
+                            code='class_remap_missing', message=remap_missing_message
+                        )
+                    ],
+                    force_allowed=True,
+                    override='pass force=true in the request body',
+                ).model_dump(),
             )
         logger.warning(
             'curation_promote_class_remap_missing_force_bypass',

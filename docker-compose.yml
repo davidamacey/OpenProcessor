@@ -194,7 +194,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: [ '0' ]
+              device_ids: [ '${API_GPU_ID:-0}' ]
               capabilities:
                 - gpu
     depends_on:
@@ -453,6 +453,14 @@ services:
     env_file:
       - path: ./.env
         required: false
+    environment:
+      # F-46 (fresh-start E2E findings 2026-09-25): the trainer gets
+      # MLFLOW_TRACKING_URI (see curation-trainer above) but the evaluator
+      # didn't, so it always logged `mlflow logging skipped:
+      # HTTPConnectionPool(host='localhost', port=5000)` -- same MLflow
+      # instance, so the same URL.
+      - MLFLOW_TRACKING_URI=http://curation-mlflow:5000
+      - MLFLOW_EXPERIMENT_NAME=${MLFLOW_EXPERIMENT_NAME:-openprocessor}
     volumes:
       - ./scripts:/app/scripts:ro
       - ./src:/app/src:ro
@@ -465,7 +473,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: [ '0' ]
+              device_ids: [ '${EVALUATOR_GPU_ID:-0}' ]
               capabilities:
                 - gpu
     networks:
@@ -521,7 +529,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: [ '0' ]
+              device_ids: [ '${SEGMENTER_GPU_ID:-0}' ]
               capabilities:
                 - gpu
     networks:
@@ -723,6 +731,8 @@ services:
     image: prom/node-exporter:v1.10.2
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-node-exporter
     restart: always
+    profiles:
+      - monitoring
     command:
       - '--path.rootfs=/host'
     pid: host
@@ -737,6 +747,8 @@ services:
     image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-dcgm
     restart: always
+    profiles:
+      - monitoring
     cap_add:
       - SYS_ADMIN
     environment:
@@ -757,6 +769,8 @@ services:
     image: prom/prometheus:v3.12.0
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-prometheus
     restart: always
+    profiles:
+      - monitoring
     ports:
       - "${PROMETHEUS_PORT:-4604}:9090"  # Prometheus
     volumes:
@@ -778,6 +792,8 @@ services:
     image: grafana/grafana:13.1.0
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-grafana
     restart: always
+    profiles:
+      - monitoring
     ports:
       - "${GRAFANA_PORT:-4605}:3000"  # Grafana
     volumes:
@@ -806,6 +822,8 @@ services:
     image: grafana/loki:3.6.12
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-loki
     restart: always
+    profiles:
+      - monitoring
     ports:
       - "${LOKI_PORT:-4606}:3100"  # Loki
     volumes:
@@ -820,6 +838,8 @@ services:
     image: grafana/alloy:v1.17.1
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-alloy
     restart: always
+    profiles:
+      - monitoring
     volumes:
       - ./monitoring/alloy-config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -869,6 +889,8 @@ services:
     image: opensearchproject/opensearch-dashboards:3.6.0
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-osd
     restart: always
+    profiles:
+      - monitoring
     environment:
       - OPENSEARCH_HOSTS=["http://opensearch:9200"]
       - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true  # Must match OpenSearch security setting

@@ -272,15 +272,106 @@ def benchmark_onnx(onnx_path, num_iterations=100):
         )
 
 
+def _build_engine(onnx_path, plan_path, fp16, max_batch_size):
+    """Attempt a single engine build at a fixed precision.
+
+    Returns the plan path on success, or raises ``RuntimeError``/lets the
+    ``ImportError`` propagate on failure so the caller (``convert_to_tensorrt``)
+    decides whether to fall back to a lower precision or give up.
+    """
+    import tensorrt as trt
+    from trt_utils import create_explicit_network, enable_fp16
+
+    TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+
+    builder = trt.Builder(TRT_LOGGER)
+    network = create_explicit_network(builder)
+    parser = trt.OnnxParser(network, TRT_LOGGER)
+
+    if fp16:
+        from trt_utils import bake_fp16_onnx
+
+        # NOTE: the ModelOpt AutoCast path (used by export_yolo26.py) fails
+        # to build this graph's MobileOne reparam-conv + pointwise fusion
+        # ("Could not find any implementation for node
+        # …stages.1/downsample/proj/proj.0/reparam_conv/Conv + PWN…").
+        # trt_utils.bake_fp16_onnx (onnxconverter-common's plain
+        # weight/activation cast, keep_io_types=True) sidesteps that fusion
+        # entirely -- it doesn't rewrite the graph the way ModelOpt does --
+        # and is the same helper used successfully by the ArcFace, SCRFD and
+        # PaddleOCR-det exporters.
+        print('  Baking FP16 (onnxconverter-common, TRT 11 typed builds)...')
+        onnx_path = bake_fp16_onnx(onnx_path)
+
+    print('  Parsing ONNX model...')
+    with open(onnx_path, 'rb') as f:
+        if not parser.parse(f.read()):
+            for i in range(parser.num_errors):
+                print(f'    Error {i}: {parser.get_error(i)}')
+            raise RuntimeError('Failed to parse ONNX model')
+
+    print('  ✓ ONNX parsed successfully')
+
+    config = builder.create_builder_config()
+    config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 4 << 30)  # 4GB workspace
+
+    if fp16 and enable_fp16(builder, config):
+        print('  ✓ FP16 mode enabled')
+
+    profile = builder.create_optimization_profile()
+    profile.set_shape(
+        'images',
+        min=(1, 3, IMAGE_SIZE, IMAGE_SIZE),
+        opt=(8, 3, IMAGE_SIZE, IMAGE_SIZE),
+        max=(max_batch_size, 3, IMAGE_SIZE, IMAGE_SIZE),
+    )
+    config.add_optimization_profile(profile)
+
+    print('  ✓ Optimization profile configured')
+    print('    - Min batch: 1')
+    print('    - Optimal batch: 8')
+    print(f'    - Max batch: {max_batch_size}')
+
+    print('\n  Building TensorRT engine (this may take 5-10 minutes)...')
+    serialized_engine = builder.build_serialized_network(network, config)
+
+    if serialized_engine is None:
+        raise RuntimeError('Failed to build TensorRT engine')
+
+    plan_path = Path(plan_path)
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(plan_path, 'wb') as f:
+        f.write(serialized_engine)
+
+    print('\n  ✓ TensorRT engine saved!')
+    print(f'    File size: {plan_path.stat().st_size / (1024 * 1024):.2f} MB')
+
+    return plan_path
+
+
 def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=128):
     """
     Convert ONNX model to TensorRT engine for maximum throughput.
+
+    Tries FP16 first (when requested); if that build fails for any reason
+    (parse error, no viable tactic for a fused op, etc.) it falls back to a
+    plain FP32 build of the *original* ONNX rather than silently reporting
+    success with no engine at all. Raises ``RuntimeError`` if every
+    precision attempted fails to produce a usable engine, so the caller
+    (``main``) can exit non-zero instead of printing "Export Complete".
 
     Args:
         onnx_path: Path to ONNX model
         plan_path: Output path for TensorRT plan
         fp16: Use FP16 precision (2x faster, minimal accuracy loss)
         max_batch_size: Maximum batch size for dynamic batching
+
+    Returns:
+        Path to the written engine.
+
+    Raises:
+        RuntimeError: if TensorRT is unavailable, or no precision built.
     """
     print('\nConverting to TensorRT engine...')
     print(f'  Input: {onnx_path}')
@@ -290,95 +381,44 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=128):
 
     try:
         import tensorrt as trt
-        from trt_utils import create_explicit_network, enable_fp16
-
-        TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-
-        # Create builder
-        builder = trt.Builder(TRT_LOGGER)
-        network = create_explicit_network(builder)
-        parser = trt.OnnxParser(network, TRT_LOGGER)
-
-        if fp16:
-            from ultralytics.utils.export.engine import modelopt_quantize_onnx
-
-            print('  Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
-            onnx_path = modelopt_quantize_onnx(
-                str(onnx_path), quantize=16, shape=(max_batch_size, 3, 256, 256), dynamic=True
-            )
-        # Parse ONNX
-        print('  Parsing ONNX model...')
-        with open(onnx_path, 'rb') as f:
-            if not parser.parse(f.read()):
-                for i in range(parser.num_errors):
-                    print(f'    Error {i}: {parser.get_error(i)}')
-                raise RuntimeError('Failed to parse ONNX model')
-
-        print('  ✓ ONNX parsed successfully')
-
-        # Builder config
-        config = builder.create_builder_config()
-        config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 4 << 30)  # 4GB workspace
-
-        if fp16 and enable_fp16(builder, config):
-            print('  ✓ FP16 mode enabled')
-
-        # Optimization profile for dynamic batch sizes
-        profile = builder.create_optimization_profile()
-
-        # Image encoder: batch 1 to max_batch_size
-        profile.set_shape(
-            'images',
-            min=(1, 3, IMAGE_SIZE, IMAGE_SIZE),
-            opt=(8, 3, IMAGE_SIZE, IMAGE_SIZE),  # Optimal batch size
-            max=(max_batch_size, 3, IMAGE_SIZE, IMAGE_SIZE),
-        )
-        config.add_optimization_profile(profile)
-
-        print('  ✓ Optimization profile configured')
-        print('    - Min batch: 1')
-        print('    - Optimal batch: 8')
-        print(f'    - Max batch: {max_batch_size}')
-
-        # Build engine (this takes a few minutes)
-        print('\n  Building TensorRT engine (this may take 5-10 minutes)...')
-        serialized_engine = builder.build_serialized_network(network, config)
-
-        if serialized_engine is None:
-            raise RuntimeError('Failed to build TensorRT engine')
-
-        # Save engine
-        plan_path = Path(plan_path)
-        plan_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(plan_path, 'wb') as f:
-            f.write(serialized_engine)
-
-        print('\n  ✓ TensorRT engine saved!')
-        print(f'    File size: {plan_path.stat().st_size / (1024 * 1024):.2f} MB')
-
-        return plan_path
-
-    except ImportError:
+    except ImportError as e:
         print('\n  ⚠ TensorRT not available in this container')
         print('  To convert to TensorRT, use the Triton container:')
         print('    docker compose exec triton-server trtexec \\')
         print(f'      --onnx={onnx_path} \\')
         print(f'      --saveEngine={plan_path} \\')
         # TRT 11.1 is strongly typed: trtexec has no --fp16 flag anymore.
-        # Bake reduced precision into the ONNX first (ModelOpt AutoCast,
+        # Bake reduced precision into the ONNX first (onnxconverter-common,
         # see the "Baking FP16" step above) if you want a non-FP32 engine.
         print(f'      --minShapes=images:1x3x{IMAGE_SIZE}x{IMAGE_SIZE} \\')
         print(f'      --optShapes=images:8x3x{IMAGE_SIZE}x{IMAGE_SIZE} \\')
         print(f'      --maxShapes=images:{max_batch_size}x3x{IMAGE_SIZE}x{IMAGE_SIZE}')
-        return None
+        raise RuntimeError('TensorRT not available in this container') from e
 
+    errors = []
+    if fp16:
+        try:
+            return _build_engine(onnx_path, plan_path, fp16=True, max_batch_size=max_batch_size)
+        except Exception as e:
+            print(f'\n  ✗ FP16 TensorRT build failed: {e}')
+            import traceback
+
+            traceback.print_exc()
+            errors.append(f'FP16: {e}')
+            print('\n  ⚠ Falling back to an FP32 engine build...')
+
+    try:
+        return _build_engine(onnx_path, plan_path, fp16=False, max_batch_size=max_batch_size)
     except Exception as e:
-        print(f'\n  ✗ TensorRT conversion failed: {e}')
+        print(f'\n  ✗ FP32 TensorRT build also failed: {e}')
         import traceback
 
         traceback.print_exc()
-        return None
+        errors.append(f'FP32: {e}')
+
+    raise RuntimeError(
+        'TensorRT conversion failed at every precision attempted: ' + '; '.join(errors)
+    )
 
 
 def parse_args():
@@ -449,9 +489,17 @@ def main():
     # Convert to TensorRT
     plan_path = None
     if not args.skip_tensorrt:
-        plan_path = convert_to_tensorrt(
-            onnx_path, plan_output, fp16=not args.fp32, max_batch_size=args.max_batch_size
-        )
+        try:
+            plan_path = convert_to_tensorrt(
+                onnx_path, plan_output, fp16=not args.fp32, max_batch_size=args.max_batch_size
+            )
+        except RuntimeError as e:
+            print('\n' + '=' * 80)
+            print('❌ Export FAILED')
+            print('=' * 80)
+            print(f'\n{e}')
+            print(f'\nONNX was produced at {onnx_output} but no TensorRT plan was written.')
+            sys.exit(1)
 
     # Summary
     print('\n' + '=' * 80)

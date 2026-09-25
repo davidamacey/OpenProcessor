@@ -566,12 +566,32 @@ def atomic_symlink_flip(symlink_path: Path, target: Path) -> None:
     or the new target, never a missing/half-written symlink. The tmp name
     carries the pid so two processes flipping the same link concurrently
     can't clobber each other's staging entry.
+
+    F-38 (fresh-start E2E findings 2026-09-25): a relative, non-absolute
+    ``target`` (e.g. ``data/exports/20260925T143527Z``, from the default
+    relative ``OP_EXPORT_ROOT=./data/exports``) used to be passed straight
+    to ``symlink_to`` verbatim. Symlink targets resolve relative to the
+    *link's own directory*, not the process cwd -- so
+    ``data/exports/current`` ended up pointing at
+    ``data/exports/data/exports/20260925T143527Z``, a path that doesn't
+    exist, and every export-artifact download 404'd. When ``target`` sits
+    directly inside ``symlink_path``'s parent (the normal case: both are
+    ``<export_root>/<name>``), link with just the sibling name so the
+    symlink stays valid even if the export root is bind-mounted at a
+    different absolute path inside a container than on the host. Anywhere
+    else, resolve ``target`` to an absolute path so the link is still
+    correct regardless of the reader's cwd.
     """
     symlink_path.parent.mkdir(parents=True, exist_ok=True)
+    target = Path(target)
+    if target.parent.resolve() == symlink_path.parent.resolve():
+        link_target: Path = Path(target.name)
+    else:
+        link_target = target.resolve()
     tmp_symlink = symlink_path.with_name(f'.{symlink_path.name}.tmp.{os.getpid()}')
     if tmp_symlink.exists() or tmp_symlink.is_symlink():
         tmp_symlink.unlink()
-    tmp_symlink.symlink_to(target, target_is_directory=True)
+    tmp_symlink.symlink_to(link_target, target_is_directory=True)
     tmp_symlink.replace(symlink_path)
 
 

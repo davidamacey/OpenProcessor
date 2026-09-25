@@ -5709,6 +5709,108 @@
         "title": "ProfilesResponse",
         "type": "object"
       },
+      "PromoteGateFailedDetail": {
+        "description": "The ``detail`` body of every promote-blocking 422.\n\n``force_allowed`` tells the caller (and the UI) whether re-submitting\nwith ``force=true`` can get past *this specific* failure — some 422s\n(e.g. the job simply isn't finished yet) force cannot bypass.",
+        "properties": {
+          "failures": {
+            "items": {
+              "$ref": "#/components/schemas/PromoteGateFailure"
+            },
+            "title": "Failures",
+            "type": "array"
+          },
+          "force_allowed": {
+            "title": "Force Allowed",
+            "type": "boolean"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "override": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override"
+          },
+          "thresholds": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thresholds"
+          }
+        },
+        "required": [
+          "message",
+          "failures",
+          "force_allowed"
+        ],
+        "title": "PromoteGateFailedDetail",
+        "type": "object"
+      },
+      "PromoteGateFailedResponse": {
+        "description": "Documents the actual FastAPI error envelope: ``{\"detail\": ...}``.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/PromoteGateFailedDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "PromoteGateFailedResponse",
+        "type": "object"
+      },
+      "PromoteGateFailure": {
+        "description": "One machine-readable promote-gate failure.\n\nF-64 (fresh-start E2E findings 2026-09-25): the 422 used to carry only\nfree-text strings in ``failures``; a UI-only user saw just \"API 422\"\nbecause there was nothing structured to render. ``code`` is a stable\nidentifier a frontend can switch on without string-parsing;\n``message`` is still the human-readable detail for display.",
+        "properties": {
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Name"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "PromoteGateFailure",
+        "type": "object"
+      },
       "PromoteRequest": {
         "description": "Body for ``POST {api_prefix}/train/promote/{job_id}``.",
         "properties": {
@@ -15651,7 +15753,7 @@
     },
     "/curation/train/promote/{job_id}": {
       "post": {
-        "description": "Promote a finished training run into the Triton model repo.\n\nReads the run's ``status.json`` for the ONNX export the trainer\nproduced during the ``exporting`` state, copies it into\n``models/<triton_name>/1/model.onnx``, writes ``config.pbtxt``\nusing the YOLO26 single-output template (no NMS plugin — NMS is\ninternal to the YOLO26 forward pass), writes\n``labels.txt`` honoring any subset-training class_remap, and POSTs\nTriton's load endpoint to make the model active immediately.\n\nErrors:\n    404: job not found, or its ONNX export hasn't been written\n    409: a Triton model with this name already exists (use\n          ``overwrite=true`` to clobber)\n    422: status.json shows the run isn't in a promote-ready state\n    502: Triton refused the load (config or weights mismatch)",
+        "description": "Promote a finished training run into the Triton model repo.\n\nReads the run's ``status.json`` for the ONNX export the trainer\nproduced during the ``exporting`` state, copies it into\n``models/<triton_name>/1/model.onnx``, writes ``config.pbtxt``\nusing the YOLO26 single-output template (no NMS plugin — NMS is\ninternal to the YOLO26 forward pass), writes\n``labels.txt`` honoring any subset-training class_remap, and POSTs\nTriton's load endpoint to make the model active immediately.\n\nErrors:\n    404: job not found, or its ONNX export hasn't been written\n    409: a Triton model with this name already exists (use\n          ``overwrite=true`` to clobber)\n    422: status.json shows the run isn't in a promote-ready state, or\n          the promote gate failed. The ``detail`` body always matches\n          ``PromoteGateFailedResponse``: ``failures`` is a list of\n          ``{code, message}`` (plus ``class_name`` where relevant) so\n          a caller never has to string-parse a message, and\n          ``force_allowed`` says whether resubmitting with\n          ``force=true`` can get past this specific failure.\n    502: Triton refused the load (config or weights mismatch)",
         "operationId": "promote_run_curation_train_promote__job_id__post",
         "parameters": [
           {
@@ -15691,11 +15793,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/PromoteGateFailedResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Promote Run",
