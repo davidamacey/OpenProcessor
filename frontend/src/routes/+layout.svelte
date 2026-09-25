@@ -20,7 +20,7 @@
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
-  import { healthStore } from '$stores/health.svelte';
+  import { healthStore, healthChip, HEALTH_CHIP_TEXT } from '$stores/health.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
   interface Props {
@@ -207,11 +207,20 @@
     return out;
   });
 
-  const dotClass = $derived(healthStore.ok ? 'bg-green-500' : 'bg-red-500');
+  const chipState = $derived(healthChip(healthStore.ok, healthStore.lastChecked));
+  const dotClass = $derived(
+    chipState === 'ok'
+      ? 'bg-green-500'
+      : chipState === 'down'
+        ? 'bg-red-500'
+        : 'bg-zinc-500',
+  );
   const dotTitle = $derived(
-    healthStore.ok
-      ? `API OK at ${data.apiBase || window.location.host} (last checked ${healthStore.lastChecked ? new Date(healthStore.lastChecked).toLocaleTimeString() : '—'})`
-      : `API unavailable at ${data.apiBase || window.location.host}: ${healthStore.error ?? 'no response'}`,
+    chipState === 'checking'
+      ? `Checking API at ${data.apiBase || window.location.host}…`
+      : healthStore.ok
+        ? `API OK at ${data.apiBase || window.location.host} (last checked ${healthStore.lastChecked ? new Date(healthStore.lastChecked).toLocaleTimeString() : '—'})`
+        : `API unavailable at ${data.apiBase || window.location.host}: ${healthStore.error ?? 'no response'}`,
   );
 </script>
 
@@ -337,7 +346,9 @@
       title={dotTitle}
     >
       <span class="h-2 w-2 rounded-full {dotClass}"></span>
-      <span class="font-mono">{healthStore.ok ? 'API OK' : 'API down'}</span>
+      <span class="font-mono" data-testid="api-health-chip"
+        >{HEALTH_CHIP_TEXT[chipState]}</span
+      >
     </span>
   </header>
 

@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- The top-bar API chip read "API down" (red) for the first moment of every
+  page load, before the first `/health` poll had answered. It now shows a
+  neutral "API …" until that poll settles.
 - `/export`'s class table buried the classes that have data under dozens
   of empty ones. The default gap sort put every empty class (+500) first,
   and the table shrank to a few rows at narrow widths. Classes with
