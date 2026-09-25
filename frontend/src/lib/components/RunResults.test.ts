@@ -9,7 +9,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync, tick } from 'svelte';
 import type { TrainJobStatus } from '$lib/types_train';
-import { trainManifestFixture, trainStatusFixture } from '$lib/test/fixtures/trainRun';
+import {
+  trainManifestFixture,
+  trainStatusFixture,
+  trainStatusFixtureW1,
+} from '$lib/test/fixtures/trainRun';
 
 const getTrainManifestMock = vi.fn();
 
@@ -59,36 +63,69 @@ describe('RunResults — val vs test labelling', () => {
     ).toBe(`Results for ${trainStatusFixture.job_id}`);
   });
 
-  it('labels best/last metric as validation, never as test', () => {
+  it('renders the training-epochs metrics section', () => {
     getTrainManifestMock.mockResolvedValue(trainManifestFixture);
     const el = renderRunResults(trainStatusFixture);
-    expect(el.textContent).toContain('Metrics — validation');
+    expect(el.textContent).toContain('Metrics — training epochs');
   });
 });
 
-describe('RunResults — best_metric/last_metric relabel (coordinator finding 7)', () => {
-  // `last_metric` is actually the best checkpoint's own final validation
-  // pass (Ultralytics re-fires on_fit_epoch_end for best.pt), not "the
-  // last training epoch"; `best_metric` is a per-key max that can span
-  // different epochs for mAP50 vs mAP50-95. Both sub-groups render under
-  // "Metrics — validation" but must carry their own, more accurate label.
-  it('labels the best_metric block "best per metric (val, may span epochs)"', () => {
+describe('RunResults — last_epoch_metric/best_checkpoint_metric (OpenProcessor #34 W1)', () => {
+  it('labels the section "Metrics — training epochs"', () => {
     getTrainManifestMock.mockResolvedValue(trainManifestFixture);
     const el = renderRunResults(trainStatusFixture);
-    expect(el.textContent).toContain('best per metric (val, may span epochs)');
+    expect(el.textContent).toContain('Metrics — training epochs');
   });
 
-  it('labels the last_metric block "best checkpoint (final val)"', () => {
+  it('renders "—" for both metric blocks when the fixture (a pre-W1 run) serves null for both', () => {
     getTrainManifestMock.mockResolvedValue(trainManifestFixture);
     const el = renderRunResults(trainStatusFixture);
-    expect(el.textContent).toContain('best checkpoint (final val)');
+    // Every mAP50/mAP50-95 dd under the training-epochs section is "—";
+    // check the two labelled captions render with no "(epoch N)" suffix.
+    expect(el.textContent).toContain('last epoch');
+    expect(el.textContent).toContain('best checkpoint');
+    expect(el.textContent).not.toMatch(/last epoch\s*\(epoch/);
+    expect(el.textContent).not.toMatch(/best checkpoint\s*\(epoch/);
   });
 
-  it('still renders the served best_metric/last_metric values under their new labels', () => {
+  it('renders the served epoch number and values for a run that carries them', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const el = renderRunResults(trainStatusFixtureW1);
+    expect(el.textContent).toContain('last epoch');
+    expect(el.textContent).toContain('(epoch 20)');
+    expect(el.textContent).toContain('best checkpoint');
+    expect(el.textContent).toContain('(epoch 17)');
+    expect(el.textContent).toContain(
+      trainStatusFixtureW1.last_epoch_metric!.map50!.toFixed(3),
+    );
+    expect(el.textContent).toContain(
+      trainStatusFixtureW1.best_checkpoint_metric!.map50!.toFixed(3),
+    );
+  });
+
+  it('never shows best_checkpoint_metric as the Evaluation section headline', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const el = renderRunResults(trainStatusFixtureW1);
+    // The headline is eval.map50 (0.9191 on the fixture); the best
+    // checkpoint's own map50 (0.9356) must appear only under "Metrics —
+    // training epochs", not next to "overall:".
+    const overallLine = Array.from(el.querySelectorAll('p')).find((p) =>
+      p.textContent?.includes('overall:'),
+    );
+    expect(overallLine?.textContent).toContain('0.919');
+    expect(overallLine?.textContent).not.toContain('0.936');
+  });
+
+  it('renders the served eval.head as a labelled fact', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const el = renderRunResults(trainStatusFixtureW1);
+    expect(el.textContent).toContain('head: end2end');
+  });
+
+  it('does not render a head fact when eval.head is absent', () => {
     getTrainManifestMock.mockResolvedValue(trainManifestFixture);
     const el = renderRunResults(trainStatusFixture);
-    expect(el.textContent).toContain(trainStatusFixture.best_metric!.map50!.toFixed(3));
-    expect(el.textContent).toContain(trainStatusFixture.last_metric!.map50!.toFixed(3));
+    expect(el.textContent).not.toContain('head:');
   });
 });
 
@@ -209,8 +246,6 @@ describe('RunResults — failed run', () => {
       state: 'failed',
       error: 'CUDA out of memory',
       eval: null,
-      best_metric: null,
-      last_metric: null,
     };
     const el = renderRunResults(status);
     expect(el.textContent).toContain('CUDA out of memory');

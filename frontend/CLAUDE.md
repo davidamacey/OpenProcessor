@@ -460,7 +460,9 @@ the **Model Disagreements** tab on `/review` surfaces validated crops
 where the new model and the human label diverge — high-signal candidates
 for the next training cycle.
 
-### Finished-run results (`RunResults.svelte`, 2026-09-24)
+### Finished-run results (`RunResults.svelte`, 2026-09-24; metrics/lineage
+
+renamed by OpenProcessor #34 W1, 2026-09-25)
 
 A live train smoke found the backend already serves test-split
 evaluation and full lineage for a finished run but `/train` rendered
@@ -468,23 +470,46 @@ neither. Every terminal past-run row (`finished`/`failed`/`cancelled`/
 `skipped`/`lost`) gets a collapsed "Results" section, `RunResults.svelte`,
 rendered as its own table row right under that run — everything except
 lineage comes straight off the already-loaded `TrainJobStatus`
-(`best_metric`/`last_metric`/`eval`/`mlflow_run_*`/`checkpoint_sha256`/
-`error`), so it renders instantly on open; the manifest
-(`GET {API_PREFIX}/train/manifest/{job_id}`, for lineage) is fetched
-lazily, only the first time the section is opened.
+(`last_epoch_metric`/`best_checkpoint_metric`/`eval`/`mlflow_run_*`/
+`checkpoint_sha256`/`error`), so it renders instantly on open; the
+manifest (`GET {API_PREFIX}/train/manifest/{job_id}`, for lineage) is
+fetched lazily, only the first time the section is opened.
 
-- **Val vs. test labelling.** `eval`'s overall figures
+- **Val vs. test labelling — resolved.** `eval`'s overall figures
   (`map50`/`map50_95`/`precision`/`recall`) and its `per_class` table
   are labelled independently by `evalOverallLabel`/`evalPerClassLabel`
-  (`src/lib/trainResults.ts`), never assumed to both mean "test". Today's
-  backend serves no `eval.split` — confirmed live: on that shape the
-  overall figures are actually the last **val** epoch's numbers, while
-  `per_class` really is computed over the frozen **test** holdout, two
-  different passes under one object. TODO(train-eval cutover, branch
-  `cutover/train-eval`): once `eval.split: 'test' | 'val'` is served,
-  both halves are labelled by it directly instead of the pre-cutover
-  guess — `types_train.ts`'s `TrainEval` doc comment has the full
-  contract both shapes must satisfy.
+  (`src/lib/trainResults.ts`), never assumed to both mean "test". The
+  eval-split cutover (OpenProcessor e9aac68) has landed: the backend
+  serves `eval.split` (`'test'` when the frozen-holdout pass ran, `'val'`
+  when it fell back), and this is the run's **headline number** —
+  labelled directly by `split`, not the pre-cutover guess. A run whose
+  `eval` predates the cutover (no `split` served) still falls back to
+  the old guess (overall = last val epoch, per-class = test) — see
+  `types_train.ts`'s `TrainEval` doc comment.
+- **`eval.head`** (OpenProcessor #34 W1) names the detection head that
+  test-split pass scored (e.g. `'end2end'` when YOLO26's NMS-free
+  one-to-one head was explicitly forced to match what's actually
+  served) — rendered as a small labelled fact next to the overall
+  figures when served.
+- **Training-time metrics renamed (#34 W1) — `best_metric`/`last_metric`
+  are gone, no fallback shim.** `last_epoch_metric` is the true last
+  TRAINING epoch's own metrics; `best_checkpoint_metric` is the best
+  checkpoint's (best.pt) own re-validation, which Ultralytics performs
+  once, after training ends — each one coherent `{epoch, map50,
+map50_95}` row, never a per-key max spanning different epochs. Neither
+  is the headline number (that's `eval.map50`/`eval.split` above) —
+  they render under "Metrics — training epochs", each captioned
+  `(epoch N)` when the run carries one. `null` on a run whose
+  status.json predates these fields renders "—", never an incorrectly
+  back-filled guess (a real bug in the W1 rollout: a pre-fix backend
+  back-filled `best_checkpoint_metric` from the wrong, test-split eval
+  numbers — fixed server-side, not papered over client-side).
+  `TrainProgress.svelte`'s live-run chips are "Last epoch mAP50/
+  mAP50-95" (from `last_epoch_metric` — `best_checkpoint_metric` is only
+  populated once, at the very end of a run, so it's useless as a live
+  progress signal). `CampaignCard.svelte` and the past-runs table's
+  mAP50 column (`trainRunsTable.ts`'s `bestMapDisplay`) both show the
+  run's own `eval.map50`/`eval.split`, never a training-time metric.
 - **MLflow.** A non-null `mlflow_run_url` renders as a link; a null url
   with a non-null `mlflow_run_id` renders the id as copyable text; a
   null id while the run is still active (non-terminal state) shows
@@ -499,25 +524,42 @@ lazily, only the first time the section is opened.
   (`GET /train/artifacts/{job_id}/{name}`), an `<img src>` renders from
   that URL only.
 - **Lineage** (manifest, lazy): `export_dir`, `dataset_sha`,
-  `include_classes`, `training_seed`, `code_versions.{api_sha,
-trainer_image}`, and a class-remap table (new id → original id → name)
-  built from the served `class_remap.new_to_original`/`names` — no
-  client-side remap math.
-- Thin frontend throughout — `formatMetric`/`formatScalar`
-  (`src/lib/trainResults.ts`) turn a missing value into "—", never a
-  false 0, same pattern as the existing `formatCount()`.
+  `dataset_version_tag`, `frozen_test_sha`, `test_label_sha` (the three
+  export-identity fields added by #34 W1), `include_classes`,
+  `training_seed`, `code_versions.{api_sha, trainer_sha,
+trainer_image_id}` (`trainer_sha` replaces the old `trainer_image`
+  field name — a rolling-deploy backend may still echo that legacy key
+  too, but it's never read), and a class-remap table (new id → original
+  id → name) built from the served `class_remap.new_to_original`/
+  `names` — no client-side remap math.
+- **`/bakeoff`'s model picker** (`BakeoffTrainedModel`, `api.ts`) shows
+  `map50` sourced from `eval.map50` (was `best_checkpoint_metric.map50`
+  — a training-time figure, not the frozen-holdout eval) next to its own
+  `map50_split`.
+- Thin frontend throughout — `formatMetric`/`formatScalar`/
+  `metricEpochLabel` (`src/lib/trainResults.ts`) turn a missing value
+  into "—"/`null`, never a false 0, same pattern as the existing
+  `formatCount()`.
 - New types on `types_train.ts`: `TrainEval`/`TrainEvalPerClass`/
-  `TrainEvalSplit`, `TrainManifest` and its `Lineage`/`ClassRemap`/
-  `CodeVersions`/`Results` sub-types; `getTrainManifest` (`api.ts`) is
-  now typed `Promise<TrainManifest>` (was `Record<string, unknown>`).
-- Tests: `trainResults.test.ts`, `RunResults.test.ts` (mount-based,
-  against the real served fixture JSON from the live
-  `2026-09-24T23-47-55_yolo26n` run —
-  `src/lib/test/fixtures/trainRun.ts`), `e2e/stubbed/
-test_train_results.py`. Verified against the real deployed backend at
-  `:5184` via a temporary `vite preview` proxy (reverted before commit,
-  never shipped) and `CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run
-test:live`.
+  `TrainEvalSplit`/`TrainEpochMetric`, `TrainManifest` and its
+  `Lineage`/`ClassRemap`/`CodeVersions`/`Results` sub-types;
+  `getTrainManifest` (`api.ts`) is now typed `Promise<TrainManifest>`
+  (was `Record<string, unknown>`).
+- Tests: `trainResults.test.ts`, `trainRunsTable.test.ts`,
+  `RunResults.test.ts` (mount-based, against the real served fixture
+  JSON from the live `2026-09-24T23-47-55_yolo26n` run —
+  `src/lib/test/fixtures/trainRun.ts`, hand-corrected to the post-W1-fix
+  shape for that run's `last_epoch_metric`/`best_checkpoint_metric`
+  since it predates both — see that file's doc comment; plus a
+  hand-constructed `trainStatusFixtureW1` for the epoch-labelled-metrics
+  and `eval.head` rendering paths no live pre-fix run can exercise yet),
+  `e2e/stubbed/test_train_results.py`. Verified against the real
+  deployed backend at `:5184` via a temporary `vite preview` proxy
+  (reverted before commit, never shipped) — that backend still predates
+  the #34 W1 fix (both runs it serves show the buggy
+  `best_checkpoint_metric` back-fill), so the fixtures above are
+  hand-corrected to the fixed shape rather than mirroring the live
+  response verbatim.
 
 ### Training cohorts (2026-09-24 logic-moves W6; originally P2.12-P2.14,
 

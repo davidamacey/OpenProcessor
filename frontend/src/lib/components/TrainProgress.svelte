@@ -32,10 +32,16 @@
     return r === 0 ? `${h}h` : `${h}h ${r}m`;
   }
 
-  function fmtMetric(v: number | undefined): string {
+  function fmtMetric(v: number | null | undefined): string {
     if (v == null) return '—';
     return v.toFixed(3);
   }
+
+  // Live progress has no finished eval pass yet — the last completed
+  // TRAINING epoch's own metrics (never best_checkpoint_metric, which
+  // Ultralytics only fills once, after training ends) is the honest
+  // "how's it doing" number while a run is still running.
+  const lastEpoch = $derived(status.last_epoch_metric);
 
   function statePillClass(s: string): string {
     switch (s) {
@@ -103,12 +109,21 @@
       <dd class="font-mono text-zinc-100">{fmtEta(etaSec)}</dd>
     </div>
     <div>
-      <dt class="text-[11px] uppercase tracking-wide text-zinc-500">Best mAP50</dt>
-      <dd class="font-mono text-zinc-100">{fmtMetric(status.best_metric?.map50)}</dd>
+      <dt
+        class="text-[11px] uppercase tracking-wide text-zinc-500"
+        title="The last completed training epoch's own validation pass — not the best checkpoint's, which Ultralytics only re-validates once, after training ends"
+      >
+        Last epoch mAP50{#if lastEpoch?.epoch != null}
+          <span class="normal-case text-zinc-600"> (ep {lastEpoch.epoch})</span>
+        {/if}
+      </dt>
+      <dd class="font-mono text-zinc-100">{fmtMetric(lastEpoch?.map50)}</dd>
     </div>
     <div>
-      <dt class="text-[11px] uppercase tracking-wide text-zinc-500">Best mAP50-95</dt>
-      <dd class="font-mono text-zinc-100">{fmtMetric(status.best_metric?.map50_95)}</dd>
+      <dt class="text-[11px] uppercase tracking-wide text-zinc-500">
+        Last epoch mAP50-95
+      </dt>
+      <dd class="font-mono text-zinc-100">{fmtMetric(lastEpoch?.map50_95)}</dd>
     </div>
   </div>
 

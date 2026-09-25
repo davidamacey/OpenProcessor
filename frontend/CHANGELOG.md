@@ -8,6 +8,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Adopted OpenProcessor #34 W1 (backend commit eb5c251) — training
+  lineage, build identity, and last-epoch vs. best-checkpoint metrics.**
+  - `TrainJobStatus`/`TrainManifest.results` drop `best_metric`/
+    `last_metric` entirely (no fallback shim) in favor of
+    `last_epoch_metric` (the true last TRAINING epoch's own metrics) and
+    `best_checkpoint_metric` (the best checkpoint's own re-validation,
+    which Ultralytics performs once, after training ends) — each one
+    coherent `{epoch, map50, map50_95}` row, never a per-key max spanning
+    different epochs. `null` on a run whose status.json predates these
+    fields renders "—", never an incorrectly back-filled guess. `/train`'s
+    `RunResults.svelte` relabels its metrics section "Metrics — training
+    epochs" with an "(epoch N)" caption per block; `TrainProgress.svelte`'s
+    live chips are now "Last epoch mAP50/mAP50-95" (sourced from
+    `last_epoch_metric`, since `best_checkpoint_metric` is only populated
+    once, at the very end of a run); `CampaignCard.svelte` and the
+    past-runs table's mAP50 column (`trainRunsTable.ts`'s
+    `bestMapDisplay`) now show the run's own headline number,
+    `eval.map50` labelled by `eval.split`, never a training-time metric.
+  - `TrainEval` gains `head` (the detection head that eval pass scored,
+    e.g. `'end2end'`), rendered as a small labelled fact next to the
+    overall eval figures.
+  - `TrainJobSpec` gains `dataset_sha`/`frozen_test_sha`/`test_label_sha`/
+    `dataset_version_tag`/`api_sha`/`trainer_image_id`/
+    `trainer_image_revision` (server-set lineage, surfaced for
+    round-tripping only). `TrainManifest.lineage` gains
+    `frozen_test_sha`/`test_label_sha`/`dataset_version_tag`;
+    `TrainManifest.code_versions`' `trainer_image` field is renamed
+    `trainer_sha` and gains `trainer_image_id`. `RunResults.svelte`'s
+    lazy lineage block shows all of the new fields, served values only.
+  - `BakeoffTrainedModel.map50` now comes from `eval.map50` instead of
+    the old training-time metric; gains `map50_split` — the bake-off
+    model picker on `/bakeoff` shows both.
+  - Vendored contract snapshot re-synced to eb5c251
+    (`contracts/openprocessor/`).
+
+### Fixed
+
+- `RunResults.svelte`'s MLflow run URL no longer overlaps the adjacent
+  Checkpoint SHA-256 column at narrow (≤800px) widths — found during the
+  #34 W1 visual review; the link was missing the `break-all` its
+  sibling already had, so a long unbroken URL string overflowed into
+  the next grid column instead of wrapping.
 - **Region features follow the backend's served region profile
   (OpenProcessor naming-w2, domain-neutral audit steps 7-11,
   `docs/design/domain-neutral-audit-2026-09-24.md`).** Breaking for any

@@ -5,6 +5,7 @@
    * back to the parent.
    */
   import type { TrainJobStatus } from '$lib/types_train';
+  import { bestMapDisplay } from '$lib/trainRunsTable';
 
   interface Props {
     campaignId: string;
@@ -40,13 +41,14 @@
     }
   }
 
-  // Best run = finished + highest map50.
+  // Best run = finished + highest served eval.map50 (the run's own
+  // headline number — see trainRunsTable.ts's bestMapDisplay).
   const best = $derived.by(() => {
     let winner: TrainJobStatus | null = null;
     let winnerScore = -1;
     for (const r of runs) {
       if (r.state !== 'finished') continue;
-      const m = r.best_metric?.map50;
+      const m = bestMapDisplay(r).value;
       if (typeof m === 'number' && m > winnerScore) {
         winner = r;
         winnerScore = m;
@@ -79,7 +81,8 @@
         class="btn btn-primary"
         onclick={() => onPromoteBest(best)}
         disabled={cancelling}
-        title="Promote {best.job_id} (best mAP50 {best.best_metric?.map50?.toFixed(3)})"
+        title="Promote {best.job_id} (mAP50 {bestMapDisplay(best).value?.toFixed(3) ??
+          '—'})"
       >
         Promote best
       </button>
@@ -115,9 +118,9 @@
           {r.current_epoch ?? '—'} / {r.total_epochs ?? '—'} epochs
         </span>
         <span class="font-mono text-xs text-zinc-300">
-          mAP50 {r.best_metric?.map50?.toFixed(3) ?? '—'}
+          mAP50 {bestMapDisplay(r).value?.toFixed(3) ?? '—'}
           <span class="text-zinc-500">·</span>
-          mAP50-95 {r.best_metric?.map50_95?.toFixed(3) ?? '—'}
+          mAP50-95 {r.eval?.map50_95?.toFixed(3) ?? '—'}
         </span>
       </li>
     {/each}
@@ -129,7 +132,9 @@
       <span class="font-mono text-zinc-200">{best.job_id}</span>
       <span class="text-zinc-500">·</span>
       mAP50
-      <span class="font-mono text-zinc-200">{best.best_metric?.map50?.toFixed(3)}</span>
+      <span class="font-mono text-zinc-200"
+        >{bestMapDisplay(best).value?.toFixed(3) ?? '—'}</span
+      >
     </p>
   {/if}
 </section>

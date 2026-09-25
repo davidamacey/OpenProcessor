@@ -7,6 +7,20 @@
  * import). Used by `RunResults.test.ts` / `trainResults.test.ts` so
  * the results-view tests exercise the actual wire shape rather than a
  * hand-typed guess.
+ *
+ * **OpenProcessor #34 W1 adoption (2026-09-25):** this run predates the
+ * `last_epoch_metric`/`best_checkpoint_metric` split — re-fetched live
+ * against the currently-deployed (pre-fix) backend, its status still
+ * carries the OLD `best_metric`/`last_metric` keys AND a buggy
+ * `best_checkpoint_metric` back-filled from the wrong (test-split) eval
+ * numbers. Per the W1 backend fix (not yet deployed): a run whose
+ * status.json predates these fields serves `null` for BOTH
+ * `last_epoch_metric` and `best_checkpoint_metric` — no incorrect
+ * back-fill. This fixture is hand-corrected to that post-fix shape
+ * (nulls) rather than the live buggy response, so tests exercise the
+ * real fixed behavior, not a bug being adopted on purpose. `eval` is
+ * otherwise served verbatim (unaffected by the fix) and predates the
+ * `split`/`head` fields too — the genuinely oldest captured shape.
  */
 import type { TrainJobStatus, TrainManifest } from '$lib/types_train';
 
@@ -19,8 +33,8 @@ export const trainStatusFixture: TrainJobStatus = {
   current_epoch: 20,
   total_epochs: 20,
   epoch_time_s: null,
-  best_metric: { map50: 0.9356, map50_95: 0.85096 },
-  last_metric: { map50: 0.9191, map50_95: 0.8459816666666667 },
+  last_epoch_metric: null,
+  best_checkpoint_metric: null,
   mlflow_run_id: '724a9292103d4ec3b153068758be340d',
   mlflow_run_url:
     'http://op-mlflow:5000/#/experiments/1/runs/724a9292103d4ec3b153068758be340d',
@@ -90,7 +104,8 @@ export const trainManifestFixture: TrainManifest = {
   campaign_id: null,
   code_versions: {
     api_sha: null,
-    trainer_image: null,
+    trainer_sha: null,
+    trainer_image_id: null,
     ultralytics_pkg: '8.4.48',
     ultralytics_sha: '8f5d355cd05b91503e7bf62429681dea4fa4b004',
   },
@@ -107,6 +122,9 @@ export const trainManifestFixture: TrainManifest = {
       single_cls: false,
     },
     dataset_sha: null,
+    frozen_test_sha: null,
+    test_label_sha: null,
+    dataset_version_tag: null,
     deterministic: true,
     export_dir: '/exports/20260924T233203Z',
     include_classes: [38, 39, 44, 52, 79],
@@ -116,7 +134,8 @@ export const trainManifestFixture: TrainManifest = {
   },
   promoted_to: null,
   results: {
-    best_metric: { map50: 0.9356, map50_95: 0.85096 },
+    last_epoch_metric: null,
+    best_checkpoint_metric: null,
     checkpoint_path:
       '/var/lib/openprocessor/training_runs/2026-09-24T23-47-55_yolo26n/weights/best.pt',
     checkpoint_sha256: 'cc5ffb75e020b54d87df6f534de2a7a74eaa02519c69658a9504e2fe42d15e81',
@@ -201,5 +220,27 @@ export const trainManifestFixture: TrainManifest = {
     model_family: 'yolo26',
     model_size: 'n',
     profile: 'probe',
+  },
+};
+
+/**
+ * Hand-constructed (not live-captured) example of a genuinely post-W1
+ * run — no live run exists yet whose `status.json` was written after
+ * the fix, so this fills in realistic `last_epoch_metric`/
+ * `best_checkpoint_metric` (with their own `epoch` numbers, one
+ * coherent map50+map50_95 row each) and `eval.split`/`eval.head` on top
+ * of `trainStatusFixture`'s otherwise-real shape, to exercise the
+ * epoch-labelled metrics and eval-head rendering `trainStatusFixture`
+ * alone (nulled per the fix) can't.
+ */
+export const trainStatusFixtureW1: TrainJobStatus = {
+  ...trainStatusFixture,
+  job_id: '2026-09-26T00-00-00_yolo26n',
+  last_epoch_metric: { epoch: 20, map50: 0.9191, map50_95: 0.8459816666666667 },
+  best_checkpoint_metric: { epoch: 17, map50: 0.9356, map50_95: 0.85096 },
+  eval: {
+    ...trainStatusFixture.eval,
+    split: 'test',
+    head: 'end2end',
   },
 };

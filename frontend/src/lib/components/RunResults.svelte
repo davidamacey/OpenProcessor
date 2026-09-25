@@ -1,11 +1,12 @@
 <script lang="ts">
   /**
-   * Finished-run results — test-split evaluation + lineage for a
-   * terminal `/train` run. Collapsed by default; the manifest (lineage:
-   * dataset SHA, class remap, code versions) is fetched lazily the
-   * first time the section is opened. Everything else (best/last
-   * metric, eval, mlflow, checkpoint) is already on the served
-   * `TrainJobStatus` the caller hands in, so it renders immediately.
+   * Finished-run results — evaluation (labelled by its own `eval.split`)
+   * + lineage for a terminal `/train` run. Collapsed by default; the
+   * manifest (lineage: dataset/test-split SHAs, class remap, code
+   * versions) is fetched lazily the first time the section is opened.
+   * Everything else (last-epoch/best-checkpoint training metrics, eval,
+   * mlflow, checkpoint) is already on the served `TrainJobStatus` the
+   * caller hands in, so it renders immediately.
    *
    * Thin frontend: every value here is rendered exactly as served —
    * no client-side metric computation. `formatMetric`/`formatScalar`
@@ -20,6 +21,7 @@
     formatMetric,
     formatScalar,
     isTerminalTrainState,
+    metricEpochLabel,
   } from '$lib/trainResults';
   import { formatCount } from '$lib/formatCount';
   import { focusOnMount } from '$lib/actions/focusOnMount';
@@ -73,6 +75,12 @@
   const isTerminal = $derived(isTerminalTrainState(status.state));
   const evalData = $derived(status.eval ?? manifest?.results?.eval ?? null);
   const perClass = $derived(evalData?.per_class ?? []);
+  const lastEpochMetric = $derived(
+    status.last_epoch_metric ?? manifest?.results?.last_epoch_metric ?? null,
+  );
+  const bestCheckpointMetric = $derived(
+    status.best_checkpoint_metric ?? manifest?.results?.best_checkpoint_metric ?? null,
+  );
   const checkpointSha = $derived(
     status.checkpoint_sha256 ?? manifest?.results?.checkpoint_sha256 ?? null,
   );
@@ -127,58 +135,62 @@
         </p>
       {/if}
 
-      <!-- Validation metrics. `best_metric` is a per-key max across
-           epochs (mAP50 and mAP50-95 can come from different epochs);
-           `last_metric` is actually the *best checkpoint's* own final
-           validation pass (Ultralytics re-fires on_fit_epoch_end for
-           best.pt), not "the last training epoch" — labelled to match
-           until the backend serves `last_epoch`/`best_checkpoint`
-           explicitly. -->
+      <!-- Training-time metrics (OpenProcessor #34 W1). Neither of these
+           is the run's headline number — that's eval.map50 below,
+           labelled by eval.split. `last_epoch_metric` is the true last
+           TRAINING epoch's own validation pass; `best_checkpoint_metric`
+           is the best checkpoint's (best.pt) own re-validation, which
+           Ultralytics only performs once, after training ends — both
+           are one coherent row (mAP50 + mAP50-95 from the SAME pass),
+           never a per-key max spanning different epochs. `null` on a
+           run whose status.json predates these fields (no incorrect
+           back-fill) renders "—", never a guessed value. -->
       <section>
         <h3 class="mb-1 text-[11px] uppercase tracking-wide text-zinc-500">
-          Metrics — validation
+          Metrics — training epochs
         </h3>
-        <div class="mb-2">
-          <p
-            class="mb-1 text-[10px] uppercase tracking-wide text-zinc-600"
-            title="Per-key max across epochs — mAP50 and mAP50-95 can come from different epochs"
-          >
-            best per metric (val, may span epochs)
-          </p>
-          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div>
-              <dt class="text-zinc-500">best mAP50</dt>
-              <dd class="font-mono text-zinc-100">
-                {formatMetric(status.best_metric?.map50)}
-              </dd>
-            </div>
-            <div>
-              <dt class="text-zinc-500">best mAP50-95</dt>
-              <dd class="font-mono text-zinc-100">
-                {formatMetric(status.best_metric?.map50_95)}
-              </dd>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <p class="mb-1 text-[10px] uppercase tracking-wide text-zinc-600">
+              last epoch{#if metricEpochLabel(lastEpochMetric)}
+                ({metricEpochLabel(lastEpochMetric)}){/if}
+            </p>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <dt class="text-zinc-500">mAP50</dt>
+                <dd class="font-mono text-zinc-100">
+                  {formatMetric(lastEpochMetric?.map50)}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-zinc-500">mAP50-95</dt>
+                <dd class="font-mono text-zinc-100">
+                  {formatMetric(lastEpochMetric?.map50_95)}
+                </dd>
+              </div>
             </div>
           </div>
-        </div>
-        <div>
-          <p
-            class="mb-1 text-[10px] uppercase tracking-wide text-zinc-600"
-            title="Ultralytics re-fires on_fit_epoch_end for best.pt — this is the best checkpoint's own final validation pass, not necessarily the last training epoch"
-          >
-            best checkpoint (final val)
-          </p>
-          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div>
-              <dt class="text-zinc-500">mAP50</dt>
-              <dd class="font-mono text-zinc-100">
-                {formatMetric(status.last_metric?.map50)}
-              </dd>
-            </div>
-            <div>
-              <dt class="text-zinc-500">mAP50-95</dt>
-              <dd class="font-mono text-zinc-100">
-                {formatMetric(status.last_metric?.map50_95)}
-              </dd>
+          <div>
+            <p
+              class="mb-1 text-[10px] uppercase tracking-wide text-zinc-600"
+              title="Ultralytics re-validates the best checkpoint once more after training completes — not the same pass as the frozen-holdout eval below"
+            >
+              best checkpoint{#if metricEpochLabel(bestCheckpointMetric)}
+                ({metricEpochLabel(bestCheckpointMetric)}){/if}
+            </p>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <dt class="text-zinc-500">mAP50</dt>
+                <dd class="font-mono text-zinc-100">
+                  {formatMetric(bestCheckpointMetric?.map50)}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-zinc-500">mAP50-95</dt>
+                <dd class="font-mono text-zinc-100">
+                  {formatMetric(bestCheckpointMetric?.map50_95)}
+                </dd>
+              </div>
             </div>
           </div>
         </div>
@@ -206,6 +218,9 @@
               <span class="ml-2 font-mono text-zinc-100"
                 >recall {formatMetric(evalData.recall)}</span
               >
+            {/if}
+            {#if evalData.head}
+              <span class="ml-2 text-zinc-500">head: {evalData.head}</span>
             {/if}
           </p>
           {#if evalData.val_last}
@@ -302,7 +317,7 @@
       <section class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div>
           <dt class="text-[11px] uppercase tracking-wide text-zinc-500">MLflow run</dt>
-          <dd class="font-mono text-zinc-100">
+          <dd class="break-all font-mono text-zinc-100">
             {#if mlflowRunUrl}
               <a
                 href={mlflowRunUrl}
@@ -360,6 +375,24 @@
               </dd>
             </div>
             <div>
+              <dt class="text-zinc-500">dataset_version_tag</dt>
+              <dd class="break-all font-mono text-zinc-100">
+                {formatScalar(lineage?.dataset_version_tag)}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-zinc-500">frozen_test_sha</dt>
+              <dd class="break-all font-mono text-zinc-100">
+                {formatScalar(lineage?.frozen_test_sha)}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-zinc-500">test_label_sha</dt>
+              <dd class="break-all font-mono text-zinc-100">
+                {formatScalar(lineage?.test_label_sha)}
+              </dd>
+            </div>
+            <div>
               <dt class="text-zinc-500">include_classes</dt>
               <dd class="break-all font-mono text-zinc-100">
                 {lineage?.include_classes && lineage.include_classes.length > 0
@@ -380,9 +413,15 @@
               </dd>
             </div>
             <div>
-              <dt class="text-zinc-500">code: trainer_image</dt>
+              <dt class="text-zinc-500">code: trainer_sha</dt>
               <dd class="break-all font-mono text-zinc-100">
-                {formatScalar(codeVersions?.trainer_image)}
+                {formatScalar(codeVersions?.trainer_sha)}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-zinc-500">code: trainer_image_id</dt>
+              <dd class="break-all font-mono text-zinc-100">
+                {formatScalar(codeVersions?.trainer_image_id)}
               </dd>
             </div>
           </dl>

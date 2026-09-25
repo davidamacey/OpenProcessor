@@ -356,6 +356,11 @@
                     class="rounded bg-blue-900/60 px-1 text-[10px] text-blue-200"
                     >{t.model_size}</span
                   >{/if}
+                {#if t.map50 != null}
+                  <span class="text-[10px] text-zinc-500"
+                    >mAP50 {t.map50.toFixed(3)} ({t.map50_split ?? 'val'})</span
+                  >
+                {/if}
                 <input
                   type="number"
                   min="320"

@@ -76,6 +76,19 @@ export interface TrainJobSpec {
   // Opt-in: on successful finish, auto-export all deployable formats and
   // benchmark them (drives the trainer's auto_quantize_bakeoff hook).
   auto_quantize_bakeoff?: boolean;
+
+  // Lineage — normally auto-filled server-side at submit time
+  // (`write_job`) from the export's manifest.json and this build's own
+  // identity; a caller should not set these directly. Surfaced here only
+  // so a served `TrainJobSpec` (e.g. `TrainManifest.spec`, or a
+  // Reproduce resubmit) round-trips them without loss.
+  dataset_sha?: string | null;
+  frozen_test_sha?: string | null;
+  test_label_sha?: string | null;
+  dataset_version_tag?: string | null;
+  api_sha?: string | null;
+  trainer_image_id?: string | null;
+  trainer_image_revision?: string | null;
 }
 
 export interface CampaignRunSpec {
@@ -107,10 +120,15 @@ export interface GpuInfo {
 }
 
 /**
- * Which pass produced `TrainEval`'s overall figures. Absent on today's
- * backend — see `TrainEval`'s doc comment for what that means. Present
- * once the trainer's train-eval cutover lands (branch `cutover/train-
- * eval`), naming whichever pass actually won.
+ * Which pass produced `TrainEval`'s overall figures — `'test'` when the
+ * post-training re-validation against the frozen holdout succeeded,
+ * `'val'` when it didn't run or produced no usable box metrics (falls
+ * back to the training-time validation numbers). Served on every run
+ * whose trainer build includes the eval-split cutover; absent only on a
+ * run whose `eval` predates it (see `TrainEval`'s doc comment) — treat
+ * that case the same as `'val'` labelling for the overall figures, but
+ * `'test'` for `per_class` (the per-class table has always been
+ * test-split-only, split field or not).
  */
 export type TrainEvalSplit = 'test' | 'val';
 
@@ -126,21 +144,26 @@ export interface TrainEvalPerClass {
 }
 
 /**
- * `TrainJobStatus.eval` / `TrainManifest.results.eval` — test-split
- * evaluation the trainer writes after the run finishes.
+ * `TrainJobStatus.eval` / `TrainManifest.results.eval` — evaluation the
+ * trainer writes after the run finishes: a fresh `model.val(..., split=
+ * 'test')` pass against the frozen holdout whenever it succeeds
+ * (`split === 'test'`), falling back to the training-time validation
+ * numbers when it didn't (`split === 'val'`, no `per_class`). This is
+ * the run's headline number — render `map50`/`map50_95` labelled by
+ * `split` (`src/lib/trainResults.ts`'s `evalOverallLabel`/
+ * `evalPerClassLabel`); never `TrainJobStatus.best_checkpoint_metric`,
+ * which is a per-epoch training-time figure, not this holdout pass.
  *
- * **Today's backend (no `split` field):** `map50`/`map50_95` (and any
- * other overall figure) are actually the *last VAL epoch's* numbers,
- * while `per_class` really is computed over the frozen test holdout.
- * Two different passes under one object — render each half labelled by
- * what it actually is (`src/lib/trainResults.ts`'s `evalOverallLabel`/
- * `evalPerClassLabel`), never both as "test".
+ * `split` is absent only on a run whose `eval` predates the eval-split
+ * cutover (OpenProcessor e9aac68) — `evalOverallLabel`/
+ * `evalPerClassLabel` fall back to the pre-cutover guess for that case
+ * (val for the overall figures, test for per-class, since per-class has
+ * always been test-split-only).
  *
- * **Upcoming backend** (train-eval cutover): `split` names the pass
- * that produced `map50`/`map50_95`/`precision`/`recall` — `'test'`
- * when a test pass ran, falling back to `'val'` otherwise. Once present,
- * both the overall figures and the per-class table are labelled by this
- * field instead of the pre-cutover guess above.
+ * `head` (OpenProcessor #34 W1) names the detection head that test-split
+ * pass scored, e.g. `'end2end'` when the loaded checkpoint's NMS-free
+ * one-to-one head was explicitly forced to match what's actually served
+ * — `null`/absent for a model family with no such distinction.
  *
  * `confusion_matrix_url` is the servable artifact URL
  * (`GET /train/artifacts/{job_id}/{name}`) — render an `<img>` from
@@ -158,12 +181,28 @@ export interface TrainEval {
    *  overall figures since e9aac68. */
   val_last?: { map50?: number | null; map50_95?: number | null } | null;
   per_class?: TrainEvalPerClass[] | null;
+  /** Detection head this eval pass scored (OpenProcessor #34 W1),
+   *  e.g. `'end2end'`; `null`/absent when not applicable. */
+  head?: string | null;
   /** Server filesystem path — text only, never an `<img src>`. */
   confusion_matrix_path?: string | null;
   /** Servable URL (`GET {API_PREFIX}/train/artifacts/{job_id}/{name}`),
    *  API-prefix-relative; resolve with `resolveApiUrl`. */
   confusion_matrix_url?: string | null;
   [extra: string]: unknown;
+}
+
+/** One row of `TrainJobStatus.last_epoch_metric` /
+ *  `.best_checkpoint_metric` (OpenProcessor #34 W1) — a single coherent
+ *  validation pass (map50 + map50_95 from the SAME pass, never a
+ *  per-key running max across different epochs). `epoch` is that pass's
+ *  1-indexed training epoch number. `null` on a run whose status.json
+ *  predates this field (no incorrect back-fill — render "—"). */
+export interface TrainEpochMetric {
+  epoch?: number | null;
+  map50?: number | null;
+  map50_95?: number | null;
+  [k: string]: unknown;
 }
 
 /** Status JSON the trainer writes; nullable everywhere except job_id+state. */
@@ -176,16 +215,18 @@ export interface TrainJobStatus {
   current_epoch?: number | null;
   total_epochs?: number | null;
   epoch_time_s?: number | null;
-  best_metric?: {
-    map50?: number;
-    map50_95?: number;
-    [k: string]: number | undefined;
-  } | null;
-  last_metric?: {
-    map50?: number;
-    map50_95?: number;
-    [k: string]: number | undefined;
-  } | null;
+  /** The true last TRAINING epoch's own metrics (OpenProcessor #34 W1) —
+   *  distinct from `best_checkpoint_metric` because Ultralytics
+   *  re-validates the best checkpoint once more after training and that
+   *  pass doesn't advance the epoch counter. `best_metric`/`last_metric`
+   *  are gone — never read them, even if a rolling-deploy backend still
+   *  echoes them on the wire. */
+  last_epoch_metric?: TrainEpochMetric | null;
+  /** The best checkpoint's (best.pt) own re-validation metrics, as one
+   *  coherent row. Never the run's headline number — that's `eval.map50`
+   *  labelled by `eval.split`; this is a training-time figure. `null` on
+   *  a run whose status.json predates this field. */
+  best_checkpoint_metric?: TrainEpochMetric | null;
   mlflow_run_id?: string | null;
   /**
    * TODO: backend is being asked to serve this as `null` unless
@@ -225,6 +266,16 @@ export interface TrainManifestLineage {
   augmentation_seed?: number | null;
   class_remap?: TrainManifestClassRemap | null;
   dataset_sha?: string | null;
+  /** The export's frozen-test-split hash (OpenProcessor #34 W1) — copied
+   *  from the export manifest, or computed from disk when an older
+   *  export's manifest lacks it. */
+  frozen_test_sha?: string | null;
+  /** Hash of just the frozen test split's label files (#34 W1) —
+   *  distinct from `frozen_test_sha` (the whole frozen split). */
+  test_label_sha?: string | null;
+  /** The export's own human-readable version tag (#34 W1), when the
+   *  export recorded one. */
+  dataset_version_tag?: string | null;
   deterministic?: boolean | null;
   export_dir?: string | null;
   include_classes?: number[] | null;
@@ -235,18 +286,28 @@ export interface TrainManifestLineage {
 
 export interface TrainManifestCodeVersions {
   api_sha?: string | null;
-  trainer_image?: string | null;
+  /** The trainer container's own build identity (#34 W1) — its baked
+   *  `OP_BUILD_SHA` when present, else the API's stamped
+   *  `trainer_image_revision` observed at submit time. Replaces the old
+   *  `trainer_image` field name; a rolling-deploy backend may still echo
+   *  that legacy key too, but never read it. */
+  trainer_sha?: string | null;
+  /** The trainer image's own id (#34 W1), independent of `trainer_sha`'s
+   *  revision label. */
+  trainer_image_id?: string | null;
   ultralytics_pkg?: string | null;
   ultralytics_sha?: string | null;
   [extra: string]: unknown;
 }
 
 export interface TrainManifestResults {
-  best_metric?: {
-    map50?: number;
-    map50_95?: number;
-    [k: string]: number | undefined;
-  } | null;
+  /** The true last training epoch's metrics (#34 W1) — see
+   *  `TrainJobStatus.last_epoch_metric`. */
+  last_epoch_metric?: TrainEpochMetric | null;
+  /** The best checkpoint's own re-validation metrics (#34 W1) — see
+   *  `TrainJobStatus.best_checkpoint_metric`. Never the headline number;
+   *  that's `eval.map50` labelled by `eval.split`. */
+  best_checkpoint_metric?: TrainEpochMetric | null;
   checkpoint_path?: string | null;
   checkpoint_sha256?: string | null;
   compare?: unknown;

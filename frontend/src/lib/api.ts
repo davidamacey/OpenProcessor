@@ -3986,13 +3986,19 @@ export interface BakeoffRunSummary {
   finished_at?: string;
 }
 
-/** A finished training run selectable as a bake-off contender. */
+/** A finished training run selectable as a bake-off contender.
+ *  `map50` is sourced from the run's `eval.map50` (OpenProcessor #34 W1
+ *  fix — previously `best_checkpoint_metric.map50`, a training-time
+ *  figure, not the frozen-holdout eval); `map50_split` names which pass
+ *  produced it ('test' when the holdout pass ran, 'val' when it fell
+ *  back), mirroring `eval.split` — label any rendered `map50` with it. */
 export interface BakeoffTrainedModel {
   run_id: string;
   name: string;
   model_size: string | null;
   checkpoint_path: string;
   map50: number | null;
+  map50_split: 'test' | 'val' | null;
   finished_at: string | null;
   campaign_id: string | null;
 }

@@ -1464,7 +1464,7 @@
               <th class="w-24 px-3 py-2 text-left">Status</th>
               <th
                 class="w-28 px-3 py-2 text-right"
-                title="Test split when the run's own eval reports one, otherwise best val mAP50 (a per-key max across epochs)"
+                title="The run's served eval.map50, labelled by eval.split (test split when the frozen-holdout pass ran, val when it fell back)"
               >
                 mAP50
               </th>
@@ -1502,11 +1502,19 @@
                 </td>
                 <td
                   class="px-3 py-2 text-right font-mono text-xs text-zinc-200"
-                  title={mapDisplay.source === 'test' ? 'test split' : 'best val mAP50'}
+                  title={mapDisplay.source === 'test'
+                    ? 'test split (frozen holdout)'
+                    : mapDisplay.source === 'val'
+                      ? 'validation (test pass fell back)'
+                      : 'no eval served yet'}
                 >
                   {mapDisplay.value?.toFixed(3) ?? '—'}
                   <span class="block font-sans text-[9px] text-zinc-500">
-                    {mapDisplay.source === 'test' ? 'test' : 'best val'}
+                    {mapDisplay.source === 'test'
+                      ? 'test'
+                      : mapDisplay.source === 'val'
+                        ? 'val'
+                        : '—'}
                   </span>
                 </td>
                 <td class="px-3 py-2">

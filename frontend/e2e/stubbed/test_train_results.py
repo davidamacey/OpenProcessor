@@ -1,9 +1,15 @@
-"""Finished-run Results view on /train (past-runs table): test-split
-evaluation + lineage for a terminal run, served by GET
-{API_PREFIX}/train/status/{job_id} and GET {API_PREFIX}/train/manifest/
-{job_id}. Fixture data mirrors the real served shapes captured live from
-the 2026-09-24T23-47-55_yolo26n train-smoke run
-(artifacts_local/cw-live/train-smoke/f_status.json / f_manifest.json).
+"""Finished-run Results view on /train (past-runs table): evaluation
+(labelled by its own eval.split) + lineage for a terminal run, served by
+GET {API_PREFIX}/train/status/{job_id} and GET
+{API_PREFIX}/train/manifest/{job_id}. Fixture data mirrors the real
+served shape captured live from the 2026-09-24T23-47-55_yolo26n
+train-smoke run (artifacts_local/cw-live/train-smoke/f_status.json /
+f_manifest.json), hand-corrected for OpenProcessor #34 W1's
+best_metric/last_metric removal: that run predates
+last_epoch_metric/best_checkpoint_metric, so both serve null under the
+W1 fix (never a back-filled guess) -- see
+src/lib/test/fixtures/trainRun.ts's doc comment for the same call on
+the frontend fixture this mirrors.
 """
 
 from __future__ import annotations
@@ -21,8 +27,8 @@ FINISHED_STATUS = {
     "current_epoch": 20,
     "total_epochs": 20,
     "epoch_time_s": None,
-    "best_metric": {"map50": 0.9356, "map50_95": 0.85096},
-    "last_metric": {"map50": 0.9191, "map50_95": 0.8459816666666667},
+    "last_epoch_metric": None,
+    "best_checkpoint_metric": None,
     "mlflow_run_id": "724a9292103d4ec3b153068758be340d",
     "mlflow_run_url": "http://op-mlflow:5000/#/experiments/1/runs/724a9292103d4ec3b153068758be340d",
     "checkpoint_path": "/var/lib/openprocessor/training_runs/2026-09-24T23-47-55_yolo26n/weights/best.pt",
@@ -61,7 +67,8 @@ MANIFEST = {
     "campaign_id": None,
     "code_versions": {
         "api_sha": None,
-        "trainer_image": None,
+        "trainer_sha": None,
+        "trainer_image_id": None,
         "ultralytics_pkg": "8.4.48",
         "ultralytics_sha": "8f5d355cd05b91503e7bf62429681dea4fa4b004",
     },
@@ -87,7 +94,8 @@ MANIFEST = {
     },
     "promoted_to": None,
     "results": {
-        "best_metric": {"map50": 0.9356, "map50_95": 0.85096},
+        "last_epoch_metric": None,
+        "best_checkpoint_metric": None,
         "checkpoint_path": "/var/lib/openprocessor/training_runs/2026-09-24T23-47-55_yolo26n/weights/best.pt",
         "checkpoint_sha256": "cc5ffb75e020b54d87df6f534de2a7a74eaa02519c69658a9504e2fe42d15e81",
         "compare": None,
@@ -161,8 +169,6 @@ def test_failed_run_shows_served_error(stub, page, app_url):
         "state": "failed",
         "error": "CUDA out of memory",
         "eval": None,
-        "best_metric": None,
-        "last_metric": None,
         "mlflow_run_id": None,
         "mlflow_run_url": None,
     }

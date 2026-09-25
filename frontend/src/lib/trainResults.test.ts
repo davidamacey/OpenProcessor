@@ -5,6 +5,7 @@ import {
   formatMetric,
   formatScalar,
   isTerminalTrainState,
+  metricEpochLabel,
 } from './trainResults';
 import { trainStatusFixture } from './test/fixtures/trainRun';
 
@@ -65,6 +66,25 @@ describe('formatScalar', () => {
   it('stringifies a real value verbatim', () => {
     expect(formatScalar('abc123')).toBe('abc123');
     expect(formatScalar(42)).toBe('42');
+  });
+});
+
+describe('metricEpochLabel', () => {
+  it('formats a served epoch number', () => {
+    expect(metricEpochLabel({ epoch: 17, map50: 0.9 })).toBe('epoch 17');
+  });
+
+  it('returns null when epoch is absent', () => {
+    expect(metricEpochLabel({ map50: 0.9 })).toBeNull();
+  });
+
+  it('returns null for a null/undefined metric (a run predating this field)', () => {
+    expect(metricEpochLabel(null)).toBeNull();
+    expect(metricEpochLabel(undefined)).toBeNull();
+  });
+
+  it('renders epoch 0 (not falsy-skipped)', () => {
+    expect(metricEpochLabel({ epoch: 0, map50: 0.1 })).toBe('epoch 0');
   });
 });
 
