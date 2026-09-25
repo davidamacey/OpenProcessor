@@ -151,6 +151,63 @@ def test_run_writes_artifacts_and_manifest(tmp_path: Path, monkeypatch) -> None:
     assert 'QuantizeLinear' in ops
 
 
+# --- TensorRT .plan export (G-21: no `trtexec --fp16`, removed in TRT 11.1) --
+
+
+def test_export_trt_plan_never_passes_fp16_flag(tmp_path: Path, monkeypatch) -> None:
+    """trtexec on TensorRT 11.1 (strongly typed) has no --fp16 flag; passing
+    it makes trtexec exit non-zero. Precision comes from the ONNX itself."""
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], check: bool) -> None:
+        calls.append(cmd)
+
+    fake_trtexec = tmp_path / 'trtexec'
+    fake_trtexec.write_bytes(b'')
+    monkeypatch.setattr(quantize.shutil, 'which', lambda _name: str(fake_trtexec))
+    monkeypatch.setattr(quantize, 'subprocess', type('S', (), {'run': staticmethod(fake_run)}))
+    onnx_path = tmp_path / 'fp16.onnx'
+    onnx_path.write_bytes(b'x')
+    out = quantize.export_trt_plan(onnx_path, tmp_path / 'model.plan', int8=False)
+    assert out == tmp_path / 'model.plan'
+    assert len(calls) == 1
+    assert '--fp16' not in calls[0]
+    assert not any(arg.startswith('--fp16') for arg in calls[0])
+
+
+def test_run_prefers_fp16_onnx_as_plan_source_over_fp32(tmp_path: Path, monkeypatch) -> None:
+    """When both fp32.onnx and fp16.onnx exist and int8 wasn't requested,
+    the plan is built from the fp16-baked ONNX -- otherwise TRT 11.1 has
+    no way to bake reduced precision in after the fact."""
+
+    def fake_export(pt_path: Path, out: Path, imgsz: int, *, half: bool) -> Path:
+        out.write_bytes(b'x')
+        return out
+
+    plan_srcs: list[Path] = []
+
+    def fake_plan(onnx_path: Path, out: Path, *, int8: bool) -> Path:
+        plan_srcs.append(onnx_path)
+        out.write_bytes(b'plan')
+        return out
+
+    monkeypatch.setattr(quantize, '_ultralytics_export_onnx', fake_export)
+    monkeypatch.setattr(quantize, 'export_trt_plan', fake_plan)
+    pt = tmp_path / 'best.pt'
+    pt.write_bytes(b'weights')
+
+    quantize.run(
+        'cand',
+        ['fp32_onnx', 'fp16_onnx', 'plan'],
+        tmp_path / 'quant',
+        pt_override=pt,
+        calib_override=None,
+        n_calib_override=None,
+    )
+    assert plan_srcs == [tmp_path / 'quant' / 'cand' / 'fp16.onnx']
+    assert (tmp_path / 'quant' / 'cand' / 'model.plan').is_file()
+
+
 # --- runner: stage failures are reported, not swallowed ------------------------
 
 

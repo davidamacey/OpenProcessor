@@ -235,6 +235,10 @@ def convert_to_tensorrt_via_trtexec(onnx_path: Path, plan_path: Path) -> Path | 
 
     # Build command - write output to file inside container for reliable capture
     # NOTE: --workspace is deprecated in TRT 10+, use --memPoolSize=workspace:8192MiB instead
+    # NOTE (G-21): TRT 11.1 is strongly typed -- trtexec has no --fp16 flag
+    # anymore. This ONNX is not pre-baked to FP16, so the engine builds
+    # FP32 (TF32 tensor cores on Ampere+); bake precision into the ONNX
+    # first if you need a smaller/faster engine.
     trtexec_cmd = f"""
 trtexec \\
     --onnx=/models/{onnx_path.name} \\
@@ -242,7 +246,6 @@ trtexec \\
     --minShapes={min_shapes} \\
     --optShapes={opt_shapes} \\
     --maxShapes={max_shapes} \\
-    --fp16 \\
     --memPoolSize=workspace:8192M \\
     2>&1 | tee /tmp/trtexec.log
 

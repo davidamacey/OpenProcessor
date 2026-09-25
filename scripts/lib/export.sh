@@ -24,7 +24,10 @@ PYTORCH_MODELS_DIR="$PROJECT_DIR/pytorch_models"
 
 # TensorRT export settings
 TRT_WORKSPACE="${TRT_WORKSPACE:-4G}"
-TRT_FP16="${TRT_FP16:---fp16}"
+# TRT_FP16 (G-21): removed. trtexec --fp16 no longer exists on TRT 11.1
+# (strongly-typed builds follow the ONNX dtypes); this var was defined but
+# never read by anything in this file. See scripts/export_paddleocr.sh for
+# the current pattern (empty placeholder, precision baked into the ONNX).
 
 # Estimated export times (minutes) for progress display
 declare -gA EXPORT_TIMES=(
