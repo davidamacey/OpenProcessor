@@ -1934,6 +1934,60 @@ class ClassRegistry:
             'target_name': target.class_name,
         }
 
+    def set_deprecated(self, class_id: int, deprecated: bool) -> RegistryClassEntry:
+        """Toggle ``deprecated`` on a class in place.
+
+        Used by ``POST /classes/{id}/deprecate`` (``deprecated=True``) and
+        ``POST /classes/{id}/restore`` (``deprecated=False``) -- the direct
+        retirement path for a class with no data, as opposed to
+        :meth:`merge_class` which deprecates the source while relabeling
+        its items into a target.
+
+        Deprecating clears ``hotkey_letter`` so the letter can't collide
+        with a future class binding it (mirrors the "not bound to another
+        *active* class" hotkey rule -- a deprecated class no longer counts
+        as active, so its old letter must not linger as if it still did).
+
+        Restoring (``deprecated=False``) re-enters the non-deprecated
+        name-uniqueness pool: raises ``ClassRegistryError`` if another
+        non-deprecated class already holds this name (same rule
+        :meth:`rename_class` enforces on rename).
+
+        Raises ``ClassRegistryError`` if ``class_id`` is unknown.
+        """
+        reg = self.load()
+        target: RegistryClassEntry | None = None
+        for c in reg.classes:
+            if c.class_id == class_id:
+                target = c
+                break
+        if target is None:
+            raise ClassRegistryError(f'class_id {class_id} not found')
+
+        if not deprecated and target.deprecated:
+            for c in reg.classes:
+                if (
+                    c.class_id != class_id
+                    and not c.deprecated
+                    and c.class_name == target.class_name
+                ):
+                    raise ClassRegistryError(
+                        f'cannot restore class_id {class_id}: name {target.class_name!r} '
+                        f'already in use by class_id {c.class_id}'
+                    )
+
+        target.deprecated = deprecated
+        if deprecated:
+            target.hotkey_letter = None
+        self._atomic_write(reg)
+        logger.info(
+            'curation_registry_set_deprecated',
+            class_id=class_id,
+            class_name=target.class_name,
+            deprecated=deprecated,
+        )
+        return target
+
     # ------------------------------------------------------------- OS sync
 
     async def sync_to_opensearch(self, client: AsyncOpenSearch) -> dict[str, int]:
