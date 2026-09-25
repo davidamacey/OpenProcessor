@@ -3,9 +3,9 @@
 Vendored from OpenProcessor (openprocessor) via `git -C <repo> show <ref>:contracts/...`.
 
 - repo: `/data/repos/openprocessor`
-- ref: `c676d2b`
-- sha: `c676d2bd8d1015086f2aef4144891cb516e1044c`
-- synced_at: `2026-09-25T05:19:38.521Z`
+- ref: `698d1da`
+- sha: `698d1da06105b95f7cf9cf2ea99c83755506704a`
+- synced_at: `2026-09-25T06:11:13.079Z`
 
 Regenerate with `npm run contract:sync`. Verify with `npm run contract:check`
 (non-blocking in CI — the backend repo isn't checked out there).

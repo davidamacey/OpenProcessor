@@ -1022,7 +1022,7 @@ export interface KeyboardShortcut {
   description: string;
 }
 
-export type ModelStatus = 'ready' | 'not_ready' | 'unavailable';
+export type ModelStatus = 'ready' | 'not_ready' | 'unavailable' | 'not_configured';
 export type ModelKind = 'triton' | 'external';
 
 export interface ModelInfo {
@@ -1050,6 +1050,14 @@ export interface ModelInfo {
   is_region_protected?: boolean;
   /** ACTIVE_VEHICLE_MODEL or another core pipeline model — unload requires force=true. */
   requires_force_to_unload?: boolean;
+  /** Served directly (2026-09-25 follow-up to #36 item 5) — `false` for
+   *  every external-service entry (the segmenter, the VLM) and any model
+   *  the active config hard-blocks (`is_region_protected`, now also
+   *  covering the ingest primary proposer/secondary classifier and the
+   *  OCR det/rec pair, not just the region detector). `unloadButtonState`
+   *  reads this FIRST, ahead of `kind`/`is_region_protected` — the
+   *  server's own verdict, never re-derived from the other flags. */
+  unloadable?: boolean;
   /** Present (with job_id/version) only for models promoted through this pipeline. */
   job_id?: string | null;
   promoted_at?: string | null;

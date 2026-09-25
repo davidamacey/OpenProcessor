@@ -65,6 +65,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   mutated copy before being restored byte-for-byte. Full stubbed e2e
   suite (65 tests) green.
 
+- **2026-09-25 follow-up to OpenProcessor #36 item 5 (`/models`, backend
+  698d1da) — served `unloadable` and widened `is_region_protected`.**
+  Contract snapshot synced to 698d1da (superset of c676d2b).
+  `ModelInfo` gains `unloadable`; `ModelStatus` gains `'not_configured'`
+  (the segmenter, `sam3`, is now `kind: 'external'` with a possible
+  `not_configured` status and null inference/exec/latency fields,
+  already rendered "—" by the existing `fmtCount`/`fmtMs`).
+  `unloadButtonState` (`$lib/modelUnload.ts`) now reads the served
+  `unloadable` FIRST: `unloadable === false` hides the button outright
+  (every external entry); `is_region_protected` — which as of 698d1da
+  also hard-blocks the ingest primary proposer/secondary classifier and
+  the OCR det/rec pair, not just the region detector — still hides it
+  too, but `/models` now renders a "protected: in use by the pipeline"
+  chip in that case (`showsProtectedChip`) instead of nothing. A backend
+  that predates `unloadable` (`undefined`) falls back to the prior
+  `kind !== 'triton'` rule, so an older deployment renders exactly as
+  before. Live, this leaves only the CLIP/PE encoders with an Unload
+  button.
+
 - **Adopted OpenProcessor #36 item 8 — probe control on `/train`.**
   `api.ts` gains `runProbe`/`getProbeStatus`/`cancelProbe`
   (`POST {API_PREFIX}/probe/run`, `GET {API_PREFIX}/probe/status`,
