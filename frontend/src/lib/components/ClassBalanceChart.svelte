@@ -59,7 +59,7 @@
             {/if}
           </div>
           <span
-            class="w-36 shrink-0 text-right font-mono text-zinc-400"
+            class="w-44 shrink-0 whitespace-nowrap text-right font-mono text-zinc-400"
             title="{row.validated} validated, {row.test} frozen as test holdout"
           >
             {`${row.trainable} trainable`}{#if row.test > 0}<span class="text-zinc-600"

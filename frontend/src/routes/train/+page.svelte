@@ -1413,7 +1413,7 @@
           {zeroCandidateGroups.length} class{zeroCandidateGroups.length === 1 ? '' : 'es'} with
           no candidates{#if cohortGroupsPending > 0}
             <span class="text-zinc-600" data-testid="zero-cohorts-so-far"
-              >so far ({cohortGroupsPending} still loading)</span
+              >{` so far (${cohortGroupsPending} still loading)`}</span
             >{/if}
         </summary>
         <div class="mt-2 space-y-2">
