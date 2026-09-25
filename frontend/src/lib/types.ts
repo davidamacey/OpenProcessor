@@ -634,7 +634,7 @@ export type CoreReviewTab =
   | 'uncertainty'
   | 'model_disagreements'
   | 'primary_low_conf'
-  | 'coco_blind_spots'
+  | 'classifier_blind_spots'
   // New-class-proposal queue (2026-09-24 logic-moves W5): crops the VLM
   // couldn't match to any registered class (`class_source:
   // 'vlm_new_class_pending'`). Backed by the same `{API_PREFIX}/review/{tab}`

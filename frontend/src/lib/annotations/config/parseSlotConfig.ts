@@ -1382,7 +1382,7 @@ function defaultParseContext(): Required<ParseContext> {
       'all',
       'uncertainty',
       'model_disagreements',
-      'coco_blind_spots',
+      'classifier_blind_spots',
       'mismatches',
       'vlm_low_conf',
       'primary_low_conf',
@@ -1391,7 +1391,7 @@ function defaultParseContext(): Required<ParseContext> {
       'all',
       'uncertainty',
       'model_disagreements',
-      'coco_blind_spots',
+      'classifier_blind_spots',
     ]),
     takenKeys,
   };

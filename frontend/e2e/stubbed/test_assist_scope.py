@@ -82,7 +82,7 @@ IDLE_JOB = {
 }
 
 # Full DatasetStats shape (src/lib/api.ts) — DatasetStats.svelte reads
-# nested fields (e.g. in_progress.sam_drain_total_unfinished) directly, so
+# nested fields (e.g. in_progress.region_drain_total_unfinished) directly, so
 # a partial fixture throws a real pageerror instead of degrading via
 # resolveStatsUpdate's error-envelope guard (that guard only checks
 # top-level total_crops).
@@ -95,7 +95,7 @@ DATASET_STATS = {
     "labeled": {"by_human": 0, "by_vlm": 0, "by_classifier": 0, "by_proposal": 0, "other": 0},
     "regions": {"total_detected": 0, "by_detector": 0, "by_segmenter": 0, "by_human": 0},
     "unlabeled": {"pending_detection": 0, "no_label_source": 0},
-    "in_progress": {"sam_drain_total_unfinished": 0},
+    "in_progress": {"region_drain_total_unfinished": 0},
     "clusters": {"last_run_at": None, "cluster_count": 0, "residual_count": 0, "noise_count": 0, "method": None},
 }
 

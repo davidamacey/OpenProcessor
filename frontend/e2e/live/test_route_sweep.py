@@ -67,7 +67,7 @@ ROUTES: list[tuple[str, str]] = [
     ("/review?tab=all", '[data-testid="queue-counter"]'),
     ("/review?tab=uncertainty", '[data-testid="queue-counter"]'),
     ("/review?tab=model_disagreements", '[data-testid="queue-counter"]'),
-    ("/review?tab=coco_blind_spots", '[data-testid="queue-counter"]'),
+    ("/review?tab=classifier_blind_spots", '[data-testid="queue-counter"]'),
     ("/review?tab=new_class_proposals", '[data-testid="queue-counter"]'),
     (f"/review?tab={REGION_TAB_URL_ID}", '[data-testid="queue-counter"]'),
     ("/classes", 'h1:has-text("Class management")'),

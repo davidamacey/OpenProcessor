@@ -196,7 +196,7 @@ DATASET_STATS = {
         "pending_verification": 220,
         "no_label_source": 180,
     },
-    "in_progress": {"sam_drain_total_unfinished": 0},
+    "in_progress": {"region_drain_total_unfinished": 0},
     "clusters": {
         "last_run_at": "2026-09-20T18:04:00+00:00",
         "cluster_count": 84,
