@@ -60,7 +60,7 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Quick Start:"
-	@echo "  make up          # Start all services"
+	@echo "  make up          # Start the core stack"
 	@echo "  make status      # Check service status"
 	@echo "  make bench-quick # Run quick benchmark"
 	@echo "  make logs        # View all logs"
@@ -71,9 +71,18 @@ help: ## Show this help message
 # ==================================================================================
 
 .PHONY: up
-up: ## Start all services (Triton + API + Monitoring + OpenSearch)
-	@echo "Starting all services..."
+up: ## Start the core stack (Triton + API + OpenSearch) -- see 'make up-monitoring' for Prometheus/Grafana/Loki/dcgm
+	@echo "Starting core services..."
 	$(COMPOSE) up -d
+	@echo ""
+	@echo "Services starting. Check status with: make status"
+	@echo "API available at: http://localhost:$(API_PORT)"
+	@echo "Monitoring (Prometheus/Grafana/Loki/dcgm) is opt-in: make up-monitoring"
+
+.PHONY: up-monitoring
+up-monitoring: ## Start the core stack PLUS monitoring (F-3: opt-in on a shared host -- alloy mounts docker.sock and tails every container, dcgm-exporter reserves all GPUs)
+	@echo "Starting core + monitoring services..."
+	$(COMPOSE) --profile monitoring up -d
 	@echo ""
 	@echo "Services starting. Check status with: make status"
 	@echo "API available at: http://localhost:$(API_PORT)"
@@ -1020,7 +1029,7 @@ info: ## Show service URLs and ports
 	@echo "==================================================================================="
 	@echo ""
 	@echo "Quick Start:"
-	@echo "  make up                    Start all services"
+	@echo "  make up                    Start the core stack"
 	@echo "  make status                Check service health"
 	@echo "  make test-all              Test all endpoints"
 	@echo ""
