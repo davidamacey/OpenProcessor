@@ -23,8 +23,8 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from .base import Detection
-from .yolo_post import nms
+from scripts.curation.bakeoff.backends.base import Detection
+from scripts.curation.bakeoff.backends.yolo_post import nms
 
 
 # Per-variant model input (width, height). Grid stride is 16.
@@ -40,7 +40,6 @@ class LpdnetDetector:
     """Run NVIDIA LPDNet (DetectNet_v2 ONNX) as a bake-off Detector."""
 
     runtime = 'onnxruntime'
-    class_names: dict[int, str] | None = None
 
     def __init__(
         self,
@@ -57,6 +56,7 @@ class LpdnetDetector:
         if variant not in _VARIANTS:
             raise ValueError(f'lpdnet variant must be one of {sorted(_VARIANTS)}')
         self.name = name or f'lpdnet-{variant}'
+        self.class_names: dict[int, str] | None = {0: 'license_plate'}
         self.variant = variant
         self.in_w, self.in_h = _VARIANTS[variant]
         self.conf = conf
@@ -88,6 +88,7 @@ class LpdnetDetector:
                 float(boxes[i, 2]),
                 float(boxes[i, 3]),
                 float(scores[i]),
+                class_id=0,
             )
             for i in keep
         ]

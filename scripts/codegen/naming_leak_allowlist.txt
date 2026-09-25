@@ -109,7 +109,6 @@ CONTRIBUTING.md # describes the plate_* literal guard and its roi_* illustrative
 # none of them contain gemma/lpr/sam_worker/v6/plate_*/hdd_source.
 # ---------------------------------------------------------------------------
 examples/ # the example-domain directory; license_plate profile + bakeoff baseline configs live here on purpose
-scripts/curation/bakeoff/ # bake-off harness examples (backends + the license_plate example profile); domain content allowed here
 env.template # OP_REGION_PROFILE_PATH example value; the public worked example
 docs/ARCHITECTURE.md # example prose illustrating a region sub-annotation
 tests/curation/test_region_worker.py # uses the example profile's real detector_model id ('license_plate_detector') as a realistic detector-source literal
@@ -156,6 +155,7 @@ tests/curation/test_training_class_subset_presets.py # exercises the example pro
 tests/curation/test_triton_promote.py # exercises the example profile
 tests/curation/test_yolo26_triton_config.py # exercises the example profile
 tests/integration/test_import_labeled_dataset.py # exercises the example profile
+tests/examples/test_bakeoff_license_plate_example.py # exercises the opt-in license_plate bake-off example under examples/bakeoff/ (loads it by path)
 
 # ---------------------------------------------------------------------------
 # Scan C (private class vocabulary: sportbike/cruiserbike/dirtbike/harley/honda)

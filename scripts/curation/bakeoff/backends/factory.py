@@ -1,13 +1,18 @@
-"""Build the detector under test from parsed ``run`` CLI args.
+"""Built-in detector backends and the system-under-test builder.
 
-Moved out of ``run.py`` so the CLI module stays about the scoring flow.
-Backends import lazily: each pulls in its own runtime (Ultralytics, ONNX
-Runtime, tritonclient, coremltools) only when selected.
+Registers the five generic backends (``ultralytics``, ``triton``,
+``two-stage``, ``onnxruntime``, ``coreml``) into ``registry.py`` on import,
+and builds the detector a ``run`` scores from parsed CLI args, honoring
+``--mode crop``. Backends import lazily: each pulls in its own runtime
+(Ultralytics, ONNX Runtime, tritonclient, coremltools) only when built.
+Backend-specific options arrive in ``args.backend_options``.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+
+from .registry import get_backend, register_backend
 
 
 if TYPE_CHECKING:
@@ -16,74 +21,58 @@ if TYPE_CHECKING:
     from .base import Detector
 
 
-def _build_detector(args: argparse.Namespace, backend: str) -> Detector:
-    """Build ONE model detector (the model under test) for a backend."""
-    if backend == 'ultralytics':
-        from .ultralytics_pt import UltralyticsDetector
+def _ultralytics(args: argparse.Namespace) -> Detector:
+    from .ultralytics_pt import UltralyticsDetector
 
-        return UltralyticsDetector(
-            args.weights,
-            name=args.name,
-            imgsz=args.imgsz,
-            device=args.device,
-            conf=args.conf_floor,
-            iou=args.nms_iou,
-        )
-    if backend == 'triton':
-        from .triton_trt import TritonYoloDetector
+    return UltralyticsDetector(
+        args.weights,
+        name=args.name,
+        imgsz=args.imgsz,
+        device=args.device,
+        conf=args.conf_floor,
+        iou=args.nms_iou,
+    )
 
-        return TritonYoloDetector(
-            url=args.triton_url,
-            model=args.triton_model,
-            name=args.name,
-            input_size=args.imgsz,
-            conf=args.conf_floor,
-            iou=args.nms_iou,
-        )
-    if backend == 'open-image-models':
-        from .open_image_models import OpenImageModelsDetector
 
-        return OpenImageModelsDetector(
-            name=args.name,
-            conf=args.conf_floor,
-            device='cpu' if str(args.device) == 'cpu' else 'cuda',
-        )
-    if backend == 'lpdnet':
-        from .lpdnet import LpdnetDetector
+def _triton(args: argparse.Namespace) -> Detector:
+    from .triton_trt import TritonYoloDetector
 
-        return LpdnetDetector(
-            args.weights,
-            name=args.name,
-            variant=str(args.backend_options.get('variant', 'usa')),
-            conf=args.conf_floor,
-            iou=args.nms_iou,
-            device='cpu' if str(args.device) == 'cpu' else 'cuda',
-        )
-    if backend == 'onnxruntime':
-        from .onnxruntime_ort import OnnxRuntimeDetector
+    return TritonYoloDetector(
+        url=args.triton_url,
+        model=args.triton_model,
+        name=args.name,
+        input_size=args.imgsz,
+        conf=args.conf_floor,
+        iou=args.nms_iou,
+    )
 
-        return OnnxRuntimeDetector(
-            args.weights,
-            name=args.name,
-            imgsz=args.imgsz,
-            conf=args.conf_floor,
-            iou=args.nms_iou,
-            providers=args.ort_providers,
-            coords_normalized=args.coords_normalized,
-        )
-    if backend == 'coreml':
-        from .coreml import CoreMLDetector
 
-        return CoreMLDetector(
-            args.weights,
-            name=args.name,
-            imgsz=args.imgsz,
-            conf=args.conf_floor,
-            iou=args.nms_iou,
-            compute_units=args.coreml_compute_units,
-            coords_normalized=args.coords_normalized,
-        )
-    raise SystemExit(f'unknown / not-yet-wired backend: {backend!r}')
+def _onnxruntime(args: argparse.Namespace) -> Detector:
+    from .onnxruntime_ort import OnnxRuntimeDetector
+
+    return OnnxRuntimeDetector(
+        args.weights,
+        name=args.name,
+        imgsz=args.imgsz,
+        conf=args.conf_floor,
+        iou=args.nms_iou,
+        providers=args.ort_providers,
+        coords_normalized=args.coords_normalized,
+    )
+
+
+def _coreml(args: argparse.Namespace) -> Detector:
+    from .coreml import CoreMLDetector
+
+    return CoreMLDetector(
+        args.weights,
+        name=args.name,
+        imgsz=args.imgsz,
+        conf=args.conf_floor,
+        iou=args.nms_iou,
+        compute_units=args.coreml_compute_units,
+        coords_normalized=args.coords_normalized,
+    )
 
 
 def parse_class_ids(value: str | None) -> tuple[int, ...]:
@@ -111,46 +100,55 @@ def _primary_detector(args: argparse.Namespace) -> Detector:
     )
 
 
+def _two_stage(args: argparse.Namespace) -> Detector:
+    """A fixed coarse+fine cascade as the system under test itself.
+
+    Unlike ``--mode crop`` (which wraps any backend), the pair here is the
+    model being scored: an Ultralytics coarse stage and an Ultralytics or
+    Triton fine stage.
+    """
+    from .two_stage import TwoStageDetector
+    from .ultralytics_pt import UltralyticsDetector
+
+    primary = _primary_detector(args)
+    if args.secondary_backend == 'triton':
+        from .triton_trt import TritonYoloDetector
+
+        secondary: Detector = TritonYoloDetector(
+            url=args.triton_url,
+            model=args.triton_model,
+            input_size=640,
+            conf=args.conf_floor,
+            iou=args.nms_iou,
+        )
+    else:
+        secondary = UltralyticsDetector(
+            args.weights,
+            name='secondary',
+            imgsz=args.secondary_imgsz,
+            device=args.device,
+            conf=args.conf_floor,
+            iou=args.nms_iou,
+        )
+    return TwoStageDetector(primary, secondary, name=args.name or 'two-stage', nms_iou=args.nms_iou)
+
+
+register_backend('ultralytics', _ultralytics)
+register_backend('triton', _triton)
+register_backend('two-stage', _two_stage)
+register_backend('onnxruntime', _onnxruntime)
+register_backend('coreml', _coreml)
+
+
 def _build_backend(args: argparse.Namespace) -> Detector:
     """Build the system under test, honoring --mode (full vs crop).
 
     ``--mode crop`` wraps ANY backend in a coarse-detector->crop->detector
     pipeline (parent object -> part, any two-stage cascade);
-    ``--mode full`` runs the detector directly on the source frame. The
-    ``two-stage`` backend is a fixed, non-wrapped variant of that same
-    cascade for when the coarse+fine pair is the system under test itself
-    (not a wrapper around one of the other single backends above).
+    ``--mode full`` runs the detector directly on the source frame.
     """
-    if args.backend == 'two-stage':
-        from .two_stage import TwoStageDetector
-        from .ultralytics_pt import UltralyticsDetector
-
-        primary = _primary_detector(args)
-        if args.secondary_backend == 'triton':
-            from .triton_trt import TritonYoloDetector
-
-            secondary: Detector = TritonYoloDetector(
-                url=args.triton_url,
-                model=args.triton_model,
-                input_size=640,
-                conf=args.conf_floor,
-                iou=args.nms_iou,
-            )
-        else:
-            secondary = UltralyticsDetector(
-                args.weights,
-                name='secondary',
-                imgsz=args.secondary_imgsz,
-                device=args.device,
-                conf=args.conf_floor,
-                iou=args.nms_iou,
-            )
-        return TwoStageDetector(
-            primary, secondary, name=args.name or 'two-stage', nms_iou=args.nms_iou
-        )
-
-    inner = _build_detector(args, args.backend)
-    if args.mode == 'crop':
+    inner = get_backend(args.backend)(args)
+    if args.mode == 'crop' and args.backend != 'two-stage':
         from .two_stage import TwoStageDetector
 
         return TwoStageDetector(

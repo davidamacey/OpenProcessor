@@ -19,8 +19,6 @@ from fastapi.testclient import TestClient
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-# The license_plate example profile is opt-in: loaded by path, never listed.
-PLATE_PROFILE = REPO_ROOT / 'scripts/curation/bakeoff/examples/license_plate/profile.json'
 
 # CFG-6: this harness used to default to owner-private absolute paths --
 # one of which named the location of a licensed proprietary image corpus
@@ -37,7 +35,7 @@ _HARNESS_SUFFIXES = {'.py', '.json', '.txt', '.md'}
 
 def _bakeoff_harness_files() -> list[str]:
     files = ['src/routers/curation/bakeoff.py']
-    for root in ('scripts/curation/bakeoff',):
+    for root in ('scripts/curation/bakeoff', 'examples/bakeoff'):
         files += [
             p.relative_to(REPO_ROOT).as_posix()
             for p in sorted((REPO_ROOT / root).rglob('*'))
@@ -52,7 +50,7 @@ _HOST_MOUNT_PATH_RE = re.compile(r'/(?:mnt|home|Users)/[A-Za-z0-9_./\-]+')
 def test_bakeoff_harness_has_no_owner_private_absolute_path_defaults() -> None:
     offenders: list[str] = []
     files = _bakeoff_harness_files()
-    assert 'scripts/curation/bakeoff/backends/lpdnet.py' in files
+    assert 'examples/bakeoff/license_plate/backends/lpdnet.py' in files
     for rel in files:
         text = (REPO_ROOT / rel).read_text()
         offenders.extend(f'{rel}: {match.group(0)}' for match in _HOST_MOUNT_PATH_RE.finditer(text))
@@ -190,18 +188,19 @@ def test_bakeoff_run_writes_profile_into_job_spec(
 
     monkeypatch.setattr(bakeoff, 'JOBS_DIR', tmp_path / 'jobs')
     monkeypatch.setattr(bakeoff, 'OUT_DIR', tmp_path / 'out')
+    prof = tmp_path / 'mine.json'  # a .json path passes through to the evaluator
     r = app_client.post(
         '/curation/bakeoff/run',
         json={
             'dataset': '/data/ds',
             'job_id': 'jp1',
-            'profile': str(PLATE_PROFILE),
+            'profile': str(prof),
             'models': [{'backend': 'ultralytics', 'name': 'm1', 'profile': 'generic'}],
         },
     )
     assert r.status_code == 200, r.text
     spec = json.loads((tmp_path / 'jobs' / 'jp1.job.json').read_text())
-    assert spec['profile'] == str(PLATE_PROFILE)
+    assert spec['profile'] == str(prof)
     assert spec['models'][0]['profile'] == 'generic'
 
 
@@ -269,20 +268,6 @@ def test_bakeoff_profiles_lists_generic_only_by_default(app_client: TestClient) 
 
 
 @pytest.mark.usefixtures('clean_profile_env')
-def test_bakeoff_profiles_default_follows_env_example_path(
-    app_client: TestClient, monkeypatch
-) -> None:
-    monkeypatch.setenv('OP_BAKEOFF_PROFILE', str(PLATE_PROFILE))
-    body = app_client.get('/curation/bakeoff/profiles').json()
-    by_name = {p['name']: p for p in body['profiles']}
-    assert body['default_profile'] == 'license_plate'
-    assert by_name['license_plate']['default'] is True
-    assert by_name['license_plate']['kind'] == 'configured'
-    assert by_name['generic']['default'] is False
-    assert sum(p['default'] for p in body['profiles']) == 1
-
-
-@pytest.mark.usefixtures('clean_profile_env')
 def test_bakeoff_profiles_default_from_json_path_and_field_overrides(
     app_client: TestClient, monkeypatch, tmp_path: Path
 ) -> None:
@@ -329,12 +314,9 @@ def test_bakeoff_run_rejects_coreml_leg(
     assert not (tmp_path / 'jobs').exists()
 
 
-def test_default_baseline_registry_is_domain_neutral(app_client: TestClient) -> None:
-    names = [
-        b['name'] for b in app_client.get('/curation/bakeoff/baseline_models').json()['baselines']
-    ]
-    assert names, 'default registry should still list the quantized variants'
-    assert all(n.startswith('ours_') for n in names), names
+def test_default_baseline_registry_is_empty(app_client: TestClient) -> None:
+    body = app_client.get('/curation/bakeoff/baseline_models').json()
+    assert body == {'baselines': [], 'count': 0}
 
 
 def test_baseline_models_per_profile(app_client: TestClient) -> None:

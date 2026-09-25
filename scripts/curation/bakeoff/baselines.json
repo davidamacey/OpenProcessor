@@ -1,35 +1,4 @@
 {
-  "_comment": "Baseline-model registry for the bake-off UI picker (GET /curation/bakeoff/baseline_models). Domain-neutral: only the quantized ONNX variants of your own trained model (produced by the bake-off job's quantize step). Domain baselines belong to a profile -- see examples/<name>/baselines.json and BakeoffProfile.baselines_path, or point OP_BAKEOFF_BASELINES_PATH at your own file. Add a model = append an entry (no code change). 'weights' paths are placeholders relative to the evaluator container's working directory; replace them with your own. 'mode' may be full|crop|both.",
-  "baselines": [
-    {
-      "name": "ours_fp32_onnx",
-      "backend": "onnxruntime",
-      "weights": "./weights/ours_yolo26n/fp32.onnx",
-      "imgsz": 640,
-      "device": "cuda",
-      "coords_normalized": false,
-      "ort_providers": "CUDAExecutionProvider,CPUExecutionProvider",
-      "training_data": "curated YOLO26 (FP32 ONNX baseline)"
-    },
-    {
-      "name": "ours_fp16_onnx",
-      "backend": "onnxruntime",
-      "weights": "./weights/ours_yolo26n/fp16.onnx",
-      "imgsz": 640,
-      "device": "cuda",
-      "coords_normalized": false,
-      "ort_providers": "CUDAExecutionProvider,CPUExecutionProvider",
-      "training_data": "curated YOLO26 (FP16 ONNX)"
-    },
-    {
-      "name": "ours_int8_onnx",
-      "backend": "onnxruntime",
-      "weights": "./weights/ours_yolo26n/int8_qdq.onnx",
-      "imgsz": 640,
-      "device": "cuda",
-      "coords_normalized": false,
-      "ort_providers": "TensorrtExecutionProvider,CUDAExecutionProvider,CPUExecutionProvider",
-      "training_data": "curated YOLO26 (INT8 QDQ ONNX)"
-    }
-  ]
+  "_comment": "Baseline-model registry for the bake-off UI picker (GET /curation/bakeoff/baseline_models). Empty by default: previous training runs are the baselines, and quantized ONNX variants of a run are produced by the bake-off job's quantize stage. Add external models as entries (schema: docs/design/generic_model_comparison_plan.md section 7.6), give a profile its own registry via baselines_path, or point OP_BAKEOFF_BASELINES_PATH at your own file.",
+  "baselines": []
 }

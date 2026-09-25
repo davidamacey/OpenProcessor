@@ -27,6 +27,7 @@ from scripts.curation.bakeoff import (
     run,
     scoring,
 )
+from scripts.curation.bakeoff.backends import registry
 from scripts.curation.bakeoff.backends.base import Detection
 from scripts.curation.bakeoff.backends.yolo_post import decode_yolo26_e2e, decode_yolo_v11, nms
 from scripts.curation.bakeoff.dataset import YoloTestSet
@@ -41,9 +42,6 @@ from scripts.curation.bakeoff.profile import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HARNESS = REPO_ROOT / 'scripts/curation/bakeoff'
-# The license_plate example profile, loaded by explicit path (it is no longer
-# auto-discovered by name).
-PLATE_PROFILE = HARNESS / 'examples/license_plate/profile.json'
 
 
 @pytest.fixture(autouse=True)
@@ -80,17 +78,6 @@ def test_generic_profile_is_domain_neutral() -> None:
     assert not hasattr(p, 'target_class_name')
 
 
-def test_license_plate_is_an_example_not_the_default() -> None:
-    with pytest.raises(ValueError, match='unknown bake-off profile'):
-        resolve_profile('license_plate')  # no longer auto-discovered by name
-    lp = resolve_profile(str(PLATE_PROFILE))
-    assert lp.name == 'license_plate'
-    assert lp.class_names == ('license_plate',)
-    assert lp.context_class_ids == (2, 3, 5, 7)
-    assert lp.triton_model == ''
-    assert resolve_profile(None).name == 'generic'
-
-
 def test_profile_from_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('OP_BAKEOFF_PROFILE_CLASS_FILTER', 'box, label')
     monkeypatch.setenv('OP_BAKEOFF_PROFILE_CLASS_NAMES', 'pallet,box,label')
@@ -103,11 +90,6 @@ def test_profile_from_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     assert p.context_class_ids == (0, 1)
     assert p.op_conf == pytest.approx(0.4)
     assert p.backend_modules == ('my.backends',)
-
-
-def test_env_selects_profile_by_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('OP_BAKEOFF_PROFILE', str(PLATE_PROFILE))
-    assert resolve_profile(None).name == 'license_plate'
 
 
 def test_profile_json_path_and_unknown_name(tmp_path: Path) -> None:
@@ -125,11 +107,13 @@ def test_profile_json_path_and_unknown_name(tmp_path: Path) -> None:
 def test_profile_baselines_path_resolves_against_repo() -> None:
     default = Path('/nonexistent/default.json')
     assert resolve_baselines_path(GENERIC_PROFILE, default) == default
-    lp = resolve_baselines_path(resolve_profile(str(PLATE_PROFILE)), default)
-    assert lp.is_file()
-    assert lp.is_relative_to(PLATE_PROFILE.parent)
-    names = {b['name'] for b in json.loads(lp.read_text())['baselines']}
-    assert 'lpdnet-usa' in names
+    rel = BakeoffProfile(name='x', baselines_path='scripts/curation/bakeoff/baselines.json')
+    assert resolve_baselines_path(rel, default) == HARNESS / 'baselines.json'
+
+
+def test_default_baseline_registry_is_empty() -> None:
+    reg = json.loads((HARNESS / 'baselines.json').read_text())
+    assert reg['baselines'] == []  # previous runs are the baselines; quant variants are produced
 
 
 # --- run.py: profile vs CLI precedence ------------------------------------------
@@ -148,15 +132,6 @@ def test_run_generic_profile_has_no_hardcoded_context_classes() -> None:
     assert args.imgsz == 640
     assert args.backend_options == {}
     assert args.class_map is None
-
-
-def test_run_profile_fills_unset_flags_and_cli_wins() -> None:
-    args, _ = _resolve('--profile', str(PLATE_PROFILE), '--dataset', '/x')
-    assert run.parse_class_ids(args.primary_classes) == (2, 3, 5, 7)
-    assert args.imgsz == 1280
-    args, _ = _resolve('--profile', str(PLATE_PROFILE), '--primary-classes', '0', '--imgsz', '320')
-    assert args.primary_classes == '0'
-    assert args.imgsz == 320
 
 
 def test_run_v2_flags_parse_json() -> None:
@@ -226,6 +201,14 @@ def test_writer_data_yaml_uses_profile_class_names(tmp_path: Path) -> None:
         w.write('a', _img(tmp_path / 'src/a.png'), [(5, 0.5, 0.5, 0.1, 0.1)])
 
 
+def test_writer_single_class_collapses_to_zero(tmp_path: Path) -> None:
+    w = datasets.YoloWriter(tmp_path, ('thing',))
+    assert not hasattr(w, 'target_class_id')
+    assert (w.map_class_id(7), w.map_class_name('anything')) == (0, 0)
+    with pytest.raises(TypeError):
+        datasets.YoloWriter(tmp_path, ('thing',), target_class_id=0)  # type: ignore[call-arg]
+
+
 def _voc(path: Path, objects: list[tuple[str, tuple[int, int, int, int]]]) -> None:
     objs = ''.join(
         f'<object><name>{n}</name><bndbox><xmin>{b[0]}</xmin><ymin>{b[1]}</ymin>'
@@ -273,19 +256,6 @@ def test_yolo_passthrough_keeps_or_drops_ids(tmp_path: Path) -> None:
     out = tmp_path / 'out'
     datasets.convert('yolo', src, out, prof)
     assert (out / 'labels/test/f1.txt').read_text() == '1 0.500000 0.500000 0.200000 0.200000\n'
-
-
-def test_plate_converters_come_from_the_example_profile(tmp_path: Path) -> None:
-    lp = resolve_profile(str(PLATE_PROFILE))
-    src = tmp_path / 'ccpd'
-    _img(src / '01-90_85-10&5_60&45-x.png')
-    out = tmp_path / 'out'
-    assert datasets.convert('ccpd', src, out, lp) == 1
-    assert datasets.available_converters()['ccpd'].example_for == 'license_plate'
-    label = (out / 'labels/test/01-90_85-10&5_60&45-x.txt').read_text().split()
-    assert label[0] == '0'
-    assert [float(v) for v in label[1:]] == pytest.approx([0.35, 0.5, 0.5, 0.8])
-    assert '  0: license_plate\n' in (out / 'data.yaml').read_text()
 
 
 def test_unknown_format_error_names_registry() -> None:
@@ -846,7 +816,7 @@ def _v2_model(key: str, class_map_by_dataset: dict | None = None, **kw) -> dict:
         'display_name': kw.pop('display_name', key),
         'source': 'custom',
         'run_id': None,
-        'backend': 'ultralytics',
+        'backend': kw.pop('backend', 'ultralytics'),
         'weights': None,
         'imgsz': 64,
         'mode': 'full',
@@ -924,9 +894,9 @@ def test_runner_passes_v2_model_fields_to_run(tmp_path: Path, monkeypatch) -> No
         train_test_overlap_by_dataset={'export:ds': {'n_images': 1, 'fraction': 0.5}},
         mode='both',
     )
-    status = bakeoff_runner.run_job(
-        _v2_spec(tmp_path, [entry], [model], profile=str(PLATE_PROFILE))
-    )
+    prof = tmp_path / 'prof.json'
+    prof.write_text(json.dumps({'name': 'mine', 'context_class_ids': [4]}))
+    status = bakeoff_runner.run_job(_v2_spec(tmp_path, [entry], [model], profile=str(prof)))
     assert status['state'] == 'done'
     assert status['models'] == ['run:r1:full', 'run:r1:crop']
     argv = seen[0]
@@ -934,7 +904,7 @@ def test_runner_passes_v2_model_fields_to_run(tmp_path: Path, monkeypatch) -> No
     def flag(name: str) -> str:
         return argv[argv.index(name) + 1]
 
-    assert flag('--profile') == str(PLATE_PROFILE)
+    assert flag('--profile') == str(prof)
     assert json.loads(flag('--class-map-json')) == {'0': 1}
     assert json.loads(flag('--backend-options-json')) == {'providers': 'CPUExecutionProvider'}
     assert json.loads(flag('--train-test-overlap-json')) == {'n_images': 1, 'fraction': 0.5}
@@ -947,7 +917,7 @@ class _FakeDetector:
     """Scripted detector: 'cat'/'dog' named classes; answers by image brightness."""
 
     runtime = 'fake'
-    class_names = {0: 'cat', 1: 'dog'}
+    class_names: dict[int, str] | None = {0: 'cat', 1: 'dog'}
 
     def __init__(self, name: str) -> None:
         self.name = name
@@ -962,7 +932,8 @@ class _FakeDetector:
 
 
 def test_runner_v2_end_to_end_with_fake_backend(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(run, '_build_backend', lambda args: _FakeDetector(args.name))
+    monkeypatch.setattr(registry, '_REGISTRY', dict(registry._REGISTRY))  # undo after the test
+    registry.register_backend('fake-scripted', lambda args: _FakeDetector(args.name))
 
     def in_process_task(ds_path, ds_out, ds_id, model, gpu):
         argv = bakeoff_runner._model_argv(ds_path, ds_out, ds_id, model)
@@ -973,8 +944,13 @@ def test_runner_v2_end_to_end_with_fake_backend(tmp_path: Path, monkeypatch) -> 
     monkeypatch.setattr(bakeoff_runner, '_run_task', in_process_task)
     _, entry = _v2_dataset(tmp_path)
     models = [
-        _v2_model('custom:by-name', display_name='by name'),
-        _v2_model('custom:dog-only', {'export:ds': {'1': 0}}, display_name='dog only'),
+        _v2_model('custom:by-name', display_name='by name', backend='fake-scripted'),
+        _v2_model(
+            'custom:dog-only',
+            {'export:ds': {'1': 0}},
+            display_name='dog only',
+            backend='fake-scripted',
+        ),
     ]
     status = bakeoff_runner.run_job(_v2_spec(tmp_path, [entry], models))
     out = tmp_path / 'out'
@@ -1003,58 +979,56 @@ def test_runner_v2_end_to_end_with_fake_backend(tmp_path: Path, monkeypatch) -> 
 
 # --- domain-neutral core guard ---------------------------------------------------
 
-# Files that are domain-specific by nature: the example tree and two
-# backends wrapping public license-plate-only models.
-_DOMAIN_FILES = {'backends/lpdnet.py', 'backends/open_image_models.py'}
-_DOMAIN_WORDS = re.compile(r'\b(plates?|lpr|licen[cs]e(?:[_ -]plates?)?|vehicles?)\b', re.I)
+# Domain content (profiles, baselines, converters, backends for one domain's
+# public models) lives only under the opt-in examples/ tree. The router is
+# rewritten in the W4 API wave (its v1 request model still names legacy
+# backends) and joins this scan there; the two W4 service modules are scanned
+# as soon as they exist.
+_DOMAIN_WORDS = re.compile(r'(?i)plate|lpr|lpdnet|vehicle|open[_-]?image')
+_W4_SERVICE_FILES = (
+    'src/services/curation/eval_datasets.py',
+    'src/services/curation/bakeoff_jobs.py',
+)
 
 
 def test_harness_core_has_no_domain_vocabulary() -> None:
+    files = [p for p in sorted(HARNESS.rglob('*')) if p.suffix in {'.py', '.json', '.txt', '.md'}]
+    files += [REPO_ROOT / f for f in _W4_SERVICE_FILES if (REPO_ROOT / f).exists()]
     offenders: list[str] = []
-    for path in sorted(HARNESS.rglob('*')):
-        rel = path.relative_to(HARNESS).as_posix()
-        if path.suffix not in {'.py', '.json'} or rel.startswith('examples/'):
-            continue
-        if rel in _DOMAIN_FILES:
-            continue
+    for path in files:
+        rel = path.relative_to(REPO_ROOT).as_posix()
         for n, line in enumerate(path.read_text().splitlines(), 1):
             if _DOMAIN_WORDS.search(line):
                 offenders.append(f'{rel}:{n}: {line.strip()}')
+        if _DOMAIN_WORDS.search(rel):
+            offenders.append(rel)
     assert not offenders, 'domain vocabulary in the generic harness core:\n' + '\n'.join(offenders)
+
+
+def test_builtin_backends_are_generic() -> None:
+    """Before any plugin module is imported, only the five generic backends exist."""
+    import subprocess
+    import sys
+
+    code = (
+        'from scripts.curation.bakeoff.backends import registry; '
+        'print(",".join(sorted(registry.registered_backends())))'
+    )
+    proc = subprocess.run(
+        [sys.executable, '-c', code], cwd=REPO_ROOT, capture_output=True, text=True, check=False
+    )
+    assert proc.returncode == 0, proc.stderr
+    builtins = {'ultralytics', 'triton', 'two-stage', 'onnxruntime', 'coreml'}
+    assert set(proc.stdout.strip().split(',')) == builtins
+    from scripts.curation.bakeoff.profile import BACKENDS
+
+    assert set(BACKENDS) == builtins
+    with pytest.raises(SystemExit, match='unknown bake-off backend'):
+        registry.get_backend('no-such-backend')
+    with pytest.raises(ValueError, match='already registered'):
+        registry.register_backend('ultralytics', lambda _args: _FakeDetector('x'))
 
 
 def test_paper_modules_are_not_in_the_harness() -> None:
     for name in ('lean_candidates', 'deskew_prototype', 'dedup_sweep', 'paper_numbers'):
         assert not (HARNESS / f'{name}.py').exists(), name
-
-
-def test_datasets_cli_loads_profile_converters(tmp_path: Path) -> None:
-    """``python -m ...datasets`` must see plugin converters (``__main__`` vs package)."""
-    import subprocess
-    import sys
-
-    src = tmp_path / 'ccpd'
-    _img(src / '01-90_85-10&5_60&45-x.png')
-    out = tmp_path / 'out'
-    proc = subprocess.run(
-        [
-            sys.executable,
-            '-m',
-            'scripts.curation.bakeoff.datasets',
-            '--profile',
-            str(PLATE_PROFILE),
-            '--format',
-            'ccpd',
-            '--src',
-            str(src),
-            '--out',
-            str(out),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert proc.returncode == 0, proc.stderr
-    assert 'converted 1 images (ccpd, profile=license_plate)' in proc.stdout
-    assert (out / 'labels/test/01-90_85-10&5_60&45-x.txt').read_text().startswith('0 ')

@@ -1,0 +1,46 @@
+{
+  "_comment": "Example baseline registry for the license_plate example profile: public license-plate detectors (schema: plan section 7.6 BaselineModel). Every model is single-class, so class_map sends its class 0 to the eval class named license_plate. 'weights' paths are placeholders relative to the evaluator container's working directory; download the checkpoints yourself and point these at them. The lpdnet and open-image-models backends register from this example's backends package (profile backend_modules).",
+  "baselines": [
+    {
+      "name": "open-image-models-yolov9t",
+      "backend": "open-image-models",
+      "imgsz": 1280,
+      "training_data": "open plate datasets",
+      "class_map": {
+        "0": "license_plate"
+      }
+    },
+    {
+      "name": "ml-debi-yolov8",
+      "backend": "ultralytics",
+      "weights": "./weights/ml-debi_yolov8_lpd/best.onnx",
+      "imgsz": 640,
+      "training_data": "undocumented",
+      "class_map": {
+        "0": "license_plate"
+      }
+    },
+    {
+      "name": "morsetechlab-yolo11s",
+      "backend": "ultralytics",
+      "weights": "./weights/morsetechlab_yolov11_lpd/license-plate-finetune-v1s.pt",
+      "imgsz": 640,
+      "training_data": "Roboflow ALPR",
+      "class_map": {
+        "0": "license_plate"
+      }
+    },
+    {
+      "name": "lpdnet-usa",
+      "backend": "lpdnet",
+      "weights": "./weights/lpdnet_pruned_v2.2.1/LPDNet_usa_pruned_tao5.onnx",
+      "training_data": "NVIDIA TAO (US)",
+      "class_map": {
+        "0": "license_plate"
+      },
+      "backend_options": {
+        "variant": "usa"
+      }
+    }
+  ]
+}

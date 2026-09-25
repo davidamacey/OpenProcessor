@@ -14,13 +14,13 @@ Built-in, domain-neutral converters:
 * ``voc``  --- Pascal VOC XML; ``<object><name>`` maps to a class id.
 
 Domain-specific converters register themselves from a profile's
-``converter_modules`` (an example profile under ``examples/<name>/`` can ship
-the converters for its domain's public benchmark formats).
+``converter_modules`` (an opt-in example under the repo's ``examples/``
+tree can ship the converters for its domain's public benchmark formats).
 
 Class-id policy (both built-ins): when the profile's label space has a
-single class, every source box collapses onto ``target_class_id`` (a
-single-class benchmark of a multi-class source); otherwise source ids /
-names are kept and anything outside the label space is dropped.
+single class, every source box collapses onto class 0 (a single-class
+benchmark of a multi-class source); otherwise source ids / names are kept
+and anything outside the label space is dropped.
 
 CLI:
     python -m scripts.curation.bakeoff.datasets \
@@ -63,27 +63,16 @@ class YoloWriter:
     Args:
         out_root: Output dataset root.
         class_names: Label space, index = class id (``profile.class_names``).
+            With a single class every box is written as class 0.
         split: Split directory name.
-        target_class_id: Class id used for single-class sources and as the
-            collapse target when ``class_names`` has one entry.
     """
 
-    def __init__(
-        self,
-        out_root: Path,
-        class_names: Sequence[str],
-        *,
-        split: str = 'test',
-        target_class_id: int = 0,
-    ) -> None:
+    def __init__(self, out_root: Path, class_names: Sequence[str], *, split: str = 'test') -> None:
         if not class_names:
             raise ValueError('YoloWriter needs at least one class name')
-        if not 0 <= target_class_id < len(class_names):
-            raise ValueError(f'target_class_id {target_class_id} outside nc={len(class_names)}')
         self.out_root = out_root
         self.class_names = tuple(class_names)
         self.split = split
-        self.target_class_id = target_class_id
         self._by_name = {n.strip().lower(): i for i, n in enumerate(self.class_names)}
 
     @classmethod
@@ -101,13 +90,13 @@ class YoloWriter:
     def map_class_id(self, source_id: int) -> int | None:
         """Source class id -> output id (collapse if single-class, else keep/drop)."""
         if self.single_class:
-            return self.target_class_id
+            return 0
         return source_id if 0 <= source_id < self.nc else None
 
     def map_class_name(self, source_name: str | None) -> int | None:
         """Source class name -> output id (collapse if single-class, else lookup/drop)."""
         if self.single_class:
-            return self.target_class_id
+            return 0
         if source_name is None:
             return None
         return self._by_name.get(source_name.strip().lower())
@@ -135,11 +124,10 @@ class YoloWriter:
         w: int,
         h: int,
         *,
-        class_id: int | None = None,
+        class_id: int = 0,
     ) -> None:
         """Convenience for single-class formats: abs xyxy boxes -> one class id."""
-        cid = self.target_class_id if class_id is None else class_id
-        yolo = [(cid, *b) for b in (abs_xyxy_to_yolo(bx, w, h) for bx in abs_boxes) if b]
+        yolo = [(class_id, *b) for b in (abs_xyxy_to_yolo(bx, w, h) for bx in abs_boxes) if b]
         self.write(stem, src_img, yolo)
 
     def write_data_yaml(self) -> Path:
@@ -340,7 +328,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         '--profile',
         default=None,
-        help='Bake-off profile: registered/example name or profile .json (default: generic)',
+        help='Bake-off profile: registered name or profile .json path (default: generic)',
     )
     p.add_argument('--format', required=True, choices=sorted(available_converters()))
     p.add_argument('--src', type=Path, required=True)

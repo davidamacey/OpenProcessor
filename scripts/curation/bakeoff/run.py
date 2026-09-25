@@ -36,9 +36,10 @@ import cv2
 
 from . import class_map as cmap, scoring
 from .backends.factory import _build_backend, parse_class_ids
+from .backends.registry import get_backend, load_backend_plugins
 from .dataset import YoloTestSet
 from .metrics import percentiles
-from .profile import BakeoffProfile, resolve_profile
+from .profile import BakeoffProfile, load_converter_plugins, resolve_profile
 from .report import build_report, log_mlflow, weights_size_mb, write_report
 
 
@@ -233,14 +234,18 @@ def _apply_backend_options(args: argparse.Namespace) -> None:
 def resolve_args(args: argparse.Namespace) -> tuple[argparse.Namespace, BakeoffProfile]:
     """Fill every flag the user left unset from the profile; parse JSON flags; validate.
 
-    Raises ``SystemExit`` for an unknown profile, malformed JSON flags, or a
-    triton backend with no model (the profile's ``triton_model`` is empty by
-    design).
+    Imports the profile's ``backend_modules`` / ``converter_modules`` first.
+    Raises ``SystemExit`` for an unknown profile or backend, malformed JSON
+    flags, or a triton backend with no model (the profile's ``triton_model``
+    is empty by design).
     """
     try:
         profile = resolve_profile(args.profile)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
+    # A profile's plugin modules register its extra backends / converters.
+    load_backend_plugins(profile)
+    load_converter_plugins(profile)
     for dest, attr in PROFILE_BACKED_ARGS.items():
         if getattr(args, dest) is None:
             setattr(args, dest, getattr(profile, attr))
@@ -253,6 +258,7 @@ def resolve_args(args: argparse.Namespace) -> tuple[argparse.Namespace, BakeoffP
     args.display_name = args.display_name or args.name or args.model_key
     args.name = args.name or args.display_name
     args.profile_name = profile.name
+    get_backend(args.backend)  # SystemExit naming the registered backends if unknown
     if not args.triton_model:
         args.triton_model = None
     if args.backend == 'triton' and not args.triton_model:

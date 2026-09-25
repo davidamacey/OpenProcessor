@@ -1,0 +1,32 @@
+{
+  "_comment": "Example/reference bake-off profile for license-plate detection. Opt-in: nothing loads it unless you select it by path (--profile examples/bakeoff/license_plate/profile.json, or OP_BAKEOFF_PROFILE=/app/examples/bakeoff/license_plate/profile.json in a container that mounts examples/ at /app/examples). triton_model is intentionally empty -- set it (or pass --triton-model) to the plate detector your Triton server actually serves.",
+  "name": "license_plate",
+  "description": "Single license_plate class; vehicle->plate crop mode via COCO vehicle classes",
+  "class_names": [
+    "license_plate"
+  ],
+  "imgsz": 1280,
+  "conf_floor": 0.001,
+  "nms_iou": 0.7,
+  "op_conf": 0.25,
+  "op_iou": 0.45,
+  "rank_metric": "map_50_95",
+  "default_backend": "ultralytics",
+  "triton_model": "",
+  "context_class_ids": [
+    2,
+    3,
+    5,
+    7
+  ],
+  "context_weights": "./weights/yolo11n.pt",
+  "context_imgsz": 960,
+  "context_conf": 0.25,
+  "converter_modules": [
+    "examples.bakeoff.license_plate.converters"
+  ],
+  "backend_modules": [
+    "examples.bakeoff.license_plate.backends"
+  ],
+  "baselines_path": "examples/bakeoff/license_plate/baselines.json"
+}
