@@ -21,10 +21,10 @@ export interface ReviewTabDef {
 /**
  * Top-level `/review` tabs (2026-09 tab consolidation). Down from 9 to 5.
  *
- * A review of all 9 tabs against the real 1,000-crop index found three
- * were too big to be curated queues — Mismatches (1,000 · 97.5% the size
- * of "All"), VLM Low-Conf (1,000 · 11% of the dataset), and Primary ·
- * Low-Conf (1,000 · 92% of the ENTIRE dataset). Those three collapsed
+ * A review of all 9 tabs against a large production index found three
+ * were too big to be curated queues — Mismatches (nearly the size of
+ * "All"), VLM Low-Conf (about a tenth of the dataset), and Primary ·
+ * Low-Conf (most of the ENTIRE dataset). Those three collapsed
  * into quick-filter preset chips shown on the `all` tab instead (see
  * REVIEW_PRESETS below) — same backend cohort query as before
  * (`{API_PREFIX}/review/{id}`, via resolveEffectiveTab), just triggered from a chip
@@ -38,7 +38,7 @@ export interface ReviewTabDef {
  *
  * Uncertainty, Model Disagreements, and Classifier Blind Spots stay as
  * top-level tabs unchanged — each is a real, distinct signal the live
- * counts backed up (100 / 12 / 1,000 respectively).
+ * counts backed up.
  */
 export const CORE_REVIEW_TABS: ReviewTabDef[] = [
   { id: 'all', label: 'All', urlId: 'all', endpointId: 'all' },

@@ -1,6 +1,6 @@
 /**
  * DQ-M3 frontend half (docs/design/data-quality-pass-2026-09-24.md):
- * `cluster_is_core` is null for 1,000 of 1,000 class-cluster members, and
+ * `cluster_is_core` is null for most (about 85%) class-cluster members, and
  * `/crops?cluster_id=N` defaults to `sort=updated_at:desc` — NOT
  * core-first — while `clusters/[id]/+page.svelte`'s old `cutLineIndex`
  * assumed the API had already sorted crops core-first. Live: a class
@@ -31,7 +31,7 @@ export interface CutLineResult {
 }
 
 /** Below this null-share, `cluster_is_core` is too sparse on this view to
- *  mean anything — matches the design doc's 1,000/1,000 (85%) null rate
+ *  mean anything — matches the ~85% null rate measured
  *  on class clusters, comfortably over half. */
 const MOSTLY_NULL_THRESHOLD = 0.5;
 

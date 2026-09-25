@@ -378,7 +378,7 @@
   //
   // DQ-M3 (docs/design/data-quality-pass-2026-09-24.md): this used to
   // assume "crops are already sorted core-first by the API" — false.
-  // `cluster_is_core` is null on 1,000/1,000 class-cluster members, and
+  // `cluster_is_core` is null on most class-cluster members, and
   // the default order (`sort=updated_at:desc`) isn't core-first at all —
   // live, a class cluster's member #1 usually isn't core (this old logic
   // degenerately produced index 0, effectively already hidden by the
