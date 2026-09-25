@@ -209,6 +209,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                 validated_count=validated.get(c.class_id, c.validated_count),
                 cluster_size=cluster_size.get(c.class_id, 0),
                 deprecated=c.deprecated,
+                merged_into=getattr(c, 'merged_into', None),
                 hotkey_letter=getattr(c, 'hotkey_letter', None),
                 adequacy=adequacy(validated.get(c.class_id, c.validated_count)),
                 added_at=getattr(c, 'added_at', None),

@@ -1275,6 +1275,17 @@
             "title": "Kind",
             "type": "string"
           },
+          "merged_into": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged Into"
+          },
           "sample_count": {
             "default": 0,
             "title": "Sample Count",

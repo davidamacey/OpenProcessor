@@ -110,6 +110,39 @@ def test_get_class_unknown_id_is_404(app_client: TestClient) -> None:
 
 
 # =============================================================================
+# ``merged_into`` wire exposure. RegistryClassEntry has tracked this since
+# the merge feature shipped (POST /classes/merge sets it on the deprecated
+# source class), but GET /classes never served it -- the frontend had no
+# way to render "-> merged into X" without a second per-class round trip.
+# =============================================================================
+
+
+def test_list_classes_exposes_merged_into_for_a_merged_class(
+    app_client: TestClient,
+) -> None:
+    listed = app_client.get('/curation/classes').json()['classes']
+    by_id = {c['class_id']: c for c in listed}
+    source_id, target_id = min(by_id), max(by_id)
+
+    r = app_client.post(
+        '/curation/classes/merge', json={'source_id': source_id, 'target_id': target_id}
+    )
+    assert r.status_code == 200, r.text
+
+    listed_after = app_client.get('/curation/classes').json()['classes']
+    by_id_after = {c['class_id']: c for c in listed_after}
+    assert by_id_after[source_id]['merged_into'] == target_id
+    assert by_id_after[target_id]['merged_into'] is None
+
+
+def test_list_classes_merged_into_is_null_for_an_unmerged_class(
+    app_client: TestClient,
+) -> None:
+    listed = app_client.get('/curation/classes').json()['classes']
+    assert all(c['merged_into'] is None for c in listed)
+
+
+# =============================================================================
 # Region-class ``kind`` marking. This used to override
 # sample_count/validated_count/cluster_size with the region inventory
 # total, which made a region slot look like an item
