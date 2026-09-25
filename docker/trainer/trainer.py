@@ -226,6 +226,7 @@ def populate_eval_block(
     save_dir: Path,
     val_results: Any | None = None,
     data_yaml_path: Path | None = None,
+    eval_head: str | None = None,
 ) -> None:
     """Parse Ultralytics' artifacts off disk into ``state.eval`` (+ ``compare``).
 
@@ -233,6 +234,14 @@ def populate_eval_block(
     P/R/F1/AP50/support (from a fresh ``val()`` pass), and the path to the
     confusion-matrix PNG. When an incumbent is configured and reachable, the
     side-by-side comparison lands in ``state.compare``.
+
+    ``eval_head`` (from :func:`_finalize_run`) records which detection head
+    the fresh ``val()`` pass scored -- ``"end2end"`` when the loaded
+    checkpoint's NMS-free one-to-one head was explicitly forced to match
+    what's actually served (see ``_finalize_run``), ``None`` for a model
+    family with no such distinction. Making this explicit means a
+    comparison result never silently depends on Ultralytics' own
+    checkpoint-dependent ``.val()`` default.
     """
     eval_block: dict[str, Any] = {}
     row = incumbent_compare.read_results_csv_last_row(save_dir / 'results.csv')
@@ -248,6 +257,9 @@ def populate_eval_block(
     cm_path = save_dir / 'confusion_matrix.png'
     if cm_path.is_file():
         eval_block['confusion_matrix_path'] = str(cm_path)
+
+    if eval_head is not None:
+        eval_block['head'] = eval_head
 
     if eval_block:
         with state.lock:
@@ -595,15 +607,46 @@ def _finalize_run(spec: JobSpec, state: StatusState, model: Any, data_yaml_path:
     # Ultralytics writes only mAP to results.csv. Best-effort; a failure here
     # falls back to the top-level metrics.
     val_results: Any | None = None
+    eval_head: str | None = None
     if best_pt.is_file():
         try:
-            val_results = type(model)(str(best_pt)).val(
+            eval_model = type(model)(str(best_pt))
+            # YOLO26 exports/serves the NMS-free one-to-one head (nms=False
+            # at export -- Ultralytics forces nms=False for any end2end
+            # model). `.val()` has no `end2end=` kwarg: the only real
+            # toggle is the loaded model's own `.end2end` property
+            # (ultralytics.nn.tasks.DetectionModel.end2end, a setter that
+            # delegates to set_head_attr). Force it here so this
+            # test-split re-validation scores the SAME head that's
+            # actually served, rather than silently depending on whatever
+            # head the reloaded checkpoint happens to default to.
+            # `hasattr(..., 'one2one')` (only present on a genuine
+            # dual-head build) guards against forcing end2end on a
+            # non-end2end architecture, which has no one2one branch to
+            # switch to and would break inference.
+            if spec.model_family == 'yolo26':
+                inner_model = getattr(eval_model, 'model', None)
+                head_layers = (
+                    getattr(inner_model, 'model', None) if inner_model is not None else None
+                )
+                head_module = head_layers[-1] if head_layers else None
+                if (
+                    inner_model is not None
+                    and head_module is not None
+                    and hasattr(head_module, 'one2one')
+                ):
+                    inner_model.end2end = True
+                    eval_head = 'end2end'
+            val_results = eval_model.val(
                 data=str(data_yaml_path), split='test', plots=False, verbose=False
             )
         except Exception as exc:  # metrics are not worth failing a run over
             logger.warning('val pass for per-class metrics failed', error=str(exc))
+            eval_head = None
 
-    populate_eval_block(state, save_dir, val_results=val_results, data_yaml_path=data_yaml_path)
+    populate_eval_block(
+        state, save_dir, val_results=val_results, data_yaml_path=data_yaml_path, eval_head=eval_head
+    )
 
 
 def run_job(spec: JobSpec) -> None:

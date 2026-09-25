@@ -661,6 +661,126 @@ def stub_ultralytics(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type[_S
     return _StubYOLO
 
 
+def test_finalize_run_forces_the_end2end_head_for_yolo26_test_split_eval(
+    jobs_dir: Path, export_dir: Path, tmp_path: Path
+) -> None:
+    """The trainer's own post-training test-split re-validation must score
+    the served (NMS-free, one-to-one) head -- not whichever head
+    Ultralytics' .val() defaults to for the reloaded checkpoint -- or the
+    comparison metric silently doesn't match what Triton actually serves.
+    ``.val()`` has no ``end2end=`` kwarg; the real toggle is the loaded
+    model's own ``.end2end`` property."""
+    job_id = _write_job(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
+    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    state = job_protocol.StatusState(
+        job_id=spec.job_id, campaign_id=spec.campaign_id, state='running'
+    )
+
+    save_dir = tmp_path / 'run'
+    (save_dir / 'weights').mkdir(parents=True)
+    best_pt = save_dir / 'weights' / 'best.pt'
+    best_pt.write_bytes(b'stub-checkpoint')
+    (save_dir / 'results.csv').write_text('epoch,metrics/mAP50(B),metrics/mAP50-95(B)\n1,0.5,0.3\n')
+    data_yaml_path = export_dir / 'data.yaml'
+
+    class _Head:
+        """A genuine dual-head build: one2one only exists once end2end
+        training actually created it -- same as Ultralytics' real head."""
+
+        def __init__(self) -> None:
+            self.end2end = False
+
+        @property
+        def one2one(self) -> dict[str, Any]:
+            return {'box_head': None, 'cls_head': None}
+
+    class _InnerModel:
+        def __init__(self) -> None:
+            self._head = _Head()
+            self.model = [self._head]  # DetectionModel.model[-1] is the head
+
+        @property
+        def end2end(self) -> bool:
+            return self._head.end2end
+
+        @end2end.setter
+        def end2end(self, value: bool) -> None:
+            self._head.end2end = value
+
+    class _RecordingYOLO:
+        observed_end2end: bool | None = None
+
+        def __init__(self, weights: str) -> None:
+            self.weights = weights
+            self.model = _InnerModel()
+            self.trainer: _StubTrainer | None = None
+
+        def export(self, **_kwargs: Any) -> None:
+            pass  # not under test here
+
+        def val(self, **_kwargs: Any) -> str:
+            _RecordingYOLO.observed_end2end = self.model.end2end
+            return 'val-result-sentinel'
+
+    model = _RecordingYOLO(str(best_pt))
+    model.trainer = _StubTrainer(save_dir)
+
+    trainer._finalize_run(spec, state, model, data_yaml_path)
+
+    assert _RecordingYOLO.observed_end2end is True
+    assert state.eval is not None
+    assert state.eval['head'] == 'end2end'
+
+
+def test_finalize_run_does_not_force_end2end_on_a_non_dual_head_model(
+    jobs_dir: Path, export_dir: Path, tmp_path: Path
+) -> None:
+    """A model with no one2one branch (not end2end-capable) must be left
+    alone -- forcing end2end=True on it would break inference, since it
+    has no one-to-one head to switch to."""
+    job_id = _write_job(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
+    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    state = job_protocol.StatusState(
+        job_id=spec.job_id, campaign_id=spec.campaign_id, state='running'
+    )
+
+    save_dir = tmp_path / 'run'
+    (save_dir / 'weights').mkdir(parents=True)
+    best_pt = save_dir / 'weights' / 'best.pt'
+    best_pt.write_bytes(b'stub-checkpoint')
+    (save_dir / 'results.csv').write_text('epoch,metrics/mAP50(B),metrics/mAP50-95(B)\n1,0.5,0.3\n')
+    data_yaml_path = export_dir / 'data.yaml'
+
+    class _NonEndToEndHead:
+        end2end = False  # no one2one property at all -- a plain single head
+
+    class _InnerModel:
+        def __init__(self) -> None:
+            self.model = [_NonEndToEndHead()]
+            self.end2end = False
+
+    class _RecordingYOLO:
+        def __init__(self, weights: str) -> None:
+            self.weights = weights
+            self.model = _InnerModel()
+            self.trainer: _StubTrainer | None = None
+
+        def export(self, **_kwargs: Any) -> None:
+            pass
+
+        def val(self, **_kwargs: Any) -> str:
+            return 'val-result-sentinel'
+
+    model = _RecordingYOLO(str(best_pt))
+    model.trainer = _StubTrainer(save_dir)
+
+    trainer._finalize_run(spec, state, model, data_yaml_path)
+
+    assert model.model.end2end is False  # left untouched
+    assert state.eval is not None
+    assert 'head' not in state.eval
+
+
 @pytest.mark.integration
 def test_run_job_drives_a_whole_export_run_to_finished(
     jobs_dir: Path, export_dir: Path, stub_ultralytics: type[_StubYOLO], tmp_path: Path
