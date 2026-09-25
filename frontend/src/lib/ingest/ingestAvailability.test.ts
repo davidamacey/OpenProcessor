@@ -4,7 +4,7 @@
  * per-test `vi.doMock` + dynamic `import()` is needed here).
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiError as ApiErrorType } from '$lib/api';
 
 async function loadStoreThrowing(makeError: (ApiError: typeof ApiErrorType) => unknown) {
@@ -31,6 +31,14 @@ async function loadStoreResolving(status: { total: number; by_source: []; by_day
   const { ingestAvailability } = await import('./ingestAvailability.svelte');
   return ingestAvailability;
 }
+
+// Each test re-imports a fresh singleton after resetModules(). Compile api.ts
+// and the store once up front so the first test doesn't pay the cold
+// transform against its own timeout when the full suite is loaded.
+beforeAll(async () => {
+  await vi.importActual('$lib/api');
+  await import('./ingestAvailability.svelte');
+});
 
 beforeEach(() => {
   vi.resetModules();
