@@ -412,7 +412,7 @@ def _save_reducer_to_disk(reducer: Any) -> None:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(_serialize_reducer(reducer))
     except Exception as exc:
-        logger.warning('legacy_umap_viz_state_disk_save_failed', error=str(exc))
+        logger.warning('curation_umap_viz_state_disk_save_failed', error=str(exc))
 
 
 async def _save_run_metadata(
@@ -441,14 +441,14 @@ async def _save_run_metadata(
     try:
         await opensearch.index(index=UMAP_VIZ_STATE_INDEX, id='current', body=body, refresh=False)
     except Exception as exc:
-        logger.warning('legacy_umap_viz_state_metadata_save_failed', error=str(exc))
+        logger.warning('curation_umap_viz_state_metadata_save_failed', error=str(exc))
 
 
 async def _load_run_metadata(opensearch: AsyncOpenSearch) -> dict[str, Any] | None:
     try:
         resp = await opensearch.get(index=UMAP_VIZ_STATE_INDEX, id='current')
     except Exception as exc:
-        logger.debug('legacy_umap_viz_state_metadata_not_found', error=str(exc))
+        logger.debug('curation_umap_viz_state_metadata_not_found', error=str(exc))
         return None
     return resp.get('_source') or None
 
@@ -569,7 +569,7 @@ async def run_projection_job(
         _atomic_write(state)
         raise
     except Exception as exc:
-        logger.error('legacy_viz_projection_job_failed', job_id=job_id, error=str(exc))
+        logger.error('curation_viz_projection_job_failed', job_id=job_id, error=str(exc))
         state.status = 'failed'
         state.error = str(exc)
         state.finished_at = time.time()
@@ -665,7 +665,7 @@ async def get_cached_projection(
         count_resp = await opensearch.count(index=ITEMS_INDEX, body={'query': missing_query})
         stale = int(count_resp.get('count', 0)) > 0
     except Exception as exc:
-        logger.warning('legacy_viz_projection_staleness_check_failed', error=str(exc))
+        logger.warning('curation_viz_projection_staleness_check_failed', error=str(exc))
 
     return {
         'points': points,

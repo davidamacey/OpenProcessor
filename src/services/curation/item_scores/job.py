@@ -289,7 +289,7 @@ async def run_scoring_job(
         _atomic_write(state)
         raise
     except Exception as exc:
-        logger.error('legacy_scores_job_failed', job_id=job_id, error=str(exc))
+        logger.error('curation_scores_job_failed', job_id=job_id, error=str(exc))
         state.status = 'failed'
         state.error = str(exc)
         state.finished_at = time.time()
@@ -314,7 +314,9 @@ async def compute_coverage(opensearch: AsyncOpenSearch) -> dict[str, Any]:
             )
             n = int(resp.get('count', 0))
         except Exception as exc:
-            logger.warning('legacy_scores_coverage_count_failed', scorer=scorer_id, error=str(exc))
+            logger.warning(
+                'curation_scores_coverage_count_failed', scorer=scorer_id, error=str(exc)
+            )
             n = 0
         coverage[scorer_id] = {
             'field': field_name,

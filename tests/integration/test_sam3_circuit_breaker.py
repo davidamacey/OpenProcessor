@@ -75,7 +75,7 @@ def _metric_value(counter: Any, **labels: str) -> float:
 @pytest.mark.asyncio
 async def test_three_failures_open_circuit() -> None:
     """3 x HTTP-500 within 30s open the circuit; 4th call short-circuits."""
-    from src.services.curation.metrics import LEGACY_SAM3_CIRCUIT_OPEN_TOTAL
+    from src.services.curation.metrics import OP_SEGMENTER_CIRCUIT_OPEN_TOTAL
 
     clock = _FakeClock()
     call_count = {'n': 0}
@@ -90,7 +90,7 @@ async def test_three_failures_open_circuit() -> None:
         now_func=clock,
     )
     host = 'http://sam3-fake-1:7000'
-    before = _metric_value(LEGACY_SAM3_CIRCUIT_OPEN_TOTAL, host=host)
+    before = _metric_value(OP_SEGMENTER_CIRCUIT_OPEN_TOTAL, host=host)
 
     # 3 failures (each one HTTP 500, no retries — 5xx is not retried).
     for _ in range(3):
@@ -104,7 +104,7 @@ async def test_three_failures_open_circuit() -> None:
         await sam.segment_plate(_CROP_BYTES)
     assert call_count['n'] == n_before_fourth, 'expected zero httpx calls past open circuit'
 
-    after = _metric_value(LEGACY_SAM3_CIRCUIT_OPEN_TOTAL, host=host)
+    after = _metric_value(OP_SEGMENTER_CIRCUIT_OPEN_TOTAL, host=host)
     assert after == before + 1, f'expected exactly one open transition, got delta {after - before}'
 
     await sam.aclose()
@@ -152,7 +152,7 @@ async def test_circuit_recovers_after_60s_window() -> None:
 @pytest.mark.asyncio
 async def test_bounded_retry_on_read_timeout() -> None:
     """ReadTimeout then success on retry 2 — call succeeds + retry counter ticks."""
-    from src.services.curation.metrics import LEGACY_SAM3_REQUEST_RETRIES_TOTAL
+    from src.services.curation.metrics import OP_SEGMENTER_REQUEST_RETRIES_TOTAL
 
     clock = _FakeClock()
     seq = {'n': 0}
@@ -169,7 +169,9 @@ async def test_bounded_retry_on_read_timeout() -> None:
         now_func=clock,
     )
     host = 'http://sam3-fake-3:7000'
-    before = _metric_value(LEGACY_SAM3_REQUEST_RETRIES_TOTAL, host=host, outcome='success_after_retry')
+    before = _metric_value(
+        OP_SEGMENTER_REQUEST_RETRIES_TOTAL, host=host, outcome='success_after_retry'
+    )
 
     # Patch asyncio.sleep to a no-op so the test doesn't actually wait 1s.
     import asyncio as _asyncio
@@ -188,7 +190,9 @@ async def test_bounded_retry_on_read_timeout() -> None:
     assert cand is not None
     assert seq['n'] == 2, 'expected 1 timeout + 1 retry-success = 2 calls'
 
-    after = _metric_value(LEGACY_SAM3_REQUEST_RETRIES_TOTAL, host=host, outcome='success_after_retry')
+    after = _metric_value(
+        OP_SEGMENTER_REQUEST_RETRIES_TOTAL, host=host, outcome='success_after_retry'
+    )
     assert after == before + 1, f'success_after_retry should tick by 1, delta {after - before}'
 
     await sam.aclose()

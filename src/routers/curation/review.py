@@ -537,7 +537,7 @@ async def freeze_test_holdout(
         except HTTPException:
             raise
         except Exception as exc:
-            logger.warning('legacy_test_holdout_count_failed', error=str(exc))
+            logger.warning('curation_test_holdout_count_failed', error=str(exc))
 
     cohort_query = build_cohort_query()
     try:

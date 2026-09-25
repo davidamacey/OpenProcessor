@@ -19,9 +19,9 @@ import pytest
 
 from scripts.curation.worker.client import Sam3Client
 from src.services.curation.metrics import (
-    LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS,
-    LEGACY_SAM3_REQUEST_RESPONSE_SECONDS,
-    LEGACY_SAM3_REQUEST_WAIT_SECONDS,
+    OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS,
+    OP_SEGMENTER_REQUEST_RESPONSE_SECONDS,
+    OP_SEGMENTER_REQUEST_WAIT_SECONDS,
 )
 
 
@@ -59,9 +59,13 @@ async def test_wait_inflight_response_histograms_observed():
 
     sam = _build_client(handler)
     before = {
-        'wait': _hist_obs_count(LEGACY_SAM3_REQUEST_WAIT_SECONDS, host=_HOST, outcome='hit'),
-        'inflight': _hist_obs_count(LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS, host=_HOST, outcome='hit'),
-        'response': _hist_obs_count(LEGACY_SAM3_REQUEST_RESPONSE_SECONDS, host=_HOST, outcome='hit'),
+        'wait': _hist_obs_count(OP_SEGMENTER_REQUEST_WAIT_SECONDS, host=_HOST, outcome='hit'),
+        'inflight': _hist_obs_count(
+            OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS, host=_HOST, outcome='hit'
+        ),
+        'response': _hist_obs_count(
+            OP_SEGMENTER_REQUEST_RESPONSE_SECONDS, host=_HOST, outcome='hit'
+        ),
     }
 
     candidate = await sam.segment_plate(_CROP_BYTES)
@@ -69,9 +73,13 @@ async def test_wait_inflight_response_histograms_observed():
     assert candidate.source == 'sam3'
 
     after = {
-        'wait': _hist_obs_count(LEGACY_SAM3_REQUEST_WAIT_SECONDS, host=_HOST, outcome='hit'),
-        'inflight': _hist_obs_count(LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS, host=_HOST, outcome='hit'),
-        'response': _hist_obs_count(LEGACY_SAM3_REQUEST_RESPONSE_SECONDS, host=_HOST, outcome='hit'),
+        'wait': _hist_obs_count(OP_SEGMENTER_REQUEST_WAIT_SECONDS, host=_HOST, outcome='hit'),
+        'inflight': _hist_obs_count(
+            OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS, host=_HOST, outcome='hit'
+        ),
+        'response': _hist_obs_count(
+            OP_SEGMENTER_REQUEST_RESPONSE_SECONDS, host=_HOST, outcome='hit'
+        ),
     }
     assert after['wait'] == before['wait'] + 1
     assert after['inflight'] == before['inflight'] + 1
@@ -112,7 +120,7 @@ async def test_outcome_label_correct_on_hit_miss_error():
     sam = Sam3Client(base_url=host, client=httpx_client)
 
     before = {
-        outcome: _hist_obs_count(LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS, host=host, outcome=outcome)
+        outcome: _hist_obs_count(OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS, host=host, outcome=outcome)
         for outcome in ('hit', 'miss', 'error')
     }
 
@@ -125,7 +133,7 @@ async def test_outcome_label_correct_on_hit_miss_error():
     assert err is None
 
     after = {
-        outcome: _hist_obs_count(LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS, host=host, outcome=outcome)
+        outcome: _hist_obs_count(OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS, host=host, outcome=outcome)
         for outcome in ('hit', 'miss', 'error')
     }
     assert after['hit'] == before['hit'] + 1

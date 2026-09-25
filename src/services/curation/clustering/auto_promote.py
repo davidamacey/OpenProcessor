@@ -98,7 +98,7 @@ async def _scroll_hits(
         try:
             await client.clear_scroll(scroll_id=scroll_id)
         except Exception as exc:  # nosec B110 — advisory cleanup only
-            logger.info('legacy_auto_promote_clear_scroll_failed', error=str(exc))
+            logger.info('curation_auto_promote_clear_scroll_failed', error=str(exc))
     return found
 
 
@@ -298,7 +298,9 @@ async def auto_promote_clusters(
         try:
             read = await _scroll_hits(client, index=ITEMS_INDEX, query=promote_query)
         except Exception as exc:
-            logger.warning('legacy_auto_promote_cluster_failed', cluster_id=cluster_id, error=str(exc))
+            logger.warning(
+                'curation_auto_promote_cluster_failed', cluster_id=cluster_id, error=str(exc)
+            )
             total_skipped += members
             continue
         if not read:
@@ -347,14 +349,16 @@ async def auto_promote_clusters(
                 writer_id='auto_promote',
             )
         except Exception as exc:
-            logger.warning('legacy_auto_promote_cluster_failed', cluster_id=cluster_id, error=str(exc))
+            logger.warning(
+                'curation_auto_promote_cluster_failed', cluster_id=cluster_id, error=str(exc)
+            )
             total_skipped += members
             continue
         total_promoted += int(result.get('updated', 0))
         total_skipped += int(result.get('skipped_due_to_conflict', 0))
         if result.get('errors'):
             logger.warning(
-                'legacy_auto_promote_bulk_partial_errors',
+                'curation_auto_promote_bulk_partial_errors',
                 cluster_id=cluster_id,
                 errors=len(result['errors']),
             )

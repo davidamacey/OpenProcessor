@@ -108,10 +108,10 @@ async def compute_centroid_distances(
         try:
             await client.clear_scroll(scroll_id=scroll_id)
         except Exception as exc:
-            logger.warning('legacy_outlier_clear_scroll_failed', error=str(exc))
+            logger.warning('curation_outlier_clear_scroll_failed', error=str(exc))
 
     if too_large:
-        logger.info('legacy_outlier_skip_too_large', index=index, n_seen=len(ids))
+        logger.info('curation_outlier_skip_too_large', index=index, n_seen=len(ids))
         return None
     if not ids:
         return {}

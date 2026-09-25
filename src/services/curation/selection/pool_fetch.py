@@ -92,7 +92,7 @@ async def fetch_pool_embeddings(
         try:
             await client.clear_scroll(scroll_id=scroll_id)
         except Exception as exc:
-            logger.warning('legacy_select_clear_scroll_failed', error=str(exc))
+            logger.warning('curation_select_clear_scroll_failed', error=str(exc))
 
     if truncated:
         return ids[:cap], np.zeros((0, 0), dtype=np.float32), True

@@ -25,10 +25,10 @@ from src.services.curation.ingest_class_sources import (
     classifier_class_sources,
 )
 from src.services.curation.metrics import (
-    LEGACY_STAGE_A_GEMMA_VISIBLE_DURATION_SECONDS,
-    LEGACY_STAGE_A_SAM_DURATION_SECONDS,
-    LEGACY_STAGE_B_GEMMA_VERIFY_DURATION_SECONDS,
-    LEGACY_STAGE_LPR_DURATION_SECONDS,
+    OP_STAGE_A_SEGMENTER_DURATION_SECONDS,
+    OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS,
+    OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS,
+    OP_STAGE_REGION_DETECTOR_DURATION_SECONDS,
 )
 from src.services.detection.cascade_detect import (
     PaddleOcrTextRecognizer,
@@ -126,7 +126,7 @@ async def _start_metrics_http_server(*, port: int) -> web.AppRunner:
     await runner.setup()
     site = _web.TCPSite(runner, host='0.0.0.0', port=port)
     await site.start()
-    logger.info('sam_worker_metrics_server_started', port=port)
+    logger.info('region_worker_metrics_server_started', port=port)
     return runner
 
 
@@ -400,15 +400,15 @@ async def run(args: argparse.Namespace) -> int:
         'total_processed': 0,
         'total_written': 0,
         'consecutive_empty_polls': 0,
-        # gemma_visible_skipped: primary-miss / secondary-shape crops
+        # vlm_visible_skipped: primary-miss / secondary-shape crops
         # that the visibility pre-filter short-circuited to
         # no_region_visible (no segmenter call, no combined call). The
         # point of this stage; bigger is better.
-        'gemma_visible_skipped': 0,
-        # gemma_visible_kept: crops that passed the filter and went on
+        'vlm_visible_skipped': 0,
+        # vlm_visible_kept: crops that passed the filter and went on
         # to the secondary-segmenter stage. Together with skipped, lets
         # us compute the filter's skip rate at a glance.
-        'gemma_visible_kept': 0,
+        'vlm_visible_kept': 0,
         # visible_no_verdict: crops the visibility VLM call answered with
         # nothing (empty reply). Left pending for a retry, up to the
         # no-verdict cap.
@@ -434,9 +434,9 @@ async def run(args: argparse.Namespace) -> int:
         # verdict (either kind above) on every allowed attempt; written
         # verify_rejected / verifier_no_verdict for human review.
         'combined_no_verdict_cap_hits': 0,
-        # combined_no_plate_visible: the VLM confirmed no region is
+        # combined_no_region_visible: the VLM confirmed no region is
         # visible at all. Terminal write.
-        'combined_no_plate_visible': 0,
+        'combined_no_region_visible': 0,
     }
 
     # A no-verdict reply (see no_verdict.py) is retried at most this many
@@ -446,7 +446,7 @@ async def run(args: argparse.Namespace) -> int:
     combined_no_verdict = NoVerdictCounter(no_verdict_cap)
 
     logger.info(
-        'sam_worker_start_streaming',
+        'region_worker_start_streaming',
         opensearch=args.opensearch,
         triton=args.triton,
         sam3_url=args.sam3_url,
@@ -612,12 +612,12 @@ async def run(args: argparse.Namespace) -> int:
                     try:
                         lpr_results = await lpr.detect_batch([t.crop_jpeg])
                     except Exception:
-                        LEGACY_STAGE_LPR_DURATION_SECONDS.labels(outcome='error').observe(
+                        OP_STAGE_REGION_DETECTOR_DURATION_SECONDS.labels(outcome='error').observe(
                             time.monotonic() - _lpr_t0
                         )
                         raise
                     cand = lpr_results[0] if lpr_results else None
-                    LEGACY_STAGE_LPR_DURATION_SECONDS.labels(
+                    OP_STAGE_REGION_DETECTOR_DURATION_SECONDS.labels(
                         outcome='hit' if cand is not None else 'miss'
                     ).observe(time.monotonic() - _lpr_t0)
                     if cand is not None:
@@ -761,15 +761,15 @@ async def run(args: argparse.Namespace) -> int:
                             msg = 'visibility stage fed without a VLM'
                             raise RuntimeError(msg)
                         verdicts = await gemma.region_visible_batch(plate_crops)
-                        LEGACY_STAGE_A_GEMMA_VISIBLE_DURATION_SECONDS.labels(outcome='ok').observe(
+                        OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS.labels(outcome='ok').observe(
                             time.monotonic() - _vis_t0
                         )
                     except Exception as exc:
-                        LEGACY_STAGE_A_GEMMA_VISIBLE_DURATION_SECONDS.labels(outcome='error').observe(
+                        OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS.labels(outcome='error').observe(
                             time.monotonic() - _vis_t0
                         )
                         logger.warning(
-                            'stage_a_gemma_visible_failed',
+                            'stage_a_vlm_visible_failed',
                             consumer_id=consumer_id,
                             chunk_size=len(plate_crops),
                             request_ids=batch_request_ids,
@@ -812,11 +812,11 @@ async def run(args: argparse.Namespace) -> int:
                             continue
                         visible_no_verdict.clear(t.crop_id)
                         if is_visible:
-                            metrics['gemma_visible_kept'] += 1
+                            metrics['vlm_visible_kept'] += 1
                             t.detection_trace.append('vlm_visible:yes')
                             await sam_q.put(t)
                         else:
-                            metrics['gemma_visible_skipped'] += 1
+                            metrics['vlm_visible_skipped'] += 1
                             t.detection_trace.append('vlm_visible:no')
                             t.update_doc = {
                                 F.status: RegionStatus.NO_REGION_VISIBLE,
@@ -865,7 +865,7 @@ async def run(args: argparse.Namespace) -> int:
                     # a host recovers. Drop from in_flight + sleep so
                     # the producer can re-fetch and we don't spin a hot
                     # loop while every host is down.
-                    LEGACY_STAGE_A_SAM_DURATION_SECONDS.labels(outcome='error').observe(
+                    OP_STAGE_A_SEGMENTER_DURATION_SECONDS.labels(outcome='error').observe(
                         time.monotonic() - _sam_t0
                     )
                     logger.error(
@@ -880,12 +880,12 @@ async def run(args: argparse.Namespace) -> int:
                     await asyncio.sleep(1.0)
                     continue
                 except Exception:
-                    LEGACY_STAGE_A_SAM_DURATION_SECONDS.labels(outcome='error').observe(
+                    OP_STAGE_A_SEGMENTER_DURATION_SECONDS.labels(outcome='error').observe(
                         time.monotonic() - _sam_t0
                     )
                     raise
                 _sam_elapsed = time.monotonic() - _sam_t0
-                LEGACY_STAGE_A_SAM_DURATION_SECONDS.labels(
+                OP_STAGE_A_SEGMENTER_DURATION_SECONDS.labels(
                     outcome='hit' if sam_candidate is not None else 'miss'
                 ).observe(_sam_elapsed)
                 logger.info(
@@ -1096,7 +1096,7 @@ async def run(args: argparse.Namespace) -> int:
                             class_names=class_names or None,
                         )
                         _gemma_elapsed = time.monotonic() - _gemma_t0
-                        LEGACY_STAGE_B_GEMMA_VERIFY_DURATION_SECONDS.labels(outcome='ok').observe(
+                        OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS.labels(outcome='ok').observe(
                             _gemma_elapsed
                         )
                         _gemma_ms = round(_gemma_elapsed * 1000.0, 2)
@@ -1109,7 +1109,7 @@ async def run(args: argparse.Namespace) -> int:
                             per_crop_ms=round(_gemma_ms / max(1, len(combined_crops)), 2),
                         )
                     except Exception as exc:
-                        LEGACY_STAGE_B_GEMMA_VERIFY_DURATION_SECONDS.labels(outcome='error').observe(
+                        OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS.labels(outcome='error').observe(
                             time.monotonic() - _gemma_t0
                         )
                         logger.warning(
@@ -1313,7 +1313,7 @@ async def run(args: argparse.Namespace) -> int:
                             }
                         else:
                             # region_visible=False — no region in this crop.
-                            metrics['combined_no_plate_visible'] += 1
+                            metrics['combined_no_region_visible'] += 1
                             t.detection_trace.append(f'{actor}:combined_no_region_visible')
                             t.update_doc = {
                                 F.status: RegionStatus.NO_REGION_VISIBLE,
@@ -1369,7 +1369,7 @@ async def run(args: argparse.Namespace) -> int:
             elapsed = time.monotonic() - t0
             rate = metrics['total_processed'] / max(time.monotonic() - started_at, 1e-6)
             logger.info(
-                'sam_worker_flush',
+                'region_worker_flush',
                 reason=reason,
                 flushed=len(pending),
                 written=n_written,
@@ -1434,14 +1434,14 @@ async def run(args: argparse.Namespace) -> int:
             hit_rate = state._cache_hits / cache_total if cache_total > 0 else 0.0
             async with in_flight_lock:
                 in_flight_count = len(in_flight)
-            vis_total = metrics['gemma_visible_kept'] + metrics['gemma_visible_skipped']
-            vis_skip_rate = metrics['gemma_visible_skipped'] / vis_total if vis_total > 0 else 0.0
+            vis_total = metrics['vlm_visible_kept'] + metrics['vlm_visible_skipped']
+            vis_skip_rate = metrics['vlm_visible_skipped'] / vis_total if vis_total > 0 else 0.0
             logger.info(
-                'sam_worker_metrics',
+                'region_worker_metrics',
                 in_q_depth=in_q.qsize(),
                 in_q_max=in_q.maxsize,
-                gemma_visible_q_depth=gemma_visible_q.qsize(),
-                gemma_visible_q_max=gemma_visible_q.maxsize,
+                vlm_visible_q_depth=gemma_visible_q.qsize(),
+                vlm_visible_q_max=gemma_visible_q.maxsize,
                 sam_q_depth=sam_q.qsize(),
                 sam_q_max=sam_q.maxsize,
                 combined_q_depth=combined_q.qsize(),
@@ -1454,13 +1454,13 @@ async def run(args: argparse.Namespace) -> int:
                 cache_hits=state._cache_hits,
                 cache_misses=state._cache_misses,
                 cache_hit_rate=round(hit_rate, 3),
-                gemma_visible_kept=metrics['gemma_visible_kept'],
-                gemma_visible_skipped=metrics['gemma_visible_skipped'],
-                gemma_visible_skip_rate=round(vis_skip_rate, 3),
+                vlm_visible_kept=metrics['vlm_visible_kept'],
+                vlm_visible_skipped=metrics['vlm_visible_skipped'],
+                vlm_visible_skip_rate=round(vis_skip_rate, 3),
                 visible_no_verdict=metrics['visible_no_verdict'],
                 visible_no_verdict_cap_hits=metrics['visible_no_verdict_cap_hits'],
                 combined_bbox_wrong=metrics['combined_bbox_wrong'],
-                combined_no_plate_visible=metrics['combined_no_plate_visible'],
+                combined_no_region_visible=metrics['combined_no_region_visible'],
                 combined_parse_failure=metrics['combined_parse_failure'],
                 combined_no_bbox_verdict=metrics['combined_no_bbox_verdict'],
                 combined_no_verdict_cap_hits=metrics['combined_no_verdict_cap_hits'],
@@ -1506,7 +1506,7 @@ async def run(args: argparse.Namespace) -> int:
             port=int(os.environ.get('OP_REGION_WORKER_METRICS_PORT', '4609')),
         )
         logger.info(
-            'sam_worker_pipeline_ready',
+            'region_worker_pipeline_ready',
             stage_a_lpr_consumers=args.concurrency,
             stage_a_visible_consumers=gemma_visible_concurrency,
             stage_a_sam_consumers=args.concurrency,
@@ -1514,7 +1514,7 @@ async def run(args: argparse.Namespace) -> int:
             visible_chunk=VISIBLE_CHUNK,
             combined_chunk=COMBINED_CHUNK,
             in_q_max=in_q.maxsize,
-            gemma_visible_q_max=gemma_visible_q.maxsize,
+            vlm_visible_q_max=gemma_visible_q.maxsize,
             sam_q_max=sam_q.maxsize,
             combined_q_max=combined_q.maxsize,
             out_q_max=out_q.maxsize,
@@ -1561,7 +1561,7 @@ async def run(args: argparse.Namespace) -> int:
 
     elapsed_total = time.monotonic() - started_at
     logger.info(
-        'sam_worker_done',
+        'region_worker_done',
         processed=metrics['total_processed'],
         written=metrics['total_written'],
         elapsed_s=round(elapsed_total, 2),

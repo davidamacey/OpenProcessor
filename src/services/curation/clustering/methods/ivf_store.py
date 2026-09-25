@@ -76,7 +76,7 @@ class IVFCentroidStore:
             try:
                 self._metadata = json.loads(self._metadata_path.read_text())
             except (json.JSONDecodeError, OSError) as exc:
-                logger.warning('legacy_ivf_store_metadata_read_failed', error=str(exc))
+                logger.warning('curation_ivf_store_metadata_read_failed', error=str(exc))
         return self._metadata
 
     @property
@@ -100,14 +100,14 @@ class IVFCentroidStore:
 
             self._index = faiss.read_index(str(self._centroids_path))
             logger.info(
-                'legacy_ivf_store_loaded',
+                'curation_ivf_store_loaded',
                 n_clusters=self._index.ntotal,
                 dim=self._index.d,
                 path=str(self._centroids_path),
             )
             return True
         except Exception as exc:
-            logger.warning('legacy_ivf_store_load_failed', error=str(exc))
+            logger.warning('curation_ivf_store_load_failed', error=str(exc))
             self._index = None
             return False
 
@@ -143,7 +143,9 @@ class IVFCentroidStore:
 
         self._index = index
         self._metadata = meta
-        logger.info('legacy_ivf_store_saved', n_clusters=k, dim=dim, path=str(self._centroids_path))
+        logger.info(
+            'curation_ivf_store_saved', n_clusters=k, dim=dim, path=str(self._centroids_path)
+        )
 
     def update_metadata(self, **fields: Any) -> None:
         """Merge ``fields`` into the persisted metadata without touching centroids.
@@ -252,7 +254,7 @@ class IVFCentroidStore:
         try:
             return json.loads(self._gate_path.read_text())
         except (json.JSONDecodeError, OSError) as exc:
-            logger.warning('legacy_ivf_store_gate_read_failed', error=str(exc))
+            logger.warning('curation_ivf_store_gate_read_failed', error=str(exc))
             return {}
 
     # -- assign -----------------------------------------------------------

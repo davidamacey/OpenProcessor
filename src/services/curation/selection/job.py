@@ -284,7 +284,7 @@ async def run_selection_job(
         _atomic_write(state)
         raise
     except Exception as exc:
-        logger.error('legacy_select_job_failed', job_id=job_id, error=str(exc))
+        logger.error('curation_select_job_failed', job_id=job_id, error=str(exc))
         state.status = 'failed'
         state.error = str(exc)
         state.finished_at = time.time()

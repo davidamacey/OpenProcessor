@@ -50,4 +50,4 @@ def test_curation_metric_namespace_is_exposed(client: TestClient) -> None:
     /metrics endpoint as the generic HTTP histogram, without a second
     scrape target."""
     body = client.get('/metrics').text
-    assert 'legacy_occ_retry_count' in body
+    assert 'op_occ_retry_count' in body

@@ -321,7 +321,7 @@ async def _fetch_cluster_members(
         try:
             await client.clear_scroll(scroll_id=scroll_id)
         except Exception as e:
-            logger.warning('legacy_clear_scroll_failed', error=str(e))
+            logger.warning('curation_clear_scroll_failed', error=str(e))
     return members
 
 
@@ -433,7 +433,7 @@ async def refine_cluster(
         ``{cluster_id, n_members, n_subclusters, purity, action, ...}``.
     """
     log = logger.bind(cluster_id=cluster_id, index=index, cluster_id_field=cluster_id_field)
-    log.info('legacy_refine_cluster_start')
+    log.info('curation_refine_cluster_start')
 
     # F-16: count before scrolling every member's embedding — a cluster
     # far past max_members should never pay for that fetch just to
@@ -444,7 +444,7 @@ async def refine_cluster(
     precount = int((count_resp or {}).get('count', 0))
     if precount > max_members:
         log.warning(
-            'legacy_refine_cluster_skipped_too_large_precount',
+            'curation_refine_cluster_skipped_too_large_precount',
             n_members=precount,
             max_allowed=max_members,
         )
@@ -474,7 +474,7 @@ async def refine_cluster(
 
     if n_members < MIN_REFINE_MEMBERS:
         log.info(
-            'legacy_refine_cluster_skipped_too_small',
+            'curation_refine_cluster_skipped_too_small',
             n_members=n_members,
             min_required=MIN_REFINE_MEMBERS,
         )
@@ -489,7 +489,7 @@ async def refine_cluster(
 
     if n_members > max_members:
         log.warning(
-            'legacy_refine_cluster_skipped_too_large',
+            'curation_refine_cluster_skipped_too_large',
             n_members=n_members,
             max_allowed=max_members,
         )
@@ -512,7 +512,7 @@ async def refine_cluster(
             dtype=np.float32,
         )
     except (KeyError, TypeError, ValueError) as e:
-        log.error('legacy_refine_cluster_embedding_load_failed', error=str(e))
+        log.error('curation_refine_cluster_embedding_load_failed', error=str(e))
         raise
 
     # AHC — sklearn import is local to keep startup fast and avoid a hard dep
@@ -576,7 +576,7 @@ async def refine_cluster(
         'metric': AHC_METRIC,
         'action': 'refined',
     }
-    log.info('legacy_refine_cluster_done', **summary)
+    log.info('curation_refine_cluster_done', **summary)
     return summary
 
 
@@ -888,7 +888,7 @@ async def _park_gated_residuals(
         )
         return int(resp.get('updated', 0))
     except Exception as exc:
-        logger.warning('legacy_park_gated_residuals_failed', error=str(exc))
+        logger.warning('curation_park_gated_residuals_failed', error=str(exc))
         return 0
 
 
@@ -1097,7 +1097,7 @@ async def cluster_residuals(
         try:
             await client.indices.refresh(index=ITEMS_INDEX)
         except Exception as exc:
-            logger.debug('legacy_cluster_refresh_failed', error=str(exc))
+            logger.debug('curation_cluster_refresh_failed', error=str(exc))
 
     # Park the gate complement (residual crops too small / blurry to train or
     # assign) and persist the gate policy so ingest + assign_only apply it.
@@ -1119,7 +1119,7 @@ async def cluster_residuals(
         if method_name == 'ivf':
             ivf_store.update_metadata(trained_mode=mode_label)
     except Exception as exc:
-        logger.warning('legacy_cluster_save_gate_failed', error=str(exc))
+        logger.warning('curation_cluster_save_gate_failed', error=str(exc))
 
     return {
         'status': 'success',
@@ -1190,7 +1190,7 @@ async def assign_only_residuals(
             total_estimate = int(cnt.get('count', 0))
             progress.update(processed=0, total=total_estimate)
         except Exception as exc:
-            logger.debug('legacy_ivf_assign_count_failed', error=str(exc))
+            logger.debug('curation_ivf_assign_count_failed', error=str(exc))
 
     body: dict[str, Any] = {'size': chunk_size, '_source': [field], 'query': query}
     resp = await client.search(index=ITEMS_INDEX, body=body, scroll='2m')
@@ -1238,13 +1238,13 @@ async def assign_only_residuals(
             try:
                 await client.clear_scroll(scroll_id=scroll_id)
             except Exception as exc:
-                logger.debug('legacy_ivf_assign_clear_scroll_failed', error=str(exc))
+                logger.debug('curation_ivf_assign_clear_scroll_failed', error=str(exc))
 
     if n_written:
         try:
             await client.indices.refresh(index=ITEMS_INDEX)
         except Exception as exc:
-            logger.debug('legacy_ivf_assign_refresh_failed', error=str(exc))
+            logger.debug('curation_ivf_assign_refresh_failed', error=str(exc))
 
     # Park the gate complement so newly-gated crops don't linger in stale
     # candidate buckets after an incremental re-sort.
@@ -1343,7 +1343,7 @@ async def cluster_region_residuals(
         try:
             await client.clear_scroll(scroll_id=scroll_id)
         except Exception as e:
-            logger.warning('legacy_clear_scroll_failed', error=str(e))
+            logger.warning('curation_clear_scroll_failed', error=str(e))
 
     n = len(ids)
     if n < MIN_REGIONS_FOR_CLUSTERING:
@@ -1405,10 +1405,10 @@ async def cluster_region_residuals(
     try:
         await client.indices.refresh(index=ITEMS_INDEX)
     except Exception as exc:
-        logger.debug('legacy_region_cluster_refresh_failed', error=str(exc))
+        logger.debug('curation_region_cluster_refresh_failed', error=str(exc))
 
     logger.info(
-        'legacy_cluster_region_residuals_done', n_regions=n, n_clusters=int(k), assigned=n_written
+        'curation_cluster_region_residuals_done', n_regions=n, n_clusters=int(k), assigned=n_written
     )
     return {
         'status': 'success',
@@ -1566,7 +1566,7 @@ async def _count_false_positives(client: AsyncOpenSearch) -> int:
         )
         return int(resp.get('count', 0))
     except Exception as exc:
-        logger.warning('legacy_count_fp_failed', error=str(exc))
+        logger.warning('curation_count_fp_failed', error=str(exc))
         return 0
 
 
@@ -1723,7 +1723,7 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
         try:
             await client.clear_scroll(scroll_id=scroll_id)
         except Exception as exc:
-            logger.warning('legacy_fp_centroid_clear_scroll_failed', error=str(exc))
+            logger.warning('curation_fp_centroid_clear_scroll_failed', error=str(exc))
 
     n = len(ids)
     if n == 0:
@@ -1778,7 +1778,7 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
     try:
         await client.indices.refresh(index=ITEMS_INDEX)
     except Exception as exc:
-        logger.debug('legacy_fp_centroid_refresh_failed', error=str(exc))
+        logger.debug('curation_fp_centroid_refresh_failed', error=str(exc))
 
     subids = [f'{FALSE_POSITIVE_REGION_CLUSTER_ID}{_subcluster_label(i)}' for i in range(int(k))]
     FalsePositiveCentroidStore().save(
@@ -1868,7 +1868,7 @@ async def auto_assign_fp_from_centroids(
         try:
             await client.clear_scroll(scroll_id=scroll_id)
         except Exception as exc:
-            logger.warning('legacy_auto_fp_clear_scroll_failed', error=str(exc))
+            logger.warning('curation_auto_fp_clear_scroll_failed', error=str(exc))
 
     bulk: list[dict[str, Any]] = []
     for doc_id, sub, d in moved:
@@ -1904,10 +1904,10 @@ async def auto_assign_fp_from_centroids(
         try:
             await client.indices.refresh(index=ITEMS_INDEX)
         except Exception as exc:
-            logger.debug('legacy_auto_fp_refresh_failed', error=str(exc))
+            logger.debug('curation_auto_fp_refresh_failed', error=str(exc))
 
     logger.info(
-        'legacy_auto_assign_fp_done', n_scanned=n_scanned, n_moved=len(moved), threshold=threshold
+        'curation_auto_assign_fp_done', n_scanned=n_scanned, n_moved=len(moved), threshold=threshold
     )
     return {
         'status': 'success',

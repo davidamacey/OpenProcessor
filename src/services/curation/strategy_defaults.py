@@ -154,7 +154,7 @@ async def resolve_effective_default(
 
             settings_doc = await get_curation_settings(opensearch)
         except Exception as exc:
-            logger.warning('legacy_settings_resolve_default_failed', axis=axis, error=str(exc))
+            logger.warning('curation_settings_resolve_default_failed', axis=axis, error=str(exc))
             return hardcoded
 
     override = (settings_doc.get('defaults') or {}).get(axis)

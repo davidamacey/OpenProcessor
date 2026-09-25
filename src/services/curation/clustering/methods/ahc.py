@@ -95,7 +95,7 @@ async def _build_knn_graph(
             graph = await _asyncio.to_thread(_gpu_knn)
             return graph, 'cuml'
         except Exception as exc:
-            logger.warning('legacy_ahc_gpu_knn_failed_fallback_cpu', error=str(exc))
+            logger.warning('curation_ahc_gpu_knn_failed_fallback_cpu', error=str(exc))
     graph = await _asyncio.to_thread(_cpu_knn)
     return graph, 'sklearn'
 
@@ -131,7 +131,7 @@ class AHCMethod:
 
         k = min(self.k, len(embeddings) - 1)
         connectivity, knn_backend = await _build_knn_graph(embeddings, k, backend_info)
-        logger.info('legacy_ahc_knn_graph_built', backend=knn_backend, k=k, n=len(embeddings))
+        logger.info('curation_ahc_knn_graph_built', backend=knn_backend, k=k, n=len(embeddings))
 
         if progress is not None:
             progress.raise_if_cancelled()

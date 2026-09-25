@@ -133,7 +133,7 @@ async def _try_combined_class_region(
             draw_overlay=True,
         )
     except CombinedParseFailure as exc:
-        logger.info('legacy_combined_parse_failure', crop_id=task.crop_id, error=str(exc))
+        logger.info('curation_combined_parse_failure', crop_id=task.crop_id, error=str(exc))
         return False
 
     # Stash class-side update so the eventual no_region_box terminal write

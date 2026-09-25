@@ -45,11 +45,11 @@ import httpx
 
 from src.core.logging import get_logger
 from src.services.curation.metrics import (
-    LEGACY_SAM3_CIRCUIT_OPEN_TOTAL,
-    LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS,
-    LEGACY_SAM3_REQUEST_RESPONSE_SECONDS,
-    LEGACY_SAM3_REQUEST_RETRIES_TOTAL,
-    LEGACY_SAM3_REQUEST_WAIT_SECONDS,
+    OP_SEGMENTER_CIRCUIT_OPEN_TOTAL,
+    OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS,
+    OP_SEGMENTER_REQUEST_RESPONSE_SECONDS,
+    OP_SEGMENTER_REQUEST_RETRIES_TOTAL,
+    OP_SEGMENTER_REQUEST_WAIT_SECONDS,
 )
 from src.services.detection.cascade_detect import RegionCandidate
 
@@ -145,12 +145,12 @@ class Sam3Client:
 
         if not self.enabled:
             logger.info(
-                'sam3_disabled',
+                'segmenter_disabled',
                 reason='no segmenter_url configured; segmenter leg skipped',
             )
 
         if len(urls) > 1:
-            logger.info('sam3_multi_url', urls=urls, count=len(urls))
+            logger.info('segmenter_multi_url', urls=urls, count=len(urls))
 
     @property
     def base_url(self) -> str:
@@ -214,14 +214,14 @@ class Sam3Client:
                 state.half_open_in_flight = False
                 state.open_until = now + _OPEN_DURATION_S
                 state.failures.clear()
-                LEGACY_SAM3_CIRCUIT_OPEN_TOTAL.labels(host=url).inc()
-                logger.warning('sam3_circuit_reopen', url=url, open_for_s=_OPEN_DURATION_S)
+                OP_SEGMENTER_CIRCUIT_OPEN_TOTAL.labels(host=url).inc()
+                logger.warning('segmenter_circuit_reopen', url=url, open_for_s=_OPEN_DURATION_S)
                 return
             if len(state.failures) >= _FAILURE_THRESHOLD:
                 state.open_until = now + _OPEN_DURATION_S
                 state.failures.clear()
-                LEGACY_SAM3_CIRCUIT_OPEN_TOTAL.labels(host=url).inc()
-                logger.warning('sam3_circuit_open', url=url, open_for_s=_OPEN_DURATION_S)
+                OP_SEGMENTER_CIRCUIT_OPEN_TOTAL.labels(host=url).inc()
+                logger.warning('segmenter_circuit_open', url=url, open_for_s=_OPEN_DURATION_S)
 
     async def aclose(self) -> None:
         if self._owns_client:
@@ -267,7 +267,7 @@ class Sam3Client:
                 if attempt < _MAX_ATTEMPTS - 1:
                     backoff = _RETRY_BACKOFFS[attempt]
                     logger.warning(
-                        'sam3_retry',
+                        'segmenter_retry',
                         url=url,
                         attempt=attempt + 1,
                         backoff_s=backoff,
@@ -275,11 +275,11 @@ class Sam3Client:
                     )
                     await asyncio.sleep(backoff)
                     continue
-                LEGACY_SAM3_REQUEST_RETRIES_TOTAL.labels(
+                OP_SEGMENTER_REQUEST_RETRIES_TOTAL.labels(
                     host=url, outcome='failed_after_all_retries'
                 ).inc()
                 logger.warning(
-                    'sam3_http_error',
+                    'segmenter_http_error',
                     error=str(exc),
                     error_type=type(exc).__name__,
                     url=url,
@@ -291,7 +291,7 @@ class Sam3Client:
                 if timing is not None:
                     timing['post_returned'] = self._now()
                 logger.warning(
-                    'sam3_http_error',
+                    'segmenter_http_error',
                     error=str(exc),
                     error_type=type(exc).__name__,
                     url=url,
@@ -299,12 +299,12 @@ class Sam3Client:
                 return None
             else:
                 if attempt > 0:
-                    LEGACY_SAM3_REQUEST_RETRIES_TOTAL.labels(
+                    OP_SEGMENTER_REQUEST_RETRIES_TOTAL.labels(
                         host=url, outcome='success_after_retry'
                     ).inc()
                 return resp
         if last_exc is not None:  # pragma: no cover
-            logger.warning('sam3_retry_unreachable', error=str(last_exc))
+            logger.warning('segmenter_retry_unreachable', error=str(last_exc))
         return None
 
     def _record_timings(
@@ -337,9 +337,9 @@ class Sam3Client:
             response = max(0.0, t_end - post_returned)
         else:
             response = 0.0
-        LEGACY_SAM3_REQUEST_WAIT_SECONDS.labels(host=url, outcome=outcome).observe(wait)
-        LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS.labels(host=url, outcome=outcome).observe(inflight)
-        LEGACY_SAM3_REQUEST_RESPONSE_SECONDS.labels(host=url, outcome=outcome).observe(response)
+        OP_SEGMENTER_REQUEST_WAIT_SECONDS.labels(host=url, outcome=outcome).observe(wait)
+        OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS.labels(host=url, outcome=outcome).observe(inflight)
+        OP_SEGMENTER_REQUEST_RESPONSE_SECONDS.labels(host=url, outcome=outcome).observe(response)
 
     async def segment_plate(self, crop_jpeg: bytes) -> RegionCandidate | None:
         """Segment one crop. Returns the top candidate in crop frame.
@@ -375,7 +375,7 @@ class Sam3Client:
         except ValueError:
             t_end = self._now()
             self._record_timings(url, t0, timing, outcome='error', t_end=t_end)
-            logger.warning('sam3_bad_json')
+            logger.warning('segmenter_bad_json')
             await self._on_failure(url)
             return None
 

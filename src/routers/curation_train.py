@@ -1423,7 +1423,7 @@ async def _resolve_full_registry_for_promote(job_id: str) -> dict[int, str]:
             }
         except Exception as exc:
             logger.warning(
-                'legacy_promote_registry_pin_unreadable',
+                'curation_promote_registry_pin_unreadable',
                 job_id=job_id,
                 snapshot_path=snapshot_path,
                 error=str(exc),
@@ -1432,11 +1432,11 @@ async def _resolve_full_registry_for_promote(job_id: str) -> dict[int, str]:
             if pinned:
                 return pinned
             logger.warning(
-                'legacy_promote_registry_pin_empty', job_id=job_id, snapshot_path=snapshot_path
+                'curation_promote_registry_pin_empty', job_id=job_id, snapshot_path=snapshot_path
             )
     else:
         logger.warning(
-            'legacy_promote_registry_pin_missing',
+            'curation_promote_registry_pin_missing',
             job_id=job_id,
             note=(
                 'no registry_snapshot_path on this job — falling back to the LIVE '
@@ -1566,7 +1566,7 @@ async def promote_run(
                 detail=str(ClassRemapMissingError(job_id)),
             )
         logger.warning(
-            'legacy_promote_class_remap_missing_force_bypass',
+            'curation_promote_class_remap_missing_force_bypass',
             job_id=job_id,
             note='subset/single_cls run promoted with force=true and no resolvable class_remap',
         )

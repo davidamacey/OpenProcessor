@@ -84,7 +84,7 @@ class HDBSCANMethod:
             try:
                 labels, extra = await _asyncio.to_thread(self._fit_gpu, embeddings)
                 logger.info(
-                    'legacy_hdbscan_gpu_done',
+                    'curation_hdbscan_gpu_done',
                     n=len(embeddings),
                     n_clusters=extra.get('n_clusters'),
                     n_noise=extra.get('n_noise'),
@@ -97,11 +97,11 @@ class HDBSCANMethod:
                     extra=extra,
                 )
             except Exception as exc:
-                logger.warning('legacy_hdbscan_gpu_failed_fallback_cpu', error=str(exc))
+                logger.warning('curation_hdbscan_gpu_failed_fallback_cpu', error=str(exc))
 
         labels, extra = await _asyncio.to_thread(self._fit_cpu, embeddings)
         logger.info(
-            'legacy_hdbscan_cpu_done',
+            'curation_hdbscan_cpu_done',
             n=len(embeddings),
             n_clusters=extra.get('n_clusters'),
             n_noise=extra.get('n_noise'),
@@ -157,7 +157,7 @@ class HDBSCANMethod:
                 extra['probabilities_mean'] = float(probs.mean())
                 extra['probabilities_min'] = float(probs.min())
             except Exception as exc:
-                logger.debug('legacy_hdbscan_probs_extract_failed', error=str(exc))
+                logger.debug('curation_hdbscan_probs_extract_failed', error=str(exc))
         return labels, extra
 
     def _fit_cpu(self, embeddings: np.ndarray) -> tuple[np.ndarray, dict[str, Any]]:

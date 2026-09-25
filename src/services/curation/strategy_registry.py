@@ -555,7 +555,7 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
             bucket = aggs.get(field)
             counts[field] = int(bucket['doc_count']) if bucket is not None else None
     except Exception as exc:
-        logger.warning('legacy_methods_field_coverage_failed', error=str(exc))
+        logger.warning('curation_methods_field_coverage_failed', error=str(exc))
         if need_total:
             counts[_COVERAGE_TOTAL_KEY] = None
         for field in missing:
@@ -611,7 +611,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
 
             settings_doc = await get_curation_settings(opensearch)
         except Exception as exc:
-            logger.warning('legacy_methods_settings_lookup_failed', error=str(exc))
+            logger.warning('curation_methods_settings_lookup_failed', error=str(exc))
             settings_doc = None
 
     cluster_default = await resolve_effective_default('cluster', settings_doc=settings_doc)
@@ -644,7 +644,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
             # "GET /curation/methods never fails or blocks" -- honor that even
             # against a totally broken client (e.g. one whose .count
             # attribute isn't even callable).
-            logger.warning('legacy_methods_field_coverage_failed', error=str(exc))
+            logger.warning('curation_methods_field_coverage_failed', error=str(exc))
             coverage = {}
 
     total = coverage.get(_COVERAGE_TOTAL_KEY)

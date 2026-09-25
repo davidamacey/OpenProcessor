@@ -6,10 +6,9 @@ at module scope. It deliberately does NOT wire any of these metrics
 into the worker / OCC / VLM code paths — the owning services are
 responsible for incrementing / observing them where appropriate.
 
-Metric *names* (``legacy_*``) are unchanged from the reference
-implementation this module was ported from — renaming them is
-deferred to a later phase since they are operationally visible
-(dashboards, alert rules); only the *module path* moves here. See
+Metric names use the ``op_*`` prefix (renamed from the reference
+implementation's ``legacy_*`` during the OSS naming sweep — see
+``docs/design/naming_sweep_plan.md`` W4). See
 ``docs/design/curation_design_rationale.md`` §6 (known gaps).
 """
 
@@ -24,15 +23,15 @@ from src.core.metrics import HTTP_REQUEST_DURATION_SECONDS  # re-exported below 
 # OCC (optimistic concurrency control)
 # ---------------------------------------------------------------------------
 
-LEGACY_OCC_RETRY_COUNT = Histogram(
-    'legacy_occ_retry_count',
+OP_OCC_RETRY_COUNT = Histogram(
+    'op_occ_retry_count',
     'Distribution of OCC retry attempts per write (0 = first-try success).',
     labelnames=('endpoint',),
     buckets=(0, 1, 2, 3),
 )
 
-LEGACY_OCC_FINAL_CONFLICT = Counter(
-    'legacy_occ_final_conflict',
+OP_OCC_FINAL_CONFLICT = Counter(
+    'op_occ_final_conflict',
     'OCC writes that exhausted retries and returned 409 to the caller.',
     labelnames=('endpoint',),
 )
@@ -41,8 +40,8 @@ LEGACY_OCC_FINAL_CONFLICT = Counter(
 # Worker conflict skips
 # ---------------------------------------------------------------------------
 
-LEGACY_WORKER_SKIP_HUMAN_WON = Counter(
-    'legacy_worker_skip_human_won',
+OP_WORKER_SKIP_HUMAN_WON = Counter(
+    'op_worker_skip_human_won',
     'Worker writes skipped because a human label (or higher-precedence writer) won.',
     labelnames=('writer_id',),
 )
@@ -51,18 +50,18 @@ LEGACY_WORKER_SKIP_HUMAN_WON = Counter(
 # VLM combined vs separate calls
 # ---------------------------------------------------------------------------
 
-LEGACY_GEMMA_CALL_COMBINED_COUNT = Counter(
-    'legacy_gemma_call_combined_count',
+OP_VLM_CALL_COMBINED_COUNT = Counter(
+    'op_vlm_call_combined_count',
     'VLM calls made via the combined verify+OCR prompt path.',
 )
 
-LEGACY_GEMMA_CALL_SEPARATE_COUNT = Counter(
-    'legacy_gemma_call_separate_count',
+OP_VLM_CALL_SEPARATE_COUNT = Counter(
+    'op_vlm_call_separate_count',
     'VLM calls made via the legacy separate verify / OCR prompts.',
 )
 
-LEGACY_GEMMA_COMBINED_PARSE_FAILURE = Counter(
-    'legacy_gemma_combined_parse_failure',
+OP_VLM_COMBINED_PARSE_FAILURE = Counter(
+    'op_vlm_combined_parse_failure',
     'Combined-call responses that failed to parse (fell back to separate calls).',
 )
 
@@ -70,18 +69,18 @@ LEGACY_GEMMA_COMBINED_PARSE_FAILURE = Counter(
 # Shared-memory crop cache
 # ---------------------------------------------------------------------------
 
-LEGACY_SHM_CROP_CACHE_HITS = Counter(
-    'legacy_shm_crop_cache_hits',
+OP_SHM_CROP_CACHE_HITS = Counter(
+    'op_shm_crop_cache_hits',
     'Crop lookups served from the shared-memory crop cache.',
 )
 
-LEGACY_SHM_CROP_CACHE_MISSES = Counter(
-    'legacy_shm_crop_cache_misses',
+OP_SHM_CROP_CACHE_MISSES = Counter(
+    'op_shm_crop_cache_misses',
     'Crop lookups that missed the shared-memory crop cache.',
 )
 
-LEGACY_SHM_CROP_CACHE_EVICTIONS = Counter(
-    'legacy_shm_crop_cache_evictions',
+OP_SHM_CROP_CACHE_EVICTIONS = Counter(
+    'op_shm_crop_cache_evictions',
     'Entries evicted from the shared-memory crop cache.',
 )
 
@@ -89,18 +88,18 @@ LEGACY_SHM_CROP_CACHE_EVICTIONS = Counter(
 # Source-image prefetch + decode counters
 # ---------------------------------------------------------------------------
 
-LEGACY_SOURCE_IMAGE_PREFETCH_HITS = Counter(
-    'legacy_source_image_prefetch_hits',
+OP_SOURCE_IMAGE_PREFETCH_HITS = Counter(
+    'op_source_image_prefetch_hits',
     'Source-image opens that found the file already in the page cache (prefetch landed).',
 )
 
-LEGACY_SOURCE_IMAGE_PREFETCH_MISSES = Counter(
-    'legacy_source_image_prefetch_misses',
+OP_SOURCE_IMAGE_PREFETCH_MISSES = Counter(
+    'op_source_image_prefetch_misses',
     'Source-image opens that had to fault from disk despite prefetch.',
 )
 
-LEGACY_SOURCE_IMAGE_DECODE_COUNT = Counter(
-    'legacy_source_image_decode_count',
+OP_SOURCE_IMAGE_DECODE_COUNT = Counter(
+    'op_source_image_decode_count',
     'Total source-image decodes performed.',
 )
 
@@ -108,13 +107,13 @@ LEGACY_SOURCE_IMAGE_DECODE_COUNT = Counter(
 # Thumbnail cache
 # ---------------------------------------------------------------------------
 
-LEGACY_THUMBNAIL_CACHE_HITS = Counter(
-    'legacy_thumbnail_cache_hits',
+OP_THUMBNAIL_CACHE_HITS = Counter(
+    'op_thumbnail_cache_hits',
     'Thumbnail requests served from the in-memory cache.',
 )
 
-LEGACY_THUMBNAIL_CACHE_MISSES = Counter(
-    'legacy_thumbnail_cache_misses',
+OP_THUMBNAIL_CACHE_MISSES = Counter(
+    'op_thumbnail_cache_misses',
     'Thumbnail requests that missed the cache and were regenerated.',
 )
 
@@ -140,52 +139,52 @@ LEGACY_THUMBNAIL_CACHE_MISSES = Counter(
 # histograms cannot.
 # ---------------------------------------------------------------------------
 
-LEGACY_STAGE_A_SAM_DURATION_SECONDS = Histogram(
-    'legacy_stage_a_sam_duration_seconds',
-    'Stage A SAM3 segment_plate call duration in seconds.',
+OP_STAGE_A_SEGMENTER_DURATION_SECONDS = Histogram(
+    'op_stage_a_segmenter_duration_seconds',
+    'Stage A segmenter segment call duration in seconds.',
     labelnames=('outcome',),  # hit / miss / error
     buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
 )
 
-LEGACY_STAGE_A_GEMMA_VISIBLE_DURATION_SECONDS = Histogram(
-    'legacy_stage_a_gemma_visible_duration_seconds',
-    'Stage A.gemma_visible region_visible_batch call duration in seconds.',
+OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS = Histogram(
+    'op_stage_a_vlm_visible_duration_seconds',
+    'Stage A.vlm_visible region_visible_batch call duration in seconds.',
     labelnames=('outcome',),  # ok / parse_failed / error
     buckets=(0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0),
 )
 
-LEGACY_STAGE_B_GEMMA_VERIFY_DURATION_SECONDS = Histogram(
-    'legacy_stage_b_gemma_verify_duration_seconds',
+OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS = Histogram(
+    'op_stage_b_vlm_verify_duration_seconds',
     'Stage B VLM verify_region_batch call duration in seconds.',
     labelnames=('outcome',),  # ok / parse_failed / error
     buckets=(0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0),
 )
 
-LEGACY_STAGE_LPR_DURATION_SECONDS = Histogram(
-    'legacy_stage_lpr_duration_seconds',
-    'Stage A LPR (lpr_nanov11_640) detect_batch call duration in seconds.',
+OP_STAGE_REGION_DETECTOR_DURATION_SECONDS = Histogram(
+    'op_stage_region_detector_duration_seconds',
+    'Stage A region detector (single-class detector) detect_batch call duration in seconds.',
     labelnames=('outcome',),  # hit / miss / error
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0),
 )
 
 # ---------------------------------------------------------------------------
-# SAM3 circuit breaker + bounded retry.
+# Segmenter circuit breaker + bounded retry.
 # ---------------------------------------------------------------------------
 
-LEGACY_SAM3_CIRCUIT_OPEN_TOTAL = Counter(
-    'legacy_sam3_circuit_open_total',
-    'Number of times the SAM3 per-host circuit breaker transitioned to UNHEALTHY.',
+OP_SEGMENTER_CIRCUIT_OPEN_TOTAL = Counter(
+    'op_segmenter_circuit_open_total',
+    'Number of times the segmenter per-host circuit breaker transitioned to UNHEALTHY.',
     labelnames=('host',),
 )
 
-LEGACY_SAM3_REQUEST_RETRIES_TOTAL = Counter(
-    'legacy_sam3_request_retries_total',
-    'SAM3 request retry outcomes per host (success_after_retry / failed_after_all_retries).',
+OP_SEGMENTER_REQUEST_RETRIES_TOTAL = Counter(
+    'op_segmenter_request_retries_total',
+    'Segmenter request retry outcomes per host (success_after_retry / failed_after_all_retries).',
     labelnames=('host', 'outcome'),
 )
 
 # ---------------------------------------------------------------------------
-# SAM3 fan-out decomposition. Three histograms split the total per-call
+# Segmenter fan-out decomposition. Three histograms split the total per-call
 # wall time into client-side queue wait, HTTP round-trip (request sent →
 # full body received), and JSON decode/parse. This answers the
 # "oversubscription vs server saturation" question without needing
@@ -200,7 +199,7 @@ LEGACY_SAM3_REQUEST_RETRIES_TOTAL = Counter(
 #   * ``inflight``  = (time .post() returned) - (time .post() started).
 #                     This includes connection-pool acquisition,
 #                     network RTT, server-side queueing, and decode on
-#                     the SAM3 side.
+#                     the segmenter side.
 #   * ``response``  = (time json() completed) - (time .post() returned).
 #                     Pure client-side parse cost.
 # These bookmarks are taken from ``time.monotonic()``. The ``wait``
@@ -210,7 +209,7 @@ LEGACY_SAM3_REQUEST_RETRIES_TOTAL = Counter(
 # ``inflight`` histogram is the load-bearing signal in this phase.
 # ---------------------------------------------------------------------------
 
-_SAM3_LATENCY_BUCKETS = (
+_SEGMENTER_LATENCY_BUCKETS = (
     0.005,
     0.01,
     0.025,
@@ -225,25 +224,25 @@ _SAM3_LATENCY_BUCKETS = (
     30.0,
 )
 
-LEGACY_SAM3_REQUEST_WAIT_SECONDS = Histogram(
-    'legacy_sam3_request_wait_seconds',
-    'SAM3 client-side queue wait before the HTTP request is sent.',
+OP_SEGMENTER_REQUEST_WAIT_SECONDS = Histogram(
+    'op_segmenter_request_wait_seconds',
+    'Segmenter client-side queue wait before the HTTP request is sent.',
     labelnames=('host', 'outcome'),
-    buckets=_SAM3_LATENCY_BUCKETS,
+    buckets=_SEGMENTER_LATENCY_BUCKETS,
 )
 
-LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS = Histogram(
-    'legacy_sam3_request_inflight_seconds',
-    'SAM3 HTTP round-trip latency (request issued → full response body received).',
+OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS = Histogram(
+    'op_segmenter_request_inflight_seconds',
+    'Segmenter HTTP round-trip latency (request issued → full response body received).',
     labelnames=('host', 'outcome'),
-    buckets=_SAM3_LATENCY_BUCKETS,
+    buckets=_SEGMENTER_LATENCY_BUCKETS,
 )
 
-LEGACY_SAM3_REQUEST_RESPONSE_SECONDS = Histogram(
-    'legacy_sam3_request_response_seconds',
-    'SAM3 client-side JSON decode + parse latency after HTTP body received.',
+OP_SEGMENTER_REQUEST_RESPONSE_SECONDS = Histogram(
+    'op_segmenter_request_response_seconds',
+    'Segmenter client-side JSON decode + parse latency after HTTP body received.',
     labelnames=('host', 'outcome'),
-    buckets=_SAM3_LATENCY_BUCKETS,
+    buckets=_SEGMENTER_LATENCY_BUCKETS,
 )
 
 # ---------------------------------------------------------------------------
@@ -254,42 +253,42 @@ LEGACY_SAM3_REQUEST_RESPONSE_SECONDS = Histogram(
 # production.
 # ---------------------------------------------------------------------------
 
-LEGACY_INGEST_OCC_FINAL_CONFLICT = Counter(
-    'legacy_ingest_occ_final_conflict',
+OP_INGEST_OCC_FINAL_CONFLICT = Counter(
+    'op_ingest_occ_final_conflict',
     'Ingest upsert OCC writes that exhausted retries (skipped without clobber).',
 )
 
-LEGACY_INGEST_PRESERVED_HUMAN_LABEL = Counter(
-    'legacy_ingest_preserved_human_label',
+OP_INGEST_PRESERVED_HUMAN_LABEL = Counter(
+    'op_ingest_preserved_human_label',
     'Ingest upserts that preserved a pre-existing human-applied label field.',
     labelnames=('field',),
 )
 
 __all__ = [
     'HTTP_REQUEST_DURATION_SECONDS',
-    'LEGACY_GEMMA_CALL_COMBINED_COUNT',
-    'LEGACY_GEMMA_CALL_SEPARATE_COUNT',
-    'LEGACY_GEMMA_COMBINED_PARSE_FAILURE',
-    'LEGACY_INGEST_OCC_FINAL_CONFLICT',
-    'LEGACY_INGEST_PRESERVED_HUMAN_LABEL',
-    'LEGACY_OCC_FINAL_CONFLICT',
-    'LEGACY_OCC_RETRY_COUNT',
-    'LEGACY_SAM3_CIRCUIT_OPEN_TOTAL',
-    'LEGACY_SAM3_REQUEST_INFLIGHT_SECONDS',
-    'LEGACY_SAM3_REQUEST_RESPONSE_SECONDS',
-    'LEGACY_SAM3_REQUEST_RETRIES_TOTAL',
-    'LEGACY_SAM3_REQUEST_WAIT_SECONDS',
-    'LEGACY_SHM_CROP_CACHE_EVICTIONS',
-    'LEGACY_SHM_CROP_CACHE_HITS',
-    'LEGACY_SHM_CROP_CACHE_MISSES',
-    'LEGACY_SOURCE_IMAGE_DECODE_COUNT',
-    'LEGACY_SOURCE_IMAGE_PREFETCH_HITS',
-    'LEGACY_SOURCE_IMAGE_PREFETCH_MISSES',
-    'LEGACY_STAGE_A_GEMMA_VISIBLE_DURATION_SECONDS',
-    'LEGACY_STAGE_A_SAM_DURATION_SECONDS',
-    'LEGACY_STAGE_B_GEMMA_VERIFY_DURATION_SECONDS',
-    'LEGACY_STAGE_LPR_DURATION_SECONDS',
-    'LEGACY_THUMBNAIL_CACHE_HITS',
-    'LEGACY_THUMBNAIL_CACHE_MISSES',
-    'LEGACY_WORKER_SKIP_HUMAN_WON',
+    'OP_INGEST_OCC_FINAL_CONFLICT',
+    'OP_INGEST_PRESERVED_HUMAN_LABEL',
+    'OP_OCC_FINAL_CONFLICT',
+    'OP_OCC_RETRY_COUNT',
+    'OP_SEGMENTER_CIRCUIT_OPEN_TOTAL',
+    'OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS',
+    'OP_SEGMENTER_REQUEST_RESPONSE_SECONDS',
+    'OP_SEGMENTER_REQUEST_RETRIES_TOTAL',
+    'OP_SEGMENTER_REQUEST_WAIT_SECONDS',
+    'OP_SHM_CROP_CACHE_EVICTIONS',
+    'OP_SHM_CROP_CACHE_HITS',
+    'OP_SHM_CROP_CACHE_MISSES',
+    'OP_SOURCE_IMAGE_DECODE_COUNT',
+    'OP_SOURCE_IMAGE_PREFETCH_HITS',
+    'OP_SOURCE_IMAGE_PREFETCH_MISSES',
+    'OP_STAGE_A_SEGMENTER_DURATION_SECONDS',
+    'OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS',
+    'OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS',
+    'OP_STAGE_REGION_DETECTOR_DURATION_SECONDS',
+    'OP_THUMBNAIL_CACHE_HITS',
+    'OP_THUMBNAIL_CACHE_MISSES',
+    'OP_VLM_CALL_COMBINED_COUNT',
+    'OP_VLM_CALL_SEPARATE_COUNT',
+    'OP_VLM_COMBINED_PARSE_FAILURE',
+    'OP_WORKER_SKIP_HUMAN_WON',
 ]
