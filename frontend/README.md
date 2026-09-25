@@ -20,7 +20,9 @@ Apple system colors, keyboard-first UX.
 
 ## Screenshots
 
-![Demo](docs/screenshots/demo.gif)
+<!-- TODO(F10): add screenshots captured from the public-data fresh-start run
+     (COCO val2017 + Open Images plates). The existing docs/screenshots*/
+     images show non-public imagery and must never be linked here. -->
 
 Full walkthrough of every route with explanations: **[docs/FEATURES.md](docs/FEATURES.md)**.
 
