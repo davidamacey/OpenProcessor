@@ -20,6 +20,17 @@ export PROJECT_DIR
 # Source library functions
 source "${SCRIPT_DIR}/lib/colors.sh"
 source "${SCRIPT_DIR}/lib/gpu.sh"
+source "${SCRIPT_DIR}/lib/ports.sh"
+
+# F-66: resolve every port from THIS deployment's .env (falling back to the
+# stock defaults) instead of hardcoding localhost:4603/4600/4607/4605. On a
+# shared host running a second isolated stack (remapped ports via .env),
+# the hardcoded literals used to report ANOTHER stack's /health as this
+# one's.
+API_PORT="$(env_port API_PORT 4603)"
+TRITON_HTTP_PORT="$(env_port TRITON_HTTP_PORT 4600)"
+OPENSEARCH_PORT="$(env_port OPENSEARCH_PORT 4607)"
+GRAFANA_PORT="$(env_port GRAFANA_PORT 4605)"
 
 # Source optional libraries only when needed
 load_download_lib() {
@@ -108,38 +119,38 @@ cmd_status() {
 
     # API health
     local api_status
-    api_status=$(curl -s -o /dev/null -w "%{http_code}" localhost:4603/health 2>/dev/null || echo "000")
+    api_status=$(curl -s -o /dev/null -w "%{http_code}" "localhost:${API_PORT}/health" 2>/dev/null || echo "000")
     if [[ "$api_status" == "200" ]]; then
-        echo -e "  API (4603):       ${GREEN}healthy${NC}"
+        echo -e "  API (${API_PORT}):       ${GREEN}healthy${NC}"
     else
-        echo -e "  API (4603):       ${RED}unavailable${NC} (HTTP $api_status)"
+        echo -e "  API (${API_PORT}):       ${RED}unavailable${NC} (HTTP $api_status)"
     fi
 
     # Triton health
     local triton_status
-    triton_status=$(curl -s -o /dev/null -w "%{http_code}" localhost:4600/v2/health/ready 2>/dev/null || echo "000")
+    triton_status=$(curl -s -o /dev/null -w "%{http_code}" "localhost:${TRITON_HTTP_PORT}/v2/health/ready" 2>/dev/null || echo "000")
     if [[ "$triton_status" == "200" ]]; then
-        echo -e "  Triton (4600):    ${GREEN}healthy${NC}"
+        echo -e "  Triton (${TRITON_HTTP_PORT}):    ${GREEN}healthy${NC}"
     else
-        echo -e "  Triton (4600):    ${RED}unavailable${NC} (HTTP $triton_status)"
+        echo -e "  Triton (${TRITON_HTTP_PORT}):    ${RED}unavailable${NC} (HTTP $triton_status)"
     fi
 
     # OpenSearch health
     local opensearch_status
-    opensearch_status=$(curl -s -o /dev/null -w "%{http_code}" localhost:4607 2>/dev/null || echo "000")
+    opensearch_status=$(curl -s -o /dev/null -w "%{http_code}" "localhost:${OPENSEARCH_PORT}" 2>/dev/null || echo "000")
     if [[ "$opensearch_status" == "200" ]]; then
-        echo -e "  OpenSearch (4607): ${GREEN}healthy${NC}"
+        echo -e "  OpenSearch (${OPENSEARCH_PORT}): ${GREEN}healthy${NC}"
     else
-        echo -e "  OpenSearch (4607): ${RED}unavailable${NC} (HTTP $opensearch_status)"
+        echo -e "  OpenSearch (${OPENSEARCH_PORT}): ${RED}unavailable${NC} (HTTP $opensearch_status)"
     fi
 
     # Grafana health
     local grafana_status
-    grafana_status=$(curl -s -o /dev/null -w "%{http_code}" localhost:4605/api/health 2>/dev/null || echo "000")
+    grafana_status=$(curl -s -o /dev/null -w "%{http_code}" "localhost:${GRAFANA_PORT}/api/health" 2>/dev/null || echo "000")
     if [[ "$grafana_status" == "200" ]]; then
-        echo -e "  Grafana (4605):   ${GREEN}healthy${NC}"
+        echo -e "  Grafana (${GRAFANA_PORT}):   ${GREEN}healthy${NC}"
     else
-        echo -e "  Grafana (4605):   ${YELLOW}unavailable${NC}"
+        echo -e "  Grafana (${GRAFANA_PORT}):   ${YELLOW}unavailable${NC}"
     fi
 
     echo ""
@@ -155,7 +166,7 @@ cmd_health() {
     log_info "Checking API health..."
 
     local response
-    response=$(curl -s localhost:4603/health 2>/dev/null)
+    response=$(curl -s "localhost:${API_PORT}/health" 2>/dev/null)
 
     if [[ -n "$response" ]]; then
         echo "$response" | python3 -m json.tool 2>/dev/null || echo "$response"
@@ -173,7 +184,7 @@ cmd_models() {
     log_info "Fetching loaded models from Triton..."
 
     local response
-    response=$(curl -s -X POST localhost:4600/v2/repository/index 2>/dev/null)
+    response=$(curl -s -X POST "localhost:${TRITON_HTTP_PORT}/v2/repository/index" 2>/dev/null)
 
     if [[ -n "$response" ]]; then
         echo ""
@@ -304,7 +315,7 @@ cmd_test() {
             # Simple curl tests
             echo ""
             echo "Health check:"
-            curl -s localhost:4603/health | python3 -m json.tool 2>/dev/null || curl -s localhost:4603/health
+            curl -s "localhost:${API_PORT}/health" | python3 -m json.tool 2>/dev/null || curl -s "localhost:${API_PORT}/health"
             echo ""
             ;;
         full)

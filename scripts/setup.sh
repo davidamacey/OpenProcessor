@@ -35,26 +35,13 @@ source "${SCRIPT_DIR}/lib/gpu.sh"
 source "${SCRIPT_DIR}/lib/download.sh"
 source "${SCRIPT_DIR}/lib/export.sh"
 source "${SCRIPT_DIR}/lib/config.sh"
+source "${SCRIPT_DIR}/lib/ports.sh"
 
-# G-04: read a single KEY=value out of .env without sourcing the whole
-# file (.env may hold JSON-ish values in commented-out advanced settings
-# that aren't safe to `source`). Smoke tests below hit whatever ports
-# THIS deployment's .env actually configured, not the hardcoded
-# defaults -- a remapped API_PORT/TRITON_HTTP_PORT/OPENSEARCH_PORT (e.g.
-# a second isolated stack) must still smoke-test correctly.
-env_port() {
-    local key="$1" default="$2" env_file="$PROJECT_DIR/.env"
-    if [[ -f "$env_file" ]]; then
-        local value
-        value="$(grep -E "^${key}=" "$env_file" | tail -n1 | cut -d= -f2-)"
-        if [[ -n "$value" ]]; then
-            echo "$value"
-            return 0
-        fi
-    fi
-    echo "$default"
-}
-
+# G-04 / F-66: env_port() (scripts/lib/ports.sh) reads a single KEY=value
+# out of .env without sourcing the whole file. Smoke tests below hit
+# whatever ports THIS deployment's .env actually configured, not the
+# hardcoded defaults -- a remapped API_PORT/TRITON_HTTP_PORT/OPENSEARCH_PORT
+# (e.g. a second isolated stack) must still smoke-test correctly.
 API_PORT="$(env_port API_PORT 4603)"
 TRITON_HTTP_PORT="$(env_port TRITON_HTTP_PORT 4600)"
 OPENSEARCH_PORT="$(env_port OPENSEARCH_PORT 4607)"
