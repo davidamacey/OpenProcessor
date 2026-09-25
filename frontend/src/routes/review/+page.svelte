@@ -2125,7 +2125,7 @@
     {:else}
       <!-- Source image with bbox -->
       <div
-        class="flex h-[45vh] flex-col surface p-2 lg:h-auto lg:min-h-0"
+        class="flex h-[35vh] flex-col surface p-2 lg:h-auto lg:min-h-0"
         data-testid="review-source-panel"
       >
         <div class="mb-2 flex items-center gap-2 px-1 text-xs text-zinc-400">
