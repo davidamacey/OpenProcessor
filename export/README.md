@@ -181,7 +181,7 @@ Encoder) provides both towers of one shared 1024-d embedding space:
 | Tower | Consumer | Serving | Contract (hardcoded in `src/clients/pe_encoder.py`) |
 |-------|----------|---------|-----------------------------------------------------|
 | Image | `PEEncoder.encode_images` → `pe_embedding` field (semantic search, near-dup, clustering, embedding viz) | Triton `pe_image_encoder`, **required** | `images` FP32 `[B, 3, 336, 336]` → `image_embeddings` FP32 `[B, 1024]` |
-| Text  | `PEEncoder.encode_text` → `GET /curation/search/text` queries | **In-process** (ONNX Runtime, else PyTorch); Triton `pe_text_encoder` optional | `text_tokens` INT64 `[B, T≤32]` → `text_embeddings` FP32 `[B, 1024]` |
+| Text  | `PEEncoder.encode_text` → `GET /curation/search/text` queries | **Triton `pe_text_encoder`** (preferred: one shared CPU instance for every uvicorn worker), lazily-loaded in-process PyTorch fallback; in-process ONNX Runtime is an explicit opt-in only | `text_tokens` INT64 `[B, T≤32]` → `text_embeddings` FP32 `[B, 1024]` |
 
 Both embeddings come out L2-normalized. See
 [`docs/CURATION.md`](../docs/CURATION.md#models-you-must-supply) for what
@@ -195,15 +195,18 @@ make pe-download        # 0. weights: pinned commit + SHA-256 into the HF cache
 make pe-export-image    # 1. image tower -> pytorch_models/pe_image_encoder.onnx
 make pe-build-trt       # 2. -> models/pe_image_encoder/1/model.plan (Path 1)
 #   make pe-build-ort   #    ...or serve the ONNX via Triton ORT (Path 2 fallback)
-make pe-export-text     # 3. text tower -> pytorch_models/pe_text_encoder.onnx
-# 4. load the image model in Triton (explicit model control): add
-#    --load-model=pe_image_encoder to the triton-server command, then
+make pe-export-text-triton  # 3. text tower -> pytorch_models/pe_text_encoder.onnx
+                             #    + installs models/pe_text_encoder/1/model.onnx + config.pbtxt
+# 4. load both models in Triton (explicit model control): add
+#    --load-model=pe_image_encoder and --load-model=pe_text_encoder to
+#    the triton-server command (both are in docker-compose.yml's default
+#    load list already), then
 make restart-triton
-docker compose restart yolo-api   # picks up the text ONNX
-make pe-text-status     # expect "backend": "onnx"
+make pe-text-status     # expect "backend": "triton"
 ```
 
-`make export-pe` runs steps 0–3 plus the Triton restart.
+`make export-pe` runs steps 0–3 (with the text tower installed for
+Triton) plus the Triton restart.
 
 #### 0. Weights — `download_pe_weights.py`
 
@@ -282,15 +285,22 @@ the `nn.MultiheadAttention` reshapes, so this exporter uses the
 `Dim`s.
 
 The API picks the text backend at startup (`OP_PE_TEXT_BACKEND`, default
-`auto`): **ONNX Runtime** (`CPUExecutionProvider`) when
-`OP_PE_TEXT_ONNX_PATH` (default `/app/pytorch_models/pe_text_encoder.onnx`)
-exists, else **Triton** `pe_text_encoder` if it reports ready, else
-**PyTorch eager**. Pin with `onnx` / `triton` / `torch`. A Triton call that
-fails switches the process to in-process encoding for good, so Triton is
-never a hard dependency. `GET /health/pe_text` (`make pe-text-status`)
-reports the active backend. Tokenization always stays in Python with PE's
-own `SimpleTokenizer`, so `perception_models` stays a runtime dependency
-(for the tokenizer only, when ONNX is used).
+`auto`): **Triton** `pe_text_encoder` if it reports ready, else a
+**lazily-loaded PyTorch eager** fallback (loaded once, on the first query
+a given worker actually serves — never at warm time). **ONNX Runtime**
+(`CPUExecutionProvider`, also lazy) only runs when explicitly pinned
+(`OP_PE_TEXT_BACKEND=onnx`); `auto` no longer considers it at all. This
+matters because it's an in-process backend: with N uvicorn workers, N
+independent ~1.4 GB ONNX Runtime sessions (or worse, N PyTorch eager
+loads) is exactly the failure this ordering avoids — see F-07 in
+`docs/design/openprocessor_internal/fresh_start_e2e_findings_2026-09-25.md`.
+Pin with `onnx` / `triton` / `torch`. A Triton call that fails switches
+the process to in-process encoding for good, so Triton is never a hard
+dependency. `GET /health/pe_text` (`make pe-text-status`) reports the
+active backend. Tokenization always stays in Python with PE's own
+`SimpleTokenizer`, so `perception_models` stays a runtime dependency (for
+the tokenizer only, when the PyTorch or ONNX in-process backend is
+used).
 
 Reference CPU numbers (Xeon E5-2680 v3, 8 intra-op threads on a shared,
 loaded host — treat as relative; median ms per call, typical queries):

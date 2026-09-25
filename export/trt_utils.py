@@ -6,9 +6,14 @@ export scripts don't each carry their own compatibility branches.
 
 from __future__ import annotations
 
+import os
+import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import tensorrt as trt
+
+if TYPE_CHECKING:
+    import tensorrt as trt
 
 
 def create_explicit_network(builder: trt.Builder) -> trt.INetworkDefinition:
@@ -17,7 +22,13 @@ def create_explicit_network(builder: trt.Builder) -> trt.INetworkDefinition:
     TRT >= 10 networks are always explicit-batch; the
     ``NetworkDefinitionCreationFlag.EXPLICIT_BATCH`` flag was deprecated in
     10.x and removed in newer majors. Pass it only where it still exists.
+
+    Imports ``tensorrt`` lazily (at call time, not module import time) so
+    this module can be imported -- and its callers unit-tested with a fake
+    ``tensorrt`` in ``sys.modules`` -- without the real package installed.
     """
+    import tensorrt as trt
+
     flag = getattr(trt.NetworkDefinitionCreationFlag, 'EXPLICIT_BATCH', None)
     if flag is not None:
         return builder.create_network(1 << int(flag))
@@ -38,6 +49,8 @@ def enable_fp16(builder: trt.Builder, config: trt.IBuilderConfig) -> bool:
     CPU-only torch while the engine build targets the GPU through
     TensorRT itself.
     """
+    import tensorrt as trt
+
     fp16_flag = getattr(trt.BuilderFlag, 'FP16', None)
     if fp16_flag is None:
         return False
@@ -55,6 +68,8 @@ def engine_output_dtypes(plan_path: str | Path) -> dict[str, str]:
     config.pbtxt must be written from the BUILT engine rather than
     assumed — a hardcoded dtype breaks across TRT releases.
     """
+    import tensorrt as trt
+
     dtype_map = {
         trt.DataType.FLOAT: 'TYPE_FP32',
         trt.DataType.HALF: 'TYPE_FP16',
@@ -92,6 +107,8 @@ def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None)
     On older TRT (classic FP16 flag still present) this is a no-op and
     returns the input path — :func:`enable_fp16` handles precision there.
     """
+    import tensorrt as trt
+
     if getattr(trt.BuilderFlag, 'FP16', None) is not None:
         return Path(onnx_path)
 
@@ -114,3 +131,56 @@ def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None)
     out = Path(output_path) if output_path else Path(onnx_path).with_suffix('.fp16.onnx')
     onnx.save(fp16_model, str(out))
     return out
+
+
+def validate_serialized_engine(engine_bytes: bytes) -> bool:
+    """Confirm a serialized TensorRT engine is non-empty and deserializes.
+
+    Used before an engine ever touches a real ``model.plan`` path so a
+    build that "succeeds" (non-None ``build_serialized_network``) but
+    produced garbage never gets swapped in over a working install.
+    """
+    import tensorrt as trt
+
+    if not engine_bytes:
+        return False
+    trt_logger = trt.Logger(trt.Logger.ERROR)
+    trt.init_libnvinfer_plugins(trt_logger, '')
+    runtime = trt.Runtime(trt_logger)
+    try:
+        engine = runtime.deserialize_cuda_engine(engine_bytes)
+    except Exception:
+        return False
+    return engine is not None
+
+
+def atomic_write_plan(engine_bytes: bytes, plan_path: str | Path) -> Path:
+    """Validate + atomically install a serialized engine at ``plan_path``.
+
+    Never deletes an existing plan up front and never writes directly to
+    the destination: the engine is validated (deserialized), written to a
+    temp file in the same directory (same filesystem, so the final
+    ``os.replace`` is atomic), then swapped into place. A failed or
+    invalid build therefore always leaves whatever plan was already there
+    (working or absent) untouched instead of a half-written or missing
+    file.
+
+    Raises ``ValueError`` if the engine fails validation -- callers should
+    treat that the same as a build failure and leave Triton alone.
+    """
+    plan_path = Path(plan_path)
+    if not validate_serialized_engine(engine_bytes):
+        raise ValueError('serialized engine is empty or failed to deserialize')
+
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(plan_path.parent), prefix=f'.{plan_path.name}.', suffix='.tmp'
+    )
+    try:
+        with os.fdopen(fd, 'wb') as f:
+            f.write(engine_bytes)
+        Path(tmp_name).replace(plan_path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+    return plan_path

@@ -631,8 +631,10 @@ pe-text-status: ## PE-Core: which text backend the API is using (GET /health/pe_
 		echo "API not reachable on port $(API_PORT)"
 
 .PHONY: export-pe
-export-pe: pe-download pe-export-image pe-build-trt pe-export-text ## PE-Core: full chain (weights, image ONNX + TRT, text ONNX)
+export-pe: pe-download pe-export-image pe-build-trt pe-export-text-triton ## PE-Core: full chain (weights, image ONNX + TRT, text ONNX served via Triton)
 	@echo "If pe-build-trt failed on attention-pool ops: make pe-build-ort"
+	@echo "pe_text_encoder is now installed under models/pe_text_encoder/1/model.onnx --"
+	@echo "reload/restart Triton (or 'make reload-promoted') to pick it up if it wasn't already loaded."
 	@$(MAKE) restart-triton
 	@echo "Restart the API to pick up the text ONNX: $(COMPOSE) restart $(API_SERVICE)"
 

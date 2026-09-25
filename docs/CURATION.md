@@ -99,16 +99,24 @@ trainer. A deployment supplies:
   (`GET /curation/search/text`), near-duplicate detection, residual
   clustering and the embedding visualization all run on — without it,
   ingest cannot write an embedding and those features have nothing to
-  query. The text tower encodes search queries into the same space; it
-  runs **in the API process** (ONNX Runtime over
-  `pytorch_models/pe_text_encoder.onnx`, else PyTorch eager through
-  `perception_models`), so search keeps working with the GPU/Triton down,
-  with an optional Triton `pe_text_encoder` route. This repo ships the
-  whole chain — `make pe-download` (pinned + SHA-256-verified checkpoint;
-  the HF repo is not gated), `make pe-export-image` + `make pe-build-trt`
-  (or `make pe-build-ort` when the TensorRT build fails on PE's
-  attention-pool ops), `make pe-export-text` (parity-gated against
-  PyTorch), then `--load-model=pe_image_encoder` in Triton and an API
+  query. The text tower encodes search queries into the same space.
+  **`auto` (the default) prefers Triton's `pe_text_encoder`** — one shared
+  CPU instance for every uvicorn worker — and falls back to a
+  **lazily-loaded, in-process** PyTorch backend only if that model isn't
+  ready, so search still works with Triton down. An in-process ONNX
+  Runtime backend over `pytorch_models/pe_text_encoder.onnx` also exists,
+  but is an explicit opt-in (`OP_PE_TEXT_BACKEND=onnx`) — with 32 uvicorn
+  workers each loading their own ~1.4 GB session, that path alone was
+  observed to add ~80 GiB of container RSS on a fresh install, which is
+  exactly why `auto` no longer considers it. This repo ships the whole
+  chain — `make pe-download` (pinned + SHA-256-verified checkpoint; the HF
+  repo is not gated), `make pe-export-image` + `make pe-build-trt` (or
+  `make pe-build-ort` when the TensorRT build fails on PE's attention-pool
+  ops), `make export-pe` (the full chain, including `make
+  pe-export-text-triton`, which installs the text tower's ONNX +
+  `config.pbtxt` under `models/pe_text_encoder/` for Triton to serve),
+  then `--load-model=pe_image_encoder` and `--load-model=pe_text_encoder`
+  in Triton (both on by default in `docker-compose.yml`) and an API
   restart; `make pe-text-status` confirms the text backend. Full
   walkthrough, flags, Triton templates (`models/pe_image_encoder/`,
   `models/pe_text_encoder/`) and CPU latency numbers:
@@ -487,9 +495,9 @@ sample-clean` removes everything fetched.
    too). A duplicate `name` is `409`; a reserved hotkey (`g n d z x u a m
    / f e b`) is rejected the same way in the UI and the API.
 3. Build the PE-Core encoders (`make pe-download pe-export-image
-   pe-build-trt pe-export-text`, or `make export-pe`), load
-   `pe_image_encoder` in Triton and restart the API — see "Models you
-   must supply" above and
+   pe-build-trt pe-export-text-triton`, or `make export-pe`), load
+   `pe_image_encoder` and `pe_text_encoder` in Triton and restart the API
+   — see "Models you must supply" above and
    [`export/README.md`](../export/README.md#pe-core-encoders-curation-embeddings).
    Ingest writes no `pe_embedding` without the image model, and semantic
    search / near-dup / clustering then have nothing to operate on.

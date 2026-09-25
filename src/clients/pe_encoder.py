@@ -13,25 +13,33 @@ Two encoders ship under one class:
 
 Text backends (picked once by :meth:`PEEncoder.warm_text_encoder`):
 
-``onnx``
-    ONNX Runtime ``CPUExecutionProvider`` over the text-tower graph from
-    ``export/export_pe_text_encoder.py``. Preferred whenever the file at
-    ``OP_PE_TEXT_ONNX_PATH`` exists: it loads only the text tower (no
-    ``pe.CLIP`` vision weights, no checkpoint download), roughly halves
-    resident memory and warm-up time, and is at least as fast as PyTorch
-    eager (~1.4x at batch 1 on the reference CPU).
 ``triton``
-    The same graph served by Triton as ``pe_text_encoder`` (onnxruntime
-    backend). Used only when Triton reports that model ready; a failed call
-    permanently falls back to an in-process backend, so Triton is never a
-    hard dependency.
+    The text-tower graph from ``export/export_pe_text_encoder.py`` served
+    by Triton as ``pe_text_encoder`` (onnxruntime backend, one CPU
+    instance shared by every uvicorn worker). Used whenever Triton reports
+    that model ready; a failed call permanently falls back to an
+    in-process backend for the rest of that worker's life, so Triton is
+    never a hard dependency.
 ``torch``
-    PyTorch eager through ``perception_models``' ``pe.CLIP`` — the original
-    path, and the last resort.
+    PyTorch eager through ``perception_models``' ``pe.CLIP`` — the
+    in-process fallback when Triton's ``pe_text_encoder`` isn't ready.
+    Loaded lazily (see :class:`LazyTorchTextBackend`): never at warm time,
+    only from the first query a given worker actually serves.
+``onnx``
+    ONNX Runtime ``CPUExecutionProvider`` over the same text-tower graph,
+    loaded **in-process** from ``OP_PE_TEXT_ONNX_PATH``. Explicit opt-in
+    only (``OP_PE_TEXT_BACKEND=onnx``) -- this is exactly the backend that
+    used to run once per uvicorn worker (F-07, fresh-start E2E findings
+    2026-09-25): with 32 workers each loading its own ~1.4 GB ONNX Runtime
+    session, ``auto`` mode alone put container RSS at ~84 GiB. ``auto``
+    no longer considers this backend at all; pin it explicitly only for a
+    single-worker/CLI process where Triton isn't available. Also loaded
+    lazily, never at warm time.
 
-``OP_PE_TEXT_BACKEND`` selects ``auto`` (default: onnx -> triton -> torch),
-or pins one of the three; a pinned ``onnx``/``torch`` that cannot load
-raises, a pinned ``triton`` that is not ready falls back in-process.
+``OP_PE_TEXT_BACKEND`` selects ``auto`` (default: triton -> torch), or
+pins one of the three; a pinned ``onnx``/``torch`` that cannot load
+raises (on first use, since both load lazily), a pinned ``triton`` that
+is not ready falls back in-process.
 
 Tokenization always stays in Python with PE's own ``SimpleTokenizer``
 (context length 32). Because the text tower's attention mask is strictly
@@ -205,6 +213,37 @@ class OnnxTextBackend:
     def encode(self, tokens: np.ndarray) -> np.ndarray:
         (out,) = self._session.run([PE_TEXT_OUTPUT], {PE_TEXT_INPUT: tokens})
         return np.asarray(out, dtype=np.float32)
+
+
+class LazyOnnxTextBackend:
+    """Defers ``ort.InferenceSession`` construction until the first query.
+
+    F-07 remainder (fresh-start E2E findings 2026-09-25): even as an
+    explicit ``OP_PE_TEXT_BACKEND=onnx`` opt-in, this must not load at
+    warm time -- ``warm_text_encoder()`` runs in every uvicorn worker at
+    startup, and only workers that actually serve a text-search request
+    should ever pay the ~1.4 GB session cost. Reports ``name == 'onnx'``
+    immediately; the loader (which raises if the file is missing/invalid)
+    only actually runs from the first :meth:`encode`.
+    """
+
+    name = 'onnx'
+
+    def __init__(self, loader: Any) -> None:
+        self._loader = loader
+        self._real: OnnxTextBackend | None = None
+        self._lock = threading.Lock()
+
+    def encode(self, tokens: np.ndarray) -> np.ndarray:
+        real = self._real
+        if real is None:
+            with self._lock:
+                real = self._real
+                if real is None:
+                    logger.info('pe_text_encoder_lazy_loading', backend='onnx')
+                    real = self._loader()
+                    self._real = real
+        return real.encode(tokens)
 
 
 class TritonTextBackend:
@@ -413,8 +452,13 @@ class PEEncoder:
 
             pref = self._text_backend_pref
             backend: Any = None
-            if pref in ('auto', 'onnx'):
-                backend = self._try_onnx_backend(required=pref == 'onnx')
+            # F-07 remainder (fresh-start E2E findings 2026-09-25): 'auto'
+            # tries Triton's shared pe_text_encoder first -- NOT the
+            # in-process ONNX path, which used to load its own ~1.4 GB
+            # session in every uvicorn worker. In-process ONNX is now only
+            # reachable via an explicit OP_PE_TEXT_BACKEND=onnx pin.
+            if pref == 'onnx':
+                backend = self._try_onnx_backend(required=True)
             if backend is None and pref in ('auto', 'triton'):
                 backend = self._try_triton_backend()
             if backend is None:
@@ -469,7 +513,12 @@ class PEEncoder:
 
         return SimpleTokenizer(context_length=PE_TEXT_CONTEXT_LENGTH)
 
-    def _try_onnx_backend(self, *, required: bool) -> OnnxTextBackend | None:
+    def _try_onnx_backend(self, *, required: bool) -> LazyOnnxTextBackend | None:
+        """Explicit-opt-in only (``OP_PE_TEXT_BACKEND=onnx``) -- 'auto'
+        never calls this. Only checks the file exists here (cheap); the
+        actual ``ort.InferenceSession`` construction is deferred to the
+        first query via :class:`LazyOnnxTextBackend`, never at warm time.
+        """
         path = self._text_onnx_path
         if not Path(path).is_file():
             if required:
@@ -479,27 +528,23 @@ class PEEncoder:
                 )
             logger.info('pe_text_onnx_not_found', path=path)
             return None
-        try:
-            import onnxruntime as ort
+        return LazyOnnxTextBackend(lambda: self._load_onnx_backend(path))
 
-            opts = ort.SessionOptions()
-            if self._ort_threads:
-                opts.intra_op_num_threads = self._ort_threads
-            session = ort.InferenceSession(
-                path, sess_options=opts, providers=['CPUExecutionProvider']
+    def _load_onnx_backend(self, path: str) -> OnnxTextBackend:
+        import onnxruntime as ort
+
+        logger.info('pe_text_encoder_loading', checkpoint=path, backend='onnx')
+        opts = ort.SessionOptions()
+        if self._ort_threads:
+            opts.intra_op_num_threads = self._ort_threads
+        session = ort.InferenceSession(path, sess_options=opts, providers=['CPUExecutionProvider'])
+        names_in = [i.name for i in session.get_inputs()]
+        names_out = [o.name for o in session.get_outputs()]
+        if PE_TEXT_INPUT not in names_in or PE_TEXT_OUTPUT not in names_out:
+            raise ValueError(
+                f'{path} has inputs {names_in} / outputs {names_out}; expected '
+                f'{PE_TEXT_INPUT!r} -> {PE_TEXT_OUTPUT!r}'
             )
-            names_in = [i.name for i in session.get_inputs()]
-            names_out = [o.name for o in session.get_outputs()]
-            if PE_TEXT_INPUT not in names_in or PE_TEXT_OUTPUT not in names_out:
-                raise ValueError(
-                    f'{path} has inputs {names_in} / outputs {names_out}; expected '
-                    f'{PE_TEXT_INPUT!r} -> {PE_TEXT_OUTPUT!r}'
-                )
-        except Exception as exc:
-            if required:
-                raise
-            logger.warning('pe_text_onnx_load_failed', path=path, error=str(exc))
-            return None
         return OnnxTextBackend(session, path)
 
     def _try_triton_backend(self) -> TritonTextBackend | None:
@@ -534,22 +579,22 @@ class PEEncoder:
         return TorchTextBackend(model, torch)
 
     def _local_backend(self) -> Any:
-        """In-process backend: ONNX if the file loads, else PyTorch. Cached.
+        """In-process PyTorch fallback for 'auto'/'triton' when Triton's
+        ``pe_text_encoder`` isn't ready. Cached.
 
-        A pinned ``OP_PE_TEXT_BACKEND=torch`` loads eagerly here, same as
-        always — the operator asked for it explicitly, so failing fast on
-        load is correct. ``auto`` (the default) instead defers the torch
-        load to first query via :class:`LazyTorchTextBackend` (see F-07 in
-        the fresh-start E2E findings): eagerly loading a multi-GB fallback
-        model in every uvicorn worker at startup is the bug, not a feature.
+        Reached only for ``pref in ('auto', 'triton')`` -- an explicit
+        ``pref == 'onnx'`` is resolved directly in :meth:`warm_text_encoder`
+        (raising if missing) and never falls through to here. A pinned
+        ``OP_PE_TEXT_BACKEND=torch`` loads eagerly, same as always — the
+        operator asked for it explicitly, so failing fast on load is
+        correct. ``auto``/``triton`` instead defer the torch load to first
+        query via :class:`LazyTorchTextBackend` (see F-07 in the
+        fresh-start E2E findings): eagerly loading a multi-GB fallback
+        model in every uvicorn worker at startup is the bug, not a
+        feature.
         """
         if self._local_text_backend is None:
-            onnx = None
-            if self._text_backend_pref != 'torch':
-                onnx = self._try_onnx_backend(required=False)
-            if onnx is not None:
-                self._local_text_backend = onnx
-            elif self._text_backend_pref == 'torch':
+            if self._text_backend_pref == 'torch':
                 self._local_text_backend = self._load_torch_backend()
             else:
                 self._local_text_backend = LazyTorchTextBackend(self._load_torch_backend)

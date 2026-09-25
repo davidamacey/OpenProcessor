@@ -1,9 +1,14 @@
 """Backend selection + fallback for the PE text encoder.
 
-:class:`src.clients.pe_encoder.PEEncoder` picks one of three text backends
-at warm-up — in-process ONNX Runtime when ``OP_PE_TEXT_ONNX_PATH`` exists,
-Triton's ``pe_text_encoder`` when it reports ready, PyTorch eager otherwise
-— and drops to in-process encoding for good if Triton fails mid-flight.
+:class:`src.clients.pe_encoder.PEEncoder` picks a text backend at warm-up.
+F-07 remainder (fresh-start E2E findings 2026-09-25, round 2): ``auto``
+now tries Triton's shared ``pe_text_encoder`` first and falls back to a
+**lazily-loaded** in-process PyTorch backend -- it no longer even looks at
+the in-process ONNX Runtime path. That in-process ONNX backend used to
+load its own ~1.4 GB session in *every* uvicorn worker (32x on the
+fresh-start run, ~84 GiB RSS); it's now reachable only via an explicit
+``OP_PE_TEXT_BACKEND=onnx`` pin, and even then loads lazily (first query,
+not at warm time).
 
 Everything here runs on CI without weights, a GPU or ``perception_models``:
 the ONNX backend is exercised against a genuine, tiny ONNX graph with the
@@ -199,9 +204,12 @@ class TestTrimTextTokens:
 
 
 class TestBackendSelection:
-    def test_auto_prefers_onnx_when_the_file_exists(self, tmp_path, monkeypatch) -> None:
+    def test_auto_prefers_triton_over_a_local_onnx_file(self, tmp_path, monkeypatch) -> None:
+        """'auto' must not go anywhere near the in-process ONNX path when
+        Triton's shared pe_text_encoder is ready -- a valid local file is
+        present here and must be ignored."""
         onnx_file = _write_stub_graph(tmp_path / 'pe_text.onnx')
-        triton = _FakeTritonClient()
+        triton = _FakeTritonClient(ready=True)
         torch_backend = _FakeTorchBackend()
         enc = _encoder(
             tmp_path,
@@ -214,13 +222,36 @@ class TestBackendSelection:
         enc.warm_text_encoder()
 
         assert enc.text_ready
-        assert enc.text_backend == 'onnx'
-        assert triton.ready_checks == []
+        assert enc.text_backend == 'triton'
+        assert triton.ready_checks == [PE_TEXT_TRITON_MODEL]
         assert torch_backend.calls == 0
+
+    def test_auto_never_constructs_an_ort_session_when_triton_is_ready(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Coordinator-requested regression: even with a valid local ONNX
+        file present, 'auto' with Triton ready must never construct an ORT
+        session anywhere in the pipeline -- simulated by making the real
+        ``onnxruntime.InferenceSession`` explode if it's ever called."""
+        ort = pytest.importorskip('onnxruntime')
+        onnx_file = _write_stub_graph(tmp_path / 'pe_text.onnx')
+
+        def _boom(*_a, **_k):
+            raise AssertionError('ORT InferenceSession must not be constructed under auto+Triton')
+
+        monkeypatch.setattr(ort, 'InferenceSession', _boom)
+
+        triton = _FakeTritonClient(ready=True)
+        enc = _encoder(tmp_path, onnx_file=onnx_file, triton=triton, monkeypatch=monkeypatch)
+
+        enc.warm_text_encoder()
+        enc.encode_text(['red sedan'])
+
+        assert enc.text_backend == 'triton'
 
     def test_onnx_backend_runs_the_graph_on_trimmed_tokens(self, tmp_path, monkeypatch) -> None:
         onnx_file = _write_stub_graph(tmp_path / 'pe_text.onnx')
-        enc = _encoder(tmp_path, onnx_file=onnx_file, monkeypatch=monkeypatch)
+        enc = _encoder(tmp_path, backend='onnx', onnx_file=onnx_file, monkeypatch=monkeypatch)
         enc.warm_text_encoder()
 
         out = enc.encode_text(['red sedan', 'x'])
@@ -230,6 +261,34 @@ class TestBackendSelection:
         expected /= np.linalg.norm(expected, axis=1, keepdims=True)
         assert out.shape == (2, PE_EMBEDDING_DIM)
         np.testing.assert_allclose(out, expected, rtol=1e-5, atol=1e-6)
+
+    def test_pinned_onnx_loads_lazily_not_at_warm_time(self, tmp_path, monkeypatch) -> None:
+        onnx_file = _write_stub_graph(tmp_path / 'pe_text.onnx')
+        enc = _encoder(tmp_path, backend='onnx', onnx_file=onnx_file, monkeypatch=monkeypatch)
+
+        load_count = 0
+        real_load_onnx_backend = enc._load_onnx_backend
+
+        def counting_load_onnx_backend(path):
+            nonlocal load_count
+            load_count += 1
+            return real_load_onnx_backend(path)
+
+        monkeypatch.setattr(enc, '_load_onnx_backend', counting_load_onnx_backend)
+
+        enc.warm_text_encoder()
+
+        assert enc.text_ready is True
+        assert enc.text_backend == 'onnx'
+        assert load_count == 0  # not loaded yet
+
+        enc.encode_text(['red sedan'])
+
+        assert load_count == 1  # loaded on first real query
+
+        enc.encode_text(['blue truck'])
+
+        assert load_count == 1  # reused, not reloaded
 
     def test_auto_uses_triton_when_no_onnx_and_model_ready(self, tmp_path, monkeypatch) -> None:
         triton = _FakeTritonClient(ready=True)
@@ -324,10 +383,13 @@ class TestBackendSelection:
         enc.warm_text_encoder()
         assert enc.text_backend == 'torch'
 
-    def test_missing_onnx_file_falls_back_under_auto(self, tmp_path, monkeypatch) -> None:
+    def test_missing_onnx_file_is_irrelevant_under_auto(self, tmp_path, monkeypatch) -> None:
+        """'auto' falls back to Triton/torch regardless of the local ONNX
+        file's state -- it's simply never consulted."""
         enc = _encoder(
             tmp_path,
             onnx_file=tmp_path / 'not_exported_yet.onnx',
+            triton=_FakeTritonClient(ready=False),
             torch_backend=_FakeTorchBackend(),
             monkeypatch=monkeypatch,
         )
@@ -335,11 +397,15 @@ class TestBackendSelection:
         assert enc.text_backend == 'torch'
         assert enc.text_status()['onnx_path_exists'] is False
 
-    def test_unloadable_onnx_file_falls_back_under_auto(self, tmp_path, monkeypatch) -> None:
+    def test_corrupt_onnx_file_is_irrelevant_under_auto(self, tmp_path, monkeypatch) -> None:
         bad = tmp_path / 'corrupt.onnx'
         bad.write_bytes(b'not an onnx graph')
         enc = _encoder(
-            tmp_path, onnx_file=bad, torch_backend=_FakeTorchBackend(), monkeypatch=monkeypatch
+            tmp_path,
+            onnx_file=bad,
+            triton=_FakeTritonClient(ready=False),
+            torch_backend=_FakeTorchBackend(),
+            monkeypatch=monkeypatch,
         )
         enc.warm_text_encoder()
         assert enc.text_backend == 'torch'
@@ -352,11 +418,21 @@ class TestBackendSelection:
             enc.warm_text_encoder()
         assert enc.text_ready is False
 
-    def test_pinned_onnx_with_wrong_tensor_names_raises(self, tmp_path, monkeypatch) -> None:
+    def test_pinned_onnx_with_wrong_tensor_names_raises_on_first_use(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """The session build (and its input/output name validation) is
+        lazy now -- warm_text_encoder() only checks the file exists, so
+        the ValueError surfaces on the first real query, not at warm
+        time."""
         onnx_file = _write_stub_graph(tmp_path / 'wrong.onnx', input_name='input_ids')
         enc = _encoder(tmp_path, backend='onnx', onnx_file=onnx_file, monkeypatch=monkeypatch)
+
+        enc.warm_text_encoder()
+        assert enc.text_backend == 'onnx'
+
         with pytest.raises(ValueError, match='text_tokens'):
-            enc.warm_text_encoder()
+            enc.encode_text(['red sedan'])
 
     def test_pinned_torch_ignores_an_existing_onnx_file(self, tmp_path, monkeypatch) -> None:
         onnx_file = _write_stub_graph(tmp_path / 'pe_text.onnx')
@@ -377,19 +453,30 @@ class TestBackendSelection:
             enc.warm_text_encoder()
         assert enc.text_ready is False
 
-    def test_pinned_triton_not_ready_uses_local(self, tmp_path, monkeypatch) -> None:
+    def test_pinned_triton_not_ready_uses_local_lazy_torch(self, tmp_path, monkeypatch) -> None:
+        """The local fallback for pref='triton' is the lazy torch backend,
+        not in-process ONNX -- a local ONNX file (present here) is no
+        longer part of the fallback chain at all."""
         onnx_file = _write_stub_graph(tmp_path / 'pe_text.onnx')
+        torch_backend = _FakeTorchBackend()
         enc = _encoder(
             tmp_path,
             backend='triton',
             onnx_file=onnx_file,
             triton=_FakeTritonClient(ready=False),
+            torch_backend=torch_backend,
             monkeypatch=monkeypatch,
         )
         enc.warm_text_encoder()
-        assert enc.text_backend == 'onnx'
+        assert enc.text_backend == 'torch'
+        assert torch_backend.calls == 0  # lazy: not loaded at warm time
 
-    def test_pinned_triton_prefers_triton_over_a_local_onnx(self, tmp_path, monkeypatch) -> None:
+        enc.encode_text(['red sedan'])
+        assert torch_backend.calls == 1
+
+    def test_pinned_triton_prefers_triton_over_the_local_fallback(
+        self, tmp_path, monkeypatch
+    ) -> None:
         onnx_file = _write_stub_graph(tmp_path / 'pe_text.onnx')
         enc = _encoder(
             tmp_path,
@@ -428,11 +515,17 @@ class TestBackendSelection:
 
 
 class TestTritonRuntimeFallback:
-    def test_failed_triton_call_switches_to_local_for_good(self, tmp_path, monkeypatch) -> None:
-        onnx_file = _write_stub_graph(tmp_path / 'pe_text.onnx')
+    def test_failed_triton_call_switches_to_local_torch_for_good(
+        self, tmp_path, monkeypatch
+    ) -> None:
         triton = _FakeTritonClient(ready=True, fail_infer=True)
+        torch_backend = _FakeTorchBackend()
         enc = _encoder(
-            tmp_path, backend='triton', onnx_file=onnx_file, triton=triton, monkeypatch=monkeypatch
+            tmp_path,
+            backend='triton',
+            triton=triton,
+            torch_backend=torch_backend,
+            monkeypatch=monkeypatch,
         )
         enc.warm_text_encoder()
         assert enc.text_backend == 'triton'
@@ -442,10 +535,12 @@ class TestTritonRuntimeFallback:
 
         assert out.shape == (1, PE_EMBEDDING_DIM)
         np.testing.assert_allclose(np.linalg.norm(out, axis=1), [1.0], atol=1e-6)
-        assert enc.text_backend == 'onnx'
+        assert enc.text_backend == 'torch'
         assert enc.text_status()['triton_fallbacks'] == 1
         # Only the first query ever reached Triton — no per-request flapping.
         assert len(triton.infer_calls) == 1
+        # Both queries were served locally once the fallback kicked in.
+        assert torch_backend.calls == 2
 
     def test_fallback_loads_torch_lazily_when_no_onnx(self, tmp_path, monkeypatch) -> None:
         torch_backend = _FakeTorchBackend()
@@ -501,13 +596,18 @@ class TestHealthEndpoint:
 
     def test_reports_the_active_backend(self, tmp_path, monkeypatch) -> None:
         onnx_file = _write_stub_graph(tmp_path / 'pe_text.onnx')
-        enc = _encoder(tmp_path, onnx_file=onnx_file, monkeypatch=monkeypatch)
+        enc = _encoder(
+            tmp_path,
+            onnx_file=onnx_file,
+            triton=_FakeTritonClient(ready=True),
+            monkeypatch=monkeypatch,
+        )
         enc.warm_text_encoder()
         resp = self._client(enc).get('/health/pe_text')
         assert resp.status_code == 200
         body = resp.json()
         assert body['ready'] is True
-        assert body['backend'] == 'onnx'
+        assert body['backend'] == 'triton'
         assert body['onnx_path'] == str(onnx_file)
 
     def test_cold_encoder_is_503(self, tmp_path) -> None:
