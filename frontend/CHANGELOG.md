@@ -12,8 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   of empty ones. The default gap sort put every empty class (+500) first,
   and the table shrank to a few rows at narrow widths. Classes with
   validated or held-out crops now come first, the rest fold behind a
-  "N classes with no validated crops" toggle, and the table keeps a
-  readable minimum height.
+  "N classes with no validated crops" toggle, and the table is sized to its
+  rows (capped at 70% of the viewport, then it scrolls) instead of
+  stretching to fill the page.
 - **Visual audit 2026-09-24 page fixes (`/clusters`, `/clusters/[id]`,
   `/dashboard`, `/export`, `/train`, `/models`, `/bakeoff`, `CropCard`)**
   — see `docs/design/visual-audit-2026-09-24.md` for each finding's commit.

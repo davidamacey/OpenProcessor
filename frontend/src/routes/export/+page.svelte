@@ -496,7 +496,7 @@
   {/snippet}
 
   <!-- Dataset table -->
-  <section class="surface min-h-[20rem] flex-1 overflow-auto">
+  <section class="surface max-h-[70vh] shrink-0 overflow-auto">
     {#if loading && rows.length === 0}
       <div class="p-6 text-sm text-zinc-500">Loading dataset stats…</div>
     {:else if error}
