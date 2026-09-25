@@ -1,4 +1,4 @@
-"""F-29: ``_park_gated_residuals`` must not re-write docs already parked.
+"""``_park_gated_residuals`` must not re-write docs already parked.
 
 Rewriting cluster_id=-3 (PARKED_CLUSTER_ID) onto a doc that's already -3
 (with cluster_subid already null) is a wasted write on every re-run of

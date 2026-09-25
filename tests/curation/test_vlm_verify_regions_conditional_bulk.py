@@ -1,4 +1,4 @@
-"""F-26 (vlm.py:469 row): ``POST /vlm/verify_regions`` must not clobber a
+"""``POST /vlm/verify_regions`` must not clobber a
 concurrent human write.
 
 The endpoint fetches each crop, calls the VLM to verify its region, then
@@ -11,7 +11,7 @@ conflict for a given id is skipped, not retried) with a merger that
 re-checks the freshest ``current`` doc state for human ownership --
 exactly the pattern ``vlm_label_batch`` already uses for class writes
 (``_class_locked``) and the clustering orchestrator's bulk writers use for
-cluster writes (F-3) -- since a human write landing mid-VLM-round-trip
+cluster writes -- since a human write landing mid-VLM-round-trip
 lands well before occ_skip_on_conflict_bulk's own (much narrower)
 mget-to-bulk OCC window.
 """

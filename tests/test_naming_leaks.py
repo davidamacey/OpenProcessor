@@ -1,4 +1,4 @@
-"""Tests for ``scripts/codegen/check_naming_leaks.py`` (naming sweep W8).
+"""Tests for ``scripts/codegen/check_naming_leaks.py``.
 
 Two kinds of coverage:
 

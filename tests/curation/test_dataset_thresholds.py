@@ -89,7 +89,7 @@ def _client_with_fake(
     monkeypatch: pytest.MonkeyPatch, search_resp: dict[str, Any]
 ) -> tuple[TestClient, AsyncMock]:
     """Same wiring as :func:`_client`, but also hands back the fake so a
-    test can assert on the request body it was called with (F-13)."""
+    test can assert on the request body it was called with."""
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     fake = AsyncMock()
@@ -194,7 +194,7 @@ def test_classes_list_serves_trainable_minus_holdout_and_excluded(
 def test_classes_by_cluster_agg_is_filtered_to_class_kind_ids(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """F-12: /classes' by_cluster agg must be wrapped in a filter restricted
+    """/classes' by_cluster agg must be wrapped in a filter restricted
     to class-kind cluster ids (< RESIDUAL_CLUSTER_ID_OFFSET) before
     terms-aggregating, so candidate/residual ids can't pollute class
     cluster_size counts or crowd real class buckets out of the size-1000
@@ -241,7 +241,7 @@ def test_holdout_stats_flags_deficient_classes(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_holdout_stats_tracks_total_hits(monkeypatch: pytest.MonkeyPatch) -> None:
-    """F-13: without track_total_hits, OpenSearch silently caps the
+    """Without track_total_hits, OpenSearch silently caps the
     reported total at 10000 even when more docs match -- add it to the
     request so /test_holdout/stats never lies about the real count."""
     resp = {

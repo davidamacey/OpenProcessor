@@ -1,4 +1,4 @@
-"""F-24: kNN warmup startup hook.
+"""kNN warmup startup hook.
 
 ``warm_knn_indexes`` (src.routers.curation._common) calls OpenSearch's
 kNN warmup endpoint for the items + images indexes. It must never raise

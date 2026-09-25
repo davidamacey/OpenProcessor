@@ -1,5 +1,5 @@
-"""Tests for ``src.services.curation.review_sorts`` (curation-strategy plan
-§3.2 / §7 Phase 3 / §9 — "the single most important test in this plan").
+"""Tests for ``src.services.curation.review_sorts`` — "the single most
+important test in this file."
 
 The golden-body regression guard: every one of the 9 existing
 ``GET /curation/review/{tab}`` tabs must resolve, with ``?sort`` absent, to the
@@ -16,7 +16,7 @@ from src.services.curation import review_sorts
 
 # The literal legacy `sort = [...]` the review router hardcoded per tab before
 # this registry existed (read directly off the pre-refactor router source —
-# see git history for the reference review router). Any change here must be deliberate.
+# see git history for the earlier router version). Any change here must be deliberate.
 LEGACY_TAB_CLAUSES: dict[str, list[dict]] = {
     'all': [{'cluster_distance': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}],
     'mismatches': [{'updated_at': {'order': 'desc'}}],
@@ -121,7 +121,7 @@ async def test_stable_sorts_resolve_to_their_own_clause(sort_id: str) -> None:
 
 
 def test_representativeness_is_atypicality_flipped() -> None:
-    """Plan §2.1 / §6: representativeness's acceptance bar IS this exact
+    """representativeness's acceptance bar IS this exact
     equality (asc vs desc on the same field), not new math."""
     registry = review_sorts.get_review_sorts()
     rep = registry['representativeness'].clause[0]['cluster_distance']
@@ -187,7 +187,7 @@ async def test_mistakenness_experimental_when_enabled_not_shadow(
 
 
 def test_no_sort_clause_ever_references_cluster_id_fields() -> None:
-    """Plan §8 non-goal #3 / hard constraint: sorting must never touch
+    """Hard constraint: sorting must never touch
     cluster *assignment* fields. cluster_distance (a metric, not an id) is
     fine; cluster_id/cluster_subid must never appear in any sort clause."""
     forbidden = {'cluster_id', 'cluster_subid'}

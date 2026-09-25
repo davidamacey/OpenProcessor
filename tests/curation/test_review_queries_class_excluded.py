@@ -1,4 +1,4 @@
-"""F-4 regression: ``class_excluded`` items must never reappear in any
+"""Regression: ``class_excluded`` items must never reappear in any
 ``/review/{tab}`` queue.
 
 Structural check (every known tab's ``must_not`` carries the clause,

@@ -1,16 +1,15 @@
-"""Tests for ``VlmLabeler.label_combined`` (§5 Chunk 7).
+"""Tests for ``VlmLabeler.label_combined``.
 
-Ported from a private reference vehicle/license-plate curation stack's
-combined-labeling test suite. Mocks the httpx client; verifies JSON-mode
+Mocks the httpx client; verifies JSON-mode
 flag, parse success, and that
 parse failures raise :class:`CombinedParseFailure` so the caller can fall
 back to the separate-call paths.
 
 The upstream VLM's own wire-reply keys (what the reply's JSON object is
 keyed by) are read via ``RegionFields`` in ``vlm_labeler.py`` rather than
-hardcoded — this port's fixtures use the generic ``RegionFields``
+hardcoded — these fixtures use the generic ``RegionFields``
 defaults (``region_visible``, ``region_bbox_correct``, ``region_text``,
-``region_confidence``) in place of the reference's ``plate_*`` keys.
+``region_confidence``) so the tests stay domain-neutral.
 """
 
 from __future__ import annotations

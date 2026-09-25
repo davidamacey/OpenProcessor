@@ -1,19 +1,17 @@
-"""Integration tests pinning four of the seven reference-line write-path
-invariants (plan Wave 5 T-3).
+"""Integration tests pinning four of the write-path invariants for the
+curation subsystem.
 
-Ported from the reference's 7-invariant integration file — this restores
-invariants 1 (OCC no-silent-overwrite), a *rewritten* 2 (no single-VLM
-signal validates a class), 3 (class <-> region orthogonality — the
-invariant the whole ``RegionFields`` split depends on being true), and 4
-(history preserved across relabels). Invariants 5 and 6 are NOT
-restored: 5 targets the reference line's private domain ingest service,
-a module never ported anywhere in this plan (Wave 2 territory at best,
-and even there the plan explicitly excludes the domain-specific ingest
-internals this invariant pins); 6 tests OpenSearch's own partial-update
-semantics (a bare ``doc`` update only touches the given keys), not any
-logic this codebase owns.
+This restores invariant 1 (OCC no-silent-overwrite), a *rewritten*
+invariant 2 (no single-VLM signal validates a class), invariant 3 (class
+<-> region orthogonality — the invariant the whole ``RegionFields``
+split depends on being true), and invariant 4 (history preserved across
+relabels). Two other invariants from the original set are NOT restored
+here: one targets a domain-specific ingest service this codebase doesn't
+wire up; the other tests OpenSearch's own partial-update semantics (a
+bare ``doc`` update only touches the given keys), not any logic this
+codebase owns.
 
-Per plan §6.0's house rule (don't add the repo's first live-stack
+Per this repo's house rule (don't add the repo's first live-stack
 dependency), these run against the existing in-memory fakes rather than
 a real OpenSearch: ``tests/curation/occ_fakes.py`` for the batched
 mget/bulk surface, and ``tests/integration/test_ingest_occ.py``'s
@@ -45,8 +43,8 @@ class _VersionedFakeOpenSearch(FakeUpsertOpenSearch):
     two ``asyncio.gather``-ed callers of a get-then-write helper never
     actually interleave — a coroutine with no internal suspension point
     runs start-to-finish the moment it's awaited, so "concurrent"
-    callers would just run sequentially and never race. The reference
-    test forced real interleaving by using two live socket connections;
+    callers would just run sequentially and never race. Forcing real
+    interleaving normally means two live socket connections;
     this fake reproduces the same race deterministically by yielding
     control right after the read, which is exactly where the real
     OpenSearch client would suspend on the network round trip.

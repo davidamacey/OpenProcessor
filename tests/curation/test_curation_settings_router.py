@@ -1,5 +1,4 @@
-"""Tests for ``GET,PUT /curation/settings`` (curation deployment-settings
-plan) -- CRUD + validation.
+"""Tests for ``GET,PUT /curation/settings`` -- CRUD + validation.
 
 The integration proof that a PUT actually changes ``GET /methods`` AND
 real endpoint behavior (not just what ``/methods`` displays) lives in
@@ -35,7 +34,7 @@ def _reset_field_coverage_cache() -> Iterator[None]:
 
 @pytest.fixture(autouse=True)
 def _reset_settings_cache() -> Iterator[None]:
-    """F-28.1's settings-doc cache is module-level and keyed by index name
+    """The settings-doc cache is module-level and keyed by index name
     -- every test in this file shares the default index, and a fresh
     ``FakeSettingsOpenSearch`` per test must never see a prior test's
     cached value."""

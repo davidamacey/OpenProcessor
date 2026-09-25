@@ -8,15 +8,13 @@ Uses the real application object so the middleware wiring itself is under
 test; TestClient is used without its context manager so the lifespan
 (Triton pool, OpenSearch warm-up) never runs.
 
-Chunk 9 extends this file (plan §6.1 — five basenames already exist on
-``origin/main``; extend, never overwrite) with three checks ported from
-the reference tree's curation-async-pipeline additions:
+This file extends five pre-existing basenames with three checks for the
+curation async pipeline:
 
-1. ``test_items_request_id_field_migration_is_idempotent`` — the
-   reference version of this check ran against a live dev OpenSearch
-   (skipped when unreachable). Per plan §6.0's house rule, this port
-   fakes the ``indices.put_mapping`` I/O boundary instead of adding the
-   repo's first live-stack dependency.
+1. ``test_items_request_id_field_migration_is_idempotent`` — per this
+   repo's house rule (don't add the repo's first live-stack
+   dependency), this fakes the ``indices.put_mapping`` I/O boundary
+   rather than hitting a live dev OpenSearch.
 2. ``test_worker_structlog_emits_request_id`` /
    ``test_worker_unbind_clears_request_id`` — pure-Python checks that
    ``bind_request_id`` / ``unbind_contextvars`` propagate through

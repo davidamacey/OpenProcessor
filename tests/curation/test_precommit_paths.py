@@ -1,4 +1,4 @@
-"""R12: a path-keyed pre-commit hook can fail OPEN if a listed path is
+"""A path-keyed pre-commit hook can fail OPEN if a listed path is
 renamed out from under it and nobody notices. This test converts that
 into a loud test failure instead of a silent no-op.
 
@@ -88,8 +88,8 @@ def test_check_no_literal_region_fields_allowlist_paths_exist_on_disk() -> None:
 
 
 def test_check_no_literal_region_fields_allowlist_only_grows_with_real_ports() -> None:
-    """Chunk 1 onward: the allowlist is expected to grow monotonically as
-    each wave ports files — see `test_...allowlist_paths_exist_on_disk`
+    """The allowlist is expected to grow monotonically as files are
+    ported — see `test_...allowlist_paths_exist_on_disk`
     above for the standing invariant. This test only pins that entries
     are unique (a duplicate entry would be a copy-paste mistake, not a
     real new port)."""

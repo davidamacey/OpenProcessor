@@ -117,7 +117,7 @@ async def test_forwards_conflicts_and_refresh_params():
 
 
 # =============================================================================
-# CM-6: force_cluster_id_equals_class_id must never pull an excluded item
+# force_cluster_id_equals_class_id must never pull an excluded item
 # back into its class cluster.
 # =============================================================================
 

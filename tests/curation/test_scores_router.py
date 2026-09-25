@@ -1,5 +1,4 @@
-"""Tests for POST /curation/scores/compute + status/cancel/coverage
-(curation-strategy plan §3.3/§9).
+"""Tests for POST /curation/scores/compute + status/cancel/coverage.
 
 Job lifecycle: start -> 409 on double-start -> status -> cancel. The actual
 scoring coroutine (``crop_scores.job.run_scoring_job``) is monkeypatched to

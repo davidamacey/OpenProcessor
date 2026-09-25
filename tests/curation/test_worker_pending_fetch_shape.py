@@ -1,4 +1,4 @@
-"""F-20: both the VLM worker and the region/cascade worker's pending-batch
+"""Both the VLM worker and the region/cascade worker's pending-batch
 fetch push in-flight exclusion server-side (``must_not: {ids: ...}``)
 instead of over-fetching ``batch_size + len(in_flight)`` docs and
 filtering in Python, set ``track_total_hits: False``, sort with a
@@ -131,7 +131,7 @@ def test_cascade_worker_pending_query_uses_filter_context() -> None:
 
     query = _build_pending_query()
     b = query['bool']
-    assert 'must' not in b  # F-20: filter context, not must — nothing here scores.
+    assert 'must' not in b  # filter context, not must — nothing here scores.
     assert len(b['filter']) == 3
 
 

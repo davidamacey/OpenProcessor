@@ -1,10 +1,8 @@
 """GET /curation/stats/dataset — dashboard contract test.
 
-The reference this was ported from hit a live yolo-api instance over
-HTTP (skipped when unreachable). Per plan §6.0's house rule ("do not
-add the repo's first live-stack dependency" — write a unit test with
-the I/O boundary faked instead, matching
-``tests/integration/test_health_endpoints.py``'s style), this port
+Per this repo's house rule ("do not add the repo's first live-stack
+dependency" — write a unit test with the I/O boundary faked instead,
+matching ``tests/integration/test_health_endpoints.py``'s style), this
 mounts the curation router directly with a faked OpenSearch client
 instead of making a real network call, and asserts the same response
 shape + internal-consistency invariants against synthetic aggregation

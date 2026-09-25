@@ -1,6 +1,5 @@
 """``GET /export/datasets`` lists multi-class AND single-class exports with a
-``kind`` + ``profile_name`` per row and honors ``?kind=`` / ``?profile_name=``
-(contract audit S4)."""
+``kind`` + ``profile_name`` per row and honors ``?kind=`` / ``?profile_name=``."""
 
 from __future__ import annotations
 

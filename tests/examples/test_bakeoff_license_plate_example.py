@@ -151,7 +151,7 @@ _BASELINE_NAME_RE = re.compile(r'[A-Za-z0-9_.\-]{1,64}')
 
 
 def test_baselines_file_validates() -> None:
-    """Every entry matches the baseline-registry schema (plan 7.6) and has a class_map."""
+    """Every entry matches the baseline-registry schema and has a class_map."""
     lp = resolve_profile(str(PROFILE))
     path = resolve_baselines_path(lp, Path('/nonexistent.json'))
     assert path == EXAMPLE / 'baselines.json'

@@ -1,5 +1,5 @@
-"""Tests for src.services.detection.pe_preprocess (T-4: restores three
-dropped preprocessing cases from the pre-Wave-2 zero-coverage audit)."""
+"""Tests for src.services.detection.pe_preprocess (restores three
+dropped preprocessing cases from an earlier zero-coverage audit)."""
 
 from __future__ import annotations
 

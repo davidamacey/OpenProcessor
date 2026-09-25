@@ -1,4 +1,4 @@
-"""DQ-M2: a cluster card's ``purity`` is a real signal, not 1.0 by construction.
+"""A cluster card's ``purity`` is a real signal, not 1.0 by construction.
 
 Class clusters are filled by labelling (``cluster_id == class_id``), so the
 top class's share of their labels is always 1.0 — every class cluster read

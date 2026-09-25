@@ -1,19 +1,15 @@
 """Shared fake-OpenSearch helpers for occ_skip_on_conflict_bulk callers.
 
-Since P2-13 (reference-line audit) rewrote ``occ_skip_on_conflict_bulk``
-to use batched ``_mget`` + ``_bulk`` instead of per-doc ``get``/
-``update``, every test double that stands in for an ``AsyncOpenSearch``
-client in a code path that calls it needs ``mget`` + ``bulk`` methods
-(not ``get``/``update``). This module centralizes that fake-response
-construction so it isn't duplicated across test files.
-
-Ported ahead of its originally-scheduled wave (the plan slots
-``src/clients/occ.py`` itself into a later curation wave) because
-``tests/curation/test_clustering_orchestrator_extra.py`` (Chunk 4)
-needs it for ``auto_promote_clusters``'s OCC-bulk write path — these
-helpers only build plain response-dict shapes and have zero import
-dependency on ``src.clients.occ``, so porting them early carries no
-forward-reference risk.
+``occ_skip_on_conflict_bulk`` uses batched ``_mget`` + ``_bulk`` instead
+of per-doc ``get``/``update``, so every test double that stands in for
+an ``AsyncOpenSearch`` client in a code path that calls it needs
+``mget`` + ``bulk`` methods (not ``get``/``update``). This module
+centralizes that fake-response construction so it isn't duplicated
+across test files -- including
+``tests/curation/test_clustering_orchestrator_extra.py``, which needs
+it for ``auto_promote_clusters``'s OCC-bulk write path. These helpers
+only build plain response-dict shapes and have zero import dependency
+on ``src.clients.occ``.
 """
 
 from __future__ import annotations
@@ -198,7 +194,7 @@ class FakeIngestOpenSearch:
     ) -> dict[str, Any]:
         # Two shapes land here: occ_upsert_bulk's own {'ids': [...]} calls,
         # and mget_crops' {'docs': [{'_id':..., '_index':...}, ...]} shape
-        # (occ_update_bulk, F-26 Phase 2).
+        # (occ_update_bulk).
         ids = body['ids'] if 'ids' in body else [d['_id'] for d in body['docs']]
         docs = []
         for doc_id in ids:

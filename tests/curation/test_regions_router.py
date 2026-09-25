@@ -1,5 +1,5 @@
-"""Write-path tests for the human region-labelling endpoints (plan Wave
-5 W5.c): ``PUT /crops/{id}/region``, ``PATCH /crops/{id}/region_meta``,
+"""Write-path tests for the human region-labelling endpoints:
+``PUT /crops/{id}/region``, ``PATCH /crops/{id}/region_meta``,
 ``POST /regions/batch_status``.
 
 Before this file, ``src/routers/curation/regions.py`` (12.62% coverage)
@@ -32,7 +32,7 @@ pytestmark = pytest.mark.usefixtures('reference_region_profile')
 
 class _FakeRegionOS:
     """AsyncOpenSearch double covering exactly what regions.py's write
-    routes call: get/update (OCC single-doc), mget/bulk (F-17 batched
+    routes call: get/update (OCC single-doc), mget/bulk (batched
     OCC writes), plus indices.refresh for the batch-status endpoint."""
 
     class _Indices:
@@ -352,7 +352,7 @@ def test_batch_set_region_status_updates_every_crop_and_refreshes(
     assert fake_os._docs['crop-1'][F.status] == 'detected'
     assert fake_os._docs['crop-2'][F.status] == 'detected'
     assert fake_os._docs['crop-1'][F.verified] is True
-    # F-17: the batch write refreshes via the final bulk call's
+    # The batch write refreshes via the final bulk call's
     # refresh='wait_for', not a separate forced indices.refresh().
     assert fake_os.refresh_calls == 0
     assert len(fake_os.bulk_calls) == 1

@@ -1,7 +1,6 @@
 """Tests for src/services/training/gpu_arbiter.py.
 
-Ported from a private reference vehicle/license-plate curation stack's
-training-pipeline test suite (Chunk 6). Covers:
+Covers:
 
 * parse_cuda_visible_devices edge cases
 * needs_multi_gpu_stop dispatch (single vs multi GPU)
@@ -9,11 +8,10 @@ training-pipeline test suite (Chunk 6). Covers:
 * multi-GPU stop path falls back to sentinel when docker is missing
 * reconcile leaves an active job intact, but cleans up when no jobs are active
 
-The reference tests monkeypatched module-level ``DEFAULT_SENTINEL_PATH`` /
-``TRAINING_LOCK_PATH`` constants. This port derives both from
-``CurationConfig.state_dir`` instead (there is no fixed deployment-specific
-path in the generic module), so the equivalent redirection here
-monkeypatches ``gpu_arbiter._state_dir``.
+Module-level ``DEFAULT_SENTINEL_PATH`` / ``TRAINING_LOCK_PATH`` both
+derive from ``CurationConfig.state_dir`` (there is no fixed
+deployment-specific path in the generic module), so redirecting them
+for a test monkeypatches ``gpu_arbiter._state_dir``.
 """
 
 from __future__ import annotations
@@ -79,14 +77,14 @@ def test_needs_multi_gpu_stop_none_false():
 
 
 def test_needs_multi_gpu_stop_alias_removed():
-    """The private-deployment ``needs_gemma_stop`` alias is gone entirely --
+    """The ``needs_gemma_stop`` alias is gone entirely --
     stop decisions are GPU-scope-driven now, not a "gemma" special case."""
     assert not hasattr(ga, 'needs_gemma_stop')
 
 
-# NOTE: the reference test suite had a `test_needs_gemma_stop_single_gpu2_true`
-# pinning a deployment-specific fact -- "GPU 2 always hosts the Gemma vLLM
-# server, so a lone '2' claim must still stop it." That knowledge is now
+# NOTE: an earlier internal version pinned a deployment-specific fact --
+# "GPU 2 always hosts the Gemma vLLM server, so a lone '2' claim must
+# still stop it." That knowledge is now
 # expressed generically: a container scoped to GPU 2 (``name@2`` in
 # ``OP_GPU_ARBITER_CONTAINERS``) is stopped by any claim that intersects
 # GPU 2, single- or multi-GPU. See the ``containers_to_stop`` tests below.
@@ -199,7 +197,7 @@ async def test_claim_single_gpu_uses_sentinel(tmp_path: Path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_claim_dual_gpu_fails_closed_without_docker(tmp_path: Path, monkeypatch):
-    """S-5: dual-GPU on a host without a usable docker SDK/socket must
+    """Dual-GPU on a host without a usable docker SDK/socket must
     refuse the claim (GpuArbiterStopFailedError), not silently fall back
     to a sentinel-only pause -- a sentinel pauses a paired *worker*
     process, not a sibling container sharing the GPU (e.g. a large vLLM
@@ -262,7 +260,7 @@ class _FakeDockerClient:
 async def test_claim_single_gpu_scoped_container_stops_it(tmp_path: Path, monkeypatch):
     """A single-GPU claim that intersects a *scoped* container's GPU set
     stops that container even though it's not a multi-GPU claim -- this is
-    the whole point of GPU-scoped containers (task #1 in the plan)."""
+    the whole point of GPU-scoped containers."""
     monkeypatch.setattr(ga, '_state_dir', lambda: tmp_path)
     registry = {'vllm-server': _FakeContainer('vllm-server')}
     monkeypatch.setattr(ga, '_docker_client', lambda: _FakeDockerClient(registry))

@@ -1,4 +1,4 @@
-"""CM-1 data repair: scripts/curation/revert_class_cluster_promotions.py.
+"""Data repair: scripts/curation/revert_class_cluster_promotions.py.
 
 Reproduces the exact bug shape: an item whose class_source was set to
 ``cluster_majority_agreement`` by ``auto_promote`` on a class-range
@@ -53,7 +53,7 @@ class TestLastAutoPromoteEntry:
 
     def test_ignores_candidate_range_promotions(self) -> None:
         """A promotion out of a real candidate cluster (>= the residual
-        offset) is legitimate -- not the CM-1 bug -- and must not revert."""
+        offset) is legitimate and must not revert."""
         source = {
             'cluster_id': revert_script.RESIDUAL_CLUSTER_ID_OFFSET + 5,
             'class_id_history': [_history_entry()],

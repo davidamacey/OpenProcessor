@@ -1,5 +1,5 @@
-"""Guard against CFG-2 (see docs/design/curation_design_rationale.md and
-the OSS completion plan §0.6): ``src/routers/curation/vlm.py`` used to
+"""Guard against a cache-dir mismatch (see
+docs/design/curation_design_rationale.md): ``src/routers/curation/vlm.py`` used to
 read ``GEMMA_CROP_CACHE_DIR`` (default ``/dev/shm/curation_crops``) while
 the worker (``scripts/curation/worker/state.py``) writes into
 ``CurationConfig.crop_cache_dir`` (env ``OP_CROP_CACHE_DIR``, default

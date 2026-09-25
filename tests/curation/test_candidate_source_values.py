@@ -1,8 +1,7 @@
-"""S3: stored ``region_source`` / ``candidate_source`` provenance values.
+"""Stored ``region_source`` / ``candidate_source`` provenance values.
 
-The reference deployment's vendor names (``sam3``, ``lpr``) must never be
-the *stored* candidate-source vocabulary — see
-``docs/design/naming_sweep_plan.md`` S3. The worker's four write sites and
+A deployment's vendor names (``sam3``, ``lpr``) must never be
+the *stored* candidate-source vocabulary. The worker's four write sites and
 ``candidate_detector()``'s lookup table must agree on the generic names.
 """
 

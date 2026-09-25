@@ -574,7 +574,7 @@ async def test_unload_posts_to_the_unload_endpoint_not_load(
 
 
 # =============================================================================
-# TR-1: OP_TRITON_MODEL_REPO / OP_TRITON_HTTP_URL resolved at construction
+# OP_TRITON_MODEL_REPO / OP_TRITON_HTTP_URL resolved at construction
 # time, not baked in as an import-time constant. A deployment overlay that
 # mounts the Triton model repo somewhere other than /app/models (the
 # private deployment mounts it at /models) previously had promote() write
@@ -653,7 +653,7 @@ def test_resolve_triton_models_dir_matches_promoter_default(
 
 
 # =============================================================================
-# TR-4: reload_promoted_models
+# reload_promoted_models
 # =============================================================================
 
 

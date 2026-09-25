@@ -1,5 +1,5 @@
 """``GET /crops`` honors ``limit``, ``sort``, ``conf_min``/``conf_max`` and,
-for ``order=diverse``, ``k`` (contract audit S10)."""
+for ``order=diverse``, ``k``."""
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ def test_default_sort_is_newest_first(client: TestClient, fake_os: _RecordingOS)
     assert client.get(f'{P}/crops').status_code == 200
     sort = fake_os.bodies[-1]['sort']
     assert sort[0]['updated_at']['order'] == 'desc'
-    # F-7: stable crop_id tiebreaker, always last.
+    # Stable crop_id tiebreaker, always last.
     assert sort[-1] == {'crop_id': {'order': 'asc'}}
 
 
@@ -106,7 +106,7 @@ def test_confidence_band(client: TestClient, fake_os: _RecordingOS) -> None:
 
 
 def test_source_param_filters_on_source_field(client: TestClient, fake_os: _RecordingOS) -> None:
-    """S2: the only ingest-source query param is ``source``; it filters on
+    """The only ingest-source query param is ``source``; it filters on
     the stored ``source`` field. The old ``hdd_source`` param name is gone
     (extra/unknown query params are simply ignored by FastAPI, so passing it
     must NOT produce a filter clause)."""
@@ -126,7 +126,7 @@ def test_class_crops_passes_real_defaults(client: TestClient, fake_os: _Recordin
     """/classes/{id}/crops calls list_crops directly; unset params must be
     plain defaults, not FastAPI FieldInfo objects leaking into the query.
 
-    F-19: class_id/test_holdout/class_excluded are pure predicates and
+    class_id/test_holdout/class_excluded are pure predicates and
     live in filter context now, but the optional params this test cares
     about (max_rank, min_blur_ratio, classifier_conf_lt, item_text,
     confidence band) must still be absent when unset."""
@@ -169,7 +169,7 @@ def test_diverse_order_honors_k(
 
 
 def test_page_too_deep_is_422(client: TestClient) -> None:
-    """F-7: from+size past the 10000 result-window ceiling must 422
+    """from+size past the 10000 result-window ceiling must 422
     explicitly rather than let OpenSearch 500 past index.max_result_window."""
     r = client.get(f'{P}/crops', params={'page': 400, 'page_size': 30})
     assert r.status_code == 422, r.text

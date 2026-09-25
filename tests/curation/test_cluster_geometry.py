@@ -1,4 +1,4 @@
-"""DQ-M3: every clustered item gets geometry, stale geometry is not served,
+"""Every clustered item gets geometry, stale geometry is not served,
 and cluster members can be served core-first.
 
 - :func:`write_cluster_geometry` writes ``cluster_distance`` (member-mean

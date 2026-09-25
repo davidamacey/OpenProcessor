@@ -1,4 +1,4 @@
-"""Unit tests for ``src.clients.occ_bulk.occ_update_bulk`` (F-17):
+"""Unit tests for ``src.clients.occ_bulk.occ_update_bulk``:
 human-write-semantics batch OCC update (retry on 409 rather than
 skip-on-conflict, unlike ``occ_skip_on_conflict_bulk``).
 

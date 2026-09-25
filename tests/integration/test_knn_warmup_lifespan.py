@@ -1,4 +1,4 @@
-"""Proves the FastAPI startup lifespan fires the kNN warmup task (F-24).
+"""Proves the FastAPI startup lifespan fires the kNN warmup task.
 
 Monkeypatches ``warm_knn_indexes`` before constructing the app so this
 never issues a real ``_plugins/_knn/warmup`` call; it only proves the

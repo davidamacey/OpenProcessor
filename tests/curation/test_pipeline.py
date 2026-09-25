@@ -1,8 +1,8 @@
 """Tests for :mod:`src.routers.curation.pipeline`.
 
-Ports the ``TestPipelineSkipFilter`` class from the reference tree's
-``test_label_combined_wireup.py`` (deferred out of Chunk 8 there because
-it exercises the reference pipeline module, ported here in Chunk 9).
+Includes the ``TestPipelineSkipFilter`` class, exercising the pipeline
+router's unvalidated-crops query (see ``test_label_combined_wireup.py``
+for the related combined-VLM-path cohort tests).
 """
 
 from __future__ import annotations

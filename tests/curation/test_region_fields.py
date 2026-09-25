@@ -1,10 +1,10 @@
-"""Pins for ``RegionFields`` (Chunk 0).
+"""Pins for ``RegionFields``.
 
-See ``docs/design/curation_design_rationale.md`` §4. Chunk 0
+See ``docs/design/curation_design_rationale.md`` §4. This file
 covers defaults + overridability only — the mapping/query agreement
 property (the index-mapping builder produces the same key set as a
-``RegionFields`` instance) is deferred to Chunk 1, when
-``curation_opensearch.py`` (and its mapping builder) is ported.
+``RegionFields`` instance) is covered separately, alongside
+``curation_opensearch.py`` (and its mapping builder).
 
 This file is one of the two hardcoded exemptions in
 ``scripts/codegen/check_no_literal_region_fields.py`` — it legitimately
@@ -55,7 +55,7 @@ def test_is_frozen() -> None:
 def test_overridability_expresses_a_pre_existing_deployment_shape() -> None:
     """A deployment with pre-existing data under other names is fully
     expressible by constructing a `RegionFields` instance with those
-    names — no reindex, no code change. This is the plan's stand-in for
+    names — no reindex, no code change. This stands in for
     a future overlay instance (never authored on this branch).
     """
     f = RegionFields(

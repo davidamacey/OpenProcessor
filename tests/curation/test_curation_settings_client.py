@@ -1,6 +1,6 @@
 """Tests for the shared curation-settings document client
 (``src.clients.curation_opensearch.get_curation_settings`` /
-``update_curation_settings`` — curation deployment-settings plan).
+``update_curation_settings``).
 
 A tiny in-memory fake stands in for OpenSearch's ``get``/``update``
 behavior: ``get`` raises a duck-typed "not found" error for a missing
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def _reset_settings_cache() -> Iterator[None]:
-    """F-28.1's module-level settings cache is keyed by index name and
+    """The module-level settings cache is keyed by index name and
     persists across tests -- every test here uses the same default index,
     so a stale entry from another test would otherwise leak in."""
     curation_opensearch._settings_cache.clear()

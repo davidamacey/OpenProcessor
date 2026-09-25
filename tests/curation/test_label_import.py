@@ -309,7 +309,7 @@ class TestImportLabelsBatch:
         assert summary['labels_imported'] == 3
         assert summary['files_processed'] == 3
         assert summary['files_failed'] == 0
-        # F-26: the image docs are resolved via one batched _msearch
+        # The image docs are resolved via one batched _msearch
         # instead of one `search` per file.
         assert len(os_fake.msearch_calls) == 1
         assert len(os_fake.msearch_calls[0]) == 6  # 3 files * (index line + query line)
@@ -332,7 +332,7 @@ class TestImportLabelsBatch:
         summary = await import_labels_batch(pairs, registry, os_fake)
 
         assert summary['labels_imported'] == n
-        # F-26: chunked at 100 -> 2 _msearch calls for 105 files, not 105
+        # Chunked at 100 -> 2 _msearch calls for 105 files, not 105
         # individual `search` calls.
         assert len(os_fake.msearch_calls) == 2
         assert os_fake.image_search_calls == 0
@@ -477,7 +477,7 @@ class TestImportLabelsBatchImageDocsPassthrough:
     async def test_precomputed_image_docs_skip_msearch_entirely(
         self, tmp_path: Path, registry: ClassRegistry
     ) -> None:
-        """F-26: a caller that already knows image_id (e.g. an ingest
+        """A caller that already knows image_id (e.g. an ingest
         batch's own results) can pass image_docs= and skip the _msearch
         image-lookup round-trip completely."""
         os_fake = FakeLabelOpenSearch(

@@ -1,4 +1,4 @@
-"""Pins for ``CurationConfig`` / ``IndexRole`` / ``index_name`` (Chunk 0).
+"""Pins for ``CurationConfig`` / ``IndexRole`` / ``index_name``.
 
 See ``docs/design/curation_design_rationale.md`` §2.1.
 """
@@ -33,7 +33,7 @@ def test_defaults_use_path_types() -> None:
 
 
 def test_bakeoff_eval_root_default_is_relative_not_a_private_path() -> None:
-    """CFG-6: the bake-off harness used to default to owner-private
+    """The bake-off harness used to default to owner-private
     absolute paths (one of which named a licensed proprietary image
     corpus). The default must be a repo-relative path, never an
     absolute filesystem path baked into the source."""
@@ -88,8 +88,7 @@ def test_from_env_overrides_bakeoff_eval_root(monkeypatch: pytest.MonkeyPatch) -
 
 def test_prompt_pack_path_defaults_to_none() -> None:
     """Unlike the other path fields, there is no generic on-disk default --
-    most deployments never need a custom PromptPack (labeling-assist plan
-    task a)."""
+    most deployments never need a custom PromptPack."""
     cfg = CurationConfig()
     assert cfg.prompt_pack_path is None
 

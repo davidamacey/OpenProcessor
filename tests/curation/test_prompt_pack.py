@@ -1,13 +1,11 @@
-"""Tests for ``PromptPack`` (§5 Chunk 7 "New" test).
+"""Tests for ``PromptPack``.
 
 Exercises the generic ``PromptPack`` shape plus the shipped neutral
 ``GENERIC_ITEM_PACK`` example: the dataclass field set, that the shipped
 instance's templates are formattable, and that its prompt text uses the
 same wire-key vocabulary ``RegionFields`` defaults to (per the design
 note in ``vlm_prompts.py``). Deliberately has no dependency on
-``vlm_labeler.py`` — this file lands in the same commit as
-``vlm_prompts.py`` (§5 Chunk 7 "Commits"), before ``vlm_labeler.py``
-exists on this branch. The mechanism functions that *consume* a
+``vlm_labeler.py``. The mechanism functions that *consume* a
 ``PromptPack`` (``format_class_catalog`` / ``resolve_class_name``, which
 live in ``vlm_labeler.py``) are tested in ``test_class_synonyms.py``
 instead, landing with the second commit.
@@ -24,7 +22,7 @@ def test_prompt_pack_is_frozen_dataclass() -> None:
 
     assert dataclasses.is_dataclass(PromptPack)
     fields = {f.name for f in dataclasses.fields(PromptPack)}
-    # Mirrors the reference VLM labeler's inline constant set (§3.4).
+    # Mirrors the VLM labeler's inline constant set.
     assert fields == {
         'name',
         'class_system',

@@ -154,7 +154,7 @@ async def test_probe_writes_all_seven_fields(
 async def test_probe_writes_one_bulk_call_per_page_not_per_item(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, tiny_image: Path
 ) -> None:
-    """F-26: probe scoring must issue one bulk() per scroll page, not one
+    """Probe scoring must issue one bulk() per scroll page, not one
     update() per crop -- these fakes' single search() call returns every
     doc as one page, so N crops should still cost exactly 1 bulk call."""
     from src.services.curation import probe_predictions as pp

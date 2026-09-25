@@ -52,7 +52,7 @@ def app_client(
     """Build a minimal FastAPI app with just the train router."""
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
 
-    # S-5: claim_gpus_for_training (called unconditionally by /start and
+    # claim_gpus_for_training (called unconditionally by /start and
     # /start_campaign before job.json is written) writes a sentinel/lock
     # file under CurationConfig.state_dir. get_curation_config() is a
     # process-wide cached singleton, so setting OP_STATE_DIR here would
@@ -60,7 +60,7 @@ def app_client(
     # the arbiter's own _state_dir() seam instead (same pattern
     # test_gpu_arbiter.py uses) so these tests exercise a real,
     # succeeding claim instead of relying on an exception being silently
-    # swallowed by a broad except-Exception (which S-5 removed).
+    # swallowed by a broad except-Exception (now removed).
     from src.services.training import gpu_arbiter as _gpu_arbiter
 
     monkeypatch.setattr(_gpu_arbiter, '_state_dir', lambda: tmp_path)
@@ -385,7 +385,7 @@ def test_preflight_blocks_unresolvable_include_classes(
 
 
 def test_preflight_lpr_single_class_alias_is_retired(app_client: TestClient, tmp_path: Any) -> None:
-    """S6: the accepted alias 'lpr_single_class' for dataset_kind is
+    """The accepted alias 'lpr_single_class' for dataset_kind is
     dropped; only 'single_class' is recognized. A manifest carrying the
     retired alias must be treated as an ordinary multi-class export, so
     the include_classes-resolvable check runs (and blocks on an
@@ -624,7 +624,7 @@ def test_start_returns_409_when_active_run_exists(
 def test_start_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
     app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """S-5: a claim that needs to stop a configured GPU-resident container
+    """A claim that needs to stop a configured GPU-resident container
     (e.g. a large vLLM process sharing the requested GPU) must refuse
     with 409 -- and must NOT write job.json -- when the docker SDK/socket
     isn't usable, instead of silently falling back to a sentinel-only

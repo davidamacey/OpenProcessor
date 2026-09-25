@@ -104,7 +104,7 @@ def test_search_text_happy_path(app_client: TestClient):
     app_client.fake_encoder.encode_text.assert_called_once_with(['white pickup truck'])
 
     # kNN query body never carries pe_embedding/backbone_embedding/region_embedding
-    # or class_id_history (F-25 -- this is a paginated list endpoint).
+    # or class_id_history -- this is a paginated list endpoint.
     _args, kwargs = app_client.fake_os.search.call_args
     body_sent = kwargs.get('body') or _args[-1]
     assert set(body_sent['_source']['excludes']) == {
@@ -118,7 +118,7 @@ def test_search_text_happy_path(app_client: TestClient):
 
 
 def test_search_text_min_score_filters_results(app_client: TestClient):
-    """F-24: min_score is applied by OpenSearch itself now (top-level
+    """min_score is applied by OpenSearch itself now (top-level
     request body field), not filtered out of the full hit list in
     Python -- so the fake must apply it like real OpenSearch would."""
     hits = [

@@ -3,7 +3,7 @@ Unit tests for the curation clustering router's
 ``GET /curation/clusters/representatives`` endpoint. Mocks the
 OpenSearch dependency and asserts the response shape.
 
-F-15 / D-4: representatives no longer come from a per-bucket
+Representatives no longer come from a per-bucket
 ``top_hits`` sub-agg — the ``terms`` agg only returns cluster ids, and
 one ``_msearch`` (one body per cluster in the requested page) fetches
 representatives for that page only.
@@ -126,7 +126,7 @@ def test_cluster_representatives_returns_keyed_dict(
 def test_cluster_representatives_query_shape_has_no_top_hits(
     app_client: Any, fake_opensearch: AsyncMock
 ) -> None:
-    """The terms agg must no longer carry a top_hits sub-agg (F-15)."""
+    """The terms agg must no longer carry a top_hits sub-agg."""
     fake_opensearch.search = AsyncMock(return_value=_cluster_id_buckets())
 
     r = app_client.get('/curation/clusters/representatives?per_cluster=3&max_clusters=50')
@@ -176,7 +176,7 @@ def test_cluster_representatives_msearch_only_covers_the_page(
             {'crop_id': 'asc'},
         ]
         # cluster_id + cluster_distance_cluster_id let a stale distance be
-        # nulled (DQ-M3).
+        # nulled.
         assert q['_source'] == [
             'crop_id',
             'cluster_id',
@@ -207,7 +207,7 @@ def test_cluster_representatives_offset_limits_page_size(
 def test_cluster_representatives_excludes_class_excluded_items(
     app_client: Any, fake_opensearch: AsyncMock
 ) -> None:
-    """F-12: excluded items must not surface as cluster representatives --
+    """Excluded items must not surface as cluster representatives --
     this endpoint had no class_excluded guard at all before."""
     fake_opensearch.search = AsyncMock(return_value=_cluster_id_buckets())
 

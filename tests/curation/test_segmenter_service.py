@@ -234,7 +234,7 @@ class TestWireSurface:
     @pytest.mark.asyncio
     @pytest.mark.usefixtures('served')
     async def test_generic_path_serves_the_wire_contract(self) -> None:
-        """``/segment`` is the shipped client's only path (W3: the
+        """``/segment`` is the shipped client's only path (the
         ``/segmenter/segment`` alias was removed -- no deployed worker
         posts to it anymore)."""
         payload = {

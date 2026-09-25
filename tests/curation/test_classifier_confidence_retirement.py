@@ -1,4 +1,4 @@
-"""F-6 / D-1: retire ``classifier_raw_confidence`` entirely.
+"""Retire ``classifier_raw_confidence`` entirely.
 
 It was never written anywhere in the live code path (only the seed/test
 harness wrote it), so the ``primary_low_conf`` review tab, the

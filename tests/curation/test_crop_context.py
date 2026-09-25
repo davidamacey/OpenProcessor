@@ -85,7 +85,7 @@ def test_crop_image_context() -> None:
 
 
 def test_crop_image_context_carries_full_drawing_geometry_for_every_item() -> None:
-    """K6 completeness: /context must serve every box a full-image
+    """/context must serve every box a full-image
     labeling view needs, in source-image-normalized coordinates, plus
     class + status + reason + validation fields, for every sibling item.
     """
@@ -135,7 +135,7 @@ def test_crop_image_context_carries_full_drawing_geometry_for_every_item() -> No
 def test_crop_image_context_fills_missing_pixel_size_from_the_file_header(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """K6 completeness: width/height must never be left null when the
+    """Width/height must never be left null when the
     image is actually servable -- fall back to reading the file header."""
     import src.config.curation as curation_config_mod
 

@@ -1,4 +1,4 @@
-"""F-15 / D-4: ``GET /clusters`` computes representatives only for the
+"""``GET /clusters`` computes representatives only for the
 requested ``[offset, offset+limit)`` page of the card list, via one
 ``_msearch`` (one body per cluster in the page) instead of a per-bucket
 ``top_hits`` sub-agg that decompressed stored ``_source`` for every

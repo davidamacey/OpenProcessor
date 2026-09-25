@@ -1,11 +1,9 @@
-"""B-PR5 + Phase C wireup tests — ensure the broadened low-class-confidence
+"""Phase C wireup tests — ensure the broadened low-class-confidence
 cohort takes the single combined VLM call path instead of the legacy
 verify + class chain.
 
-Deferred here from Chunk 7 because it exercises
-``scripts.curation.region_worker_main``'s
-``_process_crop`` cohort-routing logic, which needs the worker package
-that lands in this chunk.
+Exercises ``scripts.curation.region_worker_main``'s
+``_process_crop`` cohort-routing logic.
 
 Cohort detection criterion (mirrors ``combined._is_combined_cohort``):
 
@@ -24,12 +22,11 @@ paths must NOT be called for that crop. The bulk-update doc must carry
 ``vlm_verify_completed_at``, ``class_source='vlm'``, and the
 make/model fields when reported.
 
-Note: the reference file's ``TestPipelineSkipFilter`` class (asserting
-the reference pipeline router's unvalidated-crops query excludes
-recent ``vlm_verify_completed_at`` writes) is NOT ported here — that
-module (``src/routers/curation/pipeline.py``) is out of this chunk's
-scope (Chunk 9 in the plan's target layout). Those two cases stay
-unported until the pipeline router lands.
+Note: a ``TestPipelineSkipFilter`` class (asserting the pipeline
+router's unvalidated-crops query excludes recent
+``vlm_verify_completed_at`` writes) is NOT covered here — that
+module (``src/routers/curation/pipeline.py``) needs its own coverage
+for those two cases.
 """
 
 from __future__ import annotations

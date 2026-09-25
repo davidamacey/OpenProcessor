@@ -1,4 +1,4 @@
-"""F-7: paging depth guard + stable ``crop_id`` sort tiebreaker for
+"""Paging depth guard + stable ``crop_id`` sort tiebreaker for
 ``GET /regions`` and ``GET /regions/training_candidates``.
 """
 

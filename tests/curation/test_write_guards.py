@@ -10,14 +10,12 @@ crops. The guard is scoped to CLASS fields only — region-field writes
 stay unconditional (test_holdout protects class-label ground truth, not
 region detection state).
 
-``TestAutomatedClassWritersExcludeTestHoldout`` restores five (of the
-reference file's seven) per-writer ``test_holdout``-exclusion checks
-(plan Wave 5 T-2): the cascade writer's check already lives in
-``TestShouldClassifyHoldoutGuard`` above, and the reference's
-label-import lookup-query check targets a module never ported anywhere
-in this plan (out of Wave 5's scope — that's Wave 2 territory). The
-reference's two one-off-migration-script checks (``cleanup_low_conf_classifier_labels``
-/ class-id-realign) target operator tooling this plan never ports;
+``TestAutomatedClassWritersExcludeTestHoldout`` covers five per-writer
+``test_holdout``-exclusion checks: the cascade writer's check already
+lives in ``TestShouldClassifyHoldoutGuard`` above; a label-import
+lookup-query check targets a module this codebase doesn't wire up. Two
+one-off-migration-script checks (``cleanup_low_conf_classifier_labels``
+/ class-id-realign) target operator tooling not present here;
 their live equivalents on this tree are the two ``must_not`` clauses in
 ``src/services/curation/probe_predictions.py``'s
 ``run_probe_inference``/``build_uncertainty_queue``, which is what those
@@ -198,7 +196,7 @@ class TestAutomatedClassWritersExcludeTestHoldout:
                     'clusters': {
                         'buckets': [
                             {
-                                # F-29: composite-agg bucket key is a dict.
+                                # composite-agg bucket key is a dict.
                                 'key': {'cluster_id': 7},
                                 'doc_count': 10,
                                 'top_class': {

@@ -283,7 +283,7 @@ async def test_worker_disables_segmenter_when_profile_has_no_prompt(
 def test_secondary_shape_routing_follows_env_groups(
     region_env: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """F-11: group resolution comes from the class registry
+    """Group resolution comes from the class registry
     (class_name -> group), not the dead ``_ItemTask.group`` field."""
     import scripts.curation.worker.state as worker_state
 

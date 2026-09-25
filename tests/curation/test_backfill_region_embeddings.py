@@ -1,4 +1,4 @@
-"""LG-1: scripts/curation/backfill_region_embeddings.py.
+"""Tests for scripts/curation/backfill_region_embeddings.py.
 
 No real Triton/OpenSearch/filesystem access — AsyncTritonPool, PEEncoder
 and the disk-crop helper are all monkeypatched to fakes local to this

@@ -6,22 +6,19 @@ helpers around it.
 No real OpenSearch / FAISS instance is required. We mock the
 ``AsyncOpenSearch`` surface used by ``auto_promote_clusters``.
 
-The reference line's audit-remediation pass converted the promotion
-write from a bare ``update_by_query`` painless script to a per-doc OCC
-bulk pass (scroll for doc ids -> ``occ_skip_on_conflict_bulk``) so
-``class_id_history`` gets appended per promoted crop. The mock surface
-below grew ``scroll``/``clear_scroll``/``mget``/``bulk`` to match;
-``update_by_query`` is no longer called by this function at all.
+The promotion write goes through a per-doc OCC bulk pass (scroll for doc
+ids -> ``occ_skip_on_conflict_bulk``) rather than a bare
+``update_by_query`` painless script, so ``class_id_history`` gets
+appended per promoted crop. The mock surface below implements
+``scroll``/``clear_scroll``/``mget``/``bulk`` to match;
+``update_by_query`` is not called by this function at all.
 
-A later pass rewrote ``occ_skip_on_conflict_bulk`` to page doc_ids
-through batched ``_mget`` + ``_bulk`` instead of per-doc ``get``/
-``update``, so the fake below implements ``mget``/``bulk`` rather than
-``get``/``update``.
+``occ_skip_on_conflict_bulk`` itself pages doc_ids through batched
+``_mget`` + ``_bulk`` instead of per-doc ``get``/``update``, so the fake
+below implements ``mget``/``bulk`` rather than ``get``/``update``.
 
-This is the "distinct file, same basename as the clustering package's
-test_legacy_clustering.py" file from the reference tree's top-level
-``tests/test_legacy_clustering.py`` — see
-``tests/curation/test_clustering_orchestrator.py`` for the other one.
+See ``tests/curation/test_clustering_orchestrator.py`` for the other
+clustering-package test module.
 """
 
 from __future__ import annotations
@@ -63,7 +60,7 @@ def _bucket(
 ) -> dict[str, Any]:
     """Build an OpenSearch bucket like the one ``auto_promote_clusters`` consumes.
 
-    F-29: cluster buckets now come from a ``composite`` agg (paged by
+    Cluster buckets now come from a ``composite`` agg (paged by
     cluster_id) rather than a single ``terms: size=10000`` agg — the
     composite bucket key is a dict of source-name -> value.
     """
@@ -86,7 +83,7 @@ def _make_client(search_response: dict[str, Any], *, count: int = 0) -> MagicMoc
     client = MagicMock()
     client.search = AsyncMock(return_value=search_response)
     client.update_by_query = AsyncMock(return_value={'updated': 0})
-    # CM-2: dry-run now calls client.count(...) against the real
+    # Dry-run now calls client.count(...) against the real
     # promote_query instead of computing members - top_count locally.
     client.count = AsyncMock(return_value={'count': count})
     return client
@@ -173,7 +170,7 @@ async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
     get ``class_validated=True`` set. Unlabeled crops are left for the
     VLM + the review queue. This avoids the prototype-era pattern of
     silently labelling crops by cluster proximity, which was shown to
-    poison the dataset on the reference line.
+    poison the dataset.
     """
     buckets = [
         # Cluster 1: purity = 10/10 = 1.0, members 10 → promote.
@@ -240,7 +237,7 @@ async def test_auto_promote_clusters_dry_run_does_not_call_update() -> None:
         _bucket(1, members=10, classes=[('class_b', 10)]),
         _bucket(2, members=10, classes=[('sportycar', 5), ('pickup', 5)]),
     ]
-    # CM-2: dry-run's count must come from an actual client.count(...) call
+    # Dry-run's count must come from an actual client.count(...) call
     # against the real promote_query, not a locally-computed guess.
     client = _make_client(_search_response(buckets), count=7)
 
@@ -302,7 +299,7 @@ async def test_auto_promote_clusters_search_targets_correct_index() -> None:
     client.search.assert_awaited_once()
     assert client.search.await_args.kwargs['index'] == ITEMS_INDEX
     body = client.search.await_args.kwargs['body']
-    # CM-1: the outer query restricts the aggregation to candidate clusters
+    # The outer query restricts the aggregation to candidate clusters
     # (cluster_id >= RESIDUAL_CLUSTER_ID_OFFSET). Class clusters have
     # cluster_id == class_id by construction, so their purity is always
     # 1.0 and every member trivially "agrees" -- a self-referential signal,
@@ -314,10 +311,10 @@ async def test_auto_promote_clusters_search_targets_correct_index() -> None:
     assert body['query']['bool']['filter'] == [
         {'range': {'cluster_id': {'gte': RESIDUAL_CLUSTER_ID_OFFSET}}}
     ]
-    # CM-2: excluded items never contribute to a cluster's purity call.
+    # Excluded items never contribute to a cluster's purity call.
     assert {'term': {'class_excluded': True}} in body['query']['bool']['must_not']
-    # Aggregation shape matches what the helper expects to consume (F-29:
-    # composite agg paged by cluster_id, not a single terms:size=10000).
+    # Aggregation shape matches what the helper expects to consume:
+    # composite agg paged by cluster_id, not a single terms:size=10000.
     sources = body['aggs']['clusters']['composite']['sources']
     assert sources == [{'cluster_id': {'terms': {'field': 'cluster_id'}}}]
     # ``class_name`` is mapped keyword directly on the live index — no
@@ -326,7 +323,7 @@ async def test_auto_promote_clusters_search_targets_correct_index() -> None:
 
 
 # =============================================================================
-# CM-1: class clusters must never be auto-promote targets.
+# Class clusters must never be auto-promote targets.
 # =============================================================================
 
 
@@ -334,7 +331,7 @@ class _FilteringAutoPromoteClient(_FakeAutoPromoteClient):
     """Like :class:`_FakeAutoPromoteClient`, but its `search` honors the
     outer `query.bool.filter` range on `cluster_id` for the aggregation
     call -- close enough to real OpenSearch behavior to prove the
-    CM-1 range filter actually excludes class-range buckets, not just
+    The range filter actually excludes class-range buckets, not just
     that the query body contains the right clause (already covered by
     ``test_auto_promote_clusters_search_targets_correct_index``).
     """
@@ -346,7 +343,7 @@ class _FilteringAutoPromoteClient(_FakeAutoPromoteClient):
             buckets = self._agg_response['aggregations']['clusters']['buckets']
             kept = [b for b in buckets if int(b['key']['cluster_id']) >= min_cluster_id]
             return {'aggregations': {'clusters': {'buckets': kept}}}
-        # F-19: pure predicates live in bool.filter now (bool.must before).
+        # Pure predicates live in bool.filter now (bool.must before).
         clauses = body['query']['bool'].get('filter', []) + body['query']['bool'].get('must', [])
         cluster_id = next(
             int(m['term']['cluster_id']) for m in clauses if 'cluster_id' in m.get('term', {})
@@ -362,7 +359,7 @@ class _FilteringAutoPromoteClient(_FakeAutoPromoteClient):
 async def test_auto_promote_clusters_never_promotes_a_class_cluster() -> None:
     """A class cluster (cluster_id == class_id, always purity 1.0 by
     construction) with 10 classifier-labeled members must produce 0
-    promotions -- the exact circularity CM-1 fixes. A candidate cluster
+    promotions -- the exact circularity this guards against. A candidate cluster
     (cluster_id >= RESIDUAL_CLUSTER_ID_OFFSET) with the same shape still
     promotes normally.
     """
