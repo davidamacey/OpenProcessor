@@ -20,16 +20,27 @@ OPENSEARCH_SERVICE := opensearch
 BENCHMARK_DIR := benchmarks
 SCRIPTS_DIR := scripts
 
-# Port configurations
-API_PORT := 4603
-TRITON_HTTP_PORT := 4600
-TRITON_GRPC_PORT := 4601
-TRITON_METRICS_PORT := 4602
-PROMETHEUS_PORT := 4604
-GRAFANA_PORT := 4605
-LOKI_PORT := 4606
-OPENSEARCH_PORT := 4607
-OPENSEARCH_DASH_PORT := 4608
+# Load ports (and any other overrides) from .env if present, so a shared
+# host running a second isolated stack only has to edit one file. Values
+# here are still overridden by `make VAR=value ...` on the command line
+# (`?=` below never re-overrides an already-set variable, but the .env
+# assignment above is a plain `=` and make's command-line vars always win
+# regardless — see `man make` VARIABLES/OVERRIDING).
+-include .env
+
+# Port configurations (G-01/G-03: override via .env or `make API_PORT=...`)
+API_PORT ?= 4603
+TRITON_HTTP_PORT ?= 4600
+TRITON_GRPC_PORT ?= 4601
+TRITON_METRICS_PORT ?= 4602
+PROMETHEUS_PORT ?= 4604
+GRAFANA_PORT ?= 4605
+LOKI_PORT ?= 4606
+OPENSEARCH_PORT ?= 4607
+OPENSEARCH_DASHBOARDS_PORT ?= 4608
+MLFLOW_PORT ?= 4609
+DCGM_PORT ?= 4610
+SEGMENTER_PORT ?= 4611
 
 # Default target
 .DEFAULT_GOAL := help
@@ -778,7 +789,7 @@ open-prometheus: ## Open Prometheus UI in browser
 .PHONY: open-opensearch
 open-opensearch: ## Open OpenSearch Dashboards in browser
 	@echo "Opening OpenSearch Dashboards..."
-	@xdg-open http://localhost:$(OPENSEARCH_DASH_PORT) 2>/dev/null || open http://localhost:$(OPENSEARCH_DASH_PORT) 2>/dev/null || echo "Please open http://localhost:$(OPENSEARCH_DASH_PORT) in your browser"
+	@xdg-open http://localhost:$(OPENSEARCH_DASHBOARDS_PORT) 2>/dev/null || open http://localhost:$(OPENSEARCH_DASHBOARDS_PORT) 2>/dev/null || echo "Please open http://localhost:$(OPENSEARCH_DASHBOARDS_PORT) in your browser"
 
 .PHONY: metrics
 metrics: ## Show Triton metrics
