@@ -263,8 +263,11 @@ def test_trainer_status_payload_parses_in_the_api_reader(jobs_dir: Path, export_
     assert status.current_epoch == 2
     assert status.total_epochs == 3
     assert status.checkpoint_path == '/runs/x/weights/best.pt'
-    # The API back-fills best_checkpoint_metric from eval when the trainer omits it.
-    assert status.best_checkpoint_metric == {'map50': 0.71, 'map50_95': 0.42}
+    # eval may be test-split numbers, so it is never copied into the
+    # best-checkpoint (validation) field.
+    assert status.best_checkpoint_metric is None
+    assert status.eval is not None
+    assert status.eval['map50'] == 0.71
     assert status.heartbeat_at is not None
 
 

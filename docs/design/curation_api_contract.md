@@ -1029,15 +1029,18 @@ repeat and routes it to `best_checkpoint_metric` instead of clobbering
 `last_epoch_metric` with the wrong (best-checkpoint, not last-epoch)
 values — and `best_checkpoint_metric` is a single row rather than the
 former per-key running max, which could otherwise report `map50` from
-one epoch and `map50_95` from another. `best_checkpoint_metric` is
-back-filled from the run's `eval` block (the fresh test-split
-`.val()` pass, see below) when a status payload predates this field.
+one epoch and `map50_95` from another. A status written before these
+fields existed serves both as `null`; the retired `best_metric` /
+`last_metric` keys are dropped, never mapped onto the new fields, and
+`eval` is never copied into them (it may be test-split numbers).
 
 `/bakeoff/trained_models`'s `map50` column and the promote gate
 (`src/routers/curation_train.py::_evaluate_promote_gate`) read from
 `eval.map50` (the fresh test-split re-validation, `state.eval` /
 `populate_eval_block`), not from either of these two fields — they are
 diagnostic epoch-level metrics, not the run's scored comparison metric.
+`/bakeoff/trained_models` also serves `map50_split` (`eval.split`:
+`"test"`, or `"val"` when the test pass fell back).
 
 `GET /train/manifest/{job_id}`'s `results` block mirrors the same two
 field names (`last_epoch_metric`, `best_checkpoint_metric`) in place of

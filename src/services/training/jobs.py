@@ -348,35 +348,20 @@ class TrainJobStatus(BaseModel):
     error: str | None = None
     heartbeat_at: str | None = None
 
-    @model_validator(mode='after')
-    def _backfill_best_checkpoint_metric_from_eval(self) -> TrainJobStatus:
-        """Back-fill ``best_checkpoint_metric`` from the final ``eval`` block.
+    @model_validator(mode='before')
+    @classmethod
+    def _drop_retired_metric_keys(cls, data: Any) -> Any:
+        """Drop ``best_metric`` / ``last_metric`` from pre-W1 status files.
 
-        Some trainer builds write the run's mAP into ``eval`` (map50 /
-        map50_95) but leave ``best_checkpoint_metric`` unset (e.g. a run
-        whose status.json predates this field), so the runs list and any
-        bake-off model picker would show a blank mAP. When
-        ``best_checkpoint_metric`` is absent we derive it from ``eval`` so
-        every consumer shows it.
-
-        This is a best-effort fallback for an anomalous status write -- a
-        normal run always populates ``best_checkpoint_metric`` per-epoch
-        during training (``docker/trainer/trainer.py``'s
-        ``on_fit_epoch_end``). ``eval``'s numbers may be the test split
-        (``eval.split == 'test'``) rather than the training-time
-        validation split ``best_checkpoint_metric`` otherwise means; check
-        ``eval.split``/``eval.val_last`` if that distinction matters for a
-        given consumer.
+        ``extra='allow'`` would otherwise serve them. They are not mapped
+        onto the new fields: ``best_metric`` was a per-key running max that
+        could pair map50 and map50_95 from different epochs. A pre-W1 run
+        leaves both new fields null; its ``eval`` block (labelled by
+        ``eval.split``) still carries the final score.
         """
-        if not self.best_checkpoint_metric and isinstance(self.eval, dict):
-            derived = {
-                k: float(self.eval[k])
-                for k in ('map50', 'map50_95')
-                if isinstance(self.eval.get(k), (int, float))
-            }
-            if derived:
-                self.best_checkpoint_metric = derived
-        return self
+        if isinstance(data, dict) and ('best_metric' in data or 'last_metric' in data):
+            data = {k: v for k, v in data.items() if k not in ('best_metric', 'last_metric')}
+        return data
 
 
 class CampaignRunSpec(BaseModel):
