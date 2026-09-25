@@ -18,7 +18,7 @@ a fresh file.
 
 The compose healthcheck runs this module as a script:
 
-    python -m src.services.curation.worker_liveness check <name> --max-age 120
+    python src/services/curation/worker_liveness.py check <name> --max-age 120
 
 exiting 0 (healthy) or 1 (unhealthy), printing the reason either way.
 
