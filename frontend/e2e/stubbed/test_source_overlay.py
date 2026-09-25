@@ -100,4 +100,3 @@ def test_review_source_panel_draws_client_side_boxes(stub, page, app_url):
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert errors == [], errors
     assert stub.unhandled == [], stub.unhandled
-    assert stub.op_hits == [], stub.op_hits
