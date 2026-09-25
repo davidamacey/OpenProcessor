@@ -38,7 +38,6 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
-from src.config.curation import IndexRole, get_curation_config, index_name
 from src.services.curation.item_scores.base import ScoreResult
 
 
@@ -47,7 +46,6 @@ if TYPE_CHECKING:
 
 
 MISTAKENNESS_VERSION = 'v1'
-VEHICLE_CROPS_INDEX = index_name(get_curation_config(), IndexRole.ITEMS)
 
 
 def _now_iso() -> str:
