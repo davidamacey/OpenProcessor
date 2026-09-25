@@ -6,10 +6,18 @@
 #
 # PUBLIC_API_PREFIX must equal the API's OP_API_PREFIX: the API builds
 # some URLs itself (region thumbnails) from its own prefix.
+#
+# Running a second, independent instance alongside this one (e.g. a
+# second dataset/deployment on the same host): give it its own compose
+# project name, container name and host port so nothing collides —
+#
+#   CROPWRIGHT_PORT=5199 CROPWRIGHT_CONTAINER_NAME=cw-second \
+#     OP_DOCKER_NETWORK=some_other_openprocessor_net \
+#     docker compose -p cw-second up -d --build
 services:
   cropwright:
     build: .
-    container_name: cropwright
+    container_name: ${CROPWRIGHT_CONTAINER_NAME:-cropwright}
     restart: unless-stopped
     environment:
       - PUBLIC_API_PREFIX=${PUBLIC_API_PREFIX:-/curation}
