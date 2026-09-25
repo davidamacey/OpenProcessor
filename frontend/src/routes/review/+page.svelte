@@ -2089,7 +2089,7 @@
        there instead of squeezing each panel into half the height (the
        metadata pane was ~79px tall at 800px). -->
   <div
-    class="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-4 lg:grid-cols-2 lg:overflow-hidden"
+    class="grid min-h-0 flex-1 grid-cols-1 content-start gap-4 overflow-y-auto p-4 lg:grid-cols-2 lg:content-normal lg:overflow-hidden"
     data-testid="review-body"
   >
     {#if queue.loading && queue.items.length === 0}
