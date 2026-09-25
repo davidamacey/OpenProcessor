@@ -18,7 +18,11 @@ Endpoints (per design table §7):
     POST   {api_prefix}/train/cancel_campaign/{campaign_id}
     GET    {api_prefix}/train/profiles           → profile table
     GET    {api_prefix}/train/presets            → class-subset presets
+    GET    {api_prefix}/train/augmentation_presets → augmentation preset catalog
     GET    {api_prefix}/train/gpus               → TrainGpuOptionsResponse
+    GET    {api_prefix}/train/manifest/{job_id}   → run lineage manifest
+    GET    {api_prefix}/train/artifacts/{job_id}/{name}
+        → whitelisted run artifact (confusion_matrix.png, results.csv, ...)
 
 Pre-flight contract (design §15.1): ``/start`` calls ``/preflight``
 internally and refuses to write ``job.json`` if any check has severity
@@ -35,7 +39,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Path as PathParam, Query, status
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import FileResponse, ORJSONResponse
 from pydantic import BaseModel, Field
 
 from src.config import (
@@ -56,11 +60,20 @@ from src.services.curation.dataset_thresholds import (
     dataset_thresholds,
 )
 from src.services.curation.export_readiness import (
+    export_class_split_check,
     export_generation_check,
     export_size_check,
+    export_splits_check,
+    export_unlabeled_objects_check,
     items_index_generation,
 )
 from src.services.training import jobs as train_jobs
+from src.services.training.augmentation_presets import (
+    AUGMENTATION_PRESETS,
+    DEFAULT_AUGMENTATION_PRESET,
+    PRESET_IDS,
+    unknown_preset_error,
+)
 from src.services.training.gpu_arbiter import (
     GpuArbiterStopFailedError,
     containers_to_stop,
@@ -68,7 +81,13 @@ from src.services.training.gpu_arbiter import (
     needs_service_stop,
     probe_trainer_reachable,
 )
-from src.services.training.jobs import Profile, TrainCampaignSpec, TrainJobSpec, TrainJobStatus
+from src.services.training.jobs import (
+    AugmentationSpec,
+    Profile,
+    TrainCampaignSpec,
+    TrainJobSpec,
+    TrainJobStatus,
+)
 from src.services.training.profiles import (
     PROFILES_YOLO26,
     RESERVED_OPTIMIZERS_YOLO26,
@@ -231,6 +250,33 @@ def _resolve_target_classes(spec: TrainJobSpec) -> list[int]:
         return list(spec.include_classes)
     registry = get_class_registry()
     return [c.class_id for c in registry.load().classes if not c.deprecated]
+
+
+def _augmentation_preset_error(augmentation: AugmentationSpec | None) -> str | None:
+    """Error for an enabled augmentation block naming an unknown preset.
+
+    A disabled block's preset is never built by the trainer, so it isn't
+    judged. Checked by preflight and, ahead of every side effect, by
+    ``/start`` and ``/start_campaign``.
+    """
+    if augmentation is None or not augmentation.enabled:
+        return None
+    return unknown_preset_error(augmentation.preset)
+
+
+def _refuse_unknown_augmentation_preset(augmentation: AugmentationSpec | None) -> None:
+    """``422`` (even with ``force``) before any GPU claim or job write: the
+    trainer can never build an unknown preset."""
+    error = _augmentation_preset_error(augmentation)
+    if error is not None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                'message': error,
+                'field': 'augmentation.preset',
+                'valid_presets': list(PRESET_IDS),
+            },
+        )
 
 
 def _free_gb(path: str) -> float | None:
@@ -464,6 +510,34 @@ async def _run_preflight(
                 name='optimizer_not_auto',
                 severity='ok',
                 message=f'optimizer={optimizer or "MuSGD (default)"} is allowed',
+            )
+        )
+
+    # ---- 1b. augmentation preset is one the trainer can build ------------------
+    preset_error = _augmentation_preset_error(spec.augmentation)
+    if preset_error is not None:
+        checks.append(
+            PreflightCheck(
+                name='augmentation_preset',
+                severity='block',
+                message=preset_error,
+                detail={
+                    'preset': spec.augmentation.preset if spec.augmentation else None,
+                    'valid_presets': list(PRESET_IDS),
+                },
+            )
+        )
+    else:
+        enabled = spec.augmentation is not None and spec.augmentation.enabled
+        checks.append(
+            PreflightCheck(
+                name='augmentation_preset',
+                severity='ok',
+                message=(
+                    f'augmentation preset {spec.augmentation.preset!r} is available'
+                    if enabled and spec.augmentation is not None
+                    else 'augmentation disabled; no preset to check'
+                ),
             )
         )
 
@@ -865,10 +939,32 @@ async def _run_preflight(
                     )
                 )
 
-    # ---- export readiness (DQ-M9): not empty, built from the current index -
+    # ---- export readiness (DQ-M9): not empty, trainable splits, built from
+    # the current index. Per-class coverage is multi-class only: a
+    # single-class export has one target class, which the overall
+    # train/val check already covers. So are the unlabeled-object counts
+    # (export_unlabeled_objects): only the multi-class exporter records them.
     export_manifest = _read_export_manifest(spec.dataset_export_dir)
+    class_split_result = (
+        (
+            'ok',
+            'not applicable for this dataset kind (single-class: covered by '
+            'export_splits_nonempty)',
+            {},
+        )
+        if _is_single_class
+        else export_class_split_check(export_manifest, spec.include_classes)
+    )
+    unlabeled_result = (
+        ('ok', 'not applicable for this dataset kind (single-class)', {})
+        if _is_single_class
+        else export_unlabeled_objects_check(export_manifest)
+    )
     for name, (severity, message, detail) in (
         ('export_not_empty', export_size_check(export_manifest)),
+        ('export_splits_nonempty', export_splits_check(export_manifest)),
+        ('export_class_split_coverage', class_split_result),
+        ('export_unlabeled_objects', unlabeled_result),
         (
             'export_generation',
             export_generation_check(
@@ -971,8 +1067,11 @@ async def start_train(
     """Validate, run preflight, and write ``job.json``.
 
     Returns 422 with the full preflight report if any check is blocking
-    and ``force=False``. The trainer picks up the file out-of-band.
+    and ``force=False``, and 422 for an unknown augmentation preset even
+    with ``force`` (before the GPU claim). The trainer picks up the file
+    out-of-band.
     """
+    _refuse_unknown_augmentation_preset(spec.augmentation)
     report = await _run_preflight(spec, opensearch)
     # Active run gets 409 specifically (precedes the generic 422). Without
     # ``force``, active-run is non-overridable: the trainer only handles
@@ -1044,6 +1143,7 @@ async def start_campaign(
     """
     if not campaign.runs:
         raise HTTPException(status_code=400, detail='campaign requires at least one run')
+    _refuse_unknown_augmentation_preset(campaign.augmentation)
 
     first = campaign.runs[0]
     probe_spec = TrainJobSpec(
@@ -1197,6 +1297,44 @@ async def list_profiles() -> ProfilesResponse:
     """Return the YOLO26 profile table for the form picker."""
     rows = [Profile(**p) for p in get_profiles()]
     return ProfilesResponse(profiles=rows)
+
+
+class AugmentationPresetOption(BaseModel):
+    """One selectable ``augmentation.preset``."""
+
+    id: str
+    label: str
+    description: str
+    orientation_sensitive: bool = Field(
+        description='Horizontal flip is disabled for the whole run with this preset.'
+    )
+
+
+class AugmentationPresetsResponse(BaseModel):
+    presets: list[AugmentationPresetOption]
+    default: str = Field(description='Preset used when a job omits augmentation.preset.')
+
+
+@router.get('/augmentation_presets', response_model=AugmentationPresetsResponse)
+async def list_augmentation_presets() -> AugmentationPresetsResponse:
+    """The augmentation presets the trainer can build, for the form picker.
+
+    Served from the catalog the trainer itself builds from
+    (``src/services/training/augmentation_presets.py``); ``/preflight`` and
+    ``/start`` reject any other id.
+    """
+    return AugmentationPresetsResponse(
+        presets=[
+            AugmentationPresetOption(
+                id=p.id,
+                label=p.label,
+                description=p.description,
+                orientation_sensitive=p.orientation_sensitive,
+            )
+            for p in AUGMENTATION_PRESETS
+        ],
+        default=DEFAULT_AUGMENTATION_PRESET,
+    )
 
 
 class PresetsResponse(BaseModel):
@@ -1692,3 +1830,40 @@ async def get_manifest(
     if manifest is None:
         raise HTTPException(status_code=404, detail=f'no manifest for job {job_id!r}')
     return ORJSONResponse(content=manifest)
+
+
+# =============================================================================
+# /artifacts/{job_id}/{name}
+# =============================================================================
+
+
+@router.get('/artifacts/{job_id}/{name}', response_class=FileResponse)
+async def get_run_artifact(
+    job_id: Annotated[str, PathParam(description='Training job_id from {api_prefix}/train/runs')],
+    name: Annotated[
+        str,
+        PathParam(
+            description=(
+                'Whitelisted artifact filename '
+                '(see src.services.training.jobs.RUN_ARTIFACT_WHITELIST), '
+                'e.g. confusion_matrix.png'
+            )
+        ),
+    ],
+) -> FileResponse:
+    """Serve one whitelisted metrics/plot artifact from a run's directory.
+
+    This is the only sanctioned way to reach these files -- the server
+    filesystem path itself never appears on the wire (``eval.
+    confusion_matrix_url`` on ``{api_prefix}/train/status*``/``manifest``
+    points here instead). 404 alike for an unwhitelisted name, an unknown
+    job, or a file that hasn't been written yet — nothing here
+    distinguishes those cases to a caller.
+    """
+    try:
+        path = await train_jobs.read_artifact(job_id, name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if path is None:
+        raise HTTPException(status_code=404, detail=f'no artifact {name!r} for job {job_id!r}')
+    return FileResponse(path, media_type=train_jobs.artifact_media_type(name))

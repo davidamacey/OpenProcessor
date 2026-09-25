@@ -198,6 +198,50 @@ def test_invalid_job_gets_a_terminal_failed_status(jobs_dir: Path) -> None:
 
 
 # =============================================================================
+# on_fit_epoch_end metric semantics
+# =============================================================================
+
+
+class _SpecStub:
+    """Just enough of ``JobSpec`` for ``_make_ultralytics_callbacks``:
+    ``on_fit_epoch_end`` itself never reads ``spec`` at all, but the shared
+    closure factory takes one positional argument."""
+
+    cancel_path = Path('/nonexistent/does-not-exist.cancel')
+
+
+class _FakeUltralyticsTrainer:
+    def __init__(self, epoch: int, map50: float, map50_95: float) -> None:
+        self.epoch = epoch  # 0-indexed, as Ultralytics reports it
+        self.metrics = {'metrics/mAP50(B)': map50, 'metrics/mAP50-95(B)': map50_95}
+
+
+def test_on_fit_epoch_end_tells_the_best_checkpoint_revalidation_apart_from_a_real_epoch() -> None:
+    """Ultralytics' final_eval() re-validates best.pt and fires
+    on_fit_epoch_end once more after training, WITHOUT advancing
+    trainer.epoch. Before the fix, this call silently overwrote
+    last_epoch_metric with the best checkpoint's own metrics (not the true
+    last epoch's) -- live evidence: last_metric mAP50-95 0.857 vs
+    results.csv's actual last-epoch row of 0.855. It must instead land in
+    a distinct, single coherent best_checkpoint_metric row."""
+    state = job_protocol.StatusState(job_id='x', state='running')
+    _, _, on_fit_epoch_end = trainer._make_ultralytics_callbacks(_SpecStub(), state, total_epochs=2)
+
+    # Epoch 1 (Ultralytics reports epoch=0).
+    on_fit_epoch_end(_FakeUltralyticsTrainer(epoch=0, map50=0.70, map50_95=0.40))
+    # Epoch 2, the true LAST training epoch (Ultralytics reports epoch=1).
+    on_fit_epoch_end(_FakeUltralyticsTrainer(epoch=1, map50=0.855, map50_95=0.80))
+    # final_eval()'s post-training re-validation of best.pt: same epoch=1,
+    # different (better) metrics because it validates the BEST checkpoint,
+    # not necessarily the last in-training epoch's weights.
+    on_fit_epoch_end(_FakeUltralyticsTrainer(epoch=1, map50=0.86, map50_95=0.857))
+
+    assert state.last_epoch_metric == {'epoch': 2, 'map50': 0.855, 'map50_95': 0.80}
+    assert state.best_checkpoint_metric == {'epoch': 2, 'map50': 0.86, 'map50_95': 0.857}
+    assert state.current_epoch == 2  # not clobbered by the revalidation call
+
+
+# =============================================================================
 # status.json: trainer writer -> API reader
 # =============================================================================
 
@@ -219,8 +263,8 @@ def test_trainer_status_payload_parses_in_the_api_reader(jobs_dir: Path, export_
     assert status.current_epoch == 2
     assert status.total_epochs == 3
     assert status.checkpoint_path == '/runs/x/weights/best.pt'
-    # The API back-fills best_metric from eval when the trainer omits it.
-    assert status.best_metric == {'map50': 0.71, 'map50_95': 0.42}
+    # The API back-fills best_checkpoint_metric from eval when the trainer omits it.
+    assert status.best_checkpoint_metric == {'map50': 0.71, 'map50_95': 0.42}
     assert status.heartbeat_at is not None
 
 
@@ -554,6 +598,157 @@ def test_box_iou_matches_hand_computed_overlap() -> None:
 
 
 # =============================================================================
+# eval block -- test split vs training-time validation split (P1: these two
+# were previously conflated; eval.map50/map50_95 silently carried the val
+# number while per_class carried the test number).
+# =============================================================================
+
+
+class _FakeMetric:
+    """Stand-in for Ultralytics' ``Metric`` (``DetMetrics.box``)."""
+
+    def __init__(
+        self,
+        *,
+        map50: float,
+        map_: float,
+        mp: float,
+        mr: float,
+        ap_class_index: list[int],
+        p: list[float],
+        r: list[float],
+        f1: list[float],
+        ap50: list[float],
+    ) -> None:
+        self.map50 = map50
+        self.map = map_
+        self.mp = mp
+        self.mr = mr
+        self.ap_class_index = ap_class_index
+        self.p = p
+        self.r = r
+        self.f1 = f1
+        self.ap50 = ap50
+
+
+class _FakeDetMetrics:
+    """Stand-in for the object ``model.val(...)`` returns."""
+
+    def __init__(self, box: _FakeMetric, names: dict[int, str], nt_per_class: list[int]) -> None:
+        self.box = box
+        self.names = names
+        self.nt_per_class = nt_per_class
+
+
+def _fake_test_val_results() -> _FakeDetMetrics:
+    box = _FakeMetric(
+        map50=0.62,
+        map_=0.41,
+        mp=0.71,
+        mr=0.55,
+        ap_class_index=[0, 1],
+        p=[0.8, 0.6],
+        r=[0.7, 0.5],
+        f1=[0.75, 0.55],
+        ap50=[0.79, 0.5],
+    )
+    return _FakeDetMetrics(box, names={0: 'widget', 1: 'gadget'}, nt_per_class=[12, 8])
+
+
+def _write_results_csv(save_dir: Path, map50: float, map50_95: float) -> None:
+    save_dir.mkdir(parents=True, exist_ok=True)
+    (save_dir / 'results.csv').write_text(
+        f'epoch,metrics/mAP50(B),metrics/mAP50-95(B)\n1,{map50},{map50_95}\n'
+    )
+
+
+def test_extract_test_summary_reads_detmetrics_box_properties() -> None:
+    assert incumbent_compare.extract_test_summary(_fake_test_val_results()) == {
+        'map50': pytest.approx(0.62),
+        'map50_95': pytest.approx(0.41),
+        'precision': pytest.approx(0.71),
+        'recall': pytest.approx(0.55),
+    }
+
+
+def test_extract_test_summary_empty_when_box_missing() -> None:
+    class _NoBox:
+        pass
+
+    assert incumbent_compare.extract_test_summary(_NoBox()) == {}
+
+
+def test_populate_eval_block_prefers_the_test_split_over_the_training_time_val_split(
+    tmp_path: Path,
+) -> None:
+    """The bug: eval.map50/map50_95 must be the frozen TEST split (from a
+    fresh val() pass), not the per-epoch VALIDATION split recorded in
+    results.csv -- even though both are available."""
+    save_dir = tmp_path / 'run'
+    # Deliberately distinct from the test numbers so a conflation is
+    # unmistakable rather than a lucky coincidence.
+    _write_results_csv(save_dir, map50=0.9191, map50_95=0.85096)
+    state = job_protocol.StatusState(job_id='j-test-split', state='running')
+
+    trainer.populate_eval_block(
+        state, save_dir, val_results=_fake_test_val_results(), data_yaml_path=None
+    )
+
+    assert state.eval is not None
+    assert state.eval['split'] == 'test'
+    assert state.eval['map50'] == pytest.approx(0.62)
+    assert state.eval['map50_95'] == pytest.approx(0.41)
+    assert state.eval['precision'] == pytest.approx(0.71)
+    assert state.eval['recall'] == pytest.approx(0.55)
+    assert len(state.eval['per_class']) == 2
+    # The training-time validation numbers are kept, but clearly named --
+    # never under the headline map50/map50_95 keys.
+    assert state.eval['val_last'] == pytest.approx({'map50': 0.9191, 'map50_95': 0.85096})
+    assert state.eval['map50'] != pytest.approx(0.9191)
+    assert state.eval['map50_95'] != pytest.approx(0.85096)
+
+
+def test_populate_eval_block_falls_back_to_val_when_the_test_pass_is_missing(
+    tmp_path: Path,
+) -> None:
+    save_dir = tmp_path / 'run'
+    _write_results_csv(save_dir, map50=0.9191, map50_95=0.85096)
+    state = job_protocol.StatusState(job_id='j-no-test', state='running')
+
+    trainer.populate_eval_block(state, save_dir, val_results=None, data_yaml_path=None)
+
+    assert state.eval is not None
+    assert state.eval['split'] == 'val'
+    assert 'per_class' not in state.eval
+    assert state.eval['map50'] == pytest.approx(0.9191)
+    assert state.eval['map50_95'] == pytest.approx(0.85096)
+    assert state.eval['val_last'] == pytest.approx({'map50': 0.9191, 'map50_95': 0.85096})
+
+
+def test_populate_eval_block_falls_back_to_val_when_per_class_is_unavailable(
+    tmp_path: Path,
+) -> None:
+    """A test pass that ran but returned no usable per-class rows (older
+    Ultralytics, or a degenerate ``box``) must not be labeled 'test' --
+    that would silently ship an empty/absent per_class under a 'test'
+    label for the promote gate to trip over."""
+    save_dir = tmp_path / 'run'
+    _write_results_csv(save_dir, map50=0.5, map50_95=0.3)
+    empty_box = _FakeMetric(
+        map50=0.7, map_=0.5, mp=0.6, mr=0.4, ap_class_index=[], p=[], r=[], f1=[], ap50=[]
+    )
+    val_results = _FakeDetMetrics(empty_box, names={}, nt_per_class=[])
+    state = job_protocol.StatusState(job_id='j-no-per-class', state='running')
+
+    trainer.populate_eval_block(state, save_dir, val_results=val_results, data_yaml_path=None)
+
+    assert state.eval is not None
+    assert state.eval['split'] == 'val'
+    assert 'per_class' not in state.eval
+    assert state.eval['map50'] == pytest.approx(0.5)  # the val number, not the test box's 0.7
+
+
+# =============================================================================
 # End-to-end run_job against a stub Ultralytics
 # =============================================================================
 
@@ -617,6 +812,126 @@ def stub_ultralytics(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type[_S
     return _StubYOLO
 
 
+def test_finalize_run_forces_the_end2end_head_for_yolo26_test_split_eval(
+    jobs_dir: Path, export_dir: Path, tmp_path: Path
+) -> None:
+    """The trainer's own post-training test-split re-validation must score
+    the served (NMS-free, one-to-one) head -- not whichever head
+    Ultralytics' .val() defaults to for the reloaded checkpoint -- or the
+    comparison metric silently doesn't match what Triton actually serves.
+    ``.val()`` has no ``end2end=`` kwarg; the real toggle is the loaded
+    model's own ``.end2end`` property."""
+    job_id = _write_job(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
+    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    state = job_protocol.StatusState(
+        job_id=spec.job_id, campaign_id=spec.campaign_id, state='running'
+    )
+
+    save_dir = tmp_path / 'run'
+    (save_dir / 'weights').mkdir(parents=True)
+    best_pt = save_dir / 'weights' / 'best.pt'
+    best_pt.write_bytes(b'stub-checkpoint')
+    (save_dir / 'results.csv').write_text('epoch,metrics/mAP50(B),metrics/mAP50-95(B)\n1,0.5,0.3\n')
+    data_yaml_path = export_dir / 'data.yaml'
+
+    class _Head:
+        """A genuine dual-head build: one2one only exists once end2end
+        training actually created it -- same as Ultralytics' real head."""
+
+        def __init__(self) -> None:
+            self.end2end = False
+
+        @property
+        def one2one(self) -> dict[str, Any]:
+            return {'box_head': None, 'cls_head': None}
+
+    class _InnerModel:
+        def __init__(self) -> None:
+            self._head = _Head()
+            self.model = [self._head]  # DetectionModel.model[-1] is the head
+
+        @property
+        def end2end(self) -> bool:
+            return self._head.end2end
+
+        @end2end.setter
+        def end2end(self, value: bool) -> None:
+            self._head.end2end = value
+
+    class _RecordingYOLO:
+        observed_end2end: bool | None = None
+
+        def __init__(self, weights: str) -> None:
+            self.weights = weights
+            self.model = _InnerModel()
+            self.trainer: _StubTrainer | None = None
+
+        def export(self, **_kwargs: Any) -> None:
+            pass  # not under test here
+
+        def val(self, **_kwargs: Any) -> str:
+            _RecordingYOLO.observed_end2end = self.model.end2end
+            return 'val-result-sentinel'
+
+    model = _RecordingYOLO(str(best_pt))
+    model.trainer = _StubTrainer(save_dir)
+
+    trainer._finalize_run(spec, state, model, data_yaml_path)
+
+    assert _RecordingYOLO.observed_end2end is True
+    assert state.eval is not None
+    assert state.eval['head'] == 'end2end'
+
+
+def test_finalize_run_does_not_force_end2end_on_a_non_dual_head_model(
+    jobs_dir: Path, export_dir: Path, tmp_path: Path
+) -> None:
+    """A model with no one2one branch (not end2end-capable) must be left
+    alone -- forcing end2end=True on it would break inference, since it
+    has no one-to-one head to switch to."""
+    job_id = _write_job(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
+    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    state = job_protocol.StatusState(
+        job_id=spec.job_id, campaign_id=spec.campaign_id, state='running'
+    )
+
+    save_dir = tmp_path / 'run'
+    (save_dir / 'weights').mkdir(parents=True)
+    best_pt = save_dir / 'weights' / 'best.pt'
+    best_pt.write_bytes(b'stub-checkpoint')
+    (save_dir / 'results.csv').write_text('epoch,metrics/mAP50(B),metrics/mAP50-95(B)\n1,0.5,0.3\n')
+    data_yaml_path = export_dir / 'data.yaml'
+
+    class _NonEndToEndHead:
+        end2end = False  # no one2one property at all -- a plain single head
+
+    class _InnerModel:
+        def __init__(self) -> None:
+            self.model = [_NonEndToEndHead()]
+            self.end2end = False
+
+    class _RecordingYOLO:
+        def __init__(self, weights: str) -> None:
+            self.weights = weights
+            self.model = _InnerModel()
+            self.trainer: _StubTrainer | None = None
+
+        def export(self, **_kwargs: Any) -> None:
+            pass
+
+        def val(self, **_kwargs: Any) -> str:
+            return 'val-result-sentinel'
+
+    model = _RecordingYOLO(str(best_pt))
+    model.trainer = _StubTrainer(save_dir)
+
+    trainer._finalize_run(spec, state, model, data_yaml_path)
+
+    assert model.model.end2end is False  # left untouched
+    assert state.eval is not None
+    assert 'head' not in state.eval
+
+
 @pytest.mark.integration
 def test_run_job_drives_a_whole_export_run_to_finished(
     jobs_dir: Path, export_dir: Path, stub_ultralytics: type[_StubYOLO], tmp_path: Path
@@ -636,14 +951,27 @@ def test_run_job_drives_a_whole_export_run_to_finished(
     assert status.state == 'finished', status.error
     assert status.checkpoint_path is not None
     assert status.checkpoint_path.endswith('weights/best.pt')
-    assert status.eval == {'map50': 0.77, 'map50_95': 0.44}
+    # The stub's val() returns None (no test-split pass), so eval falls
+    # back to the training-time validation numbers -- split must say 'val',
+    # never silently look like a test-split result.
+    assert status.eval == {
+        'map50': 0.77,
+        'map50_95': 0.44,
+        'split': 'val',
+        'val_last': {'map50': 0.77, 'map50_95': 0.44},
+        'confusion_matrix_url': None,
+    }
     assert status.class_remap_copy_failed is False  # type: ignore[attr-defined]
     # ONNX sibling is what promote actually copies into the Triton repo.
     assert Path(status.checkpoint_path).with_suffix('.onnx').is_file()
 
     manifest = asyncio.run(train_jobs.read_manifest(job_id))
     assert manifest is not None
-    assert manifest['lineage']['dataset_sha'] == 'sha-frozen-test'
+    # The export fixture's manifest.json only sets frozen_test_sha -- no
+    # dataset_sha key, and dataset_sha is never computed (it's the export's
+    # own claim), so it stays None.
+    assert manifest['lineage']['dataset_sha'] is None
+    assert manifest['lineage']['frozen_test_sha'] == 'sha-frozen-test'
     assert manifest['lineage']['class_remap'] is None  # whole-export run
     assert manifest['lineage']['training_seed'] == 7
     assert manifest['lineage']['deterministic'] is True
@@ -660,6 +988,74 @@ def test_run_job_drives_a_whole_export_run_to_finished(
     )
     # tmp scratch is always cleaned.
     assert not spec.tmp_root.exists()
+
+
+@pytest.mark.integration
+def test_normal_run_manifest_has_no_null_lineage(
+    jobs_dir: Path,
+    export_dir: Path,
+    stub_ultralytics: type[_StubYOLO],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A run submitted against a full export manifest, with a build sha and
+    a reachable docker client, must not leave any lineage/code_versions
+    field null -- a null here silently degrades a run's reproducibility
+    envelope with no visible signal. ``trainer_image_id`` is the one field
+    that legitimately stays null when the API has no docker socket; here
+    the socket is faked reachable so it, too, must be non-null."""
+    from src.config import GpuArbiterConfig
+    from src.services.training import lineage
+
+    (export_dir / 'manifest.json').write_text(
+        json.dumps(
+            {
+                'dataset_sha': 'dataset-sha-x',
+                'frozen_test_sha': 'sha-frozen-test',
+                'test_label_sha': 'label-sha-x',
+                'version_tag': 'v9',
+            }
+        )
+    )
+    monkeypatch.setenv('OP_BUILD_SHA', 'apisha-x')
+
+    class _FakeImage:
+        id = 'sha256:trainerimg'
+        labels = {'org.opencontainers.image.revision': 'trainerrev-x'}
+
+    class _FakeContainer:
+        image = _FakeImage()
+
+    class _FakeContainers:
+        def get(self, _name: str) -> _FakeContainer:
+            return _FakeContainer()
+
+    class _FakeDockerClient:
+        containers = _FakeContainers()
+
+    monkeypatch.setattr(
+        lineage,
+        'get_gpu_arbiter_config',
+        lambda: GpuArbiterConfig(trainer_container='curation-trainer'),
+    )
+    monkeypatch.setattr(lineage, '_docker_client', lambda: _FakeDockerClient())
+
+    job_id = _write_job(
+        dataset_export_dir=str(export_dir),
+        model_size='n',
+        profile='probe',
+        hyperparameters={'epochs': 1, 'batch': 2, 'optimizer': 'MuSGD', 'seed': 3},
+    )
+    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+
+    trainer.run_job(spec)
+
+    manifest = asyncio.run(train_jobs.read_manifest(job_id))
+    assert manifest is not None
+    for key in ('dataset_sha', 'frozen_test_sha', 'test_label_sha', 'registry_sha'):
+        assert manifest['lineage'][key] is not None, key
+    for key in ('api_sha', 'trainer_sha', 'trainer_image_id'):
+        assert manifest['code_versions'][key] is not None, key
 
 
 @pytest.mark.integration

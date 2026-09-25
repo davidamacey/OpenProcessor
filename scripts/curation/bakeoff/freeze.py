@@ -63,7 +63,7 @@ def freeze(root: Path, *, split: str = 'test') -> dict[str, object]:
     """Record the test-split hash and make the split read-only."""
     sha, n = test_sha(root, split=split)
     lock = {
-        'frozen_test_sha': sha,
+        'test_label_sha': sha,
         'n_label_files': n,
         'split': split,
         'frozen_at': datetime.now(UTC).isoformat(),
@@ -79,15 +79,21 @@ def verify(root: Path, *, split: str = 'test') -> tuple[bool, str]:
     Returns ``(ok, message)``. ``ok`` is False if no lock exists or the
     hash changed --- callers MUST refuse to score in that case so model
     comparisons stay on identical data.
+
+    Reads the current key ``test_label_sha``, falling back to the legacy
+    ``frozen_test_sha`` key so a lock file written before this rename (an
+    existing frozen dataset from an older deployment) still verifies --
+    this is stored-data tolerance, not a code shim.
     """
     lock_path = root / LOCK_NAME
     if not lock_path.is_file():
         return False, f'no {LOCK_NAME}; test set was never frozen'
     lock = json.loads(lock_path.read_text(encoding='utf-8'))
+    locked_sha = lock.get('test_label_sha', lock.get('frozen_test_sha'))
     current, n = test_sha(root, split=split)
-    if current != lock.get('frozen_test_sha'):
+    if current != locked_sha:
         return False, (
-            f'test set CHANGED: lock={lock.get("frozen_test_sha")} now={current} '
+            f'test set CHANGED: lock={locked_sha} now={current} '
             f'({n} label files) --- benchmark would drift, refusing'
         )
     return True, f'verified: {current} ({n} label files)'
@@ -105,7 +111,7 @@ def main() -> int:
 
     if args.freeze:
         lock = freeze(args.dataset, split=args.split)
-        print(f'frozen: {lock["frozen_test_sha"]} ({lock["n_label_files"]} labels), read-only')
+        print(f'frozen: {lock["test_label_sha"]} ({lock["n_label_files"]} labels), read-only')
         return 0
     if args.unlock:
         _set_readonly(args.dataset, split=args.split, writable=True)

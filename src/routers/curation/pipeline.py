@@ -187,7 +187,7 @@ async def pipeline_auto_label(
     # Snapshot counts at entry for a real before/after.
     summary['baseline'] = await pipeline_health_snapshot(opensearch)
 
-    # Pipeline order: v6 confident keeps its label; else -> VLM -> human.
+    # Pipeline order: classifier confident keeps its label; else -> VLM -> human.
     # force_cluster_id_equals_class_id keeps cluster_id==class_id for
     # labeled items; the residual clusterer handles the rest.
     # with_elapsed_tick advances the dashboard during callback-less
@@ -257,12 +257,12 @@ async def pipeline_auto_label(
         progress.start_stage('auto_promote')
         progress.raise_if_cancelled()
     if not run_auto_promote:
-        # Disabled by default — the v6+cluster-majority rule had no v6
-        # confidence floor and was contaminating class clusters by
-        # validating low-confidence v6 predictions as long as they sat in
-        # a cluster whose majority shared that class. Skip the stage
-        # entirely until a confidence-gated rewrite lands; operators can
-        # opt in via ?run_auto_promote=true.
+        # Disabled by default — the classifier+cluster-majority rule had
+        # no classifier confidence floor and was contaminating class
+        # clusters by validating low-confidence classifier predictions
+        # as long as they sat in a cluster whose majority shared that
+        # class. Skip the stage entirely until a confidence-gated
+        # rewrite lands; operators can opt in via ?run_auto_promote=true.
         summary['stages']['auto_promote'] = {'skipped': True, 'reason': 'disabled by default'}
     elif cluster_id is not None:
         summary['stages']['auto_promote'] = dict(CLUSTER_SCOPED_SKIP)
@@ -412,11 +412,11 @@ async def pipeline_auto_label(
 
     # Prototype-rescue paths are deleted: CLIP-prototype labeling
     # mis-labeled a large fraction of rows in an earlier phase. The
-    # v6+VLM agreement two-signal path (`class_source='classifier_vlm_agreement'`)
+    # classifier+VLM agreement two-signal path (`class_source='classifier_vlm_agreement'`)
     # is a documented follow-up. For this slice, the VLM writes
     # `class_source='vlm'` (or `vlm_unmatched` / `vlm_new_class_pending`)
     # WITHOUT auto-validation. Validation requires either a human signal
-    # or the v6+VLM two-signal path.
+    # or the classifier+VLM two-signal path.
 
     from src.clients.occ import occ_skip_on_conflict_bulk as _occ_skip_bulk
     from src.services.curation.vlm_class_attempt import prediction_class_update, with_class_snapshot

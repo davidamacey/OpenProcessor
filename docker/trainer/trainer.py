@@ -46,6 +46,7 @@ from job_protocol import (
     _capture_mlflow_run_id,
     _heartbeat_loop,
     _utcnow_iso,
+    build_lineage,
     list_pending_jobs,
     parse_and_validate_job,
     reject_job,
@@ -170,6 +171,21 @@ def _make_ultralytics_callbacks(
             raise CancelRequestedError(msg)
 
     def on_fit_epoch_end(trainer: Any) -> None:
+        """Capture per-epoch metrics -- and tell the true last training
+        epoch apart from Ultralytics' post-training re-validation of
+        best.pt.
+
+        Ultralytics' ``BaseTrainer.final_eval()`` re-validates the best
+        checkpoint after training completes and fires this same callback
+        one more time -- but does not advance ``trainer.epoch``. So a
+        repeated epoch number (same as the previous call) is the signal
+        that this call is the best checkpoint's own metrics, not a new
+        training epoch; only that call updates ``best_checkpoint_metric``.
+        Every other call is a real epoch and updates ``last_epoch_metric``.
+        This keeps both as one coherent row (map50 + map50_95 from the SAME
+        validation pass) instead of a per-key running max that can mix
+        metrics from different epochs.
+        """
         try:
             epoch = int(getattr(trainer, 'epoch', 0)) + 1  # Ultralytics is 0-indexed
             t0 = epoch_start_at.pop('t0', None)
@@ -177,22 +193,23 @@ def _make_ultralytics_callbacks(
             metrics = getattr(trainer, 'metrics', None) or {}
             map50 = metrics.get('metrics/mAP50(B)') or metrics.get('metrics/mAP_0.5')
             map5095 = metrics.get('metrics/mAP50-95(B)') or metrics.get('metrics/mAP_0.5:0.95')
-            last: dict[str, float] = {}
+            row: dict[str, Any] = {'epoch': epoch}
             if map50 is not None:
-                last['map50'] = float(map50)
+                row['map50'] = float(map50)
             if map5095 is not None:
-                last['map50_95'] = float(map5095)
-            best = state.best_metric or {}
-            new_best = {
-                **best,
-                **{k: v for k, v in last.items() if v > best.get(k, float('-inf'))},
-            }
+                row['map50_95'] = float(map5095)
             with state.lock:
-                state.current_epoch = epoch
-                state.total_epochs = total_epochs
-                state.epoch_time_s = epoch_dt
-                state.last_metric = last or None
-                state.best_metric = new_best or None
+                is_best_checkpoint_revalidation = (
+                    state.last_epoch_metric is not None
+                    and state.last_epoch_metric.get('epoch') == epoch
+                )
+                if is_best_checkpoint_revalidation:
+                    state.best_checkpoint_metric = row
+                else:
+                    state.current_epoch = epoch
+                    state.total_epochs = total_epochs
+                    state.epoch_time_s = epoch_dt
+                    state.last_epoch_metric = row
         except Exception as exc:  # metric capture must not kill the epoch
             logger.warning('on_fit_epoch_end metric capture failed', error=str(exc))
 
@@ -209,28 +226,66 @@ def populate_eval_block(
     save_dir: Path,
     val_results: Any | None = None,
     data_yaml_path: Path | None = None,
+    eval_head: str | None = None,
 ) -> None:
     """Parse Ultralytics' artifacts off disk into ``state.eval`` (+ ``compare``).
 
-    The eval block carries top-level mAP (from ``results.csv``), per-class
-    P/R/F1/AP50/support (from a fresh ``val()`` pass), and the path to the
-    confusion-matrix PNG. When an incumbent is configured and reachable, the
-    side-by-side comparison lands in ``state.compare``.
+    ``results.csv``'s last row is Ultralytics' per-epoch **validation** metric
+    (the split reserved for early-stopping/model-selection during training,
+    recorded every epoch). ``val_results`` -- when the caller passed one -- is
+    a fresh ``model.val(..., split='test')`` pass against the frozen holdout
+    the run was never trained or tuned against. These are NOT
+    interchangeable: labeling the val number as "test" overstates how the
+    model will do on unseen data.
+
+    The overall ``eval.map50`` / ``eval.map50_95`` (+ ``precision`` /
+    ``recall`` / ``per_class`` when available) come from the test pass
+    whenever it succeeded (``eval.split == 'test'``). When it didn't run or
+    produced no usable ``box`` metrics, they fall back to the training-time
+    validation numbers (``eval.split == 'val'``, no ``per_class`` -- those
+    would silently be val-split numbers mislabeled as test). The val numbers
+    are always additionally kept, clearly named, under ``eval.val_last`` so a
+    consumer that specifically wants the training-time curve still can. The
+    confusion-matrix PNG path (server filesystem; the API rewrites this to a
+    servable URL before it reaches the wire) rounds out the block. When an
+    incumbent is configured and reachable, the side-by-side comparison lands
+    in ``state.compare``.
+
+    ``eval_head`` (from :func:`_finalize_run`) records which detection head
+    that same test-split ``val()`` pass scored -- ``"end2end"`` when the
+    loaded checkpoint's NMS-free one-to-one head was explicitly forced to
+    match what's actually served (see ``_finalize_run``), ``None`` for a
+    model family with no such distinction. Making this explicit means a
+    comparison result never silently depends on Ultralytics' own
+    checkpoint-dependent ``.val()`` default.
     """
     eval_block: dict[str, Any] = {}
     row = incumbent_compare.read_results_csv_last_row(save_dir / 'results.csv')
-    if row is not None:
-        eval_block.update(incumbent_compare.extract_top_level_metrics(row))
+    val_last = incumbent_compare.extract_top_level_metrics(row) if row is not None else {}
 
+    test_summary: dict[str, float] = {}
     per_class: list[dict[str, Any]] = []
     if val_results is not None:
+        test_summary = incumbent_compare.extract_test_summary(val_results)
         per_class = incumbent_compare.per_class_from_val_results(val_results)
-    if per_class:
+
+    if test_summary and per_class:
+        eval_block.update(test_summary)
+        eval_block['split'] = 'test'
         eval_block['per_class'] = per_class
+    else:
+        eval_block.update(val_last)
+        eval_block['split'] = 'val'
+
+    if val_last:
+        eval_block['val_last'] = val_last
 
     cm_path = save_dir / 'confusion_matrix.png'
     if cm_path.is_file():
         eval_block['confusion_matrix_path'] = str(cm_path)
+
+    if eval_head is not None:
+        eval_block['head'] = eval_head
 
     if eval_block:
         with state.lock:
@@ -459,12 +514,9 @@ def _build_model(
             run_name=spec.mlflow_run_name,
             profile=spec.profile,
             seed=int(spec.hyperparameters.get('seed') or 42),
-            manifest=spec.raw,
+            lineage=build_lineage(spec),
             data_cfg=data_cfg,
             data_yaml_path=data_yaml_path,
-            git_sha=os.environ.get('OP_BUILD_SHA'),
-            docker_digest=os.environ.get('OP_TRAINER_IMAGE_DIGEST'),
-            frozen_test_sha=spec.raw.get('frozen_test_sha'),
         )
     except Exception as exc:  # tracking is optional
         logger.warning('mlflow callback registration failed', error=str(exc))
@@ -581,15 +633,46 @@ def _finalize_run(spec: JobSpec, state: StatusState, model: Any, data_yaml_path:
     # Ultralytics writes only mAP to results.csv. Best-effort; a failure here
     # falls back to the top-level metrics.
     val_results: Any | None = None
+    eval_head: str | None = None
     if best_pt.is_file():
         try:
-            val_results = type(model)(str(best_pt)).val(
+            eval_model = type(model)(str(best_pt))
+            # YOLO26 exports/serves the NMS-free one-to-one head (nms=False
+            # at export -- Ultralytics forces nms=False for any end2end
+            # model). `.val()` has no `end2end=` kwarg: the only real
+            # toggle is the loaded model's own `.end2end` property
+            # (ultralytics.nn.tasks.DetectionModel.end2end, a setter that
+            # delegates to set_head_attr). Force it here so this
+            # test-split re-validation scores the SAME head that's
+            # actually served, rather than silently depending on whatever
+            # head the reloaded checkpoint happens to default to.
+            # `hasattr(..., 'one2one')` (only present on a genuine
+            # dual-head build) guards against forcing end2end on a
+            # non-end2end architecture, which has no one2one branch to
+            # switch to and would break inference.
+            if spec.model_family == 'yolo26':
+                inner_model = getattr(eval_model, 'model', None)
+                head_layers = (
+                    getattr(inner_model, 'model', None) if inner_model is not None else None
+                )
+                head_module = head_layers[-1] if head_layers else None
+                if (
+                    inner_model is not None
+                    and head_module is not None
+                    and hasattr(head_module, 'one2one')
+                ):
+                    inner_model.end2end = True
+                    eval_head = 'end2end'
+            val_results = eval_model.val(
                 data=str(data_yaml_path), split='test', plots=False, verbose=False
             )
         except Exception as exc:  # metrics are not worth failing a run over
             logger.warning('val pass for per-class metrics failed', error=str(exc))
+            eval_head = None
 
-    populate_eval_block(state, save_dir, val_results=val_results, data_yaml_path=data_yaml_path)
+    populate_eval_block(
+        state, save_dir, val_results=val_results, data_yaml_path=data_yaml_path, eval_head=eval_head
+    )
 
 
 def run_job(spec: JobSpec) -> None:

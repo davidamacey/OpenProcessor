@@ -7,6 +7,7 @@ volume is required. Each test exercises a single endpoint.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -1427,3 +1428,110 @@ def test_preflight_warns_on_export_that_dropped_unregistered_class_ids(
     r = app_client.post('/curation/train/preflight', json={'dataset_export_dir': str(clean)})
     check = next(c for c in r.json()['checks'] if c['name'] == 'unregistered_class_ids')
     assert check['severity'] == 'ok'
+
+
+# =============================================================================
+# /artifacts/{job_id}/{name}
+# =============================================================================
+
+
+def test_get_run_artifact_serves_whitelisted_file(app_client: TestClient, tmp_path: Any) -> None:
+    run_dir = tmp_path / 'runs' / 'artjob'
+    run_dir.mkdir(parents=True)
+    (run_dir / 'confusion_matrix.png').write_bytes(b'\x89PNG-fake-bytes')
+    (tmp_path / 'artjob.status.json').write_text(
+        json.dumps(
+            {
+                'job_id': 'artjob',
+                'state': 'finished',
+                'eval': {'confusion_matrix_path': str(run_dir / 'confusion_matrix.png')},
+            }
+        )
+    )
+
+    r = app_client.get('/curation/train/artifacts/artjob/confusion_matrix.png')
+
+    assert r.status_code == 200, r.text
+    assert r.content == b'\x89PNG-fake-bytes'
+    assert r.headers['content-type'] == 'image/png'
+
+
+def test_get_run_artifact_404_for_non_whitelisted_name(
+    app_client: TestClient, tmp_path: Any
+) -> None:
+    run_dir = tmp_path / 'runs' / 'artjob2'
+    run_dir.mkdir(parents=True)
+    (run_dir / 'best.pt').write_bytes(b'weights')
+    (tmp_path / 'artjob2.status.json').write_text(
+        json.dumps(
+            {'job_id': 'artjob2', 'state': 'finished', 'checkpoint_path': str(run_dir / 'best.pt')}
+        )
+    )
+
+    r = app_client.get('/curation/train/artifacts/artjob2/best.pt')
+
+    assert r.status_code == 404
+
+
+def test_get_run_artifact_404_for_unknown_job(app_client: TestClient) -> None:
+    r = app_client.get('/curation/train/artifacts/does_not_exist/confusion_matrix.png')
+    assert r.status_code == 404
+
+
+def test_get_run_artifact_400_for_invalid_job_id(app_client: TestClient) -> None:
+    r = app_client.get('/curation/train/artifacts/..%2Fescape/confusion_matrix.png')
+    # Percent-decoding of the path param is up to FastAPI/Starlette; either
+    # a 400 (our validation) or 404 (routing never matched) is acceptable,
+    # matching the existing /status/{job_id} traversal test's tolerance.
+    assert r.status_code in (400, 404)
+
+
+def test_get_run_artifact_404_when_file_never_written(
+    app_client: TestClient, tmp_path: Any
+) -> None:
+    run_dir = tmp_path / 'runs' / 'artjob3'
+    run_dir.mkdir(parents=True)
+    (tmp_path / 'artjob3.status.json').write_text(
+        json.dumps(
+            {
+                'job_id': 'artjob3',
+                'state': 'running',
+                'eval': {'confusion_matrix_path': str(run_dir / 'confusion_matrix.png')},
+            }
+        )
+    )
+
+    r = app_client.get('/curation/train/artifacts/artjob3/confusion_matrix.png')
+
+    assert r.status_code == 404
+
+
+def test_status_eval_never_carries_a_filesystem_path(app_client: TestClient, tmp_path: Any) -> None:
+    """No consumer of the wire should ever see a server path -- only the
+    artifact-route URL (or null)."""
+    run_dir = tmp_path / 'runs' / 'pathcheck'
+    run_dir.mkdir(parents=True)
+    (tmp_path / 'pathcheck.status.json').write_text(
+        json.dumps(
+            {
+                'job_id': 'pathcheck',
+                'state': 'finished',
+                'eval': {
+                    'map50': 0.5,
+                    'split': 'val',
+                    'confusion_matrix_path': str(run_dir / 'confusion_matrix.png'),
+                },
+            }
+        )
+    )
+
+    r = app_client.get('/curation/train/status/pathcheck')
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert 'confusion_matrix_path' not in body['eval']
+    assert str(tmp_path) not in json.dumps(body)
+    assert (
+        body['eval']['confusion_matrix_url']
+        == '/curation/train/artifacts/pathcheck/confusion_matrix.png'
+    )

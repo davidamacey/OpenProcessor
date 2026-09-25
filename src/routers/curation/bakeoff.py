@@ -289,7 +289,9 @@ async def bakeoff_eval_datasets() -> dict[str, Any]:
             try:
                 meta = json.loads(lock.read_text(encoding='utf-8'))
                 n_test = meta.get('n_label_files')
-                sha = meta.get('frozen_test_sha')
+                # W1 renamed the lock key to test_label_sha; fall back to the
+                # legacy key for locks written before that (see freeze.py).
+                sha = meta.get('test_label_sha', meta.get('frozen_test_sha'))
             except (OSError, ValueError):
                 pass
             datasets.append(
@@ -410,7 +412,7 @@ async def bakeoff_trained_models(limit: int = 100) -> dict[str, Any]:
                 'name': r.job_id,
                 'model_size': _infer_model_size(r.job_id, getattr(r, 'model_size', None)),
                 'checkpoint_path': r.checkpoint_path,
-                'map50': (r.best_metric or {}).get('map50'),
+                'map50': (r.best_checkpoint_metric or {}).get('map50'),
                 'finished_at': r.finished_at,
                 'campaign_id': r.campaign_id,
             }

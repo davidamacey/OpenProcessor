@@ -155,10 +155,25 @@ class StatusState:
     current_epoch: int = 0
     total_epochs: int = 0
     epoch_time_s: float | None = None
-    best_metric: dict[str, float] | None = None
-    last_metric: dict[str, float] | None = None
+    # The true last TRAINING epoch's metrics (with its epoch number) --
+    # distinct from best_checkpoint_metric because Ultralytics'
+    # final_eval() fires the same on_fit_epoch_end callback once more
+    # after training, re-validating best.pt, and that call does not
+    # advance trainer.epoch -- see docker/trainer/trainer.py's
+    # on_fit_epoch_end for how the two are told apart.
+    last_epoch_metric: dict[str, Any] | None = None
+    # The best checkpoint's (best.pt) own re-validation metrics, as one
+    # coherent row (both map50 and map50_95 from the SAME validation
+    # pass) -- not a per-key running max across every epoch, which can
+    # mix map50 from one epoch with map50_95 from another.
+    best_checkpoint_metric: dict[str, Any] | None = None
     mlflow_run_id: str | None = None
     mlflow_run_url: str | None = None
+    # Needed alongside ``mlflow_run_id`` for the API to rebuild a
+    # browser-reachable deep link (see ``src/services/training/jobs.py``'s
+    # ``_public_mlflow_url``) -- the run URL's path embeds both ids and the
+    # API has no other way to recover the experiment id.
+    mlflow_experiment_id: str | None = None
     checkpoint_path: str | None = None
     eval: dict[str, Any] | None = None
     compare: dict[str, Any] | None = None
@@ -368,10 +383,11 @@ def build_status_payload(s: StatusState) -> dict[str, Any]:
             'current_epoch': s.current_epoch,
             'total_epochs': s.total_epochs,
             'epoch_time_s': s.epoch_time_s,
-            'best_metric': s.best_metric,
-            'last_metric': s.last_metric,
+            'last_epoch_metric': s.last_epoch_metric,
+            'best_checkpoint_metric': s.best_checkpoint_metric,
             'mlflow_run_id': s.mlflow_run_id,
             'mlflow_run_url': s.mlflow_run_url,
+            'mlflow_experiment_id': s.mlflow_experiment_id,
             'checkpoint_path': s.checkpoint_path,
             'class_remap_copy_failed': s.class_remap_copy_failed,
             'gpu': _gpu_telemetry(),
@@ -451,6 +467,13 @@ def _capture_mlflow_run_id(spec: JobSpec, state: StatusState) -> None:
         run = runs[0]
         with state.lock:
             state.mlflow_run_id = run.info.run_id
+            state.mlflow_experiment_id = str(experiment.experiment_id)
+            # Internal-network URL -- a browser behind the deployment can't
+            # reach ``tracking_uri`` (it's a container hostname). Kept here
+            # for operators inspecting status.json/manifest.json directly
+            # (e.g. ``docker exec``); the API rewrites this to a public URL
+            # (or null) before it ever reaches the wire -- see
+            # ``src/services/training/jobs.py``'s ``_public_mlflow_url``.
             state.mlflow_run_url = (
                 f'{tracking_uri.rstrip("/")}/#/experiments/'
                 f'{experiment.experiment_id}/runs/{run.info.run_id}'
@@ -536,6 +559,31 @@ def _ultralytics_version() -> str | None:
         return None
 
 
+def build_lineage(spec: JobSpec) -> dict[str, Any]:
+    """Byte-identical lineage dict shared by the run manifest and the
+    MLflow tags/params/registry metadata (``mlflow_callbacks.py``).
+
+    Reads straight off ``spec.raw`` -- the job.json the API wrote via
+    ``src.services.training.jobs.write_job`` -- so both consumers see the
+    exact same values with no second source of truth to drift out of sync.
+    ``trainer_sha`` prefers this container's own baked ``OP_BUILD_SHA``
+    (the trainer image actually running this code) over the API's stamped
+    ``trainer_image_revision`` (the trainer image the API *observed* at
+    submit time, via the docker socket) -- the two agree unless the
+    trainer image was rebuilt/redeployed between submit and run.
+    """
+    raw = spec.raw
+    return {
+        'dataset_sha': raw.get('dataset_sha'),
+        'frozen_test_sha': raw.get('frozen_test_sha'),
+        'test_label_sha': raw.get('test_label_sha'),
+        'dataset_version_tag': raw.get('dataset_version_tag'),
+        'api_sha': raw.get('api_sha'),
+        'trainer_sha': os.environ.get('OP_BUILD_SHA') or raw.get('trainer_image_revision') or None,
+        'trainer_image_id': raw.get('trainer_image_id'),
+    }
+
+
 def write_manifest(
     spec: JobSpec, state: StatusState, class_remap: dict[str, Any] | None = None
 ) -> None:
@@ -558,6 +606,7 @@ def write_manifest(
         checkpoint_sha = (
             _checkpoint_sha256(Path(state.checkpoint_path)) if state.checkpoint_path else None
         )
+        lineage = build_lineage(spec)
         manifest: dict[str, Any] = {
             'kind': 'train',
             'job_id': spec.job_id,
@@ -565,7 +614,10 @@ def write_manifest(
             'created_at': datetime.now(tz=UTC).isoformat(),
             'lineage': {
                 'export_dir': str(spec.dataset_export_dir),
-                'dataset_sha': spec.raw.get('frozen_test_sha'),
+                'dataset_sha': lineage['dataset_sha'],
+                'frozen_test_sha': lineage['frozen_test_sha'],
+                'test_label_sha': lineage['test_label_sha'],
+                'dataset_version_tag': lineage['dataset_version_tag'],
                 'include_classes': spec.include_classes,
                 'single_cls': spec.single_cls,
                 'class_remap': class_remap,
@@ -586,10 +638,9 @@ def write_manifest(
                 'registry_sha': spec.raw.get('registry_sha'),
             },
             'code_versions': {
-                # Injected by the trainer compose service (see
-                # docker-compose.yml); null when built outside a git checkout.
-                'api_sha': os.environ.get('OP_BUILD_SHA'),
-                'trainer_image': os.environ.get('OP_TRAINER_IMAGE_DIGEST'),
+                'api_sha': lineage['api_sha'],
+                'trainer_sha': lineage['trainer_sha'],
+                'trainer_image_id': lineage['trainer_image_id'],
                 'ultralytics_pkg': _ultralytics_version(),
                 'ultralytics_sha': os.environ.get('ULTRALYTICS_SHA'),
             },
@@ -615,11 +666,13 @@ def write_manifest(
                 'final_state': state.state,
                 'eval': state.eval,
                 'compare': state.compare,
-                'best_metric': state.best_metric,
+                'last_epoch_metric': state.last_epoch_metric,
+                'best_checkpoint_metric': state.best_checkpoint_metric,
                 'checkpoint_path': state.checkpoint_path,
                 'checkpoint_sha256': checkpoint_sha,
                 'mlflow_run_id': state.mlflow_run_id,
                 'mlflow_run_url': state.mlflow_run_url,
+                'mlflow_experiment_id': state.mlflow_experiment_id,
             },
             # Stamped by POST {api_prefix}/train/promote/{job_id}.
             'promoted_to': None,

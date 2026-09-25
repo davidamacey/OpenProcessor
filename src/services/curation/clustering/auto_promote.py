@@ -1,19 +1,19 @@
 """Auto-promote stage for the curation auto-label pipeline.
 
 Extracted from the orchestrator module alongside the disable-by-default
-change in the ingest pipeline. Disabled because the v6-confidence-
+change in the ingest pipeline. Disabled because the classifier-confidence-
 floor-less rule contaminated class clusters with visually wrong crops
 via ``class_source='cluster_majority_agreement'``. Kept here as an
 opt-in path so the eventual confidence-gated rewrite has a home.
 
-A crop is promoted only when v6's class call already matches the
+A crop is promoted only when the classifier's class call already matches the
 cluster's dominant class (supervised classifier + sibling-embedding
 majority agree). Earlier behaviour propagated the dominant label onto
-every member of a high-purity cluster (including crops v6 never saw),
+every member of a high-purity cluster (including crops the classifier never saw),
 which silently poisoned a large historical cohort of rows. A
 backfill demoted that cohort; this function no longer creates that
 pollution shape going forward, but the unsolved problem — promoting
-low-confidence v6 predictions — is why the pipeline now defaults to
+low-confidence classifier predictions — is why the pipeline now defaults to
 skipping this stage.
 """
 
@@ -174,7 +174,7 @@ async def auto_promote_clusters(
     min_members: int = PROMOTE_MIN_MEMBERS,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Auto-validate crops in high-purity clusters where v6 agrees.
+    """Auto-validate crops in high-purity clusters where the classifier agrees.
 
     Returns a summary keyed by ``promoted``, ``skipped``, ``clusters``.
     """
@@ -252,7 +252,7 @@ async def auto_promote_clusters(
             total_skipped += members
             continue
 
-        # WARNING: this rule has no v6-confidence floor; even v6 @ 61%
+        # WARNING: this rule has no classifier-confidence floor; even classifier @ 61%
         # passes if its prediction matches the cluster majority. That's
         # why the pipeline defaults to skipping this stage. A
         # confidence-gated rewrite is the prerequisite to enabling

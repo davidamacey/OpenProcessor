@@ -61,7 +61,93 @@ async def test_export_yolo_handler_passes_version_tag_and_seed_to_service(
 
     assert captured.get('version_tag') == 'audit-smoke-v1'
     assert captured.get('seed') == 1234
+    assert captured.get('require_fully_labeled_images') is False
     assert response['version_tag'] == 'audit-smoke-v1'
+
+
+@pytest.mark.asyncio
+async def test_export_yolo_handler_passes_the_partial_frame_flag_and_reports_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    async def _fake_export_dataset(self: GenericYoloExportService, **kwargs: Any) -> ExportResult:
+        captured.update(kwargs)
+        return ExportResult(
+            export_dir='/tmp/fake-export',
+            version_tag='',
+            manifest_path='/tmp/fake-export/manifest.json',
+            data_yaml_path='/tmp/fake-export/data.yaml',
+            dataset_sha='deadbeef',
+            split_counts=SplitCounts(train=8, val=1, test=1),
+            image_count=10,
+            class_count=2,
+            classes_with_objects=2,
+            started_at='2026-01-01T00:00:00+00:00',
+            finished_at='2026-01-01T00:00:01+00:00',
+            current_symlink='/tmp/fake-export/current',
+            object_count=17,
+            split_object_counts=SplitCounts(train=13, val=2, test=2),
+            unlabeled_items_on_exported_images=0,
+            images_with_unlabeled_items=0,
+            images_dropped_not_fully_labeled=3,
+        )
+
+    monkeypatch.setattr(
+        'src.services.curation.export.GenericYoloExportService.export_dataset',
+        _fake_export_dataset,
+    )
+
+    payload = ExportYoloRequest(require_fully_labeled_images=True)
+    response = await export_yolo_handler(payload, MagicMock(), MagicMock())
+
+    assert captured['require_fully_labeled_images'] is True
+    assert response['image_count'] == 10
+    assert response['object_count'] == 17
+    assert response['split_counts'] == {'train': 8, 'val': 1, 'test': 1}
+    assert response['split_object_counts'] == {'train': 13, 'val': 2, 'test': 2}
+    assert response['require_fully_labeled_images'] is True
+    assert response['images_dropped_not_fully_labeled'] == 3
+    assert response['unlabeled_items_on_exported_images'] == 0
+    assert response['images_with_unlabeled_items'] == 0
+
+
+@pytest.mark.asyncio
+async def test_export_yolo_response_surfaces_skipped_items(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``POST /curation/export/yolo`` must surface the manifest's
+    ``skipped_items`` (items scrolled off the index but left out of the
+    export, by reason) — it was silently dropped on the wire before."""
+
+    async def _fake_export_dataset(self: GenericYoloExportService, **_kwargs: Any) -> ExportResult:
+        return ExportResult(
+            export_dir='/tmp/fake-export',
+            version_tag='',
+            manifest_path='/tmp/fake-export/manifest.json',
+            data_yaml_path='/tmp/fake-export/data.yaml',
+            dataset_sha='deadbeef',
+            split_counts=SplitCounts(),
+            image_count=0,
+            class_count=0,
+            classes_with_objects=0,
+            started_at='2026-01-01T00:00:00+00:00',
+            finished_at='2026-01-01T00:00:01+00:00',
+            current_symlink='/tmp/fake-export/current',
+            skipped_items={'no_image_id': 3, 'no_usable_box_or_class': 5},
+        )
+
+    monkeypatch.setattr(
+        'src.services.curation.export.GenericYoloExportService.export_dataset',
+        _fake_export_dataset,
+    )
+
+    response = await export_yolo_handler(ExportYoloRequest(), MagicMock(), MagicMock())
+
+    assert response['skipped_items'].model_dump() == {
+        'no_image_id': 3,
+        'no_usable_box_or_class': 5,
+    }
 
 
 # =============================================================================

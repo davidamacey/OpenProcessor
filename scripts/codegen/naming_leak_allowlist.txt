@@ -1,0 +1,168 @@
+# Allowlist for scripts/codegen/check_naming_leaks.py (naming sweep W8).
+#
+# One entry per line: `path # reason` (whole-file exemption) or
+# `path:regex # reason` (only lines in `path` matching `regex` are allowed —
+# any OTHER hit in that same file still fails the check). A path ending in
+# `/` is a directory-prefix exemption. Blank lines and lines starting with
+# `#` are ignored. Every entry needs a reason after `#`.
+#
+# Keep this file itself, and the checker script, exempt from every scan —
+# they spell every forbidden pattern on purpose.
+scripts/codegen/check_naming_leaks.py # spells every forbidden pattern by definition; this IS the guard
+scripts/codegen/naming_leak_allowlist.txt # this file; every entry below necessarily spells a forbidden pattern
+tests/test_naming_leaks.py # feeds synthetic 'legacy_stuff'-style leak fixtures into a temp repo to test the guard itself
+
+# ---------------------------------------------------------------------------
+# Scan A (hard leak: reference/legacy_/company terms/private paths)
+# ---------------------------------------------------------------------------
+
+# Internal cutover-plan docs (docs/design/*_plan.md convention). All name
+# forbidden patterns on purpose as part of documenting the sweep itself, or
+# predate it and reference the private deployment/company by design. W9
+# removes or privately-relocates all of these; until then they are excluded
+# here rather than scrubbed, per the coordinator's explicit "do not do W9"
+# instruction for this session.
+docs/design/curation_api_contract.md # design/rename-history doc, extensively documents old wire names on purpose; scrubbed in W9
+docs/design/curation_design_rationale.md # design-rationale doc, documents the LEGACY_*/legacy_* rename narrative on purpose; scrubbed in W9
+docs/CURATION.md # user-facing curation doc; still documents pre-rename env vars/fields; scrubbed in W9 (plan C10)
+docs/design/new_class_proposal_resolve_plan.md # internal cutover-plan doc; removed in W9 (plan D6, docs/design/*_plan.md)
+docs/design/oss_main_completion_plan.md # internal cutover-plan doc; removed in W9 (plan D6, docs/design/*_plan.md)
+docs/design/train_gpu_options_plan.md # internal cutover-plan doc; removed in W9 (plan D6, docs/design/*_plan.md); also in C7's leak-scan-terms list
+docs/design/full_stack_audit.md # internal cutover-plan doc; removed in W9 (plan D6)
+docs/design/curation_query_performance_audit.md # internal audit doc added by cutover/db-perf; W9 removal candidate (plan §7 re-inventory note)
+docs/design/segmenter_triton_feasibility.md # internal design doc; W9 scrub/removal candidate, same character as the other docs/design/*_plan.md artifacts
+docs/design/generic_model_comparison_plan.md # internal cutover-plan doc (#34 waves); names the example license-plate bake-off profile and the retired OP_BAKEOFF_PROFILE value on purpose; removed in W9 (plan D6)
+CHANGELOG.md # documents every rename with the actual old->new literals throughout; CHANGELOG rewrite is explicitly W9 scope
+
+# Negative/historical test docstrings (describe a retired literal or a past
+# bug by name; not a live leak).
+tests/curation/test_curation_images.py:legacy_vehicle_crops # negative test: asserts this literal fallback does NOT exist
+tests/curation/test_feature_flag_consistency.py:LEGACY_ # historical prose about a past LEGACY_*->OP_* rename commit
+
+# ---------------------------------------------------------------------------
+# Scan B (domain vocabulary: gemma/lpr/sam_worker/v6/plate_/hdd_source/license_plate)
+# ---------------------------------------------------------------------------
+
+# The `check_no_literal_region_fields.py` guard's own module: its entire
+# purpose is matching `'plate_...'` literals, so it necessarily spells the
+# pattern throughout (docstring, regexes, PORTED_PATHS comments).
+scripts/codegen/check_no_literal_region_fields.py # the plate_* literal guard itself; spells the pattern by definition
+
+# The retired-env guard and its test spell every retired name on purpose
+# (D4): that IS the mechanism that makes a stale env var fail loudly instead
+# of silently doing nothing.
+src/config/retired_env.py # spells every retired env-var name on purpose (D4 guard); see docs/design/naming_sweep_plan.md §3
+tests/config/test_retired_env.py # exercises every retired env-var name in src/config/retired_env.py
+
+# docker/segmenter run examples use the retired SAM3_URL name nowhere after
+# the pre-W8 leftover-sweep fix; the Dockerfile/README hits left are the
+# already-corrected OP_SEGMENTER_URL lines matching scan B's SAM3_* pattern
+# only via the surrounding comment text -- none remain as of this commit.
+
+# The `check_no_literal_region_fields.py` guard's own tests feed `plate_*`
+# fixtures into it on purpose (that is the guard's entire test surface).
+tests/test_region_field_guard.py # feeds plate_* literal fixtures into the guard under test, on purpose
+
+# Guard-test vendor regexes (built as literal regexes rather than by string
+# concatenation; C2 permits either) and other negative/guard assertions that
+# must spell a retired or vendor name to prove it is absent/rejected.
+tests/curation/test_vlm_vocabulary.py # guard test: pins gemma_*->vlm_* / v6_*->classifier_* renames via a literal vendor regex
+tests/curation/test_wire_contract.py:plate|gemma # negative assertions that these retired-name literals are absent / rejected on the wire
+tests/integration/test_stats_router.py:by_lpr|by_sam3|gemma # negative test: asserts these retired stats-key literals are absent
+tests/curation/test_bakeoff_harness.py # guard test + its own DOMAIN_WORDS regex scanning bakeoff harness files for domain words
+tests/curation/test_bakeoff_router.py # negative test: asserts the retired lpr_nanov11_640 id is absent from served baselines
+tests/curation/test_models_unload.py # S8 guard tests: prove there is no hardcoded 'lpr_' prefix special-case
+tests/curation/test_candidate_source_values.py # negative test: asserts retired sam3/sam3_text_hint/lpr/lpr_existing values never resolve specially
+tests/curation/test_methods_router.py # negative test: asserts the retired 'lpr' export id is omitted from served entries
+tests/curation/test_curation_opensearch.py # negative tests: assert v6_embedding / hardcoded plate_* literals are absent from the mapping
+tests/curation/test_train_router.py:lpr # S6 negative test: the retired lpr_single_class alias must be rejected, by name
+src/routers/curation_train.py:lpr_single_class # comment explaining the retired S6 alias by name, for the reader's benefit
+
+# Historical/provenance docstrings describing what a field or alias used to
+# be (not a live hardcoded value).
+tests/curation/test_gpu_arbiter.py:gemma # historical: documents the removed needs_gemma_stop alias and reference-suite fact by name
+tests/curation/test_crop_cache_dir_consistency.py:GEMMA_CROP_CACHE_DIR # historical: documents the pre-fix env-var mismatch this test guards against
+tests/curation/test_crops_browse_params.py:hdd_source # negative test: asserts the retired hdd_source query param is gone
+tests/curation/test_router_wireup.py:plate_meta # historical: names the reference test file's pre-port route name
+tests/curation/test_test_holdout_freeze.py:v6_original_label|hdd_user_label # historical: documents the retired label_source filter this fix removed
+tests/curation/test_vlm_combined.py:plate # historical: contrasts current region_* reply fields with the reference's retired plate_* keys
+tests/curation/test_training_class_subset_presets.py:plates_only|all_vehicles|vehicles_and_plates # historical: names the hardcoded presets this test's subject replaces
+tests/curation/test_region_vocabulary.py:lpr_nanov11_640|sam3|gemma # historical: names the vendor ids a frontend used to hardcode, motivating this endpoint
+src/services/curation/region_vocabulary.py:lpr_nanov11_640|sam3|gemma # historical: names the vendor ids a frontend used to hardcode, motivating this module
+tests/fixtures/labeler_call_sites.txt:plate|LPR # historical header prose describing prior renames (plate_thumbnail bug, LPR vocabulary work item)
+tests/integration/test_labeler_route_parity.py:plate|lpr|LPR # KNOWN_GAPS documents a real, not-yet-ported proprietary frontend route by its actual path; rewriting the literal would break the check it performs (see docs/design/naming_sweep_plan.md §9 step 5 note)
+
+# .pre-commit-config.yaml / CONTRIBUTING.md: describe the plate_* literal
+# guard's purpose and name the (large, pre-port) reference files it was
+# split from. Reworded fully in W9; keep the guard description itself.
+.pre-commit-config.yaml:gemma_labeler|plate_detect # historical file-size-split rationale naming reference-implementation files; reworded in W9
+.pre-commit-config.yaml:plate # the check-no-literal-region-fields hook's own name/purpose
+CONTRIBUTING.md # describes the plate_* literal guard and its roi_* illustrative example; guard description, kept per plan C13
+
+# ---------------------------------------------------------------------------
+# The public `license_plate` reference region profile (plan §0's explicit
+# "allowed to stay" list + the coordinator's F1 decision + owner directive
+# item 6): domain content is allowed under examples/, and the profile's
+# `name='license_plate'` / `region_class_name='license_plate'` is the public
+# worked example every deployment can point OP_REGION_PROFILE_PATH at. Every
+# entry below is matched ONLY by the `license[ _-]?plate` scan-B extension —
+# none of them contain gemma/lpr/sam_worker/v6/plate_*/hdd_source.
+# ---------------------------------------------------------------------------
+examples/ # the example-domain directory; license_plate profile + bakeoff baseline configs live here on purpose
+scripts/curation/bakeoff/ # bake-off harness examples (backends + the license_plate example profile); domain content allowed here
+env.template # OP_REGION_PROFILE_PATH example value; the public worked example
+docs/ARCHITECTURE.md # example prose illustrating a region sub-annotation
+tests/curation/test_region_worker.py # uses the example profile's real detector_model id ('license_plate_detector') as a realistic detector-source literal
+CLAUDE.md # names the public license_plate example profile in the curation-subsystem summary
+scripts/README.md # example prose for eval_regions_vs_gt.py's cohort description
+scripts/download_ocr_test_images.py # public Wikimedia OCR sample images (license plates), a legitimate OCR example domain
+scripts/create_ocr_test_images.py # public OCR sample image filename
+scripts/curation/eval_regions_vs_gt.py # docstring YAML example (license_plate class), matches the bakeoff example domain
+scripts/curation/import_labeled_dataset.py # docstring YAML example (license_plate class), matches the bakeoff example domain
+export/export_pe_text_encoder.py # public PE-Core text-encoder calibration prompt example
+tests/curation/test_pe_text_backends.py # exercises the same public calibration prompt example
+src/clients/curation_opensearch.py # docstring example value
+src/config/detection_profile.py # DetectionProfile docstring example value
+src/config/region_fields.py # RegionFields docstring example value
+src/config/region_state.py # RegionStatus docstring example value
+src/routers/curation/classes.py # comment naming the example profile's region_class_name value
+src/routers/curation/vlm.py # docstring example value
+src/services/curation/clustering/orchestrator.py # docstring example value
+src/services/curation/region_eval.py # docstring example value
+src/services/curation/strategy_registry.py # docstring example value (also has the "no lpr id"/"/export/lpr" prose already reworded to avoid literals)
+src/services/detection/cascade_detect.py # docstring example value; the reference license_plate example profile is this module's worked example
+src/services/detection/profile_registry.py # docstring example value for region_profile_from_file
+src/services/detection/region_lean.py # docstring example value
+src/services/labeling/vlm_labeler.py # docstring example value
+src/services/training/preflight_scan.py # docstring example value
+tests/conftest.py # reference_region_profile fixture: loads the public example profile
+tests/_region_profile_fixture.py # defines EXAMPLE_LICENSE_PLATE_PROFILE(_PATH) -- the public example profile fixture itself
+tests/curation/test_auto_label_selection.py # exercises the example profile via the reference_region_profile fixture
+tests/curation/test_cascade_detect.py # exercises the real example profile incl. its real secondary_shape_groups (also a C14/scan-C exemption, see below)
+tests/curation/test_classes_router.py # exercises the example profile's region_class_name
+tests/curation/test_class_synonyms.py # exercises the example profile; also names the reference stack generically ("private reference vehicle/license-plate curation stack") -- W9/C10 prose cleanup, not yet done
+tests/curation/test_curation_settings_router.py # exercises the example profile
+tests/curation/test_detection_profile.py # DetectionProfile tests use the public example name/shape
+tests/curation/test_detection_profile_second_profile.py # exercises the example profile as the "first profile" in a two-profile test
+tests/curation/test_gpu_arbiter.py # names the reference stack generically ("private reference vehicle/license-plate curation stack") -- W9/C10 prose cleanup, not yet done
+tests/curation/test_region_profile.py # exercises the example profile via EXAMPLE_LICENSE_PLATE_PROFILE_PATH
+tests/curation/test_region_sanity.py # exercises the example profile ("Ported from the reference license-plate sanity-gate tests")
+tests/curation/test_region_vocabulary.py # exercises the example profile's detector id + historical vendor-id docstring
+tests/curation/test_router_wireup.py # exercises the example profile's name/region_class_name
+tests/curation/test_train_jobs.py # names the reference stack generically ("private reference vehicle/license-plate curation stack") -- W9/C10 prose cleanup, not yet done
+tests/curation/test_train_preflight_scan.py # exercises the example profile
+tests/curation/test_train_router.py # negative assertion that 'license_plate' is NOT hardcoded into the class-balance message
+tests/curation/test_training_class_subset_presets.py # exercises the example profile's region_class_name in preset tests; docstring also names the hardcoded presets it replaces
+tests/curation/test_triton_promote.py # exercises the example profile
+tests/curation/test_yolo26_triton_config.py # exercises the example profile
+tests/integration/test_import_labeled_dataset.py # exercises the example profile
+
+# ---------------------------------------------------------------------------
+# Scan C (private class vocabulary: sportbike/cruiserbike/dirtbike/harley/honda)
+# ---------------------------------------------------------------------------
+# No scan-C-only entries needed: every current scan C hit is already covered
+# by a broader entry above -- `examples/` (directory prefix) covers
+# examples/region_profiles/license_plate.json's real secondary_shape_groups,
+# the `tests/curation/test_cascade_detect.py` entry above covers its
+# assertion on those same real groups, and the `docs/design/full_stack_audit.md`
+# entry above (scan A section) covers its quoted raw VLM output.

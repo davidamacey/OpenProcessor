@@ -119,8 +119,8 @@ def test_fake_trainer_drives_the_run_to_finished(
     assert state['job_id'] == job_id
     assert state['total_epochs'] >= 1
     assert state['eval']['map50'] == pytest.approx(0.5)
-    # best_metric is back-filled from eval when the trainer omits it.
-    assert state['best_metric']['map50'] == pytest.approx(0.5)
+    # best_checkpoint_metric is back-filled from eval when the trainer omits it.
+    assert state['best_checkpoint_metric']['map50'] == pytest.approx(0.5)
 
     assert paths['status'].is_file()
     assert paths['manifest'].is_file()

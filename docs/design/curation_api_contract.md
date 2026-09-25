@@ -162,8 +162,13 @@ the training preflight and served wherever a client shows class counts:
 
 ```json
 "thresholds": {"block_below": 20, "warn_below": 500, "min_test_per_class": 5,
+               "min_train_per_class": 1, "min_val_per_class": 1,
                "aug_target_min": 500, "aug_target_max": 3000}
 ```
+
+`min_train_per_class` / `min_val_per_class` are the per-class instance
+minimums of the `export_class_split_coverage` preflight check (see
+"Export" below).
 
 - `adequacy` (`ok` / `warn` / `block`) of a class's validated count:
   `< block_below` → `block` (preflight refuses), `< warn_below` → `warn`,
@@ -178,6 +183,84 @@ the training preflight and served wherever a client shows class counts:
 | `GET /stats/classes` | `thresholds`; per row `adequacy`, `aug_target`, `aug_gap` |
 | `GET /classes` | `thresholds`; per class `adequacy` |
 | `GET /test_holdout/stats` | `min_test_per_class`; per `by_class` bucket `deficient` (`doc_count < min_test_per_class`) |
+
+### Augmentation presets — `GET /train/augmentation_presets`
+
+The one preset catalog is `src/services/training/augmentation_presets.py`;
+the trainer image copies that file next to `docker/trainer/augment.py`,
+which builds its `PRESETS` from it. Response
+(`AugmentationPresetsResponse`): `presets[]` of `{id, label, description,
+orientation_sensitive}` (in display order) and `default`
+(`"balanced_default"`, used when a job omits `augmentation.preset`).
+`orientation_sensitive: true` means horizontal flip is off for the whole
+run. A client renders this list and never hardcodes ids.
+
+An enabled `augmentation` block naming any other `preset`:
+
+- `POST /train/preflight` → check `augmentation_preset`, severity
+  `block`, message `unknown augmentation preset '<id>'; valid presets:
+  none, balanced_default, …`, `detail: {preset, valid_presets}`
+  (otherwise `ok`; a disabled block isn't judged);
+- `POST /train/start` and `POST /train/start_campaign` → `422` with
+  `detail: {message, field: "augmentation.preset", valid_presets}`,
+  even with `force=true`, before any GPU claim or job write.
+
+The other `AugmentationSpec` fields aren't enumerable here:
+`albumentations` override keys are Albumentations transform names (the
+trainer logs and skips unknown ones), and `multiplier` is range-checked
+(`1..20`) by the model.
+
+### Training `eval` block — `GET /train/status*`, `GET /train/manifest/{job_id}`
+
+`status.json`'s (and the manifest's `results.eval`) `eval` block reports the
+result of the trainer's post-training evaluation, and is deliberately
+explicit about which split every number came from:
+
+```json
+{
+  "map50": 0.62,
+  "map50_95": 0.41,
+  "precision": 0.71,
+  "recall": 0.55,
+  "split": "test",
+  "val_last": {"map50": 0.9191, "map50_95": 0.742},
+  "per_class": [{"class_id": 0, "name": "widget", "precision": 0.8,
+                 "recall": 0.7, "f1": 0.75, "ap50": 0.79, "support": 12}],
+  "confusion_matrix_url": "/curation/train/artifacts/<job_id>/confusion_matrix.png"
+}
+```
+
+- `map50` / `map50_95` / `precision` / `recall` / `per_class` are the
+  **frozen test-split** numbers (a fresh `model.val(..., split='test')` pass,
+  Ultralytics' `DetMetrics.box.{map50,map,mp,mr}` + per-class rows) whenever
+  that pass ran and produced usable metrics. `split: "test"` marks this case.
+- When the test pass fails or the export has no `test` split, the same four
+  overall keys instead carry the **training-time validation** numbers (the
+  last row of `results.csv` — Ultralytics' per-epoch model-selection metric,
+  recorded every epoch against the `val` split) and `per_class` is absent.
+  `split: "val"` marks this case — a consumer MUST check `split` before
+  treating `map50`/`map50_95` as "how the model does on unseen data."
+- `val_last` (`{map50, map50_95}`) is **always** present when `results.csv`
+  had a row, regardless of `split` — the training-time validation numbers,
+  unambiguously named, for a consumer that specifically wants the training
+  curve rather than the headline metric.
+- `confusion_matrix_url` points at `GET
+  {api_prefix}/train/artifacts/{job_id}/{name}` (whitelisted filenames only:
+  `confusion_matrix.png`, `confusion_matrix_normalized.png`, `results.png`,
+  `results.csv`, `BoxP_curve.png`, `BoxR_curve.png`, `BoxF1_curve.png`,
+  `BoxPR_curve.png`) or `null` when the trainer never wrote one. The
+  underlying server filesystem path is never on the wire.
+- The promote gate (`POST /train/promote/{job_id}`, §15.2) reads this same
+  block — a run whose test pass failed (`split: "val"`, no `per_class`)
+  fails the gate's per-class check outright rather than silently passing on
+  val-split numbers relabeled as test.
+
+`mlflow_run_url` on the same payloads is rebuilt from `CurationConfig.
+mlflow_public_url` (`OP_MLFLOW_PUBLIC_URL`) + `mlflow_run_id` +
+`mlflow_experiment_id`; `null` when the public base isn't configured or
+either id is missing (older run) — the trainer's internal tracking-server
+hostname (`MLFLOW_TRACKING_URI`, a container name unreachable from a
+browser) never reaches the wire. `mlflow_run_id` is served either way.
 
 ### VLM-label one cluster — `POST /vlm/label_cluster/{cluster_id}`
 
@@ -670,8 +753,14 @@ matched, matched_ids, updated, updated_ids, conflicts:
 `POST /crops/label/undo_batch` on `updated_ids`, same as
 `PUT /crops/batch_label`.
 
-- `TestHoldoutFreezeRequest`: `percent`, `seed` (accepted but ignored — selection is deterministic, SHA1-of-crop_id)
-- `TestHoldoutFreezeResponse`: `n_frozen`, `n_classes_covered`, `test_holdout_sha`, `per_class_counts`
+- `TestHoldoutFreezeRequest`: `percent` only (`1`–`50`, default `10`). Unknown fields are
+  rejected (`extra='forbid'`): there is no seed — selection is deterministic — so a request
+  carrying `seed` is a `422` instead of being silently ignored.
+- `TestHoldoutFreezeResponse`: `n_frozen`, `n_classes_covered`, `test_holdout_sha`,
+  `per_class_counts`, `selection` (always `"sha1_per_class"`: per class, the crops with the
+  smallest `sha1(crop_id)`, `max(min_per_class, round(n * percent / 100))` of them, capped at the
+  class size), `percent` (echoed), `min_per_class` (`5`). A client shows the method, not a
+  Seed input.
 
 ### Shared curation-strategy defaults
 
@@ -685,18 +774,129 @@ matched, matched_ids, updated, updated_ids, conflicts:
 
 ### Export
 
-- `ExportYoloRequest`: `export_dir`, `version_tag`, `seed`, `max_images`, `dedup_threshold`
+- `ExportYoloRequest`: `export_dir`, `version_tag`, `seed`, `max_images`, `dedup_threshold`,
+  `require_fully_labeled_images` (default `false`)
 - `ExportSingleClassRequest`: `export_dir`, `version_tag`, `class_ids`,
   `box_source` (`item`/`region`), `region_class_name`, `profile_name`,
   `seed`, `skip_test_split`, `empty_bg_ratio`, `max_positive_images`,
   `dedup_threshold`, `image_mode` (`whole_frame`/`item_crop`),
   `img_max_side`, `copy_images`
 
+**Multi-class layout (`POST /export/yolo`): one image file and one label
+file per source image.** Validated items (one object each) are grouped
+by `image_id`. Each exported image is written once as
+`images/<split>/<image_id>.<ext>`, next to `labels/<split>/<image_id>.txt`
+with one `cls cx cy w h` line per validated, non-excluded, non-dismissed
+object on it. `cls` is the dense `export_id`; `cx cy w h` come from the
+item's `bbox_norm` (`[x1, y1, x2, y2]`, normalized to the full source
+frame), clamped to `[0, 1]`, so they are relative to the full source
+image. Objects in a file are ordered by item id, so re-runs are
+byte-identical. An item with no `image_id`, no usable box or no class is
+left out and counted in the manifest's `skipped_items`. `resize_mode` on
+the service accepts only `null` (copy as-is) or `aspect`; `letterbox` is
+refused because its padding would shift every box. (Earlier exports
+wrote one full-frame copy and one single-line label file per *item*, so
+an image with three validated objects became three copies each labeled
+with one object, and the detector learned the other two as background.)
+
+**Partial frames.** An exported image can also hold *unlabeled* objects:
+items on it that the export does not write — not validated yet,
+validated on a class with no dense id (unregistered or deprecated), or
+validated without a usable box. They are still in the pixels, so
+training learns them as background. `class_excluded` and
+review-dismissed items are not objects to label and never count.
+
+- Default (`require_fully_labeled_images: false`): the image is exported
+  with its validated objects labeled. The manifest records
+  `unlabeled_items_on_exported_images` and `images_with_unlabeled_items`,
+  and training preflight warns (`export_unlabeled_objects`).
+- `require_fully_labeled_images: true`: every image with at least one
+  unlabeled object is left out; the manifest records how many as
+  `images_dropped_not_fully_labeled`. If no image is fully labeled the
+  export is refused with `422` and nothing is written.
+
+The partial-frame policy runs first, then `dedup_threshold` (which
+collapses near-duplicate *images*; a kept image keeps all its objects,
+a frozen-holdout image is preferred as the survivor, and the manifest's
+`dedup.n_input_rows` / `n_output_rows` count images), then `max_images`
+(a cap on images: an even round-robin over each image's rarest class, so
+a rare class survives the cap).
+
+**Multi-class manifest counts.**
+
+| Field | Counts |
+|---|---|
+| `image_count` | exported images (= label files) |
+| `object_count` | exported objects (= label lines) |
+| `split_counts` | images per split, `{train, val, test}` |
+| `split_object_counts` | objects per split, `{train, val, test}` |
+| `class_split_counts` | objects per class per split (rows below) |
+| `unlabeled_items_on_exported_images` | unlabeled objects on the exported images |
+| `images_with_unlabeled_items` | exported images holding at least one unlabeled object |
+| `require_fully_labeled_images` | the request flag |
+| `images_dropped_not_fully_labeled` | images left out by that flag (`0` when off) |
+| `skipped_items` | `{no_image_id, no_usable_box_or_class}` validated items left out |
+
+`label_stats.json` (`{class_name: objects}`) sums `class_split_counts`
+per class.
+
+`POST /export/yolo` returns `status`, `export_dir`, `version_tag`,
+`manifest_path`, `dataset_sha`, `image_count`, `object_count`,
+`split_counts`, `split_object_counts`, `require_fully_labeled_images`,
+`unlabeled_items_on_exported_images`, `images_with_unlabeled_items`,
+`images_dropped_not_fully_labeled`, `skipped_items`
+(`{no_image_id, no_usable_box_or_class}`), `dedup` (the requested
+threshold), `started_at`, `finished_at`.
+
+**`dataset_sha`** is a hash of the export's actual on-disk *content*, not
+of which item ids were selected — two exports of the same items with
+different splits, a corrected box, or a different class map (even with
+byte-identical label files, e.g. after a pure registry rename) always get
+different `dataset_sha`s. Concretely it hashes, over every written
+`labels/<split>/*.txt` file sorted by relative path: the relative path
+(so a split reassignment changes the digest even when the label bytes
+don't) and the sha256 of the file's bytes, then folds in the export's
+ordered `names:` list (`data.yaml` / dense export id → class name) so a
+class rename with no id change still changes the digest. The multi-class
+export records the full 64-hex sha256 digest; `POST /export/single_class`
+records the same digest truncated to 16 hex chars. The shared
+implementation is `label_content_sha` in
+`src/services/curation/export_support.py`.
+
+Example manifest excerpt (`img-a` with three objects of two classes,
+`img-b` with one, and `img-c` with one validated object next to one
+unreviewed item). It writes `labels/train/img-a.txt` (three lines, e.g.
+`0 0.200000 0.400000 0.200000 0.400000` for a `bbox_norm` of
+`[0.1, 0.2, 0.3, 0.6]`), `labels/train/img-b.txt` and
+`labels/val/img-c.txt`:
+
+```json
+{
+  "group_key": "image_id",
+  "image_count": 3,
+  "object_count": 5,
+  "split_counts": {"train": 2, "val": 1, "test": 0},
+  "split_object_counts": {"train": 4, "val": 1, "test": 0},
+  "class_split_counts": [
+    {"class_id": 1, "export_id": 0, "class_name": "alpha", "train": 2, "val": 1, "test": 0},
+    {"class_id": 2, "export_id": 1, "class_name": "beta", "train": 2, "val": 0, "test": 0}
+  ],
+  "require_fully_labeled_images": false,
+  "unlabeled_items_on_exported_images": 1,
+  "images_with_unlabeled_items": 1,
+  "images_dropped_not_fully_labeled": 0,
+  "skipped_items": {"no_image_id": 0, "no_usable_box_or_class": 0}
+}
+```
+
 `POST /export/single_class` builds a narrowed dataset for a single class
-or a class subset, with a stronger integrity envelope than the
-multi-class export: `dataset_sha` hashes the written label *content*,
-`frozen_test_sha` hashes the test split's identity, and the profile's
-own `current` symlink is flipped atomically. `GET
+or a class subset, with an extra integrity field the multi-class export
+doesn't need: `frozen_test_sha` hashes the test split's *identity*
+(which frames, not their content — a label correction inside the test
+set must not trip it) so "the held-out set never changed between two
+runs" is checkable. `dataset_sha` uses the same content-hash mechanism as
+the multi-class export (see above). The profile's own `current` symlink
+is flipped atomically. `GET
 /export/single_class/status?profile_name=...` reports the last run for
 one profile, with the same `idle`/`unknown`/`success` contract as
 `GET /export/status`. Each `profile_name` gets its own output root and
@@ -705,26 +905,157 @@ or the multi-class dataset.
 
 **Readiness (DQ-M9).** Both exports refuse with `422`
 (`detail: "nothing to export: <reason>"`) when nothing is exportable —
-`POST /export/yolo`: no item is `class_validated` (and not
-review-dismissed), none has a box and class, or every one is on a class
-id missing from (or deprecated in) the registry; `POST
+`POST /export/yolo`: no item is `class_validated` (and not excluded or
+review-dismissed), none has an image id, a box and a class, every one is
+on a class id missing from (or deprecated in) the registry, or
+`require_fully_labeled_images` left no image; `POST
 /export/single_class`: no item matches the profile. Nothing is written
 and `current` keeps pointing at the previous export. Every manifest
 records `items_index: {index, uuid, created_at}` — the items index it was
 read from (`null` if it could not be read).
 
-`POST /train/preflight` adds two checks (see
+`POST /train/preflight` adds these export checks (see
 `src/services/curation/export_readiness.py`):
 
 | Check | `block` when | `unknown` when |
 |---|---|---|
-| `export_not_empty` | the manifest's `image_count` (else the sum of `split_counts`) is `0` | no readable manifest / no count |
+| `export_not_empty` | the manifest's `image_count` (else the sum of `split_counts`) is `0` images | no readable manifest / no count |
+| `export_splits_nonempty` | `split_counts.train` or `split_counts.val` (images) is `0` (message names the empty split(s); `detail.empty_splits`) | the manifest records no train/val counts |
+| `export_class_split_coverage` | a class the run trains on (`include_classes`, else every class in `class_split_counts`) has fewer than `min_train_per_class` (`1`) train or `min_val_per_class` (`1`) val objects — message lists each as `name (class id): train=N, val=N`; `detail.classes[]` carries `class_id`, `class_name`, `train`, `val`, `test`, `missing_splits`. Always `ok` ("not applicable") for a single-class export, which `export_splits_nonempty` already covers | the manifest has no `class_split_counts` (exported before they were recorded — re-export) |
+| `export_unlabeled_objects` | never blocks: `warn` when `unlabeled_items_on_exported_images > 0` — message gives `images_with_unlabeled_items/image_count` and the object count, says training learns unlabeled objects as background, and points at `require_fully_labeled_images`; `detail` carries `image_count`, `unlabeled_items_on_exported_images`, `images_with_unlabeled_items`, `require_fully_labeled_images`, `images_dropped_not_fully_labeled`. `ok` when `0`, and always `ok` ("not applicable") for a single-class export | the manifest has no unlabeled counts (exported before per-image labels — re-export) |
 | `export_generation` | the manifest's `items_index.uuid` differs from the live items index's (the index was rebuilt since the export); for an unstamped export, its `exported_at` is before the live index's creation | the live index can't be read, or the manifest has neither a stamp nor `exported_at` |
 
 The index `uuid` is the staleness signal because it changes on every
 index creation and is immune to clock skew; label edits after an export
 are deliberately not "stale" (exports are snapshots, and retraining on a
 past one is supported).
+
+**Split assignment** (`stratified_split` in
+`src/services/curation/export_support.py`; the manifest records
+`group_key` and `seed`):
+
+- **Group = source image** (`group_key: "image_id"`). Items cut from
+  one image never straddle train/val/test; the multi-class export writes
+  each image once, so the image and all its objects share one split. `cluster_id` is not a leakage unit — class clusters
+  have `cluster_id == class_id`, so grouping on it made each class one
+  group. Crop-level `dup_group_id` is not used either: it is written only
+  by an opt-in scorer run, only for items in a multi-member group, and
+  its ids (`dup_<n>`) are numbered per run, so two runs can reuse an id
+  for unrelated items. Whole-frame near-duplicate bursts are handled
+  before the split by the export's `dedup_threshold`.
+- **Frozen holdout**: an image carrying a `test_holdout` item goes to
+  `test` with every object on it (any class).
+- **Strata**: each remaining group counts toward its most common class.
+  Within a class, groups are ordered by `sha256(seed:class:group)`, so
+  the same data and seed always give the same split.
+- **Per-class allocation of the `n` remaining groups**: a class with at
+  least one frozen holdout item uses the holdout as its test set and
+  splits the rest train : val = `train_ratio : val_ratio` (0.8 : 0.1); a
+  class with no holdout item splits train / val / test at 0.8 / 0.1 /
+  0.1. Every split with a positive ratio gets one group before any
+  gets a second (priority train → val → test); the rest follow the
+  ratio. So `n = 0` → the class appears only in test (its holdout);
+  `n = 1` → train; `n = 2` → one train + one val; `n >= 3` → at least
+  one train and one val (and, with no holdout, at least one test).
+
+The multi-class manifest's `class_split_counts` lists every class in the
+export (`class_id` registry id, `export_id` dense id, `class_name`,
+`train`, `val`, `test` object counts), including classes with no
+objects. `label_stats.json` keeps its flat `{class_name: count}` shape
+(objects per class).
+
+**`GET /export/status`** (`ExportStatusResponse`) serves the last
+completed multi-class export — the `current` symlink's manifest:
+`status` (`idle` / `unknown` / `success`), `path` (resolved export dir;
+`export_dir` is the same value), `last_run` (finish, else start time),
+`version_tag`, `dataset_sha`, `seed`, `group_key`, `image_count`
+(images), `object_count` (objects), `class_count`, `split_counts`
+(images per split, `{train, val, test}`), `split_object_counts` (objects
+per split), `class_split_counts` (objects per class per split, rows as
+in the manifest), `require_fully_labeled_images`,
+`unlabeled_items_on_exported_images`, `images_with_unlabeled_items`,
+`images_dropped_not_fully_labeled`, `skipped_items`
+(`{no_image_id, no_usable_box_or_class}`). A field the manifest does not
+record (an export written before it existed) is `null` — this is the
+common case for `skipped_items` against an export from before it was
+added to the manifest. `idle` sets every other field to `null`; `unknown`
+(manifest missing/unreadable) sets only `path` / `export_dir`.
+
+```json
+{
+  "status": "success",
+  "path": "/exports/20260924T120000Z",
+  "export_dir": "/exports/20260924T120000Z",
+  "last_run": "2026-09-24T12:00:04+00:00",
+  "version_tag": "v1",
+  "dataset_sha": "4c1f...",
+  "seed": 42,
+  "group_key": "image_id",
+  "image_count": 3,
+  "object_count": 5,
+  "class_count": 2,
+  "split_counts": {"train": 2, "val": 1, "test": 0},
+  "split_object_counts": {"train": 4, "val": 1, "test": 0},
+  "class_split_counts": [
+    {"train": 2, "val": 1, "test": 0, "class_id": 1, "export_id": 0, "class_name": "alpha"},
+    {"train": 2, "val": 0, "test": 0, "class_id": 2, "export_id": 1, "class_name": "beta"}
+  ],
+  "require_fully_labeled_images": false,
+  "unlabeled_items_on_exported_images": 1,
+  "images_with_unlabeled_items": 1,
+  "images_dropped_not_fully_labeled": 0,
+  "skipped_items": {"no_image_id": 0, "no_usable_box_or_class": 0}
+}
+```
+
+### Training run status — `last_epoch_metric` / `best_checkpoint_metric`
+
+`GET /train/status`, `GET /train/status/{job_id}` and `GET /train/runs`
+(`TrainJobStatus`) serve two distinct per-run metric rows instead of the
+former `best_metric`/`last_metric` pair:
+
+- `last_epoch_metric`: `{"epoch": <int>, "map50": <float>, "map50_95": <float>}`
+  — the true LAST TRAINING epoch's metrics.
+- `best_checkpoint_metric`: same shape — the best checkpoint's
+  (`best.pt`) own re-validation metrics, as one coherent row (both
+  `map50` and `map50_95` from the same validation pass).
+
+Why two fields: Ultralytics fires its `on_fit_epoch_end` callback once
+more after training completes, re-validating `best.pt` — but without
+advancing its internal epoch counter, so that call is otherwise
+indistinguishable from a repeated epoch. The trainer
+(`docker/trainer/trainer.py::_make_ultralytics_callbacks`) detects the
+repeat and routes it to `best_checkpoint_metric` instead of clobbering
+`last_epoch_metric` with the wrong (best-checkpoint, not last-epoch)
+values — and `best_checkpoint_metric` is a single row rather than the
+former per-key running max, which could otherwise report `map50` from
+one epoch and `map50_95` from another. `best_checkpoint_metric` is
+back-filled from the run's `eval` block (the fresh test-split
+`.val()` pass, see below) when a status payload predates this field.
+
+`/bakeoff/trained_models`'s `map50` column and the promote gate
+(`src/routers/curation_train.py::_evaluate_promote_gate`) read from
+`eval.map50` (the fresh test-split re-validation, `state.eval` /
+`populate_eval_block`), not from either of these two fields — they are
+diagnostic epoch-level metrics, not the run's scored comparison metric.
+
+`GET /train/manifest/{job_id}`'s `results` block mirrors the same two
+field names (`last_epoch_metric`, `best_checkpoint_metric`) in place of
+the old `results.best_metric`.
+
+**`eval.head`.** YOLO26 exports/serves the NMS-free one-to-one head
+(`nms=False` at export, since Ultralytics forces `nms=False` on any
+`end2end` model). The trainer's own post-training test-split
+re-validation (`_finalize_run`, ~`docker/trainer/trainer.py:585`)
+explicitly forces that same head (`model.end2end = True`) before calling
+`.val(split='test', ...)` when the checkpoint is a genuine dual-head
+(one-to-one + one-to-many) YOLO26 build — `.val()` has no `end2end=`
+keyword; the only real toggle is the loaded model's own `.end2end`
+property (`ultralytics.nn.tasks.DetectionModel.end2end`, a setter
+delegating to `set_head_attr`). `state.eval.head` records `"end2end"`
+when this was applied, so a comparison result is explicit about which
+head it scored rather than silently depending on Ultralytics' own
+`.val()` default for the loaded checkpoint.
 
 ### Capability discovery — `GET /methods`
 
@@ -1207,7 +1538,8 @@ via `POST /events/publish`.
 Query: `kind` (`yolo` | `single_class` — the same ids the `/methods`
 export axis advertises), `profile_name`. Rows: `kind`, `profile_name`
 (`null` for multi-class), `export_dir`, `version_tag`, `image_count`,
-`split_counts`, `dataset_sha`, `exported_at`, `class_count`,
+`object_count` (`null` when the manifest does not record it, e.g. every
+single-class export), `split_counts`, `dataset_sha`, `exported_at`, `class_count`,
 `is_current`. Multi-class versions live directly under the export root;
 single-class versions under `<export_root>/<profile_name>/<version>/`, and
 `is_current` is judged against that profile's own `current` symlink.

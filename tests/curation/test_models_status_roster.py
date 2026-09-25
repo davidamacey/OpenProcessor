@@ -37,9 +37,9 @@ def test_core_models_includes_secondary_classifier_when_configured(
 ) -> None:
     import src.routers.curation.models as models_mod
 
-    monkeypatch.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'classifier_v6')
+    monkeypatch.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'secondary_classifier_x1')
     names = {name for name, *_ in models_mod._core_models()}
-    assert 'classifier_v6' in names
+    assert 'secondary_classifier_x1' in names
 
 
 def test_core_models_omits_secondary_classifier_when_unconfigured(
@@ -49,7 +49,7 @@ def test_core_models_omits_secondary_classifier_when_unconfigured(
 
     monkeypatch.delenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', raising=False)
     names = {name for name, *_ in models_mod._core_models()}
-    assert 'classifier_v6' not in names
+    assert 'secondary_classifier_x1' not in names
 
 
 def test_core_models_includes_the_segmenter(

@@ -137,14 +137,6 @@ class CurationConfig:
     api_prefix: str = '/curation'
     api_tag: str = 'Curation'
 
-    # T1: the browser-reachable MLflow base URL, distinct from whatever
-    # internal host a training job's own served mlflow_run_url uses
-    # (jobs.py's TrainJobStatus.mlflow_run_url may already be correct
-    # host-side but unreachable from an operator's browser, or the
-    # deployment fronts MLflow behind a different public host/port
-    # entirely). ``None`` when unset -- callers must not guess a port.
-    mlflow_public_url: str | None = None
-
     embedding_dim: int = 512
     encoder_embedding_dim: int = 1024
     backbone_embedding_dim: int = 1024
@@ -168,6 +160,15 @@ class CurationConfig:
     # Lines below this recognition score are not stored. 0.5 is PaddleOCR's
     # own ``drop_score`` default for its end-to-end system.
     item_text_min_confidence: float = 0.5
+
+    # Browser-reachable MLflow base URL (e.g. ``https://mlflow.example.com``).
+    # The trainer only ever sees ``MLFLOW_TRACKING_URI``, a container
+    # hostname (e.g. ``http://curation-mlflow:5000``) unreachable from a
+    # browser -- ``src/services/training/jobs.py`` rewrites the served
+    # ``mlflow_run_url`` to use this base instead. ``None`` (the default)
+    # means "no public MLflow UI configured" -- the served field is then
+    # ``null`` rather than leaking the internal hostname.
+    mlflow_public_url: str | None = None
 
     @property
     def pause_sentinel_path(self) -> Path:
@@ -212,7 +213,7 @@ class CurationConfig:
 
         def _optional_str(name: str, default: str | None) -> str | None:
             value = os.environ.get(f'{prefix}{name}')
-            return value if value else default
+            return value.strip() if value and value.strip() else default
 
         def _int(name: str, default: int) -> int:
             value = os.environ.get(f'{prefix}{name}')

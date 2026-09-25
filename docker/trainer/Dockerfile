@@ -75,6 +75,14 @@ LABEL org.opencontainers.image.title="OpenProcessor Curation Trainer" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor"
 
+# Build identity: the commit this trainer image was built from. Read by
+# job_protocol.build_lineage() as code_versions.trainer_sha (preferred over
+# the API's submit-time trainer_image_revision observation, since this is
+# the image actually running the code) -- see docker-compose.yml build.args.
+ARG OP_BUILD_SHA=""
+ENV OP_BUILD_SHA=${OP_BUILD_SHA}
+LABEL org.opencontainers.image.revision=${OP_BUILD_SHA}
+
 ARG ULTRALYTICS_SHA=8f5d355cd05b91503e7bf62429681dea4fa4b004
 # Promoted from ARG to ENV so it is readable at *runtime*
 # (`os.environ['ULTRALYTICS_SHA']`) and lands in each run's manifest under
@@ -118,6 +126,9 @@ ENV PATH=/home/appuser/.local/bin:$PATH \
 # Flat module layout: /app is on PYTHONPATH, so `python -m trainer` resolves
 # trainer.py and its siblings as top-level modules.
 COPY --chown=appuser:appuser docker/trainer/*.py ./
+# The augmentation preset catalog is shared with the API (which validates and
+# serves it); copied flat so augment.py imports it as a top-level module.
+COPY --chown=appuser:appuser src/services/training/augmentation_presets.py ./augmentation_presets.py
 
 USER appuser
 

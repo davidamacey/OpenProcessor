@@ -80,9 +80,9 @@ def _equals_or_missing(field: str, value: Any, missing_sentinel: Any) -> dict[st
 def build_cohort_query() -> dict[str, Any]:
     """The freeze cohort: human-validated crops only.
 
-    Plan Phase 2 item 1 / Appendix C Decision 2 — the old
-    ``label_source in ['v6_original_label', 'hdd_user_label']`` filter
-    referenced values nothing in the repo ever writes (0 matches, live).
+    Plan Phase 2 item 1 / Appendix C Decision 2 — the retired
+    ``label_source`` filter referenced values nothing in the repo ever
+    writes (0 matches, live).
     ``class_source`` is mapped ``keyword`` directly on the live index — no
     ``.keyword`` subfield exists (queries against it were 400ing /
     silently matching nothing until this fix).

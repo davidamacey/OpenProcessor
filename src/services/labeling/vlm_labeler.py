@@ -37,7 +37,7 @@ Design notes
   read via a :class:`~src.config.RegionFields` instance rather than
   hardcoded literals (§3.2), so a deployment with existing data under
   different field names (e.g. a proprietary-dataset overlay using
-  ``plate_*``) is a config flip, not a code change. A :class:`~src.services.labeling
+  ``roi_*``) is a config flip, not a code change. A :class:`~src.services.labeling
   .vlm_prompts.PromptPack`'s own templates ask the VLM for the matching
   key names — see that module's docstring.
 

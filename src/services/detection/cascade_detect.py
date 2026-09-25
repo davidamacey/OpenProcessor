@@ -461,7 +461,7 @@ class RegionDetector:
 
         Sends N concurrent batch=1 ``infer`` calls and lets Triton's
         dynamic batching coalesce them into real GPU batches. Measured
-        (on the reference LPR model): this is faster than Python-side
+        (on the reference region-detector model): this is faster than Python-side
         stacking — Triton forms tighter batches across the whole
         instance group than we can in one process, and we don't pay the
         ``np.stack`` + per-batch decode loop overhead.

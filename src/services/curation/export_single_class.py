@@ -47,7 +47,6 @@ rather than forking this file.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import random
 from collections import defaultdict
@@ -74,6 +73,8 @@ from src.services.curation.export_support import (
     atomic_symlink_flip,
     atomic_write_text,
     even_stratified_sample,
+    frozen_test_sha_of,
+    label_content_sha,
     stratified_split,
 )
 from src.services.detection.frame_dedup import dedup_rows_by_embedding
@@ -310,8 +311,11 @@ class SingleClassExportService:
         self._write_class_registry(resolved_dir, names)
         self._write_label_stats(resolved_dir, names)
 
-        dataset_sha = await asyncio.to_thread(label_content_sha, resolved_dir)
+        dataset_sha = await asyncio.to_thread(label_content_sha, resolved_dir, names)
         frozen_test_sha = await asyncio.to_thread(frozen_test_sha_of, resolved_dir)
+        test_label_sha = await asyncio.to_thread(
+            label_content_sha, resolved_dir, None, truncate=16, split='test'
+        )
         finished = datetime.now(UTC)
 
         manifest = {
@@ -339,6 +343,7 @@ class SingleClassExportService:
             'positives_zero_warning': n_pos == 0,
             'dataset_sha': dataset_sha,
             'frozen_test_sha': frozen_test_sha,
+            'test_label_sha': test_label_sha,
             'code_sha': _code_sha(),
             'split_counts': counts.to_dict(),
             'stratum_distribution': dict(sorted(stratum_distribution.items())),
@@ -585,54 +590,6 @@ class SingleClassExportService:
 # =============================================================================
 
 
-def label_content_sha(export_dir: Path) -> str:
-    """Checksum over the exported label *content*, not just its identity.
-
-    Hashes sorted ``(relative label path, sha256(file bytes))`` pairs, so
-    two exports agree only if the same frames AND the same boxes were
-    written. A checksum over item ids alone would call two datasets
-    identical after a box was corrected, which is exactly the change a
-    training lineage most needs to see.
-
-    Truncated to 16 hex chars: long enough that an accidental collision is
-    not a practical concern, short enough to read in a log line or a
-    manifest diff.
-    """
-    labels_dir = export_dir / 'labels'
-    if not labels_dir.is_dir():
-        return ''
-    h = hashlib.sha256()
-    for path in sorted(labels_dir.rglob('*.txt')):
-        rel = path.relative_to(export_dir).as_posix()
-        h.update(rel.encode('utf-8'))
-        h.update(b'\0')
-        h.update(hashlib.sha256(path.read_bytes()).hexdigest().encode('ascii'))
-        h.update(b'\n')
-    return h.hexdigest()[:16]
-
-
-def frozen_test_sha_of(export_dir: Path) -> str:
-    """Checksum over the test split's *identity* — which frames are in it.
-
-    Deliberately filenames only, not content: the guarantee being made is
-    "the held-out evaluation set is the same set of frames as last time",
-    which must keep holding after a label correction inside the test set.
-    Content changes there are caught by ``dataset_sha`` instead. Returns
-    ``''`` when there is no test split.
-    """
-    test_labels = export_dir / 'labels' / 'test'
-    if not test_labels.is_dir():
-        return ''
-    names = sorted(p.name for p in test_labels.glob('*.txt'))
-    if not names:
-        return ''
-    h = hashlib.sha256()
-    for name in names:
-        h.update(name.encode('utf-8'))
-        h.update(b'\n')
-    return h.hexdigest()[:16]
-
-
 def _render_label(boxes: Iterable[tuple[int, float, float, float, float]]) -> str:
     """YOLO label text. An empty string (empty file) means a background frame."""
     lines = [f'{cid} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}' for cid, cx, cy, w, h in boxes]
@@ -687,7 +644,5 @@ __all__ = [
     'SingleClassExportResult',
     'SingleClassExportService',
     'SingleClassSplitCounts',
-    'frozen_test_sha_of',
-    'label_content_sha',
     'resolve_current_single_class_dir',
 ]

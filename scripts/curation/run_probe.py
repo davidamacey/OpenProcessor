@@ -25,7 +25,7 @@ deployed detector as the probe via ``--architecture yolov5_objectness``).
     # Resume an interrupted pass (skips items already stamped with this
     # --model-version), with smaller scroll pages for a slow CPU probe.
     python3 scripts/curation/run_probe.py --model /models/detector.onnx \\
-        --architecture yolov5_objectness --model-version detector-v6 --resume --page-size 200 --apply
+        --architecture yolov5_objectness --model-version detector-v2 --resume --page-size 200 --apply
 
 Without ``--resume`` every run re-scores every item: probe fields are
 meant to reflect the most recently promoted probe, not a mix of versions.

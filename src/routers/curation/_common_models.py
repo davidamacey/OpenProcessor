@@ -226,13 +226,13 @@ class ItemRegionMetaRequest(BaseModel):
 
 
 class TestHoldoutFreezeRequest(BaseModel):
+    """Selection is deterministic (SHA1 of each ``crop_id``, per class — see
+    ``src/services/curation/holdout.py``), so there is no seed: an unknown
+    field such as ``seed`` is a ``422`` rather than silently ignored."""
+
+    model_config = {'extra': 'forbid'}
+
     percent: int = Field(default=10, ge=1, le=50)
-    # No longer used: selection is deterministic (SHA1-of-crop_id per
-    # class, see src/services/curation/test_holdout.py) — a seeded RNG
-    # can't guarantee a min-5-per-class floor or reproduce without
-    # recording the seed. Kept accepted-but-ignored for backward
-    # compatibility with existing callers.
-    seed: int = 42
 
 
 class TestHoldoutFreezeResponse(BaseModel):
@@ -240,6 +240,14 @@ class TestHoldoutFreezeResponse(BaseModel):
     n_classes_covered: int
     test_holdout_sha: str
     per_class_counts: dict[str, int] = Field(default_factory=dict)
+    selection: Literal['sha1_per_class'] = Field(
+        default='sha1_per_class',
+        description='Per class, the crops with the smallest sha1(crop_id); no seed.',
+    )
+    percent: int = Field(description='Target holdout percent per class (from the request).')
+    min_per_class: int = Field(
+        description='Floor per class (all of a class smaller than this is frozen).'
+    )
 
 
 class HealthResponse(BaseModel):
@@ -275,13 +283,19 @@ class ExportYoloRequest(BaseModel):
     # RNG seed for the stratified split. Recording it in the manifest is what
     # makes an export re-derivable.
     seed: int = 42
-    # Cap distinct source frames collected (representative sample for pipeline
-    # tests). None = full export.
+    # Cap on exported source images (a class-balanced sample; every object
+    # on a kept image stays). None = full export.
     max_images: int | None = None
     # Optional whole-frame near-dup cut (cosine on the images index's
     # secondary embedding). e.g. 0.98 collapses near-identical bursts to
-    # one frame; None disables.
+    # one image; None disables.
     dedup_threshold: float | None = None
+    # False (default): an image that also holds unreviewed objects (or
+    # objects on a class the export leaves out) is exported with its
+    # validated objects labeled; the manifest counts the rest, and training
+    # preflight warns, because a detector learns unlabeled objects as
+    # background. True: leave such images out.
+    require_fully_labeled_images: bool = False
 
 
 class ExportSingleClassRequest(BaseModel):

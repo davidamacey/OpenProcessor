@@ -57,7 +57,7 @@ def record_class_history(
             Reads ``class_id``, ``class_name``, ``class_source``,
             ``label_source``, ``confidence`` from it.
         writer: Identifier for the new history entry's writer
-            (``ingest``, ``human``, ``vlm_pipeline``, ``sam_worker``,
+            (``ingest``, ``human``, ``vlm_pipeline``, ``region_worker``,
             ``seed_backfill``, etc.).
         now: Optional ISO-8601 timestamp; defaults to UTC now.
 

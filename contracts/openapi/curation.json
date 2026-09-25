@@ -1,6 +1,58 @@
 {
   "components": {
     "schemas": {
+      "AugmentationPresetOption": {
+        "description": "One selectable ``augmentation.preset``.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "orientation_sensitive": {
+            "description": "Horizontal flip is disabled for the whole run with this preset.",
+            "title": "Orientation Sensitive",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "orientation_sensitive"
+        ],
+        "title": "AugmentationPresetOption",
+        "type": "object"
+      },
+      "AugmentationPresetsResponse": {
+        "properties": {
+          "default": {
+            "description": "Preset used when a job omits augmentation.preset.",
+            "title": "Default",
+            "type": "string"
+          },
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/AugmentationPresetOption"
+            },
+            "title": "Presets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "presets",
+          "default"
+        ],
+        "title": "AugmentationPresetsResponse",
+        "type": "object"
+      },
       "AugmentationSpec": {
         "additionalProperties": true,
         "description": "Optional augmentation block in ``job.json``.",
@@ -1122,6 +1174,47 @@
         "title": "DatasetRef",
         "type": "object"
       },
+      "ExportClassSplitCounts": {
+        "description": "One class's object (label-line) counts per split, as recorded in the manifest.",
+        "properties": {
+          "class_id": {
+            "description": "Registry class id.",
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "export_id": {
+            "description": "Dense class id written into the label files.",
+            "title": "Export Id",
+            "type": "integer"
+          },
+          "test": {
+            "default": 0,
+            "title": "Test",
+            "type": "integer"
+          },
+          "train": {
+            "default": 0,
+            "title": "Train",
+            "type": "integer"
+          },
+          "val": {
+            "default": 0,
+            "title": "Val",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_id",
+          "export_id",
+          "class_name"
+        ],
+        "title": "ExportClassSplitCounts",
+        "type": "object"
+      },
       "ExportSingleClassRequest": {
         "description": "Body for the narrowed single-class / class-subset dataset export.\n\nPositives come from either the items' own class-labeled boxes\n(``box_source='item'``) or their region-of-interest sub-annotation\n(``box_source='region'``). All ``detected`` positives and all human\n``false_positive`` hard negatives are kept in full; ``empty_bg_ratio``\nadds a small sample of genuinely empty frames as a fraction of\npositives so the detector still sees some no-target images.",
         "properties": {
@@ -1227,6 +1320,290 @@
         "title": "ExportSingleClassRequest",
         "type": "object"
       },
+      "ExportSkippedItems": {
+        "description": "Validated items scrolled off the index but left out of the export,\nby reason (see :meth:`GenericYoloExportService._hits_to_rows`).",
+        "properties": {
+          "no_image_id": {
+            "default": 0,
+            "description": "Had a usable box + class but no image_id to group on.",
+            "title": "No Image Id",
+            "type": "integer"
+          },
+          "no_usable_box_or_class": {
+            "default": 0,
+            "description": "Missing an item id, a usable box, or a class id.",
+            "title": "No Usable Box Or Class",
+            "type": "integer"
+          }
+        },
+        "title": "ExportSkippedItems",
+        "type": "object"
+      },
+      "ExportSplitCounts": {
+        "description": "Counts per split (images or objects — see the field using it).",
+        "properties": {
+          "test": {
+            "default": 0,
+            "title": "Test",
+            "type": "integer"
+          },
+          "train": {
+            "default": 0,
+            "title": "Train",
+            "type": "integer"
+          },
+          "val": {
+            "default": 0,
+            "title": "Val",
+            "type": "integer"
+          }
+        },
+        "title": "ExportSplitCounts",
+        "type": "object"
+      },
+      "ExportStatusResponse": {
+        "description": "``GET /export/status``: the last completed multi-class export.\n\n``idle`` = no export yet (every other field ``null``); ``unknown`` =\nthe ``current`` export exists but its manifest is missing or\nunreadable (only ``path``/``export_dir`` set); ``success`` = every\nfield below read from that export's ``manifest.json``.\nA field the manifest doesn't record (an export written before it\nexisted) is ``null``.\n\nThe export has one image file + one label file per source image:\n``image_count`` / ``split_counts`` count images, ``object_count`` /\n``split_object_counts`` count objects (label lines), and\n``class_split_counts`` counts objects per class per split.",
+        "properties": {
+          "class_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Count"
+          },
+          "class_split_counts": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ExportClassSplitCounts"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Objects per class per split.",
+            "title": "Class Split Counts"
+          },
+          "classes_with_objects": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Of class_count registry classes, how many have >=1 object.",
+            "title": "Classes With Objects"
+          },
+          "dataset_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Sha"
+          },
+          "export_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Same as ``path``.",
+            "title": "Export Dir"
+          },
+          "group_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Row attribute the split grouped on (``image_id``).",
+            "title": "Group Key"
+          },
+          "image_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exported images.",
+            "title": "Image Count"
+          },
+          "images_dropped_not_fully_labeled": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Images left out by require_fully_labeled_images (0 when it was off).",
+            "title": "Images Dropped Not Fully Labeled"
+          },
+          "images_with_unlabeled_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exported images holding at least one unlabeled object.",
+            "title": "Images With Unlabeled Items"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Finish (else start) time, ISO 8601.",
+            "title": "Last Run"
+          },
+          "object_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exported objects (label lines) across all images.",
+            "title": "Object Count"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolved export directory.",
+            "title": "Path"
+          },
+          "require_fully_labeled_images": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether images with an unlabeled object were left out.",
+            "title": "Require Fully Labeled Images"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "skipped_items": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExportSkippedItems"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Validated items left out of the export, by reason. Null for an export written before this field existed, not a fabricated zero."
+          },
+          "split_counts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExportSplitCounts"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Images per split."
+          },
+          "split_object_counts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExportSplitCounts"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Objects (label lines) per split."
+          },
+          "status": {
+            "enum": [
+              "idle",
+              "unknown",
+              "success"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "unlabeled_items_on_exported_images": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Objects on exported images the export did not label (unreviewed, or on a class it leaves out); learned as background. Excluded / dismissed items never count.",
+            "title": "Unlabeled Items On Exported Images"
+          },
+          "version_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Tag"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ExportStatusResponse",
+        "type": "object"
+      },
       "ExportYoloRequest": {
         "properties": {
           "dedup_threshold": {
@@ -1261,6 +1638,11 @@
               }
             ],
             "title": "Max Images"
+          },
+          "require_fully_labeled_images": {
+            "default": false,
+            "title": "Require Fully Labeled Images",
+            "type": "boolean"
           },
           "seed": {
             "default": 42,
@@ -4011,17 +4393,14 @@
         "type": "object"
       },
       "TestHoldoutFreezeRequest": {
+        "additionalProperties": false,
+        "description": "Selection is deterministic (SHA1 of each ``crop_id``, per class — see\n``src/services/curation/holdout.py``), so there is no seed: an unknown\nfield such as ``seed`` is a ``422`` rather than silently ignored.",
         "properties": {
           "percent": {
             "default": 10,
             "maximum": 50.0,
             "minimum": 1.0,
             "title": "Percent",
-            "type": "integer"
-          },
-          "seed": {
-            "default": 42,
-            "title": "Seed",
             "type": "integer"
           }
         },
@@ -4030,6 +4409,11 @@
       },
       "TestHoldoutFreezeResponse": {
         "properties": {
+          "min_per_class": {
+            "description": "Floor per class (all of a class smaller than this is frozen).",
+            "title": "Min Per Class",
+            "type": "integer"
+          },
           "n_classes_covered": {
             "title": "N Classes Covered",
             "type": "integer"
@@ -4045,6 +4429,18 @@
             "title": "Per Class Counts",
             "type": "object"
           },
+          "percent": {
+            "description": "Target holdout percent per class (from the request).",
+            "title": "Percent",
+            "type": "integer"
+          },
+          "selection": {
+            "const": "sha1_per_class",
+            "default": "sha1_per_class",
+            "description": "Per class, the crops with the smallest sha1(crop_id); no seed.",
+            "title": "Selection",
+            "type": "string"
+          },
           "test_holdout_sha": {
             "title": "Test Holdout Sha",
             "type": "string"
@@ -4053,7 +4449,9 @@
         "required": [
           "n_frozen",
           "n_classes_covered",
-          "test_holdout_sha"
+          "test_holdout_sha",
+          "percent",
+          "min_per_class"
         ],
         "title": "TestHoldoutFreezeResponse",
         "type": "object"
@@ -4226,6 +4624,17 @@
         "additionalProperties": false,
         "description": "Payload accepted by ``POST /curation/train/start``.\n\nAll fields except the dataset path are optional -- the trainer\napplies profile defaults from :mod:`src.services.training.profiles`\nfor anything not supplied.",
         "properties": {
+          "api_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Sha"
+          },
           "augmentation": {
             "anyOf": [
               {
@@ -4265,6 +4674,28 @@
             "description": "Absolute path (inside the trainer container) to a frozen export. The API typically passes the host's ``current/`` symlink target.",
             "title": "Dataset Export Dir",
             "type": "string"
+          },
+          "dataset_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Sha"
+          },
+          "dataset_version_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Version Tag"
           },
           "frozen_test_sha": {
             "anyOf": [
@@ -4412,6 +4843,39 @@
             "default": "labeler-ui",
             "title": "Submitted By",
             "type": "string"
+          },
+          "test_label_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Label Sha"
+          },
+          "trainer_image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trainer Image Id"
+          },
+          "trainer_image_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trainer Image Revision"
           }
         },
         "required": [
@@ -4424,19 +4888,17 @@
         "additionalProperties": true,
         "description": "``status.json`` shape.\n\nEvery field except ``job_id`` and ``state`` is nullable so the trainer\ncan write partial updates while the run is still spinning up.",
         "properties": {
-          "best_metric": {
+          "best_checkpoint_metric": {
             "anyOf": [
               {
-                "additionalProperties": {
-                  "type": "number"
-                },
+                "additionalProperties": true,
                 "type": "object"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Best Metric"
+            "title": "Best Checkpoint Metric"
           },
           "campaign_id": {
             "anyOf": [
@@ -4551,19 +5013,28 @@
             "title": "Job Id",
             "type": "string"
           },
-          "last_metric": {
+          "last_epoch_metric": {
             "anyOf": [
               {
-                "additionalProperties": {
-                  "type": "number"
-                },
+                "additionalProperties": true,
                 "type": "object"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Last Metric"
+            "title": "Last Epoch Metric"
+          },
+          "mlflow_experiment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Experiment Id"
           },
           "mlflow_run_id": {
             "anyOf": [
@@ -8286,16 +8757,14 @@
     },
     "/curation/export/status": {
       "get": {
-        "description": "Last-export status — reads ``current`` symlink + manifest if present.",
+        "description": "Last completed export — the ``current`` symlink's manifest, if any.",
         "operationId": "export_status_curation_export_status_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Export Status Curation Export Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExportStatusResponse"
                 }
               }
             },
@@ -8310,7 +8779,7 @@
     },
     "/curation/export/yolo": {
       "post": {
-        "description": "Kick off a YOLO export job.\n\nBacked by :class:`GenericYoloExportService` — a multi-class YOLO\ndetection dataset export with a deterministic split and a\nreproducibility manifest. Synchronous; the response includes the\nexport dir + counts. ``422`` (``nothing to export: <reason>``) when no\nitem is exportable; nothing is written then.",
+        "description": "Kick off a YOLO export job.\n\nBacked by :class:`GenericYoloExportService` — a multi-class YOLO\ndetection dataset export, one image + one label file per source image,\nwith a deterministic per-image split and a reproducibility manifest.\nSynchronous; the response includes the export dir + counts\n(``image_count`` / ``split_counts`` are images, ``object_count`` /\n``split_object_counts`` are label lines). ``422`` (``nothing to export:\n<reason>``) when no image is exportable; nothing is written then.",
         "operationId": "export_yolo_curation_export_yolo_post",
         "requestBody": {
           "content": {
@@ -11902,7 +12371,7 @@
     },
     "/curation/test_holdout/freeze": {
       "post": {
-        "description": "Deterministic per-class sample of human-validated crops to ``test_holdout=true``.\n\nCohort: ``class_validated=true AND class_source='human'`` (Appendix C\nDecision 2). Selection: SHA1-of-``crop_id`` deterministic per-class\nsampling with a 5-crop floor via :func:`select_test_holdout` — the\nsingle canonical holdout algorithm shared with\nan offline promotion script (Appendix C\nDecision 1). No seed: the same cohort always freezes the same set.\n\nRefuses to run if a holdout already exists unless ``force=true``.\nRefuses (422) to freeze zero rows — a freeze that freezes nothing is\nnever a success, and silently returning 200 with ``sha256('')`` hid\nthat this endpoint has never actually frozen anything. Persists a\ndurable freeze record under ``OP_STATE_DIR/test_holdout/`` so a bad\nfreeze can be diagnosed and reverted from the recorded crop-id list.",
+        "description": "Deterministic per-class sample of human-validated crops to ``test_holdout=true``.\n\nCohort: ``class_validated=true AND class_source='human'`` (Appendix C\nDecision 2). Selection: SHA1-of-``crop_id`` deterministic per-class\nsampling with a 5-crop floor via :func:`select_test_holdout` — the\nsingle canonical holdout algorithm shared with\nan offline promotion script (Appendix C\nDecision 1). No seed (a ``seed`` field is a ``422``): the same cohort\nalways freezes the same set. The response names the method in\n``selection`` (``sha1_per_class``).\n\nRefuses to run if a holdout already exists unless ``force=true``.\nRefuses (422) to freeze zero rows — a freeze that freezes nothing is\nnever a success, and silently returning 200 with ``sha256('')`` hid\nthat this endpoint has never actually frozen anything. Persists a\ndurable freeze record under ``OP_STATE_DIR/test_holdout/`` so a bad\nfreeze can be diagnosed and reverted from the recorded crop-id list.",
         "operationId": "freeze_test_holdout_curation_test_holdout_freeze_post",
         "parameters": [
           {
@@ -11977,6 +12446,77 @@
         "summary": "Test Holdout Stats",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/train/artifacts/{job_id}/{name}": {
+      "get": {
+        "description": "Serve one whitelisted metrics/plot artifact from a run's directory.\n\nThis is the only sanctioned way to reach these files -- the server\nfilesystem path itself never appears on the wire (``eval.\nconfusion_matrix_url`` on ``{api_prefix}/train/status*``/``manifest``\npoints here instead). 404 alike for an unwhitelisted name, an unknown\njob, or a file that hasn't been written yet — nothing here\ndistinguishes those cases to a caller.",
+        "operationId": "get_run_artifact_curation_train_artifacts__job_id___name__get",
+        "parameters": [
+          {
+            "description": "Training job_id from {api_prefix}/train/runs",
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "description": "Training job_id from {api_prefix}/train/runs",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Whitelisted artifact filename (see src.services.training.jobs.RUN_ARTIFACT_WHITELIST), e.g. confusion_matrix.png",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Whitelisted artifact filename (see src.services.training.jobs.RUN_ARTIFACT_WHITELIST), e.g. confusion_matrix.png",
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Run Artifact",
+        "tags": [
+          "Curation - Train"
+        ]
+      }
+    },
+    "/curation/train/augmentation_presets": {
+      "get": {
+        "description": "The augmentation presets the trainer can build, for the form picker.\n\nServed from the catalog the trainer itself builds from\n(``src/services/training/augmentation_presets.py``); ``/preflight`` and\n``/start`` reject any other id.",
+        "operationId": "list_augmentation_presets_curation_train_augmentation_presets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AugmentationPresetsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Augmentation Presets",
+        "tags": [
+          "Curation - Train"
         ]
       }
     },
@@ -12392,7 +12932,7 @@
     },
     "/curation/train/start": {
       "post": {
-        "description": "Validate, run preflight, and write ``job.json``.\n\nReturns 422 with the full preflight report if any check is blocking\nand ``force=False``. The trainer picks up the file out-of-band.",
+        "description": "Validate, run preflight, and write ``job.json``.\n\nReturns 422 with the full preflight report if any check is blocking\nand ``force=False``, and 422 for an unknown augmentation preset even\nwith ``force`` (before the GPU claim). The trainer picks up the file\nout-of-band.",
         "operationId": "start_train_curation_train_start_post",
         "parameters": [
           {

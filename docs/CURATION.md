@@ -354,10 +354,44 @@ the segmenter leg is skipped entirely — no HTTP call, no failure.
 8. Export a dataset with `POST /curation/export/yolo` once you have
    labeled data — or `POST /curation/export/single_class` to build a
    narrowed dataset for one class (or a class subset), which adds
-   background/hard-negative frames the narrowed detector needs and a
-   stronger integrity envelope (`dataset_sha` over the written label
-   content, `frozen_test_sha` over the test split's identity, an
-   atomically-flipped per-profile `current` symlink).
+   background/hard-negative frames the narrowed detector needs and an
+   extra integrity field: `frozen_test_sha` over the test split's
+   identity. Both exporters record `dataset_sha`, a hash of the actual
+   written label *content* (which frames, in which split, with which
+   boxes) plus the export's ordered class-name list — not of which item
+   ids were selected, so a split reassignment, a corrected box, or a
+   class rename all change it even when something else about the export
+   looks unchanged. Both flip their `current` symlink atomically.
+
+   The multi-class export writes **one image file and one label file per
+   source image** (`images/<split>/<image_id>.<ext>` +
+   `labels/<split>/<image_id>.txt`), with one `cls cx cy w h` line per
+   validated object on that image, relative to the full source image.
+   Its manifest counts images (`image_count`, `split_counts`) and
+   objects (`object_count`, `split_object_counts`, `class_split_counts`)
+   separately.
+
+   **Partially labeled images.** An image can also hold objects that
+   are not labeled yet (unreviewed, or on a class the export leaves
+   out). By default the image is still exported with its validated
+   objects labeled, and the manifest records
+   `unlabeled_items_on_exported_images` / `images_with_unlabeled_items`.
+   Training preflight then warns (`export_unlabeled_objects`), because
+   the detector learns an unlabeled object in a training image as
+   background. Pass `require_fully_labeled_images: true` to
+   `POST /curation/export/yolo` to leave those images out instead
+   (`images_dropped_not_fully_labeled` in the manifest). Excluded and
+   review-dismissed items are never counted as unlabeled.
+
+   Both exporters split by **source image** (`group_key: image_id`):
+   items cut from one image always land in the same split. An image
+   with a frozen test-holdout item (`POST /curation/test_holdout/freeze`)
+   goes to `test` with all its objects; a class with a frozen holdout
+   splits its other images between train and val only, and each split
+   gets one image before any gets a second (1 image → train, 2 → train +
+   val). `POST /curation/train/preflight` blocks an export with no train
+   or no val images, or with a trained class missing from train or val
+   — see the "Export" section of the API contract for the exact rules.
 
 ## Environment variables
 
@@ -389,7 +423,7 @@ be changed at runtime once the app has started.
 | Item-scores tuning | `OP_SCORES_KNN_K`, `OP_SCORES_NPROBE`, `OP_SCORES_STATE_DIR`, `OP_CROP_DUP_THRESHOLD`, `OP_FIELD_COVERAGE_TTL_S` |
 | Diverse-selection tuning | `OP_SELECT_JOBS_DIR`, `OP_SELECT_JOB_MAX_N`, `OP_SELECT_MAX_N`, `OP_SELECT_SYNC_MAX_OPS`, `OP_SELECT_CACHE_TTL_S` |
 | Clustering / IVF tuning | `OP_IVF_RETRAIN_CHECK_S`, `OP_IVF_RETRAIN_GROWTH`, `OP_IVF_RETRAIN_MIN_INTERVAL_S`, `OP_MAX_REFINE_MEMBERS`, `OP_OUTLIER_CACHE_TTL_S`, `OP_OUTLIER_MAX_MEMBERS`, `OP_RESIDUAL_EMBEDDING_FIELD`, `OP_REGION_CLUSTER_JOB_FILE`, `OP_REGION_FP_JOB_FILE`, `OP_REGION_PARTITION_MARKER`, `OP_REGION_REFINE_MARKER` |
-| Training pipeline | `OP_TRAIN_JOBS_DIR`, `OP_TRAIN_RUNS_ROOT`, `OP_TRAIN_STAGING`, `OP_PREFLIGHT_SCAN_CAP` |
+| Training pipeline | `OP_TRAIN_JOBS_DIR`, `OP_TRAIN_RUNS_ROOT`, `OP_TRAIN_STAGING`, `OP_PREFLIGHT_SCAN_CAP`, `OP_MLFLOW_PUBLIC_URL` (browser-reachable MLflow base; served `mlflow_run_url` is null when unset) |
 | GPU arbiter (`GpuArbiterConfig.from_env()`) | `OP_GPU_ALLOWED_IDS` (comma list; empty = unrestricted), `OP_GPU_ARBITER_CONTAINERS` (comma-separated `name` or `name@ids`, e.g. `vllm-server@2`, `segmenter@0/2` — `/`-separated ids scope a container to specific GPUs; a bare `name` keeps the old "stop only on a multi-GPU claim" behavior), `OP_GPU_ARBITER_TRAINER_CONTAINER`, `OP_GPU_LABELS` (comma-separated `id=label`, e.g. `0=RTX A6000,2=RTX A6000`, used by `GET /train/gpus`), `OP_TRAIN_DEFAULT_GPUS` (default `cuda_visible_devices` for new specs; falls back to the smallest allowed id, else `0`), plus `OP_BAKEOFF_JOBS_DIR` |
 | Export | `OP_BUILD_SHA` |
 | Bake-off harness | `OP_BAKEOFF_JOBS_DIR`, `OP_BAKEOFF_OUT_DIR`, `OP_BAKEOFF_EVAL_ROOT`, `OP_BAKEOFF_CONCURRENCY`, `OP_BAKEOFF_GPUS`, `OP_BAKEOFF_BASELINES_PATH`, `OP_BAKEOFF_PROFILE`, `OP_BAKEOFF_PROFILE_<FIELD>` |

@@ -390,17 +390,17 @@ def _export_strategies() -> list[dict[str, Any]]:
 
     Advertises which export *kinds* ``POST {prefix}/export/{kind}`` can
     actually produce on this deployment, so a consumer gates an export UI
-    on capability rather than probing a write endpoint (``POST
-    /export/lpr`` would kick off a real dataset build) with a throwaway
-    request just to see whether it 404s.
+    on capability rather than probing a write endpoint (a proprietary
+    single-class export route would kick off a real dataset build) with
+    a throwaway request just to see whether it 404s.
 
     ``single_class`` is the generic replacement for the reference
     implementation's proprietary single-class license-plate export: it
     takes the target class ids from the request rather than hardcoding a
     domain vocabulary, so it covers that use case and any other narrowed
     export without this repo carrying a deployment-specific overlay.
-    There is deliberately no ``lpr`` id — a domain-named export kind
-    would be exactly the hardcoding this axis exists to avoid.
+    There is deliberately no domain-named export kind id — that would be
+    exactly the hardcoding this axis exists to avoid.
     """
     return [
         {
@@ -497,7 +497,7 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
     denominator) but keyed by raw field name across every axis, not just
     the three ``crop_scores`` scorer fields -- ``/curation/scores/coverage`` has
     no answer for ``probe_pred_entropy``/``cluster_distance``/
-    ``plate_score``/``crop_area_norm``, which is exactly where the inert
+    ``region_score``/``crop_area_norm``, which is exactly where the inert
     sorts live (see this module's Phase 6 note above).
 
     TTL-cached at module scope (``_COVERAGE_CACHE`` / ``time.monotonic()``

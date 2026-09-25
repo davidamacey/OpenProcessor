@@ -1,6 +1,6 @@
 """Tests for src.services.training.preflight_scan (P2-8).
 
-The empty_labels + plate_pairing preflight checks were hardcoded to always
+The empty_labels + region_pairing preflight checks were hardcoded to always
 report 'ok' with no scan ever run. These tests build a small temp export
 fixture (labels dir + class_registry.json) and exercise the real scan.
 """

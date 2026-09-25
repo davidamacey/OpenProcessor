@@ -56,6 +56,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     # CFG-5: previously the ONLY var reaching this container from .env was
     # OP_API_PREFIX (explicitly interpolated below) -- everything else in
     # .env (see env.template) was silently unreachable. env_file loads the
@@ -164,6 +166,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     restart: unless-stopped
@@ -181,8 +185,8 @@ services:
       # documented no-op (see scripts/curation/worker/client.py
       # SegmenterClient). Set OP_SEGMENTER_URL=http://segmenter:8000 to use the
       # `segmenter` service below (`--profile segmenter`), or point it
-      # at your own service's `POST /sam3/segment_plate` — a
-      # comma-separated OP_SEGMENTER_URLS list load-balances across several.
+      # at your own service's `POST /segment` — a comma-separated
+      # OP_SEGMENTER_URLS list load-balances across several.
       - OP_SEGMENTER_URL=${OP_SEGMENTER_URL:-}
       - OP_SEGMENTER_URLS=${OP_SEGMENTER_URLS:-}
       - OP_VLM_URL=${OP_VLM_URL:-}
@@ -214,6 +218,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     restart: unless-stopped
@@ -250,6 +256,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     restart: unless-stopped
@@ -290,6 +298,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     restart: unless-stopped
@@ -328,6 +338,8 @@ services:
     build:
       context: .
       dockerfile: docker/evaluator/Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     env_file:
@@ -422,6 +434,8 @@ services:
     build:
       context: .
       dockerfile: docker/trainer/Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - training
     restart: unless-stopped

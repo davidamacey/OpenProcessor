@@ -69,7 +69,7 @@ logger = get_logger('curation_worker')
 # they get class + region-verify + OCR in ONE VLM call instead of TWO.
 # The threshold mirrors the pipeline's VLM-skip confidence default (0.80)
 # -- crops at or above it are trusted enough that re-asking adds nothing.
-_V6_LOW_CONF_THRESHOLD = 0.80
+_CLASSIFIER_LOW_CONF_THRESHOLD = 0.80
 
 
 def _is_combined_cohort(class_source: str, class_confidence: float) -> bool:
@@ -87,7 +87,7 @@ def _is_combined_cohort(class_source: str, class_confidence: float) -> bool:
     if class_source in unlabeled_proposal_class_sources():
         return True
     low_conf_sources = classifier_class_sources() | {CLUSTER_MAJORITY_CLASS_SOURCE}
-    return class_source in low_conf_sources and class_confidence < _V6_LOW_CONF_THRESHOLD
+    return class_source in low_conf_sources and class_confidence < _CLASSIFIER_LOW_CONF_THRESHOLD
 
 
 def _finalize_no_region(task: _ItemTask) -> None:
