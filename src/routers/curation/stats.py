@@ -41,11 +41,19 @@ async def stats_classes(opensearch: OpenSearchDep) -> dict[str, Any]:
     """Per-class total/validated breakdown.
 
     Returns both the raw ``by_class`` aggregation and a flattened ``classes``
-    array (``{class_id, class_name, count, validated_count, adequacy,
-    aug_target, aug_gap}``, plus the ``thresholds`` behind them) joined against
-    the registry for the names. The labeler's ``getStats()`` (Export + Home
-    pages) consumes ``classes`` — the aggregation alone has no class names, so
-    without this join the Export dataset table renders empty.
+    array (``{class_id, class_name, count, validated_count, trainable,
+    trainable_gap, adequacy, aug_target, aug_gap}``, plus the ``thresholds``
+    behind them) joined against the registry for the names. The labeler's
+    ``getStats()`` (Export + Home pages) consumes ``classes`` — the
+    aggregation alone has no class names, so without this join the Export
+    dataset table renders empty.
+
+    ``trainable`` = validated minus frozen test-holdout minus human-excluded
+    crops — the frontend used to compute ``validated - holdout`` itself
+    client-side; this serves the real number (also excluding
+    ``class_excluded`` crops, which the client-side version didn't
+    account for) so every page agrees. ``trainable_gap`` is the shortfall
+    against :func:`dataset_thresholds`'s per-class minimum, floored at 0.
     """
     body = {
         'size': 0,
@@ -57,6 +65,30 @@ async def stats_classes(opensearch: OpenSearchDep) -> dict[str, Any]:
                     # label_source is mapped keyword directly on the live
                     # index — no .keyword subfield exists.
                     'by_source': {'terms': {'field': 'label_source', 'size': 16}},
+                    # Trainable = validated minus these two: a frozen
+                    # test-holdout crop must never leak into training, and
+                    # a human-excluded crop was deliberately removed from
+                    # the dataset.
+                    'validated_test_holdout': {
+                        'filter': {
+                            'bool': {
+                                'filter': [
+                                    {'term': {'class_validated': True}},
+                                    {'term': {'test_holdout': True}},
+                                ]
+                            }
+                        }
+                    },
+                    'validated_excluded': {
+                        'filter': {
+                            'bool': {
+                                'filter': [
+                                    {'term': {'class_validated': True}},
+                                    {'term': {'class_excluded': True}},
+                                ]
+                            }
+                        }
+                    },
                 },
             }
         },
@@ -69,10 +101,19 @@ async def stats_classes(opensearch: OpenSearchDep) -> dict[str, Any]:
 
     counts: dict[int, int] = {}
     validated: dict[int, int] = {}
+    validated_test_holdout: dict[int, int] = {}
+    validated_excluded: dict[int, int] = {}
     for bucket in aggs.get('by_class', {}).get('buckets', []):
         cid = int(bucket['key'])
         counts[cid] = int(bucket.get('doc_count', 0))
         validated[cid] = int((bucket.get('validated') or {}).get('doc_count', 0))
+        validated_test_holdout[cid] = int(
+            (bucket.get('validated_test_holdout') or {}).get('doc_count', 0)
+        )
+        validated_excluded[cid] = int((bucket.get('validated_excluded') or {}).get('doc_count', 0))
+
+    threshold_values = dataset_thresholds()
+    hard_min = int(threshold_values.get('block_below', 0))
 
     classes: list[dict[str, Any]] = []
     try:
@@ -81,6 +122,11 @@ async def stats_classes(opensearch: OpenSearchDep) -> dict[str, Any]:
             if getattr(c, 'deprecated', False):
                 continue
             n_valid = validated.get(c.class_id, 0)
+            n_trainable = (
+                n_valid
+                - validated_test_holdout.get(c.class_id, 0)
+                - validated_excluded.get(c.class_id, 0)
+            )
             target = aug_target(n_valid)
             classes.append(
                 {
@@ -88,6 +134,8 @@ async def stats_classes(opensearch: OpenSearchDep) -> dict[str, Any]:
                     'class_name': c.class_name,
                     'count': counts.get(c.class_id, 0),
                     'validated_count': n_valid,
+                    'trainable': n_trainable,
+                    'trainable_gap': max(0, hard_min - n_trainable),
                     'adequacy': adequacy(n_valid),
                     'aug_target': target,
                     'aug_gap': target - n_valid,
@@ -96,7 +144,7 @@ async def stats_classes(opensearch: OpenSearchDep) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'class registry unavailable: {exc}') from exc
 
-    return {**aggs, 'classes': classes, 'thresholds': dataset_thresholds()}
+    return {**aggs, 'classes': classes, 'thresholds': threshold_values}
 
 
 # Provenance keys that mean "human-applied or human-validated", used to
@@ -278,6 +326,42 @@ def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
                     'missing': '__none__',
                 },
             },
+            # D1: the flat 'class_sources' agg above buckets EVERY crop by
+            # class_source regardless of whether a class_id was ever
+            # assigned -- 'vlm_unmatched' / 'vlm_new_class_pending' both
+            # start with 'vlm' and class_id is null on both, so the old
+            # labeled.by_vlm rollup (built straight off 'class_sources')
+            # counted class-less crops as VLM-labeled. This sibling agg
+            # scopes the same terms breakdown to docs that actually carry
+            # a class_id, so ``labeled.*`` only counts real labels.
+            'class_sources_with_class': {
+                'filter': {'exists': {'field': 'class_id'}},
+                'aggs': {
+                    'by_source': {
+                        'terms': {
+                            'field': 'class_source',
+                            'size': 64,
+                            'missing': '__none__',
+                        },
+                    },
+                },
+            },
+            # The class-less half of the same breakdown, so a VLM-touched
+            # but never-classed crop (vlm_unmatched / vlm_new_class_pending)
+            # can be surfaced explicitly under unlabeled.* instead of
+            # silently vanishing from every bucket.
+            'class_sources_no_class': {
+                'filter': {'bool': {'must_not': [{'exists': {'field': 'class_id'}}]}},
+                'aggs': {
+                    'by_source': {
+                        'terms': {
+                            'field': 'class_source',
+                            'size': 64,
+                            'missing': '__none__',
+                        },
+                    },
+                },
+            },
             # region-detector breakdown — distinct from class_source. primary detector /
             # segmenter / human region detections show up here. The dashboard
             # surfaces "detector found N regions" from this, NOT from
@@ -382,7 +466,23 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
     aggs = resp.get('aggregations') or {}
 
-    rollup = _rollup_class_sources((aggs.get('class_sources') or {}).get('buckets') or [])
+    # D1: rollup is built from ``class_sources_with_class`` (docs that
+    # actually carry a class_id), not the flat ``class_sources`` agg --
+    # otherwise a class-less vlm_unmatched/vlm_new_class_pending crop
+    # counts as VLM-labeled. See the agg comment in
+    # ``_build_dataset_query_body``.
+    with_class_buckets = ((aggs.get('class_sources_with_class') or {}).get('by_source') or {}).get(
+        'buckets'
+    ) or []
+    rollup = _rollup_class_sources(with_class_buckets)
+
+    no_class_buckets = ((aggs.get('class_sources_no_class') or {}).get('by_source') or {}).get(
+        'buckets'
+    ) or []
+    vlm_no_class = _sum_prefixed(
+        {str(b.get('key', '')): int(b.get('doc_count', 0)) for b in no_class_buckets},
+        VLM_CLASS_SOURCE,
+    )
 
     # Region-detector rollup — separate from class label rollup.
     # by_detector counts crops where the profile's primary region detector
@@ -484,6 +584,14 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
             'pending_detection': pending_detection,
             'pending_verification': pending_verification,
             'no_label_source': no_label_source,
+            # D1: crops a VLM answered or proposed but that never got a
+            # class_id (sources "vlm_unmatched" / "vlm_new_class_pending")
+            # -- these used to be double counted as VLM labeled in the
+            # "labeled" section above even though they carry no class.
+            # They are a subset of no_label_source, surfaced explicitly so
+            # a dashboard can tell "no class_source at all" apart from
+            # "the VLM tried but didn't land on a registry class".
+            'vlm_no_class': vlm_no_class,
         },
         'in_progress': {
             'region_drain_total_unfinished': region_drain_total_unfinished,

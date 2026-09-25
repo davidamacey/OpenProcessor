@@ -261,7 +261,9 @@ class TestIngestOne:
         svc, _, _ = _make_service()
         result = await svc.ingest_one(b'not an image', '/tmp/bad.jpg')
         assert result.status == 'failed'
-        assert result.error_kind in {'unidentified_image', 'decode_error'}
+        # BA-7: both the unidentified-image and generic-decode-error
+        # branches now serve the one stable code.
+        assert result.error_kind == 'decode_failed'
 
     @pytest.mark.asyncio
     async def test_no_detections_still_indexes_image_doc(self) -> None:

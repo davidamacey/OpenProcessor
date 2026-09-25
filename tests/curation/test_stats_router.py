@@ -63,6 +63,50 @@ def test_class_sources_agg_configures_a_missing_bucket() -> None:
     assert body['aggs']['class_sources']['terms']['missing'] == '__none__'
 
 
+def test_dataset_query_body_scopes_class_source_rollup_to_docs_with_class_id() -> None:
+    """D1 regression guard.
+
+    The query body must carry sibling aggs that split the class_source
+    breakdown by whether the doc has a class_id, so the rollup used for
+    ``labeled.*`` can exclude class-less VLM proposals.
+    """
+    from src.config.region_fields import get_region_fields
+
+    body = _build_dataset_query_body(get_region_fields())
+    assert body['aggs']['class_sources_with_class']['filter'] == {'exists': {'field': 'class_id'}}
+    assert (
+        body['aggs']['class_sources_with_class']['aggs']['by_source']['terms']['field']
+        == 'class_source'
+    )
+    assert body['aggs']['class_sources_no_class']['filter'] == {
+        'bool': {'must_not': [{'exists': {'field': 'class_id'}}]}
+    }
+
+
+@pytest.mark.asyncio
+async def test_stats_dataset_vlm_labeled_excludes_class_less_vlm_proposals() -> None:
+    """D1: a crop the VLM answered but never matched to a registry class
+    (class_source='vlm_unmatched', class_id=None) must not be counted
+    under labeled.by_vlm -- it belongs under unlabeled.vlm_no_class."""
+    os_client = AsyncMock()
+    os_client.search = AsyncMock(
+        return_value={
+            'hits': {'total': {'value': 3}},
+            'aggregations': {
+                'class_sources_with_class': {
+                    'by_source': {'buckets': [{'key': 'vlm', 'doc_count': 1}]},
+                },
+                'class_sources_no_class': {
+                    'by_source': {'buckets': [{'key': 'vlm_unmatched', 'doc_count': 2}]},
+                },
+            },
+        }
+    )
+    body = await stats_dataset(os_client)
+    assert body['labeled']['by_vlm'] == 1
+    assert body['unlabeled']['vlm_no_class'] == 2
+
+
 @pytest.mark.asyncio
 async def test_stats_dataset_uses_request_cache() -> None:
     """F-21: request_cache=True lets identical size:0 stats queries

@@ -200,6 +200,8 @@ async def run_ingest_batch(
     label_source: str = '',
     detect_mismatches: bool = False,
     whole_frame_from_bytes: bool = False,
+    source_identifiers: list[str | None] | None = None,
+    ingest_run_id: str | None = None,
 ) -> BatchIngestResult:
     """Implementation behind :meth:`CurationIngestService.ingest_batch`.
 
@@ -211,6 +213,8 @@ async def run_ingest_batch(
         raise ValueError('images and image_paths must be same length')
     if label_paths is not None and len(label_paths) != len(images):
         raise ValueError('label_paths must match images length')
+    if source_identifiers is not None and len(source_identifiers) != len(images):
+        raise ValueError('source_identifiers must match images length')
 
     summary = IngestSummary()
     hashes = [_imohash_bytes(b) for b in images]
@@ -243,6 +247,8 @@ async def run_ingest_batch(
                 prefilled_items=prefilled_items.get(i),
                 prefilled_secondary=prefilled_secondary.get(i),
                 whole_frame_from_bytes=whole_frame_from_bytes,
+                source_identifier=source_identifiers[i] if source_identifiers else None,
+                ingest_run_id=ingest_run_id,
             )
 
     results = list(

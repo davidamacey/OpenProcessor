@@ -100,6 +100,8 @@ async def export_yolo(
         'image_count': result.image_count,
         'object_count': result.object_count,
         'split_counts': result.split_counts.to_dict(),
+        'class_count': result.class_count,
+        'classes_with_objects': result.classes_with_objects,
         'split_object_counts': result.split_object_counts.to_dict(),
         'require_fully_labeled_images': payload.require_fully_labeled_images,
         'unlabeled_items_on_exported_images': result.unlabeled_items_on_exported_images,
@@ -145,7 +147,12 @@ def _dataset_row(
         'split_counts': meta.get('split_counts'),
         'dataset_sha': meta.get('dataset_sha'),
         'exported_at': meta.get('exported_at') or meta.get('started_at'),
+        # E2: class_count is the registry size written into data.yaml
+        # (nc); classes_with_objects is how many of those actually have a
+        # labeled object in this export -- older manifests written before
+        # this field existed serve null, never a fabricated 0.
         'class_count': meta.get('class_count'),
+        'classes_with_objects': meta.get('classes_with_objects'),
         'is_current': current is not None and str(d) == current,
     }
 
@@ -285,6 +292,9 @@ class ExportStatusResponse(BaseModel):
         default=None, description='Exported objects (label lines) across all images.'
     )
     class_count: int | None = None
+    classes_with_objects: int | None = Field(
+        default=None, description='Of class_count registry classes, how many have >=1 object.'
+    )
     split_counts: ExportSplitCounts | None = Field(default=None, description='Images per split.')
     split_object_counts: ExportSplitCounts | None = Field(
         default=None, description='Objects (label lines) per split.'
@@ -335,6 +345,7 @@ def _status_from_manifest(target: Path, meta: dict[str, Any]) -> ExportStatusRes
         image_count=meta.get('image_count'),
         object_count=meta.get('object_count'),
         class_count=meta.get('class_count'),
+        classes_with_objects=meta.get('classes_with_objects'),
         split_counts=ExportSplitCounts(**split_counts) if isinstance(split_counts, dict) else None,
         split_object_counts=(
             ExportSplitCounts(**split_objects) if isinstance(split_objects, dict) else None

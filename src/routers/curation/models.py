@@ -25,6 +25,7 @@ from fastapi import HTTPException, Query
 from pydantic import BaseModel
 
 from src.clients.pe_encoder import PE_IMAGE_MODEL
+from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
 from src.core.dependencies import AsyncTritonDep  # noqa: TC001
 from src.routers.curation._common import (
@@ -130,6 +131,8 @@ async def curation_health(
     active_profile = get_active_region_profile()
     region_profile = region_profile_summary(active_profile) if active_profile is not None else None
 
+    from src.config import get_curation_config
+
     return HealthResponse(
         status=overall,
         triton=triton_status,
@@ -137,6 +140,7 @@ async def curation_health(
         vlm=vlm_status,
         registry=registry_status,
         region_profile=region_profile,
+        mlflow_public_url=get_curation_config().mlflow_public_url,
     )
 
 
@@ -150,6 +154,33 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
     always-present CLIP + PE encoder entries.
     """
     entries: list[tuple[str, str, str, str]] = []
+    # M2: the primary item proposer and (if configured) the secondary
+    # classifier drive most of the label provenance the labeler shows on
+    # /review and /classes (class_source ending '_proposal' / '_model')
+    # -- they were missing here entirely, so /models showed nothing for
+    # the models that produced most of the labels. Both are resolved
+    # from OP_INGEST_PRIMARY_*/OP_INGEST_SECONDARY_* (ingest_profiles.py),
+    # never hardcoded.
+    primary = ingest_primary_profile()
+    if primary.detector_model:
+        entries.append(
+            (
+                primary.detector_model,
+                'Primary Item Proposer',
+                'Proposes item boxes on ingest (configured via OP_INGEST_PRIMARY_*).',
+                'TensorRT detection',
+            )
+        )
+    secondary = ingest_secondary_profile()
+    if secondary is not None and secondary.detector_model:
+        entries.append(
+            (
+                secondary.detector_model,
+                'Secondary Classifier',
+                'Classifies proposed item boxes (configured via OP_INGEST_SECONDARY_*).',
+                'TensorRT classification',
+            )
+        )
     region = get_active_region_profile()
     if region is not None and region.detector_model:
         entries.append(
@@ -159,6 +190,16 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
                 'Finds the configured region-of-interest (see DetectionProfile) '
                 'inside each item crop.',
                 'TensorRT detection',
+            )
+        )
+    if region is not None and region.segmenter_name:
+        entries.append(
+            (
+                region.segmenter_name,
+                'Segmenter',
+                'Refines/re-detects the region-of-interest box on crops the '
+                'primary detector missed (configured via DetectionProfile.segmenter_name).',
+                'Promptable segmentation',
             )
         )
     if region is not None and region.ocr_det_model:

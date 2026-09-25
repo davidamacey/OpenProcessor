@@ -88,3 +88,20 @@ def test_ingest_status_response_shape_unwraps_the_filtered_buckets(
         {'key_as_string': '2026-09-24', 'doc_count': 5},
         {'key_as_string': '2026-09-23', 'doc_count': 7},
     ]
+
+
+def test_ingest_status_without_run_id_matches_everything(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, fake = _client(monkeypatch, _RESP)
+    r = client.get('/curation/ingest/status')
+    assert r.status_code == 200, r.text
+    assert fake.search.call_args.kwargs['body']['query'] == {'match_all': {}}
+
+
+def test_ingest_status_run_id_scopes_the_query(monkeypatch: pytest.MonkeyPatch) -> None:
+    """BA-4: GET /ingest/status?run_id= filters to that upload run's images."""
+    client, fake = _client(monkeypatch, _RESP)
+    r = client.get('/curation/ingest/status', params={'run_id': 'run-42'})
+    assert r.status_code == 200, r.text
+    assert fake.search.call_args.kwargs['body']['query'] == {'term': {'ingest_run_id': 'run-42'}}

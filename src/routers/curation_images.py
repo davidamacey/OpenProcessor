@@ -6,7 +6,7 @@ Exposes:
 - ``GET {prefix}/images/root/{alias}``          — stream an image from a named source-path alias
 - ``GET {prefix}/images/cache/stats``           — thumbnail cache hit/miss stats
 - ``GET {prefix}/crops/{id}/thumbnail``         — 128px item-crop thumbnail (LRU cached)
-- ``GET {prefix}/crops/{id}/image``             — full source image with bbox overlay(s)
+- ``GET {prefix}/crops/{id}/image``             — clean full source image (no overlay; see K6)
 - ``GET {prefix}/crops/{id}/region_thumbnail``  — region-of-interest sub-bbox thumbnail
 
 Exports **two** routers — ``router`` (images) and ``crops_router``
@@ -27,8 +27,7 @@ from src.core.logging import get_logger
 from src.services.curation.image_serving import (
     THUMBNAIL_CACHE,
     _fetch_crop,
-    render_image_with_bbox,
-    render_image_with_multiple_bboxes,
+    render_source_image,
     resolve_crop_root,
     resolve_safe_path,
     serve_source_image,
@@ -179,48 +178,26 @@ async def crop_full_image(
         ),
     ] = None,
 ) -> Response:
-    """Source image with the item bbox drawn.
+    """The clean source image for this crop's parent frame — no box, label
+    or other overlay drawn (K6). Only resize, EXIF-transpose and RGB
+    conversion apply.
 
     Defaults to full resolution to preserve compatibility with callers
     that need pixel-accurate frames. Pass ``max_dim`` for the labeler
-    review queue, where the user is glancing at one bbox at a time and
-    a sub-MB preview is plenty. If the item also carries a
-    region-of-interest sub-bbox (``RegionFields.bbox_norm``), it is
-    drawn as a second overlay.
+    review queue, where the user is glancing at one item at a time and a
+    sub-MB preview is plenty. The frontend draws the item box, the
+    region box and any rejected-candidate box itself, from the geometry
+    ``GET {prefix}/crops/{id}/context`` serves in source-image-normalized
+    coordinates.
     """
     crop = await _fetch_crop(crop_id, opensearch)
-    bbox_norm = crop.get('bbox_norm')
-    if not bbox_norm or len(bbox_norm) != 4:
-        raise HTTPException(status_code=500, detail='crop has invalid bbox_norm')
-
     image_path = _resolve_image_for_crop(crop)
-    region_bbox = crop.get(get_region_fields().bbox_norm)
 
     try:
-        # If a region-of-interest bbox is also present, draw both for
-        # richer context.
-        if region_bbox and len(region_bbox) == 4:
-            jpeg = await render_image_with_multiple_bboxes(
-                image_path,
-                [
-                    {
-                        'bbox_norm': bbox_norm,
-                        'class_name': crop.get('class_name', 'item'),
-                        'color': (255, 80, 80),
-                    },
-                    {
-                        'bbox_norm': region_bbox,
-                        'class_name': 'region',
-                        'color': (80, 200, 255),
-                    },
-                ],
-                max_dim=max_dim,
-            )
-        else:
-            jpeg = await render_image_with_bbox(image_path, list(bbox_norm), max_dim=max_dim)
+        jpeg = await render_source_image(image_path, max_dim=max_dim)
     except Exception as exc:
         logger.error('crop_full_image_failed', crop_id=crop_id, error=str(exc))
-        raise HTTPException(status_code=500, detail=f'overlay render failed: {exc}') from exc
+        raise HTTPException(status_code=500, detail=f'image render failed: {exc}') from exc
 
     return Response(content=jpeg, media_type='image/jpeg', headers=_IMAGE_CACHE_HEADERS)
 

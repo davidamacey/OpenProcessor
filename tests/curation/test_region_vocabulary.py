@@ -11,6 +11,7 @@ instead.
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE_PATH
@@ -23,10 +24,15 @@ from src.services.curation.review_queries import KNOWN_TABS
 
 @pytest.fixture
 def client() -> Any:
-    from src.routers.curation import router as curation_router
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
     app.include_router(curation_router)
+    # C3: GET /review/tabs now also serves empty_state, which issues a
+    # couple of `count` calls against opensearch.
+    fake = AsyncMock()
+    fake.count = AsyncMock(return_value={'count': 0})
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as c:
         yield c
 

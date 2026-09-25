@@ -17,11 +17,10 @@ module ships no domain-specific class taxonomy or detector weights.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import File, Form, HTTPException, UploadFile
+from fastapi import HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.config import DetectionProfile, RegionStatus, get_region_fields
@@ -33,8 +32,14 @@ from src.routers.curation._common import (
     BatchIngestSummaryResponse as _BatchIngestSummaryResponse,
     ImportLabelsBatchRequest,
     ImportLabelsRequest,
+    IngestBatchConfig,
+    IngestConfigResponse,
     IngestImageRequest,
     IngestImageResponse,
+    IngestRegionDrainConfig,
+    IngestRegionDrainResponse,
+    IngestStatusResponse,
+    IngestUploadConfig,
     OpenSearchDep,
     RegistryDep,
     _ensure_indexes,
@@ -44,6 +49,7 @@ from src.routers.curation._common import (
 )
 from src.services.curation.image_serving import UNSERVABLE_PATH_ERROR, is_servable_image_path
 from src.services.curation.ingest import CurationIngestService
+from src.services.curation.ingest_models import ERROR_KIND_DECODE_FAILED, ERROR_KIND_UNSERVABLE_PATH
 from src.services.curation.label_import import (
     DEFAULT_LABEL_SOURCE,
     count_disagreements,
@@ -151,6 +157,8 @@ async def curation_ingest_image(
         n_crops=result.n_crops,
         n_regions=result.n_region_queued,
         error=result.error,
+        error_kind=result.error_kind,
+        source_identifier=result.source_identifier,
     )
 
 
@@ -171,6 +179,14 @@ async def curation_ingest_batch(
     (one per ``DetectionProfile.batch_limit`` chunk), so a larger batch
     is materially faster than the same images posted one at a time.
     """
+    from src.config import get_curation_config
+
+    max_items = get_curation_config().batch_max_items_per_request
+    if len(body.items) > max_items:
+        raise HTTPException(
+            status_code=413,
+            detail=f'{len(body.items)} items exceeds the per-request limit of {max_items}',
+        )
     await _ensure_indexes(opensearch)
     service = await _get_ingest_service(opensearch, registry)
 
@@ -182,7 +198,23 @@ async def curation_ingest_batch(
         if not is_servable_image_path(item.path):
             failed_early.append(
                 IngestImageResponse(
-                    status='failed', image_path=item.path, error=UNSERVABLE_PATH_ERROR
+                    status='failed',
+                    image_path=item.path,
+                    error=UNSERVABLE_PATH_ERROR,
+                    error_kind=ERROR_KIND_UNSERVABLE_PATH,
+                )
+            )
+            continue
+        if item.label_txt_path is not None and not is_servable_image_path(item.label_txt_path):
+            # BA-5: label_txt_path gets the same root guard as the image
+            # path -- a client-controlled label file path must not escape
+            # the configured source roots either.
+            failed_early.append(
+                IngestImageResponse(
+                    status='failed',
+                    image_path=item.path,
+                    error=f'label_txt_path {item.label_txt_path!r}: {UNSERVABLE_PATH_ERROR}',
+                    error_kind=ERROR_KIND_UNSERVABLE_PATH,
                 )
             )
             continue
@@ -192,7 +224,12 @@ async def curation_ingest_batch(
             label_paths.append(item.label_txt_path)
         except OSError as exc:
             failed_early.append(
-                IngestImageResponse(status='failed', image_path=item.path, error=str(exc))
+                IngestImageResponse(
+                    status='failed',
+                    image_path=item.path,
+                    error=str(exc),
+                    error_kind=ERROR_KIND_DECODE_FAILED,
+                )
             )
 
     # The service stamps one source per call; honour the per-item tag when
@@ -230,6 +267,8 @@ def _batch_response(
                 n_crops=r.n_crops,
                 n_regions=r.n_region_queued,
                 error=r.error,
+                error_kind=r.error_kind,
+                source_identifier=r.source_identifier,
             )
             for r in batch_result.results
         )
@@ -254,87 +293,6 @@ def _batch_response(
         results=results,
         disagreements=list(batch_result.disagreements) if batch_result is not None else [],
     )
-
-
-MAX_UPLOAD_IMAGES = 128
-
-
-def _parse_upload_paths(image_paths: str | None, uploads: list[UploadFile]) -> list[str]:
-    if image_paths is None or not image_paths.strip():
-        return [u.filename or f'upload_{i}' for i, u in enumerate(uploads)]
-    try:
-        paths = json.loads(image_paths)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=422, detail=f'image_paths is not JSON: {exc}') from None
-    if not isinstance(paths, list) or not all(isinstance(p, str) and p for p in paths):
-        raise HTTPException(status_code=422, detail='image_paths must be a JSON list of strings')
-    if len(paths) != len(uploads):
-        raise HTTPException(
-            status_code=422,
-            detail=f'image_paths has {len(paths)} entries but {len(uploads)} images were sent',
-        )
-    return paths
-
-
-@router.post('/ingest/upload', response_model=_BatchIngestResponse)
-async def curation_ingest_upload(
-    images: Annotated[list[UploadFile], File(description='Encoded image files (JPEG/PNG)')],
-    opensearch: OpenSearchDep,
-    registry: RegistryDep,
-    image_paths: Annotated[
-        str | None,
-        Form(
-            description=(
-                'JSON list of stable identifiers, one per image, stored as image_path '
-                '(default: the upload filenames). Need not exist on the server.'
-            )
-        ),
-    ] = None,
-    source: Annotated[str, Form(description='Provenance tag for every image')] = 'upload',
-) -> _BatchIngestResponse:
-    """Ingest a batch of images sent as bytes (multipart), not server-side paths.
-
-    For storage the API container cannot mount (a laptop, a remote NAS, a
-    high-latency share): the client reads the files and uploads them.
-    ``image_paths`` are identifiers, recorded verbatim — keep them stable
-    across runs so ``/ingest/path_lookup`` can pre-filter a re-scan.
-
-    Resume is server-side content dedup: every image is fingerprinted
-    (imohash over the uploaded bytes) and one already in the images index
-    comes back as ``duplicate`` without re-running inference, so a
-    crashed upload run can simply be restarted. The whole-frame embedding
-    is computed from the uploaded bytes, not by re-opening the path.
-    """
-    if not images:
-        raise HTTPException(status_code=422, detail='no images uploaded')
-    if len(images) > MAX_UPLOAD_IMAGES:
-        raise HTTPException(
-            status_code=413,
-            detail=f'{len(images)} images exceeds the per-request limit of {MAX_UPLOAD_IMAGES}',
-        )
-    paths = _parse_upload_paths(image_paths, images)
-    await _ensure_indexes(opensearch)
-    service = await _get_ingest_service(opensearch, registry)
-
-    data: list[bytes] = []
-    kept_paths: list[str] = []
-    failed_early: list[IngestImageResponse] = []
-    for upload, path in zip(images, paths, strict=True):
-        payload = await upload.read()
-        if not payload:
-            failed_early.append(
-                IngestImageResponse(status='failed', image_path=path, error='empty upload')
-            )
-            continue
-        data.append(payload)
-        kept_paths.append(path)
-
-    batch_result = (
-        await service.ingest_batch(data, kept_paths, source=source, whole_frame_from_bytes=True)
-        if data
-        else None
-    )
-    return _batch_response(batch_result, failed_early)
 
 
 @router.post('/import_labels')
@@ -388,13 +346,28 @@ async def curation_import_labels_batch(
     return summary
 
 
-@router.get('/ingest/status')
-async def ingest_status(opensearch: OpenSearchDep) -> dict[str, Any]:
-    """Recent ingest summary — counts grouped by source."""
+@router.get('/ingest/status', response_model=IngestStatusResponse)
+async def ingest_status(
+    opensearch: OpenSearchDep,
+    run_id: Annotated[
+        str | None,
+        Query(description='BA-4: scope counts to one POST /ingest/upload run_id.'),
+    ] = None,
+) -> IngestStatusResponse:
+    """Recent ingest summary — counts grouped by source.
+
+    ``run_id`` scopes ``total``/``by_source``/``by_day`` to images carrying
+    that ``ingest_run_id`` (BA-4) -- an upload run's own images doc field,
+    set by ``POST /ingest/upload``'s optional ``run_id`` form field.
+    """
     await _ensure_indexes(opensearch)
+    query: dict[str, Any] = (
+        {'term': {'ingest_run_id': run_id}} if run_id is not None else {'match_all': {}}
+    )
     body = {
         'size': 0,
         'track_total_hits': True,
+        'query': query,
         'aggs': {
             'by_source': {
                 'terms': {'field': 'source', 'size': 64},
@@ -423,34 +396,80 @@ async def ingest_status(opensearch: OpenSearchDep) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
     aggs = resp.get('aggregations') or {}
-    return {
-        'total': total,
-        'by_source': (aggs.get('by_source') or {}).get('buckets', []),
-        'by_day': ((aggs.get('by_day') or {}).get('days') or {}).get('buckets', []),
-    }
+    return IngestStatusResponse(
+        total=total,
+        by_source=(aggs.get('by_source') or {}).get('buckets', []),
+        by_day=((aggs.get('by_day') or {}).get('days') or {}).get('buckets', []),
+    )
 
 
-@router.get('/ingest/region_drain')
-async def ingest_region_drain(opensearch: OpenSearchDep) -> dict[str, int]:
+@router.get('/ingest/config', response_model=IngestConfigResponse)
+async def ingest_config() -> IngestConfigResponse:
+    """Typed ingest capability + limits (BA-2).
+
+    ``upload``/``batch``/``region_drain`` are all real config, not
+    hardcoded client-side constants: ``upload.max_images_per_request`` /
+    ``max_bytes_per_request`` / ``accepted_extensions`` are enforced (413 /
+    per-item ``unsupported_type``) by ``POST /ingest/upload``;
+    ``batch.max_items`` is enforced by ``POST /ingest/batch``;
+    ``region_drain.*`` are the parameters ``GET /ingest/region_drain``'s
+    stability verdict uses.
+    """
+    from src.config import get_curation_config
+    from src.services.curation.image_serving import _configured_roots
+    from src.services.curation.region_drain import (
+        region_drain_poll_interval_s,
+        region_drain_stable_polls,
+    )
+
+    cfg = get_curation_config()
+    return IngestConfigResponse(
+        upload=IngestUploadConfig(
+            max_images_per_request=cfg.upload_max_images_per_request,
+            max_bytes_per_request=cfg.upload_max_bytes_per_request,
+            accepted_extensions=list(cfg.upload_accepted_extensions),
+            persists_bytes=True,
+        ),
+        batch=IngestBatchConfig(
+            max_items=cfg.batch_max_items_per_request,
+            source_roots=[str(r) for r in _configured_roots(cfg)],
+        ),
+        region_drain=IngestRegionDrainConfig(
+            poll_interval_s=region_drain_poll_interval_s(),
+            stable_polls=region_drain_stable_polls(),
+        ),
+    )
+
+
+@router.get('/ingest/region_drain', response_model=IngestRegionDrainResponse)
+async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainResponse:
     """Region-detection worklog: how many items are still waiting for the
     detection worker.
 
     Used by an ingest walker to decide when the asynchronous
     detect-then-verify chain has caught up after a folder finishes, before
     triggering ``/curation/pipeline/auto_label``. The walker polls this
-    endpoint every ~10s and proceeds when ``total_unfinished`` reaches 0
-    (with a stability window).
+    endpoint every ``region_drain.poll_interval_s`` (``GET /ingest/config``)
+    and proceeds once ``drained`` is true (BA-3) -- computed server-side
+    now, not invented client-side from ``total_unfinished == 0``.
 
     Returns:
     * ``pending_detection``    — items the detection worker hasn't reached
                                   yet (region status == 'pending_detection').
     * ``pending_verification`` — items where the detector found a
                                   candidate and the verify step is queued.
-    * ``total_unfinished``     — sum of the two; what the walker polls.
+    * ``total_unfinished``     — sum of the two; what a legacy walker polled.
+    * ``drained``              — true once ``total_unfinished`` has read 0
+                                  for ``region_drain.stable_polls`` consecutive
+                                  polls of this endpoint.
+    * ``stable_for_s``         — seconds since the last non-zero reading.
+    * ``observed_at``          — this poll's timestamp.
 
     Re-ingested data can never carry the retired ``'pending'`` /
     ``'pending_verify'`` short names (S5), so there is no legacy rollup.
     """
+    from src.services.curation.region_drain import observe_drain
+
     await _ensure_indexes(opensearch)
     fields = get_region_fields()
     body = {
@@ -472,11 +491,16 @@ async def ingest_region_drain(opensearch: OpenSearchDep) -> dict[str, int]:
         raw[bucket.get('key', '')] = int(bucket.get('doc_count', 0))
     pending_detection = raw.get(RegionStatus.PENDING_DETECTION, 0)
     pending_verification = raw.get(RegionStatus.PENDING_VERIFICATION, 0)
-    return {
-        'pending_detection': pending_detection,
-        'pending_verification': pending_verification,
-        'total_unfinished': pending_detection + pending_verification,
-    }
+    total_unfinished = pending_detection + pending_verification
+    verdict = observe_drain(total_unfinished)
+    return IngestRegionDrainResponse(
+        pending_detection=pending_detection,
+        pending_verification=pending_verification,
+        total_unfinished=total_unfinished,
+        drained=verdict.drained,
+        stable_for_s=verdict.stable_for_s,
+        observed_at=verdict.observed_at,
+    )
 
 
 @router.post(
@@ -491,8 +515,11 @@ async def curation_ingest_path_lookup(
     """Filter a list of paths down to those already ingested.
 
     Used by an ingest walker to short-circuit the read+hash work for
-    re-scans of immutable archive media. Safe because ingest writes
-    image_path verbatim and image_path is mapped as keyword on the
+    re-scans of immutable archive media. Matches on ``image_path`` OR
+    ``source_identifier`` (BA-1): a byte-upload ingest's client identifier
+    is recorded as ``source_identifier`` now that ``image_path`` is the
+    server-persisted path, so a re-scan driver that only knows its own
+    identifiers still gets a hit. Both fields are mapped keyword on the
     images index.
     """
     if not body.image_paths:
@@ -508,14 +535,30 @@ async def curation_ingest_path_lookup(
             index=CURATION_IMAGES_INDEX,
             body={
                 'size': len(chunk),
-                '_source': ['image_id', 'image_path'],
-                'query': {'terms': {'image_path': chunk}},
+                '_source': ['image_id', 'image_path', 'source_identifier'],
+                'query': {
+                    'bool': {
+                        'should': [
+                            {'terms': {'image_path': chunk}},
+                            {'terms': {'source_identifier': chunk}},
+                        ],
+                        'minimum_should_match': 1,
+                    }
+                },
             },
         )
+        chunk_set = set(chunk)
         for hit in resp.get('hits', {}).get('hits', []):
             src = hit.get('_source') or {}
-            p = src.get('image_path')
             iid = src.get('image_id')
-            if p and iid:
-                result[p] = iid
+            if not iid:
+                continue
+            # Key the result by whichever of the two fields is one of the
+            # requested paths -- a doc found via source_identifier keys
+            # under that identifier, not the (unrelated to the caller)
+            # persisted image_path.
+            for field in ('image_path', 'source_identifier'):
+                p = src.get(field)
+                if p and p in chunk_set:
+                    result[p] = iid
     return _PathLookupResponse(known_paths=result)
