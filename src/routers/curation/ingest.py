@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.config import DetectionProfile, RegionStatus, get_region_fields
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
@@ -74,7 +74,15 @@ class IngestBatchItem(IngestImageRequest):
 
 
 class IngestBatchRequest(BaseModel):
-    items: list[IngestBatchItem] = Field(default_factory=list)
+    # F-22: extra='forbid' + a required, non-empty items list. Previously a
+    # body with a wrong key (e.g. {'paths': [...]}) validated fine with
+    # items defaulting to [] and the endpoint returned 200 status=success
+    # with all-zero counts -- a silent no-op indistinguishable from "ingested
+    # an empty batch on purpose". Both a stale key and a missing/empty
+    # items list now 422 instead.
+    model_config = ConfigDict(extra='forbid')
+
+    items: list[IngestBatchItem] = Field(..., min_length=1)
     label_source: str = Field(
         default=DEFAULT_LABEL_SOURCE,
         description='label_source recorded on labels imported from label_txt_path',

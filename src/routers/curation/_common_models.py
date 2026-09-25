@@ -27,6 +27,11 @@ from src.services.curation.label_import import DEFAULT_LABEL_SOURCE as _DEFAULT_
 
 
 class IngestImageRequest(BaseModel):
+    # F-22: extra='forbid' so a wrong-key body (e.g. {'paths': [...]} instead
+    # of the real field) 422s instead of silently validating to defaults and
+    # ingesting nothing. Subclasses (IngestBatchItem) inherit this.
+    model_config = ConfigDict(extra='forbid')
+
     path: str = Field(..., description='Absolute path to a JPEG on a mounted volume')
     source: str = Field(default='unknown', description='Source tag (e.g. hdd01, dataset_a)')
 
@@ -73,6 +78,8 @@ class BatchIngestResponse(BaseModel):
 
 
 class ImportLabelsRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
     image_path: str
     label_txt_path: str
     # Defaulted from the label importer so the public API carries no
@@ -82,7 +89,9 @@ class ImportLabelsRequest(BaseModel):
 
 
 class ImportLabelsBatchRequest(BaseModel):
-    items: list[ImportLabelsRequest]
+    model_config = ConfigDict(extra='forbid')
+
+    items: list[ImportLabelsRequest] = Field(..., min_length=1)
 
 
 class CropLabelRequest(BaseModel):

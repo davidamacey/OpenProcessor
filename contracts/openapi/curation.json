@@ -2018,12 +2018,14 @@
         "type": "object"
       },
       "CropRegionUndoBatchRequest": {
+        "additionalProperties": false,
         "description": "Undo the most recent human region write on each crop.",
         "properties": {
           "crop_ids": {
             "items": {
               "type": "string"
             },
+            "minItems": 1,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -3205,11 +3207,13 @@
         "type": "object"
       },
       "ImportLabelsBatchRequest": {
+        "additionalProperties": false,
         "properties": {
           "items": {
             "items": {
               "$ref": "#/components/schemas/ImportLabelsRequest"
             },
+            "minItems": 1,
             "title": "Items",
             "type": "array"
           }
@@ -3221,6 +3225,7 @@
         "type": "object"
       },
       "ImportLabelsRequest": {
+        "additionalProperties": false,
         "properties": {
           "detect_mismatches": {
             "default": false,
@@ -3275,6 +3280,7 @@
         "type": "object"
       },
       "IngestBatchItem": {
+        "additionalProperties": false,
         "description": "One batch entry: an image, and optionally its ground-truth labels.\n\n``label_txt_path`` is what makes an \"ingest an already-labeled\ndataset and compare the detector against ground truth\" pass a single\ncall instead of an ingest followed by a second\n``POST /import_labels/batch`` round trip.",
         "properties": {
           "label_txt_path": {
@@ -3308,6 +3314,7 @@
         "type": "object"
       },
       "IngestBatchRequest": {
+        "additionalProperties": false,
         "properties": {
           "detect_mismatches": {
             "default": false,
@@ -3319,6 +3326,7 @@
             "items": {
               "$ref": "#/components/schemas/IngestBatchItem"
             },
+            "minItems": 1,
             "title": "Items",
             "type": "array"
           },
@@ -3329,6 +3337,9 @@
             "type": "string"
           }
         },
+        "required": [
+          "items"
+        ],
         "title": "IngestBatchRequest",
         "type": "object"
       },
@@ -3353,6 +3364,7 @@
         "type": "object"
       },
       "IngestImageRequest": {
+        "additionalProperties": false,
         "properties": {
           "path": {
             "description": "Absolute path to a JPEG on a mounted volume",
@@ -7988,12 +8000,14 @@
         "type": "object"
       },
       "VlmLabelBatchRequest": {
+        "additionalProperties": false,
         "properties": {
           "crop_ids": {
             "items": {
               "type": "string"
             },
             "maxItems": 5000,
+            "minItems": 1,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -8024,12 +8038,14 @@
         "type": "object"
       },
       "VlmRegionVisibleBatchRequest": {
+        "additionalProperties": false,
         "description": "Request body for ``POST /curation/vlm/region_visible_batch``.",
         "properties": {
           "items": {
             "items": {
               "$ref": "#/components/schemas/VlmRegionVisibleBatchItem"
             },
+            "minItems": 1,
             "title": "Items",
             "type": "array"
           }
@@ -8090,12 +8106,14 @@
         "type": "object"
       },
       "VlmVerifyRegionBatchRequest": {
+        "additionalProperties": false,
         "description": "Request body for ``POST /curation/vlm/verify_region_batch``.",
         "properties": {
           "items": {
             "items": {
               "$ref": "#/components/schemas/VlmVerifyRegionBatchItem"
             },
+            "minItems": 1,
             "title": "Items",
             "type": "array"
           }
@@ -8163,12 +8181,14 @@
         "type": "object"
       },
       "VlmVerifyRegionsRequest": {
+        "additionalProperties": false,
         "properties": {
           "crop_ids": {
             "items": {
               "type": "string"
             },
             "maxItems": 5000,
+            "minItems": 1,
             "title": "Crop Ids",
             "type": "array"
           }
