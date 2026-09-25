@@ -518,14 +518,14 @@ export_all_models() {
 export_essential_models() {
     print_header "TensorRT Export (Essential Models)"
 
-    log_info "Exporting essential models only (no OCR)"
+    log_info "Exporting essential models only (no OCR; Triton skips the missing OCR models)"
     log_info "Estimated time: 25-35 minutes"
     echo ""
 
     unload_models_for_export
 
     local failed=0
-    local total=5
+    local total=6
     local export_start step_start elapsed
     export_start=$SECONDS
 
@@ -570,6 +570,15 @@ export_essential_models() {
     if export_mobileclip_text; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
     elapsed=$((SECONDS - step_start))
     model_names+=("MobileCLIP text encoder")
+    model_times+=("$elapsed")
+    log_info "  Elapsed: $(format_elapsed $elapsed)"
+
+    # PE-Core backs curation ingest embeddings, search and item scores.
+    log_step "Exporting model 6/$total: PE-Core image encoder"
+    step_start=$SECONDS
+    if export_pe; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
+    elapsed=$((SECONDS - step_start))
+    model_names+=("PE-Core image encoder")
     model_times+=("$elapsed")
     log_info "  Elapsed: $(format_elapsed $elapsed)"
 

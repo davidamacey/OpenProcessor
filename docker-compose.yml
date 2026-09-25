@@ -26,6 +26,11 @@ services:
       - --backend-config=default-max-batch-size=128
       - --strict-model-config=false
       - --model-control-mode=explicit
+      # Serve whatever exported: a missing/failed engine (e.g. the minimal
+      # setup profile skips OCR) leaves that model unloaded instead of
+      # killing the server. The API reports per-model status.
+      - --exit-on-error=false
+      - --strict-readiness=false
       # ===================================================================
       # Visual Search Models
       # ===================================================================
@@ -53,7 +58,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: [ '0' ]
+              device_ids: [ '${TRITON_GPU_ID:-0}' ]
               capabilities:
                 - gpu
     networks:
@@ -625,11 +630,10 @@ services:
   # VLM_LIMIT_MM_IMAGES below defaults to the same 8 as
   # OP_VLM_MAX_IMAGES_PER_CALL's default.
   vlm:
-    # Pin, don't float on :latest -- an untested vLLM bump can silently
-    # change chat-template / tool-call-parser behavior. Confirm this tag
-    # supports Gemma 4's multimodal (image) input for your GPU/CUDA combo
-    # before relying on it; see vLLM's release notes.
-    image: ${VLM_IMAGE:-vllm/vllm-openai:v0.11.0}
+    # Pinned by digest to the Gemma 4 build this stack is tested against
+    # (the gemma4 chat template + reasoning parser below ship in it). An
+    # untested vLLM bump can silently change chat-template / parser behavior.
+    image: ${VLM_IMAGE:-vllm/vllm-openai:gemma4-cu130@sha256:0d152595cd940ea1e0890fa190a37b7a86e3f7f0f5048ac3e2e4c14529fea833}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-vlm
     profiles:
       - vlm
