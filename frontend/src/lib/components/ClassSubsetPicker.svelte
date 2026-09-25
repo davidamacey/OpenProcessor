@@ -5,7 +5,7 @@
    * Owns its UI state (search query, expanded/collapsed); the parent
    * binds `selected` (set of class_ids) and `singleCls`.
    */
-  import type { RegistryClass } from '$lib/types';
+  import type { RegistryClass, TestHoldoutStats } from '$lib/types';
   import type { ClassSubsetPreset } from '$lib/types_train';
 
   interface Props {
@@ -16,6 +16,15 @@
     singleCls: boolean;
     setSingleCls: (v: boolean) => void;
     presets?: ClassSubsetPreset[];
+    /**
+     * `GET {API_PREFIX}/test_holdout/stats`, or `null` while it hasn't
+     * loaded / isn't available. `validated_count` on a class includes
+     * its held-out test crops — training never sees those — so the
+     * summary shows the holdout figure served here *alongside*
+     * `validated_count`, never subtracted client-side. No holdout data
+     * ⇒ just the validated count, same as before this landed.
+     */
+    holdout?: TestHoldoutStats | null;
   }
 
   let {
@@ -25,6 +34,7 @@
     singleCls,
     setSingleCls,
     presets = [],
+    holdout = null,
   }: Props = $props();
 
   let expanded = $state<boolean>(false);
@@ -58,6 +68,22 @@
     const sel = new Set(effectiveIds);
     for (const c of allClasses) {
       if (sel.has(c.id)) n += c.validated_count ?? 0;
+    }
+    return n;
+  });
+
+  /** Sum of `holdout.by_class[*].doc_count` for the selected classes —
+   *  `validated_count` includes these, so showing them side by side
+   *  (never subtracted here) tells the operator how many of the
+   *  "validated" crops training will actually never see. `null` when
+   *  the stats haven't loaded/aren't available — the summary omits the
+   *  holdout clause entirely rather than guessing a count. */
+  const totalHeldOut = $derived.by(() => {
+    if (!holdout) return null;
+    const sel = new Set(effectiveIds);
+    let n = 0;
+    for (const b of holdout.by_class) {
+      if (sel.has(b.key)) n += b.doc_count;
     }
     return n;
   });
@@ -115,12 +141,20 @@
 
   // Compact summary for the header. Shown whether expanded or not so
   // the user knows their selection without unfolding the picker.
+  // `validated_count` counts test-holdout crops too (training never
+  // trains on those), so the served holdout total — never subtracted,
+  // just shown alongside — is appended whenever it's loaded.
+  const holdoutClause = $derived(
+    totalHeldOut != null && totalHeldOut > 0
+      ? ` (${totalHeldOut.toLocaleString()} held out for test)`
+      : '',
+  );
   const summary = $derived.by(() => {
     if (allMode) {
-      return `All ${allClasses.length} classes · ${totalValidated.toLocaleString()} validated crops`;
+      return `All ${allClasses.length} classes · ${totalValidated.toLocaleString()} validated crops${holdoutClause}`;
     }
     const n = selected?.length ?? 0;
-    return `${n} class${n === 1 ? '' : 'es'} selected · ${totalValidated.toLocaleString()} validated crops`;
+    return `${n} class${n === 1 ? '' : 'es'} selected · ${totalValidated.toLocaleString()} validated crops${holdoutClause}`;
   });
 </script>
 

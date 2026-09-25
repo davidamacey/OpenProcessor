@@ -209,7 +209,7 @@
   <header
     class="flex h-12 shrink-0 items-center gap-4 border-b border-zinc-800 bg-zinc-950 px-4"
   >
-    <div class="flex items-center gap-2 text-sm font-semibold tracking-tight">
+    <div class="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight">
       <button
         type="button"
         class="flex shrink-0 items-center justify-center rounded border border-zinc-700 transition-transform duration-150 hover:scale-110 hover:border-zinc-500"
@@ -238,14 +238,17 @@
 
     <AboutModal open={aboutOpen} onclose={() => (aboutOpen = false)} {appName} />
 
-    <nav class="flex items-center gap-1 text-sm" aria-label="Breadcrumb">
+    <nav
+      class="flex min-w-0 shrink items-center gap-1 overflow-x-auto whitespace-nowrap text-sm"
+      aria-label="Breadcrumb"
+    >
       {#each crumbs as c, i (c.href)}
         {#if i > 0}
-          <span class="text-zinc-600">/</span>
+          <span class="shrink-0 text-zinc-600">/</span>
         {/if}
         <a
           href={c.href}
-          class="rounded px-1.5 py-0.5 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+          class="shrink-0 rounded px-1.5 py-0.5 text-zinc-300 hover:bg-zinc-900 hover:text-white"
           aria-current={i === crumbs.length - 1 ? 'page' : undefined}
         >
           {c.label}
@@ -255,22 +258,31 @@
 
     <span class="grow"></span>
 
-    <nav class="flex items-center gap-3 text-sm text-zinc-300">
-      <a href="/dashboard" class="hover:text-white">Dashboard</a>
-      <a href="/clusters" class="hover:text-white">Clusters</a>
-      <a href="/review" class="hover:text-white">Review</a>
-      <a href="/classes" class="hover:text-white">Classes</a>
-      <a href="/export" class="hover:text-white">Export</a>
-      <a href="/models" class="hover:text-white">Models</a>
-      <a href="/train" class="hover:text-white">Train</a>
+    <!-- Narrow widths (~800px and below): this used to be a plain
+         `flex` row with no shrink/overflow control, so "Bake-off"
+         wrapped onto two lines and pushed the "API OK" chip past the
+         viewport edge (clipped, and forcing horizontal page overflow).
+         Scrolls horizontally within its own box instead of ever
+         wrapping link text or growing past its flex slot. -->
+    <nav
+      class="flex min-w-0 shrink items-center gap-3 overflow-x-auto whitespace-nowrap text-sm text-zinc-300"
+      aria-label="Primary"
+    >
+      <a href="/dashboard" class="shrink-0 hover:text-white">Dashboard</a>
+      <a href="/clusters" class="shrink-0 hover:text-white">Clusters</a>
+      <a href="/review" class="shrink-0 hover:text-white">Review</a>
+      <a href="/classes" class="shrink-0 hover:text-white">Classes</a>
+      <a href="/export" class="shrink-0 hover:text-white">Export</a>
+      <a href="/models" class="shrink-0 hover:text-white">Models</a>
+      <a href="/train" class="shrink-0 hover:text-white">Train</a>
       {#if bakeoffAvailability.available !== false}
-        <a href="/bakeoff" class="hover:text-white">Bake-off</a>
+        <a href="/bakeoff" class="shrink-0 hover:text-white">Bake-off</a>
       {/if}
-      <a href="/settings" class="hover:text-white">Settings</a>
+      <a href="/settings" class="shrink-0 hover:text-white">Settings</a>
     </nav>
 
     <span
-      class="chip gap-1.5 rounded-full border-zinc-700 bg-zinc-900 text-zinc-300"
+      class="chip shrink-0 gap-1.5 rounded-full border-zinc-700 bg-zinc-900 text-zinc-300"
       title={dotTitle}
     >
       <span class="h-2 w-2 rounded-full {dotClass}"></span>

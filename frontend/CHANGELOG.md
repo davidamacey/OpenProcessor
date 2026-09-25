@@ -8,6 +8,76 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`/train` visual/UX pass + live-tier full-page screenshots.**
+  - Confusion matrix (`RunResults.svelte`) was rendering at full panel
+    width (~1094×821 at 1600px), dwarfing the past-runs table. Now a
+    bounded thumbnail (`max-h-64 object-contain`, click to enlarge) that
+    opens a full-size lightbox (same `trapFocus`/`focusOnMount` modal
+    pattern as `EmbeddingPlot`'s enlarged preview and
+    `CropDetailModal`) — Esc or the close button dismisses it.
+  - `RunResults`' `best_metric`/`last_metric` blocks were both labelled
+    generically under "Metrics — validation". Relabelled per a live
+    review: `best_metric` (a per-key max — mAP50 and mAP50-95 can come
+    from different epochs) is now "best per metric (val, may span
+    epochs)"; `last_metric` (actually the best checkpoint's own final
+    validation pass, since Ultralytics re-fires `on_fit_epoch_end` for
+    `best.pt`, not "the last training epoch") is now "best checkpoint
+    (final val)". `val_last` keeps its existing "validation (last
+    epoch)" label.
+  - `/train`'s past-runs table "Best mAP50" column always showed
+    `best_metric.map50` (a val figure) even for a run whose own `eval`
+    already reports a real test-split number (`eval.split === 'test'`)
+    — a served 0.917 test mAP50 sat unused next to a 0.995 val number
+    shown as the headline. The column (now labelled just "mAP50", with
+    a tooltip) picks the served test-split figure when the run reports
+    one, else falls back to best val, and tags each cell "test" or
+    "best val" (`$lib/trainRunsTable.ts`'s pure `bestMapDisplay`).
+  - The class-subset picker's "3 classes selected · 104 validated
+    crops" summary counted test-holdout crops training never sees (89
+    of the 104 were actually trainable, 15 held out). `ClassSubsetPicker`
+    now takes an optional `holdout` prop (`GET
+{API_PREFIX}/test_holdout/stats`, fetched by `/train/+page.svelte`
+    the same way `/export` already does) and appends "(N held out for
+    test)" alongside — never subtracted from — the validated count,
+    summed only over the served `by_class` counts for the selected
+    classes. Omitted entirely when the stats haven't loaded or the
+    selection's holdout total is 0.
+  - The training-cohort chip section listed every class with 8 chips
+    each, almost all showing 0 — a wall of zeros dominating the section
+    above the past-runs table. A class now collapses into a "N classes
+    with no candidates" disclosure only once every one of its cohorts
+    has SERVED a count of exactly 0 (`$lib/trainCohortGroups.ts`'s pure
+    `splitCohortGroups`/`isAllZeroLoaded`) — a class still loading (lazy
+    IntersectionObserver hasn't fired, or a fetch failed) always stays
+    in the normal list, never guessed into the zero bucket.
+  - Top nav (`+layout.svelte`): at ≤800px the primary nav wrapped
+    "Bake-off" onto two lines and pushed/clipped the "API OK" status
+    chip past the viewport edge, causing real horizontal page overflow.
+    The primary nav is now its own horizontally-scrolling strip
+    (`overflow-x-auto whitespace-nowrap`, every link `shrink-0`), and
+    the status chip is pinned `shrink-0` so it's never squeezed.
+    Verified via a local `npm run build` + `vite preview` check (no
+    overflow at 800px on `/dashboard`, `/train`, `/clusters`,
+    `/settings`, `/bakeoff` post-fix — see PR discussion; the deployed
+    container wasn't rebuilt as part of this change, so the live-tier
+    run below still shows the pre-fix overflow against today's
+    deployment).
+  - Confirmed the `/train` class-subset presets ("All vehicles / Plates
+    only / …") are unchanged: still entirely backend-served from `GET
+{API_PREFIX}/train/presets` (`ClassSubsetPicker`'s `presets` prop),
+    no hardcoded preset list on the frontend.
+  - `e2e/live/test_route_sweep.py` now saves a full-page screenshot for
+    every route at both 1600×1000 and 800×1000, unconditionally (not
+    only on failure), under
+    `artifacts_local/cw-live/live-tier/<run-timestamp>/<route-slug>-
+<width>.png` (`screenshot_run_dir`, a new session-scoped fixture in
+    `e2e/live/conftest.py`). The narrow-viewport pass also asserts
+    `document.documentElement.scrollWidth <= window.innerWidth + 1` —
+    this is what caught the nav overflow above. CLAUDE.md's live-tier
+    section now documents that these screenshots must actually be
+    opened and visually reviewed after every run — they are not
+    self-checking.
+
 - **`/train` finished-run Results view.** A live train smoke (job
   `2026-09-24T23-47-55_yolo26n`) found that the backend already serves
   test-split evaluation (`GET {API_PREFIX}/train/status/{id}`'s `eval`)

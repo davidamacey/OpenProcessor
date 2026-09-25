@@ -15,6 +15,7 @@
   import ClassSubsetPicker from './ClassSubsetPicker.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { defaultGpuValue, getTrainGpus, type TrainGpuOptionsResponse } from '$lib/api';
+  import type { TestHoldoutStats } from '$lib/types';
   import type {
     AugmentationSpec,
     CampaignRunSpec,
@@ -32,6 +33,9 @@
     datasetExportDir: string;
     profiles: Profile[];
     presets: ClassSubsetPreset[];
+    /** `GET {API_PREFIX}/test_holdout/stats`, or `null` while unloaded/
+     *  unavailable — passed straight through to `ClassSubsetPicker`. */
+    holdout?: TestHoldoutStats | null;
     /** Live preflight result rendered inline; null while none has run. */
     preflight: PreflightReport | null;
     preflighting: boolean;
@@ -54,6 +58,7 @@
     datasetExportDir,
     profiles,
     presets,
+    holdout = null,
     preflight,
     preflighting,
     starting,
@@ -396,6 +401,7 @@
       {singleCls}
       setSingleCls={(v) => (singleCls = v)}
       {presets}
+      {holdout}
     />
   {/if}
 

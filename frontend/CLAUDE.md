@@ -1029,10 +1029,36 @@ machine, see that fixture's docstring), sets an explicit 1280×720
 viewport, and explicit navigation/action timeouts. Tests use
 `wait_until="domcontentloaded"` plus a concrete `wait_for_selector`/
 `wait_for_function`, never `wait_until="load"` or a fixed sleep.
-Screenshots are captured only on failure, under
-`artifacts_local/cw-live/live-tier/` (gitignored) — wired via
-pytest-playwright's own `--screenshot=only-on-failure --output=...`
-flags in `scripts/run-e2e.mjs` when the target is `e2e/live`.
+A failing test's own screenshot is captured via pytest-playwright's
+`--screenshot=only-on-failure --output=...` flags (`scripts/run-e2e.mjs`
+when the target is `e2e/live`), landing directly under
+`artifacts_local/cw-live/live-tier/` (gitignored).
+
+**Full-page route screenshots (2026-09-24 visual-review follow-up),
+always, not just on failure.** `test_route_sweep.py` additionally saves
+one full-page PNG per route at each of two viewports — desktop
+(1600×1000) and narrow (800×1000) — under
+`artifacts_local/cw-live/live-tier/<run-timestamp>/<route-slug>-
+<width>.png` (`screenshot_run_dir`, a session-scoped fixture in
+`e2e/live/conftest.py` that timestamps one directory per test-session
+run). **These screenshots are not self-checking — a human (or an agent
+acting on the user's behalf) MUST actually open a representative sample
+of them with an image-reading tool after every live-tier run and look at
+them.** The sweep's assertions (no `pageerror`, no bad response, no
+`NaN`/`undefined`, no broken image, no narrow-viewport overflow) catch
+what's mechanically checkable; they do not catch a confusion-matrix image
+rendering at full panel width, a wrapped nav link, a clipped status chip,
+or any other layout regression that only shows up to the eye. Treat a
+live-tier run that skipped this review step as incomplete.
+
+While at the narrow (800px) viewport, the sweep also asserts
+`document.documentElement.scrollWidth <= window.innerWidth + 1` — no
+horizontal page overflow. (This caught and drove the fix for the top
+nav wrapping "Bake-off" onto two lines and clipping the "API OK" chip
+past the viewport edge at ≤800px — `src/routes/+layout.svelte`'s primary
+nav is now its own horizontally-scrolling strip, `overflow-x-auto
+whitespace-nowrap`, with every link `shrink-0` and the status chip
+pinned `shrink-0` so it's never squeezed.)
 
 Three test modules, 21 tests total against this deployment's live
 dataset:
@@ -1049,7 +1075,9 @@ dataset:
   no literal `"NaN"`/`"undefined"` in the rendered body text; every
   `<img>` whose bounding box intersects the 1280×720 viewport finishes
   loading (`naturalWidth > 0`) — an offscreen lazy image is allowed to
-  still be pending.
+  still be pending; no horizontal overflow at the narrow 800px viewport
+  (see above). Also saves the always-on desktop/narrow screenshots
+  described above.
 - **`test_data_agreement.py`** — the UI shows what the API serves:
   the dashboard's "Clusters (total now)" vs `GET {API_PREFIX}/stats/
 dataset` `clusters.cluster_count`; `/review?tab=plates`'s queue-counter
