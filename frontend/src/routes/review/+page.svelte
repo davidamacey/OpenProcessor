@@ -20,6 +20,7 @@
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
   import BboxCanvas from '$lib/components/BboxCanvas.svelte';
   import ScoreChip from '$lib/components/ScoreChip.svelte';
+  import ScrollStrip from '$lib/components/ScrollStrip.svelte';
   import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import StrategyBar from '$lib/components/StrategyBar.svelte';
@@ -31,13 +32,25 @@
   import { isSlotSuppressedTab } from '$lib/review/slotTabGuard';
   import { computeViewBox } from '$lib/review/viewBox';
   import {
+    emptyQueueMessage,
+    locateMissMessage,
+    NO_CLASS_YET,
+    vlmEmptyReasonText,
+  } from '$lib/review/reviewCopy';
+  import {
     humanWritableStates,
     statusClearsBox,
     statusWantsRejectionReason,
     panelLabels,
   } from '$lib/review/slotPanel';
   import { slotOf } from '$lib/annotations/cropSlots';
-  import { resolveConfirmClassId, searchClasses } from '$lib/classPicker';
+  import {
+    itemClassTargets,
+    itemHintClassIds,
+    quickAssignClasses,
+    resolveConfirmClassId,
+    searchClasses,
+  } from '$lib/classPicker';
   import {
     endpointForTab,
     isSlotTab,
@@ -534,11 +547,7 @@
         _filter(),
       );
       if (!loc.in_queue || loc.page == null) {
-        toastStore.info(
-          loc.reason
-            ? `That crop is not in this review queue: ${loc.reason}`
-            : 'That crop is not in this review queue (it may already be reviewed).',
-        );
+        toastStore.info(locateMissMessage(loc.reason));
         return;
       }
       // M11: /locate resolves the sort under the same rules {API_PREFIX}/review/{tab}
@@ -763,7 +772,59 @@
     (classSourcesStore.roleFor(current?.label_source) ?? '').startsWith('vlm'),
   );
 
-  const topClasses = $derived(classesStore.topNForCluster(0, 10));
+  // R1 (visual audit 2026-09-24): item-class targets only — a slot-bound
+  // region class is never an item's class — ranked by what THIS item
+  // already points at (proposal / current / VLM / model), then by
+  // validated count, instead of by global validated count alone.
+  // R3: the operator's own narrowing filters (never the strategy bar's
+  // sort) — an empty queue under these may just be filtered empty.
+  const clientFiltersActive = $derived(
+    classFilter != null ||
+      sourceFilter !== '' ||
+      confMin > 0 ||
+      confMax < 1 ||
+      slotTextQuery !== '' ||
+      subjectScope !== 0 ||
+      minBlurRatio != null ||
+      Object.keys(activeEnumParams).length > 0,
+  );
+  const activeQueueLabel = $derived(
+    preset
+      ? reviewTabsVocabularyStore.labelFor(
+          preset,
+          REVIEW_PRESETS.find((p) => p.id === preset)?.label ?? preset,
+        )
+      : reviewTabsVocabularyStore.labelFor(
+          activeTabEndpointId,
+          REVIEW_TABS.find((t) => t.id === tab)?.label ?? String(tab),
+        ),
+  );
+  const emptyMessage = $derived(
+    emptyQueueMessage({
+      label: activeQueueLabel,
+      description: reviewTabsVocabularyStore.descriptionFor(activeTabEndpointId) ?? null,
+      sortFallbackReason,
+      filtersActive: clientFiltersActive,
+    }),
+  );
+  // Tabs whose last load with no client filters came back empty — dimmed
+  // in the tab strip with a "0" so an operator isn't sent into them
+  // blind (R3). Only ever learned from a real served total.
+  let emptyTabEndpoints = $state<Record<string, boolean>>({});
+  $effect(() => {
+    if (queue.loading || queue.error || diverseMode || searchModeActive) return;
+    if (queue.loadedPages === 0 || clientFiltersActive) return;
+    const id = activeTabEndpointId;
+    const empty = queue.total === 0;
+    if (untrack(() => emptyTabEndpoints[id]) !== empty) {
+      emptyTabEndpoints = { ...untrack(() => emptyTabEndpoints), [id]: empty };
+    }
+  });
+  const currentHintIds = $derived(itemHintClassIds(current));
+  const topClasses = $derived(
+    quickAssignClasses(classesStore.classes, currentHintIds, 10),
+  );
+  const pickerClasses = $derived(itemClassTargets(classesStore.classes));
 
   // Non-deprecated classes for the filter dropdown (P2-1). classesStore.classes
   // is unfiltered; every other class-offering surface in the app already
@@ -788,7 +849,9 @@
   let pickerIndex = $state(0);
   let pickerInputEl = $state<HTMLInputElement | null>(null);
 
-  const pickerResults = $derived(searchClasses(classesStore.classes, pickerQuery, 50));
+  const pickerResults = $derived(
+    searchClasses(pickerClasses, pickerQuery, 50, currentHintIds),
+  );
 
   // Re-center the highlighted row on the best match whenever the query
   // (re-ranks the list) changes. Doesn't fire on arrow-key navigation,
@@ -1562,14 +1625,27 @@
   <!-- Tabs — horizontally scrollable on narrow viewports so all tabs stay reachable
        without colliding with the loaded-count chip on the right. -->
   <div class="flex items-center gap-1 border-b border-zinc-800 px-4">
-    <div class="flex min-w-0 grow items-center gap-1 overflow-x-auto whitespace-nowrap">
+    <!-- R2 (visual audit 2026-09-24): at 800px the plain overflow row
+         clipped "New class proposals"/"Regions" with no hint, and an
+         active tab past the edge was invisible — ScrollStrip shows a
+         chevron where tabs are hidden and scrolls the active one in. -->
+    <ScrollStrip class="gap-1" activeKey={tab} testId="review-tabs">
       {#each REVIEW_TABS as t (t.id)}
+        {@const knownEmpty = emptyTabEndpoints[t.endpointId] === true}
         <button
           type="button"
+          data-active={tab === t.id ? 'true' : undefined}
           class="shrink-0 px-3 py-2.5 text-sm border-b-2 {tab === t.id
             ? 'border-blue-500 text-white'
-            : 'border-transparent text-zinc-400 hover:text-zinc-200'}"
-          title={reviewTabsVocabularyStore.descriptionFor(t.endpointId) ?? undefined}
+            : knownEmpty
+              ? 'border-transparent text-zinc-600 hover:text-zinc-300'
+              : 'border-transparent text-zinc-400 hover:text-zinc-200'}"
+          title={[
+            reviewTabsVocabularyStore.descriptionFor(t.endpointId),
+            knownEmpty ? 'Empty when last loaded.' : null,
+          ]
+            .filter(Boolean)
+            .join(' — ') || undefined}
           onclick={() => {
             tab = t.id;
             pendingCropId = null;
@@ -1594,9 +1670,15 @@
           }}
         >
           {reviewTabsVocabularyStore.labelFor(t.endpointId, t.label)}
+          {#if knownEmpty}
+            <span
+              class="ml-1 font-mono text-[10px] text-zinc-600"
+              data-testid="tab-empty-count">0</span
+            >
+          {/if}
         </button>
       {/each}
-    </div>
+    </ScrollStrip>
     <span
       data-testid="queue-counter"
       class="shrink-0 pl-2 font-mono text-xs text-zinc-500"
@@ -1823,6 +1905,13 @@
             'Largest',
             '+2nd',
           ]}
+          titles={[
+            servedMaxRankDefault != null
+              ? `This tab's own default: only the ${servedMaxRankDefault} largest subjects in each image`
+              : 'Every subject in the image, whatever its size',
+            'Only the largest subject in each image',
+            'The largest and second-largest subject in each image',
+          ]}
           label="subject"
         />
       {/if}
@@ -1913,7 +2002,15 @@
     {:else if queue.error}
       <p class="col-span-full text-sm text-red-300">API unavailable: {queue.error}</p>
     {:else if !current}
-      <p class="col-span-full text-sm text-zinc-500">Queue empty.</p>
+      <!-- R3 (visual audit 2026-09-24): say WHY the queue is empty, from
+           the served tab description and sort-fallback reason, instead of
+           a bare "Queue empty.". -->
+      <div class="col-span-full max-w-2xl text-sm" data-testid="queue-empty">
+        <p class="text-zinc-300">{emptyMessage.title}</p>
+        {#each emptyMessage.lines as line (line)}
+          <p class="mt-1 text-xs text-zinc-500">{line}</p>
+        {/each}
+      </div>
     {:else}
       <!-- Source image with bbox -->
       <div class="flex min-h-0 flex-col surface p-2">
@@ -2065,8 +2162,16 @@
 
             <dt class="text-zinc-500">Current label</dt>
             <dd class="text-zinc-200">
-              {current.class_name ?? '—'}
-              <span class="ml-1 text-zinc-500">({current.label_source})</span>
+              <!-- R6 (visual audit 2026-09-24): a class-less item used to
+                   read "Current label (vlm)" with a blank value. -->
+              {#if current.class_name}
+                {current.class_name}
+              {:else}
+                <span class="italic text-zinc-500">{NO_CLASS_YET}</span>
+              {/if}
+              {#if current.label_source}
+                <span class="ml-1 text-zinc-500">({current.label_source})</span>
+              {/if}
               <!-- dq-queues cutover (2026-09-24): vlm_raw_class/
                    vlm_class_empty_reason fold into this row rather than
                    their own — the review panel is height-budgeted
@@ -2079,7 +2184,7 @@
                 >
               {:else if current.vlm_class_empty_reason}
                 <span class="ml-1 text-[11px] text-orange-300"
-                  >— VLM empty: {current.vlm_class_empty_reason}</span
+                  >— {vlmEmptyReasonText(current.vlm_class_empty_reason)}</span
                 >
               {/if}
             </dd>
@@ -2387,7 +2492,7 @@
                   autocapitalize={activeSlot.capabilities.text?.transform === 'uppercase'
                     ? 'characters'
                     : 'off'}
-                  class="w-28 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none {activeSlot
+                  class="w-28 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 placeholder:italic placeholder:text-zinc-600 focus:border-blue-500 focus:outline-none {activeSlot
                     .capabilities.text?.monospace
                     ? 'font-mono'
                     : ''}"
@@ -2433,25 +2538,43 @@
                 {/if}
               </span>
               {#if statusWantsRejectionReason(activeSlot, editedSlotStatus, regionStatusesStore.list)}
+                {@const servedReasonKind = regionVocabularyStore.rejectionReasonKind(
+                  slotData?.lifecycle?.rejectionReason,
+                )}
                 <span class="text-zinc-500">Rejection reason</span>
                 <span>
-                  <input
-                    type="text"
-                    bind:value={editedRejectionReason}
-                    onblur={() => void commitRejectionReason()}
-                    onkeydown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        (e.currentTarget as HTMLInputElement).blur();
-                      }
-                    }}
-                    placeholder="e.g. blurred, occluded, glare"
-                    class="w-44 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
-                  />
+                  {#if servedReasonKind && editedRejectionReason === (slotData?.lifecycle?.rejectionReason ?? '')}
+                    <!-- R6 (visual audit 2026-09-24): a machine reason from the
+                         served vocabulary (e.g. verifier_no_verdict) used to
+                         sit raw in an editable box; show its served label
+                         instead. Changing the status still re-asks. -->
+                    <span class="text-zinc-300" data-testid="served-rejection-reason"
+                      >{regionVocabularyStore.rejectionReasonLabel(
+                        slotData?.lifecycle?.rejectionReason,
+                      )}</span
+                    >
+                  {:else}
+                    <input
+                      type="text"
+                      bind:value={editedRejectionReason}
+                      onblur={() => void commitRejectionReason()}
+                      onkeydown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          (e.currentTarget as HTMLInputElement).blur();
+                        }
+                      }}
+                      placeholder="e.g. blurred, occluded, glare"
+                      class="w-44 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+                    />
+                  {/if}
                 </span>
               {/if}
             </div>
-            <div class="mt-3 flex flex-wrap gap-2">
+            <div
+              class="sticky bottom-0 z-10 mt-3 flex flex-wrap gap-2 bg-[rgb(var(--bg-elevated))] py-1"
+              data-testid="review-actions"
+            >
               {#if editMode}
                 <button
                   class="btn btn-primary"
@@ -2521,7 +2644,10 @@
               </p>
             {/if}
           {:else}
-            <div class="mt-3 flex flex-wrap gap-2">
+            <div
+              class="sticky bottom-0 z-10 mt-3 flex flex-wrap gap-2 bg-[rgb(var(--bg-elevated))] py-1"
+              data-testid="review-actions"
+            >
               <button
                 class="btn btn-primary"
                 type="button"
@@ -2608,7 +2734,7 @@
             </button>
             {#if detailsOpen}
               <div class="mt-2">
-                <CropMetaPanel crop={current} />
+                <CropMetaPanel crop={current} embedded />
               </div>
             {/if}
           </div>
@@ -2759,7 +2885,7 @@
         bind:this={pickerInputEl}
         bind:value={pickerQuery}
         type="text"
-        placeholder="Search all {classesStore.classes.length} classes…"
+        placeholder="Search all {pickerClasses.length} classes…"
         class="w-full border-b border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:outline-none"
         onkeydown={onPickerKeydown}
       />
