@@ -19,12 +19,13 @@ from typing import Any
 
 from src.core.logging import get_logger
 from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._methods_models import MethodsResponse
 
 
 logger = get_logger(__name__)
 
 
-@router.get('/methods')
+@router.get('/methods', response_model=MethodsResponse)
 async def get_methods(opensearch: OpenSearchDep) -> dict[str, Any]:
     """Every strategy across every axis (cluster / score / sort / overlay),
     plus the feature flags that gated each entry's status and a real

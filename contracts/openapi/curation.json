@@ -5106,6 +5106,31 @@
         "title": "MatrixModel",
         "type": "object"
       },
+      "MethodsResponse": {
+        "description": "``GET /curation/methods`` response: every strategy across every axis\nplus the feature flags that gated each entry's status.",
+        "properties": {
+          "flags": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Flags",
+            "type": "object"
+          },
+          "strategies": {
+            "items": {
+              "$ref": "#/components/schemas/StrategyEntry"
+            },
+            "title": "Strategies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "strategies",
+          "flags"
+        ],
+        "title": "MethodsResponse",
+        "type": "object"
+      },
       "MetricBlock": {
         "description": "Metrics over a model's own covered classes (AP: class mean; P/R/F1: micro).",
         "properties": {
@@ -6617,6 +6642,91 @@
           "preflight"
         ],
         "title": "StartTrainResponse",
+        "type": "object"
+      },
+      "StrategyEntry": {
+        "additionalProperties": true,
+        "description": "One strategy/registry row across any axis (cluster / score / sort /\noverlay / export / detection_profile / prompt_pack).",
+        "properties": {
+          "axis": {
+            "title": "Axis",
+            "type": "string"
+          },
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "field_coverage": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Coverage"
+          },
+          "field_coverage_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Coverage Total"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "requires_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires Field"
+          },
+          "settable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settable"
+          },
+          "status": {
+            "enum": [
+              "stable",
+              "experimental",
+              "shadow",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "axis",
+          "label",
+          "status",
+          "default"
+        ],
+        "title": "StrategyEntry",
         "type": "object"
       },
       "StratumMetrics": {
@@ -12015,9 +12125,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Methods Curation Methods Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/MethodsResponse"
                 }
               }
             },
