@@ -1,7 +1,7 @@
-"""B-PR5 combined class + region-verify + OCR helpers for the curation worker.
+"""Combined class + region-verify + OCR helpers for the curation worker.
 
 Extracted from ``cascade.py`` so the cascade module stays under the
-700-LOC ceiling (PR7 §1 / §2). Houses:
+700-LOC ceiling. Houses:
 
 * ``_is_combined_cohort`` — which ``class_source`` values (derived from
   the configured ingest profiles) trigger the combined VLM call.

@@ -1,9 +1,9 @@
-"""BA-3: the server-computed drain-stability verdict.
+"""The server-computed drain-stability verdict.
 
-Persisted to a state.json under ``OP_REGION_DRAIN_STATE_DIR`` (2026-09-25
-fix) rather than kept in module memory, so the verdict is correct
-regardless of which ``yolo-api --workers`` process answers a given poll
--- every test here points that env var at a per-test ``tmp_path``.
+Persisted to a state.json under ``OP_REGION_DRAIN_STATE_DIR`` rather than
+kept in module memory, so the verdict is correct regardless of which
+``yolo-api --workers`` process answers a given poll -- every test here
+points that env var at a per-test ``tmp_path``.
 """
 
 from __future__ import annotations

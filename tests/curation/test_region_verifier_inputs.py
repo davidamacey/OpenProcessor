@@ -1,4 +1,4 @@
-"""What the verifier is shown and how a non-answer is read (MODEL notes, DQ §6).
+"""What the verifier is shown and how a non-answer is read.
 
 * The candidate-box overlay is drawn *around* the region, never over it:
   typical regions are ~25 px tall, and a 3 px outline drawn inside the box

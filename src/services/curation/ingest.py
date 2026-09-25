@@ -1,14 +1,13 @@
 """Generic curation ingest pipeline.
 
-Ported (generic half only) from the private reference ingest service —
-see ``docs/design/curation_design_rationale.md`` §2.1 for the citation
-convention. The reference file mixed a generic per-image pipeline
-(decode, dedup, detect, embed, quality-score, bulk-index) with ~700 LOC
-of domain-specific logic (a hardcoded vehicle-class allowlist, a
-dual-head vehicle-detector runner, a region-status assignment policy,
-and a mismatch-report sink). None of that domain-specific logic is
-ported here — a deployment that needs it builds its own overlay on top
-of :class:`CurationIngestService` instead.
+Keeps a generic per-image pipeline (decode, dedup, detect, embed,
+quality-score, bulk-index) fully separate from any domain-specific logic
+(a hardcoded class allowlist, a dual-head detector runner, a
+region-status assignment policy, a mismatch-report sink). See
+``docs/design/curation_design_rationale.md`` §2.1 for the design
+approach — none of that domain-specific logic lives here; a deployment
+that needs it builds its own overlay on top of
+:class:`CurationIngestService` instead.
 
 Pipeline, per image:
 

@@ -1,5 +1,4 @@
-"""CLI safety-default guard for ``scripts/curation/backfill_scores.py``
-(curation-strategy plan §7 Phase 1 / audit-remediation Phase 11).
+"""CLI safety-default guard for ``scripts/curation/backfill_scores.py``.
 
 The script can write new fields onto all 347,837 the configured items index's docs
 if run unbounded — ``--dry-run`` must be the default so an operator has to

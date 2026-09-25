@@ -231,12 +231,11 @@ class TestRegionChain:
 
 
 # =============================================================================
-# auto_promote_clusters missing-writer regression (Chunk 4 deferral note —
-# ported alongside orchestrator.py/auto_promote.py per the plan's Chunk 4
-# section rather than with the rest of the reference line's missing-writer
-# test suite's cases, which depend on modules not yet ported — the
-# region-detection worker's bulk writer, the class-merge writer, and the
-# proprietary-dataset label-import writer — and land in later waves).
+# auto_promote_clusters missing-writer regression.
+#
+# Other missing-writer cases that depend on modules not covered here —
+# the region-detection worker's bulk writer, the class-merge writer,
+# and the label-import writer — are not exercised in this file.
 # =============================================================================
 
 
@@ -255,7 +254,7 @@ class _FakeAutoPromoteOS:
                     'clusters': {
                         'buckets': [
                             {
-                                # F-29: composite-agg bucket key is a dict.
+                                # Composite-agg bucket key is a dict.
                                 'key': {'cluster_id': 1},
                                 'doc_count': 5,
                                 'top_class': {
@@ -333,13 +332,9 @@ async def test_auto_promote_appends_history() -> None:
 # =============================================================================
 # Curation worker combined-VLM path (bulk_writer.py's OCC merger)
 #
-# Deferred here from Chunk 2 (one case of the reference implementation's
-# "test_history_writers.py") since it exercises
-# scripts/curation/worker/bulk_writer.py, which lands in
-# Chunk 8. Extends this file rather than porting a second one — the
-# reference test file covers three other class-writer cases (auto_promote,
-# a class-merge router endpoint, and a label-import script) alongside this
-# one; those are out of this chunk's scope and stay unported for now.
+# Exercises scripts/curation/worker/bulk_writer.py. Other class-writer
+# cases (a class-merge router endpoint, a label-import script) are not
+# covered in this file.
 # =============================================================================
 
 
@@ -407,8 +402,7 @@ async def test_curation_worker_appends_history() -> None:
 
 # =============================================================================
 # classes.py::merge_class (the writer originally deferred alongside the
-# curation worker case above — its subject now exists on this tree, see
-# plan Wave 5 W5.a).
+# curation worker case above — its subject now exists on this tree).
 # =============================================================================
 
 

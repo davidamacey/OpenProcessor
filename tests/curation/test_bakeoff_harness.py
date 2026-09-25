@@ -981,9 +981,9 @@ def test_runner_v2_end_to_end_with_fake_backend(tmp_path: Path, monkeypatch) -> 
 
 # Domain content (profiles, baselines, converters, backends for one domain's
 # public models) lives only under the opt-in examples/ tree. The router is
-# rewritten in the W4 API wave (its v1 request model still names legacy
-# backends) and joins this scan there; the two W4 service modules are scanned
-# as soon as they exist.
+# still being rewritten (its v1 request model still names legacy
+# backends) and joins this scan once that lands; the two related service
+# modules are scanned as soon as they exist.
 _DOMAIN_WORDS = re.compile(r'(?i)plate|lpr|lpdnet|vehicle|open[_-]?image')
 _BAKEOFF_API_FILES = (
     'src/routers/curation/bakeoff.py',

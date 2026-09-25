@@ -1,4 +1,4 @@
-"""F-25: list endpoints stop shipping ``class_id_history`` in their
+"""List endpoints stop shipping ``class_id_history`` in their
 ``_source`` fetch. Covers the query-body shape for every list endpoint
 that switched to ``item_list_source_excludes`` (crops, review, regions,
 region training candidates, semantic search) and confirms

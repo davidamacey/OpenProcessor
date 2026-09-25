@@ -69,7 +69,7 @@ def item_list_source_excludes(storage: RegionFields | None = None) -> list[str]:
     / regions browse / semantic search) — :func:`item_source_excludes`
     plus ``class_id_history``.
 
-    F-25: ``class_id_history`` (up to 32 entries) is only ever read by the
+    ``class_id_history`` (up to 32 entries) is only ever read by the
     undo path (``label_undo.py``, which stays on
     :func:`item_source_excludes` — it needs the history) — no list
     renderer reads it. Shipping it in every row of a paginated list

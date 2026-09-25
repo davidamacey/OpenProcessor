@@ -1,11 +1,11 @@
-"""Tests for GET /curation/methods (curation-strategy plan §3.6/§7 Phase 0/§9).
+"""Tests for GET /curation/methods.
 
 Mounts the real curation router with OpenSearch stubbed (the endpoint does
 no OpenSearch I/O, but the shared app fixture follows the project's
 established pattern — see test_review_disagreements.py). Verifies:
 
 * Every real cluster method (ivf/ahc/hdbscan) is reported stable, ivf is
-  the sole default (mirrors DEFAULT_METHOD — plan §8 non-goal #1).
+  the sole default (mirrors DEFAULT_METHOD).
 * Score-axis entries reflect OP_SCORES_ENABLED / OP_SCORES_SHADOW.
 * Disabled entries are never marked default; every advertised id resolves
   via the real registries (cluster_methods.get_method /
@@ -93,12 +93,12 @@ def test_score_entries_disabled_by_default(app_client: TestClient) -> None:
 def test_score_entries_shadow_when_enabled_and_shadow(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Phase 2 validation (curation-strategy plan §6, see
-    docs/design/curation_scores.md) promoted ``mistakenness`` one notch
-    (shadow -> experimental) — its full synthetic gate (AUROC + precision@100)
+    """Validation promoted
+    ``mistakenness`` one notch (shadow -> experimental) — its full
+    synthetic gate (AUROC + precision@100)
     passed outright with no human/GPU step left unexecuted. ``uniqueness``
     and ``near_dup`` only cleared their cheap pre-screens on real data; each
-    method's plan-table *full* gate still needs a step this pass couldn't
+    method's full gate still needs a step this pass couldn't
     run (blind operator A/B; manually-judged near-dup pairs), so they stay
     ``shadow`` here."""
     from src.services.curation.strategy_registry import VALIDATED_SCORERS
@@ -166,8 +166,8 @@ def test_diverse_overlay_entry_present_and_disabled_by_default(app_client: TestC
 def test_diverse_overlay_experimental_when_flag_on_but_never_stable(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Curation-strategy plan §6/§10.2: only diversity's cheap pre-screen
-    passed (docs/design/curation_scores.md §6); the full training A/B gate
+    """Only diversity's cheap pre-screen
+    passed; the full training A/B gate
     has not run, so this overlay must never advertise 'stable' regardless
     of OP_SELECT_DIVERSE_ENABLED."""
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
@@ -194,9 +194,9 @@ def test_viz_projection_entry_present_and_disabled_by_default(app_client: TestCl
 def test_viz_projection_experimental_when_flag_on_but_never_stable(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Curation-strategy plan §6's UMAP row / §7 Phase 5: the purity half of
-    the protocol passed for real (docs/design/curation_scores.md's UMAP-viz
-    section), but the interactive-perf half is a frontend check this
+    """The purity half of
+    the protocol passed for real (the UMAP-viz
+    validation), but the interactive-perf half is a frontend check this
     backend-only pass never ran -- same "capped at experimental" reasoning
     ``diverse`` uses for its own still-outstanding gate half."""
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
@@ -212,7 +212,7 @@ def test_viz_projection_carries_measured_purity_and_banner_flag(app_client: Test
     """The real number from the offline purity-evaluation script (this
     pass, not a placeholder) plus the frontend-facing banner flag --
     ``requires_banner`` is False because the measured purity landed in the
-    plan §6 "ship plain" tier (>=0.30), not the 0.15-0.30 banner tier."""
+    "ship plain" tier (>=0.30), not the 0.15-0.30 banner tier."""
     r = app_client.get('/curation/methods')
     body = r.json()
     entry = next(s for s in body['strategies'] if s['id'] == 'viz_projection')
@@ -227,7 +227,7 @@ def test_viz_projection_carries_measured_purity_and_banner_flag(app_client: Test
 def test_export_axis_advertises_yolo_and_single_class_and_omits_lpr(
     app_client: TestClient,
 ) -> None:
-    """cropwright_backend_integration_plan.md §4.3/T-C2: the frontend gates
+    """The frontend gates
     its export panels on this axis rather than probing the write endpoint.
 
     ``single_class`` is the generic narrowed export (G2); ``lpr`` must not
@@ -315,7 +315,7 @@ def test_detection_profile_registry_supports_more_than_one_profile() -> None:
 
 
 def test_prompt_pack_axis_advertises_the_resolved_pack(app_client: TestClient) -> None:
-    """Labeling-assist plan task (c): with no ``OP_PROMPT_PACK_PATH``
+    """With no ``OP_PROMPT_PACK_PATH``
     configured, the axis must advertise the built-in generic pack by its
     own ``name`` field."""
     from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
@@ -403,7 +403,7 @@ def test_writes_never_include_cluster_fields(app_client: TestClient) -> None:
 
 def _fake_field_counts(*, total: int, per_field: dict[str, int] | None = None, default: int = 5):
     """Build an ``AsyncMock`` side_effect for the one-``_search``-per-field
-    coverage query (F-28.2): ``size:0``/``track_total_hits:true`` for the
+    coverage query: ``size:0``/``track_total_hits:true`` for the
     pool size, one ``filter: {exists}`` sub-agg per requested field."""
     per_field = per_field or {}
 
@@ -450,9 +450,8 @@ def test_methods_reports_zero_coverage_for_a_genuinely_inert_sort(
     app_client: TestClient,
 ) -> None:
     """mistakenness_score/probe_pred_entropy/uniqueness_score/dup_group_id
-    are 0% covered on the real pool today (audit-remediation plan §0.1) --
-    the whole point of Phase 6 is that this must come through as a real
-    zero (hide the control), distinct from an unknown/None."""
+    are 0% covered on the real pool today -- this must come through as a
+    real zero (hide the control), distinct from an unknown/None."""
     app_client.fake_os.search = _fake_field_counts(  # type: ignore[attr-defined]
         total=347_837,
         per_field={
@@ -473,7 +472,7 @@ def test_methods_reports_zero_coverage_for_a_genuinely_inert_sort(
 def test_methods_coverage_is_null_not_zero_on_opensearch_failure(
     app_client: TestClient,
 ) -> None:
-    """The fail-open direction matters (plan Phase 6): a dead OpenSearch
+    """The fail-open direction matters: a dead OpenSearch
     must not silently hide every control by reporting 0 coverage
     everywhere. Before the fix there was no field_coverage at all; a naive
     fix that defaults failures to 0 (mirroring
@@ -491,7 +490,7 @@ def test_methods_coverage_is_null_not_zero_on_opensearch_failure(
 
 
 def test_methods_does_not_query_per_entry(app_client: TestClient) -> None:
-    """O(1) request, not O(entries) or O(distinct fields) (F-28.2): every
+    """O(1) request, not O(entries) or O(distinct fields): every
     distinct ``requires_field`` (several sorts share one, e.g. both
     uncertainty_entropy and disagreement_entropy_asc need
     probe_pred_entropy) is covered by one ``_search`` with a filter agg

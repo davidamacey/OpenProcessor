@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pre-commit guard: no private-company or domain-vendor vocabulary leaks
-into the public tree (docs/design/naming_sweep_plan.md W8).
+into the public tree.
 
 Three independent scans, each a single ``git grep -n -I -P`` pass over the
 whole tracked tree:
@@ -40,11 +40,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALLOWLIST_PATH = REPO_ROOT / 'scripts' / 'codegen' / 'naming_leak_allowlist.txt'
 
-# This plan file names every forbidden pattern on purpose (it is the design
-# doc for this very guard). It is removed in wave W9; until then it is
-# excluded from `git grep` entirely rather than allowlisted, since matching
-# almost the whole file line-by-line would be noise.
-_ALWAYS_EXCLUDE_PATHS: tuple[str, ...] = ('docs/design/naming_sweep_plan.md',)
+# Paths excluded from `git grep` entirely rather than allowlisted, for files
+# where matching almost the whole file line-by-line would be noise. Empty
+# today; kept as the mechanism for the next such file.
+_ALWAYS_EXCLUDE_PATHS: tuple[str, ...] = ()
 
 SCAN_A = (
     r'reference|Reference|REFERENCE|\blegacy_|\bLEGACY_|\bLegacy[A-Z]|/legacy\b|Provider|provider|'

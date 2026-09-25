@@ -1,5 +1,5 @@
-"""2-D UMAP visualization-only projection overlay (curation-strategy plan
-§2.7/§3.5/§7 Phase 5): ``POST {prefix}/viz/projection/rebuild``,
+"""2-D UMAP visualization-only projection overlay: ``POST
+{prefix}/viz/projection/rebuild``,
 ``GET {prefix}/viz/projection/status``, ``POST {prefix}/viz/projection/cancel``,
 ``GET {prefix}/viz/projection``.
 
@@ -21,11 +21,9 @@ Gated end-to-end by ``OP_VIZ_PROJECTION_ENABLED`` (default off, inline
 off, same convention this codebase uses for other disabled-by-default
 feature flags.
 
-**Ship-mode status (curation-strategy plan §6's UMAP row) — see
-``docs/design/curation_scores.md`` for the full write-up and
-``strategy_registry.py``'s ``viz_projection`` entry for how the measured
-purity maps to this entry's ``status``/``purity``/``requires_banner``
-fields).
+**Ship-mode status** — see ``strategy_registry.py``'s ``viz_projection``
+entry for how the measured purity maps to this entry's
+``status``/``purity``/``requires_banner`` fields.
 """
 
 from __future__ import annotations

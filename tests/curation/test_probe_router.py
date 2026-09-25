@@ -1,4 +1,4 @@
-"""C1: `POST /curation/probe/run`, `GET /curation/probe/status`,
+"""`POST /curation/probe/run`, `GET /curation/probe/status`,
 `POST /curation/probe/cancel`."""
 
 from __future__ import annotations

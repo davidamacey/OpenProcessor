@@ -1,7 +1,6 @@
-"""Tests for ``POST /curation/test_holdout/freeze`` (audit remediation Phase 2,
-P0-1) — see ``docs/design/audit-remediation-plan-2026-09.md`` "## Phase 2".
+"""Tests for ``POST /curation/test_holdout/freeze``.
 
-Before this phase the endpoint was completely broken end to end:
+Before the fix below, the endpoint was completely broken end to end:
 
 1. Its cohort filter referenced ``label_source`` values
    (``v6_original_label`` / ``hdd_user_label``) that nothing in the repo
@@ -348,13 +347,11 @@ def test_freeze_persists_record(
 
 def test_freeze_is_deterministic(app_client: Any, fake_opensearch: AsyncMock) -> None:
     """Freezing the same cohort twice must select the identical crop-id
-    set and sha -- no seed, no randomness. The plan doesn't call out an
-    explicit pre-Phase-2 failure mode for this one (the old
+    set and sha -- no seed, no randomness (the old
     ``random.Random(payload.seed)`` with the request's default seed
     happens to be reproducible too, for a fixed seed) -- this test exists
     to pin the new algorithm's core guarantee: reproducibility without a
-    seed to record, which is exactly why it was chosen (Appendix C
-    Decision 1).
+    seed to record.
     """
     buckets = [_bucket(1, 'hdd:demo_hdd01', 9), _bucket(2, 'hdd:demo_hdd01', 3)]
     crop_ids_by_stratum = {
@@ -431,7 +428,7 @@ def test_select_test_holdout_min_five_floor_and_determinism() -> None:
 
 
 # =============================================================================
-# F-8 — class_id 0 must not be misbucketed as "unknown", and docs missing
+# class_id 0 must not be misbucketed as "unknown", and docs missing
 # class_id/source must get an explicit stratum instead of being
 # silently dropped from the composite agg.
 # =============================================================================

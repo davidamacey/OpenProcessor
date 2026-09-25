@@ -48,7 +48,7 @@ def parse_crop_sort(sort: str | None) -> list[dict[str, Any]]:
                 'unmapped_type': CROP_SORT_FIELDS[field],
             }
         },
-        # F-7: stable tiebreaker. crop_id is a mapped keyword field equal to
+        # Stable tiebreaker. crop_id is a mapped keyword field equal to
         # _id -- sort on it directly rather than _id (which uses fielddata,
         # disabled on these indexes) so ties on the primary sort key don't
         # produce duplicate/skipped rows across pages.
@@ -72,7 +72,7 @@ def confidence_band(conf_min: float | None, conf_max: float | None) -> dict[str,
 
 
 def classifier_low_confidence_clause(lt: float) -> dict[str, Any]:
-    """``classifier_conf_lt`` filter (D-1 / F-6): ``classifier_raw_confidence``
+    """``classifier_conf_lt`` filter: ``classifier_raw_confidence``
     is never written in production (only a seed/test harness writes it), so a
     filter keyed on it was a permanent no-op. Points at the stored
     ``confidence`` field instead, restricted to items a classifier actually
@@ -125,7 +125,7 @@ def crops_page(
 
 
 def with_exists_filter(query_clause: dict[str, Any], field: str) -> dict[str, Any]:
-    """AND an ``exists`` filter onto ``query_clause`` (F-16) — docs without
+    """AND an ``exists`` filter onto ``query_clause`` — docs without
     the ranking field can't be scored, so excluding them up front keeps
     the outliers/diverse pool query and its exact count in sync with
     what the ranker actually fetches."""

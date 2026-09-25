@@ -1,4 +1,4 @@
-"""F-21: SSE stats fan-out.
+"""SSE stats fan-out.
 
 ``_cached_stats_payload`` is a module-level, TTL-cached wrapper around
 ``stats_dataset`` shared by every open SSE connection. It must:

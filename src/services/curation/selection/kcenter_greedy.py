@@ -1,14 +1,14 @@
-"""k-center-greedy core-set selection (curation-strategy plan §2.6/§3.4).
+"""k-center-greedy core-set selection.
 
 Sener & Savarese, "Active Learning for Convolutional Neural Networks: A
 Core-Set Approach" (ICLR 2018) — the standard greedy k-center algorithm.
 This is the real technique behind "diversity sampling" / "subpart
-diversity" in tools like LightlyStudio (plan §2.6). Produces a selection
-order, **never** a ``cluster_id`` — it's an overlay, not an assignment
-(plan §0/§8 non-goal #3). This module is pure math: no OpenSearch, no
+diversity" in tools like LightlyStudio. Produces a selection
+order, **never** a ``cluster_id`` — it's an overlay, not an assignment.
+This module is pure math: no OpenSearch, no
 faiss, no I/O of any kind, so it's directly unit-testable.
 
-**Why plain numpy, not faiss (house convention check, plan §3.4):**
+**Why plain numpy, not faiss (house convention check):**
 :mod:`crop_scores.uniqueness` uses ``faiss.IndexIVFFlat`` because its
 workload is an *approximate nearest-neighbour search* (k=16 neighbours
 out of ~125k candidates per query, repeated for every point) — exactly
@@ -23,10 +23,10 @@ is for "find this point's 16 nearest neighbours", so introducing faiss
 here would add complexity without a speed win.
 
 **Compute shape:** O(n·k·d) — n full-pool distance updates, k times.
-When ``k == n`` (a full-pool ranking, as the reference select router needs for
+When ``k == n`` (a full-pool ranking, as the select router needs for
 ``GET /curation/crops?order=diverse`` pagination) this degrades to O(n²·d),
 which is why that caller uses a much smaller inline-pool cap than the
-POST endpoint's k-bounded selection — see the reference select router's module
+POST endpoint's k-bounded selection — see the select router's module
 docstring for the exact budget derivation.
 """
 
@@ -55,7 +55,7 @@ def k_center_greedy(x: np.ndarray, k: int, *, seed_idx: int | None = None) -> np
             batch centroid** (lowest cosine similarity to the mean
             direction), not a fixed index like ``0``. Rationale: a real
             embedding pool is dominated by dense, redundant regions (the
-            common vehicle types); starting the greedy walk at a fixed
+            common item types); starting the greedy walk at a fixed
             index risks starting *inside* that dense mass (whichever
             direction happens to sort first), wasting the first pick on
             a point that free-rides on later coverage anyway. Starting
@@ -63,8 +63,7 @@ def k_center_greedy(x: np.ndarray, k: int, *, seed_idx: int | None = None) -> np
             very first selection is informative, and it's still 100%
             deterministic for a given ``x`` (no RNG involved) — this
             mirrors the throwaway validation implementation that produced
-            the 1.50x pre-screen result in
-            ``docs/design/curation_scores.md`` §6.
+            the 1.50x pre-screen result.
 
     Returns:
         ``(min(k, n),)`` int64 array of selected row indices, in selection

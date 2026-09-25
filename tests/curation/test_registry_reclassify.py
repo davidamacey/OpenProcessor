@@ -78,7 +78,7 @@ def _corpus() -> dict[str, dict[str, Any]]:
         'u7': {**_unmatched('widget'), 'class_source': 'alt_unmatched'},
         'u8': _unmatched('Widget', vlm_confidence='low'),  # low conf: exact only
         'u9': _unmatched('widget', vlm_confidence='low'),
-        # F-4: an excluded item must never be un-excluded by reclassification,
+        # An excluded item must never be un-excluded by reclassification,
         # even though its raw label would otherwise resolve cleanly.
         'u10': _unmatched('widget', class_excluded=True),
     }
@@ -123,7 +123,7 @@ async def test_apply_promotes_only_resolvable_unguarded_items(registry):
 
 @pytest.mark.asyncio
 async def test_excluded_item_is_never_promoted(registry):
-    """F-4: excluded items must be excluded from the query itself (not just
+    """Excluded items must be excluded from the query itself (not just
     silently skipped by the merge guard), so they never even count as
     'matched'."""
     fake = _fake()

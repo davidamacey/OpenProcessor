@@ -88,11 +88,10 @@ def fresh_cache() -> svc.ThumbnailCache:
         '../etc/passwd',
         '../../etc/passwd',
         '/etc/passwd',
-        # This is the one proprietary-absolute-path site in the whole
-        # reference test corpus (see plan §0.8) — a path-traversal
-        # REJECTION fixture, not a data dependency, so it is trivially
-        # portable by swapping in the configured source_root instead of
-        # the hardcoded proprietary root.
+        # This is the one absolute-path fixture in this file that needs the
+        # real configured source_root — it's a path-traversal REJECTION
+        # fixture, not a data dependency, so it stays portable by swapping in
+        # the configured source_root instead of a hardcoded root.
         f'{get_curation_config().source_root}/../../../etc/passwd',
         '..\\windows\\system32\\config',
         'hdd01/../../etc/passwd',
@@ -396,8 +395,8 @@ def test_fetch_crop_500_when_no_source() -> None:
 
 
 def test_fetch_crop_uses_configured_items_index() -> None:
-    """The literal 'legacy_vehicle_crops' fallback (reference lines 542-544)
-    must not exist here — the index name always comes from CurationConfig."""
+    """A hardcoded legacy items-index name must not exist here — the
+    index name always comes from CurationConfig."""
     seen: dict[str, str] = {}
 
     class _RecordingOS:
@@ -411,7 +410,7 @@ def test_fetch_crop_uses_configured_items_index() -> None:
 
 
 def test_fetch_crop_uses_source_includes_covering_every_caller_field() -> None:
-    """F-14: no embeddings/history round-trip — only the fields any
+    """No embeddings/history round-trip — only the fields any
     ``crops_router`` route actually reads off the returned doc."""
     src = {'image_path': 'archive/foo.jpg', 'bbox_norm': [0.1, 0.1, 0.5, 0.5]}
     client = _FakeOSClient(source=src)

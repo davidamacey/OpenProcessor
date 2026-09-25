@@ -1,4 +1,4 @@
-"""F-10: force_cluster_id_equals_class_id must not visit every doc with a
+"""force_cluster_id_equals_class_id must not visit every doc with a
 class_id.
 
 Before the fix, the ``update_by_query`` filter only required

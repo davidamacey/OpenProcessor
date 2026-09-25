@@ -1,4 +1,4 @@
-"""Curation-score overlay job control (curation-strategy plan §3.3/§7 Phase 1).
+"""Curation-score overlay job control.
 
 ``POST /curation/scores/compute`` / ``GET /curation/scores/status`` / ``POST
 /curation/scores/cancel`` / ``GET /curation/scores/coverage``. New module (not touching

@@ -1,4 +1,4 @@
-"""S8: byte-upload ingest — ``POST /curation/ingest/upload`` and the
+"""Byte-upload ingest — ``POST /curation/ingest/upload`` and the
 ``scripts/curation/ingest_upload.py`` driver, run against the real app
 with the OpenSearch/Triton/PE boundary faked."""
 

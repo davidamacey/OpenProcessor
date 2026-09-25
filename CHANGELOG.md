@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `BakeoffProfile`; `--backend triton` requires a model); plate baselines moved
   to the `license_plate` example profile; paper-only scripts (a dedup-threshold
   sweep and a LaTeX-number generator that hardcoded a private model id and a
-  live-deployment URL) removed from the public tree (W7).
+  live-deployment URL) removed from the public tree.
 - **Model comparison (bake-off) API v2, generic and multi-class** (clean break,
   no compatibility fields; shapes in `docs/design/curation_api_contract.md`). Every
   `/curation/bakeoff/*` route is typed and result files carry
@@ -67,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The trainer's opt-in auto-quantize posts `POST /curation/bakeoff/run`
   (via `OP_API_BASE_URL` + `OP_API_PREFIX`) instead of writing a job file;
   `campaign.py` no longer reads `OP_BAKEOFF_JOBS_DIR` / `OP_BAKEOFF_OUT_DIR`.
-- **Naming sweep, wave W1 — stored-data renames** (re-ingest required):
+- **Stored-data renames** (re-ingest required):
   - Items index kNN field `v6_embedding` → `backbone_embedding`
     (`CurationConfig.BACKBONE_EMBEDDING_FIELD`).
   - Images + items ingest-source field `hdd_source` → `source`; `GET
@@ -95,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `OPENWEBUI_BASE_URL` / `OPENWEBUI_MODEL` / `OPENWEBUI_API_KEY` /
     `VLM_URL` / `GEMMA_URL` are retired; only `OP_VLM_URL` / `OP_VLM_MODEL`
     / `OP_VLM_API_KEY` are read now.
-- **Naming sweep, wave W2 — wire surface**: `GET /curation/methods`'
+- **Wire surface renames**: `GET /curation/methods`'
   operationId is `get_methods_curation_methods_get` (was a
   company-initialed operation id); its `flags` keys drop the same
   company-initialed prefix (`scores_enabled`, `scores_shadow`,
@@ -103,7 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `semantic_search_enabled`); the
   `coco_blind_spots` review tab id and its default-sort id are renamed
   to `classifier_blind_spots` / `classifier_blind_spots_default`.
-- **Naming sweep, wave W3 — env vars, clean break, no aliases.** A
+- **Env vars, clean break, no aliases.** A
   startup guard (`src/config/retired_env.py`, called from `src/main.py`'s
   lifespan and both worker `main()` entry points) now fails loudly,
   naming the replacement, if any of these are still set:
@@ -132,9 +132,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/sam3/segment_plate_batch` path aliases are removed (`POST /segment`
   and `POST /segment/batch` are the only paths now; the shipped client
   posts to `/segment`).
-- **Naming sweep, wave W4 — Prometheus metric names.** Every metric
+- **Prometheus metric name cleanup.** Every metric
   constant and name in `src/services/curation/metrics.py` moved off the
-  company-initialed `LEGACY_*`/`legacy_*` prefix onto `OP_*`/`op_*`, and
+  legacy metric prefix onto `OP_*`/`op_*`, and
   domain/vendor-named metrics were renamed alongside the prefix swap
   (for example, the combined/separate VLM call counters, the
   segmenter-leg duration and circuit-breaker metrics, and the
@@ -220,7 +220,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answer to the class source they had before (VLM, ingest proposal or
   classifier, recovered from the untouched class provenance; class history
   as fallback) and records the empty attempt.
-- **Naming sweep, wave W0 — served detector/segmenter/VLM vocabulary**:
+- **Served detector/segmenter/VLM vocabulary**:
   `GET {prefix}/regions/vocabulary`
   serves `{detectors, region_sources, chain_actors}` (each entry `{id,
   label, role, filterable}`) built from the active `DetectionProfile` /

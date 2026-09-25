@@ -1,4 +1,4 @@
-"""F-11: auto_promote's classifier-source gate must not emit a dead
+"""auto_promote's classifier-source gate must not emit a dead
 ``terms: {class_source: []}`` clause when ``classifier_class_sources()``
 is empty in this environment -- that clause sits in ``must`` context, so
 an empty list would silently promote zero crops (the query matches
@@ -22,7 +22,7 @@ from src.services.curation.clustering import auto_promote
 
 
 def _cluster_agg_response(cluster_id: int, class_name: str, count: int) -> dict[str, Any]:
-    # F-29: cluster buckets now come from a composite agg (paged by
+    # Cluster buckets now come from a composite agg (paged by
     # cluster_id), not a single terms:size=10000 agg — the composite
     # bucket key is a dict of source-name -> value.
     return {

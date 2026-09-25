@@ -28,7 +28,7 @@ from fastapi.responses import StreamingResponse
 from src.routers.curation._common import OpenSearchDep, router
 
 
-# F-21: the dataset-stats aggregation used to re-run once per SSE client
+# The dataset-stats aggregation used to re-run once per SSE client
 # every STATS_REFRESH_SECONDS (15s) -- N open dashboard tabs meant N
 # identical `_search?size=0` round-trips every 15s. This module-level
 # cache is shared by every SSE connection; the lock ensures that when
@@ -104,7 +104,7 @@ async def pipeline_events(opensearch: OpenSearchDep) -> StreamingResponse:
 
     async def _build_stats_payload() -> dict[str, Any]:
         """Dashboard rollup, shared across every open SSE connection via
-        :func:`_cached_stats_payload`'s module-level TTL cache (F-21) —
+        :func:`_cached_stats_payload`'s module-level TTL cache —
         the REST ``/curation/stats/dataset`` endpoint's body, not a
         separate query."""
         return await _cached_stats_payload(opensearch)

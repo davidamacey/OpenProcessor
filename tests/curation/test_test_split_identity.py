@@ -1,5 +1,5 @@
 """Parity between the API's test-split identity helpers and the trainer's
-stdlib-only ``freeze.test_sha`` (plan W1, §3.1).
+stdlib-only ``freeze.test_sha``.
 
 ``label_content_sha(..., split='test')`` (API side, imports ``src``) and
 ``freeze.test_sha`` (trainer/evaluator side, stdlib-only, no ``src`` import)

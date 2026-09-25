@@ -1,4 +1,4 @@
-"""Clear a stale ``label_source`` left on a class-less item (K3).
+"""Clear a stale ``label_source`` left on a class-less item.
 
 ``label_source`` means "who set this item's class". A class-less item
 (``class_id is None``) has no class, so a non-null ``label_source`` on
@@ -46,7 +46,7 @@ def is_candidate(doc: dict[str, Any]) -> bool:
 
 
 def candidate_query(*, id_prefix: str | None = None) -> dict[str, Any]:
-    """OpenSearch query matching every candidate (K3)."""
+    """OpenSearch query matching every candidate."""
     query: dict[str, Any] = {
         'bool': {
             'must_not': [{'exists': {'field': 'class_id'}}],

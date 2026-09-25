@@ -5,7 +5,7 @@ Each ``run`` writes ``<model stem>.json`` into the dataset's results dir.
 comparison for that dataset; :func:`build_matrix` puts several datasets'
 comparisons side by side (model x dataset) with the winners per metric.
 
-Comparison semantics (plan section 3.5):
+Comparison semantics:
 
 * ``common_classes`` = eval classes covered by every model that covers at
   least one class. Every row gets a ``common`` block (its metrics over those

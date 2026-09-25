@@ -1,13 +1,12 @@
-"""Mistakenness scorer — confident-learning margin
-(curation-strategy plan §2.4).
+"""Mistakenness scorer — confident-learning margin.
 
 Northcutt/Jiang/Chuang, "Confident Learning" (JAIR 2021 / cleanlab):
 ``mistakenness = p(ŷ) - p(y_stored)`` for a crop where the probe's top-1
 prediction ``ŷ`` disagrees with the stored label ``y_stored``. This is the
 published formulation behind the existing (hand-rolled) "sort
-model_disagreements by entropy ascending" heuristic in the reference review-queries module —
-Phase 1 doesn't touch that tab (plan §8 non-goal #6); this scorer feeds the
-*new* additive ``/curation/scores/*`` surface instead.
+model_disagreements by entropy ascending" heuristic in the
+``review_queries`` module — that tab is untouched here; this scorer feeds
+the *new* additive ``/curation/scores/*`` surface instead.
 
 Two layers, because of a real persistence constraint:
 
@@ -16,11 +15,11 @@ Two layers, because of a real persistence constraint:
   ``tests/curation/test_mistakenness.py`` exercises (synthetic label-flip,
   AUROC acceptance bar) — it needs the true posterior to be a fair test of
   the *math*, independent of what we happen to persist per-crop today.
-* :func:`compute_mistakenness_from_margin` — the **production** path. Per
-  plan §4.1 we persist only scalar probe summaries per crop
+* :func:`compute_mistakenness_from_margin` — the **production** path. We
+  persist only scalar probe summaries per crop
   (``probe_pred_confidence`` = p(ŷ), ``probe_pred_margin`` = p(ŷ) - p(second))
-  — not the full ``nc``-length posterior (would bloat the index; not in the
-  plan's field list). When the probe agrees with the stored label,
+  — not the full ``nc``-length posterior (would bloat the index). When the
+  probe agrees with the stored label,
   mistakenness is defined as 0 (probe/human perfectly consistent — no
   evidence of a bad label). When it disagrees, we don't know p(y_stored)
   exactly, but if the stored label is the probe's rank-2 class (the common
@@ -29,7 +28,7 @@ Two layers, because of a real persistence constraint:
   than 2, the true p(y_stored) is even smaller, so this *underestimates*
   mistakenness — a conservative, documented approximation, not a silent
   one. Resolved as part of the class-posterior blocker fix in
-  ``probe_predictions.py`` (plan §2.2/§2.4/§10.1).
+  ``probe_predictions.py``.
 """
 
 from __future__ import annotations

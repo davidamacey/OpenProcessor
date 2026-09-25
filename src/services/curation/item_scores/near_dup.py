@@ -1,21 +1,22 @@
 """Near-duplicate scorer — crop-level reuse of the validated whole-frame
-primitive (curation-strategy plan §2.5).
+primitive.
 
 :func:`src.services.detection.frame_dedup.near_dup_groups` (exact blocked
 cosine + union-find connected components, already validated at threshold
 0.98 for whole-frame image ``pe_embedding``) is reused verbatim here,
 just applied to crop-level embeddings instead of frame-level ones. No new
 math. New fields only: ``dup_group_id`` / ``dup_group_size`` /
-``dup_is_representative`` (plan §2.5/§4).
+``dup_is_representative``.
 
-**Threshold is a hypothesis, not a finding** (plan §2.5/§10.3): crops likely
+**Threshold is a hypothesis, not a finding**: crops likely
 need a tighter cut than the whole-frame 0.98 — a near-dup *photo* burst still
-contains distinct crops (a truck and its trailer), so 0.98 was never
-validated at crop granularity. ``OP_CROP_DUP_THRESHOLD`` (default 0.98,
-matching :data:`frame_dedup.DEFAULT_FRAME_DEDUP_THRESHOLD` until the sweep
-in plan §6 says otherwise) makes this a knob, not a hardcoded assumption.
+contains distinct crops (e.g. two different objects in the same frame), so
+0.98 was never validated at crop granularity. ``OP_CROP_DUP_THRESHOLD``
+(default 0.98, matching :data:`frame_dedup.DEFAULT_FRAME_DEDUP_THRESHOLD`
+until a future sweep says otherwise) makes this a knob, not a hardcoded
+assumption.
 
-**Bucket-scoped, not global** (plan §3 compute budget): an O(n²) pass over
+**Bucket-scoped, not global** (compute budget): an O(n²) pass over
 the full residual pool is 1.2e11 pairs at 350k crops — a requirement to
 avoid, not an optimization. When ``centroids`` are supplied (production
 path), embeddings are first assigned to their nearest IVF centroid and
@@ -124,7 +125,7 @@ class NearDupScorer:
         store = IVFCentroidStore()
         if not store.load():
             # Fail loudly rather than silently degrading to an unscoped
-            # global O(n^2) pass (plan §3: 1.2e11 pairs at 350k crops —
+            # global O(n^2) pass (1.2e11 pairs at 350k crops —
             # exactly the cost the bucket-scoping exists to avoid). A
             # missing store is a setup problem the caller needs to know
             # about, not a shape the scorer should quietly paper over.

@@ -1,14 +1,13 @@
-"""2-D UMAP projection for **visualization only** (curation-strategy plan
-§2.7/§3.5/§7 Phase 5).
+"""2-D UMAP projection for **visualization only**.
 
-Non-negotiable design rules (plan §2.7 / §8 non-goal #4):
+Non-negotiable design rules:
 
 1. **Own persisted state slot.** Never touches
    ``embedding_reduce.UMAP_STATE_JOBLIB_PATH{,_CUML}`` or the
    ``op_umap_state`` index — those belong to the *retired* clustering
-   reducer (``docs/design/clustering_methods.md`` §2.1: UMAP collapsed
-   most of the residual pool into one mega-cluster and was retired for
-   clustering). This module's state lives at ``umap_viz_state.joblib``
+   reducer (UMAP collapsed most of the residual pool into one
+   mega-cluster and was retired for clustering). This module's state
+   lives at ``umap_viz_state.joblib``
    (disk) and the ``op_umap_viz_state`` index — deliberately distinct
    names, never imported by/from ``embedding_reduce.py`` /
    ``curation_umap.py`` / ``clustering/orchestrator.py`` /
@@ -28,12 +27,12 @@ Non-negotiable design rules (plan §2.7 / §8 non-goal #4):
 4. **Only writes ``viz_x`` / ``viz_y`` / ``viz_projection_version``**
    (the three fields declared by
    :func:`src.clients.curation_opensearch.ensure_items_viz_fields`).
-   Never ``cluster_id`` / ``cluster_subid`` / ``cluster_distance`` (plan §8
-   non-goal #3, guarded by
+   Never ``cluster_id`` / ``cluster_subid`` / ``cluster_distance`` (guarded
+   by
    ``tests/curation/test_embedding_viz.py::test_writes_never_include_cluster_fields``).
 
 Embedding fetch reuses the two existing helpers rather than a third
-scroll/PIT-fetch implementation (plan §3.5 note): ``scope='residual'``
+scroll/PIT-fetch implementation: ``scope='residual'``
 delegates to
 :func:`src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel`
 (same pool + ``CONFIDENT_CLASS_SOURCES``/``class_excluded`` gate
@@ -107,7 +106,7 @@ VIZ_PROJECTION_VERSION = 'umap_viz_v1'
 EMBEDDING_FIELD = 'pe_embedding'
 
 # max_result_window is 10000; get_cached_projection() pages with search_after
-# in chunks of this size instead of a single oversized `size: max_points` (F-2).
+# in chunks of this size instead of a single oversized `size: max_points`.
 _VIZ_PROJECTION_PAGE_SIZE = 5000
 
 # Job pool cap. Residual-scope fetch has no built-in cap (unlike
@@ -379,10 +378,10 @@ async def _fetch_pool(
 def _build_reducer() -> Any:
     """Lazy ``import umap`` -- mirrors ``clustering.embedding_reduce._build_cpu_reducer``
     so importing this module (or running its non-fit tests) never requires
-    ``umap-learn`` to be installed. CPU-only (no cuML branch): the plan's
+    ``umap-learn`` to be installed. CPU-only (no cuML branch): the
     compute budget already treats 2-d UMAP as job-only/background
-    (10-30 min CPU at 128k), and this is explicitly the lowest-priority
-    phase -- a GPU path can be added later without touching the on-disk
+    (10-30 min CPU at 128k), and this is explicitly a low-priority
+    concern -- a GPU path can be added later without touching the on-disk
     state format if the CPU wall-clock proves annoying in practice."""
     import umap
 
@@ -461,8 +460,7 @@ async def _bulk_write_coordinates(
     chunk_size: int = 500,
 ) -> int:
     """Write ``viz_x``/``viz_y``/``viz_projection_version`` only -- never
-    ``cluster_id``/``cluster_subid``/``cluster_distance`` (plan §8
-    non-goal #3; guarded by
+    ``cluster_id``/``cluster_subid``/``cluster_distance`` (guarded by
     ``tests/curation/test_embedding_viz.py::test_writes_never_include_cluster_fields``)."""
     index = ITEMS_INDEX
     n_written = 0

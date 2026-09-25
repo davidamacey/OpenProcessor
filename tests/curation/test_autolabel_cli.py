@@ -1,8 +1,7 @@
-"""Coverage for ``src/services/curation/autolabel/cli.py`` (plan Wave 5
-W5.b — a zero-coverage subprocess entry point).
+"""Coverage for ``src/services/curation/autolabel/cli.py``, a
+zero-coverage subprocess entry point.
 
-This module has no ``argparse`` surface (unlike the plan's generic W5.b
-description, which assumed one) — its input is a ``state.json`` file
+This module has no ``argparse`` surface — its input is a ``state.json`` file
 written by :func:`src.services.curation.autolabel.job.start_job`, not
 CLI flags. Tests exercise the module's actual shape instead: pipeline
 path resolution, the ``_run_pipeline`` state-machine (success, each

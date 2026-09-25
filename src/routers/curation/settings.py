@@ -1,5 +1,5 @@
 """``GET,PUT /curation/settings`` — shared, backend-stored curation-strategy
-defaults (curation deployment-settings plan).
+defaults.
 
 There is no user-account system (single shared instance), so a per-axis
 UI default (cluster method, sort order, detection profile, prompt pack —

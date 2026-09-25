@@ -50,9 +50,9 @@ def test_items_mapping_region_fields_match_the_module_singleton() -> None:
         'cluster_id',
         'cluster_distance',
         'cluster_subid',
-        # CFG-8: this was a domain-named, vendor-named literal
-        # (historic) baked into the mapping until
-        # it was wired through RegionFields.visible.
+        # This was a domain-named, vendor-named literal (historic)
+        # baked into the mapping until it was wired through
+        # RegionFields.visible.
         'visible',
     )
     for attr in region_attrs_declared:

@@ -1,4 +1,4 @@
-"""F-16 coverage for ``src.services.curation.selection.pool_fetch``.
+"""Count-first cap coverage for ``src.services.curation.selection.pool_fetch``.
 
 Count-first cap check: a pool already known (via ``count``) to exceed
 ``cap`` must never be scrolled at all.

@@ -1,7 +1,8 @@
 """Shared fakes for the curation ingest integration tests.
 
-Fakes the OpenSearch / Triton / PE-encoder I/O boundary (plan §6.0 house
-rule) so ingest can run through the real app and the real
+Fakes the OpenSearch / Triton / PE-encoder I/O boundary (per this repo's
+house rule: don't add the repo's first live-stack dependency) so ingest
+can run through the real app and the real
 ``CurationIngestService``. Used by ``test_ingest_roundtrip.py`` (path
 ingest), ``test_ingest_upload.py`` (byte upload) and
 ``test_import_labeled_dataset.py`` (labeled-dataset driver).
@@ -246,7 +247,7 @@ class FakeOpenSearch:
     ) -> dict[str, Any]:
         # Two shapes land here: the {'ids': [...]} shape used directly by
         # this module's own callers, and mget_crops' {'docs': [{'_id':...,
-        # '_index':...}, ...]} shape (occ_update_bulk, F-17/F-26).
+        # '_index':...}, ...]} shape (used by occ_update_bulk).
         ids = body['ids'] if 'ids' in body else [d['_id'] for d in body['docs']]
         docs = []
         for doc_id in ids:

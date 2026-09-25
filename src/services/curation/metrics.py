@@ -6,9 +6,8 @@ at module scope. It deliberately does NOT wire any of these metrics
 into the worker / OCC / VLM code paths — the owning services are
 responsible for incrementing / observing them where appropriate.
 
-Metric names use the ``op_*`` prefix (renamed from the reference
-implementation's original vendor-specific prefix during the naming
-sweep). See ``docs/design/curation_design_rationale.md`` §6 (known gaps).
+Metric names use the ``op_*`` prefix. See
+``docs/design/curation_design_rationale.md`` §6 (known gaps).
 """
 
 from __future__ import annotations

@@ -162,7 +162,7 @@ async def lifespan(app: FastAPI):
     # =========================================================================
     logger.info('startup_begin', phase='initialization')
 
-    # Fail loudly on any retired env-var name (naming-sweep D4) before
+    # Fail loudly on any retired env-var name before
     # anything else initializes.
     from src.config.retired_env import reject_retired_env
 
@@ -203,7 +203,7 @@ async def lifespan(app: FastAPI):
         await create_curation_indexes(os_client.client, force_recreate=False)
         logger.info('curation_indexes_bootstrapped')
 
-        # F-24: warm the kNN graph cache in the background — fire-and-
+        # Warm the kNN graph cache in the background — fire-and-
         # forget, never blocks startup, failure is logged and swallowed.
         from src.routers.curation._common import warm_knn_indexes
 
@@ -299,7 +299,7 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning('gpu_arbiter_reconcile_skipped', error=str(exc))
 
-    # TR-4: Triton in explicit-control mode only loads its --load-model
+    # Triton in explicit-control mode only loads its --load-model
     # list at startup. A model promoted through POST
     # {api_prefix}/train/promote/{job_id} stays on disk (with a
     # promote.json marker) but drops to UNAVAILABLE after any Triton
@@ -419,12 +419,10 @@ def create_app() -> FastAPI:
     # the API. In production a reverse proxy usually handles routing so
     # cross-origin calls are rare, but this covers: dev mode (vite/webpack
     # dev servers on a different port), direct API access from LAN IPs, and
-    # any other internal network clients. Ported from the reference
-    # implementation's CORS block — dropped during the initial OSS port,
-    # which broke any frontend dev server talking to this API
-    # cross-origin (browser fetch fails with "Failed to fetch"/no CORS
-    # headers, even though the server itself processes and logs the
-    # request as 200).
+    # any other internal network clients. Without this middleware, any
+    # frontend dev server talking to this API cross-origin fails
+    # (browser fetch fails with "Failed to fetch"/no CORS headers, even
+    # though the server itself processes and logs the request as 200).
     from fastapi.middleware.cors import CORSMiddleware
 
     application.add_middleware(

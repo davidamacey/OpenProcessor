@@ -32,7 +32,7 @@ def test_every_ensure_migration_is_wired():
     )
     assert migration_names, 'expected at least one ensure_items_* export'
 
-    # F-28.4: the actual bootstrap sequence moved into
+    # The actual bootstrap sequence moved into
     # _ensure_indexes_locked (called by _ensure_indexes while holding
     # _ensure_indexes_lock) so the lock/fast-path wiring stays readable
     # -- inspect that one for the migration calls.

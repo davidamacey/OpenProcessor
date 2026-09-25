@@ -1,9 +1,8 @@
-"""Tests for the UMAP visualization-only projection overlay
-(curation-strategy plan §2.7/§3.5/§7 Phase 5/§9): ``POST
+"""Tests for the UMAP visualization-only projection overlay: ``POST
 /curation/viz/projection/rebuild`` + ``status``/``cancel`` lifecycle, and
 ``GET /curation/viz/projection``.
 
-Mirrors the reference line's select/scores router test conventions:
+Mirrors the select/scores router test conventions:
 mount the real curation router with OpenSearch stubbed, monkeypatch
 the background job runner wholesale to control the async lifecycle
 deterministically instead of racing a real ``asyncio.create_task``
@@ -248,7 +247,7 @@ def test_get_projection_max_points_over_ceiling_422(
 
 
 # =============================================================================
-# Hard requirement (plan Part A.2): GET must never be able to trigger a fit.
+# Hard requirement: GET must never be able to trigger a fit.
 # =============================================================================
 
 

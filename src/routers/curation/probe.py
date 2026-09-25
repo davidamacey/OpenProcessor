@@ -1,4 +1,4 @@
-"""C1: run the active-learning probe from a finished training run.
+"""Run the active-learning probe from a finished training run.
 
 ``POST /probe/run`` resolves the given training ``job_id``'s exported
 weights (the same ``checkpoint_path`` ``POST /train/promote`` reads) and

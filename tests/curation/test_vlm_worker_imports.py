@@ -1,4 +1,4 @@
-"""S-1: the vlm worker's lazy `from src...` import must resolve.
+"""The vlm worker's lazy `from src...` import must resolve.
 
 The container command used to be `python scripts/curation/vlm_worker.py
 --continuous`, which puts `scripts/curation` (not the repo root) on

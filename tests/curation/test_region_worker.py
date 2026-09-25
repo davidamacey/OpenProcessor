@@ -701,7 +701,7 @@ class TestSignalHandling:
 
 
 class TestIsSecondaryShape:
-    """F-11: group resolution now comes from the class registry
+    """Group resolution now comes from the class registry
     (class_name -> group), not the dead ``_ItemTask.group`` field nothing
     ever wrote or mapped on the item doc."""
 

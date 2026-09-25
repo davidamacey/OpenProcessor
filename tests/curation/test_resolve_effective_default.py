@@ -1,5 +1,5 @@
-"""Tests for ``resolve_effective_default`` (curation deployment-settings
-plan) -- the single function both ``GET /methods``'s per-axis ``default``
+"""Tests for ``resolve_effective_default`` -- the single function both
+``GET /methods``'s per-axis ``default``
 flag and every real endpoint's omitted-param resolution must share.
 
 Uses the same ``FakeSettingsOpenSearch`` fake as

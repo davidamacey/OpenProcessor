@@ -1,4 +1,4 @@
-"""Unified PE-Core-L14-336 client (B-PR3).
+"""Unified PE-Core-L14-336 client.
 
 Two encoders ship under one class:
 
@@ -75,8 +75,7 @@ if TYPE_CHECKING:
     from src.clients.triton_pool import AsyncTritonPool
 
 # Chunk size for embed_crops -- respects the PE Triton model's configured
-# max_batch_size on typical deployments (see docs/design/curation_design_rationale.md
-# §2.1 for the reference throughput note this mirrors).
+# max_batch_size on typical deployments.
 PE_CROP_MAX_BATCH = 32
 
 

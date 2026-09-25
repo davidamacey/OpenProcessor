@@ -460,7 +460,7 @@ async def run_probe_inference(
             'bbox_norm',
             'class_name',
         ],
-        # F-26: scroll hygiene, no relevance scoring needed here.
+        # Scroll hygiene, no relevance scoring needed here.
         'sort': ['_doc'],
     }
     resp = await opensearch.search(
@@ -473,7 +473,7 @@ async def run_probe_inference(
     processed = 0
     try:
         while hits:
-            # F-26: one bulk() per scroll page instead of one update() per
+            # One bulk() per scroll page instead of one update() per
             # item — page_size items become 1 round-trip instead of N.
             bulk_body: list[dict[str, Any]] = []
             for hit in hits:

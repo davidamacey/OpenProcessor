@@ -1,13 +1,12 @@
 """Model-comparison (bake-off) job resolution: runs, baselines, class maps, job spec v2.
 
 The API resolves everything it can at enqueue time, so the evaluator
-container only scores (plan ``generic_model_comparison_plan.md`` sections
-3.3, 5, 7.7, 7.12):
+container only scores:
 
 * a training run -> checkpoint, imgsz, class names, the export it trained on
   (:func:`resolve_run_model`);
 * a model x dataset pair -> its class mapping (:func:`build_class_mapping`,
-  the plan's five-rule order, algorithm in ``scripts/curation/bakeoff/class_map.py``);
+  a five-rule order, algorithm in ``scripts/curation/bakeoff/class_map.py``);
 * a ``POST /bakeoff/run`` body -> the job file the evaluator reads plus the
   response (:func:`build_job_spec`).
 
@@ -262,7 +261,7 @@ async def resolve_run_model(run_id: str) -> RunModel:
 
 
 # =============================================================================
-# Class mapping: plan 3.3
+# Class mapping
 # =============================================================================
 
 
@@ -300,7 +299,7 @@ def _single_cls_mapping(
 def run_class_mapping(
     run: RunModel, dataset: EvalDatasetRecord, scored: list[int]
 ) -> cmap.ClassMapping:
-    """Rules 2-4 of plan 3.3 for a training run."""
+    """Rules 2-4 for a training run."""
     if run.single_cls:
         fallback = _single_cls_mapping(run, dataset, scored)
         if fallback is not None:
@@ -360,7 +359,7 @@ def _overlap(run: RunModel, dataset: EvalDatasetRecord) -> TrainTestOverlap | No
 
 
 # =============================================================================
-# Trained-model listing: plan 7.3
+# Trained-model listing
 # =============================================================================
 
 
@@ -426,7 +425,7 @@ async def list_trained_models(dataset_id: str | None, limit: int) -> list[Traine
 
 
 # =============================================================================
-# Run request to job spec v2: plan 7.7, 7.12
+# Run request to job spec v2
 # =============================================================================
 
 

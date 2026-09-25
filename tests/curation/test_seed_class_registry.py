@@ -1,4 +1,4 @@
-"""S6: seed/validate class_registry.json from a detector's embedded class names."""
+"""Seed/validate class_registry.json from a detector's embedded class names."""
 
 from __future__ import annotations
 

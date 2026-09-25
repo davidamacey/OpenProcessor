@@ -5,17 +5,16 @@
 of truth for OpenSearch region field names — see
 ``docs/design/curation_design_rationale.md`` §4. On the working
 branch a ``'plate_...'``/``"plate_..."`` string literal is *always* a
-mistake: it means a file was copied across from the reference tree
-without being genericized to read fields via ``RegionFields``.
+mistake: it means a file was not fully genericized to read fields via
+``RegionFields``.
 
 Run by the ``check-no-literal-region-fields`` pre-commit hook, which
 passes every changed ``*.py`` file under ``src/``, ``scripts/`` and
 ``tests/`` as a positional argument (same wiring style as
 ``check_file_size.py``). Of those, this script only actually checks
 files that fall under ``PORTED_PATHS`` — a growing allowlist of
-already-ported paths (see the same doc's §4 "Per-chunk enforcement
-guard"). It starts empty in Chunk 0; each later wave appends its
-newly-ported paths in the same commit that ports them. This gives a
+already-ported paths. It starts empty; each newly-ported path is appended
+in the same commit that ports it. This gives a
 ratchet: once a module is ported, it can never regress to hardcoding a
 `plate_*` literal again.
 
@@ -54,13 +53,13 @@ from pathlib import Path
 # Growing allowlist of paths (files or directory prefixes, POSIX,
 # relative to the repo root) that have been ported to the `curation`
 # namespace and are expected to be free of `plate_*` OpenSearch-field
-# literals. Starts empty in Chunk 0 (scaffolding only, nothing ported
-# yet). Each later wave appends its newly-ported paths here in the same
-# commit that ports them — see §3.2 "Per-chunk enforcement guard".
+# literals. Starts empty (scaffolding only, nothing ported
+# yet). Each newly-ported path is appended here in the same
+# commit that ports it.
 #
-# Chunk 1 (foundations). Note: `test_region_fields_mapping_
+# Foundations note: `test_region_fields_mapping_
 # coverage.py` and `test_region_fields.py` construct a `roi_*`-named
-# RegionFields instance to prove overridability (§3.2) — not `plate_*`,
+# RegionFields instance to prove overridability — not `plate_*`,
 # so they never needed a guard exemption in the first place.
 PORTED_PATHS: tuple[str, ...] = (
     # commit (a) — OpenSearch client
@@ -70,7 +69,7 @@ PORTED_PATHS: tuple[str, ...] = (
     'src/routers/curation/_common.py',
     'src/routers/curation/__init__.py',
     'tests/curation/test_ensure_indexes.py',
-    # Chunk 2 — image serving, history, source-image cache
+    # Image serving, history, source-image cache
     'src/services/curation/image_serving.py',
     'src/services/curation/history.py',
     'src/services/curation/source_image_cache.py',
@@ -78,13 +77,13 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_curation_images.py',
     'tests/curation/test_history.py',
     'tests/curation/test_source_image_cache.py',
-    # Chunk 4 commit (a) — clustering methods + backend primitives
+    # Clustering methods + backend primitives
     'src/services/curation/clustering/backend.py',
     'src/services/curation/clustering/id_normalize.py',
     'src/services/curation/clustering/outliers.py',
     'src/services/curation/clustering/methods/',
     'tests/curation/test_cluster_id_normalize.py',
-    # Chunk 4 commit (b) — clustering orchestrator + cluster/umap/viz routers
+    # Clustering orchestrator + cluster/umap/viz routers
     'src/services/curation/clustering/orchestrator.py',
     'src/services/curation/clustering/auto_promote.py',
     'src/services/curation/clustering/embedding_reduce.py',
@@ -99,20 +98,17 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_embedding_viz.py',
     'tests/curation/test_curation_viz_router.py',
     'tests/curation/test_cluster_representatives_router.py',
-    # The reference line's clustering-wave regression-guards test file
-    # is deliberately NOT ported — it exercises four reference-line-only
-    # pre-commit guard scripts (label-validated, prototype, legacy-search,
-    # mobileclip guards) that plan section 0.6 already resolved as "not
-    # applicable" / "not inherited" on the working branch, independent
-    # of this chunk.
-    # Chunk 4 commit (b), continued — src.clients.occ ported ahead of its
-    # originally-scheduled wave (see the port's commit message / plan
-    # deviation note): a genuine, plan-missed hard dependency of
+    # A companion regression-guard test file from an earlier version of
+    # this codebase is deliberately NOT ported — it exercised four
+    # legacy-only pre-commit guard scripts (label-validated, prototype,
+    # legacy-search, mobileclip guards) that don't apply on this
+    # codebase.
+    # src.clients.occ ported early — a genuine hard dependency of
     # auto_promote.py that would otherwise leave `import src.main` clean
     # but the function itself uncallable.
     'src/clients/occ.py',
     'tests/curation/occ_fakes.py',
-    # Chunk 5 — scoring, selection and review services + routers
+    # Scoring, selection and review services + routers
     'src/services/curation/item_scores/',
     'src/services/curation/selection/',
     'src/services/curation/review_queries.py',
@@ -135,7 +131,7 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_methods_router.py',
     'tests/curation/test_test_holdout_freeze.py',
     'tests/curation/test_backfill_scores_cli.py',
-    # Chunk 6 — training pipeline (services, router, bakeoff harness)
+    # Training pipeline (services, router, bakeoff harness)
     'src/services/training/jobs.py',
     'src/services/training/preflight_scan.py',
     'src/services/training/profiles.py',
@@ -155,7 +151,7 @@ PORTED_PATHS: tuple[str, ...] = (
     'src/routers/curation/bakeoff.py',
     'scripts/curation/bakeoff/',
     'tests/curation/test_bakeoff_router.py',
-    # Chunk 7 commit (a) — VLM client (transport) + PromptPack (prompt
+    # VLM client (transport) + PromptPack (prompt
     # data). `vlm_prompts.py` carries no `RegionFields`-governed literals
     # of its own (its neutral pack's wire-key strings match
     # `RegionFields` defaults already, e.g. `region_visible`) but is
@@ -163,29 +159,29 @@ PORTED_PATHS: tuple[str, ...] = (
     'src/services/labeling/vlm_client.py',
     'src/services/labeling/vlm_prompts.py',
     'tests/curation/test_prompt_pack.py',
-    # Chunk 7 commit (b) — VLM labeler (orchestration) + router.
+    # VLM labeler (orchestration) + router.
     'src/services/labeling/vlm_labeler.py',
     'src/routers/curation/vlm.py',
     'tests/curation/test_vlm_labeler.py',
     'tests/curation/test_vlm_combined.py',
     'tests/curation/test_class_synonyms.py',
-    # Chunk 8 commit (a) — detection cascade, parameterized by
+    # Detection cascade, parameterized by
     # DetectionProfile and renamed to region terms.
     'src/services/detection/cascade_detect.py',
     'tests/curation/test_cascade_detect.py',
     'tests/curation/test_region_sanity.py',
     'tests/curation/test_detection_profile_second_profile.py',
-    # Chunk 8 commit (b) — region + region-fp routers.
+    # Region + region-fp routers.
     'src/routers/curation/regions.py',
     'src/routers/curation/regions_fp.py',
-    # Chunk 8 commit (c) — curation detection worker package.
+    # Curation detection worker package.
     'scripts/curation/worker/',
     'scripts/curation/region_worker_main.py',
     'tests/curation/test_region_worker.py',
     'tests/curation/test_label_combined_wireup.py',
     'tests/curation/test_segmenter_telemetry.py',
     'tests/integration/test_segmenter_circuit_breaker.py',
-    # Chunk 9 commit (a) — remaining services.
+    # Remaining services.
     'src/services/curation/semantic_search.py',
     'src/services/curation/event_hub.py',
     'src/services/curation/probe_predictions.py',
@@ -195,7 +191,7 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_semantic_search.py',
     'tests/curation/test_probe_predictions.py',
     'tests/curation/test_export_service.py',
-    # Chunk 9 commit (b) — leaf routers.
+    # Leaf routers.
     'src/clients/pe_encoder.py',
     'src/routers/curation/classes.py',
     'src/routers/curation/crops.py',
@@ -222,10 +218,10 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/integration/test_ingest_occ.py',
     'tests/integration/test_auto_label_class_name_fix.py',
     'tests/integration/test_request_id_propagation.py',
-    # Chunk 9 commit (c) — pipeline router.
+    # Pipeline router.
     'src/routers/curation/pipeline.py',
     'tests/curation/test_pipeline.py',
-    # Wave 2 — generic curation ingest path.
+    # Generic curation ingest path.
     'src/services/curation/label_import.py',
     'src/services/detection/geometry.py',
     'src/services/curation/ingest.py',
@@ -237,7 +233,7 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_ensemble_nms.py',
     'tests/curation/test_pe_preprocess.py',
     'tests/integration/test_ingest_roundtrip.py',
-    # G2 — generic single-class / class-subset dataset export.
+    # Generic single-class / class-subset dataset export.
     'src/services/curation/export_single_class.py',
     'src/services/curation/export_single_class_rows.py',
     'src/services/curation/export_support.py',

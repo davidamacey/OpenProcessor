@@ -74,7 +74,7 @@ async def compute_centroid_distances(
     ):
         return cached['distances']  # type: ignore[no-any-return]
 
-    # F-16: count before scrolling — a cluster far past _MAX_MEMBERS should
+    # Count before scrolling — a cluster far past _MAX_MEMBERS should
     # never pay for a scroll (even a partial, break-early one) just to
     # discover it's too large; the exact count is cheap and decides that
     # up front.

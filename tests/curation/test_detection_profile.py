@@ -1,4 +1,4 @@
-"""Pins for ``DetectionProfile`` (Chunk 0).
+"""Pins for ``DetectionProfile``.
 
 See ``docs/design/curation_design_rationale.md`` §2.3.
 """
@@ -52,7 +52,7 @@ def test_is_frozen() -> None:
 
 
 def test_ocr_rec_model_defaults_to_the_real_triton_directory_name() -> None:
-    """CFG-7: this used to default to 'paddleocr_rec', but no model
+    """This used to default to 'paddleocr_rec', but no model
     directory of that name exists -- the real one (verified against
     docker-compose.yml's --load-model list, scripts/setup.sh's
     required_models, scripts/export_paddleocr.sh, and the models/ tree
@@ -210,7 +210,7 @@ def test_from_env_name_kwarg_used_when_name_env_unset() -> None:
 
 def test_two_distinct_profiles_are_independent() -> None:
     """A second, distinct profile through the same cascade must not
-    share mutable state with the first (§6.1 wave-8 coverage note)."""
+    share mutable state with the first."""
     region_a = DetectionProfile(name='license_plate', detector_model='region_det_test')
     box = DetectionProfile(
         name='box',

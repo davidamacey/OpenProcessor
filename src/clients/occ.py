@@ -340,12 +340,11 @@ def _is_human_marker(value: Any) -> bool:
 
 
 def is_human_owned_class(source: dict[str, Any]) -> bool:
-    """P0-2 reusable human-label guard predicate.
+    """Reusable human-label guard predicate.
 
     True when a crop's current ``class_source`` indicates a human already
     set/confirmed the class label. Every automated CLASS writer must
-    consult this before overwriting class fields — audit-remediation-plan
-    Phase 1 (P0-2). Currently wired into:
+    consult this before overwriting class fields. Currently wired into:
       * the region-detection worker's classification gate (guards
         whether the combined VLM call is even asked to classify).
       * the region-detection worker's bulk writer (defense-in-depth on
@@ -566,7 +565,7 @@ async def occ_upsert_bulk(
             if item.get('found') and item['_id'] in id_to_doc
         )
 
-    # Phase 2: batched OCC updates (F-26) — one occ_update_bulk call
+    # Phase 2: batched OCC updates — one occ_update_bulk call
     # (one mget page + one bulk, retrying 409s once) instead of one
     # client.update per doc. Local import: occ_bulk.py imports FROM this
     # module (ITEMS_INDEX / OCC_BULK_*), so importing it back at module

@@ -1,4 +1,4 @@
-"""C1: the file-backed probe job wrapper (src.services.curation.probe_job).
+"""The file-backed probe job wrapper (src.services.curation.probe_job).
 
 Multi-worker correctness is the point of this module (2026-09-25 fix):
 ``yolo-api`` runs under ``--workers=N`` -- separate OS processes that

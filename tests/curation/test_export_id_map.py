@@ -1,4 +1,4 @@
-"""Coverage for the dense ``export_id_map`` (plan §4 Wave 3, W3.a).
+"""Coverage for the dense ``export_id_map``.
 
 Registry id -> contiguous-from-zero dense id, deprecated classes skipped;
 the label files on disk must carry the dense id, not the raw registry id;

@@ -1,8 +1,7 @@
 """In-process IVF centroid cache + ingest quality gate.
 
-Ported from the private reference ingest service's residual-clustering
-option (see ``docs/design/curation_design_rationale.md`` §2.1 for the
-citation convention; reference lines ``:165-229``). Two independent
+Implements the residual-clustering option described in
+``docs/design/curation_design_rationale.md`` §2.1. Two independent
 things live here, both process-cached and keyed on the persisted
 centroids file's mtime so a worker retrain propagates to the ingest
 path without a process restart:

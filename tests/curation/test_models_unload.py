@@ -61,7 +61,7 @@ def test_unload_refuses_region_protected_model(app_client, monkeypatch, model_na
 
 @pytest.mark.usefixtures('reference_region_profile')
 def test_unload_refuses_active_profiles_detector_model(app_client, monkeypatch):
-    """S8: the guard has no hardcoded 'lpr_' prefix. A model is protected
+    """The guard has no hardcoded 'lpr_' prefix. A model is protected
     because it IS the active profile's configured detector_model, not
     because of its name's shape."""
     mock = _mock_unload(monkeypatch)
@@ -230,7 +230,7 @@ def test_discover_promoted_models_corrupt_promote_json_is_skipped_not_fatal(tmp_
 def test_is_region_protected_model_matches_names_and_prefixes():
     import src.routers.curation.models as models_mod
 
-    # No hardcoded 'lpr_' prefix (S8): an lpr-shaped name is not protected
+    # No hardcoded 'lpr_' prefix: an lpr-shaped name is not protected
     # merely by its name, only via the active profile's detector_model or
     # the fixed paddleocr_ OCR prefix.
     assert models_mod._is_region_protected_model('lpr_nanov11_640') is False

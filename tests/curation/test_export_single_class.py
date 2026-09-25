@@ -6,11 +6,11 @@ deliberately exercises the crop+resize stage against real tiny JPEGs.
 
 The acceptance test for this capability is
 ``test_manifest_shape_matches_reference_single_class_export`` at the
-bottom: the cutover plan's §10 checklist requires the reference
-implementation's single-class export to be reproducible through this
-generic exporter with a byte-comparable manifest, so that test pins the
-reference manifest's exact key set and asserts this exporter's manifest
-carries every one of them with the same semantics.
+bottom: an earlier internal version's single-class export must be
+reproducible through this generic exporter with a byte-comparable
+manifest, so that test pins that manifest's exact key set and asserts
+this exporter's manifest carries every one of them with the same
+semantics.
 """
 
 from __future__ import annotations
@@ -69,12 +69,12 @@ class _FakeOpenSearch:
     def _match(self, query: dict[str, Any]) -> list[dict[str, Any]]:
         """Crude status-terms matcher, enough to split the three region pools.
 
-        F-29: the empty-frame sample query is wrapped in ``function_score``
+        The empty-frame sample query is wrapped in ``function_score``
         (random_score) rather than a bare bool — unwrap it first.
         """
         if 'function_score' in query:
             query = query['function_score']['query']
-        # F-19: status/class_id predicates now live in filter context.
+        # status/class_id predicates now live in filter context.
         clauses = query.get('bool', {}).get('filter', [])
         wanted: set[str] = set()
         for clause in clauses:
@@ -463,7 +463,7 @@ async def test_symlink_flip_retargets_a_previous_export(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Region box source (the reference implementation's export shape)
+# Region box source (an earlier internal version's export shape)
 # ---------------------------------------------------------------------------
 
 
@@ -494,7 +494,7 @@ async def test_region_mode_splits_positives_hard_negatives_and_empties(tmp_path)
 
 @pytest.mark.asyncio
 async def test_region_mode_empty_frame_sample_uses_random_score_with_fixed_seed(tmp_path):
-    """F-29: the empty-frame sample must not be index-order-biased (the
+    """The empty-frame sample must not be index-order-biased (the
     same leading docs every export) — it's a function_score/random_score
     query with a fixed seed instead."""
     from src.services.curation.export_single_class_rows import EMPTY_FRAME_SAMPLE_SEED
@@ -604,7 +604,7 @@ async def test_item_crop_mode_crops_the_written_image(tmp_path):
 # Acceptance: manifest parity with the reference single-class export
 # ---------------------------------------------------------------------------
 
-# Exact manifest key set written by the reference implementation's
+# Exact manifest key set written by an earlier internal version's
 # single-class export service. Pinned here as literal
 # data so this test fails if the generic exporter ever drops one of the
 # fields a downstream training lineage reads.
@@ -649,7 +649,7 @@ _REFERENCE_KEY_RENAMES: dict[str, str] = {'sampling': 'sampling_mode', 'git_sha'
 
 @pytest.mark.asyncio
 async def test_manifest_shape_matches_reference_single_class_export(tmp_path):
-    """Cutover plan §10: the reference single-class export must be
+    """An earlier internal version's single-class export must be
     reproducible through this generic exporter with a byte-comparable
     manifest.
 

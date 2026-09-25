@@ -161,7 +161,7 @@ def vlm_suggestion_dismissed(src: dict[str, Any]) -> bool:
 
 def class_confidence(src: dict[str, Any]) -> tuple[float | None, str | None]:
     """``(class_confidence, class_confidence_source)`` for a stored item:
-    the confidence of the writer that set the current label (DQ-M8).
+    the confidence of the writer that set the current label.
 
     * a VLM source: the stored ``vlm_confidence`` category mapped through
       :data:`VLM_CATEGORY_SCORE`, source ``'vlm'`` (``None`` for a missing

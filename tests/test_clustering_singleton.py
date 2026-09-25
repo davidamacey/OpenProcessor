@@ -1,5 +1,5 @@
 """Coverage for the ``ClusteringService`` singleton bootstrap and its
-``load_index``/``load_all_indexes`` fail-open branch (plan Wave 5 T-6).
+``load_index``/``load_all_indexes`` fail-open branch.
 
 This module is pure collateral test-drop damage — it predates the
 curation port and has zero import dependency on it — so this is a

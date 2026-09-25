@@ -1,4 +1,4 @@
-"""F-28.3: preflight's per-class validated + test-holdout counts merge
+"""preflight's per-class validated + test-holdout counts merge
 into one ``_search`` (two sibling filter aggs) instead of two separate
 round trips."""
 

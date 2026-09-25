@@ -1,7 +1,6 @@
-"""``GET /regions/vocabulary`` and ``GET /review/tabs`` (W0 of
-``docs/design/naming_sweep_plan.md`` -- finding m9).
+"""``GET /regions/vocabulary`` and ``GET /review/tabs``.
 
-After S3/S7 the detector/segmenter/VLM identifiers the worker writes come
+The detector/segmenter/VLM identifiers the worker writes come
 entirely from deployment config, so the frontend can no longer hardcode a
 label/palette map keyed on ``lpr_nanov11_640`` / ``sam3`` / ``gemma-4-e4b``.
 These two endpoints are the served vocabulary a client renders from
@@ -28,7 +27,7 @@ def client() -> Any:
 
     app = FastAPI()
     app.include_router(curation_router)
-    # C3: GET /review/tabs now also serves empty_state, which issues a
+    # GET /review/tabs now also serves empty_state, which issues a
     # couple of `count` calls against opensearch.
     fake = AsyncMock()
     fake.count = AsyncMock(return_value={'count': 0})

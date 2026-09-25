@@ -1,15 +1,10 @@
-"""Unit tests for ``resolve_class_name`` (§5 Chunk 7).
+"""Unit tests for ``resolve_class_name``.
 
-Ported from a private reference vehicle/license-plate curation stack's
-synonym-table test suite, which exercised that stack's vehicle-class
-synonym table directly. That table is domain vocabulary for a
-proprietary dataset family and is not shipped on this branch (§3.4) —
-this port re-fixtures the same *mechanism* assertions (exact
-match, case/separator normalization, synonym rescue, low-confidence
-force-fit bypass, unknown-phrase fallthrough) onto a small local
-synonym table plus the neutral ``GENERIC_ITEM_PACK`` shipped in
-``vlm_prompts.py``, rather than copying vehicle-class vocabulary into
-the public repo.
+Exercises the synonym-resolution *mechanism* (exact match,
+case/separator normalization, synonym rescue, low-confidence force-fit
+bypass, unknown-phrase fallthrough) against a small local synonym table
+plus the neutral ``GENERIC_ITEM_PACK`` shipped in ``vlm_prompts.py``,
+rather than any domain-specific vocabulary.
 """
 
 from __future__ import annotations

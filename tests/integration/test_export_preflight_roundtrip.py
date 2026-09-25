@@ -1,7 +1,6 @@
 """Export -> preflight round trip against a REAL produced export directory.
 
-The single highest-value test in Wave 3 (plan §4 "the single highest-value
-test in this plan"): ``src/services/curation/export.py`` used to never
+The single highest-value test in this suite: ``src/services/curation/export.py`` used to never
 write ``class_registry.json`` at all, which meant every subset-training
 ``include_classes`` filter both readers apply
 (``src/services/training/preflight_scan.py`` and

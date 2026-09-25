@@ -1,4 +1,4 @@
-"""C1: file-backed job runner wrapping
+"""A file-backed job runner wrapping
 :func:`src.services.curation.probe_predictions.run_probe_inference`, so
 ``POST /curation/probe/run`` doesn't block the request on a
 potentially-long CPU/GPU inference pass over the whole items index.

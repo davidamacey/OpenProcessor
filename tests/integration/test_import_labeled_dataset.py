@@ -1,4 +1,4 @@
-"""S9: bulk import of an existing YOLO-labeled dataset through the real app.
+"""Bulk import of an existing YOLO-labeled dataset through the real app.
 
 Runs ``scripts/curation/import_labeled_dataset.py`` against the real
 ``/curation/ingest/batch`` + label importer, with a *near-real-time* fake

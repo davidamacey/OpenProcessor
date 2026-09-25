@@ -55,8 +55,7 @@ def test_aggregatable_region_fields_are_keyword(attr: str) -> None:
         ('needs_new_class', 'boolean'),
         # scripts/curation/worker/verify.py writes this on every combined
         # VLM verify call; src/services/curation/autolabel/selection.py
-        # range-queries it. Found unmapped in a live mapping diff audit —
-        # see docs/design/new_class_proposal_resolve_plan.md.
+        # range-queries it. Found unmapped in a live mapping diff audit.
         ('vlm_verify_completed_at', 'date'),
     ],
 )
@@ -88,7 +87,7 @@ def test_no_query_targets_a_dynamic_keyword_subfield_of_a_region_field() -> None
 
 
 def test_class_history_is_an_unindexed_object() -> None:
-    """F-22: class_id_history is never queried as `nested` (rg -n "'nested'"
+    """class_id_history is never queried as `nested` (rg -n "'nested'"
     src scripts turns up none), yet a nested mapping cost a hidden Lucene doc
     per entry and a FieldExistsQuery[_primary_term] parent filter on every
     top-level query. Mapped `object enabled:False` instead -- the per-entry

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""LG-1: backfill ``region_embedding`` for existing items.
+"""Backfill ``region_embedding`` for existing items.
 
 Nothing in ``main`` writes the per-item PE-Core region embedding yet
 (the legacy stack's plate-embedder loop has no equivalent here) --
@@ -13,10 +13,10 @@ encoder already does this), and writes the vector back.
 
 Resumable by construction: the selection query excludes items that
 already carry the field, so re-running only picks up items ingested
-or accepted since the last pass. Land CM-3 before running this for
-real -- the region-FP centroid store's distance units were wrong
-until that fix, so any FP-clustering pass over freshly-backfilled
-vectors would use the wrong thresholds.
+or accepted since the last pass. Land the region-FP centroid store
+distance-units fix before running this for real -- otherwise any
+FP-clustering pass over freshly-backfilled vectors would use the
+wrong thresholds.
 
 Defaults to dry-run: prints the eligible count and a source-image
 read failure sample. ``--apply`` writes.

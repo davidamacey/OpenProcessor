@@ -1,4 +1,4 @@
-"""C3: a real-state reason for a zero-result ``GET /review/{tab}``.
+"""A real-state reason for a zero-result ``GET /review/{tab}``.
 
 Split out of :mod:`review_queries` (which owns tab *selection*) to keep
 that module under the 700-LOC pre-commit ceiling -- this module owns

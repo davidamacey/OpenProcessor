@@ -1,7 +1,7 @@
 """Cluster-id maintenance helpers for the curation pipeline.
 
 The labeler treats ``cluster_id`` as the grouping key on the
-``/clusters`` page. For the reference vehicle-crop ensemble the cluster
+``/clusters`` page. For a class-clustered item ensemble the cluster
 IS the class — any item with a known model / VLM / human class_id
 should sit in its class's bucket. Without periodic normalization,
 classes fragment across multiple cluster_ids depending on which
@@ -9,10 +9,10 @@ pipeline stage last touched the item.
 
 This module is the post-prototype-deletion home of
 ``force_cluster_id_equals_class_id``. The previous prototype-cluster
-module (and the prototype concept generally) is deleted per the
-reference plan because it mis-labeled a large fraction of rows in
-production. ``cluster_id`` upkeep is a separate, narrowly-scoped
-concern that survives the cleanup.
+module (and the prototype concept generally) was deleted because it
+mis-labeled a large fraction of rows in production. ``cluster_id``
+upkeep is a separate, narrowly-scoped concern that survives the
+cleanup.
 """
 
 from __future__ import annotations
@@ -145,7 +145,7 @@ async def force_cluster_id_equals_class_id(
 async def _normalize(client: AsyncOpenSearch, crop_ids: list[str] | None) -> dict[str, Any]:
     """One ``update_by_query`` pass over the index, or over ``crop_ids``.
 
-    Implementation (post-K2): uses ``update_by_query`` with
+    Implementation uses ``update_by_query`` with
     ``ctx._source`` semantics. This:
 
     * Operates on the document body (Python-dict-style ``.get`` access),
@@ -162,9 +162,9 @@ async def _normalize(client: AsyncOpenSearch, crop_ids: list[str] | None) -> dic
     config = get_curation_config()
     # `class_id` / `cluster_id` / `cluster_subid` here are the top-level
     # item fields (already generic — not the RegionFields-governed
-    # region/plate sub-annotation; see RegionFields' docstring scope).
+    # region sub-annotation; see RegionFields' docstring scope).
     #
-    # F-10: the old query (`exists: class_id` only) matched nearly every
+    # The old query (`exists: class_id` only) matched nearly every
     # doc — 234,575 on the legacy index — forcing OpenSearch to load and
     # reconstruct the full _source (including derived kNN vectors) only
     # for the script to noop. Worse, it isn't just wasteful: residual
@@ -179,7 +179,7 @@ async def _normalize(client: AsyncOpenSearch, crop_ids: list[str] | None) -> dic
     # doc-values filter alone cut the legacy match from 234,575 to
     # 30,688 (7.6x); the class-source restriction narrows it further.
     body = {
-        # CM-6: exclude class_excluded items. Exclusion keeps class_id but
+        # Exclude class_excluded items. Exclusion keeps class_id but
         # sets cluster_id=-2 precisely so an excluded item drops out of its
         # class cluster; without this the normalizer pulls it straight back.
         'query': {
@@ -215,7 +215,7 @@ async def _normalize(client: AsyncOpenSearch, crop_ids: list[str] | None) -> dic
                 # `def` rather than `int` so we can hold either an int
                 # or null without painless complaining. `Objects.equals`
                 # handles the null case correctly.
-                # CM-6 defense in depth: re-check class_excluded inside
+                # Defense in depth: re-check class_excluded inside
                 # the script too, in case a concurrent exclusion write
                 # lands between the query match and this doc's update.
                 'if (ctx._source.class_excluded == true) {'

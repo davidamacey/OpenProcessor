@@ -75,8 +75,8 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 def test_disagreements_query_includes_class_validated_and_probe_exists(
     app_client: TestClient,
 ) -> None:
-    """Plan §1.3, A-PR2: model_disagreements filters on class_validated=True
-    (the class-side flag) rather than the legacy conflated label_validated.
+    """model_disagreements filters on class_validated=True (the class-side
+    flag) rather than the legacy conflated label_validated.
     """
     r = app_client.get('/curation/review/model_disagreements')
     assert r.status_code == 200, r.text
@@ -91,7 +91,7 @@ def test_disagreements_query_includes_class_validated_and_probe_exists(
 
 
 def test_disagreements_script_uses_keyword_subfields(app_client: TestClient) -> None:
-    """Regression guard (Phase 11 audit-remediation): ``probe_pred_class``
+    """Regression guard: ``probe_pred_class``
     and ``class_name`` are mapped ``keyword`` *directly* on the live
     index — there is no ``.keyword`` sub-field to fall back on (a `text`
     mapping was assumed at one point; that assumption is what caused the
@@ -100,8 +100,8 @@ def test_disagreements_script_uses_keyword_subfields(app_client: TestClient) -> 
     ``doc[...]`` directly, NOT to append ``.keyword`` (there's nothing
     there). This was invisible to the mocked-OpenSearch tests above (they
     only assert on the outgoing query body, never execute the script)
-    because ``probe_pred_class`` had zero real coverage until Phase 11's
-    probe backfill — the ``exists`` clause matched nothing, so the script
+    because ``probe_pred_class`` had zero real coverage until the
+    probe backfill landed — the ``exists`` clause matched nothing, so the script
     never actually ran. Confirmed live against triton-opensearch pre-fix
     (400 script_exception) and post-fix (real rows) before landing this
     guard.
@@ -123,7 +123,7 @@ def test_disagreements_script_uses_keyword_subfields(app_client: TestClient) -> 
 def test_disagreements_overrides_default_must_not(app_client: TestClient) -> None:
     """The default must_not excludes class_validated=true; this tab inverts it.
 
-    Plan §1.3, A-PR2: review tabs filter on class_validated (class side)
+    Review tabs filter on class_validated (class side)
     or region_validated (regions tab); model_disagreements wants validated
     class rows so it drops the must_not.
     """
@@ -172,7 +172,7 @@ def test_unknown_tab_lists_disagreements_in_400(app_client: TestClient) -> None:
 def test_existing_tabs_still_exclude_validated(app_client: TestClient) -> None:
     """Smoke check: refactoring didn't break the standard tabs' must_not list.
 
-    Plan §1.3, A-PR2: review tabs filter on class_validated (the class-
+    Review tabs filter on class_validated (the class-
     side flag — the common case for the labeler /clusters view).
     """
     r = app_client.get('/curation/review/all')

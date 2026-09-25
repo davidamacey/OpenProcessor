@@ -1,5 +1,5 @@
-"""Guard against the shipped-image-can't-run-its-own-code class of bug
-(see §0.5 of the OSS completion plan): ``scikit-learn``, ``umap-learn``,
+"""Guard against the shipped-image-can't-run-its-own-code class of bug:
+``scikit-learn``, ``umap-learn``,
 ``hdbscan`` and ``joblib`` were imported (lazily, inside functions) by
 curation clustering code and appeared in **no** dependency manifest --
 not ``requirements.txt``, not ``pyproject.toml``. Because the imports
@@ -177,7 +177,7 @@ _ALLOWLIST = {
     # src/services/training/gpu_arbiter.py's _docker_client() wraps the
     # import (and the socket connection) in a try/except Exception and
     # returns None on any failure, falling back to the sentinel-only path.
-    # The GPU arbiter is a documented no-op on main (see completion plan §3.4).
+    # The GPU arbiter is a documented no-op on main.
     'docker': 'optional docker-SDK path with a graceful None fallback (GPU arbiter, currently a no-op)',
     # src/services/curation/autolabel/job.py falls back to polling
     # (_watch_state_file_poll) inside a try/except ImportError.

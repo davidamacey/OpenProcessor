@@ -1,5 +1,4 @@
-"""Shared-settings default resolution for the curation-strategy axes
-(curation deployment-settings plan).
+"""Shared-settings default resolution for the curation-strategy axes.
 
 Split out of :mod:`src.services.curation.strategy_registry` (which grew
 past the pre-commit 700-LOC ratchet once this landed) rather than
@@ -33,7 +32,7 @@ def _hardcoded_default_for_axis(axis: str) -> str | None:
     """The pre-settings-feature hardcoded default id for ``axis`` --
     :func:`resolve_effective_default`'s fallback when no shared-settings
     override applies. Only the four axes the shared-defaults feature
-    covers (curation deployment-settings plan) have an entry; every other
+    covers have an entry; every other
     axis (``score``/``overlay``/``export``) has no single-id "default"
     concept and returns ``None`` here, same as before this feature
     existed.
@@ -93,8 +92,7 @@ def _advertised_ids_for_axis(axis: str) -> frozenset[str]:
     return frozenset()
 
 
-# Axes a shared-settings override can actually change (curation
-# deployment-settings plan). Deliberately a subset of every axis
+# Axes a shared-settings override can actually change. Deliberately a subset of every axis
 # GET /methods advertises: 'score'/'overlay'/'export' have no
 # single-selectable-id "default" concept a shared override could apply to
 # today (score/overlay are additive, not mutually-exclusive choices; export

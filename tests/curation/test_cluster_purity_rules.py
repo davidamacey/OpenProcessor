@@ -8,7 +8,7 @@
   from the same thresholds, plus the thresholds themselves and the
   core-member similarity cut line. ``promotable`` reads the label purity
   (``label_purity``); the tier reads the card's geometry ``purity``
-  (DQ-M2, see ``test_cluster_purity_geometry.py``).
+  (see ``test_cluster_purity_geometry.py``).
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ async def test_auto_promote_purity_counts_classes_beyond_the_top_buckets() -> No
     # 90 of 100 labelled are 'a' in the top buckets, but 60 more labelled
     # members sit in classes past the top 5: true purity 90/160 = 0.5625.
     bucket = {
-        # F-29: composite-agg bucket key is a dict, not a bare scalar.
+        # Composite-agg bucket key is a dict, not a bare scalar.
         'key': {'cluster_id': 3},
         'doc_count': 170,
         'top_class': {
@@ -142,7 +142,7 @@ async def test_cluster_cards_serve_tier_promotable_and_thresholds() -> None:
 
 @pytest.mark.asyncio
 async def test_cluster_cards_never_mark_a_class_cluster_promotable() -> None:
-    """CM-1: a class cluster (cluster_id == class_id) has purity 1.0 by
+    """A class cluster (cluster_id == class_id) has purity 1.0 by
     construction -- every member trivially "agrees" because the cluster
     IS the class. `promotable` must stay False regardless of purity or
     member count; only candidate clusters (cluster_id >= the residual

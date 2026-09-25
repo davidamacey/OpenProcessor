@@ -1,11 +1,9 @@
-"""``GET /curation/methods`` — capability-discovery endpoint
-(curation-strategy plan §3.6/§7 Phase 0; field coverage added in
-audit-remediation plan Phase 6, P1-2/P1-3).
+"""``GET /curation/methods`` — capability-discovery endpoint.
 
-New module (not touching ``review.py`` / ``pipeline.py``). Side-effect
+Separate module from ``review.py`` / ``pipeline.py``. Side-effect
 import: registers the ``@router`` handler on the shared ``_common.router``.
 
-Thin wrapper over :mod:`src.services.curation.strategy_registry`. Phase 6
+Thin wrapper over :mod:`src.services.curation.strategy_registry`, which
 adds a real, TTL-cached ``field_coverage`` OpenSearch lookup per entry
 (:func:`strategy_registry._compute_field_coverage`) — this endpoint is no
 longer pure/I/O-free, but the frontend's 404-fallback design still means it

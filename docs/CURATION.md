@@ -15,11 +15,11 @@ interest, cluster and browse the crops, label them (by hand or via an
 OpenAI-compatible vision-language model), track class registries and
 review queues, export labeled datasets, and drive a training loop.
 
-It was ported and genericized from a private, domain-specific
-(vehicle / license-plate) curation product. That history shows up in a
+It was ported and genericized from an earlier internal, domain-specific
+curation product. That history shows up in a
 few frozen wire-level names described below (§ Naming you'll notice),
 but the subsystem itself makes no assumption about what a "region of
-interest" is — a license plate, a barcode, a defect on a manufactured
+interest" is — a barcode, a defect on a manufactured
 part, a tag on livestock — you configure your own domain via the
 dataclasses in the next section. See
 [`docs/design/curation_design_rationale.md`](design/curation_design_rationale.md)
@@ -40,8 +40,8 @@ four dataclasses instead of forking code. All four support
 `from_env()` so most of a deployment can be configured purely through
 environment variables (see the env var table below), including the
 region `DetectionProfile` (`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`).
-The `DetectionProfile` dataclass field defaults still describe the
-reference license-plate domain's OCR/segmenter wiring, so review them for
+The `DetectionProfile` dataclass field defaults still describe an
+earlier internal domain's OCR/segmenter wiring, so review them for
 a genuinely new region type.
 
 | Dataclass | File | What it configures |
@@ -225,7 +225,7 @@ trainer. A deployment supplies:
 
 The class registry is a single JSON file at `OP_REGISTRY_PATH` (default
 `./data/class_registry.json`), read/written atomically through
-`src.clients.curation_opensearch.ClassRegistry`. A worked, **non-vehicle**
+`src.clients.curation_opensearch.ClassRegistry`. A worked
 example ships at
 [`data/class_registry.example.json`](../data/class_registry.example.json)
 — a small warehouse/retail inventory set (`cardboard_box`,
@@ -337,7 +337,7 @@ failure.
    detector missed a label, fired on a background image, or chose a
    different class). If the dataset's labels are *region* ground truth
    rather than item classes (whole frames labeled with, e.g., a single
-   `license_plate` class plus background frames), add `--images-only`
+   region class plus background frames), add `--images-only`
    so the labels never touch the item registry, let the region cascade
    run, then score it with `scripts/curation/eval_regions_vs_gt.py
    --dataset <data.yaml> --state-dir <same state dir> --wait-pending 1800`

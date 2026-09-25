@@ -86,7 +86,7 @@ def _make_scroll_client(ids: list[str], embeddings: np.ndarray) -> Any:
 def _bulk_calls_to_cluster_ids(client: Any) -> dict[str, int]:
     """Reconstruct {crop_id: cluster_id} from the mocked ``client.bulk`` calls.
 
-    F-3 changed these writers to a guarded painless ``script`` update
+    These writers use a guarded painless ``script`` update
     (``params.cid``) instead of a blind ``doc`` update.
     """
     out: dict[str, int] = {}

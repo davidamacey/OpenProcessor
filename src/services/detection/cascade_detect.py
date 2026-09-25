@@ -1,6 +1,6 @@
 """Generic sub-region detection cascade — YOLO-style detector + PaddleOCR.
 
-See ``docs/design/curation_design_rationale.md`` §2.3 / §5 — Chunk 8; this
+See ``docs/design/curation_design_rationale.md`` §2.3 / §5; this
 is one of the ratchet-exempt oversize files.
 Wraps a YOLO-style Triton detector to produce sub-region bounding boxes
 in the **item crop's** coordinate frame (normalized to ``[0, 1]``), plus
@@ -9,8 +9,8 @@ rescue path and text-hint source.
 
 Every heuristic (detector identity, confidence floors, aspect bands, OCR
 wiring) lives on a :class:`~src.config.DetectionProfile` instance, so a
-deployment can describe any region type (a license plate, a box, a
-tractor's ID plate, …) without forking this module. **No profile ships
+deployment can describe any region type (a printed label, a box, an
+ID plate, …) without forking this module. **No profile ships
 built in.** ``RegionDetector`` / ``PaddleOcrRegionDetector`` /
 ``PaddleOcrTextRecognizer`` all require a profile explicitly — the
 caller resolves it from :mod:`src.services.detection.profile_registry`
@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 # valid: no profile is registered and region detection stays off.
 ensure_env_region_profile()
 
-# The reference detector engine is exported with a fixed
+# The detector engine is exported with a fixed
 # [1, 3, N, N] input — Triton's dynamic batching layers multiple
 # requests onto the GPU but each request is still a single image. We
 # respect that by sending many concurrent single-image requests rather
@@ -104,7 +104,7 @@ def is_plausible_region_bbox(
 
     GEOMETRY GUARD ONLY. This gate does not apply aspect-ratio or
     region-vs-parent size heuristics: shape bands built from a single
-    reference domain's assumptions (e.g. "a plate is always wider than
+    domain's assumptions (e.g. "this region type is always wider than
     tall") silently reject legitimate detections from other domains
     (foreshortened / angled views, naturally-square sub-regions). This
     gate runs BEFORE the VLM verification step, so a rejected box never
@@ -260,7 +260,7 @@ def _decode_yolo_output(
 ) -> RegionCandidate | None:
     """Decode a YOLOv11-shaped ``[1, 5, N]`` raw output to a normalized region box.
 
-    The reference detector is single-class, so the fifth row is the
+    The detector is single-class, so the fifth row is the
     class-0 score. We pick the highest-scoring anchor, apply the
     confidence floor, undo the letterbox into crop-pixel space, then
     normalize to ``[0, 1]`` of the crop.
@@ -461,7 +461,7 @@ class RegionDetector:
 
         Sends N concurrent batch=1 ``infer`` calls and lets Triton's
         dynamic batching coalesce them into real GPU batches. Measured
-        (on the reference region-detector model): this is faster than Python-side
+        (on the region-detector model): this is faster than Python-side
         stacking — Triton forms tighter batches across the whole
         instance group than we can in one process, and we don't pay the
         ``np.stack`` + per-batch decode loop overhead.

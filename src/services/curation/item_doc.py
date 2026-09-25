@@ -73,7 +73,7 @@ def build_image_doc(
 ) -> dict[str, Any]:
     """Build the single images-index document for one ingested photo.
 
-    BA-1: ``source_identifier`` is the client-supplied identifier for a
+    ``source_identifier`` is the client-supplied identifier for a
     byte-upload ingest (``POST /ingest/upload``) -- ``image_path`` there
     is now the server-persisted, servable path, so the client's own
     identifier (which need not exist on the server and previously WAS
@@ -81,7 +81,7 @@ def build_image_doc(
     separate field. ``None`` for a server-path ingest, where
     ``image_path`` already *is* the client-meaningful identifier.
 
-    BA-4: ``ingest_run_id`` is an optional client-supplied tag for one
+    ``ingest_run_id`` is an optional client-supplied tag for one
     upload call, so ``GET /ingest/status?run_id=`` can scope counts to
     it.
     """

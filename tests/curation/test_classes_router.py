@@ -110,9 +110,9 @@ def test_get_class_unknown_id_is_404(app_client: TestClient) -> None:
 
 
 # =============================================================================
-# Region-class ``kind`` marking (X2). This used to override
+# Region-class ``kind`` marking. This used to override
 # sample_count/validated_count/cluster_size with the region inventory
-# total, which made a region slot (e.g. license_plate) look like an item
+# total, which made a region slot look like an item
 # class with thousands of validated crops -- inflating /train's class
 # picker and /export's per-class table. Region classes are now only
 # flagged via ``kind='region'``; their item counts stay the real (usually

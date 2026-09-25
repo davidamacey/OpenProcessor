@@ -50,7 +50,7 @@ def _written(client: Any) -> dict[str, dict[str, Any]]:
     for call in client.bulk.await_args_list:
         body = call.kwargs['body']
         for action, doc in zip(body[::2], body[1::2], strict=True):
-            # F-3: residual writes are guarded painless scripts; the written
+            # Residual writes are guarded painless scripts; the written
             # values travel as script params.
             params = doc['script']['params']
             out[action['update']['_id']] = {

@@ -1,4 +1,4 @@
-"""F-28.4: concurrent first requests must not race through the
+"""Concurrent first requests must not race through the
 ``_ensure_indexes`` bootstrap sequence independently -- the module-level
 lock serializes them, and the inner re-check under the lock makes every
 caller after the first a no-op once bootstrap has completed.

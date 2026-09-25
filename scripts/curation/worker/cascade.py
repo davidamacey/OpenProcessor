@@ -81,7 +81,7 @@ def _build_pending_query(exclude_ids: list[str] | None = None) -> dict[str, Any]
     this worker is scoped to the class-field write path only — see
     ``runner.py:_should_classify`` (checks ``task.test_holdout``).
 
-    F-20: none of these clauses score, so they belong in filter context
+    None of these clauses score, so they belong in filter context
     (cacheable, no scoring pass) rather than ``must``. ``exclude_ids`` —
     the caller's in-flight set — is pushed server-side via
     ``must_not: {ids: ...}`` instead of being filtered out in Python
@@ -123,7 +123,7 @@ async def _fetch_pending(
 ) -> list[_ItemTask]:
     """Pull up to ``batch_size`` pending crops, oldest first.
 
-    F-20: ``track_total_hits: False`` (the exact match count is never
+    ``track_total_hits: False`` (the exact match count is never
     read here) and a ``crop_id`` sort tiebreaker for stable ordering
     among same-``created_at`` crops. ``_source`` stays an explicit
     includes list (unlike the VLM worker's ids-only fetch) — this
@@ -386,7 +386,7 @@ async def _process_crop(
         seg_version = region_profile().segmenter_version
         ocr_det_model = region_profile().ocr_rec_model
 
-        # ---- Step 0: B-PR5 combined class+region for low-confidence-class cohort. ----
+        # ---- Step 0: combined class+region for low-confidence-class cohort. ----
         # Cohort (Phase C broadened) = ``class_source='coco_yolo11_proposal'``
         # (primary classifier missed) OR ``class_source in {'item_model',
         # 'cluster_majority_agreement'}`` with confidence < 0.80, AND a

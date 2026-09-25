@@ -1,10 +1,10 @@
-"""Guard against CFG-1 (see docs/design/curation_design_rationale.md and
-the OSS completion plan §0.6): the router's own feature-flag gate and
+"""Guard against feature-flag drift (see docs/design/curation_design_rationale.md):
+the router's own feature-flag gate and
 ``GET /curation/methods``' capability status for the same capability
 used to read *different* env vars (the router read ``OP_SEMANTIC_SEARCH_ENABLED``
 while the registry read a differently-prefixed name for the same flag, same
-split for viz projection -- both since unified onto ``OP_*``, see the
-LEGACY_* -> OP_* rename commit). Both existing test suites passed the whole time because
+split for viz projection -- both since unified onto ``OP_*``, following an
+earlier env-var rename). Both existing test suites passed the whole time because
 neither crossed the seam. This test sets each flag exactly once and
 asserts the router's gate and the ``/curation/methods`` status agree,
 parameterized over every gated capability so a future name split fails

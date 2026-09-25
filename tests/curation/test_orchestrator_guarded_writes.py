@@ -1,4 +1,4 @@
-"""F-3: the clustering orchestrator's bulk writers must never clobber a
+"""The clustering orchestrator's bulk writers must never clobber a
 concurrent human label/verification/exclusion.
 
 Five writers fetch candidates, spend seconds-to-minutes fitting a model,
@@ -8,7 +8,7 @@ the fit was silently overwritten. Every writer now sends a guarded
 painless ``script`` update instead: noop when the doc's current state
 shows human ownership.
 
-Two writers share :func:`_guarded_class_cluster_write` (vehicle-class
+Two writers share :func:`_guarded_class_cluster_write` (class
 clustering: ``cluster_residuals``, ``assign_only_residuals``); two share
 :func:`_guarded_region_write` (region clustering: ``cluster_region_residuals``,
 ``auto_assign_fp_from_centroids``); ``_bulk_update_subids`` (refine, both

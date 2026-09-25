@@ -535,7 +535,7 @@ async def test_registry_sync_to_opensearch_indexes_each_class(
     client = _make_mock_client(exists_returns=True)
     out = await tmp_registry.sync_to_opensearch(client)
     assert out == {'upserted': 2, 'n_classes': 2}
-    # F-26: one bulk() call for both classes (not one index() per class),
+    # One bulk() call for both classes (not one index() per class),
     # plus 1 refresh.
     assert client.bulk.await_count == 1
     assert client.indices.refresh.await_count == 1

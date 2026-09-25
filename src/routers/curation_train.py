@@ -5,7 +5,7 @@ frontend's train page consumes. The router is intentionally thin: every file-sys
 write/read goes through :mod:`src.services.training.jobs`, and every
 hyperparameter table lives in :mod:`src.services.training.profiles`.
 
-Endpoints (per design table §7):
+Endpoints:
 
     POST   {api_prefix}/train/preflight          → PreflightReport
     POST   {api_prefix}/train/start              → {job_id}        (writes job.json)
@@ -24,7 +24,7 @@ Endpoints (per design table §7):
     GET    {api_prefix}/train/artifacts/{job_id}/{name}
         → whitelisted run artifact (confusion_matrix.png, results.csv, ...)
 
-Pre-flight contract (design §15.1): ``/start`` calls ``/preflight``
+Pre-flight contract: ``/start`` calls ``/preflight``
 internally and refuses to write ``job.json`` if any check has severity
 ``block``. Pass ``?force=true`` to bypass; the report is still returned in
 the 422 body so the UI can render it inline.
@@ -119,7 +119,7 @@ PreflightSeverity = Literal['ok', 'warn', 'block', 'unknown']
 
 
 class PreflightCheck(BaseModel):
-    """Single row in the preflight report (design §15.1)."""
+    """Single row in the preflight report."""
 
     name: str
     severity: PreflightSeverity
@@ -137,10 +137,10 @@ class PreflightReport(BaseModel):
     thresholds: dict[str, int] = Field(default_factory=dataset_thresholds)
 
 
-# Disk-space threshold (design §15.1: ≥50 GB free on the training-data volume).
+# Disk-space threshold (≥50 GB free on the training-data volume).
 MIN_FREE_DISK_GB = 50
 
-# Per-class crop minimums (design §15.1) live in dataset_thresholds.py,
+# Per-class crop minimums live in dataset_thresholds.py,
 # which also serves them to clients.
 
 
@@ -155,19 +155,17 @@ async def _count_validated_and_test_per_class(
 ) -> tuple[dict[int, int], dict[int, int]]:
     """Return ``({class_id: validated_crop_count}, {class_id: test_holdout_count})``.
 
-    F-28.3: preflight used to issue these as two separate
-    ``_search`` round trips (identical ``class_id`` scope, one with an
-    extra ``test_holdout`` filter) -- merged into one ``_search`` with
-    two sibling ``filter`` aggs, each with its own ``by_class`` terms
-    sub-agg, since both share the same base document set.
+    Preflight used to issue these as two separate ``_search`` round trips
+    (identical ``class_id`` scope, one with an extra ``test_holdout``
+    filter) -- merged into one ``_search`` with two sibling ``filter``
+    aggs, each with its own ``by_class`` terms sub-agg, since both share
+    the same base document set.
 
-    The reference deployment's items-index schema uses a boolean ``label_validated``
-    field (set true by both human-confirmation and auto-promotion). The
-    design doc's earlier reference to ``label_state == 'confirmed'``
-    predated the schema settling on the boolean -- we keep the boolean
-    as the source of truth and treat both human and auto-promoted
-    labels as eligible training data. Test-holdout coverage (design
-    §15.1, ≥5 per class) is a subset of validated crops.
+    The items-index schema uses a boolean ``label_validated`` field (set
+    true by both human-confirmation and auto-promotion) as the source of
+    truth; both human and auto-promoted labels count as eligible training
+    data. Test-holdout coverage (≥5 per class) is a subset of validated
+    crops.
     """
     if not class_ids:
         return {}, {}
@@ -282,7 +280,7 @@ def _refuse_unknown_augmentation_preset(augmentation: AugmentationSpec | None) -
 def _free_gb(path: str) -> float | None:
     """Free disk space on ``path``'s filesystem, in GB.
 
-    P2-8: this used to fail OPEN on any ``OSError`` (return ``float('inf')``,
+    This used to fail OPEN on any ``OSError`` (return ``float('inf')``,
     i.e. "infinite free space") — the exact opposite of a safe default.
     ``None`` now means "couldn't determine", which the caller reports as
     ``severity='unknown'``, never ``'ok'``.
@@ -308,7 +306,7 @@ def _nearest_existing(path: str) -> Path:
 
 
 def _resolve_disk_check_path(spec: TrainJobSpec) -> str:
-    """Pick the path to stat for the free-disk check (P2-8).
+    """Pick the path to stat for the free-disk check.
 
     Previously hardcoded to a host data-volume root — inside the yolo-api
     container, only specific subpaths under that root (e.g. a
@@ -327,7 +325,7 @@ def _resolve_disk_check_path(spec: TrainJobSpec) -> str:
 
 
 def _training_volume_mount_sane(path: str) -> bool:
-    """False if ``path`` is on the same device as ``/`` (P2-8).
+    """False if ``path`` is on the same device as ``/``.
 
     A strong signal the real training-data volume isn't actually mounted
     into this container at ``path`` — e.g. a dev box or misconfigured
@@ -389,7 +387,7 @@ def _unresolvable_include_classes(
 # Export manifests whose data sufficiency must be judged from the manifest
 # itself rather than the multi-class registry. ``single_class`` is what
 # :mod:`src.services.curation.export_single_class` writes. The retired
-# ``lpr_single_class`` alias is not accepted (S6): a manifest carrying it
+# ``lpr_single_class`` alias is not accepted: a manifest carrying it
 # must be re-exported, not silently treated as single-class.
 SINGLE_CLASS_DATASET_KINDS: frozenset[str] = frozenset({'single_class'})
 
@@ -588,7 +586,7 @@ async def _run_preflight(
                 )
             )
 
-    # ---- 2b. trainer reachable (P1-8) ------------------------------------------
+    # ---- 2b. trainer reachable ------------------------------------------
     # Without this, /start writes job.json and the run sits in `queued`
     # forever with no error if the configured trainer container was never started.
     trainer_up, trainer_detail = await probe_trainer_reachable()
@@ -600,7 +598,7 @@ async def _run_preflight(
         )
     )
 
-    # ---- 2c. GPU arbiter can actually stop what this claim requires (S-5) -----
+    # ---- 2c. GPU arbiter can actually stop what this claim requires -----
     # containers_to_stop() names real GPU-resident containers (e.g. a large
     # vLLM/Triton process) this run's GPU claim must free. If the docker
     # SDK/socket isn't usable from this container, claim_gpus_for_training
@@ -674,7 +672,7 @@ async def _run_preflight(
     _is_single_class = _single_class_manifest.get('dataset_kind') in SINGLE_CLASS_DATASET_KINDS
     target_classes = [] if _is_single_class else _resolve_target_classes(spec)
 
-    # ---- 3b. include_classes resolvable against this export (P2-8) ----------
+    # ---- 3b. include_classes resolvable against this export ----------
     # Previously an unresolvable include_classes id (deprecated, typo, or a
     # class this export never had) surfaced as either a 500 or a job that
     # failed deep inside the trainer container (subset_dataset.py's own
@@ -723,7 +721,7 @@ async def _run_preflight(
             )
         )
     else:
-        # F-28.3: one search covers both per-class validated counts and
+        # One search covers both per-class validated counts and
         # per-class test-holdout counts (used in check 5 below).
         counts, test_counts = await _count_validated_and_test_per_class(opensearch, target_classes)
         registry = get_class_registry()
@@ -777,7 +775,7 @@ async def _run_preflight(
             )
 
         # ---- 5. test holdout coverage ----------------------------------------
-        # test_counts came from the merged query above (F-28.3).
+        # test_counts came from the merged query above.
         thin_test: list[dict[str, Any]] = []
         for cid in target_classes:
             n = test_counts.get(cid, 0)
@@ -807,12 +805,12 @@ async def _run_preflight(
                 )
             )
 
-    # ---- 6. empty-label / plate-pairing (P2-8: real scan, not a stub) --------
+    # ---- 6. empty-label / region-pairing (real scan, not a stub) --------
     # Both used to be hardcoded to 'ok' with no scan ever run. Single-class
-    # (single-class plate exports) is handled by its own additive branch —
-    # background/negative frames are a legitimate, expected empty-label
-    # case there (accounted for via the manifest's own counts), and there
-    # are no parent vehicle boxes to pair against by construction.
+    # exports are handled by their own additive branch — background/negative
+    # frames are a legitimate, expected empty-label case there (accounted
+    # for via the manifest's own counts), and there are no parent item
+    # boxes to pair against by construction.
     if _is_single_class:
         positive = int(_single_class_manifest.get('positive_images') or 0)
         total_single_class_images = int(_single_class_manifest.get('total_images') or 0) or None
@@ -939,7 +937,7 @@ async def _run_preflight(
                     )
                 )
 
-    # ---- export readiness (DQ-M9): not empty, trainable splits, built from
+    # ---- export readiness: not empty, trainable splits, built from
     # the current index. Per-class coverage is multi-class only: a
     # single-class export has one target class, which the overall
     # train/val check already covers. So are the unlabeled-object counts
@@ -1092,7 +1090,7 @@ async def start_train(
         )
     # GPU arbiter — pause the VLM worker (single-GPU) or stop the container
     # (dual-GPU) BEFORE the trainer picks the job up, and BEFORE job.json
-    # is written. S-5: fails closed -- claim_gpus_for_training raises
+    # is written. Fails closed -- claim_gpus_for_training raises
     # GpuArbiterStopFailedError when a claim needs to stop a configured
     # GPU-resident container and can't (docker SDK/socket unavailable, or
     # the stop itself failed). Starting anyway would run training right
@@ -1135,7 +1133,7 @@ async def start_campaign(
     opensearch: OpenSearchDep,
     force: Annotated[bool, Query(description='Bypass blocking preflight checks')] = False,
 ) -> StartCampaignResponse:
-    """Submit a multi-size training campaign (design §14).
+    """Submit a multi-size training campaign.
 
     Preflight runs once on a synthetic spec built from the first run; the
     rest of the runs share the same dataset / class set so a single
@@ -1165,7 +1163,7 @@ async def start_campaign(
 
     # GPU arbiter — claim once for the entire campaign. The reconcile loop
     # in src/main.py releases when no run is left in a non-terminal state.
-    # S-5: fails closed -- see the matching comment in start_train above.
+    # Fails closed -- see the matching comment in start_train above.
     from src.services.training.gpu_arbiter import claim_gpus_for_training
 
     try:
@@ -1343,7 +1341,7 @@ class PresetsResponse(BaseModel):
 
 @router.get('/presets', response_model=PresetsResponse)
 async def list_presets() -> PresetsResponse:
-    """Return server-side class-subset presets (design §12.3)."""
+    """Return server-side class-subset presets."""
     return PresetsResponse(class_subset_presets=get_class_subset_presets())
 
 
@@ -1403,9 +1401,8 @@ def _build_train_gpu_option(gpu_ids: list[int], gpu_labels: dict[int, str]) -> T
 async def list_train_gpu_options() -> TrainGpuOptionsResponse:
     """Serve the training GPU picker: values, labels, and stop advisories.
 
-    Backend owns these decisions (design rationale: the frontend must
-    never hardcode a deployment's GPU topology) -- see
-    ``docs/design/train_gpu_options_plan.md``. Unrestricted installs (no
+    Backend owns these decisions -- the frontend must never hardcode a
+    deployment's GPU topology. Unrestricted installs (no
     ``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.
     """
     from src.services.training.jobs import default_train_gpu_value
@@ -1480,7 +1477,7 @@ class PromoteRequest(BaseModel):
     )
 
 
-# Promote-gate thresholds (design §15.2). Mirrored as named constants so
+# Promote-gate thresholds. Mirrored as named constants so
 # tests can monkey-patch them without re-parsing the router source.
 PROMOTE_GATE_MAP50_MIN = 0.65
 PROMOTE_GATE_PER_CLASS_PRECISION_MIN = 0.50
@@ -1490,7 +1487,7 @@ PROMOTE_GATE_PER_CLASS_SUPPORT_MIN = 5
 def _evaluate_promote_gate(eval_block: dict[str, Any] | None) -> list[str]:
     """Return a list of human-readable failure messages, [] when the gate passes.
 
-    The gate runs against ``status.json``'s ``eval`` block (design §15.2):
+    The gate runs against ``status.json``'s ``eval`` block:
     mAP50 floor + per-class precision floor + per-class support floor.
     """
     failures: list[str] = []
@@ -1515,7 +1512,7 @@ def _evaluate_promote_gate(eval_block: dict[str, Any] | None) -> list[str]:
         support = row.get('support')
         # A non-numeric metric (null, string, missing) is a gate FAILURE,
         # not a skip — an unreadable eval is exactly the case the gate
-        # exists to catch (P1-9). isinstance(x, bool) is deliberately not
+        # exists to catch. isinstance(x, bool) is deliberately not
         # excluded from the numeric check for precision since Triton/trainer
         # never emits bool there; support uses `int` so a JSON `true`/`false`
         # would (correctly) still gate-fail on the < comparison below it if
@@ -1538,7 +1535,7 @@ def _evaluate_promote_gate(eval_block: dict[str, Any] | None) -> list[str]:
 
 async def _resolve_full_registry_for_promote(job_id: str) -> dict[int, str]:
     """Resolve class_id -> name for ``labels.txt``, preferring the registry
-    snapshot pinned at submit time over the live registry (P1-12).
+    snapshot pinned at submit time over the live registry.
 
     ``labels.txt`` used to be rebuilt from the *live* registry at promote
     time — a rename between export and promote silently mislabeled the
@@ -1610,7 +1607,7 @@ async def promote_run(
     produced during the ``exporting`` state, copies it into
     ``models/<triton_name>/1/model.onnx``, writes ``config.pbtxt``
     using the YOLO26 single-output template (no NMS plugin — NMS is
-    internal to the YOLO26 forward pass per design §10), writes
+    internal to the YOLO26 forward pass), writes
     ``labels.txt`` honoring any subset-training class_remap, and POSTs
     Triton's load endpoint to make the model active immediately.
 
@@ -1656,7 +1653,7 @@ async def promote_run(
             detail=f'job {job_id!r} has no checkpoint_path in status.json',
         )
 
-    # Promote gate (design §15.2). Refuses underqualified runs unless the
+    # Promote gate. Refuses underqualified runs unless the
     # caller explicitly passes force=true.
     gate_failures = _evaluate_promote_gate(job_status.eval)
     gate_report: dict[str, Any] = {
@@ -1678,9 +1675,9 @@ async def promote_run(
         )
 
     # Resolve full-registry class names (id -> name), preferring the
-    # snapshot pinned at submit time (P1-12). Subset-trained models get
+    # snapshot pinned at submit time. Subset-trained models get
     # renumbered inside build_class_id_to_name using the resolved remap
-    # (P2-7: manifest lineage.class_remap first, then the weights-dir file).
+    # (manifest lineage.class_remap first, then the weights-dir file).
     full_registry = await _resolve_full_registry_for_promote(job_id)
     job_spec = await train_jobs.read_job_spec(job_id)
     manifest = await train_jobs.read_manifest(job_id)
@@ -1767,7 +1764,7 @@ async def promote_run(
     except PromoteError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
-    # Stamp the manifest's promoted_to field (design §15.4), including
+    # Stamp the manifest's promoted_to field, including
     # whether the gate was bypassed and the (possibly-failing) report so a
     # forced promote is traceable later. Older runs without a manifest
     # legitimately have nothing to stamp — stamp_manifest_promotion returns
@@ -1776,7 +1773,7 @@ async def promote_run(
     # the promote outright (the model is already live in Triton at this
     # point — a 500 here would be misleading), but we surface it loudly via
     # both an ERROR-level log and `lineage_stamped: false` in the response
-    # instead of the previous silent WARNING-and-forget (P1-10).
+    # instead of the previous silent WARNING-and-forget.
     from datetime import datetime
 
     promoted_at = datetime.now(tz=UTC).isoformat()
@@ -1821,7 +1818,7 @@ async def promote_run(
 async def get_manifest(
     job_id: Annotated[str, PathParam(description='Training job_id from {api_prefix}/train/runs')],
 ) -> ORJSONResponse:
-    """Return the run's ``manifest.json`` (design §15.4 lineage envelope).
+    """Return the run's ``manifest.json`` (lineage envelope).
 
     404 if the manifest doesn't exist yet — older runs that finished
     before the manifest writer landed simply lack one.

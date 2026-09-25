@@ -6,12 +6,12 @@ Exposes:
 - ``GET {prefix}/images/root/{alias}``          — stream an image from a named source-path alias
 - ``GET {prefix}/images/cache/stats``           — thumbnail cache hit/miss stats
 - ``GET {prefix}/crops/{id}/thumbnail``         — 128px item-crop thumbnail (LRU cached)
-- ``GET {prefix}/crops/{id}/image``             — clean full source image (no overlay; see K6)
+- ``GET {prefix}/crops/{id}/image``             — clean full source image (no overlay)
 - ``GET {prefix}/crops/{id}/region_thumbnail``  — region-of-interest sub-bbox thumbnail
 
 Exports **two** routers — ``router`` (images) and ``crops_router``
-(crops) — mirroring the reference implementation, which registers them
-separately in ``src/main.py`` rather than nesting one under the other.
+(crops), registered separately in ``src/main.py`` rather than nesting one
+under the other.
 """
 
 from __future__ import annotations
@@ -179,7 +179,7 @@ async def crop_full_image(
     ] = None,
 ) -> Response:
     """The clean source image for this crop's parent frame — no box, label
-    or other overlay drawn (K6). Only resize, EXIF-transpose and RGB
+    or other overlay drawn. Only resize, EXIF-transpose and RGB
     conversion apply.
 
     Defaults to full resolution to preserve compatibility with callers
@@ -215,7 +215,7 @@ async def crop_region_thumbnail(
     when there is no accepted region box (``RegionFields.bbox_norm``) --
     a ``verify_rejected`` item never has the latter, so this route used to
     404 for every one of them even though the item is still reviewable
-    (DQ-B2 follow-up). 404 only when the crop has neither box. The cache
+    404 only when the crop has neither box. The cache
     key includes the box's own coordinates (``ThumbnailCache.get_or_compute``),
     so a later promotion or re-detection that changes the box never
     serves a stale image -- it's a different cache key.
