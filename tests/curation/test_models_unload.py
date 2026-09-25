@@ -253,3 +253,86 @@ def test_core_pipeline_models_includes_clip_and_face_models():
     assert 'mobileclip2_s2_image_encoder' in core
     assert 'scrfd_10g_bnkps' in core
     assert 'lpr_nanov11_640' not in core
+
+
+# =============================================================================
+# Live-UI follow-up: the primary item proposer + secondary classifier had no
+# unload guard at all (`requires_force_to_unload: false`), so the UI offered
+# a plain Unload that would break ingest. They must be protected the same
+# way the region detector and OCR models are -- hard-blocked, never with
+# `force=true` -- derived from the active ingest profiles, not hardcoded.
+# =============================================================================
+
+
+def test_is_region_protected_model_matches_configured_primary_proposer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import src.routers.curation.models as models_mod
+
+    monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'item_proposer_v9')
+    assert models_mod._is_region_protected_model('item_proposer_v9') is True
+
+
+def test_is_region_protected_model_matches_configured_secondary_classifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import src.routers.curation.models as models_mod
+
+    monkeypatch.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'secondary_classifier_x1')
+    assert models_mod._is_region_protected_model('secondary_classifier_x1') is True
+
+
+def test_unload_refuses_configured_primary_proposer_even_with_force(
+    app_client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'item_proposer_v9')
+    mock = _mock_unload(monkeypatch)
+    resp = app_client.delete('/curation/models/item_proposer_v9', params={'force': 'true'})
+    assert resp.status_code == 403
+    mock.assert_not_awaited()
+
+
+def test_unload_refuses_configured_secondary_classifier_even_with_force(
+    app_client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'secondary_classifier_x1')
+    mock = _mock_unload(monkeypatch)
+    resp = app_client.delete('/curation/models/secondary_classifier_x1', params={'force': 'true'})
+    assert resp.status_code == 403
+    mock.assert_not_awaited()
+
+
+# =============================================================================
+# External-service entries (segmenter, VLM) are never Triton models --
+# DELETE must reject them with a clear 4xx before ever calling Triton, and
+# /models/status must flag them `unloadable: false` (same source of truth).
+# =============================================================================
+
+
+@pytest.mark.usefixtures('reference_region_profile')
+def test_unload_refuses_the_segmenter(app_client, monkeypatch: pytest.MonkeyPatch) -> None:
+    # license_plate.json's segmenter_name is 'sam3'.
+    mock = _mock_unload(monkeypatch)
+    resp = app_client.delete('/curation/models/sam3')
+    assert resp.status_code == 400
+    mock.assert_not_awaited()
+
+
+def test_unload_refuses_the_vlm(app_client, monkeypatch: pytest.MonkeyPatch) -> None:
+    import src.routers.curation.models as models_mod
+
+    vlm_name = models_mod._get_vlm_labeler().model
+    mock = _mock_unload(monkeypatch)
+    resp = app_client.delete(f'/curation/models/{vlm_name}')
+    assert resp.status_code == 400
+    mock.assert_not_awaited()
+
+
+def test_external_service_model_names_includes_segmenter_and_vlm(
+    monkeypatch: pytest.MonkeyPatch, reference_region_profile: None
+) -> None:
+    import src.routers.curation.models as models_mod
+
+    names = models_mod._external_service_model_names()
+    assert 'sam3' in names
+    assert models_mod._get_vlm_labeler().model in names

@@ -9498,7 +9498,7 @@
     },
     "/curation/models/status": {
       "get": {
-        "description": "Status + usage stats for the models that drive the curation labeling pipeline.\n\nReturns a single ``{\"models\": [...]}`` object describing each Triton model\nthe labeler depends on, plus the external VLM service. Each entry\ncarries enough metadata for the labeler ``/models`` page to render a\nself-explanatory card without requiring access to Triton/Prometheus directly.",
+        "description": "Status + usage stats for the models that drive the curation labeling pipeline.\n\nReturns a single ``{\"models\": [...]}`` object describing each Triton model\nthe labeler depends on, plus the external VLM and segmenter services.\nEach entry carries enough metadata for the labeler ``/models`` page to\nrender a self-explanatory card without requiring access to\nTriton/Prometheus directly.",
         "operationId": "models_status_curation_models_status_get",
         "responses": {
           "200": {
@@ -9522,7 +9522,7 @@
     },
     "/curation/models/{model_name}": {
       "delete": {
-        "description": "Unload ``model_name`` from Triton and delete its model repo directory.\n\nGuardrails:\n- Region-detector + OCR models (per the active ``DetectionProfile``)\n  can **never** be unloaded here, even with ``force=true`` — 403\n  unconditionally.\n- Other core pipeline models (CLIP image encoder, face\n  detect/recognition) need ``force=true`` — without it, 409 with a\n  loud explanation. Unloading any of them breaks live serving until\n  something else is loaded.",
+        "description": "Unload ``model_name`` from Triton and delete its model repo directory.\n\nGuardrails:\n- External-service entries (the segmenter, the VLM) are rejected\n  unconditionally: there is no Triton repository entry to unload, and\n  treating their name as one would just surface a confusing Triton\n  404.\n- Region-detector + OCR models (per the active ``DetectionProfile``)\n  can **never** be unloaded here, even with ``force=true`` — 403\n  unconditionally.\n- Other core pipeline models (CLIP image encoder, face\n  detect/recognition) need ``force=true`` — without it, 409 with a\n  loud explanation. Unloading any of them breaks live serving until\n  something else is loaded.",
         "operationId": "unload_model_curation_models__model_name__delete",
         "parameters": [
           {
