@@ -54,65 +54,101 @@ WORKSPACE_GB = 4
 # =============================================================================
 
 
+# F-18 (fresh-start E2E findings 2026-09-25): Triton's config.pbtxt and the
+# clients (src/clients/triton_client.py, fast_face_client.py) hardcode this
+# tensor contract. Keep the export the one place that reconciles it against
+# whatever names the buffalo_l checkpoint's raw graph happens to use (its
+# PyTorch tracer emitted 'input.1' / '683') -- many more call sites would
+# need to change, and stay in sync, if the client/config chased the model
+# instead.
+CANONICAL_INPUT_NAME = 'input'
+CANONICAL_OUTPUT_NAME = 'output'
+
+
+def _rename_tensor_everywhere(model, old_name: str, new_name: str) -> None:
+    """Rename a graph-boundary tensor and every node reference to it."""
+    if old_name == new_name:
+        return
+    for node in model.graph.node:
+        for i, name in enumerate(node.input):
+            if name == old_name:
+                node.input[i] = new_name
+        for i, name in enumerate(node.output):
+            if name == old_name:
+                node.output[i] = new_name
+
+
 def make_batch_dynamic(onnx_path: Path, output_path: Path | None = None) -> Path:
     """
-    Convert ArcFace ONNX model to have dynamic batch dimension if needed.
+    Convert ArcFace ONNX model to a dynamic batch dimension and canonical
+    'input'/'output' tensor names, whichever of the two the source model
+    still needs.
 
     Args:
         onnx_path: Path to original ONNX model
         output_path: Path for output (default: adds _dynamic suffix)
 
     Returns:
-        Path to dynamic batch ONNX model
+        Path to the dynamic-batch, canonically-named ONNX model
     """
     import onnx
     from onnx import TensorProto, helper
 
-    print('\nChecking batch dimension...')
+    print('\nChecking batch dimension and IO tensor names...')
     print(f'  Input: {onnx_path}')
 
     model = onnx.load(str(onnx_path))
 
-    # Get current input shape
     input_tensor = model.graph.input[0]
+    output_tensor = model.graph.output[0]
     old_shape = [
         d.dim_value if d.dim_value > 0 else d.dim_param
         for d in input_tensor.type.tensor_type.shape.dim
     ]
     print(f'  Original input shape: {old_shape}')
+    print(f'  Original IO names: input={input_tensor.name!r} output={output_tensor.name!r}')
 
-    # Check if already dynamic
-    if isinstance(old_shape[0], str) or old_shape[0] == 0:
-        print('  ✓ Already has dynamic batch dimension')
+    batch_is_dynamic = isinstance(old_shape[0], str) or old_shape[0] == 0
+    io_is_canonical = (
+        input_tensor.name == CANONICAL_INPUT_NAME and output_tensor.name == CANONICAL_OUTPUT_NAME
+    )
+    if batch_is_dynamic and io_is_canonical:
+        print('  ✓ Already has dynamic batch dimension and canonical IO names')
         return onnx_path
 
-    # Create new input with dynamic batch
+    if input_tensor.name != CANONICAL_INPUT_NAME:
+        print(f'  Renaming input tensor {input_tensor.name!r} -> {CANONICAL_INPUT_NAME!r}')
+        _rename_tensor_everywhere(model, input_tensor.name, CANONICAL_INPUT_NAME)
+    if output_tensor.name != CANONICAL_OUTPUT_NAME:
+        print(f'  Renaming output tensor {output_tensor.name!r} -> {CANONICAL_OUTPUT_NAME!r}')
+        _rename_tensor_everywhere(model, output_tensor.name, CANONICAL_OUTPUT_NAME)
+
+    # Replace both graph-boundary ValueInfoProtos with dynamic-batch,
+    # canonically-named ones (node references were already repointed above).
     new_input = helper.make_tensor_value_info(
-        input_tensor.name,
+        CANONICAL_INPUT_NAME,
         TensorProto.FLOAT,
         ['batch', 3, INPUT_SIZE, INPUT_SIZE],
     )
-
-    # Replace input
     model.graph.input.remove(input_tensor)
     model.graph.input.insert(0, new_input)
 
-    # Update output to have dynamic batch
-    output_tensor = model.graph.output[0]
     new_output = helper.make_tensor_value_info(
-        output_tensor.name,
+        CANONICAL_OUTPUT_NAME,
         TensorProto.FLOAT,
         ['batch', EMBEDDING_DIM],
     )
     model.graph.output.remove(output_tensor)
     model.graph.output.insert(0, new_output)
 
+    onnx.checker.check_model(model)
+
     # Save modified model
     if output_path is None:
         output_path = onnx_path.parent / f'{onnx_path.stem}_dynamic.onnx'
 
     onnx.save(model, str(output_path))
-    print(f'  ✓ Dynamic batch model saved: {output_path}')
+    print(f'  ✓ Dynamic-batch, canonical-IO model saved: {output_path}')
 
     return output_path
 
@@ -369,13 +405,13 @@ platform: "tensorrt_plan"
 max_batch_size: {MAX_BATCH_SIZE}
 
 input {{
-    name: "input"
+    name: "{CANONICAL_INPUT_NAME}"
     data_type: TYPE_FP32
     dims: [3, {INPUT_SIZE}, {INPUT_SIZE}]
 }}
 
 output {{
-    name: "output"
+    name: "{CANONICAL_OUTPUT_NAME}"
     data_type: TYPE_FP32
     dims: [{EMBEDDING_DIM}]
 }}
@@ -386,7 +422,9 @@ dynamic_batching {{
 }}
 
 instance_group [{{
-    count: 4
+    # F-19: count 1 is the default core loadout's baseline (~0.7 GB);
+    # raise on a card with headroom to spare (see README "GPU sizing").
+    count: 1
     kind: KIND_GPU
     gpus: [0]
 }}]

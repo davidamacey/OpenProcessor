@@ -376,7 +376,7 @@ def test_source_root_mounted_at_the_same_path_on_api_and_detection_worker() -> N
     detection_failed/reason=image_unavailable."""
     services = _services()
     target = '/data/source'
-    for name in ('yolo-api', 'curation-detection-worker'):
+    for name in ('yolo-api', 'curation-detection-worker', 'curation-auto-label-worker'):
         mounts = [str(v) for v in (services[name].get('volumes') or [])]
         matching = [m for m in mounts if m.endswith((f':{target}:ro', f':{target}'))]
         assert matching, f'{name} has no source-root mount at {target}: {mounts}'
@@ -388,10 +388,60 @@ def test_examples_mounted_on_api_and_detection_worker() -> None:
     container if ./examples is actually mounted."""
     services = _services()
     target = '/app/examples'
-    for name in ('yolo-api', 'curation-detection-worker'):
+    for name in ('yolo-api', 'curation-detection-worker', 'curation-auto-label-worker'):
         mounts = [str(v) for v in (services[name].get('volumes') or [])]
         assert any(m.endswith(f':{target}:ro') for m in mounts), (
             f'{name} has no ./examples mount at {target}: {mounts}'
+        )
+
+
+# F-33/F-34 (fresh-start E2E findings 2026-09-25): curation-auto-label-worker
+# runs the same in-process pipeline (cascade_detect / profile_registry /
+# source-image serving) as curation-detection-worker, not a thin HTTP client
+# like curation-vlm-worker/curation-cluster-refresh -- it needs the same
+# source-root/examples mounts or it fails lazily, on its first claimed job,
+# with its idle healthcheck staying green the whole time. Unlike
+# curation-detection-worker (which only ever produces unlabeled
+# `*_proposal` detections), the auto-label worker's VLM stage additionally
+# needs the class registry itself, so ./data is its own, narrower
+# requirement -- see test_class_registry_data_mounted_where_needed below.
+_IN_PROCESS_PIPELINE_SERVICES = (
+    'yolo-api',
+    'curation-detection-worker',
+    'curation-auto-label-worker',
+)
+_HTTP_CLIENT_ONLY_CURATION_SERVICES = ('curation-vlm-worker', 'curation-cluster-refresh')
+
+
+def test_class_registry_data_mounted_where_needed() -> None:
+    """F-34b: OP_REGISTRY_PATH defaults to ./data/class_registry.json.
+    Without ./data mounted, the registry loads empty and any class-aware
+    stage (the VLM auto-label stage, training, promote, eval) raises
+    'class_names or class_catalog must be supplied' or reads no classes
+    instead of running. yolo-api and curation-auto-label-worker read the
+    registry directly; curation-detection-worker deliberately does not
+    (it only ever writes unlabeled `*_proposal` detections)."""
+    services = _services()
+    target = '/app/data'
+    for name in ('yolo-api', 'curation-auto-label-worker'):
+        mounts = [str(v) for v in (services[name].get('volumes') or [])]
+        assert any(m.endswith((f':{target}', f':{target}:ro')) for m in mounts), (
+            f'{name} has no ./data mount at {target}: {mounts}'
+        )
+
+
+def test_http_client_only_curation_services_stay_lightweight() -> None:
+    """Documents *why* curation-vlm-worker/curation-cluster-refresh don't
+    need the source-root/examples/data mounts above: they only ever talk
+    to yolo-api over HTTP (verified via each entrypoint's own imports, not
+    inferred from mounts), so adding a heavier mount surface there would be
+    unnecessary attack/complexity surface, not a missing-mount bug."""
+    services = _services()
+    for name in _HTTP_CLIENT_ONLY_CURATION_SERVICES:
+        mounts = [str(v) for v in (services[name].get('volumes') or [])]
+        assert not any(m.endswith(':/data/source:ro') for m in mounts), (
+            f'{name} now mounts /data/source -- update this test/comment if '
+            f'that is intentional (it started calling cascade_detect directly?)'
         )
 
 

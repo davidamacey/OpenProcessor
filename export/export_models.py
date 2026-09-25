@@ -218,6 +218,26 @@ def setup_trt_builder(
     Returns:
         Tuple of (builder, config, network, logger)
     """
+    # F-09/F-12 (fresh-start E2E findings 2026-09-25): this script runs
+    # under /opt/venv-y11's deliberately CPU-only torch (see
+    # requirements-export-y11.txt), so the ONNX-export step above always
+    # passes device='cpu' to Ultralytics. Ultralytics' own
+    # select_device('cpu') sets os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+    # as a side effect, in-process -- CUDA_VISIBLE_DEVICES is read by the
+    # driver, not by torch, so it blinds the TensorRT builder below too
+    # (createInferBuilder fails with a CUDA initialization error), even
+    # though a bare tensorrt.Builder() in an unpoisoned process works
+    # fine. The engine build never uses torch's CUDA (see that same
+    # requirements file's own comment), so clearing the poisoned value
+    # here is safe and restores what this process would see without
+    # Ultralytics having touched it.
+    if os.environ.get('CUDA_VISIBLE_DEVICES') == '-1':
+        logger.warning(
+            "Clearing CUDA_VISIBLE_DEVICES=-1 (set by Ultralytics' CPU-mode "
+            'ONNX export in this process) before building the TensorRT engine'
+        )
+        os.environ.pop('CUDA_VISIBLE_DEVICES', None)
+
     trt_logger = trt.Logger(trt.Logger.INFO)
     trt.init_libnvinfer_plugins(trt_logger, '')
 
@@ -1057,7 +1077,12 @@ def export_model(
 
     # Validate input file
     if not validate_pt_file(pt_file):
-        return {'model': model_id, 'status': 'error', 'error': 'Model file not found'}
+        return {
+            'model': model_id,
+            'triton_name': config['triton_name'],
+            'status': 'error',
+            'error': f'Model file not found: {pt_file}',
+        }
 
     results = {
         'model': model_id,
@@ -1175,7 +1200,11 @@ def print_summary(results: list[dict[str, Any]]) -> None:
     logger.info('=' * 70)
 
     for result in results:
-        logger.info(f'{result["model"]} ({result["triton_name"]}):')
+        logger.info(f'{result["model"]} ({result.get("triton_name", "?")}):')
+
+        if result.get('status') == 'error':
+            logger.info(f'  [FAIL] {result.get("error", "unknown error")}')
+            continue
 
         if 'onnx' in result:
             status = '[OK]' if result['onnx']['status'] == 'success' else '[FAIL]'
@@ -1213,8 +1242,26 @@ def print_summary(results: list[dict[str, Any]]) -> None:
     logger.info('=' * 70)
 
 
-def main() -> None:
-    """Main entry point for export script."""
+def _any_export_failed(results: list[dict[str, Any]]) -> bool:
+    """F-12: whether any model/format in ``results`` reports an error.
+
+    ``main()`` used to always exit 0 regardless of what ``results``
+    said -- a total, silent failure (e.g. every format's TensorRT build
+    rejected by a poisoned CUDA_VISIBLE_DEVICES, see setup_trt_builder)
+    looked identical to a clean run to anything checking the exit code
+    (CI, ``make``, an operator's shell).
+    """
+    for result in results:
+        if result.get('status') == 'error':
+            return True
+        for value in result.values():
+            if isinstance(value, dict) and value.get('status') == 'error':
+                return True
+    return False
+
+
+def main() -> int:
+    """Main entry point for export script. Returns a process exit code."""
     parser = argparse.ArgumentParser(
         description='Export YOLO models in multiple formats for Triton',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1449,6 +1496,11 @@ Examples:
                 )
     logger.info('=' * 70)
 
+    if _any_export_failed(results):
+        logger.error('One or more exports failed -- see EXPORT SUMMARY above')
+        return 1
+    return 0
+
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

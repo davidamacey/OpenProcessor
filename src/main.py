@@ -194,25 +194,12 @@ async def lifespan(app: FastAPI):
     await AppResources.async_triton_pool.initialize()
     logger.info('triton_pool_initialized', channels=4, max_concurrent=64)
 
-    # Best-effort: pre-create curation indexes. Wrapped so a missing /
-    # not-yet-up OpenSearch instance doesn't block startup; the curation
-    # router retries the create on first /curation/* request.
-    try:
-        from src.clients.curation_opensearch import create_curation_indexes
+    # Best-effort: create the core + curation OpenSearch indexes (F-25) and
+    # kick off the background kNN-warmup task. See
+    # dependencies.bootstrap_opensearch_indexes for the full rationale.
+    from src.core.dependencies import bootstrap_opensearch_indexes
 
-        os_client = await OpenSearchClientFactory.get_client()
-        await create_curation_indexes(os_client.client, force_recreate=False)
-        logger.info('curation_indexes_bootstrapped')
-
-        # Warm the kNN graph cache in the background — fire-and-
-        # forget, never blocks startup, failure is logged and swallowed.
-        from src.routers.curation._common import warm_knn_indexes
-
-        AppResources.curation_knn_warmup_task = asyncio.create_task(
-            warm_knn_indexes(os_client.client)
-        )
-    except Exception as exc:
-        logger.warning('curation_indexes_bootstrap_skipped', error=str(exc))
+    AppResources.curation_knn_warmup_task = await bootstrap_opensearch_indexes()
 
     # S-3: tail the shared cross-process event log so this uvicorn
     # worker's SSE clients see events published by any other worker or

@@ -149,6 +149,50 @@ class TorchTextBackend:
         return np.asarray(features.detach().cpu().numpy(), dtype=np.float32)
 
 
+class LazyTorchTextBackend:
+    """Defers the ~2.7 GB ``pe.CLIP`` eager load until the first real query.
+
+    ``PEEncoder.warm_text_encoder()`` runs from the FastAPI lifespan in
+    *every* uvicorn worker at startup. When ``OP_PE_TEXT_BACKEND=auto`` (the
+    default) and neither the ONNX export nor Triton's ``pe_text_encoder`` is
+    available yet, eagerly loading the torch fallback there multiplies a
+    multi-GB checkpoint load by the worker count before a single
+    ``/curation/search/text`` request has ever been made — on a fresh
+    install (before ``make export-pe`` has produced the ONNX file) this was
+    observed to peak container RSS at 153 GiB with 32 workers and OOM-kill
+    the container before any export command could even run.
+
+    Reports ``name == 'torch'`` immediately (health/status endpoints see
+    the truth about which backend *will* serve text queries), but only
+    calls the real loader — once, thread-safely — from the first
+    :meth:`encode`, so only workers that actually receive a text-search
+    request ever pay the load cost, and they pay it spread out over time
+    rather than all at once at startup.
+    """
+
+    name = 'torch'
+
+    def __init__(self, loader: Any) -> None:
+        self._loader = loader
+        self._real: Any = None
+        self._lock = threading.Lock()
+
+    def encode(self, tokens: np.ndarray) -> np.ndarray:
+        real = self._real
+        if real is None:
+            with self._lock:
+                real = self._real
+                if real is None:
+                    logger.info(
+                        'pe_text_encoder_lazy_loading',
+                        checkpoint=PE_TEXT_CHECKPOINT,
+                        backend='torch',
+                    )
+                    real = self._loader()
+                    self._real = real
+        return real.encode(tokens)
+
+
 class OnnxTextBackend:
     """ONNX Runtime CPU session over the exported text-tower graph."""
 
@@ -490,12 +534,25 @@ class PEEncoder:
         return TorchTextBackend(model, torch)
 
     def _local_backend(self) -> Any:
-        """In-process backend: ONNX if the file loads, else PyTorch. Cached."""
+        """In-process backend: ONNX if the file loads, else PyTorch. Cached.
+
+        A pinned ``OP_PE_TEXT_BACKEND=torch`` loads eagerly here, same as
+        always — the operator asked for it explicitly, so failing fast on
+        load is correct. ``auto`` (the default) instead defers the torch
+        load to first query via :class:`LazyTorchTextBackend` (see F-07 in
+        the fresh-start E2E findings): eagerly loading a multi-GB fallback
+        model in every uvicorn worker at startup is the bug, not a feature.
+        """
         if self._local_text_backend is None:
             onnx = None
             if self._text_backend_pref != 'torch':
                 onnx = self._try_onnx_backend(required=False)
-            self._local_text_backend = onnx or self._load_torch_backend()
+            if onnx is not None:
+                self._local_text_backend = onnx
+            elif self._text_backend_pref == 'torch':
+                self._local_text_backend = self._load_torch_backend()
+            else:
+                self._local_text_backend = LazyTorchTextBackend(self._load_torch_backend)
         return self._local_text_backend
 
     # -- encoding --------------------------------------------------------

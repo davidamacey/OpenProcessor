@@ -550,6 +550,36 @@ command: --workers=2   # Development
 device_ids: ['0', '2']  # Use GPUs 0 and 2
 ```
 
+### GPU sizing — default core Triton loadout
+
+Measured on a 48 GB card (fresh-start E2E run, 2026-09-25) by unloading
+each model in turn via `POST /v2/repository/models/<name>/unload`. The
+stock `models/*/config.pbtxt` loadout came to **~25.2 GB** at its
+previous default instance counts — with the VLM service alone measured
+at ~23 GB in that same run, that left no room for the segmenter or a
+training run on the same card.
+
+| Model | Instance count | Approx. VRAM (measured) | Notes |
+|---|---:|---:|---|
+| `scrfd_10g_bnkps` | 4 (old) → 1 (default) | 6.8 GB → ~1.7 GB | Face detection |
+| `mobileclip2_s2_image_encoder` | 2 (old) → 1 (default) | 3.4 GB → ~1.7 GB | FP32 build (no FP16 baked into this export yet) |
+| `arcface_w600k_r50` | 4 (old) → 1 (default) | 2.75 GB → ~0.7 GB | Face embeddings |
+| `mobileclip2_s2_text_encoder` | 1 | 0.7 GB | Unchanged |
+| yolo11/PE/OCR set (remaining core models) | as shipped | ~11.65 GB | Not reduced by this pass — no per-model breakdown measured yet |
+
+The shipped defaults now use `count: 1` for the three over-provisioned
+models above, bringing the core loadout down to roughly 16-17 GB — a
+meaningful cut from 25.2 GB, though still above a strict 12-14 GB target
+if you also need the segmenter/VLM/trainer on the same card (the
+remaining ~11.65 GB yolo/PE/OCR set hasn't been broken down
+per-model yet). Raise any
+instance count back up (`config.pbtxt`, or re-export with
+`export/export_scrfd.py` / `export/export_face_recognition.py`) on a
+card with headroom to spare — hot-path models (face detection under
+heavy face-search load, for example) benefit most from more instances.
+Curation-only deployments that don't need the core face/vehicle path at
+all can `unload` those 3 models entirely instead of exporting them.
+
 ### GPU sizing — segmenter (curation region cascade)
 
 The optional `segmenter` service (`--profile segmenter`) is the single

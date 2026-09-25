@@ -37,8 +37,13 @@ declare -gA MODEL_SOURCES=(
     # ArcFace from FaceFusion (public HuggingFace)
     ["arcface_w600k_r50.onnx"]="https://huggingface.co/facefusion/models-3.0.0/resolve/main/arcface_w600k_r50.onnx"
 
-    # MobileCLIP from Apple (via HuggingFace)
-    ["mobileclip_s2.pt"]="https://huggingface.co/apple/mobileclip-s2/resolve/main/mobileclip_s2.pt"
+    # MobileCLIP2-S2 (open_clip pretrained tag "dfndr2b", resolved via
+    # open_clip.pretrained.get_pretrained_cfg('MobileCLIP2-S2', 'dfndr2b') ->
+    # hf_hub 'timm/MobileCLIP2-S2-OpenCLIP'). NOT apple/mobileclip-s2, which
+    # is the older MobileCLIP v1 checkpoint and is incompatible with the
+    # 'mobileclip2_s2' open_clip model config export_mobileclip_image_encoder.py
+    # / export_mobileclip_text_encoder.py load.
+    ["mobileclip_s2.pt"]="https://huggingface.co/timm/MobileCLIP2-S2-OpenCLIP/resolve/main/open_clip_pytorch_model.bin"
 )
 
 # Model checksums for validation (sha256)

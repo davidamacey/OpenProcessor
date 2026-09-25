@@ -75,6 +75,12 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     # not Python code. OP_SOURCE_ROOT (the in-container path it feeds)
     # IS read by src/config/curation.py and stays subject to this check.
     'OP_SOURCE_ROOT_HOST',
+    # F-01: compose-only vars -- docker-compose.yml's own
+    # ${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-latest}
+    # interpolation is the reader, not Python code (see fresh-start E2E
+    # findings 2026-09-25).
+    'OP_IMAGE_REPO',
+    'OP_IMAGE_TAG',
 }
 
 

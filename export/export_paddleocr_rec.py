@@ -11,8 +11,11 @@ Model: PP-OCRv5 Multilingual Recognition (SVTR-LCNet architecture)
 - Preprocessing: (x / 127.5) - 1, BGR format
 
 The multilingual ONNX is downloaded by download_paddleocr.py (no PaddleX needed).
-TensorRT conversion is typically done by scripts/export_paddleocr.sh via trtexec.
-This script provides manual verification and an alternative Python-based conversion path.
+This script verifies the ONNX and builds the TensorRT engine in-process with the
+TensorRT Python API -- self-contained, no docker CLI / Triton container dependency
+(see convert_to_tensorrt_via_python_api). scripts/export_paddleocr.sh is the
+alternative HOST-side path (docker compose run ... trtexec), for when you'd
+rather build from outside any container.
 
 Usage:
     python export/export_paddleocr_rec.py               # Verify + TRT convert
@@ -20,9 +23,6 @@ Usage:
 """
 
 import argparse
-import os
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -52,8 +52,6 @@ MAX_BATCH = 64  # Match Triton max_batch_size
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _PROJECT_DIR = _SCRIPT_DIR.parent
 MODELS_DIR = _PROJECT_DIR / 'models'
-# Container that provides trtexec (override for renamed deployments)
-TRITON_CONTAINER = os.environ.get('TRITON_CONTAINER', 'triton-server')
 
 ONNX_PATH = (
     Path('/app/pytorch_models/paddleocr/ppocr_rec_v5_mobile.onnx')
@@ -153,22 +151,6 @@ def test_onnx_inference(onnx_path: Path) -> bool:
         return False
 
 
-def check_triton_container() -> bool:
-    """Check if Triton container is running."""
-    try:
-        # Using docker CLI with fixed arguments - safe from injection
-        result = subprocess.run(
-            ['docker', 'ps', '--filter', f'name={TRITON_CONTAINER}', '--format', '{{.Names}}'],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        return TRITON_CONTAINER in result.stdout
-    except Exception:
-        return False
-
-
 def unload_models_for_memory():
     """Unload Triton models to free GPU memory for TensorRT build."""
     import logging
@@ -201,111 +183,86 @@ def unload_models_for_memory():
     print('  Models unloaded')
 
 
-def convert_to_tensorrt_via_trtexec(onnx_path: Path, plan_path: Path) -> Path | None:
-    """Convert ONNX to TensorRT using trtexec in Triton container."""
+def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path | None:
+    """Build the TensorRT engine in-process with the TensorRT Python API.
+
+    F-17 (fresh-start E2E findings 2026-09-25): this script runs inside
+    ``yolo-api`` (see the module docstring's ``Usage``), which has no
+    docker CLI or docker.sock, and shelling out to
+    ``docker exec <TRITON_CONTAINER> trtexec ...`` also hardcoded the
+    pre-G-01 container name ``triton-server`` -- after the project-name
+    rename it's ``${COMPOSE_PROJECT_NAME}-triton``, so this always
+    printed "triton-server container is not running" even with Triton
+    up. yolo-api already depends on ``tensorrt-cu13`` directly (see
+    requirements.txt; ``export/export_models.py`` builds YOLO engines
+    the same way), so there's no need for Triton to be running, or even
+    exist, at export time -- only the ONNX file and a GPU.
+    """
     print('\n' + '=' * 60)
     print('Step 3: Convert to TensorRT')
     print('=' * 60)
 
-    # Check Triton container is running
-    if not check_triton_container():
-        print('ERROR: triton-server container is not running')
-        print('  Start it with: docker compose up -d triton-server')
-        return None
-
-    # Unload models to free GPU memory
+    # Best-effort headroom for the build; a plain HTTP call, harmless
+    # (and a no-op) if Triton isn't reachable.
     unload_models_for_memory()
 
-    # Copy ONNX to models dir for container access
-    container_onnx = MODELS_DIR / onnx_path.name
-    if not container_onnx.exists() or container_onnx.stat().st_size != onnx_path.stat().st_size:
-        shutil.copy(onnx_path, container_onnx)
-        print(f'Copied ONNX to: {container_onnx}')
-
-    # Remove old plan file
     if plan_path.exists():
         plan_path.unlink()
         print(f'Removed old plan: {plan_path}')
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Build trtexec command with dynamic shapes
-    # IMPORTANT: Use --workspace=N format (MB) not --memPoolSize which requires different syntax
-    min_shapes = f'{INPUT_NAME}:{MIN_BATCH}x3x{REC_HEIGHT}x{MIN_WIDTH}'
-    opt_shapes = f'{INPUT_NAME}:{OPT_BATCH}x3x{REC_HEIGHT}x{OPT_WIDTH}'
-    max_shapes = f'{INPUT_NAME}:{MAX_BATCH}x3x{REC_HEIGHT}x{MAX_WIDTH}'
-
-    # Build command - write output to file inside container for reliable capture
-    # NOTE: --workspace is deprecated in TRT 10+, use --memPoolSize=workspace:8192MiB instead
-    # NOTE (G-21): TRT 11.1 is strongly typed -- trtexec has no --fp16 flag
-    # anymore. This ONNX is not pre-baked to FP16, so the engine builds
-    # FP32 (TF32 tensor cores on Ampere+); bake precision into the ONNX
-    # first if you need a smaller/faster engine.
-    trtexec_cmd = f"""
-trtexec \\
-    --onnx=/models/{onnx_path.name} \\
-    --saveEngine=/models/paddleocr_rec_trt/1/model.plan \\
-    --minShapes={min_shapes} \\
-    --optShapes={opt_shapes} \\
-    --maxShapes={max_shapes} \\
-    --memPoolSize=workspace:8192M \\
-    2>&1 | tee /tmp/trtexec.log
-
-EXIT_CODE=${{PIPESTATUS[0]}}
-echo ""
-echo "=== BUILD RESULT ==="
-echo "Exit code: $EXIT_CODE"
-if [ -f /models/paddleocr_rec_trt/1/model.plan ]; then
-    ls -lh /models/paddleocr_rec_trt/1/model.plan
-else
-    echo "ERROR: model.plan not created"
-fi
-exit $EXIT_CODE
-"""
-
-    cmd = ['docker', 'exec', TRITON_CONTAINER, 'bash', '-c', trtexec_cmd]
-
-    print('Running trtexec with dynamic shapes:')
-    print(f'  Min: {min_shapes}')
-    print(f'  Opt: {opt_shapes}')
-    print(f'  Max: {max_shapes}')
+    min_shape = (MIN_BATCH, 3, REC_HEIGHT, MIN_WIDTH)
+    opt_shape = (OPT_BATCH, 3, REC_HEIGHT, OPT_WIDTH)
+    max_shape = (MAX_BATCH, 3, REC_HEIGHT, MAX_WIDTH)
+    print('Building with dynamic shapes:')
+    print(f'  Min: {INPUT_NAME}:{min_shape}')
+    print(f'  Opt: {INPUT_NAME}:{opt_shape}')
+    print(f'  Max: {INPUT_NAME}:{max_shape}')
     print('  Memory Pool: 8192 MiB')
     print('\nThis may take 10-20 minutes for dynamic shapes...')
-    print('  (Output saved to /tmp/trtexec.log in container)')
-    print('')
 
     try:
-        # Run with live output - cmd is constructed with validated paths above
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
+        import tensorrt as trt
 
-        # Stream output
-        last_lines = []
-        for line in process.stdout:
-            print(line, end='')
-            last_lines.append(line)
-            if len(last_lines) > 100:
-                last_lines.pop(0)
+        trt_logger = trt.Logger(trt.Logger.INFO)
+        trt.init_libnvinfer_plugins(trt_logger, '')
+        builder = trt.Builder(trt_logger)
+        config = builder.create_builder_config()
+        config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 8192 * (1 << 20))
 
-        process.wait(timeout=1800)
+        network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+        network = builder.create_network(network_flags)
+        parser = trt.OnnxParser(network, trt_logger)
+        with open(onnx_path, 'rb') as f:
+            if not parser.parse(f.read()):
+                for i in range(parser.num_errors):
+                    print(f'  ONNX parse error: {parser.get_error(i)}')
+                return None
 
-        if process.returncode == 0 and plan_path.exists() and plan_path.stat().st_size > 0:
+        profile = builder.create_optimization_profile()
+        # NOTE (G-21): TRT 11.1 is strongly typed -- this ONNX is not
+        # pre-baked to FP16, so the engine builds FP32 (TF32 tensor cores
+        # on Ampere+); bake precision into the ONNX first for FP16.
+        profile.set_shape(INPUT_NAME, min=min_shape, opt=opt_shape, max=max_shape)
+        config.add_optimization_profile(profile)
+
+        serialized_engine = builder.build_serialized_network(network, config)
+        if serialized_engine is None:
+            print('\nERROR: TensorRT engine build failed (see log above)')
+            return None
+
+        with open(plan_path, 'wb') as f:
+            f.write(serialized_engine)
+
+        if plan_path.exists() and plan_path.stat().st_size > 0:
             print('\nTensorRT conversion successful!')
             print(f'  Engine size: {plan_path.stat().st_size / 1024 / 1024:.2f} MB')
             return plan_path
-        print(f'\nERROR: trtexec failed (exit code {process.returncode})')
-        if plan_path.exists():
-            print(f'  Plan file size: {plan_path.stat().st_size} bytes (0 = failed)')
+        print('\nERROR: engine serialized but model.plan is missing/empty')
         return None
 
-    except subprocess.TimeoutExpired:
-        print('ERROR: TensorRT conversion timed out after 30 minutes')
-        process.kill()
-        return None
     except Exception as e:
-        print(f'ERROR: TensorRT conversion failed: {e}')
+        print(f'\nERROR: TensorRT conversion failed: {e}')
         import traceback
 
         traceback.print_exc()
@@ -422,10 +379,11 @@ def main():
     # Step 3: Convert to TensorRT
     plan_path = None
     if not args.skip_tensorrt:
-        plan_path = convert_to_tensorrt_via_trtexec(onnx_path, PLAN_OUTPUT)
+        plan_path = convert_to_tensorrt_via_python_api(onnx_path, PLAN_OUTPUT)
         if not plan_path:
-            print('\nWARNING: TensorRT conversion failed')
-            print('  You can retry manually or check GPU memory')
+            print('\nERROR: TensorRT conversion failed')
+            print('  Check GPU memory and retry')
+            return 1
 
     # Step 4: Create Triton config
     if plan_path:
