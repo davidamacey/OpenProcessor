@@ -299,7 +299,9 @@ COCO_CLASSES = {
 }
 
 
-def format_detections_from_triton(result: dict, input_size: int = 640) -> list:
+def format_detections_from_triton(
+    result: dict, input_size: int = 640, model_name: str | None = None
+) -> list:
     """
     Format Triton EfficientNMS detections with original-image-normalized coordinates.
 
@@ -314,6 +316,13 @@ def format_detections_from_triton(result: dict, input_size: int = 640) -> list:
             - orig_shape: (height, width) optional
             - scale: float optional
             - padding: (pad_x, pad_y) optional
+        model_name: Which Triton model produced ``result`` -- resolves
+            ``class_name`` from that model's own labels (see
+            :mod:`src.utils.class_names`) instead of always assuming the
+            stock 80-class COCO vocabulary (F-42, fresh-start E2E
+            findings 2026-09-25). ``None`` keeps the historical
+            COCO-only behavior for callers that genuinely never see
+            anything but the stock detector.
 
     Returns:
         List of detection dicts with x1, y1, x2, y2 normalized to original image
@@ -333,6 +342,13 @@ def format_detections_from_triton(result: dict, input_size: int = 640) -> list:
     if orig_shape is not None and scale is not None and padding is not None:
         boxes = inverse_letterbox_coords(boxes, orig_shape, scale, padding, input_size)
 
+    if model_name is not None:
+        from src.utils.class_names import get_class_names
+
+        class_names = get_class_names(model_name)
+    else:
+        class_names = COCO_CLASSES
+
     return [
         {
             'x1': float(boxes[i, 0]),
@@ -341,7 +357,7 @@ def format_detections_from_triton(result: dict, input_size: int = 640) -> list:
             'y2': float(boxes[i, 3]),
             'confidence': float(scores[i]),
             'class': int(classes[i]),
-            'class_name': COCO_CLASSES.get(int(classes[i]), f'class_{int(classes[i])}'),
+            'class_name': class_names.get(int(classes[i]), f'class_{int(classes[i])}'),
         }
         for i in range(len(boxes))
     ]
