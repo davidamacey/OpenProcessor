@@ -193,6 +193,48 @@ def test_selection_job_leaves_fresh_running_state_alone(
 
 
 # =============================================================================
+# probe_job.reconcile_orphaned_jobs
+# =============================================================================
+
+
+def test_probe_job_reconciles_orphaned_running_state(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv('OP_PROBE_JOBS_DIR', str(tmp_path / 'probe'))
+    from src.services.curation import probe_job
+
+    (tmp_path / 'probe').mkdir()
+    (tmp_path / 'probe' / 'state.json').write_text(
+        json.dumps({'job_id': 'j6', 'status': 'running', 'train_job_id': 't1'})
+    )
+    heartbeat = tmp_path / 'probe' / 'heartbeat'
+    heartbeat.touch()
+    old = time.time() - 120
+    os.utime(heartbeat, (old, old))
+
+    assert probe_job.reconcile_orphaned_jobs() is True
+    on_disk = json.loads((tmp_path / 'probe' / 'state.json').read_text())
+    assert on_disk['status'] == 'interrupted'
+
+
+def test_probe_job_leaves_fresh_running_state_alone(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv('OP_PROBE_JOBS_DIR', str(tmp_path / 'probe'))
+    from src.services.curation import probe_job
+
+    (tmp_path / 'probe').mkdir()
+    (tmp_path / 'probe' / 'state.json').write_text(
+        json.dumps({'job_id': 'j6', 'status': 'running'})
+    )
+    (tmp_path / 'probe' / 'heartbeat').touch()
+
+    assert probe_job.reconcile_orphaned_jobs() is False
+    on_disk = json.loads((tmp_path / 'probe' / 'state.json').read_text())
+    assert on_disk['status'] == 'running'
+
+
+# =============================================================================
 # embedding_viz.reconcile_orphaned_jobs
 # =============================================================================
 

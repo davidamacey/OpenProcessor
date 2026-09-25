@@ -61,6 +61,7 @@ _STDLIB_AND_LOCAL = {
     'email',
     'enum',
     'errno',
+    'fcntl',
     'functools',
     'gc',
     'getpass',

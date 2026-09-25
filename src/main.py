@@ -217,13 +217,13 @@ async def lifespan(app: FastAPI):
     # that was killed mid-job — see docs/design/curation_design_rationale.md
     # and each module's reconcile_orphaned_jobs() docstring. Best-effort and
     # isolated per module so one misconfigured state dir can't block startup
-    # or the other three checks.
-    from src.services.curation import embedding_viz
+    # or the other checks.
+    from src.services.curation import embedding_viz, probe_job
     from src.services.curation.autolabel import job as autolabel_job
     from src.services.curation.item_scores import job as item_scores_job
     from src.services.curation.selection import job as selection_job
 
-    for _module in (item_scores_job, selection_job, embedding_viz, autolabel_job):
+    for _module in (item_scores_job, selection_job, embedding_viz, autolabel_job, probe_job):
         try:
             if _module.reconcile_orphaned_jobs():
                 logger.warning('orphaned_job_reconciled', module=_module.__name__)

@@ -74,6 +74,10 @@ def _heartbeat_file() -> Path:
     return _state_dir() / 'heartbeat'
 
 
+def _lock_file() -> Path:
+    return _state_dir() / 'start.lock'
+
+
 @dataclass
 class _JobState:
     job_id: str = ''
@@ -179,26 +183,39 @@ def start_job(opensearch: AsyncOpenSearch, scorer_names: list[str]) -> dict[str,
     Deliberately NOT ``async``: the busy-check + state transition to
     'running' happens before any ``await`` point, so a second call issued
     immediately after (even from a concurrent request) sees the 'running'
-    state without racing the background task's own progress.
+    state without racing the background task's own progress. That
+    in-process ordering isn't enough on its own though — ``yolo-api`` runs
+    under ``--workers=N``, so two calls landing on *different* worker
+    processes at nearly the same instant could both pass ``_is_busy()``
+    before either has written ``'running'``. The
+    :func:`~src.services.curation.job_lock.exclusive_start_lock` makes the
+    whole check-and-claim atomic across processes too, not just within
+    one (2026-09-25 fix — this gap predates the probe job's file-backed
+    rewrite that surfaced it; both now share the same fix).
     """
-    if _is_busy():
-        raise RuntimeError('scoring job already in progress')
-    _ensure_dir()
-    with contextlib.suppress(FileNotFoundError):
-        _cancel_flag().unlink()
-    with contextlib.suppress(FileNotFoundError):
-        _heartbeat_file().unlink()
+    from src.services.curation.job_lock import exclusive_start_lock
 
-    job_id = uuid.uuid4().hex
-    state = _JobState(
-        job_id=job_id,
-        status='running',
-        scorers=list(scorer_names),
-        started_at=time.time(),
-    )
-    _atomic_write(state)
-    global _active_task  # noqa: PLW0603 - singleton task handle, mirrors auto_label_job's module globals
-    _active_task = asyncio.create_task(run_scoring_job(job_id, opensearch, scorer_names))
+    with exclusive_start_lock(_lock_file()) as acquired:
+        if not acquired:
+            raise RuntimeError('scoring job already in progress')
+        if _is_busy():
+            raise RuntimeError('scoring job already in progress')
+        _ensure_dir()
+        with contextlib.suppress(FileNotFoundError):
+            _cancel_flag().unlink()
+        with contextlib.suppress(FileNotFoundError):
+            _heartbeat_file().unlink()
+
+        job_id = uuid.uuid4().hex
+        state = _JobState(
+            job_id=job_id,
+            status='running',
+            scorers=list(scorer_names),
+            started_at=time.time(),
+        )
+        _atomic_write(state)
+        global _active_task  # noqa: PLW0603 - singleton task handle, mirrors auto_label_job's module globals
+        _active_task = asyncio.create_task(run_scoring_job(job_id, opensearch, scorer_names))
     return state.to_dict()
 
 

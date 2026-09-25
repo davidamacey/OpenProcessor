@@ -74,6 +74,7 @@ from src.core.logging import get_logger
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from opensearchpy import AsyncOpenSearch
@@ -390,6 +391,7 @@ async def run_probe_inference(
     page_size: int = 1000,
     resume: bool = False,
     class_ids: dict[str, int] | None = None,
+    should_cancel: Callable[[], bool] | None = None,
 ) -> int:
     """Run the probe checkpoint over every non-holdout item and record
     uncertainty.
@@ -418,6 +420,10 @@ async def run_probe_inference(
             where it stopped instead of re-scoring everything.
         class_ids: class name -> registry id, for ``probe_pred_class_id``.
             Defaults to the active classes of the configured registry.
+        should_cancel: Optional cheap callable checked once per scroll page
+            (after that page's bulk write). Defaults to a no-op;
+            :mod:`src.services.curation.probe_job` passes its file-backed
+            ``is_cancelled`` here.
 
     Returns:
         Number of item docs updated.
@@ -522,6 +528,9 @@ async def run_probe_inference(
                     logger.warning(
                         'probe_bulk_partial_errors', sample=bulk_resp.get('items', [])[:3]
                     )
+            if should_cancel is not None and should_cancel():
+                logger.info('probe_cancelled', processed=processed)
+                return processed
             resp = await opensearch.scroll(scroll_id=scroll_id, scroll='5m')
             scroll_id = resp.get('_scroll_id')
             hits = resp.get('hits', {}).get('hits', [])
