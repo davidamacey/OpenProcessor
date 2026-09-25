@@ -12,7 +12,11 @@
  * backend's own flag still decides which terms those are. An
  * `existing_class` term keeps its one-click map to the served `class_id`.
  */
-import type { NewClassProposalTerm, NewClassProposalsSummary } from '$lib/api';
+import type {
+  NewClassProposalTerm,
+  NewClassProposalsSummary,
+  NewClassTermRules,
+} from '$lib/api';
 
 export interface ProposalRow {
   term: NewClassProposalTerm;
@@ -46,4 +50,31 @@ export function proposalRows(summary: NewClassProposalsSummary): ProposalRow[] {
   return rows.sort(
     (a, b) => b.term.count - a.term.count || a.term.label.localeCompare(b.term.label),
   );
+}
+
+/**
+ * The help line explaining which terms get auto-flagged, built from the
+ * served `term_rules`. F-52: an empty served list used to render as
+ * "(, plus …)" / "()"; each clause now appears only when it has content.
+ * Returns null when nothing is configured.
+ */
+export function termRulesText(rules: NewClassTermRules): string | null {
+  const generic = rules.generic_terms.filter((t) => t.trim().length > 0);
+  const nonObject = rules.non_object_terms.filter((t) => t.trim().length > 0);
+  const genericParts: string[] = [];
+  if (generic.length > 0) genericParts.push(generic.join(', '));
+  if (rules.registry_groups_are_generic)
+    genericParts.push('any class-registry group name');
+  const clauses: string[] = [];
+  if (genericParts.length > 0) {
+    clauses.push(`match a generic-parent term (${genericParts.join(', plus ')})`);
+  }
+  if (nonObject.length > 0) {
+    clauses.push(`match a non-object term (${nonObject.join(', ')})`);
+  }
+  if (rules.existing_classes_flagged) clauses.push('already name a registered class');
+  if (clauses.length === 0) return null;
+  const last = clauses.pop()!;
+  const joined = clauses.length > 0 ? `${clauses.join(', ')}, or ${last}` : last;
+  return `Terms are auto-flagged, not offered a one-click create, when they ${joined}.`;
 }

@@ -95,3 +95,56 @@ def test_review_actions_stay_within_1280x720_viewport(stub, page, app_url):
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, f"no pageerror expected: {errors[:3]}"
+
+
+def _stub_review(stub) -> None:
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
+    stub.on("GET", r"/methods(\?|$)", METHODS)
+    stub.on(
+        "GET",
+        r"/crops/[^/]+/image$",
+        lambda req, m: (
+            200,
+            {
+                "image": {"path": "/nas/img-0.jpg", "width": 640, "height": 480},
+                "items": [review_item(0)],
+            },
+        ),
+    )
+    stub.on(
+        "GET",
+        r"/review/",
+        lambda _r, _m: (
+            200,
+            {"items": [review_item(i) for i in range(3)], "total": 3, "page": 1, "page_size": 30},
+        ),
+    )
+
+
+def test_review_meta_pane_not_squeezed_at_800(stub, page, app_url):
+    """F8 D4: at 800px the metadata list sat in an inner pane ~79px tall.
+    Below lg the body scrolls as a whole, so the pane shows all its rows."""
+    page.set_viewport_size({"width": 800, "height": 760})
+    _stub_review(stub)
+    page.goto(f"{app_url}/review")
+    page.get_by_role("button", name="Confirm", exact=True).wait_for(timeout=15000)
+    pane = page.get_by_test_id("review-meta-pane")
+    dims = pane.evaluate("el => ({h: el.clientHeight, sh: el.scrollHeight})")
+    assert dims["h"] >= dims["sh"] - 1, f"meta pane scrolls internally at 800px: {dims}"
+    assert dims["h"] > 150, dims
+
+
+def test_review_source_image_top_aligned(stub, page, app_url):
+    """V-3: on a tall viewport the source image is top-aligned in its pane,
+    not centered mid-way down an empty panel."""
+    page.set_viewport_size({"width": 1600, "height": 2400})
+    _stub_review(stub)
+    page.goto(f"{app_url}/review")
+    page.get_by_role("button", name="Confirm", exact=True).wait_for(timeout=15000)
+    panel = page.get_by_test_id("review-source-panel")
+    aligns = panel.evaluate(
+        "el => [...el.querySelectorAll('div')].filter(d => d.clientHeight > 400)"
+        ".map(d => getComputedStyle(d).alignItems)"
+    )
+    assert aligns, "no tall box inside the source panel"
+    assert "center" not in aligns, aligns

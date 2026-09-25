@@ -55,6 +55,14 @@ describe('RunResults — val vs test labelling', () => {
     expect(el.textContent).toContain('test split (frozen holdout)');
   });
 
+  it('V-5: labels the overall eval with the trainer protocol', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const el = renderRunResults(trainStatusFixture);
+    expect(el.querySelector('[data-testid="eval-protocol"]')?.textContent).toContain(
+      'trainer eval (Ultralytics val)',
+    );
+  });
+
   it('T5 (visual audit 2026-09-24): names the run it belongs to inside the open panel', () => {
     getTrainManifestMock.mockResolvedValue(trainManifestFixture);
     const el = renderRunResults(trainStatusFixture);

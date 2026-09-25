@@ -171,5 +171,10 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
     # never anything for pages 2..100.
     assert review_page_requests == [1, 101], review_page_requests
 
+    # F8 D6: the counter shows the served queue position (rank 3000 ->
+    # #3001), not the cursor's index within the one loaded page.
+    counter = page.get_by_test_id("queue-counter").first.inner_text()
+    assert counter.startswith("#3001 "), counter
+
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, f"no pageerror expected: {errors[:3]}"

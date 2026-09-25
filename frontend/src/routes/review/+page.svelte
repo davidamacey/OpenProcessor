@@ -35,8 +35,10 @@
     emptyQueueMessage,
     locateMissMessage,
     NO_CLASS_YET,
+    queuePosition,
     vlmEmptyReasonText,
   } from '$lib/review/reviewCopy';
+  import { NO_OPINION_TEXT, probeOpinion } from '$lib/review/probeOpinion';
   import {
     humanWritableStates,
     statusClearsBox,
@@ -60,7 +62,10 @@
     tabHonorsPinnedSortDefault,
     type ReviewPresetId,
     reviewDeepLink,
+    unavailableTabMessage,
   } from '$lib/reviewTabs';
+  import { REGION_TAB_ID } from '$lib/annotations/servedRegionSlot';
+  import { regionProfileStore } from '$stores/regionProfile.svelte';
   import { isDiverseOverlayAvailable } from '$lib/strategies';
   import type {
     BBoxNorm,
@@ -107,6 +112,18 @@
   // cohort preview) open that tab and jump to that crop.
   const deepLink = reviewDeepLink(page.url.searchParams);
   let tab = $state<ReviewTab>(deepLink.tab);
+  // A `?tab=` that resolved to no tab (e.g. the region tab on a backend
+  // with no region profile) falls back to All with a visible reason.
+  let unavailableTabNotice = $state<string | null>(
+    deepLink.unavailableTab
+      ? unavailableTabMessage(
+          deepLink.unavailableTab,
+          REGION_TAB_ID,
+          regionProfileStore.configured,
+          regionProfileStore.unknown,
+        )
+      : null,
+  );
   let pendingCropId = $state<string | null>(deepLink.cropId);
   // DQ-M7 (2026-09-24 data-quality pass): true from mount until a
   // `?crop_id=` deep link either lands on its target or gives up. While
@@ -537,6 +554,10 @@
   // drained every page upfront, which on the busy 'all' tab fired ~4
   // chained network calls before first paint and made the page feel
   // frozen on slow connections. Lazy paging keeps first-paint snappy.
+  // F8 D6: the served queue position, not the index within the loaded
+  // buffer (a deep link loads only the located page).
+  const currentPosition = $derived(queuePosition(queue.firstPage, pageSize, cursor));
+
   const loadFirst = () => queue.loadFirst();
   const loadMore = () => queue.loadMore();
 
@@ -966,8 +987,14 @@
    *  model_disagreements tab's probe prediction now carries its own
    *  `probe_pred_class_id`, so this assigns it directly — no name→id
    *  lookup needed (closes G4). */
+  // F8 D1: the served probe opinion decides whether a prediction is
+  // shown and whether "Accept model's class" is offered.
+  const opinion = $derived(
+    current ? probeOpinion(current) : { kind: 'none' as const, showAccept: false },
+  );
+
   async function acceptModelClass(): Promise<void> {
-    if (!current || current.probe_pred_class_id == null) return;
+    if (!current || current.probe_pred_class_id == null || !opinion.showAccept) return;
     await assign(current.probe_pred_class_id);
   }
 
@@ -1084,6 +1111,9 @@
   // tabs. Edit mode resets to false on every cursor advance so the
   // operator always lands on the next item in scan-and-confirm mode.
   let editMode = $state<boolean>(false);
+  /** The crop an edit session belongs to. Enter in edit mode saves the
+   *  box to THIS id, never to whatever `current` has since become. */
+  let editingCropId = $state<string | null>(null);
   let slotSaving = $state<boolean>(false);
 
   // Inline editors for the slot metadata fields. Seeded from the
@@ -1248,27 +1278,35 @@
   // Reseed whenever the cursor changes (advancing to next crop) or the
   // tab/items reset. Also exit edit mode so the next item lands in
   // read-only scan mode regardless of where we left the previous one.
+  //
+  // The ONLY dependency is the current crop's id. Everything after that
+  // runs untracked: `_seedSlotFromCurrent` reads `editedSlotBox`
+  // (`seededSlotBox = editedSlotBox`), so running it tracked made every
+  // drag tick / arrow nudge re-run this effect, reseed the box from the
+  // server snapshot and drop edit mode — after which further arrows paged
+  // the queue and Enter confirmed a different crop.
   $effect(() => {
-    void current?.id;
+    const id = current?.id;
+    untrack(() => reseedForCrop(id ?? null));
+  });
+
+  function reseedForCrop(id: string | null): void {
     // DQ-M5: drop the previous crop's natural size immediately so its cap
     // never briefly applies to the next crop's <img> before it loads and
     // rebinds naturalWidth/naturalHeight.
     cropNaturalWidth = 0;
     cropNaturalHeight = 0;
     _seedSlotFromCurrent();
-    // Freeze the zoom viewport on the just-seeded bbox. Wrapped in
-    // untrack() so the read of `editedSlotBox` inside _seedViewBox
-    // does NOT make this effect re-run on every drag tick — that
-    // would re-fire _seedSlotFromCurrent and overwrite the user's
-    // in-progress resize with the server snapshot ("can't edit the
-    // bbox" bug).
-    untrack(() => _seedViewBox());
+    // Freeze the zoom viewport on the just-seeded bbox.
+    _seedViewBox();
     const seedData = current && activeSlot ? slotOf(current, activeSlot) : null;
     editedSlotText = seedData?.text?.value ?? '';
     editedSlotStatus = seedData?.lifecycle?.status ?? '';
     editedRejectionReason = seedData?.lifecycle?.rejectionReason ?? '';
     editMode = false;
-  });
+    editingCropId = null;
+    void id;
+  }
 
   // In-flight slot-meta saves, keyed by crop id so concurrent edits to
   // the same crop are aborted-then-replaced (the latest blur wins) and
@@ -1366,12 +1404,14 @@
       _seedSlotFromCurrent();
       _seedViewBox();
       editMode = false;
+      editingCropId = null;
       return;
     }
     // Re-center the zoom on whatever bbox we're about to edit (could
     // differ from the cursor-advance snapshot if the user already saved
     // once on this crop and is re-editing).
     _seedViewBox();
+    editingCropId = current.id;
     editMode = true;
   }
 
@@ -1393,7 +1433,16 @@
       toastStore.warn('No bbox to save — draw one or press Backspace to clear.');
       return;
     }
-    const id = current.id;
+    // Save to the crop the edit session started on. If the queue moved
+    // underneath the session, refuse rather than write a box onto (or
+    // confirm) a different crop.
+    const id = editingCropId ?? current.id;
+    if (id !== current.id) {
+      toastStore.warn('The crop changed while editing; the box was not saved.');
+      editMode = false;
+      editingCropId = null;
+      return;
+    }
     const tuple = _parentFrameTuple(editedSlotBox);
     slotSaving = true;
     try {
@@ -1401,6 +1450,7 @@
       const idx = queue.items.findIndex((x) => x.id === id);
       if (idx >= 0) queue.items[idx] = { ...queue.items[idx], ...item } as ReviewItem;
       editMode = false;
+      editingCropId = null;
       // M6: Z reverses a box edit the same way it reverses a confirm/
       // reject/FP below — see undo.svelte.ts's header comment for why
       // this shares the one undoStore stack (kind: 'region').
@@ -1604,8 +1654,12 @@
       reg('d', discard, 'Discard');
       reg('/', openPicker, 'Search all classes…');
     }
-    reg('n', skip, 'Skip');
-    reg('z', undoLast, 'Undo last');
+    if (!editMode) {
+      // In edit mode the queue never moves: N/Z (and the arrows, which the
+      // canvas owns below) only act once the edit is saved or cancelled.
+      reg('n', skip, 'Skip');
+      reg('z', undoLast, 'Undo last');
+    }
 
     let canvasKey: ((e: KeyboardEvent) => void) | null = null;
     if (activeSlot?.capabilities.subBox != null && editMode) {
@@ -1703,11 +1757,20 @@
         </button>
       {/each}
     </ScrollStrip>
+    {#if regionProfileStore.unknown}
+      <!-- F-78: boot couldn't read the region profile yet; the region tab
+           appears once a /health poll answers (the layout re-mounts). -->
+      <span
+        class="shrink-0 pl-2 text-[11px] text-zinc-500"
+        data-testid="region-profile-loading">loading region profile…</span
+      >
+    {/if}
     <span
       data-testid="queue-counter"
       class="shrink-0 pl-2 font-mono text-xs text-zinc-500"
     >
-      {queue.items.length > 0 ? `${cursor + 1} / ${queue.items.length}` : '—'} loaded · {queue.total}
+      {queue.items.length > 0 ? `#${currentPosition}` : '—'} · {queue.items.length} loaded ·
+      {queue.total}
       total
     </span>
     <span class="shrink-0 pl-2"><ShortcutsButton /></span>
@@ -2015,8 +2078,27 @@
     </span>
   </div>
 
+  {#if unavailableTabNotice}
+    <div
+      class="mx-4 mt-3 flex items-center gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+      data-testid="tab-unavailable"
+      role="status"
+    >
+      <span class="grow">{unavailableTabNotice}</span>
+      <button type="button" class="btn-sm" onclick={() => (unavailableTabNotice = null)}
+        >Dismiss</button
+      >
+    </div>
+  {/if}
+
   <!-- Body -->
-  <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-2">
+  <!-- F8 D4: below lg the two panels stack; the body scrolls as a whole
+       there instead of squeezing each panel into half the height (the
+       metadata pane was ~79px tall at 800px). -->
+  <div
+    class="grid min-h-0 flex-1 grid-cols-1 content-start gap-4 overflow-y-auto p-4 lg:grid-cols-2 lg:content-normal lg:overflow-hidden"
+    data-testid="review-body"
+  >
     {#if queue.loading && queue.items.length === 0}
       <p class="col-span-full text-sm text-zinc-500">Loading...</p>
     {:else if awaitingDeepLink}
@@ -2049,22 +2131,27 @@
       </div>
     {:else}
       <!-- Source image with bbox -->
-      <div class="flex min-h-0 flex-col surface p-2" data-testid="review-source-panel">
+      <div
+        class="flex h-[35vh] flex-col surface p-2 lg:h-auto lg:min-h-0"
+        data-testid="review-source-panel"
+      >
         <div class="mb-2 flex items-center gap-2 px-1 text-xs text-zinc-400">
           <span>source</span>
           <span class="grow"></span>
           <span class="font-mono">{current.source ?? ''}</span>
         </div>
-        <div class="flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
+        <!-- V-3: top-aligned, so on a tall pane the image sits at the top
+             rather than mid-way down an empty black panel. -->
+        <div class="flex min-h-0 flex-1 items-start justify-center bg-zinc-950">
           <!-- K6: boxes/labels are drawn client-side from
                GET {API_PREFIX}/crops/{id}/context — the server no longer
                burns an overlay into this image. -->
-          <SourceImageOverlay cropId={current.id} maxDim={1280} />
+          <SourceImageOverlay cropId={current.id} maxDim={1280} align="start" />
         </div>
       </div>
 
       <!-- Crop + meta -->
-      <div class="flex min-h-0 flex-col surface p-2">
+      <div class="flex flex-col surface p-2 lg:min-h-0" data-testid="review-crop-panel">
         <div class="mb-2 flex items-center gap-2 px-1 text-xs text-zinc-400">
           <span>crop</span>
           <span class="grow"></span>
@@ -2088,8 +2175,10 @@
              (BboxCanvas is still square-aspect within it) while fitting.
              Verified at 1280×720, 1600×1000 and 1920×1080 — see
              artifacts_local/cw-live/phase-b-fixes/. -->
+        <!-- F8 D4: overflow-hidden so a region canvas never paints over the
+             first metadata row (the Reason row read half-clipped). -->
         <div
-          class="flex min-h-[210px] max-h-[40%] shrink-0 items-center justify-center bg-zinc-950"
+          class="flex h-[210px] shrink-0 items-center justify-center overflow-hidden bg-zinc-950 lg:h-auto lg:max-h-[40%] lg:min-h-[210px]"
         >
           {#if activeSlot?.capabilities.subBox && editMode}
             <!-- Edit mode — drag/resize the proposal directly, then hit
@@ -2160,7 +2249,10 @@
         <!-- Everything below the image scrolls in its own region — the
              image above keeps its floor height regardless of how much
              metadata/Details content is open. -->
-        <div class="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+        <div
+          class="mt-3 pr-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+          data-testid="review-meta-pane"
+        >
           <dl class="grid grid-cols-2 gap-y-1 text-xs">
             {#if currentSlotRejectionReason}
               {@const reasonKind = regionVocabularyStore.rejectionReasonKind(
@@ -2230,7 +2322,14 @@
               <dd class="text-yellow-200">{current.proposed_class_name ?? '—'}</dd>
             {/if}
 
-            {#if current.probe_pred_class}
+            {#if opinion.kind === 'no_opinion'}
+              <!-- F8 D1: out of the probe's classes: no opinion, never
+                   shown as a prediction or as agreement. -->
+              <dt class="text-zinc-500">Model predicts</dt>
+              <dd class="text-zinc-400" data-testid="probe-no-opinion">
+                {NO_OPINION_TEXT}
+              </dd>
+            {:else if opinion.kind === 'prediction'}
               <!-- G4 closed 2026-09-24 (logic-moves item 14): the backend
                  now serves `probe_pred_class_id` alongside the display
                  name, so "Accept" no longer needs a client-side
@@ -2245,7 +2344,7 @@
                     size="sm"
                   />
                 {/if}
-                {#if current.probe_pred_class_id != null && current.probe_pred_class_id !== current.class_id}
+                {#if opinion.showAccept}
                   <button
                     type="button"
                     class="rounded border border-blue-500/60 bg-blue-500/15 px-1.5 py-0.5 text-[11px] text-blue-100 hover:bg-blue-500/25"
@@ -2443,15 +2542,8 @@
                 {:else}
                   <span class="text-zinc-500">—</span>
                 {/if}
-                {#if current.mistakenness_score != null}
-                  <ScoreChip
-                    label="mistakenness"
-                    value={current.mistakenness_score}
-                    method={current.mistakenness_method}
-                    version={current.mistakenness_version}
-                    size="sm"
-                  />
-                {/if}
+                <!-- The mistakenness chip lives in the Scores row above, not
+                     next to the detector provenance chips. -->
                 {#if editedSlotBoxIsCandidate && !editMode}
                   {@const candidateKind = regionVocabularyStore.rejectionReasonKind(
                     slotData?.lifecycle?.rejectionReason,
@@ -2773,7 +2865,7 @@
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
     <span class="font-mono text-xs text-zinc-500">
-      {Math.min(cursor + 1, queue.items.length)} / {queue.total}
+      {queue.items.length > 0 ? currentPosition : 0} / {queue.total}
       {#if queue.items.length < queue.total}
         <span class="ml-1 text-zinc-600">(loaded {queue.items.length})</span>
       {/if}

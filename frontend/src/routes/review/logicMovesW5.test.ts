@@ -45,16 +45,16 @@ describe('W5: "Accept model\'s class" assigns probe_pred_class_id directly', () 
     expect(fn).toMatch(/await assign\(current\.probe_pred_class_id\)/);
   });
 
-  it('the accept button only renders when probe_pred_class_id differs from the current class', () => {
+  it('the accept button renders only when the served probe opinion allows it (probeOpinion)', () => {
+    // F8 D1: the class-id check plus the served probe_disagreement rule
+    // live in $lib/review/probeOpinion.ts (probeOpinion.test.ts).
     // The function doc comment above also says "Accept model's class" —
     // skip past it to the actual <button> label in the template.
     const idx = src.indexOf("Accept model's class", src.indexOf('</script>'));
     expect(idx).toBeGreaterThan(-1);
     const preceding = src.slice(0, idx);
     const lastIf = [...preceding.matchAll(/\{#if [^}]*\}/g)].pop();
-    expect(lastIf?.[0]).toMatch(
-      /current\.probe_pred_class_id != null && current\.probe_pred_class_id !== current\.class_id/,
-    );
+    expect(lastIf?.[0]).toBe('{#if opinion.showAccept}');
   });
 });
 

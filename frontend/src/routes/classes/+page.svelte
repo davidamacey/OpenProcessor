@@ -11,13 +11,15 @@
     renameClass,
     resolveNewClassProposal,
     restoreClass,
+    classMergedDetail,
+    classMergedRestoreText,
     syncClassesToOpensearch,
     type NewClassProposalsSummary,
     type NewClassProposalTerm,
   } from '$lib/api';
   import AddClassModal from '$components/AddClassModal.svelte';
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
-  import { proposalRows } from '$lib/classes/proposalRows';
+  import { proposalRows, termRulesText } from '$lib/classes/proposalRows';
   import { formatDateOnly } from '$lib/formatDate';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
@@ -206,10 +208,15 @@
       toastStore.success(`Restored ${cls.name}.`);
       await classesStore.clearAndRefetch();
     } catch (e) {
-      // 409 here is a PLAIN STRING detail (a live class already uses this
-      // name) — show it verbatim, not the structured class_still_referenced
-      // shape deprecate uses.
-      if (e instanceof ApiError && e.status === 409 && e.detail) {
+      // F-56: a merged class 409s with a structured `class_merged` detail
+      // (its crops already live on the merge target); say where they went
+      // and that un-merge isn't supported, using the served text.
+      const merged = classMergedDetail(e);
+      // Any other 409 is a PLAIN STRING detail (a live class already uses
+      // this name) — show it verbatim.
+      if (merged) {
+        toastStore.error(classMergedRestoreText(merged));
+      } else if (e instanceof ApiError && e.status === 409 && e.detail) {
         toastStore.error(e.detail);
       } else {
         toastStore.error(`Restore failed: ${(e as Error).message}`);
@@ -253,7 +260,7 @@
   );
 
   // Dry-run preview: every time the pair changes, ask the server what a
-  // real merge would do (would_relabel / would_unvalidate / holdout_blocking
+  // real merge would do (would_relabel / validations_carried_over / holdout_blocking
   // / blocked) before it's possible to confirm. Never guessed client-side —
   // the backend already knows about holdout-blocking rows the frontend has
   // no visibility into.
@@ -512,7 +519,7 @@
   }
 </script>
 
-<div class="mx-auto flex h-full max-w-7xl flex-col p-6">
+<div class="mx-auto max-w-7xl p-6">
   <!-- Header -->
   <header class="mb-4 flex flex-wrap items-center gap-3">
     <h1 class="text-2xl font-semibold tracking-tight">Class management</h1>
@@ -550,173 +557,11 @@
     </div>
   {/if}
 
-  <!-- New-class proposals (2026-09-24 logic-moves W5) — aggregate view of
-       the same cohort /review's "New Class Proposals" tab pages one crop
-       at a time. Absent (not shown as an error banner) while nothing has
-       loaded yet or the pool is empty; shown as an inline error when the
-       backend genuinely failed (e.g. the opensearch aggregation 500 seen
-       live), never a page-breaking crash. -->
-  {#if proposalsLoading}
-    <div class="surface mb-4 p-4 text-xs text-zinc-500">Loading proposals…</div>
-  {:else if proposalsError}
-    <div class="surface mb-4 flex items-center gap-3 p-4 text-xs text-red-300">
-      <span>Proposals unavailable: {proposalsError}</span>
-      <button type="button" class="btn-sm" onclick={() => void loadProposals()}>
-        retry
-      </button>
-    </div>
-  {:else if proposalsSummary && (proposalsSummary.top_terms.length > 0 || proposalsSummary.flagged_terms.length > 0)}
-    <section class="surface mb-4 p-4">
-      <h2 class="mb-1 text-sm font-semibold text-zinc-200">
-        New class proposals
-        <span class="ml-1 font-normal text-zinc-500"
-          >({proposalsSummary.total_pending} pending{#if proposalsSummary.without_term > 0},
-            {proposalsSummary.without_term} with no proposed term{/if})</span
-        >
-      </h2>
-      <p class="mb-3 text-xs text-zinc-500">
-        Crops the VLM flagged as needing a class the registry doesn't have yet. Each row
-        is a proposed term with a few sample thumbnails — create a class or map onto an
-        existing one to resolve <strong>every</strong> pending crop proposing that term
-        (not just the samples shown), after a confirm step showing the real count. Crops
-        can still be triaged one at a time on <code>/review</code>'s "New Class Proposals"
-        tab instead.
-        {#if proposalsSummary.without_term > 0}
-          {proposalsSummary.without_term} pending item(s) have no proposed term (a human "needs
-          new class" flag with no name) and aren't listed below — triage those on
-          <code>/review</code> instead.
-        {/if}
-      </p>
-      {#if proposalsSummary.term_rules}
-        <p class="mb-3 text-[11px] text-zinc-600">
-          Terms are auto-flagged, not offered a one-click create, when they match this
-          deployment's generic-parent list ({proposalsSummary.term_rules.generic_terms.join(
-            ', ',
-          )}{proposalsSummary.term_rules.registry_groups_are_generic
-            ? ', plus any existing class-registry group name'
-            : ''}) or non-object list ({proposalsSummary.term_rules.non_object_terms.join(
-            ', ',
-          )}), or when the term already names a registered class.
-        </p>
-      {/if}
-      <!-- L2 (visual audit 2026-09-24): one list, biggest term first.
-           Flagged terms (generic parent / not an object / existing class)
-           used to sit in a collapsed section with no action at all while
-           holding most pending crops; they now get "map to existing"
-           too. Only "Create class" stays limited to un-flagged terms. -->
-      <ul class="flex flex-col gap-3" data-testid="proposal-rows">
-        {#each proposalRows(proposalsSummary) as row (row.term.label)}
-          {@const term = row.term}
-          <li
-            class="flex flex-wrap items-center gap-3 rounded border border-zinc-800 p-2"
-            data-testid="proposal-row"
-          >
-            <div class="flex shrink-0 items-center gap-1">
-              {#each term.sample_crop_ids.slice(0, 4) as cropId (cropId)}
-                <img
-                  src={getThumbUrl(cropId, 64)}
-                  alt=""
-                  loading="lazy"
-                  class="h-10 w-10 rounded object-cover"
-                />
-              {/each}
-            </div>
-            <div class="min-w-0 shrink-0">
-              <div class="text-sm text-zinc-100">{term.label}</div>
-              <div class="text-[11px] text-zinc-500">
-                {term.count} crop(s)
-                {#if term.flag}
-                  · <span class="text-amber-300">{flagReason(term)}</span>
-                {/if}
-              </div>
-            </div>
-            <span class="grow"></span>
-            {#if row.canCreate}
-              <div class="flex shrink-0 items-center gap-1.5">
-                <input
-                  type="text"
-                  placeholder={term.label}
-                  value={newClassNameByTerm[term.label] ?? ''}
-                  oninput={(e) => {
-                    newClassNameByTerm = {
-                      ...newClassNameByTerm,
-                      [term.label]: (e.currentTarget as HTMLInputElement).value,
-                    };
-                  }}
-                  class="input-sm w-32"
-                  disabled={proposalBusyTerm === term.label}
-                />
-                <button
-                  type="button"
-                  class="btn-sm btn-primary"
-                  disabled={proposalBusyTerm === term.label}
-                  onclick={() => void createClassAndAssign(term)}
-                >
-                  Create class & assign
-                </button>
-              </div>
-            {/if}
-            {#if row.fixedMapClassId != null}
-              <button
-                type="button"
-                class="btn-sm"
-                disabled={proposalBusyTerm === term.label}
-                onclick={() => void mapFlaggedTermToClass(term)}
-              >
-                Map to {classesStore.byId(row.fixedMapClassId)?.name ??
-                  row.fixedMapClassId}
-              </button>
-            {/if}
-            {#if row.canPickMapTarget}
-              <div class="flex shrink-0 items-center gap-1.5">
-                <select
-                  class="select-sm"
-                  aria-label="Map {term.label} to an existing class"
-                  value={mapTargetByTerm[term.label] ?? ''}
-                  onchange={(e) => {
-                    const v = (e.currentTarget as HTMLSelectElement).value;
-                    mapTargetByTerm = {
-                      ...mapTargetByTerm,
-                      [term.label]: v === '' ? null : Number(v),
-                    };
-                  }}
-                  disabled={proposalBusyTerm === term.label}
-                >
-                  <option value="">map to existing…</option>
-                  {#each allClasses.filter((c) => !c.deprecated) as cls (cls.id)}
-                    <option value={cls.id}>{cls.name}</option>
-                  {/each}
-                </select>
-                <button
-                  type="button"
-                  class="btn-sm"
-                  disabled={proposalBusyTerm === term.label ||
-                    mapTargetByTerm[term.label] == null}
-                  onclick={() => void mapToExisting(term)}
-                >
-                  Assign
-                </button>
-              </div>
-            {/if}
-            <button
-              type="button"
-              class="btn-sm btn-icon"
-              title="Dismiss this term from the list (doesn't touch the crops)"
-              onclick={() => dismissProposalTerm(term.label)}
-            >
-              ×
-            </button>
-          </li>
-        {/each}
-      </ul>
-    </section>
-  {/if}
-
-  <!-- Active classes -->
-  <!-- Visual audit 2026-09-24 (L5 follow-up): with a long proposals list
-       above, flex-1 + overflow-auto let this section shrink to nothing;
-       the floor keeps the class table on screen. -->
-  <section class="surface min-h-[60vh] flex-1 overflow-auto">
+  <!-- Active classes. F-53: the registry is the page's primary content,
+       so it renders first and the proposals list sits below it. F-50: no
+       inner scroll pane; the page scrolls and the sticky header sticks to
+       the main scroll container. -->
+  <section class="surface overflow-x-auto">
     {#if classesStore.loading && allClasses.length === 0}
       <div class="p-6 text-sm text-zinc-500">Loading classes…</div>
     {:else if classesStore.error}
@@ -924,15 +769,27 @@
                   <td class="px-3 py-1.5 line-through">{cls.name}</td>
                   <td class="px-3 py-1.5">{cls.group ?? '—'}</td>
                   <td class="px-3 py-1.5 text-right">
-                    <button
-                      type="button"
-                      class="btn"
-                      data-testid="restore-{cls.id}"
-                      onclick={() => void restoreClassAction(cls)}
-                      disabled={busy}
-                    >
-                      Restore
-                    </button>
+                    {#if cls.merged_into != null}
+                      <!-- d817605: a merged class can't be restored (its
+                           crops live on the target); say where they went. -->
+                      <span
+                        class="text-xs text-zinc-500"
+                        data-testid="merged-into-{cls.id}"
+                      >
+                        merged into {classesStore.byId(cls.merged_into)?.name ??
+                          `#${cls.merged_into}`}
+                      </span>
+                    {:else}
+                      <button
+                        type="button"
+                        class="btn"
+                        data-testid="restore-{cls.id}"
+                        onclick={() => void restoreClassAction(cls)}
+                        disabled={busy}
+                      >
+                        Restore
+                      </button>
+                    {/if}
                   </td>
                 </tr>
               {/each}
@@ -941,6 +798,165 @@
         </div>
       {/if}
     </section>
+  {/if}
+
+  <!-- New-class proposals (2026-09-24 logic-moves W5) — aggregate view of
+       the same cohort /review's "New Class Proposals" tab pages one crop
+       at a time. Absent (not shown as an error banner) while nothing has
+       loaded yet or the pool is empty; shown as an inline error when the
+       backend genuinely failed (e.g. the opensearch aggregation 500 seen
+       live), never a page-breaking crash. -->
+  {#if proposalsLoading}
+    <div class="surface mt-4 p-4 text-xs text-zinc-500">Loading proposals…</div>
+  {:else if proposalsError}
+    <div class="surface mt-4 flex items-center gap-3 p-4 text-xs text-red-300">
+      <span>Proposals unavailable: {proposalsError}</span>
+      <button type="button" class="btn-sm" onclick={() => void loadProposals()}>
+        retry
+      </button>
+    </div>
+  {:else if proposalsSummary && (proposalsSummary.top_terms.length > 0 || proposalsSummary.flagged_terms.length > 0)}
+    <details class="surface mt-4 p-4" data-testid="proposals-section">
+      <summary class="cursor-pointer text-sm font-semibold text-zinc-200">
+        New class proposals
+        <span class="ml-1 font-normal text-zinc-500"
+          >({proposalsSummary.total_pending} pending{#if proposalsSummary.without_term > 0},
+            {proposalsSummary.without_term} with no proposed term{/if})</span
+        >
+      </summary>
+      <p class="mb-3 mt-2 text-xs text-zinc-500">
+        Crops the VLM flagged as needing a class the registry doesn't have yet. Each row
+        is a proposed term with a few sample thumbnails — create a class or map onto an
+        existing one to resolve <strong>every</strong> pending crop proposing that term
+        (not just the samples shown), after a confirm step showing the real count. Crops
+        can still be triaged one at a time on <code>/review</code>'s "New Class Proposals"
+        tab instead.
+        {#if proposalsSummary.without_term > 0}
+          {proposalsSummary.without_term} pending item(s) have no proposed term (a human "needs
+          new class" flag with no name) and aren't listed below — triage those on
+          <code>/review</code> instead.
+        {/if}
+      </p>
+      {#if proposalsSummary.term_rules}
+        {@const rules = termRulesText(proposalsSummary.term_rules)}
+        {#if rules}
+          <p class="mb-3 text-[11px] text-zinc-600" data-testid="proposal-term-rules">
+            {rules}
+          </p>
+        {/if}
+      {/if}
+      <!-- L2 (visual audit 2026-09-24): one list, biggest term first.
+           Flagged terms (generic parent / not an object / existing class)
+           used to sit in a collapsed section with no action at all while
+           holding most pending crops; they now get "map to existing"
+           too. Only "Create class" stays limited to un-flagged terms. -->
+      <ul class="flex flex-col gap-3" data-testid="proposal-rows">
+        {#each proposalRows(proposalsSummary) as row (row.term.label)}
+          {@const term = row.term}
+          <li
+            class="flex flex-wrap items-center gap-3 rounded border border-zinc-800 p-2"
+            data-testid="proposal-row"
+          >
+            <div class="flex shrink-0 items-center gap-1">
+              {#each term.sample_crop_ids.slice(0, 4) as cropId (cropId)}
+                <img
+                  src={getThumbUrl(cropId, 64)}
+                  alt=""
+                  loading="lazy"
+                  class="h-10 w-10 rounded object-cover"
+                />
+              {/each}
+            </div>
+            <div class="min-w-0 shrink-0">
+              <div class="text-sm text-zinc-100">{term.label}</div>
+              <div class="text-[11px] text-zinc-500">
+                {term.count} crop(s)
+                {#if term.flag}
+                  · <span class="text-amber-300">{flagReason(term)}</span>
+                {/if}
+              </div>
+            </div>
+            <span class="grow"></span>
+            {#if row.canCreate}
+              <div class="flex shrink-0 items-center gap-1.5">
+                <input
+                  type="text"
+                  placeholder={term.label}
+                  value={newClassNameByTerm[term.label] ?? ''}
+                  oninput={(e) => {
+                    newClassNameByTerm = {
+                      ...newClassNameByTerm,
+                      [term.label]: (e.currentTarget as HTMLInputElement).value,
+                    };
+                  }}
+                  class="input-sm w-32"
+                  disabled={proposalBusyTerm === term.label}
+                />
+                <button
+                  type="button"
+                  class="btn-sm btn-primary"
+                  disabled={proposalBusyTerm === term.label}
+                  onclick={() => void createClassAndAssign(term)}
+                >
+                  Create class & assign
+                </button>
+              </div>
+            {/if}
+            {#if row.fixedMapClassId != null}
+              <button
+                type="button"
+                class="btn-sm"
+                disabled={proposalBusyTerm === term.label}
+                onclick={() => void mapFlaggedTermToClass(term)}
+              >
+                Map to {classesStore.byId(row.fixedMapClassId)?.name ??
+                  row.fixedMapClassId}
+              </button>
+            {/if}
+            {#if row.canPickMapTarget}
+              <div class="flex shrink-0 items-center gap-1.5">
+                <select
+                  class="select-sm"
+                  aria-label="Map {term.label} to an existing class"
+                  value={mapTargetByTerm[term.label] ?? ''}
+                  onchange={(e) => {
+                    const v = (e.currentTarget as HTMLSelectElement).value;
+                    mapTargetByTerm = {
+                      ...mapTargetByTerm,
+                      [term.label]: v === '' ? null : Number(v),
+                    };
+                  }}
+                  disabled={proposalBusyTerm === term.label}
+                >
+                  <option value="">map to existing…</option>
+                  {#each allClasses.filter((c) => !c.deprecated) as cls (cls.id)}
+                    <option value={cls.id}>{cls.name}</option>
+                  {/each}
+                </select>
+                <button
+                  type="button"
+                  class="btn-sm"
+                  disabled={proposalBusyTerm === term.label ||
+                    mapTargetByTerm[term.label] == null}
+                  onclick={() => void mapToExisting(term)}
+                >
+                  Assign
+                </button>
+              </div>
+            {/if}
+            <button
+              type="button"
+              class="btn-sm btn-icon"
+              title="Hide this term from the list until the page reloads. Not saved: the crops stay pending."
+              aria-label="Hide {term.label} until reload (not saved)"
+              onclick={() => dismissProposalTerm(term.label)}
+            >
+              Hide
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </details>
   {/if}
 </div>
 
@@ -1013,8 +1029,11 @@
           >
             Will relabel <strong>{mergePreview.would_relabel}</strong> crops from
             <strong>{mergeSource.name}</strong> to <strong>{mergeTarget.name}</strong>
-            {#if mergePreview.would_unvalidate > 0}
-              &middot; <strong>{mergePreview.would_unvalidate}</strong> lose validation
+            {#if mergePreview.validations_carried_over > 0}
+              <!-- d817605: a merge keeps human validations. -->
+              &middot; <strong>{mergePreview.validations_carried_over}</strong> human
+              validation{mergePreview.validations_carried_over === 1 ? '' : 's'} will carry
+              over
             {/if}
             {#if mergePreview.holdout_blocking > 0}
               &middot; <strong>{mergePreview.holdout_blocking}</strong> test-holdout crops block

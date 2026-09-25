@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   dominantShareText,
   dominantShareTitle,
-  geometryPurityText,
-  purityBasisLabel,
+  cohesionText,
+  COHESION_TOOLTIP,
 } from './clusterCardText';
 
 describe('cluster purity display text (visual audit C1/K4)', () => {
@@ -12,14 +12,13 @@ describe('cluster purity display text (visual audit C1/K4)', () => {
     expect(dominantShareText({ dominant_pct: null })).toBeNull();
   });
 
-  it('geometry purity is named as geometry, not a raw basis id', () => {
-    expect(geometryPurityText({ purity: 0.03, purity_basis: 'nearest_centroid' })).toBe(
-      '3% geometry',
+  it('F-37: the served geometry purity reads as cohesion with its n', () => {
+    expect(cohesionText({ purity: 0.19, purity_n: 984 })).toBe('cohesion 19% · n=984');
+    expect(cohesionText({ purity: 0.19, purity_n: null })).toBe('cohesion 19%');
+    expect(cohesionText({ purity: null, purity_n: 5 })).toBeNull();
+    expect(COHESION_TOOLTIP).toContain(
+      'share of measured members whose nearest cluster centre is this one',
     );
-    expect(
-      geometryPurityText({ purity: null, purity_basis: 'nearest_centroid' }),
-    ).toBeNull();
-    expect(purityBasisLabel('some_other_basis')).toBe('some other basis');
   });
 
   it('the dominant-share tooltip cites the served counts', () => {

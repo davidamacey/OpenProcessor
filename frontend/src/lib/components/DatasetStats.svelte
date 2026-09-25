@@ -17,7 +17,7 @@
    *   - Total crops (large headline)
    *   - Labeled-by-source table with proportion bars
    *   - Unlabeled breakdown (pending_detection / pending_verification /
-   *     no_label_source)
+   *     no_label_source / vlm_no_class / by_proposal)
    *   - In-progress queue (region_drain_total_unfinished)
    *   - Last clustering run summary (timestamp, method, cluster_count,
    *     residual_count, noise_count)
@@ -107,7 +107,7 @@
   const labeledTotal = $derived.by(() => {
     const l = stats?.labeled;
     if (!l) return 0;
-    return l.by_human + l.by_vlm + l.by_classifier + l.by_proposal + l.other;
+    return l.by_human + l.by_vlm + l.by_classifier + l.other;
   });
 
   const labeledRows = $derived.by(() => {
@@ -136,12 +136,6 @@
         label: 'Classifier',
         count: l.by_classifier,
         tone: 'bg-purple-500',
-      },
-      {
-        key: 'by_proposal',
-        label: 'Proposal (unclassified)',
-        count: l.by_proposal,
-        tone: 'bg-amber-500',
       },
       { key: 'other', label: 'Other', count: l.other, tone: 'bg-zinc-500' },
     ];
@@ -203,12 +197,6 @@
       ...r,
       pct: Math.round((r.count / total) * 1000) / 10,
     }));
-  });
-
-  const unlabeledTotal = $derived.by(() => {
-    const u = stats?.unlabeled;
-    if (!u) return 0;
-    return u.pending_detection + u.pending_verification + u.no_label_source;
   });
 
   // Drain rate (crops/sec) over the last ~minute. Returns null until we
@@ -515,7 +503,15 @@
       <div class="surface p-4">
         <header class="mb-3 flex items-center justify-between">
           <h3 class="text-sm font-semibold text-zinc-300">Unlabeled</h3>
-          <span class="text-xs text-zinc-500">{fmt(unlabeledTotal)} crops</span>
+          <!-- F-69: the header used to sum pending_detection +
+               pending_verification + no_label_source, but those buckets
+               overlap (a crop can be pending region detection AND have no
+               class), so the "total" could exceed total_crops. The server
+               serves no combined total, so the header shows its own
+               class-less count and the rows below say what each is. -->
+          <span class="text-xs text-zinc-500" data-testid="unlabeled-header-count"
+            >{fmt(stats.unlabeled.no_label_source)} without a class</span
+          >
         </header>
         <dl class="space-y-1.5 text-sm">
           <div class="flex justify-between">
@@ -552,7 +548,27 @@
               </dd>
             </div>
           {/if}
+          {#if stats.unlabeled.by_proposal != null}
+            <!-- F-23: detector-proposed crops nothing has classified yet,
+                 a subset of the class-less count above (served here
+                 instead of the old, always-0 labeled.by_proposal). -->
+            <div class="flex justify-between">
+              <dt
+                class="text-zinc-400"
+                title="A detector proposed this crop as an object, but nothing has classified it yet (a subset of the class-less count)"
+              >
+                Detector proposal, no class
+              </dt>
+              <dd class="font-mono text-red-300">
+                {fmt(stats.unlabeled.by_proposal)}
+              </dd>
+            </div>
+          {/if}
         </dl>
+        <p class="mt-2 text-xs text-zinc-500">
+          Pending detection / verification count region-worklog state, not class labels,
+          so they can overlap the class-less count.
+        </p>
       </div>
 
       <!-- In-progress queue + ETA -->
@@ -567,6 +583,16 @@
           >
         </div>
 
+        {#if stats.in_progress.region_stall_reason}
+          <!-- V-1: the server says why the drain can't progress (a region
+               dependency is down); shown verbatim. -->
+          <p
+            class="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+            data-testid="region-stall-reason"
+          >
+            Stalled: {stats.in_progress.region_stall_reason}
+          </p>
+        {/if}
         {#if stats.in_progress.region_drain_total_unfinished > 0}
           <!-- ETA — rolling drain rate over last ~60s. Caveat: only as
                good as the steady-state assumption (sam-worker bursts

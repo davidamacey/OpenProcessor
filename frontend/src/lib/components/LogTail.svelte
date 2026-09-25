@@ -8,6 +8,7 @@
    * (sticky-bottom behaviour — same heuristic as `tail -f`).
    */
   import type { LogTailResponse } from '$lib/types_train';
+  import { cleanLogLine } from '$lib/logText';
 
   interface Props {
     /** Job we're tailing. Switching this resets the buffer. */
@@ -129,7 +130,7 @@
       <p class="text-zinc-600">(no log lines yet)</p>
     {:else}
       {#each buffer as line, i (i)}
-        <div class="whitespace-pre">{line}</div>
+        <div class="whitespace-pre">{cleanLogLine(line)}</div>
       {/each}
     {/if}
   </div>

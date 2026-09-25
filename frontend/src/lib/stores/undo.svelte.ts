@@ -125,6 +125,11 @@ class UndoStore {
       toastStore.info('Nothing to undo.');
       return [];
     }
+    if (entry.crop_ids.length === 0) {
+      // A strict batch body 422s on an empty list; nothing to revert.
+      toastStore.info('Nothing to undo.');
+      return [];
+    }
     const kind = entry.kind ?? 'label';
     try {
       if (kind === 'vlm_dismiss') {

@@ -12,6 +12,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   API_PREFIX,
+  classMergedDetail,
+  classMergedRestoreText,
   classStillReferencedDetail,
   deprecateClass,
   restoreClass,
@@ -104,5 +106,36 @@ describe('classStillReferencedDetail', () => {
       detail: { error: 'class_still_referenced', message: 'x', class_id: 8 },
     };
     expect(classStillReferencedDetail(new ApiError(409, '/x', partial))).toBeNull();
+  });
+});
+
+describe('classMergedDetail (F-56, OpenProcessor 70663c0)', () => {
+  const body = {
+    detail: {
+      error: 'class_merged',
+      message: 'class_id 5 was merged into class_id 1 and cannot be restored',
+      class_id: 5,
+      merged_into: { class_id: 1, class_name: 'widget_a' },
+      hint: 'relabel its former crops by hand instead',
+    },
+  };
+
+  it('parses the structured restore 409 and renders the served name, message and hint', () => {
+    const d = classMergedDetail(
+      new ApiError(409, `${API_PREFIX}/classes/5/restore`, body),
+    );
+    expect(d?.merged_into).toEqual({ class_id: 1, class_name: 'widget_a' });
+    expect(classMergedRestoreText(d!)).toBe(
+      "Merged into widget_a; un-merge isn't supported. " +
+        'class_id 5 was merged into class_id 1 and cannot be restored ' +
+        'relabel its former crops by hand instead',
+    );
+  });
+
+  it('ignores a plain-string 409 and a non-409', () => {
+    expect(
+      classMergedDetail(new ApiError(409, 'x', { detail: 'name taken' })),
+    ).toBeNull();
+    expect(classMergedDetail(new ApiError(400, 'x', body))).toBeNull();
   });
 });

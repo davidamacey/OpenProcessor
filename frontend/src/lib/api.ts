@@ -1024,7 +1024,6 @@ export interface DatasetStats {
     by_human: number;
     by_vlm: number;
     by_classifier: number;
-    by_proposal: number;
     other: number;
   };
   regions: {
@@ -1065,9 +1064,19 @@ export interface DatasetStats {
      *  didn't) resolve to a class (#36 item 2). Served alongside
      *  `no_label_source`; absent on a backend that predates it. */
     vlm_no_class?: number;
+    /** F-23 (OpenProcessor a8a34aa): crops a detector proposed but
+     *  nothing has classified yet — a subset of `no_label_source`, like
+     *  `vlm_no_class`. Moved here from the always-0 `labeled.by_proposal`
+     *  (removed). Absent on a backend that predates it. */
+    by_proposal?: number;
   };
   in_progress: {
     region_drain_total_unfinished: number;
+    /** V-1 (OpenProcessor a8a34aa): a served, human-readable line naming
+     *  why the region drain can't progress (a region-profile dependency
+     *  is down, and since when). Null when nothing is pending or every
+     *  dependency is ready; absent on an older backend. Rendered verbatim. */
+    region_stall_reason?: string | null;
   };
   clusters: {
     last_run_at: string | null;
@@ -1180,6 +1189,7 @@ export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse>
     kind?: 'item' | 'region';
     trainable?: number;
     trainable_gap?: number;
+    merged_into?: number | null;
   };
   const res = await apiFetch<{
     classes: RawClass[];
@@ -1202,6 +1212,7 @@ export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse>
     kind: c.kind,
     trainable: c.trainable,
     trainable_gap: c.trainable_gap,
+    merged_into: c.merged_into ?? null,
   }));
   // Old-shape (bare array) or pre-cutover backend responses omit these —
   // an empty threshold/reserved set just means the adequacy chip and the
@@ -1472,6 +1483,10 @@ export type RawCrop = {
   mistakenness_method?: string | null;
   mistakenness_version?: string | null;
   mistakenness_scored_at?: string | null;
+  // F8 D1 (OpenProcessor d817605): the probe's opinion on this item.
+  probe_disagreement?: boolean | null;
+  probe_in_scope?: boolean | null;
+  probe_model_version?: string | null;
   thumbnail_url?: string;
   updated_at?: string;
   class_excluded?: boolean;
@@ -1530,6 +1545,9 @@ export const RAW_CROP_KEYS = [
   'mistakenness_method',
   'mistakenness_version',
   'mistakenness_scored_at',
+  'probe_disagreement',
+  'probe_in_scope',
+  'probe_model_version',
   'thumbnail_url',
   'updated_at',
   'class_excluded',
@@ -1611,6 +1629,9 @@ function mapRawCrop(c: RawCrop): Crop {
     mistakenness_method: c.mistakenness_method ?? null,
     mistakenness_version: c.mistakenness_version ?? null,
     mistakenness_scored_at: c.mistakenness_scored_at ?? null,
+    probe_disagreement: c.probe_disagreement ?? null,
+    probe_in_scope: c.probe_in_scope ?? null,
+    probe_model_version: c.probe_model_version ?? null,
     class_excluded: !!c.class_excluded,
     excluded_reason: c.excluded_reason ?? null,
     excluded_at: c.excluded_at ?? null,
@@ -1847,6 +1868,19 @@ export async function undoCropLabel(cropId: string, signal?: AbortSignal): Promi
 }
 
 /**
+ * OpenProcessor a8a34aa: the batch write bodies (`/ingest/batch`,
+ * `/crops/{label,region}/undo_batch`, `/crops/discard_batch`, the VLM
+ * batch routes) are `extra='forbid'` with a required non-empty list, so
+ * an empty list is a guaranteed 422. Refuse it here, before any request
+ * goes out — callers disable the action instead of sending it.
+ */
+export function assertNonEmptyBatch(what: string, ids: readonly unknown[]): void {
+  if (ids.length === 0) {
+    throw new Error(`${what}: nothing selected — no request sent`);
+  }
+}
+
+/**
  * `POST {API_PREFIX}/crops/label/undo_batch` — batch form of
  * `undoCropLabel`: each crop is restored independently to its own state
  * before its most recent human class write, so undoing a `bulkLabel` or
@@ -1858,6 +1892,7 @@ export async function undoLabelBatch(
   cropIds: string[],
   signal?: AbortSignal,
 ): Promise<CropUndoBatchResult> {
+  assertNonEmptyBatch('undo', cropIds);
   type Raw = {
     items?: RawCrop[];
     undone?: number;
@@ -1919,6 +1954,7 @@ export async function discardCropsBatch(
   opts: DiscardOptions = {},
   signal?: AbortSignal,
 ): Promise<DiscardBatchResult> {
+  assertNonEmptyBatch('discard', cropIds);
   const raw = await apiFetch<{
     items: RawCrop[];
     discarded: number;
@@ -2027,6 +2063,7 @@ export async function undoCropRegionBatch(
   cropIds: string[],
   signal?: AbortSignal,
 ): Promise<CropRegionUndoBatchResult> {
+  assertNonEmptyBatch('undo', cropIds);
   type Raw = {
     items?: RawCrop[];
     undone?: number;
@@ -3302,6 +3339,50 @@ export function classStillReferencedDetail(
   };
 }
 
+/** `POST /classes/{id}/restore`'s structured 409 for a class that was
+ *  merged into another (OpenProcessor 70663c0, F-56). */
+export interface ClassMergedDetail {
+  error: 'class_merged';
+  message: string;
+  class_id: number;
+  merged_into: { class_id: number; class_name: string };
+  hint: string | null;
+}
+
+export function classMergedDetail(e: unknown): ClassMergedDetail | null {
+  if (!(e instanceof ApiError) || e.status !== 409) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const d = detail as Record<string, unknown>;
+  if (d.error !== 'class_merged' || typeof d.message !== 'string') return null;
+  const into = d.merged_into as Record<string, unknown> | null | undefined;
+  if (!into || typeof into.class_id !== 'number') return null;
+  return {
+    error: 'class_merged',
+    message: d.message,
+    class_id: typeof d.class_id === 'number' ? d.class_id : -1,
+    merged_into: {
+      class_id: into.class_id,
+      class_name:
+        typeof into.class_name === 'string' ? into.class_name : String(into.class_id),
+    },
+    hint: typeof d.hint === 'string' ? d.hint : null,
+  };
+}
+
+/** The operator-facing text for a merged-class restore refusal: the
+ *  merge target by its served name, then the server's own message and
+ *  hint verbatim. */
+export function classMergedRestoreText(d: ClassMergedDetail): string {
+  return [
+    `Merged into ${d.merged_into.class_name}; un-merge isn't supported.`,
+    d.message,
+    d.hint ?? '',
+  ]
+    .filter((s) => s.length > 0)
+    .join(' ');
+}
+
 /**
  * Retire a class with no data yet — no merge target needed. Idempotent
  * (calling on an already-deprecated class just returns it) and clears any
@@ -3359,7 +3440,7 @@ export function mergeClasses(
 
 /**
  * `POST {API_PREFIX}/classes/merge?dry_run=true` — reports what a real merge
- * would do (`would_relabel`, `would_unvalidate`, `holdout_blocking`,
+ * would do (`would_relabel`, `validations_carried_over`, `holdout_blocking`,
  * `blocked`) and writes nothing. The merge dialog calls this before every
  * real merge so the operator sees the blast radius first.
  */
@@ -4049,10 +4130,11 @@ export function ingestUpload(
   );
 }
 
-export function ingestBatch(
+export async function ingestBatch(
   req: IngestBatchRequest,
   signal?: AbortSignal,
 ): Promise<BatchIngestResponse> {
+  assertNonEmptyBatch('ingest', req.items);
   return apiFetch<BatchIngestResponse>(
     `${API_PREFIX}/ingest/batch`,
     { method: 'POST', body: JSON.stringify(req) },

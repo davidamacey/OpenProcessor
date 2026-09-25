@@ -31,7 +31,14 @@ IDLE_JOB = {
 
 
 def _base_ingest_stubs(
-    stub, *, status_total=0, drain_unfinished=0, drained=None, batch_source_roots=None
+    stub,
+    *,
+    status_total=0,
+    drain_unfinished=0,
+    drained=None,
+    batch_source_roots=None,
+    stall_reason=None,
+    region_dependencies=None,
 ) -> None:
     """BA-1..BA-7 (OpenProcessor #36, c676d2b) baseline: `/ingest/config` is
     now real and always stubbed here (the page fetches it once
@@ -80,6 +87,9 @@ def _base_ingest_stubs(
             "drained": drained,
             "stable_for_s": 30 if drained else 0,
             "observed_at": "2026-09-25T00:00:00Z",
+            # OpenProcessor a8a34aa (V-1): always served.
+            "region_dependencies": region_dependencies or [],
+            "stall_reason": stall_reason,
         },
     )
     stub.on("GET", r"/pipeline/auto_label/status", IDLE_JOB)
@@ -356,3 +366,42 @@ def test_ingest_absent(stub, page, app_url):
     ingest_calls = [c for c in stub.calls if "/ingest/" in c[1]]
     assert ingest_calls == []
     assert not any("/ingest/" in path for _, path in stub.handled if path != "/curation/ingest/status")
+
+
+def test_region_drain_shows_served_stall_reason(stub, page, app_url):
+    """V-1 (a8a34aa): a stalled drain renders the served reason verbatim."""
+    reason = "segmenter seg_b unavailable since 2026-09-25T09:57:00Z"
+    _base_ingest_stubs(
+        stub,
+        drain_unfinished=12,
+        stall_reason=reason,
+        region_dependencies=[
+            {
+                "role": "segmenter",
+                "model": "seg_b",
+                "ready": False,
+                "detail": "not loaded",
+                "unavailable_since": "2026-09-25T09:57:00Z",
+            }
+        ],
+    )
+    page.goto(f"{app_url}/ingest")
+    page.wait_for_selector('h1:has-text("Ingest")')
+    expect(page.get_by_test_id("region-drain-stall-reason")).to_contain_text(reason)
+    expect(page.get_by_test_id("region-drain-dependencies")).to_contain_text("seg_b")
+
+
+def test_duplicate_only_reupload_reports_already_indexed(stub, page, app_url):
+    """F-59: re-selecting files the backend already has sends no upload and
+    says so, instead of the result panel disappearing."""
+    _base_ingest_stubs(stub)
+
+    def lookup_handler(request, _match):
+        parsed = json.loads(request.post_data)
+        return {"known_paths": {p: "img-known" for p in parsed["image_paths"]}}
+
+    stub.on("POST", r"/ingest/path_lookup", lookup_handler)
+    _select_folder(page, app_url)
+    page.get_by_role("button", name="Start", exact=True).click()
+    expect(page.get_by_test_id("ingest-all-skipped")).to_contain_text("3 already indexed")
+    expect(page.get_by_text("Skipped (3)")).to_be_visible()

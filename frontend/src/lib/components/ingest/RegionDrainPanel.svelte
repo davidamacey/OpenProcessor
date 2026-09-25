@@ -99,6 +99,25 @@
         </div>
       </div>
     </div>
+    {#if drain.stall_reason}
+      <!-- V-1: why the worklog can't drain, served verbatim. -->
+      <p
+        class="mt-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200"
+        data-testid="region-drain-stall-reason"
+      >
+        Stalled: {drain.stall_reason}
+      </p>
+    {/if}
+    {#if drain.region_dependencies && drain.region_dependencies.some((d) => !d.ready)}
+      <ul class="mt-2 space-y-0.5 text-[11px]" data-testid="region-drain-dependencies">
+        {#each drain.region_dependencies.filter((d) => !d.ready) as dep (dep.role + dep.model)}
+          <li class="text-zinc-400">
+            <span class="text-zinc-300">{dep.role}</span>
+            <span class="font-mono">{dep.model}</span>: not ready — {dep.detail}
+          </li>
+        {/each}
+      </ul>
+    {/if}
     <p class="mt-1 text-[11px] text-zinc-500">
       Last checked: {formatTime(lastChecked)}
       {#if drain.drained}

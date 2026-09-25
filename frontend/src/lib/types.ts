@@ -43,6 +43,10 @@ export interface RegistryClass {
   color?: string | null;
   /** True when the class has been merged into another and should be hidden by default. */
   deprecated?: boolean;
+  /** OpenProcessor d817605: the class this one was merged into (its crops
+   *  now carry that class). Null/absent for a class never merged. A merged
+   *  class can't be restored (restore 409s `class_merged`). */
+  merged_into?: number | null;
   /** Server-computed adequacy tier from `GET {API_PREFIX}/classes`
    *  (`block` | `warn` | `ok`, against the served `thresholds`). Never
    *  recomputed client-side from `validated_count`. */
@@ -59,7 +63,9 @@ export interface RegistryClass {
    *  no longer include region counts as of #36 (X2), so this is the
    *  server's own trainable count for the class, not client math. */
   trainable?: number;
-  /** `aug_target - trainable`, served directly. */
+  /** On `GET {API_PREFIX}/classes`: the shortfall of `trainable` against
+   *  the served per-class hard minimum (`thresholds.block_below`), floored
+   *  at 0 — served directly. > 0 means the class blocks preflight. */
   trainable_gap?: number;
 }
 
@@ -111,7 +117,9 @@ export interface ClassMergeDryRun {
   source_id: number;
   target_id: number;
   would_relabel: number;
-  would_unvalidate: number;
+  /** OpenProcessor d817605: human validations KEPT on the relabeled crops
+   *  (a merge now carries validations over; was `would_unvalidate`). */
+  validations_carried_over: number;
   holdout_blocking: number;
   blocked: boolean;
 }
@@ -511,6 +519,16 @@ export interface Crop {
   mistakenness_method?: string | null;
   mistakenness_version?: string | null;
   mistakenness_scored_at?: string | null;
+  /**
+   * F8 D1 (OpenProcessor d817605): the probe's opinion on this item.
+   * `probe_in_scope`: null = not scored yet, true = the item's class is
+   * one the probe knows (a real opinion), false = outside the probe's
+   * classes (no opinion; `probe_disagreement` is then null).
+   * `probe_disagreement`: true/false only when the probe has an opinion.
+   */
+  probe_disagreement?: boolean | null;
+  probe_in_scope?: boolean | null;
+  probe_model_version?: string | null;
   updated_at: string;
 }
 
@@ -592,6 +610,10 @@ export interface Cluster {
    *  must not draw a pure/mixed/noisy badge for it or key it against a
    *  real cluster id. Absent (not false) on every server-served Cluster. */
   isSlotCard?: boolean;
+  /** The slot's served display name (e.g. its tab label), set only on
+   *  that inventory entry (F8 D7): the card is titled by it, not by the
+   *  raw class id. */
+  slotDisplayName?: string;
 }
 
 export interface StatsSummary {
@@ -1141,6 +1163,12 @@ export interface IngestImageResult {
    * identifier).
    */
   source_identifier: string | null;
+  /**
+   * OpenProcessor a8a34aa: set when the image itself ingested but the
+   * optional secondary detector failed on it (so it carries only the
+   * primary detector's crops). Null otherwise; absent on an older backend.
+   */
+  secondary_detector_error?: string | null;
 }
 
 export interface BatchIngestSummary {
@@ -1152,6 +1180,8 @@ export interface BatchIngestSummary {
   unmatched_detections: number;
   labels_imported: number;
   crops_indexed: number;
+  /** a8a34aa: how many results carry a `secondary_detector_error`. */
+  secondary_detector_failures?: number;
 }
 
 export interface BatchIngestResponse {
@@ -1187,6 +1217,24 @@ export interface RegionDrain {
   stable_for_s: number;
   /** ISO timestamp of this poll. */
   observed_at: string;
+  /**
+   * V-1 (OpenProcessor a8a34aa): the active region profile's Triton
+   * dependencies and whether each is ready now; empty with no profile.
+   */
+  region_dependencies?: RegionDependencyStatus[];
+  /**
+   * V-1: a served, human-readable line when items are pending AND a
+   * dependency is down; null otherwise. Rendered verbatim.
+   */
+  stall_reason?: string | null;
+}
+
+export interface RegionDependencyStatus {
+  role: string;
+  model: string;
+  ready: boolean;
+  detail: string;
+  unavailable_since: string | null;
 }
 
 export interface IngestPathLookupResponse {

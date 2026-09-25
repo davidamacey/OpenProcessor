@@ -81,8 +81,11 @@ def test_classes_flagged_terms_are_listed_with_no_create_action(stub, page, app_
 
     page.goto(f"{app_url}/classes")
 
-    heading = page.get_by_role("heading", name="New class proposals")
-    heading.wait_for(timeout=15000)
+    # F-53: the proposals list sits below the registry in a collapsed
+    # <details>; open it first.
+    section = page.get_by_test_id("proposals-section")
+    section.wait_for(timeout=15000)
+    section.locator("summary").click()
 
     # top_terms: one actionable row with "Create class & assign".
     assert page.get_by_text("classic_car").count() >= 1
@@ -161,6 +164,17 @@ def test_class_table_keeps_its_height_under_a_long_proposals_list(stub, page, ap
     page.goto(f"{app_url}/classes")
     table = page.locator("table").first
     table.wait_for(timeout=15000)
+    section = page.get_by_test_id("proposals-section")
+    section.wait_for(timeout=15000)
+    section.locator("summary").click()
     page.get_by_test_id("proposal-row").nth(59).wait_for(timeout=10000)
-    height = table.evaluate("t => t.closest('section').getBoundingClientRect().height")
-    assert height >= 300, height
+    # F-53: the registry renders first and is never squeezed by the list
+    # (no inner scroll pane: its section shows the whole table).
+    dims = table.evaluate(
+        "t => ({top: t.getBoundingClientRect().top,"
+        " proposalsTop: document.querySelector('[data-testid=proposals-section]')"
+        ".getBoundingClientRect().top,"
+        " sectionH: t.closest('section').clientHeight, tableH: t.scrollHeight})"
+    )
+    assert dims["top"] < dims["proposalsTop"], dims
+    assert dims["sectionH"] >= dims["tableH"], dims

@@ -133,4 +133,79 @@ describe('IngestRunPanel', () => {
     expect(text).toContain('decode failed');
     URL.createObjectURL = originalCreateObjectURL;
   });
+
+  it('F-59: a duplicate-only re-upload says so instead of showing nothing', async () => {
+    vi.mocked(ingestPathLookup).mockResolvedValue({
+      known_paths: { 'upload/a.jpg': 'img-1' },
+    });
+    vi.mocked(ingestUpload).mockReset();
+    instance = mount(IngestRunPanel, {
+      target,
+      props: { files: [mkFile('a.jpg')], config: resolveIngestConfig(null) },
+    });
+    flushSync();
+    [...target.querySelectorAll('button')]
+      .find((b) => b.textContent?.trim() === 'Start')
+      ?.click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(
+        target.querySelector('[data-testid="ingest-all-skipped"]')?.textContent,
+      ).toContain('1 already indexed');
+    });
+    expect(ingestUpload).not.toHaveBeenCalled();
+    // The per-file list is on the Skipped tab, with the row visible.
+    expect(target.textContent).toContain('Skipped (1)');
+    expect(target.textContent).toContain('upload/a.jpg');
+  });
+
+  it('a8a34aa: shows the served secondary-detector failures on ingested files', async () => {
+    vi.mocked(ingestPathLookup).mockResolvedValue({ known_paths: {} });
+    vi.mocked(ingestUpload).mockResolvedValue({
+      status: 'success',
+      summary: {
+        successful: 1,
+        duplicates: 0,
+        failed: 0,
+        mismatches: 0,
+        missed_labels: 0,
+        unmatched_detections: 0,
+        labels_imported: 0,
+        crops_indexed: 2,
+        secondary_detector_failures: 1,
+      },
+      results: [
+        {
+          status: 'success',
+          image_id: 'img-1',
+          image_path: '/uploads/ab.jpg',
+          imohash: 'h',
+          n_crops: 2,
+          n_regions: 0,
+          error: null,
+          error_kind: null,
+          source_identifier: 'upload/a.jpg',
+          secondary_detector_error: 'DEADLINE_EXCEEDED after 30s',
+        },
+      ],
+      disagreements: [],
+    });
+    instance = mount(IngestRunPanel, {
+      target,
+      props: { files: [mkFile('a.jpg')], config: resolveIngestConfig(null) },
+    });
+    flushSync();
+    [...target.querySelectorAll('button')]
+      .find((b) => b.textContent?.trim() === 'Start')
+      ?.click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(
+        target.querySelector('[data-testid="ingest-secondary-failures"]')?.textContent,
+      ).toContain('secondary detector failed 1');
+    });
+    expect(target.textContent).toContain(
+      'secondary detector: DEADLINE_EXCEEDED after 30s',
+    );
+  });
 });

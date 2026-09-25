@@ -7,6 +7,7 @@
    * computed client-side.
    */
   import type { BakeoffComparison, ComparisonRow, PerClassRow } from '$lib/types_bakeoff';
+  import ScrollX from '$lib/components/ScrollX.svelte';
   import {
     formatCount,
     formatMetric,
@@ -15,6 +16,7 @@
     LEGACY_RESULTS_MESSAGE,
     metricLabel,
     PER_CLASS_METRICS,
+    protocolText,
     type PerClassMetric,
   } from '$lib/bakeoff/view';
 
@@ -65,6 +67,15 @@
         : "each model's own classes (not comparable)"}
       {#if c.profile}· profile <span class="font-mono">{c.profile}</span>{/if}
     </div>
+    {#if protocolText(c.thresholds)}
+      <p
+        class="mb-2 text-xs text-zinc-500"
+        data-testid="comparison-protocol"
+        title="The trainer's own mAP (Ultralytics val defaults) uses a different protocol, so the two numbers differ on the same split."
+      >
+        {protocolText(c.thresholds)}
+      </p>
+    {/if}
 
     {#if c.warnings.length}
       <ul
@@ -75,7 +86,7 @@
       </ul>
     {/if}
 
-    <div class="overflow-x-auto rounded-lg border border-zinc-800">
+    <ScrollX class="rounded-lg border border-zinc-800" testId="comparison-scroll">
       <table class="w-full text-sm" data-testid="comparison-rows">
         <thead class="bg-zinc-900 text-xs text-zinc-400">
           <tr>
@@ -137,7 +148,7 @@
           {/each}
         </tbody>
       </table>
-    </div>
+    </ScrollX>
 
     {#if c.failed.length}
       <ul
@@ -165,7 +176,7 @@
         </select>
       </label>
     </div>
-    <div class="overflow-x-auto rounded-lg border border-zinc-800">
+    <ScrollX class="rounded-lg border border-zinc-800">
       <table class="w-full text-sm" data-testid="per-class-table">
         <thead class="bg-zinc-900 text-xs text-zinc-400">
           <tr>
@@ -203,7 +214,7 @@
           {/each}
         </tbody>
       </table>
-    </div>
+    </ScrollX>
 
     {#if c.models.some((r) => r.coverage.unmapped_model_classes.length)}
       <div class="mt-3 text-xs text-zinc-400" data-testid="unmapped-classes">

@@ -128,11 +128,13 @@ describe('T1/T2 (real extraction, P0.1/P0.3): per-crop abort map + undo-stack de
 });
 
 describe('T1-adjacent: frozen-viewport effect uses untrack for the seed read', () => {
-  it('the slot bbox-editor viewport-freeze effect wraps its seed call in untrack()', () => {
-    // Without untrack(), _seedViewBox() would re-fire on every drag tick
-    // and overwrite the operator's in-progress resize with the server
-    // snapshot — see plan §3.5 point 1.
-    expect(reviewPageSrc).toMatch(/untrack\(\(\) => _seedViewBox\(\)\)/);
+  it('the slot bbox-editor reseed effect runs its whole body in untrack()', () => {
+    // Without untrack(), the seed reads (_seedViewBox, and
+    // _seedSlotFromCurrent's `seededSlotBox = editedSlotBox`) would re-fire
+    // the effect on every drag tick and overwrite the operator's
+    // in-progress resize with the server snapshot — see plan §3.5 point 1
+    // and the 2026-09-25 bbox-edit fix (the whole body is untracked now).
+    expect(reviewPageSrc).toMatch(/untrack\(\(\) => reseedForCrop\(id \?\? null\)\)/);
   });
 });
 

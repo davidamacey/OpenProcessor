@@ -39,6 +39,9 @@
     onselect?: (cropId: string) => void;
     /** Outer wrapper class — sizing/layout stays the caller's job. */
     class?: string;
+    /** Vertical placement of the image in a taller box (V-3: `/review`
+     *  top-aligns so the image doesn't float mid-way down a tall pane). */
+    align?: 'center' | 'start';
     /** Pre-fetched context (e.g. a caller that already loaded it for its
      *  own purposes) — skips this component's own fetch entirely. */
     context?: CropContextResponse | null;
@@ -50,6 +53,7 @@
     maxDim = 1600,
     onselect,
     class: className = '',
+    align = 'center',
     context: providedContext = null,
   }: Props = $props();
 
@@ -201,7 +205,12 @@
   }
 </script>
 
-<div class="relative flex h-full w-full items-center justify-center {className}">
+<div
+  class="relative flex h-full w-full justify-center {align === 'start'
+    ? 'items-start'
+    : 'items-center'} {className}"
+  data-align={align}
+>
   {#if loading && !context}
     <p class="text-xs text-zinc-500">Loading…</p>
   {:else if error}

@@ -115,6 +115,22 @@ export function hasCurrentMulticlassExport(datasets: ExportDataset[]): boolean {
 }
 
 /**
+ * F-61: the registry/data.yaml/manifest downloads serve the current
+ * multi-class export. The served datasets list flags it `is_current`;
+ * `GET /export/status` reporting a finished (`success`) export with an
+ * `export_dir` is the same fact from the other endpoint, so either one
+ * makes the downloads available (after a fresh UI export the page said
+ * "No frozen multi-class export yet" beside downloads that worked).
+ */
+export function registryArtifactsAvailable(
+  datasets: ExportDataset[] | null,
+  status: { status?: string | null; export_dir?: string | null } | null,
+): boolean {
+  if (datasets && hasCurrentMulticlassExport(datasets)) return true;
+  return status?.status === 'success' && !!status.export_dir;
+}
+
+/**
  * E2 (visual audit 2026-09-24): the export summary said "classes 84" when
  * only 5 classes had any exported object. Splits the served
  * `class_split_counts` into classes with at least one object and the rest.

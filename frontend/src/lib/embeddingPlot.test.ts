@@ -7,6 +7,7 @@ import {
   selectIdsInLasso,
   type ScreenPoint,
   classifyRebuildPoll,
+  legendEntries,
 } from './embeddingPlot';
 
 describe('computeScale', () => {
@@ -197,5 +198,23 @@ describe('embeddingCoverageSuffix (m20, 2026-09-24 interactive pass)', () => {
 
   it('never claims a gap when the pool total is smaller than shown (stale/inconsistent data)', () => {
     expect(embeddingCoverageSuffix(500, 422)).toBe('points');
+  });
+});
+
+describe('legendEntries (F-68)', () => {
+  it('lists the biggest clusters with their color and most common class name', () => {
+    const pts = [
+      { cluster_id: 3, class_name: 'widget_a' },
+      { cluster_id: 3, class_name: 'widget_a' },
+      { cluster_id: 3, class_name: 'widget_b' },
+      { cluster_id: 7, class_name: null },
+      { cluster_id: null, class_name: null },
+      { cluster_id: null, class_name: null },
+    ];
+    const e = legendEntries(pts, 2);
+    expect(e).toEqual([
+      { clusterId: 3, color: colorForCluster(3), count: 3, className: 'widget_a' },
+      { clusterId: null, color: colorForCluster(null), count: 2, className: null },
+    ]);
   });
 });

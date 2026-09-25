@@ -10,7 +10,13 @@
     TrainedModel,
     TrainedModelForDataset,
   } from '$lib/types_bakeoff';
-  import { formatOverlap, hasOverlap, MISSING, parseClassMap } from '$lib/bakeoff/view';
+  import {
+    formatOverlap,
+    hasOverlap,
+    MISSING,
+    parseClassMap,
+    TRAINER_PROTOCOL_LABEL,
+  } from '$lib/bakeoff/view';
 
   interface Props {
     trained: TrainedModel[];
@@ -111,9 +117,9 @@
           </span>
           <span
             class="text-[10px] text-zinc-500"
-            title="The trainer's own number from its own evaluation — not a comparison metric."
+            title="The trainer's own number from its own evaluation (Ultralytics val defaults) — not a comparison metric."
           >
-            trainer mAP50 {t.trainer_map50 == null
+            {TRAINER_PROTOCOL_LABEL} mAP50 {t.trainer_map50 == null
               ? MISSING
               : t.trainer_map50.toFixed(3)}{t.trainer_map50_split
               ? ` (${t.trainer_map50_split})`

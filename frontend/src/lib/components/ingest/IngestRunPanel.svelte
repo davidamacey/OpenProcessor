@@ -77,6 +77,11 @@
   async function start(): Promise<void> {
     pageOffset = { ingested: 0, duplicate: 0, failed: 0, skipped: 0, not_sent: 0 };
     await run.start(files, { source, identifierPrefix, skipLookup });
+    // F-59: land on a tab that actually has rows (a duplicate-only
+    // re-upload otherwise opened on an empty Failed tab).
+    if (run.results.countOf(activeTab) === 0) {
+      activeTab = TABS.find((t) => run.results.countOf(t.kind) > 0)?.kind ?? activeTab;
+    }
   }
 
   async function retryFailed(): Promise<void> {
@@ -222,7 +227,16 @@
     <p class="text-xs text-red-300">{run.errorReason}</p>
   {/if}
 
-  {#if run.totals.queued > 0}
+  {#if run.totals.queued === 0 && run.totals.skipped_known > 0 && run.state === 'done'}
+    <!-- F-59: every selected file was already indexed, so nothing was
+         sent. Say so instead of rendering nothing. -->
+    <p class="text-xs text-zinc-300" data-testid="ingest-all-skipped">
+      Nothing uploaded: {run.totals.skipped_known} already indexed (the backend already has
+      these files). Tick "Skip the already-indexed check" to send them anyway.
+    </p>
+  {/if}
+
+  {#if run.totals.queued > 0 || run.results.size > 0}
     <div class="h-2 w-full overflow-hidden rounded bg-zinc-800">
       <div
         class="h-full bg-blue-600 transition-[width]"
@@ -236,6 +250,14 @@
       <span class="chip">duplicate {run.totals.duplicates}</span>
       <span class="chip">failed {run.totals.failed}</span>
       <span class="chip">crops indexed {run.totals.crops_indexed}</span>
+      {#if run.totals.secondary_detector_failures > 0}
+        <span
+          class="chip border-amber-700 text-amber-200"
+          title="These images ingested, but the secondary detector failed on them (primary-detector crops only). See the Ingested tab."
+          data-testid="ingest-secondary-failures"
+          >secondary detector failed {run.totals.secondary_detector_failures}</span
+        >
+      {/if}
     </div>
 
     <div>
@@ -291,6 +313,11 @@
             {/if}
             {#if r.error}
               <span class="text-red-300"> — {r.error}</span>
+            {/if}
+            {#if r.secondary_detector_error}
+              <span class="text-amber-300">
+                — secondary detector: {r.secondary_detector_error}</span
+              >
             {/if}
           </li>
         {/each}

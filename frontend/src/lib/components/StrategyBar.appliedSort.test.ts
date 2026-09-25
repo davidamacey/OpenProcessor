@@ -42,6 +42,41 @@ function render(props: Record<string, unknown>) {
   return target;
 }
 
+describe('StrategyBar — sort options follow the served status (F8 D2)', () => {
+  it('offers uniqueness once /methods serves it experimental, never while shadow', () => {
+    const sortsWith = (status: string) =>
+      ({
+        ...FALLBACK_METHODS,
+        review_sorts: [
+          { id: 'recent', axis: 'sort', label: 'Recent', status: 'stable' },
+          {
+            id: 'uniqueness',
+            axis: 'sort',
+            label: 'Uniqueness',
+            status,
+            field_coverage: 0.4,
+          },
+        ],
+      }) as never;
+    const optionIds = (el: HTMLElement) => {
+      (el.querySelector('button') as HTMLButtonElement).click();
+      flushSync();
+      return [...el.querySelectorAll('option')].map((o) => o.value);
+    };
+
+    strategiesStore.methods = sortsWith('experimental');
+    const el = render({ bar: createStrategyBar() });
+    expect(optionIds(el)).toContain('uniqueness');
+    unmount(instance as Record<string, unknown>);
+    instance = undefined;
+    target.remove();
+
+    strategiesStore.methods = sortsWith('shadow');
+    const el2 = render({ bar: createStrategyBar() });
+    expect(optionIds(el2)).not.toContain('uniqueness');
+  });
+});
+
 describe('StrategyBar — applied-sort summary', () => {
   it('shows "→ applied" when the backend sort differs from the request', () => {
     const bar = createStrategyBar();

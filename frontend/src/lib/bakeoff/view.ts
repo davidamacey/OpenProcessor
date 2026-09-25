@@ -179,3 +179,38 @@ export function formatTime(iso: string | null | undefined): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
+
+/**
+ * V-5 (fresh-start coordinator review 2026-09-25): the bake-off's mAP and
+ * the trainer's own mAP50 differ on the same test split because they use
+ * different protocols, and neither page said so. Built from the result's
+ * own served `thresholds` (`conf_floor`/`nms_iou` for the mAP sweep,
+ * `op_conf`/`op_iou` for the precision/recall/F1 operating point); any
+ * other served key is listed verbatim. Null when nothing is served.
+ */
+export function protocolText(
+  thresholds: Record<string, number> | null | undefined,
+): string | null {
+  if (!thresholds) return null;
+  const t = { ...thresholds };
+  const parts: string[] = [];
+  if (t.conf_floor != null || t.nms_iou != null) {
+    const bits: string[] = [];
+    if (t.conf_floor != null) bits.push(`conf ≥ ${t.conf_floor}`);
+    if (t.nms_iou != null) bits.push(`NMS IoU ${t.nms_iou}`);
+    parts.push(`mAP at ${bits.join(', ')}`);
+  }
+  if (t.op_conf != null || t.op_iou != null) {
+    const bits: string[] = [];
+    if (t.op_conf != null) bits.push(`conf ${t.op_conf}`);
+    if (t.op_iou != null) bits.push(`IoU ${t.op_iou}`);
+    parts.push(`precision/recall/F1 at ${bits.join(' · ')}`);
+  }
+  for (const k of ['conf_floor', 'nms_iou', 'op_conf', 'op_iou']) delete t[k];
+  for (const [k, v] of Object.entries(t)) parts.push(`${k} ${v}`);
+  return parts.length > 0 ? `bake-off protocol: ${parts.join('; ')}` : null;
+}
+
+/** The trainer's own number is Ultralytics' val pass (its defaults, not
+ *  a bake-off profile), so it is not directly comparable. */
+export const TRAINER_PROTOCOL_LABEL = 'trainer eval (Ultralytics val)';

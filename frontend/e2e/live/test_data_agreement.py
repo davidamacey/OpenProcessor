@@ -20,7 +20,7 @@ import pytest
 from conftest import agrees_with_retry, api_get, wait_for_stable_text
 from fixtures.wire import REGION_TAB_URL_ID
 
-TOTAL_RE = re.compile(r"·\s*([\d,]+)\s*total")  # "1 / 18 loaded · 18 total"
+TOTAL_RE = re.compile(r"·\s*([\d,]+)\s*total")  # "#1 · 18 loaded · 18 total"
 
 
 def _queue_total(page: Any) -> int:

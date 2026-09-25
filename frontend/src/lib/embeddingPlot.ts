@@ -158,6 +158,56 @@ export function colorForCluster(clusterId: number | null): string {
   return PALETTE[idx]!;
 }
 
+export const PALETTE_SIZE = PALETTE.length;
+
+export interface LegendEntry {
+  clusterId: number | null;
+  color: string;
+  /** Points of this cluster in the served projection. */
+  count: number;
+  /** The most common served `class_name` among those points, if any. */
+  className: string | null;
+}
+
+/**
+ * F-68 (fresh-start findings 2026-09-25): the plot had no legend, so its
+ * colors meant nothing without hovering. The biggest clusters in the
+ * served points, each with its color and the class name its points carry
+ * most often. Display only: nothing here assigns anything.
+ */
+export function legendEntries(
+  points: readonly { cluster_id: number | null; class_name: string | null }[],
+  max = 8,
+): LegendEntry[] {
+  const byCluster = new Map<
+    number | null,
+    { count: number; names: Map<string, number> }
+  >();
+  for (const p of points) {
+    let e = byCluster.get(p.cluster_id);
+    if (!e) {
+      e = { count: 0, names: new Map() };
+      byCluster.set(p.cluster_id, e);
+    }
+    e.count += 1;
+    if (p.class_name) e.names.set(p.class_name, (e.names.get(p.class_name) ?? 0) + 1);
+  }
+  return [...byCluster.entries()]
+    .map(([clusterId, e]) => {
+      let className: string | null = null;
+      let best = 0;
+      for (const [n, c] of e.names) {
+        if (c > best) {
+          best = c;
+          className = n;
+        }
+      }
+      return { clusterId, color: colorForCluster(clusterId), count: e.count, className };
+    })
+    .sort((a, b) => b.count - a.count || (a.clusterId ?? -1) - (b.clusterId ?? -1))
+    .slice(0, max);
+}
+
 /** What the plot should do with one rebuild-job status poll. */
 export type RebuildPollOutcome = 'running' | 'completed' | 'failed' | 'idle';
 

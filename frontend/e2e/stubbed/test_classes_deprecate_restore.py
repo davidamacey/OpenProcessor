@@ -162,3 +162,88 @@ def test_restore_conflict_shows_plain_string_detail_verbatim(stub, page, app_url
 
     toast = page.get_by_text('a live class already uses the name "wagon"')
     toast.wait_for(timeout=15000)
+
+
+def test_restore_merged_class_names_the_merge_target(stub, page, app_url):
+    """F-56 (OpenProcessor 70663c0): restoring a merged class 409s with a
+    structured `class_merged` detail; the toast names the served merge
+    target and says un-merge isn't supported, with the served hint."""
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES_WITH_DEPRECATED})
+    stub.on("GET", r"/review/new_class_proposals/summary(\?|$)", EMPTY_PROPOSALS)
+    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
+    stub.on(
+        "POST",
+        r"/classes/99/restore$",
+        (
+            409,
+            {
+                "detail": {
+                    "error": "class_merged",
+                    "message": "class_id 99 was merged into class_id 11",
+                    "class_id": 99,
+                    "merged_into": {"class_id": 11, "class_name": "sedan"},
+                    "hint": "relabel crops by hand to split them back out",
+                }
+            },
+        ),
+    )
+    _confirm_dialogs_yes(page)
+
+    page.goto(f"{app_url}/classes")
+    toggle = page.get_by_text("Deprecated classes (1)")
+    toggle.wait_for(timeout=15000)
+    toggle.click()
+    page.get_by_test_id("restore-99").click()
+
+    page.get_by_text("Merged into sedan; un-merge isn't supported.", exact=False).wait_for(
+        timeout=15000
+    )
+    body = page.locator("body").inner_text()
+    assert "relabel crops by hand to split them back out" in body
+
+
+def test_merged_class_row_has_no_restore(stub, page, app_url):
+    """d817605: GET /classes serves merged_into; a merged deprecated class
+    shows where it went and offers no Restore."""
+    merged = dict(CLASSES_WITH_DEPRECATED[-1], merged_into=11)
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": [*CLASSES_LIVE, merged]})
+    stub.on("GET", r"/review/new_class_proposals/summary(\?|$)", EMPTY_PROPOSALS)
+    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
+
+    page.goto(f"{app_url}/classes")
+    toggle = page.get_by_text("Deprecated classes (1)")
+    toggle.wait_for(timeout=15000)
+    toggle.click()
+    assert page.get_by_test_id("merged-into-99").inner_text().strip() == "merged into sedan"
+    assert page.get_by_test_id("restore-99").count() == 0
+
+
+def test_merge_preview_says_validations_carry_over(stub, page, app_url):
+    """d817605: the merge dry-run serves validations_carried_over (kept),
+    replacing would_unvalidate (lost)."""
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES_LIVE})
+    stub.on("GET", r"/review/new_class_proposals/summary(\?|$)", EMPTY_PROPOSALS)
+    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
+    stub.on(
+        "POST",
+        r"/classes/merge$",
+        {
+            "dry_run": True,
+            "source_id": 10,
+            "target_id": 11,
+            "would_relabel": 3,
+            "validations_carried_over": 2,
+            "holdout_blocking": 0,
+            "blocked": False,
+        },
+    )
+    page.goto(f"{app_url}/classes")
+    page.get_by_role("button", name="Merge classes").click(timeout=15000)
+    dialog = page.get_by_role("dialog", name="Merge classes")
+    dialog.wait_for(timeout=5000)
+    dialog.locator("select").nth(0).select_option("10")
+    dialog.locator("select").nth(1).select_option("11")
+    dialog.get_by_text("will carry over", exact=False).wait_for(timeout=5000)
+    text = " ".join(dialog.inner_text().split())
+    assert "2 human validations will carry over" in text, text
+    assert "lose validation" not in text

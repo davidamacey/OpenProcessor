@@ -48,7 +48,8 @@
   import {
     dominantShareText,
     dominantShareTitle,
-    geometryPurityText,
+    cohesionText,
+    COHESION_TOOLTIP,
   } from '$lib/clusters/clusterCardText';
 
   // m7 (2026-09-24 interactive pass): the served purity_thresholds this
@@ -570,6 +571,7 @@
         representative_thumb_urls: reps.map((p) => getRegionThumbUrl(p.crop_id, 160)),
         updated_at: null,
         isSlotCard: true,
+        slotDisplayName: slot.capabilities.queue?.tabLabel ?? slot.label.plural,
       };
     } catch {
       return null;
@@ -971,7 +973,7 @@
          has to mouse over each card to figure out what the colors mean. -->
       <div
         class="flex items-center gap-2 text-[10px] text-zinc-500"
-        title="Card border color encodes cluster purity — nearest-centroid geometry purity (DQ-M2), not label agreement. See each card's purity chip tooltip for n and label_purity/labelled_share."
+        title="Card border color encodes cluster cohesion (the served bands): share of measured members whose nearest cluster centre is this one — not label agreement. See each card's cohesion chip tooltip for n, label agreement and labelled share."
       >
         <span class="flex items-center gap-1">
           <span class="inline-block h-2 w-3 rounded-sm border-2 border-green-500/60"
@@ -1039,8 +1041,8 @@
       <label class="flex items-center gap-2 text-xs text-zinc-400">
         Sort
         <select bind:value={sort} class="select-sm">
-          <option value="purity_asc">purity asc</option>
-          <option value="purity_desc">purity desc</option>
+          <option value="purity_asc">cohesion asc</option>
+          <option value="purity_desc">cohesion desc</option>
           <option value="size_desc">size desc</option>
           <option value="size_asc">size asc</option>
           <option value="dominant_class">dominant class</option>
@@ -1239,7 +1241,9 @@
               <div class="p-3">
                 <div class="mb-1 flex items-center gap-2">
                   {#if c.isSlotCard}
-                    <span class="text-sm font-semibold">{c.dominant_class_name}</span>
+                    <span class="text-sm font-semibold" data-testid="slot-card-title"
+                      >{c.slotDisplayName ?? c.dominant_class_name}</span
+                    >
                     <span
                       class="rounded px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-200"
                     >
@@ -1256,19 +1260,15 @@
                            operator can tell the two apart. -->
                       <span
                         class="rounded px-1.5 py-0.5 text-[10px] font-medium {pb.color}"
-                        title="{c.purity_basis ??
-                          'nearest-centroid'} purity, n={c.purity_n ??
-                          '—'} · label purity {c.label_purity != null
+                        data-testid="cluster-cohesion"
+                        title="{COHESION_TOOLTIP} · label agreement {c.label_purity !=
+                        null
                           ? `${(c.label_purity * 100).toFixed(0)}%`
                           : '—'} · labelled share {c.labelled_share != null
                           ? `${(c.labelled_share * 100).toFixed(0)}%`
                           : '—'}"
                       >
-                        {pb.text}
-                        {geometryPurityText(c) ?? '—'}
-                        {#if c.purity_n != null}
-                          <span class="opacity-70">· n={c.purity_n}</span>
-                        {/if}
+                        {pb.text} · {cohesionText(c) ?? 'cohesion —'}
                       </span>
                     {/if}
                   {/if}
@@ -1308,8 +1308,11 @@
                   {#if c.isSlotCard}
                     <!-- M4: dominant_pct is meaningless for the inventory
                          card too (there's no "dominant" anything — every
-                         item IS the slot's class) — no invented "· 0%". -->
-                    {c.dominant_class_name}
+                         item IS the slot's class) — no invented "· 0%".
+                         F8 D7: the title carries the served display name,
+                         so this line names the class once, as a class. -->
+                    <span class="text-zinc-500">class</span>
+                    <span class="font-mono">{c.dominant_class_name}</span>
                   {:else if c.dominant_class_name && !unlabeledOnly}
                     {c.dominant_class_name}
                     {#if dominantShareText(c)}

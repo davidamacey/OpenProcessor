@@ -224,12 +224,15 @@
       </button>
     </div>
 
-    <p class="text-xs text-zinc-400">
-      Scores are computed on demand, not automatically — the Uncertainty and Model
-      Disagreements review queues, plus the uniqueness/mistakenness sorts, stay empty
-      until a scorer has run at least once. Mistakenness additionally needs model probe
-      predictions; if it's missing those, Compute will report the backend's own error
-      below rather than silently doing nothing.
+    <!-- F8 D9: the Uncertainty and Model Disagreements queues are driven by
+         probe predictions (run a probe on /train), not by these scorers. -->
+    <p class="text-xs text-zinc-400" data-testid="scores-intro">
+      Scores are computed on demand, not automatically. The score-based review sorts (for
+      example mistakenness) have nothing to sort by until their scorer has run at least
+      once. Mistakenness also needs model probe predictions; if those are missing, Compute
+      shows the backend's own error below. The Uncertainty and Model Disagreements queues
+      don't depend on these scorers: they fill from probe predictions (run a probe from a
+      finished training run on /train).
     </p>
 
     {#if loadError}

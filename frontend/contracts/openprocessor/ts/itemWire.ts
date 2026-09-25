@@ -64,6 +64,9 @@ export interface ItemWire {
   probe_pred_class: unknown;
   probe_pred_class_id: number | null;
   probe_pred_entropy: number | null;
+  probe_disagreement: boolean | null;
+  probe_in_scope: boolean | null;
+  probe_model_version: string | null;
   mistakenness_score: number | null;
   mistakenness_method: string | null;
   mistakenness_version: string | null;
@@ -174,6 +177,9 @@ export const ITEM_WIRE_KEYS = [
   'probe_pred_class',
   'probe_pred_class_id',
   'probe_pred_entropy',
+  'probe_disagreement',
+  'probe_in_scope',
+  'probe_model_version',
   'mistakenness_score',
   'mistakenness_method',
   'mistakenness_version',

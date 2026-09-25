@@ -145,3 +145,16 @@ describe('reviewUndismissCrop', () => {
     expect(crop.id).toBe('c1');
   });
 });
+
+describe('strict batch bodies (OpenProcessor a8a34aa): an empty list is never sent', () => {
+  it('discardCropsBatch / undo batches / ingestBatch reject [] without calling fetch', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const { undoLabelBatch, undoCropRegionBatch, ingestBatch } = await import('./api');
+    await expect(discardCropsBatch([])).rejects.toThrow(/no request sent/);
+    await expect(undoLabelBatch([])).rejects.toThrow(/no request sent/);
+    await expect(undoCropRegionBatch([])).rejects.toThrow(/no request sent/);
+    await expect(ingestBatch({ items: [] })).rejects.toThrow(/no request sent/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

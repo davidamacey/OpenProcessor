@@ -51,13 +51,18 @@ describe('M2/M12: the crop/region image never collapses to 0px when Details open
     // DQ-M5 (2026-09-24 data-quality pass) added a `max-h-[46%]` ceiling
     // alongside the floor — the wrapper is still shrink-0 with min-height,
     // just no longer unbounded above.
+    // F8 D4 (2026-09-25): a fixed floor height below lg (the body scrolls
+    // there), the floor + ceiling from lg up; overflow-hidden so a region
+    // canvas can't paint over the first metadata row.
     expect(src).toMatch(
-      /flex min-h-\[\d+px\] max-h-\[\d+%\] shrink-0 items-center justify-center bg-zinc-950/,
+      /flex h-\[\d+px\] shrink-0 items-center justify-center overflow-hidden bg-zinc-950 lg:h-auto lg:max-h-\[\d+%\] lg:min-h-\[\d+px\]/,
     );
   });
 
   it('the metadata/Details region below the image scrolls independently', () => {
-    expect(src).toMatch(/class="mt-3 min-h-0 flex-1 overflow-y-auto pr-1"/);
+    // From lg up it scrolls in its own region; below lg the whole review
+    // body scrolls instead (F8 D4: the inner pane was ~79px at 800px).
+    expect(src).toMatch(/class="mt-3 pr-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"/);
   });
 });
 

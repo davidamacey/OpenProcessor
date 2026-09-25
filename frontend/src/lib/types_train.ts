@@ -427,6 +427,9 @@ export interface PromoteRequest {
   input_size?: number;
   fp16?: boolean;
   overwrite?: boolean;
+  /** Bypass the promote gate. Offered only when the server's 422 says
+   *  `force_allowed` (F-64). */
+  force?: boolean;
 }
 
 export interface PromoteResponse {

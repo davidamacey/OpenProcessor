@@ -167,4 +167,48 @@ describe('IngestBatchPanel', () => {
     );
     expect(submitBtn?.disabled).toBe(true);
   });
+
+  it('a8a34aa: lists served secondary-detector failures', async () => {
+    const base = servedResponse();
+    vi.mocked(ingestBatch).mockResolvedValue({
+      ...base,
+      summary: { ...base.summary, secondary_detector_failures: 1 },
+      results: [
+        { ...base.results[0]!, secondary_detector_error: 'classifier unavailable' },
+        base.results[1]!,
+      ],
+    });
+    instance = mount(IngestBatchPanel, {
+      target,
+      props: { config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data'] } },
+    });
+    flushSync();
+    textarea().value = '/data/a.jpg';
+    textarea().dispatchEvent(new Event('input'));
+    flushSync();
+    [...target.querySelectorAll('button')]
+      .find((b) => b.textContent?.includes('Ingest 1 path'))!
+      .click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(
+        target.querySelector('[data-testid="batch-secondary-failures"]')?.textContent,
+      ).toContain('secondary detector failed 1');
+    });
+    expect(
+      target.querySelector('[data-testid="batch-secondary-list"]')?.textContent,
+    ).toContain('classifier unavailable');
+  });
+
+  it('the submit button is disabled with no paths (never sends an empty items list)', () => {
+    instance = mount(IngestBatchPanel, {
+      target,
+      props: { config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data'] } },
+    });
+    flushSync();
+    const btn = [...target.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Ingest 0 paths'),
+    );
+    expect(btn?.disabled).toBe(true);
+  });
 });

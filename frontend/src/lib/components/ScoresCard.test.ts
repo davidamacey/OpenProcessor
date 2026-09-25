@@ -139,6 +139,15 @@ describe('ScoresCard: coverage render', () => {
     }),
   };
 
+  it('F8 D9: the intro no longer claims the probe-driven queues need a scorer', async () => {
+    getScoresCoverage.mockResolvedValue(coverage);
+    const el = renderCard();
+    await flushAsync();
+    const intro = el.querySelector('[data-testid="scores-intro"]')?.textContent ?? '';
+    expect(intro).toContain('fill from probe predictions');
+    expect(intro).not.toMatch(/Disagreements review queues[^.]*stay empty/);
+  });
+
   it('renders every served scorer id with its n_scored/total/pct — never hardcoded', async () => {
     getScoresCoverage.mockResolvedValue(coverage);
     const el = renderCard();

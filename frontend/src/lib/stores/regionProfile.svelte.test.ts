@@ -67,11 +67,48 @@ describe('loadRegionProfile', () => {
     expect(registeredSlots).toEqual([]);
   });
 
-  it('fails closed on a failed /health', async () => {
-    await loadRegionProfile(vi.fn().mockRejectedValue(new Error('down')));
-    expect(regionProfileStore.loaded).toBe(true);
+  it('F-78: a failed /health (every retry) leaves the profile unknown, not "not configured"', async () => {
+    const fetchHealth = vi.fn().mockRejectedValue(new Error('down'));
+    await loadRegionProfile(fetchHealth, [0, 0]);
+    expect(fetchHealth).toHaveBeenCalledTimes(3);
+    expect(regionProfileStore.loaded).toBe(false);
+    expect(regionProfileStore.unknown).toBe(true);
+    // Still fail closed: no region slot, no region route.
     expect(regionProfileStore.configured).toBe(false);
     expect(registeredSlots).toEqual([]);
+  });
+
+  it('F-78: a timeout then a success seeds the profile, with no toast', async () => {
+    const timeout = Object.assign(new Error('timed out'), { name: 'TimeoutError' });
+    const fetchHealth = vi
+      .fn()
+      .mockRejectedValueOnce(timeout)
+      .mockResolvedValueOnce(health({ region_profile: WIDGET_TAG_PROFILE }));
+    await loadRegionProfile(fetchHealth, [0, 0]);
+    expect(regionProfileStore.configured).toBe(true);
+    expect(slotForClassName(WIDGET_TAG_CLASS)?.key).toBe(WIDGET_TAG_PROFILE.name);
+    // A later poll reading the same profile is not a "change".
+    regionProfileStore.observe({ ...WIDGET_TAG_PROFILE });
+    expect(toastStore.toasts).toEqual([]);
+  });
+
+  it('F-78: when boot never got a read, the first successful poll seeds and installs the slot, no toast', async () => {
+    await loadRegionProfile(vi.fn().mockRejectedValue(new Error('down')), [0, 0]);
+    const before = regionProfileStore.seedVersion;
+    regionProfileStore.observe(WIDGET_TAG_PROFILE);
+    expect(regionProfileStore.configured).toBe(true);
+    expect(regionProfileStore.unknown).toBe(false);
+    expect(regionProfileStore.seedVersion).toBe(before + 1);
+    expect(slotForClassName(WIDGET_TAG_CLASS)?.key).toBe(WIDGET_TAG_PROFILE.name);
+    expect(toastStore.toasts).toEqual([]);
+  });
+
+  it('F-78: a served null after an unknown boot seeds not-configured, no toast', async () => {
+    await loadRegionProfile(vi.fn().mockRejectedValue(new Error('down')), [0, 0]);
+    regionProfileStore.observe(null);
+    expect(regionProfileStore.loaded).toBe(true);
+    expect(regionProfileStore.configured).toBe(false);
+    expect(toastStore.toasts).toEqual([]);
   });
 
   it('reads the prefixed curation health route with a bounded signal', async () => {

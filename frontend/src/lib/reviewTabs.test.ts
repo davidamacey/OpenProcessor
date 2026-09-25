@@ -12,6 +12,7 @@ import {
   resolveEffectiveTab,
   slotTabId,
   reviewDeepLink,
+  unavailableTabMessage,
   tabFromUrlId,
   tabHonorsPinnedSortDefault,
   urlIdForTab,
@@ -318,6 +319,7 @@ describe('reviewDeepLink / urlIdForTab', () => {
       tab: 'all',
       cropId: null,
       preset: null,
+      unavailableTab: null,
     });
     expect(reviewDeepLink(new URLSearchParams('tab=nope&crop_id=')).tab).toBe('all');
   });
@@ -350,5 +352,27 @@ describe('reviewDeepLink / urlIdForTab', () => {
     it('absent preset param is null, not undefined-that-happens-to-be-falsy', () => {
       expect(reviewDeepLink(new URLSearchParams('tab=all')).preset).toBeNull();
     });
+  });
+});
+
+describe('unavailable ?tab= (coordinator minor, 2026-09-25)', () => {
+  it('reviewDeepLink reports a tab that resolved to nothing, and nothing otherwise', () => {
+    expect(reviewDeepLink(new URLSearchParams('tab=no_such_tab')).unavailableTab).toBe(
+      'no_such_tab',
+    );
+    expect(reviewDeepLink(new URLSearchParams('tab=all')).unavailableTab).toBeNull();
+    expect(reviewDeepLink(new URLSearchParams('')).unavailableTab).toBeNull();
+  });
+
+  it('names the missing region profile for the region tab id', () => {
+    expect(unavailableTabMessage('regions', 'regions', false)).toContain(
+      'the backend reports no region profile',
+    );
+    expect(unavailableTabMessage('bogus', 'regions', false)).toContain(
+      'no "bogus" review tab',
+    );
+    expect(unavailableTabMessage('regions', 'regions', false, true)).toContain(
+      "hasn't loaded",
+    );
   });
 });

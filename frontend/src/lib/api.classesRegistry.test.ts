@@ -78,7 +78,7 @@ describe('previewClassMerge', () => {
         source_id: 1,
         target_id: 2,
         would_relabel: 22,
-        would_unvalidate: 0,
+        validations_carried_over: 3,
         holdout_blocking: 0,
         blocked: false,
       }),
@@ -92,7 +92,7 @@ describe('previewClassMerge', () => {
       source_id: 1,
       target_id: 2,
       would_relabel: 22,
-      would_unvalidate: 0,
+      validations_carried_over: 3,
       holdout_blocking: 0,
       blocked: false,
     });

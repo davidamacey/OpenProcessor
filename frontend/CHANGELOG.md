@@ -8,6 +8,143 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Class merge carries validations over; merged classes say where they
+  went (OpenProcessor d817605).** The merge dry-run's
+  `validations_carried_over` (it replaces `would_unvalidate`, with no shim) now
+  reads "N human validations will carry over" in the merge dialog. A
+  deprecated class with a served `merged_into` shows "merged into
+  `<name>`" instead of a Restore button. The restore 409 `class_merged`
+  message still covers a stale page. An in-request byte-identical
+  duplicate upload (served `status: 'duplicate'`) already counts as a
+  duplicate in the ingest results, and the served `stall_reason` still
+  renders verbatim, so neither needed a change.
+
+- **Probe opinion on review items (F8 D1, OpenProcessor d817605).** Items
+  carry the served `probe_disagreement`, `probe_in_scope` and
+  `probe_model_version`. An item outside the probe's classes reads "Model
+  predicts: no opinion (outside the probe's classes)" instead of the
+  probe's out-of-vocabulary top-1, and "Accept model's class" is offered
+  only when the server says the probe disagrees (`probeOpinion`), never
+  when `probe_disagreement` is null. The uniqueness sort appears in the
+  sort dropdown now that `/methods` serves it `experimental` (F8 D2; no
+  gating change needed, pinned by a test). Vendored contract synced to
+  `d817605`.
+
+- **Setup, export, clusters (F-48, F-49, F-55, F-61, F-68).**
+  `.env.example` no longer ships `PUBLIC_TRITON_API_URL` active (a verbatim
+  copy pointed a Docker build straight at `localhost:4603`). The README
+  lists the served reserved hotkeys, names the sample-data command
+  (`make sample-coco-readme`) and drops the empty Screenshots section.
+  `/export`'s registry downloads are enabled when either the served
+  datasets list flags the current export or `/export/status` reports a
+  finished one (`registryArtifactsAvailable`), and the version-tag
+  placeholder no longer suggests a private version scheme.
+  `/clusters/[id]`'s relabel action reads "Assign class to selected" and
+  the Move dialog points to it. The embedding plot has a color legend
+  (biggest clusters, their color and most common class).
+
+- **Copy and layout (F8 D5, D7, D9, D10; F-37, F-51, F-69).** The route
+  crumb next to the logo no longer truncates at 800px ("reviev"); the
+  primary nav strip scrolls instead. `/bakeoff` result tables show a
+  "scroll →" cue and edge marker while columns are hidden (`ScrollX`).
+  The `/clusters` region inventory card is titled by the served display
+  name, with the class id once below it. Cluster purity reads as
+  "cohesion NN% · n=N" with an explaining tooltip on `/clusters` and
+  `/clusters/[id]` (values and tier bands unchanged, served). The
+  `/settings` scores card no longer says the Uncertainty and Model
+  Disagreements queues need a scorer (they fill from probe predictions),
+  and an unset review-sort default reads "not set: each view uses its own
+  default" instead of a blank select.
+
+- **`/review` layout and counter (V-3, F8 D4, F8 D6).** The source image
+  is top-aligned instead of floating mid-way down a tall empty pane
+  (`SourceImageOverlay`'s new `align` prop). Below the `lg` breakpoint the
+  review body scrolls as a whole, so the metadata list is no longer
+  squeezed into a ~79px inner pane at 800px, and the crop box no longer
+  paints over the first metadata row. The queue counter shows the item's
+  position in the whole served queue (`#68 · 30 loaded · 7787 total` for
+  a deep link to rank 67), not its index within the loaded page
+  (`Pager.firstPage`, `queuePosition`).
+
+- **F-78: the region tab intermittently vanished with a spurious "region
+  profile changed — reload" toast.** A slow or aborted first `/health`
+  read (2 s timeout) seeded "no region profile" and the next poll
+  disagreed. Boot now retries (3 tries, short backoff); a timeout or
+  network error leaves the profile unknown (not "not configured"), and
+  the first successful `/health` poll seeds it and brings the region tab
+  in without a reload (the layout re-mounts on the seed). Only a served
+  change after a successful read raises the reload notice.
+- `/review?tab=<id>` that resolves to no tab (e.g. the region tab on a
+  backend with no region profile) now says why instead of silently
+  showing All.
+- The region tab's Detector row no longer carries a stray mistakenness
+  score chip; it shows only in the Scores row.
+
+- **Region bbox editor could not change a box** (data safety). The
+  `/review` region tab's reseed effect tracked `editedSlotBox`, so the
+  first drag tick or arrow nudge re-ran it, reset the box to the server
+  snapshot and left edit mode; further arrows then paged the queue and
+  Enter confirmed a different crop. The effect now depends only on the
+  crop id (body untracked); Enter in edit mode saves to the crop the
+  edit started on (and refuses if the queue moved); N/Z aren't bound
+  while editing.
+
+- **`/train` promote (F-64).** The promote modal showed only "API 422".
+  It now renders the served gate `message`, every served failure (with
+  its class) and the `override` hint, and offers "Promote anyway"
+  (`force: true`) only when the server's `force_allowed` is true. The
+  default Triton name no longer carries a hardcoded `_v7` suffix; it is
+  the run's own Triton-safe job id.
+- **`/train` class defaults (V-4).** "Classes to train" defaulted to every
+  class, including an empty one, so preflight blocked. It now defaults to
+  the classes the server reports as having enough data (served
+  `trainable_gap` of 0), marks short classes "needs N", and offers a
+  one-click "Exclude classes without enough data".
+- **`/train` readability (F-63).** The live log no longer shows raw ANSI
+  escapes; the form keeps its values through a run instead of resetting
+  when it finishes; past runs render above the cohorts section; the
+  batch inputs have labels.
+- **Metric protocol labels (V-5).** The trainer's eval figure is labelled
+  "trainer eval (Ultralytics val)" on `/train` and in the `/bakeoff`
+  model picker; `/bakeoff` results state their own served protocol
+  thresholds ("mAP at conf ≥ …, NMS IoU …; precision/recall/F1 at …").
+
+- **`/classes` (F-52, F-53, F-54, F-56, F-58).** The Add Class name
+  placeholder was a private-domain leftover; it is now "e.g.
+  delivery_van" (and the group placeholder "e.g. animals / tools /
+  furniture"), and `domainNeutral.scan.test.ts` now also fails on
+  `class_c|class_d|class_a|class_bs`. The proposals help line no
+  longer interpolates empty served lists as "(, plus …)" / "()"
+  (`termRulesText`). The class registry renders first; the proposals list
+  moved below it into a collapsed section, and the page scrolls as a
+  whole instead of an inner pane. The per-term "×" is now "Hide", labelled
+  as not saved. Restoring a merged class shows "Merged into
+  `<class>`; un-merge isn't supported." with the server's message and
+  hint instead of a bare `class_merged`.
+
+- **Adopted OpenProcessor a8a34aa..37b077f wire changes** (vendored
+  contract synced to `37b077f`). `/stats/dataset`: `labeled.by_proposal`
+  (always 0) is gone from `DatasetStats` and the dashboard, no shim;
+  `unlabeled.by_proposal` renders as "Detector proposal, no class" and
+  `in_progress.region_stall_reason` renders verbatim ("Stalled: …") in
+  the In-flight pipeline panel (V-1). `/ingest/region_drain`'s
+  `stall_reason` and not-ready `region_dependencies` render in the
+  `/ingest` region-drain panel. Upload and server-path ingest results
+  show `secondary_detector_error` per file and the served
+  `secondary_detector_failures` count.
+- **Strict request bodies.** `/ingest/batch`, `/crops/{label,region}/undo_batch`
+  and `/crops/discard_batch` now refuse an empty id/item list client-side
+  (`assertNonEmptyBatch`, `api.ts`) instead of sending a guaranteed 422;
+  Z with an empty undo entry is a no-op. `contract/strictBodies.test.ts`
+  pins `POST /export/yolo`, `/test_holdout/freeze` and `/ingest/batch` to
+  the keys their `additionalProperties: false` schemas declare.
+- **F-69:** the dashboard "Unlabeled" header summed overlapping buckets
+  (pending detection + no class), so it could exceed the total crop
+  count (4,055 of 3,516). It now shows the served class-less count only.
+- **F-59:** re-uploading files the backend already has showed nothing.
+  The run now toasts and states "Nothing uploaded: N already indexed"
+  and opens the Skipped tab.
+
 - The 26 docs screenshots (`docs/screenshots/`, `docs/screenshots-new/`,
   including the README demo GIF) showed non-public imagery and old
   branding. They are deleted along with their `docs/FEATURES.md` embeds.

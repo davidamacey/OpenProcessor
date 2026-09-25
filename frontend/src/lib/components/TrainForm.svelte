@@ -14,6 +14,7 @@
   import AugmentationPanel from './AugmentationPanel.svelte';
   import ClassSubsetPicker from './ClassSubsetPicker.svelte';
   import { classesStore } from '$stores/classes.svelte';
+  import { defaultTrainSelection } from '$lib/trainClassSelection';
   import { defaultGpuValue, getTrainGpus, type TrainGpuOptionsResponse } from '$lib/api';
   import type { TestHoldoutStats } from '$lib/types';
   import type {
@@ -106,6 +107,17 @@
   // Class subset selection. `null` means "all classes".
   let selectedClasses = $state<number[] | null>(null);
   let singleCls = $state<boolean>(false);
+  // V-4: once the registry loads, default to the classes the server
+  // doesn't report as short of data (served `trainable_gap`), so a
+  // 0-crop class doesn't block preflight out of the box. Seeded once;
+  // any operator change afterwards wins.
+  let selectionSeeded = false;
+  $effect(() => {
+    const classes = classesStore.classes;
+    if (selectionSeeded || classes.length === 0) return;
+    selectionSeeded = true;
+    if (selectedClasses === null) selectedClasses = defaultTrainSelection(classes);
+  });
 
   // Augmentation: null means "no augmentation block".
   let augmentation = $state<AugmentationSpec | null>(null);
@@ -442,6 +454,7 @@
             <span class="flex items-center gap-1 text-[10px] text-zinc-500">
               <input
                 type="checkbox"
+                aria-label="batch: auto"
                 checked={hpBatch === -1}
                 onchange={(e) => (hpBatch = e.currentTarget.checked ? -1 : 64)}
               />
@@ -451,6 +464,7 @@
           <input
             type="number"
             min="-1"
+            aria-label="batch"
             bind:value={hpBatch}
             disabled={hpBatch === -1}
             placeholder={hpBatch === -1 ? 'auto (−1)' : ''}

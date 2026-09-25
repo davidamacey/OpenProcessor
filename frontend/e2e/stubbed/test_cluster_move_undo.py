@@ -94,6 +94,9 @@ def test_move_then_undo_sends_single_crop_label_undo(stub, page, app_url):
     # M opens the move picker; type a target cluster id and Enter to confirm.
     page.keyboard.press("m")
     page.wait_for_selector('input[placeholder="e.g. 42"]', timeout=5000)
+    # F-55: the move dialog points at the class-relabel action.
+    assert "Assign class to selected" in page.get_by_test_id("move-relabel-hint").inner_text()
+    assert page.get_by_test_id("assign-selected").inner_text().strip() == "Assign class to selected"
     page.locator('input[placeholder="e.g. 42"]').fill("42")
     page.keyboard.press("Enter")
     page.wait_for_timeout(400)

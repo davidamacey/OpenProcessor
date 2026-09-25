@@ -51,6 +51,7 @@
   import SlotCard from '$components/SlotCard.svelte';
   import CropCard from '$components/CropCard.svelte';
   import PromoteModal from '$components/PromoteModal.svelte';
+  import { defaultTritonName } from '$lib/promote';
   import RunResults from '$components/RunResults.svelte';
   import TrainForm from '$components/TrainForm.svelte';
   import TrainProgress from '$components/TrainProgress.svelte';
@@ -560,10 +561,9 @@
 
   function openPromote(r: TrainJobStatus): void {
     promoteJobId = r.job_id;
-    // Server-side default: `<run_name>_v7`. Run name maps to job_id
-    // minus the colons / dots Triton dislikes.
-    const safe = r.job_id.replace(/[^A-Za-z0-9_-]+/g, '_');
-    promoteDefaultName = `${safe}_v7`;
+    // F-64: the run's own id, Triton-safe. No version suffix — nothing
+    // client-side knows this deployment's versioning.
+    promoteDefaultName = defaultTritonName(r.job_id);
     promoteOpen = true;
   }
 
@@ -1264,7 +1264,9 @@
     />
   {/if}
 
-  <!-- Form (collapses to a hint banner when a run is active) -->
+  <!-- Form. F-63(b): stays mounted (disabled) while a run is active, so
+       the operator's choices survive the run instead of resetting to
+       the page defaults when it finishes. -->
   {#if isActive}
     <p
       class="rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs text-blue-200"
@@ -1272,7 +1274,8 @@
       A run is in progress. Submit a new run after it finishes — the trainer handles one
       job at a time.
     </p>
-  {:else if !datasetExportDir}
+  {/if}
+  {#if !datasetExportDir}
     <p
       class="rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200"
     >
@@ -1296,6 +1299,134 @@
         datasetExportSpec.singleClass}
     />
   {/if}
+
+  <!-- Past runs -->
+  <section class="rounded-md border border-zinc-800 bg-zinc-900">
+    <header
+      class="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2"
+    >
+      <h2 class="text-sm font-semibold text-zinc-100">Past runs</h2>
+      <span class="font-mono text-xs text-zinc-500">{runs.length} / {runsTotal}</span>
+    </header>
+    {#if runsError}
+      <p class="px-3 py-2 text-xs text-red-300">Past runs fetch failed: {runsError}</p>
+    {/if}
+    <div class="max-h-[40rem] overflow-auto">
+      {#if runsLoading && runs.length === 0}
+        <p class="px-3 py-3 text-xs text-zinc-500">Loading…</p>
+      {:else if runs.length === 0}
+        <p class="px-3 py-3 text-xs text-zinc-500">No runs yet. Start one above.</p>
+      {:else}
+        <table class="w-full table-fixed text-sm">
+          <thead
+            class="sticky top-0 bg-zinc-900 text-[11px] uppercase tracking-wide text-zinc-500"
+          >
+            <tr>
+              <th class="px-3 py-2 text-left">Name</th>
+              <th class="w-20 px-3 py-2 text-left">Family</th>
+              <th class="w-24 px-3 py-2 text-left">Status</th>
+              <th
+                class="w-28 px-3 py-2 text-right"
+                title="The run's served eval.map50, labelled by eval.split (test split when the frozen-holdout pass ran, val when it fell back)"
+              >
+                mAP50
+              </th>
+              <th class="w-48 px-3 py-2 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each runs as r (r.job_id)}
+              {@const mapDisplay = bestMapDisplay(r)}
+              <tr class="border-t border-zinc-800 hover:bg-zinc-800/50">
+                <td class="px-3 py-2">
+                  <div class="truncate font-mono text-xs text-zinc-200" title={r.job_id}>
+                    {r.job_id}
+                  </div>
+                  {#if r.campaign_id}
+                    <div
+                      class="truncate font-mono text-[10px] text-zinc-500"
+                      title={r.campaign_id}
+                    >
+                      ↳ {r.campaign_id}
+                    </div>
+                  {/if}
+                </td>
+                <td class="px-3 py-2">
+                  <span class="font-mono text-xs text-zinc-400">{familyLabel(r)}</span>
+                </td>
+                <td class="px-3 py-2">
+                  <span
+                    class="rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide {statePillClass(
+                      r.state,
+                    )}"
+                  >
+                    {r.state}
+                  </span>
+                </td>
+                <td
+                  class="px-3 py-2 text-right font-mono text-xs text-zinc-200"
+                  title={mapDisplay.source === 'test'
+                    ? 'test split (frozen holdout)'
+                    : mapDisplay.source === 'val'
+                      ? 'validation (test pass fell back)'
+                      : 'no eval served yet'}
+                >
+                  {mapDisplay.value?.toFixed(3) ?? '—'}
+                  <span class="block font-sans text-[9px] text-zinc-500">
+                    {mapDisplay.source === 'test'
+                      ? 'test'
+                      : mapDisplay.source === 'val'
+                        ? 'val'
+                        : '—'}
+                  </span>
+                </td>
+                <td class="px-3 py-2">
+                  <div class="flex flex-wrap justify-end gap-1.5">
+                    {#if r.state === 'finished' || r.state === 'exporting'}
+                      <button
+                        type="button"
+                        class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-blue-300 hover:border-blue-500 hover:bg-blue-500/10"
+                        onclick={() => openPromote(r)}
+                        title="Promote to Triton"
+                      >
+                        Promote ↑
+                      </button>
+                    {/if}
+                    {#if r.state === 'finished' || r.state === 'failed'}
+                      <button
+                        type="button"
+                        class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800"
+                        onclick={() => reproduceRun(r)}
+                        disabled={reproducingId === r.job_id}
+                        title="Submit a new run with the same spec"
+                      >
+                        {reproducingId === r.job_id ? '…' : 'Reproduce'}
+                      </button>
+                    {/if}
+                  </div>
+                </td>
+              </tr>
+              {#if isTerminalTrainState(r.state)}
+                <tr class="border-t-0">
+                  <td colspan="5" class="p-0">
+                    <RunResults status={r} />
+                  </td>
+                </tr>
+              {/if}
+            {/each}
+          </tbody>
+        </table>
+        <div
+          use:infiniteScroll={{
+            onload: loadMoreRuns,
+            disabled: runsLoadingMore || !runsHasMore || runsLoading,
+          }}
+          class="h-1"
+          aria-hidden="true"
+        ></div>
+      {/if}
+    </div>
+  </section>
 
   <!-- Training cohorts (2026-09-24 logic-moves W6; originally P2.14)
        — GET {API_PREFIX}/training_cohorts?class_id=
@@ -1440,134 +1571,6 @@
         </div>
       </details>
     {/if}
-  </section>
-
-  <!-- Past runs -->
-  <section class="rounded-md border border-zinc-800 bg-zinc-900">
-    <header
-      class="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2"
-    >
-      <h2 class="text-sm font-semibold text-zinc-100">Past runs</h2>
-      <span class="font-mono text-xs text-zinc-500">{runs.length} / {runsTotal}</span>
-    </header>
-    {#if runsError}
-      <p class="px-3 py-2 text-xs text-red-300">Past runs fetch failed: {runsError}</p>
-    {/if}
-    <div class="max-h-[40rem] overflow-auto">
-      {#if runsLoading && runs.length === 0}
-        <p class="px-3 py-3 text-xs text-zinc-500">Loading…</p>
-      {:else if runs.length === 0}
-        <p class="px-3 py-3 text-xs text-zinc-500">No runs yet. Start one above.</p>
-      {:else}
-        <table class="w-full table-fixed text-sm">
-          <thead
-            class="sticky top-0 bg-zinc-900 text-[11px] uppercase tracking-wide text-zinc-500"
-          >
-            <tr>
-              <th class="px-3 py-2 text-left">Name</th>
-              <th class="w-20 px-3 py-2 text-left">Family</th>
-              <th class="w-24 px-3 py-2 text-left">Status</th>
-              <th
-                class="w-28 px-3 py-2 text-right"
-                title="The run's served eval.map50, labelled by eval.split (test split when the frozen-holdout pass ran, val when it fell back)"
-              >
-                mAP50
-              </th>
-              <th class="w-48 px-3 py-2 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each runs as r (r.job_id)}
-              {@const mapDisplay = bestMapDisplay(r)}
-              <tr class="border-t border-zinc-800 hover:bg-zinc-800/50">
-                <td class="px-3 py-2">
-                  <div class="truncate font-mono text-xs text-zinc-200" title={r.job_id}>
-                    {r.job_id}
-                  </div>
-                  {#if r.campaign_id}
-                    <div
-                      class="truncate font-mono text-[10px] text-zinc-500"
-                      title={r.campaign_id}
-                    >
-                      ↳ {r.campaign_id}
-                    </div>
-                  {/if}
-                </td>
-                <td class="px-3 py-2">
-                  <span class="font-mono text-xs text-zinc-400">{familyLabel(r)}</span>
-                </td>
-                <td class="px-3 py-2">
-                  <span
-                    class="rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide {statePillClass(
-                      r.state,
-                    )}"
-                  >
-                    {r.state}
-                  </span>
-                </td>
-                <td
-                  class="px-3 py-2 text-right font-mono text-xs text-zinc-200"
-                  title={mapDisplay.source === 'test'
-                    ? 'test split (frozen holdout)'
-                    : mapDisplay.source === 'val'
-                      ? 'validation (test pass fell back)'
-                      : 'no eval served yet'}
-                >
-                  {mapDisplay.value?.toFixed(3) ?? '—'}
-                  <span class="block font-sans text-[9px] text-zinc-500">
-                    {mapDisplay.source === 'test'
-                      ? 'test'
-                      : mapDisplay.source === 'val'
-                        ? 'val'
-                        : '—'}
-                  </span>
-                </td>
-                <td class="px-3 py-2">
-                  <div class="flex flex-wrap justify-end gap-1.5">
-                    {#if r.state === 'finished' || r.state === 'exporting'}
-                      <button
-                        type="button"
-                        class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-blue-300 hover:border-blue-500 hover:bg-blue-500/10"
-                        onclick={() => openPromote(r)}
-                        title="Promote to Triton"
-                      >
-                        Promote ↑
-                      </button>
-                    {/if}
-                    {#if r.state === 'finished' || r.state === 'failed'}
-                      <button
-                        type="button"
-                        class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800"
-                        onclick={() => reproduceRun(r)}
-                        disabled={reproducingId === r.job_id}
-                        title="Submit a new run with the same spec"
-                      >
-                        {reproducingId === r.job_id ? '…' : 'Reproduce'}
-                      </button>
-                    {/if}
-                  </div>
-                </td>
-              </tr>
-              {#if isTerminalTrainState(r.state)}
-                <tr class="border-t-0">
-                  <td colspan="5" class="p-0">
-                    <RunResults status={r} />
-                  </td>
-                </tr>
-              {/if}
-            {/each}
-          </tbody>
-        </table>
-        <div
-          use:infiniteScroll={{
-            onload: loadMoreRuns,
-            disabled: runsLoadingMore || !runsHasMore || runsLoading,
-          }}
-          class="h-1"
-          aria-hidden="true"
-        ></div>
-      {/if}
-    </div>
   </section>
 </div>
 
