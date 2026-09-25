@@ -6,6 +6,65 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Region features follow the backend's served region profile
+  (OpenProcessor naming-w2, domain-neutral audit steps 7-11,
+  `docs/design/domain-neutral-audit-2026-09-24.md`).** Breaking for any
+  deployment that relied on the built-in license-plate slot.
+  - The app ships with no domain built in: `builtinSlots` is empty and
+    `src/lib/annotations/profiles/licensePlate.ts` is gone. The region
+    slot is synthesized from `GET {API_PREFIX}/health`'s new
+    `region_profile` (`regionSlotFromServedProfile`,
+    `src/lib/annotations/servedRegionSlot.ts`): `display_name` labels
+    the review tab, the gallery copy and the detections panel;
+    `region_class_name` is the bound class; the profile `name` is the
+    slot key and the single-class export's profile name (so existing
+    exports keep their output root). The tab's `?tab=` id is now the
+    backend's `regions` (old `?tab=plates` bookmarks open All). The
+    singular-context title stays "Region" ("Confirm Region", "Region
+    score"), since `display_name` is a plural collection noun.
+  - With `region_profile: null` (or an older backend, a failed or slow
+    `/health`) every region surface is absent, not disabled: no region
+    review tab, `/clusters` region gallery or pinned inventory card, no
+    `CropCard` sub-box editor, no region section in `CropMetaPanel`, no
+    detections panel on `/dashboard`, no region drain panel on
+    `/ingest`, and the root layout no longer loads `/regions/statuses`
+    or `/regions/vocabulary`. No region route is called.
+  - The served profile is read once before first render
+    (`regionProfileStore`, `loadRegionProfile()` in the root layout's
+    `load()`). If a later `/health` poll serves a different profile, one
+    "reload to apply" notice appears; the tabs are not hot-swapped.
+  - A region route's 409 "no region profile is configured" becomes
+    `RegionProfileUnavailableError`; its call-site error toasts are
+    swallowed and the same reload notice shows instead.
+  - A tier-2 `annotation-profiles.json` slot that uses region routes is
+    kept only when its `key` equals the served profile's `name` (it then
+    replaces the generated slot). Otherwise it is dropped with a
+    warning.
+  - The license-plate, aircraft-tail-number and defect-code profiles
+    moved to `examples/annotation-profiles/` as tier-2 JSON (never
+    bundled; see `examples/README.md`). To keep the old plate copy and
+    cohorts, mount `examples/annotation-profiles/license-plate.json` as
+    the deployment's `annotation-profiles.json`. Its `urlId` is still
+    `plates`. `static/annotation-profiles.example.json` now customizes a
+    served `pallet_label` profile over the `region_*` wire.
+  - Review tab `coco_blind_spots` is now `classifier_blind_spots` (tab
+    id, bookmark id and endpoint), matching OpenProcessor naming-w2 F7.
+    Stats fixtures read `in_progress.region_drain_total_unfinished`.
+  - Vendored contracts synced to OpenProcessor `main` 8f58b01.
+  - `domainNeutral.scan.test.ts` now also fails on `LPR`/`lpr_`, and its
+    allow-list is down to itself and the one test that exercises
+    `examples/`. The remaining plate/LPR literals in `src/`, `scripts/`
+    and tests were neutralized.
+
+### Fixed
+
+- `npm run contract:check` (and the pre-commit hook that runs it) read
+  the frontend repo instead of the backend's inside a git hook, because
+  git sets `GIT_DIR` for hooks and `git -C` does not override it. It now
+  clears the hook's git environment for its backend reads.
+
 ### Added
 
 - **Client-side source-image overlay (K6, `docs/design/
