@@ -56,7 +56,9 @@
       </span>
       <span class="block text-[10px] text-zinc-500">
         {formatCount(d.n_images)} test images · {formatCount(d.n_objects)} objects ·
-        {formatCount(d.classes.length)} scored classes{#if d.n_background_images > 0}
+        {formatCount(d.classes.length)} scored class{d.classes.length === 1
+          ? ''
+          : 'es'}{#if d.n_background_images > 0}
           · {formatCount(d.n_background_images)} background{/if}
       </span>
       {#if d.unlabeled_items_on_exported_images}
