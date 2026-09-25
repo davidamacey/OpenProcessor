@@ -92,6 +92,15 @@ button {
   background: rgb(var(--system-gray-3));
 }
 
+/* Horizontal strips (ScrollStrip.svelte) show their own "more" chevrons,
+   so a 10px scrollbar under a one-line nav/tab row is just noise. */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Focus rings — Apple-blue */
 :focus-visible {
   outline: 2px solid rgb(var(--system-blue));

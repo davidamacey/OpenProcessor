@@ -5,6 +5,7 @@
   import { page } from '$app/state';
   import AboutModal from '$components/AboutModal.svelte';
   import ClassSidebar from '$components/ClassSidebar.svelte';
+  import ScrollStrip from '$components/ScrollStrip.svelte';
   import {
     slotForClassName,
     slotRegistryWarnings,
@@ -131,6 +132,16 @@
   });
 
   const path = $derived(page.url.pathname);
+
+  function isCurrentSection(href: string): boolean {
+    return path === href || path.startsWith(`${href}/`);
+  }
+  function navCurrent(href: string): 'page' | undefined {
+    return isCurrentSection(href) ? 'page' : undefined;
+  }
+  function navLinkClass(href: string): string {
+    return `shrink-0 hover:text-white${isCurrentSection(href) ? ' text-white' : ''}`;
+  }
   const showSidebar = $derived(path === '/clusters' || path.startsWith('/clusters/'));
 
   // Class filter applied to the cluster grid. Page reads from URL (?class=ID).
@@ -264,22 +275,62 @@
          viewport edge (clipped, and forcing horizontal page overflow).
          Scrolls horizontally within its own box instead of ever
          wrapping link text or growing past its flex slot. -->
-    <nav
-      class="flex min-w-0 shrink items-center gap-3 overflow-x-auto whitespace-nowrap text-sm text-zinc-300"
-      aria-label="Primary"
+    <!-- Visual audit 2026-09-24: the scrolling strip alone gave no hint
+         that links sat off-screen at 800px — ScrollStrip adds a chevron
+         on the side with hidden links and scrolls the current page's link
+         into view. -->
+    <ScrollStrip
+      navLabel="Primary"
+      activeKey={path}
+      class="gap-3 text-sm text-zinc-300"
+      testId="primary-nav"
     >
-      <a href="/dashboard" class="shrink-0 hover:text-white">Dashboard</a>
-      <a href="/clusters" class="shrink-0 hover:text-white">Clusters</a>
-      <a href="/review" class="shrink-0 hover:text-white">Review</a>
-      <a href="/classes" class="shrink-0 hover:text-white">Classes</a>
-      <a href="/export" class="shrink-0 hover:text-white">Export</a>
-      <a href="/models" class="shrink-0 hover:text-white">Models</a>
-      <a href="/train" class="shrink-0 hover:text-white">Train</a>
+      <a
+        href="/dashboard"
+        class={navLinkClass('/dashboard')}
+        aria-current={navCurrent('/dashboard')}>Dashboard</a
+      >
+      <a
+        href="/clusters"
+        class={navLinkClass('/clusters')}
+        aria-current={navCurrent('/clusters')}>Clusters</a
+      >
+      <a
+        href="/review"
+        class={navLinkClass('/review')}
+        aria-current={navCurrent('/review')}>Review</a
+      >
+      <a
+        href="/classes"
+        class={navLinkClass('/classes')}
+        aria-current={navCurrent('/classes')}>Classes</a
+      >
+      <a
+        href="/export"
+        class={navLinkClass('/export')}
+        aria-current={navCurrent('/export')}>Export</a
+      >
+      <a
+        href="/models"
+        class={navLinkClass('/models')}
+        aria-current={navCurrent('/models')}>Models</a
+      >
+      <a href="/train" class={navLinkClass('/train')} aria-current={navCurrent('/train')}
+        >Train</a
+      >
       {#if bakeoffAvailability.available !== false}
-        <a href="/bakeoff" class="shrink-0 hover:text-white">Bake-off</a>
+        <a
+          href="/bakeoff"
+          class={navLinkClass('/bakeoff')}
+          aria-current={navCurrent('/bakeoff')}>Bake-off</a
+        >
       {/if}
-      <a href="/settings" class="shrink-0 hover:text-white">Settings</a>
-    </nav>
+      <a
+        href="/settings"
+        class={navLinkClass('/settings')}
+        aria-current={navCurrent('/settings')}>Settings</a
+      >
+    </ScrollStrip>
 
     <span
       class="chip shrink-0 gap-1.5 rounded-full border-zinc-700 bg-zinc-900 text-zinc-300"
