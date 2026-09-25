@@ -73,6 +73,7 @@ tests/curation/test_vlm_combined.py:plate # historical: contrasts current region
 tests/curation/test_training_class_subset_presets.py:plates_only|all_vehicles|vehicles_and_plates # historical: names the hardcoded presets this test's subject replaces
 tests/curation/test_region_vocabulary.py:lpr_nanov11_640|sam3|gemma # historical: names the vendor ids a frontend used to hardcode, motivating this endpoint
 src/services/curation/region_vocabulary.py:lpr_nanov11_640|sam3|gemma # historical: names the vendor ids a frontend used to hardcode, motivating this module
+docker-compose.yml:(?i)gemma # G-10 (fresh-start gaps batch B): the optional `vlm` compose service's worked-example default is Google's real public Gemma 4 E4B model (Apache-2.0, not a vendor/private name) -- a deliberate, reviewed reference choice for an opt-in profile, not a hardcoded requirement (OP_VLM_MODEL/VLM_MODEL are both overridable)
 tests/fixtures/labeler_call_sites.txt:plate|LPR # historical header prose describing prior renames (plate_thumbnail bug, LPR vocabulary work item)
 tests/integration/test_labeler_route_parity.py:plate|lpr|LPR # KNOWN_GAPS documents a real, not-yet-ported proprietary frontend route by its actual path; rewriting the literal would break the check it performs
 
@@ -140,6 +141,8 @@ tests/curation/test_yolo26_triton_config.py # exercises the example profile
 tests/integration/test_import_labeled_dataset.py # exercises the example profile
 tests/examples/test_bakeoff_license_plate_example.py # exercises the opt-in license_plate bake-off example under examples/bakeoff/ (loads it by path)
 scripts/datasets/fetch_openimages_plates.py # G-05 public sample fetcher: fetches Open Images V7's own "Vehicle registration plate" class by that exact public display name; same public license_plate example domain this allowlist section already covers throughout
+docker-compose.yml:license[ _-]?plate # G-08 (fresh-start gaps batch B): comment naming the public license_plate.json worked-example path that ./examples is mounted for
+tests/test_compose_contract.py:license[ _-]?plate # G-08 (fresh-start gaps batch B): docstring naming the same public license_plate.json worked-example path the mount test is pinning
 
 # ---------------------------------------------------------------------------
 # Scan C (private class vocabulary: sportbike/cruiserbike/dirtbike/harley/honda)

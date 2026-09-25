@@ -15,6 +15,7 @@ Covers:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PATH = REPO_ROOT / 'docker-compose.yml'
+_NAME_LINE_RE = re.compile(r'^name:\s*(.+)$', re.MULTILINE)
 
 # The four curation worker services. Any
 # service whose name starts with this prefix must also carry
@@ -309,3 +311,130 @@ def test_yolo_api_has_a_healthcheck() -> None:
 def test_curation_mlflow_has_a_healthcheck() -> None:
     services = _services()
     assert services['curation-mlflow'].get('healthcheck'), 'curation-mlflow needs a healthcheck'
+
+
+# =============================================================================
+# Fresh-start gaps batch B — compose/install portability (G-01/G-03/G-06/
+# G-07/G-08/G-10/G-15/G-28).
+# =============================================================================
+
+
+def test_no_fixed_compose_project_name() -> None:
+    """G-01: a hardcoded top-level `name:` forces every `docker compose`
+    invocation onto the same project regardless of directory/-p/env,
+    which is exactly how a fresh clone can end up operating on a
+    different, already-running stack's containers and volumes."""
+    raw = COMPOSE_PATH.read_text(encoding='utf-8')
+    parsed = _load_compose()
+    match = _NAME_LINE_RE.search(raw)
+    assert match, 'expected a top-level `name:` key in docker-compose.yml'
+    value = match.group(1).strip()
+    assert '${COMPOSE_PROJECT_NAME' in value, (
+        f'docker-compose.yml `name:` must be interpolated from COMPOSE_PROJECT_NAME, got: {value!r}'
+    )
+    assert 'services' in parsed  # sanity: file still parses as valid compose
+
+
+def test_every_container_name_is_interpolated_from_project_name() -> None:
+    """G-01: every container_name must move with COMPOSE_PROJECT_NAME, not
+    just the ones someone remembered to update."""
+    services = _services()
+    bad = {
+        name: spec['container_name']
+        for name, spec in services.items()
+        if spec.get('container_name')
+        and '${COMPOSE_PROJECT_NAME' not in str(spec['container_name'])
+    }
+    assert not bad, f'container_name values not interpolated from COMPOSE_PROJECT_NAME: {bad}'
+
+
+def test_no_hardcoded_published_host_ports() -> None:
+    """G-03: every published host port must come from an env var (with a
+    default matching today's value), not a bare literal -- otherwise
+    env.template's port vars are decorative and a second stack on the same
+    host collides on first `up`."""
+    services = _services()
+    bad: list[str] = []
+    for name, spec in services.items():
+        for entry in spec.get('ports') or []:
+            if isinstance(entry, dict):
+                published = entry.get('published')
+                if published is not None and '${' not in str(published):
+                    bad.append(f'{name}: {entry!r}')
+                continue
+            text = str(entry)
+            host_part = text.split(':')[0] if ':' in text else text
+            if host_part and '${' not in host_part:
+                bad.append(f'{name}: {text!r}')
+    assert not bad, 'published host ports not driven by an env var:\n' + '\n'.join(bad)
+
+
+def test_source_root_mounted_at_the_same_path_on_api_and_detection_worker() -> None:
+    """G-06: ingest resolves item paths against OP_SOURCE_ROOT on yolo-api;
+    the detection worker re-reads the same items later. Without the same
+    bind on both, every worker read fails with
+    detection_failed/reason=image_unavailable."""
+    services = _services()
+    target = '/data/source'
+    for name in ('yolo-api', 'curation-detection-worker'):
+        mounts = [str(v) for v in (services[name].get('volumes') or [])]
+        matching = [m for m in mounts if m.endswith((f':{target}:ro', f':{target}'))]
+        assert matching, f'{name} has no source-root mount at {target}: {mounts}'
+
+
+def test_examples_mounted_on_api_and_detection_worker() -> None:
+    """G-08: OP_REGION_PROFILE_PATH's worked example
+    (examples/region_profiles/license_plate.json) only resolves inside the
+    container if ./examples is actually mounted."""
+    services = _services()
+    target = '/app/examples'
+    for name in ('yolo-api', 'curation-detection-worker'):
+        mounts = [str(v) for v in (services[name].get('volumes') or [])]
+        assert any(m.endswith(f':{target}:ro') for m in mounts), (
+            f'{name} has no ./examples mount at {target}: {mounts}'
+        )
+
+
+def test_pe_image_encoder_in_default_triton_load_list() -> None:
+    """G-07: docs/CURATION.md calls pe_image_encoder required, not
+    optional -- it must be in the default --load-model list, not left for
+    every deployment to add by hand."""
+    command = _services()['triton-server'].get('command') or []
+    assert '--load-model=pe_image_encoder' in [str(c) for c in command]
+
+
+def test_vlm_service_is_opt_in_with_a_pinned_image() -> None:
+    """G-10: the in-compose VLM must not start on a bare `docker compose
+    up` (profiles: [vlm]) and must not float on `:latest` (an untested
+    vLLM bump can silently change chat-template/tool-call-parser
+    behavior)."""
+    services = _services()
+    assert 'vlm' in services, 'expected an optional `vlm` service in docker-compose.yml'
+    vlm = services['vlm']
+    assert 'vlm' in (vlm.get('profiles') or []), 'vlm service must carry profiles: [vlm]'
+    image = str(vlm.get('image', ''))
+    assert ':latest' not in image, f'vlm service image must be pinned, not :latest: {image!r}'
+
+
+def test_yolo_api_carries_op_api_network_alias() -> None:
+    """G-28: Cropwright's default API_UPSTREAM is http://op-api:8000; this
+    alias lets that default resolve without every deployer overriding it."""
+    networks = _services()['yolo-api'].get('networks')
+    assert isinstance(networks, dict), 'expected yolo-api networks: to carry aliases (dict form)'
+    aliases = (networks.get('triton_net') or {}).get('aliases') or []
+    assert 'op-api' in aliases, f'expected op-api in yolo-api triton_net aliases: {aliases}'
+
+
+def test_gpu_arbiter_overlay_exists_and_mounts_docker_socket() -> None:
+    """G-15: the docker socket must be opt-in (a separate overlay file),
+    never a default mount on yolo-api."""
+    overlay_path = REPO_ROOT / 'docker-compose.gpu-arbiter.yml'
+    assert overlay_path.is_file(), 'expected docker-compose.gpu-arbiter.yml overlay'
+    with overlay_path.open() as fh:
+        overlay = yaml.safe_load(fh)
+    mounts = [str(v) for v in (overlay['services']['yolo-api'].get('volumes') or [])]
+    assert any('/var/run/docker.sock' in m for m in mounts), mounts
+    # And the base compose must NOT already mount it (defeats the point of
+    # an opt-in overlay).
+    base_mounts = [str(v) for v in (_services()['yolo-api'].get('volumes') or [])]
+    assert not any('docker.sock' in m for m in base_mounts), base_mounts

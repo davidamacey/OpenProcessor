@@ -31,8 +31,10 @@ Usage
     .venv/bin/python scripts/curation/vlm_worker.py --batch-size 32 --concurrency 4
     .venv/bin/python scripts/curation/vlm_worker.py --until-empty   # one drain pass
 
-Or via the Make target:
-    make curation-vlm-worker
+Or as the long-lived compose service (G-10: there is no
+``make curation-vlm-worker`` target -- use one of these instead):
+    docker compose --profile curation up -d curation-vlm-worker
+    docker compose exec yolo-api python scripts/curation/vlm_worker.py --until-empty
 """
 
 from __future__ import annotations

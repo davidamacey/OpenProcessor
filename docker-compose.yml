@@ -1,4 +1,10 @@
-name: openprocessor
+# G-01: no fixed project name. Compose falls back to `openprocessor`
+# (via COMPOSE_PROJECT_NAME's default below) only when neither -p nor
+# COMPOSE_PROJECT_NAME nor .env's COMPOSE_PROJECT_NAME is set, which
+# keeps an existing single-stack user's behavior unchanged. A second
+# isolated stack on the same host sets COMPOSE_PROJECT_NAME (or -p) to
+# get its own project name, container names, network and volumes.
+name: ${COMPOSE_PROJECT_NAME:-openprocessor}
 
 services:
   triton-server:
@@ -6,12 +12,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.triton
-    container_name: triton-server
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-triton
     restart: always
     ports:
-      - 4600:8000  # HTTP
-      - 4601:8001  # gRPC
-      - 4602:8002  # Metrics
+      - "${TRITON_HTTP_PORT:-4600}:8000"  # HTTP
+      - "${TRITON_GRPC_PORT:-4601}:8001"  # gRPC
+      - "${TRITON_METRICS_PORT:-4602}:8002"  # Metrics
     volumes:
       - ./models:/models
     command:
@@ -31,6 +37,10 @@ services:
       - --load-model=paddleocr_det_trt
       - --load-model=paddleocr_rec_trt
       - --load-model=ocr_pipeline
+      # G-07: pe_image_encoder backs curation semantic search and the
+      # near-dup/uniqueness item scorers -- CURATION.md calls it required,
+      # not optional, so it belongs in the default load list.
+      - --load-model=pe_image_encoder
       # ===================================================================
       - --log-verbose=1
       - --log-info=true
@@ -51,7 +61,7 @@ services:
 
   yolo-api:
     image: davidamacey/openprocessor:latest
-    container_name: yolo-api
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-api
     restart: always
     build:
       context: .
@@ -93,6 +103,14 @@ services:
       # curation-vlm-worker doesn't need it -- it reads crops through the
       # API's /vlm/label_batch.
       - openprocessor-crop-cache:/var/cache/openprocessor/crops
+      # G-06: source image root for curation ingest (OP_SOURCE_ROOT below).
+      # Must be mounted at the SAME container path in curation-detection-worker
+      # -- the worker resolves item paths against the same root the API used
+      # at ingest time. See docs/CURATION.md "Mounting your image source".
+      - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+      # G-08: worked-example region profiles / bake-off baselines
+      # (OP_REGION_PROFILE_PATH=/app/examples/region_profiles/license_plate.json).
+      - ./examples:/app/examples:ro
     environment:
       # Triton gRPC endpoint (Docker service name)
       - TRITON_URL=triton-server:8001
@@ -105,6 +123,15 @@ services:
       # builds its prefix at *module import*, so this must be set before
       # src.main is imported; it cannot change at container runtime.
       - OP_API_PREFIX=${OP_API_PREFIX:-/curation}
+      # G-06: in-container path the API resolves source-relative item
+      # paths against. Must match the bind target above.
+      - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
+    # G-10: on Linux, host.docker.internal only resolves with this mapping
+    # (Docker Desktop adds it automatically; the Linux engine does not).
+    # Needed for the "point OP_VLM_URL at a VLM running on the host" example
+    # in docs/CURATION.md.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     shm_size: 8g
     stdin_open: true # Keep stdin open
     tty: true # Allocate a pseudo-TTY
@@ -138,7 +165,7 @@ services:
       - --access-log
       - --log-level=info
     ports:
-      - 4603:8000  # FastAPI
+      - "${API_PORT:-4603}:8000"  # FastAPI
     ulimits:
       memlock: -1
       stack: 67108864
@@ -162,7 +189,14 @@ services:
     depends_on:
       - triton-server
     networks:
-      - triton_net
+      # G-28: Cropwright's default API_UPSTREAM is http://op-api:8000. The
+      # public compose's service is named yolo-api; this alias lets
+      # Cropwright's out-of-the-box default resolve without every deployer
+      # having to override API_UPSTREAM. See docs/CURATION.md "Wiring up
+      # Cropwright".
+      triton_net:
+        aliases:
+          - op-api
 
   # ===================================================================
   # Curation subsystem — EXPERIMENTAL, opt-in via `--profile curation`
@@ -180,7 +214,7 @@ services:
 
   curation-detection-worker:
     image: davidamacey/openprocessor:latest
-    container_name: curation-detection-worker
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-detection-worker
     build:
       context: .
       dockerfile: Dockerfile
@@ -198,10 +232,17 @@ services:
       - openprocessor-state:/var/lib/openprocessor
       # ST-1: shared with yolo-api -- see that service's mount comment.
       - openprocessor-crop-cache:/var/cache/openprocessor/crops
+      # G-06: same source root, same container path, as yolo-api -- the
+      # worker resolves item source paths written at ingest time against
+      # this mount. See docs/CURATION.md "Mounting your image source".
+      - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+      # G-08: region profile examples (OP_REGION_PROFILE_PATH).
+      - ./examples:/app/examples:ro
     environment:
       - TRITON_URL=triton-server:8001
       - OPENSEARCH_URL=http://opensearch:9200
       - OP_CROP_CACHE_DIR=/var/cache/openprocessor/crops
+      - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
       # D5: the segmenter leg is opt-in. Empty OP_SEGMENTER_URL makes it a
       # documented no-op (see scripts/curation/worker/client.py
       # SegmenterClient). Set OP_SEGMENTER_URL=http://segmenter:8000 to use the
@@ -239,7 +280,7 @@ services:
 
   curation-vlm-worker:
     image: davidamacey/openprocessor:latest
-    container_name: curation-vlm-worker
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-vlm-worker
     build:
       context: .
       dockerfile: Dockerfile
@@ -258,6 +299,10 @@ services:
     environment:
       - OP_API=http://yolo-api:8000
       - OPENSEARCH_URL=http://opensearch:9200
+    # G-10: matches yolo-api's extra_hosts -- lets OP_VLM_URL point at
+    # http://host.docker.internal:PORT/v1 for an external VLM on Linux.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       - python
       - -m
@@ -279,7 +324,7 @@ services:
 
   curation-auto-label-worker:
     image: davidamacey/openprocessor:latest
-    container_name: curation-auto-label-worker
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-auto-label-worker
     build:
       context: .
       dockerfile: Dockerfile
@@ -324,7 +369,7 @@ services:
 
   curation-cluster-refresh:
     image: davidamacey/openprocessor:latest
-    container_name: curation-cluster-refresh
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-cluster-refresh
     build:
       context: .
       dockerfile: Dockerfile
@@ -366,7 +411,7 @@ services:
   # `docker compose --profile curation run --rm curation-evaluator`.
   curation-evaluator:
     image: davidamacey/openprocessor-evaluator:latest
-    container_name: curation-evaluator
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-evaluator
     build:
       context: .
       dockerfile: docker/evaluator/Dockerfile
@@ -405,7 +450,7 @@ services:
   #     docker compose --profile curation --profile segmenter up -d
   segmenter:
     image: davidamacey/openprocessor-segmenter:latest
-    container_name: openprocessor-segmenter
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-segmenter
     build:
       context: docker/segmenter
       dockerfile: Dockerfile
@@ -416,7 +461,7 @@ services:
       - path: ./.env
         required: false
     ports:
-      - 4611:8000  # Segmentation HTTP API
+      - "${SEGMENTER_PORT:-4611}:8000"  # Segmentation HTTP API
     volumes:
       - ./cache/huggingface:/home/appuser/.cache/huggingface  # ST-2: nvme-backed HF cache (appuser, matches yolo-api)
     environment:
@@ -467,7 +512,7 @@ services:
 
   curation-trainer:
     image: davidamacey/openprocessor-trainer:latest
-    container_name: curation-trainer
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-trainer
     build:
       context: .
       dockerfile: docker/trainer/Dockerfile
@@ -496,10 +541,10 @@ services:
     environment:
       - OP_TRAIN_JOBS_DIR=/jobs
       - OP_TRAIN_RUNS_ROOT=/var/lib/openprocessor/training_runs
-      # MUST match `device_ids` below, in the same order: the job spec names
-      # HOST gpu ids, which appear inside the container as positional local
-      # indices. See docker/trainer/trainer.py::resolve_local_device.
-      - OP_TRAIN_GPU_ORDER=0
+      # G-14: MUST match `device_ids` below, in the same order: the job spec
+      # names HOST gpu ids, which appear inside the container as positional
+      # local indices. See docker/trainer/trainer.py::resolve_local_device.
+      - OP_TRAIN_GPU_ORDER=${OP_TRAIN_GPU_ORDER:-0}
       - OP_API_BASE_URL=http://yolo-api:8000
       - OP_API_PREFIX=${OP_API_PREFIX:-/curation}
       - OP_TRITON_HTTP_URL=http://triton-server:8000
@@ -512,7 +557,13 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: [ '0' ]
+              # G-14: single-GPU default, interpolated from the same var as
+              # OP_TRAIN_GPU_ORDER above. Compose can't cleanly expand a
+              # comma-separated OP_TRAIN_GPU_ORDER (e.g. "0,2") into
+              # multiple device_ids list entries from one scalar var --
+              # a multi-GPU deployment sets both in a docker-compose
+              # override file (device_ids: ['0', '2']) instead.
+              device_ids: [ '${OP_TRAIN_GPU_ORDER:-0}' ]
               capabilities:
                 - gpu
     depends_on:
@@ -525,7 +576,7 @@ services:
   # unreachable, so a deployment that doesn't want it can leave it stopped.
   curation-mlflow:
     image: ghcr.io/mlflow/mlflow:v2.19.0
-    container_name: curation-mlflow
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-mlflow
     profiles:
       - training
     restart: unless-stopped
@@ -549,7 +600,7 @@ services:
     volumes:
       - mlflow_data:/mlflow
     ports:
-      - 4609:5000
+      - "${MLFLOW_PORT:-4609}:5000"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\" || exit 1"]
       interval: 30s
@@ -559,9 +610,76 @@ services:
     networks:
       - triton_net
 
+  # G-10: optional in-compose VLM (Gemma 4 E4B) for the labeling/verify
+  # legs (OP_VLM_URL). Off by default -- most deployments either have no
+  # VLM yet or already run one elsewhere (set OP_VLM_URL to point at it;
+  # see the host.docker.internal extra_hosts on yolo-api /
+  # curation-vlm-worker for "VLM runs on the host, not in this compose
+  # project"). Enable with `docker compose --profile vlm up -d vlm` and
+  # set OP_VLM_URL=http://vlm:8000/v1 in .env.
+  #
+  # `--limit-mm-per-prompt` (images per request the *server* accepts) and
+  # OP_VLM_MAX_IMAGES_PER_CALL (images per request the *API/workers send*,
+  # see env.template) are two ends of the same contract -- a client value
+  # above the server's limit gets a 400 on every call. Keep them equal;
+  # VLM_LIMIT_MM_IMAGES below defaults to the same 8 as
+  # OP_VLM_MAX_IMAGES_PER_CALL's default.
+  vlm:
+    # Pin, don't float on :latest -- an untested vLLM bump can silently
+    # change chat-template / tool-call-parser behavior. Confirm this tag
+    # supports Gemma 4's multimodal (image) input for your GPU/CUDA combo
+    # before relying on it; see vLLM's release notes.
+    image: ${VLM_IMAGE:-vllm/vllm-openai:v0.11.0}
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-vlm
+    profiles:
+      - vlm
+    restart: unless-stopped
+    ipc: host
+    shm_size: 8g
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    ports:
+      - "${VLM_PORT:-4612}:8000"
+    volumes:
+      - ./cache/vllm:/root/.cache/huggingface
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+    command:
+      - --model=${VLM_MODEL:-google/gemma-4-E4B-it}
+      - --served-model-name=${VLM_SERVED_MODEL_NAME:-gemma-4-e4b}
+      - --dtype=${VLM_DTYPE:-bfloat16}
+      - --max-model-len=${VLM_MAX_MODEL_LEN:-8192}
+      # Fraction of this GPU's VRAM vLLM may claim. Lower it to share the
+      # GPU with Triton/the segmenter/training; see docs/CURATION.md
+      # "VLM VRAM budget" for worked numbers per card size.
+      - --gpu-memory-utilization=${VLM_GPU_MEMORY_UTILIZATION:-0.4}
+      # See the module comment above: keep this equal to
+      # OP_VLM_MAX_IMAGES_PER_CALL.
+      - --limit-mm-per-prompt={"image":${VLM_LIMIT_MM_IMAGES:-8},"audio":0}
+      - --chat-template=/vllm-workspace/examples/tool_chat_template_gemma4.jinja
+      - --reasoning-parser=gemma4
+      - --enable-prefix-caching
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 600s
+      retries: 5
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '${VLM_GPU_ID:-0}' ]
+              capabilities:
+                - gpu
+    networks:
+      - triton_net
+
   triton-sdk:
     image: nvcr.io/nvidia/tritonserver:26.06-py3-sdk
-    container_name: triton-sdk
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-sdk
     profiles:
       - benchmark
     command: sleep infinity
@@ -573,7 +691,7 @@ services:
 
   node-exporter:
     image: prom/node-exporter:v1.10.2
-    container_name: triton-node-exporter
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-node-exporter
     restart: always
     command:
       - '--path.rootfs=/host'
@@ -587,14 +705,14 @@ services:
   # host GPUs (not just Triton's). Read-only; does not reserve compute.
   dcgm-exporter:
     image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04
-    container_name: triton-dcgm-exporter
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-dcgm
     restart: always
     cap_add:
       - SYS_ADMIN
     environment:
       - DCGM_EXPORTER_LISTEN=:9400
     ports:
-      - 4610:9400  # DCGM GPU metrics
+      - "${DCGM_PORT:-4610}:9400"  # DCGM GPU metrics
     deploy:
       resources:
         reservations:
@@ -607,10 +725,10 @@ services:
 
   prometheus:
     image: prom/prometheus:v3.12.0
-    container_name: triton-prometheus
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-prometheus
     restart: always
     ports:
-      - 4604:9090  # Prometheus
+      - "${PROMETHEUS_PORT:-4604}:9090"  # Prometheus
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./monitoring/alerts:/etc/prometheus/alerts
@@ -628,10 +746,10 @@ services:
 
   grafana:
     image: grafana/grafana:13.1.0
-    container_name: triton-grafana
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-grafana
     restart: always
     ports:
-      - 4605:3000  # Grafana
+      - "${GRAFANA_PORT:-4605}:3000"  # Grafana
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
@@ -656,10 +774,10 @@ services:
     # root-owned loki_data volumes need a one-time chown — see
     # docs/MIGRATION_TRITON_26.md.
     image: grafana/loki:3.6.12
-    container_name: triton-loki
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-loki
     restart: always
     ports:
-      - 4606:3100  # Loki
+      - "${LOKI_PORT:-4606}:3100"  # Loki
     volumes:
       - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml
       - loki_data:/loki
@@ -670,7 +788,7 @@ services:
 # Log shipper: Grafana Alloy (Promtail reached EOL 2026-03-02).
   alloy:
     image: grafana/alloy:v1.17.1
-    container_name: triton-alloy
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-alloy
     restart: always
     volumes:
       - ./monitoring/alloy-config.alloy:/etc/alloy/config.alloy:ro
@@ -691,7 +809,7 @@ services:
   # ===================================================================
   opensearch:
     image: opensearchproject/opensearch:3.6.0
-    container_name: triton-opensearch
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-opensearch
     restart: always
     environment:
       - discovery.type=single-node
@@ -708,7 +826,7 @@ services:
     volumes:
       - opensearch_data:/usr/share/opensearch/data
     ports:
-      - 4607:9200  # REST API
+      - "${OPENSEARCH_PORT:-4607}:9200"  # REST API
     healthcheck:
       test: ["CMD-SHELL", "curl -sS http://localhost:9200 || exit 1"]
       interval: 5s
@@ -719,13 +837,13 @@ services:
 
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:3.6.0
-    container_name: triton-opensearch-dashboards
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-osd
     restart: always
     environment:
       - OPENSEARCH_HOSTS=["http://opensearch:9200"]
       - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true  # Must match OpenSearch security setting
     ports:
-      - 4608:5601  # OpenSearch Dashboards
+      - "${OPENSEARCH_DASHBOARDS_PORT:-4608}:5601"  # OpenSearch Dashboards
     volumes:
       - opensearch_dashboards_data:/usr/share/opensearch-dashboards/data
     healthcheck:

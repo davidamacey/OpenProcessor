@@ -38,6 +38,11 @@ declare -gA EXPORT_TIMES=(
     ["mobileclip2_s2_text_encoder"]="5"
     ["paddleocr_det_trt"]="10"
     ["paddleocr_rec_trt"]="15"
+    # G-07: pe_image_encoder is now in docker-compose.yml's default
+    # --load-model list (required, not curation-only -- see
+    # docs/CURATION.md "Models you must supply"), so it must be built
+    # before Triton's first start, same as every other model above.
+    ["pe_image_encoder"]="12"
 )
 
 # =============================================================================
@@ -52,7 +57,10 @@ run_in_api_container() {
 }
 
 check_triton_container() {
-    if ! docker ps --format '{{.Names}}' | grep -q "^triton-server$"; then
+    # G-03: check by compose SERVICE state, not a hardcoded container
+    # name -- container_name is now ${COMPOSE_PROJECT_NAME}-triton, which
+    # differs on a second isolated stack (or any COMPOSE_PROJECT_NAME).
+    if [[ -z "$(docker compose ps --status running --services triton-server 2>/dev/null)" ]]; then
         log_error "triton-server container not running"
         log_info "Start with: docker compose up -d triton-server"
         return 1
@@ -79,8 +87,12 @@ unload_models_for_export() {
         "ocr_pipeline"
     )
 
+    # G-03: read the port THIS deployment's .env/shell actually set, not
+    # the hardcoded default -- a remapped TRITON_HTTP_PORT must still hit
+    # the right Triton.
+    local triton_http_port="${TRITON_HTTP_PORT:-4600}"
     for model in "${models_to_unload[@]}"; do
-        curl -s -X POST "localhost:4600/v2/repository/models/${model}/unload" > /dev/null 2>&1 || true
+        curl -s -X POST "localhost:${triton_http_port}/v2/repository/models/${model}/unload" > /dev/null 2>&1 || true
     done
 
     sleep 3
@@ -303,6 +315,62 @@ export_paddleocr() {
     return 1
 }
 
+# G-07: PE-Core-L14-336 image encoder. Required (not curation-only) --
+# docker-compose.yml's default --load-model list includes
+# pe_image_encoder, and Triton's explicit model-control-mode exits at
+# startup if any listed model fails to load. So this must run in the
+# same automated flow as every other model above, not be left to a
+# separate `make export-pe` a core-install user would never know to run.
+export_pe() {
+    local plan_path="$MODELS_DIR/pe_image_encoder/1/model.plan"
+    local onnx_path="$PYTORCH_MODELS_DIR/pe_image_encoder.onnx"
+
+    log_step "Exporting PE-Core image encoder (pe_image_encoder)..."
+    log_info "  Estimated time: ~${EXPORT_TIMES[pe_image_encoder]} minutes"
+
+    mkdir -p "$MODELS_DIR/pe_image_encoder/1"
+
+    if ! run_in_api_container python /app/export/download_pe_weights.py 2>&1 | tee /tmp/export_pe_download.log; then
+        log_error "PE-Core weight download failed"
+        log_info "Check log: /tmp/export_pe_download.log"
+        return 1
+    fi
+
+    if ! run_in_api_container python /app/export/export_pe_image_encoder.py 2>&1 | tee /tmp/export_pe_image.log; then
+        log_error "PE-Core image tower ONNX export failed"
+        log_info "Check log: /tmp/export_pe_image.log"
+        return 1
+    fi
+
+    # Path 1: TensorRT. Known to fail on some TRT builds (attention-pool
+    # ops) -- fall back to Path 2 (ONNX Runtime via Triton) rather than
+    # failing the whole export, matching `make export-pe`'s own note.
+    if ONNX_PATH="$onnx_path" bash "$PROJECT_DIR/export/build_pe_trt.sh" 2>&1 | tee /tmp/export_pe_trt.log \
+        && [[ -f "$plan_path" ]] && [[ -s "$plan_path" ]]; then
+        log_success "PE-Core image encoder exported (TensorRT)"
+    else
+        log_warn "PE-Core TensorRT build failed or produced no plan -- falling back to ONNX Runtime"
+        if ! ONNX_PATH="$onnx_path" bash "$PROJECT_DIR/export/build_pe_ort_fallback.sh" 2>&1 | tee /tmp/export_pe_ort.log; then
+            log_error "PE-Core export failed (both TensorRT and ONNX Runtime paths)"
+            log_info "Check logs: /tmp/export_pe_trt.log, /tmp/export_pe_ort.log"
+            return 1
+        fi
+        log_success "PE-Core image encoder exported (ONNX Runtime fallback)"
+    fi
+
+    # Text tower: runs in-process (ONNX Runtime), not on Triton -- no
+    # --load-model entry needed, so a failure here is a warning, not a
+    # hard failure of the whole export step (semantic-search TEXT
+    # queries degrade to PyTorch eager; embeddings/near-dup/clustering,
+    # which only need the image tower above, are unaffected).
+    if ! run_in_api_container python /app/export/export_pe_text_encoder.py 2>&1 | tee /tmp/export_pe_text.log; then
+        log_warn "PE-Core text tower export failed -- semantic-search text queries will fall back to PyTorch eager"
+        log_info "Check log: /tmp/export_pe_text.log"
+    fi
+
+    return 0
+}
+
 # =============================================================================
 # Batch Export Functions
 # =============================================================================
@@ -320,7 +388,7 @@ export_all_models() {
     unload_models_for_export
 
     local failed=0
-    local total=6
+    local total=7
     local export_start step_start elapsed
     export_start=$SECONDS
 
@@ -405,6 +473,19 @@ export_all_models() {
     fi
     elapsed=$((SECONDS - step_start))
     model_names+=("PaddleOCR (det + rec)")
+    model_times+=("$elapsed")
+    log_info "  Elapsed: $(format_elapsed $elapsed)"
+
+    log_step "Exporting model 7/$total: PE-Core image encoder"
+    step_start=$SECONDS
+    if export_pe; then
+        model_status+=("OK")
+    else
+        failed=$((failed + 1))
+        model_status+=("FAIL")
+    fi
+    elapsed=$((SECONDS - step_start))
+    model_names+=("PE-Core image encoder")
     model_times+=("$elapsed")
     log_info "  Elapsed: $(format_elapsed $elapsed)"
 

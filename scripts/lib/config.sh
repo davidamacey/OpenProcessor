@@ -664,11 +664,23 @@ generate_all_configs() {
 # =============================================================================
 
 # Generate .env file from template
+#
+# G-04: NEVER overwrites an existing .env unless the caller opts in with
+# force=true (setup.sh's --force) -- a shared host may already have a
+# hand-edited .env (remapped ports, a second isolated stack's
+# COMPOSE_PROJECT_NAME, a real HF_TOKEN); silently regenerating it here
+# would blow that away on a routine re-run.
 generate_env_file() {
     local profile="${1:-standard}"
     local gpu_id="${2:-0}"
+    local force="${3:-false}"
 
     local env_file="$PROJECT_DIR/.env"
+
+    if [[ -f "$env_file" && "$force" != "true" ]]; then
+        log_info ".env already exists -- leaving it untouched (pass --force to regenerate)"
+        return 0
+    fi
 
     # Load profile
     load_profile "$profile" || return 1
@@ -694,11 +706,12 @@ SHM_SIZE=$PROFILE_SHM_SIZE
 # OpenSearch vector database
 OPENSEARCH_HEAP=$PROFILE_HEAP
 
-# Ports (change if conflicts with other services)
+# Ports (change if these conflict with something else on your host, or
+# to run a second isolated stack -- see env.template's "Isolation" section)
 API_PORT=4603
-TRITON_HTTP=4600
-TRITON_GRPC=4601
-TRITON_METRICS=4602
+TRITON_HTTP_PORT=4600
+TRITON_GRPC_PORT=4601
+TRITON_METRICS_PORT=4602
 GRAFANA_PORT=4605
 OPENSEARCH_PORT=4607
 EOF
