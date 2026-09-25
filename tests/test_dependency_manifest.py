@@ -182,6 +182,11 @@ _ALLOWLIST = {
     # src/services/curation/autolabel/job.py falls back to polling
     # (_watch_state_file_poll) inside a try/except ImportError.
     'inotify_simple': 'optional inotify-based watch with a polling fallback on ImportError',
+    # perception_models (top-level `core`): its own requirements exact-pin
+    # timm==1.0.15, which conflicts with open-clip-torch>=3.2, so it is
+    # declared as pyproject's `pe` extra and installed --no-deps at a pinned
+    # commit by the Dockerfile (tests/test_requirements_contract.py).
+    'core': 'perception_models, installed --no-deps by the Dockerfile (pyproject `pe` extra)',
     # First-party, not a pip package: src/routers/curation/bakeoff.py lazily
     # imports the stdlib-only scripts.curation.bakeoff.profile inside its
     # handlers. The API image ships scripts/ (Dockerfile COPY) and the router
