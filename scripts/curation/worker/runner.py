@@ -30,6 +30,7 @@ from src.services.curation.metrics import (
     OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS,
     OP_STAGE_REGION_DETECTOR_DURATION_SECONDS,
 )
+from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.detection.cascade_detect import (
     PaddleOcrTextRecognizer,
     RegionDetector,
@@ -1495,6 +1496,13 @@ async def run(args: argparse.Namespace) -> int:
         stage_b_tasks = [asyncio.create_task(stage_b_combined(i)) for i in range(vlm_concurrency)]
         writer_task = asyncio.create_task(writer())
         metrics_task = asyncio.create_task(metrics_reporter())
+        heartbeat_task = asyncio.create_task(
+            heartbeat_loop(
+                'detection_worker',
+                lambda: {'producer': not prod_task.done(), 'writer': not writer_task.done()},
+                stop_event,
+            )
+        )
         # Phase 4c: stand up an aiohttp /metrics endpoint inside the
         # worker process so Prometheus can scrape the stage-timing
         # histograms (the worker is not an HTTP server otherwise).
@@ -1543,10 +1551,13 @@ async def run(args: argparse.Namespace) -> int:
         # Now tell writer to flush + exit.
         await out_q.put(None)
         await writer_task
-        # Stop the metrics task.
+        # Stop the metrics + heartbeat tasks.
         metrics_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await metrics_task
+        heartbeat_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await heartbeat_task
         # Shut the /metrics HTTP server down cleanly.
         with contextlib.suppress(Exception):
             await metrics_server_runner.cleanup()

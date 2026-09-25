@@ -202,3 +202,66 @@ def test_evaluator_sees_exports_at_the_api_path() -> None:
     evaluator_mounts = services['curation-evaluator'].get('volumes') or []
     assert any(str(v).startswith('./data:/app/data') for v in api_mounts)
     assert './data:/app/data:ro' in evaluator_mounts
+
+
+# =============================================================================
+# S-2 — heartbeat-based worker healthchecks (worker_liveness.py) replace
+# `pgrep -f <module>`, which can't see a deadlocked-but-alive event loop.
+# =============================================================================
+
+# name passed to `python -m src.services.curation.worker_liveness check <name>`
+# for each service, matching the names each worker's heartbeat_loop()/
+# write_heartbeat() call uses.
+_WORKER_LIVENESS_NAMES = {
+    'curation-detection-worker': 'detection_worker',
+    'curation-vlm-worker': 'vlm_worker',
+    'curation-auto-label-worker': 'auto_label_worker',
+    'curation-cluster-refresh': 'cluster_refresh',
+}
+
+
+def test_curation_worker_healthchecks_use_liveness() -> None:
+    services = _services()
+    bad: list[str] = []
+    for name, liveness_name in _WORKER_LIVENESS_NAMES.items():
+        assert name in services, f'expected service {name!r} in docker-compose.yml'
+        test = (services[name].get('healthcheck') or {}).get('test')
+        test_str = ' '.join(test) if isinstance(test, list) else str(test or '')
+        if 'worker_liveness' not in test_str or liveness_name not in test_str:
+            bad.append(f'{name}: {test_str!r}')
+    assert not bad, 'expected worker_liveness-based healthchecks:\n' + '\n'.join(bad)
+
+
+# Workers whose depends_on already names yolo-api directly (main compose
+# doesn't have every curation worker depend on yolo-api — e.g.
+# curation-detection-worker depends on triton-server/opensearch, and
+# curation-auto-label-worker only on opensearch, both by design, since
+# they're triggered via files, not a direct HTTP call at startup).
+_WORKERS_DEPENDING_ON_API = ('curation-vlm-worker', 'curation-cluster-refresh')
+
+
+def test_curation_workers_depend_on_healthy_api() -> None:
+    """S-7: workers that depend on `yolo-api` wait for it to report healthy,
+    not merely started."""
+    services = _services()
+    bad: list[str] = []
+    for name in _WORKERS_DEPENDING_ON_API:
+        depends_on = services[name].get('depends_on')
+        if not isinstance(depends_on, dict) or 'yolo-api' not in depends_on:
+            bad.append(name)
+            continue
+        condition = (depends_on.get('yolo-api') or {}).get('condition')
+        if condition != 'service_healthy':
+            bad.append(name)
+    assert not bad, f'expected depends_on.yolo-api.condition == service_healthy: {bad}'
+
+
+def test_yolo_api_has_a_healthcheck() -> None:
+    """A `service_healthy` dependency on yolo-api is meaningless without one."""
+    services = _services()
+    assert services['yolo-api'].get('healthcheck'), 'yolo-api needs a healthcheck'
+
+
+def test_curation_mlflow_has_a_healthcheck() -> None:
+    services = _services()
+    assert services['curation-mlflow'].get('healthcheck'), 'curation-mlflow needs a healthcheck'
