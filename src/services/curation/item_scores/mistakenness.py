@@ -136,6 +136,7 @@ class MistakennessScorer:
                 'probe_pred_class',
                 'probe_pred_confidence',
                 'probe_pred_margin',
+                'probe_disagreement',
             ],
         )
 
@@ -143,6 +144,7 @@ class MistakennessScorer:
         agrees: list[bool] = []
         confs: list[float] = []
         margins: list[float] = []
+        out_of_scope = 0
         for crop_id in ids:
             doc = docs.get(crop_id)
             if not doc:
@@ -153,6 +155,11 @@ class MistakennessScorer:
             margin = src.get('probe_pred_margin')
             if pred_class is None or conf is None or margin is None:
                 continue  # not yet probe-scored — skip, not zero (absence != agreement)
+            if 'probe_disagreement' in src and src['probe_disagreement'] is None:
+                # The probe cannot predict this item's class, so it has no
+                # evidence about the label either way.
+                out_of_scope += 1
+                continue
             scored_ids.append(crop_id)
             agrees.append(pred_class == src.get('class_name'))
             confs.append(float(conf))
@@ -182,7 +189,10 @@ class MistakennessScorer:
             scored_at=now,
             fields=fields,
             n_scored=len(fields),
-            extra={'n_skipped_unscored_by_probe': len(ids) - len(scored_ids)},
+            extra={
+                'n_skipped_unscored_by_probe': len(ids) - len(scored_ids) - out_of_scope,
+                'n_skipped_outside_probe_classes': out_of_scope,
+            },
         )
 
 

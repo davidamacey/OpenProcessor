@@ -117,3 +117,54 @@ def test_margin_approximation_defensive_against_bad_confidence() -> None:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+@pytest.mark.asyncio
+async def test_scorer_skips_items_outside_the_probe_classes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An item whose stored class the probe cannot predict (null
+    ``probe_disagreement``) gets no mistakenness score, not a high one."""
+    from src.clients import curation_opensearch
+    from src.services.curation.item_scores.mistakenness import MistakennessScorer
+
+    docs = {
+        'in': {
+            '_source': {
+                'class_name': 'suv',
+                'probe_pred_class': 'sedan',
+                'probe_pred_confidence': 0.8,
+                'probe_pred_margin': 0.6,
+                'probe_disagreement': True,
+            }
+        },
+        'out': {
+            '_source': {
+                'class_name': 'bus',
+                'probe_pred_class': 'sedan',
+                'probe_pred_confidence': 0.8,
+                'probe_pred_margin': 0.6,
+                'probe_disagreement': None,
+            }
+        },
+        'legacy': {
+            '_source': {
+                'class_name': 'suv',
+                'probe_pred_class': 'sedan',
+                'probe_pred_confidence': 0.8,
+                'probe_pred_margin': 0.6,
+            }
+        },
+    }
+
+    async def fake_mget(_opensearch: object, ids: list[str], **_kwargs: object) -> dict:
+        return {i: docs[i] for i in ids}
+
+    monkeypatch.setattr(curation_opensearch, 'mget_crops', fake_mget)
+
+    result = await MistakennessScorer().score(
+        ['in', 'out', 'legacy'], np.zeros((3, 1), dtype=np.float32), opensearch=object()
+    )
+
+    assert set(result.fields) == {'in', 'legacy'}
+    assert result.fields['in']['mistakenness_score'] == pytest.approx(0.6)
