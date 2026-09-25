@@ -1056,6 +1056,30 @@ def export_trt_end2end(config: dict[str, Any]) -> dict[str, Any]:
 # ============================================================================
 
 
+def resolve_export_formats(formats: list[str], triton_name: str) -> list[str]:
+    """Add ``onnx_end2end`` to ``formats`` when it's a missing dependency
+    of a requested ``trt_end2end``.
+
+    ``export_trt_end2end`` compiles the TensorRT engine from
+    ``/app/models/{triton_name}_end2end/1/model.onnx``, which only
+    ``onnx_end2end`` (or ``all``) produces. On a fresh clone, ``make
+    export-models`` (and every other Make target that passes ``trt
+    trt_end2end`` without ``onnx_end2end``) used to hit
+    ``export_trt_end2end``'s "Run with --formats onnx_end2end first!"
+    error every time, because nothing had built that ONNX yet.
+
+    Leaves ``formats`` untouched when ``onnx_end2end``/``all`` is already
+    requested, or when the ONNX from a prior run already exists on disk
+    (no redundant re-export of an unrelated, already-built artifact).
+    """
+    if 'all' in formats or 'onnx_end2end' in formats or 'trt_end2end' not in formats:
+        return list(formats)
+    onnx_end2end_path = Path(f'/app/models/{triton_name}_end2end/1/model.onnx')
+    if onnx_end2end_path.exists():
+        return list(formats)
+    return [*formats, 'onnx_end2end']
+
+
 def export_model(
     model_id: str,
     config: dict[str, Any],
@@ -1092,6 +1116,14 @@ def export_model(
             'status': 'error',
             'error': f'Model file not found: {pt_file}',
         }
+
+    resolved_formats = resolve_export_formats(formats, config['triton_name'])
+    if resolved_formats != list(formats):
+        logger.info(
+            f'--formats requested trt_end2end without onnx_end2end and no cached '
+            f'end2end ONNX was found; adding onnx_end2end to formats: {resolved_formats}'
+        )
+    formats = resolved_formats
 
     results = {
         'model': model_id,

@@ -9315,7 +9315,7 @@
     },
     "/curation/classes/{class_id}/restore": {
       "post": {
-        "description": "Undo ``POST /classes/{id}/deprecate``. ``404`` for an unknown id;\n``409`` if a non-deprecated class already uses this class's name\n(the registry's name-uniqueness rule, enforced the same way\n``rename_class`` enforces it).",
+        "description": "Undo ``POST /classes/{id}/deprecate``. ``404`` for an unknown id;\n``409`` if a non-deprecated class already uses this class's name\n(the registry's name-uniqueness rule, enforced the same way\n``rename_class`` enforces it).\n\nA class merged via ``POST /classes/merge`` (``merged_into`` set) is\nNOT restorable this way — its crops were already bulk-relabeled onto\nthe merge target, so flipping ``deprecated`` back to ``false`` would\nresurrect an empty class while the data stays on the target. ``409``\nwith a structured detail naming the merge target and pointing at the\nmanual-relabel path instead. A plainly deprecated class (no\n``merged_into``) restores as before.",
         "operationId": "restore_class_curation_classes__class_id__restore_post",
         "parameters": [
           {

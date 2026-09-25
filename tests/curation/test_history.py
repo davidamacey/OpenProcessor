@@ -50,6 +50,19 @@ class TestRecordClassHistory:
         assert entry['confidence'] == 0.91
         assert entry['writer'] == 'ingest'
         assert entry['at'] == '2026-05-15T00:00:00+00:00'
+        assert entry['class_validated'] is False
+
+    def test_appended_entry_records_pre_write_validation_state(self):
+        # Snapshotting a validated crop's history entry must carry
+        # class_validated=true, not just default to false.
+        src = {
+            'class_id': 47,
+            'class_name': 'pickup_truck',
+            'class_source': 'human',
+            'class_validated': True,
+        }
+        result = record_class_history(src, writer='class_merge')
+        assert result[-1]['class_validated'] is True
 
     def test_appends_to_existing_history(self):
         src = {
@@ -412,8 +425,9 @@ class _FakeMergeOS:
     the confirmed-labels index, a scroll over matching items, and the
     per-doc OCC get/update via occ_skip_on_conflict_bulk."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, source_validated: bool = False) -> None:
         self.update_calls: list[dict[str, Any]] = []
+        self._source_validated = source_validated
 
     async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
         return {'count': 0}
@@ -446,7 +460,7 @@ class _FakeMergeOS:
             'class_id': 3,
             'class_name': 'sedan',
             'class_source': 'item_model',
-            'class_validated': False,
+            'class_validated': self._source_validated,
             'test_holdout': False,
         }
         found = {d['_id']: source for d in body['docs']}
@@ -463,7 +477,9 @@ class _FakeMergeOS:
         return make_bulk_response(items)
 
 
-async def _run_class_merge_case(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+async def _run_class_merge_case(
+    monkeypatch: pytest.MonkeyPatch, *, source_validated: bool = False
+) -> list[dict[str, Any]]:
     from types import SimpleNamespace
 
     import src.routers.curation.classes as classes_mod
@@ -481,7 +497,7 @@ async def _run_class_merge_case(monkeypatch: pytest.MonkeyPatch) -> list[dict[st
     )
     monkeypatch.setattr(classes_mod, 'get_class_registry', lambda: fake_reg)
 
-    fake_os = _FakeMergeOS()
+    fake_os = _FakeMergeOS(source_validated=source_validated)
     result = await classes_mod.merge_class(ClassMergeRequest(source_id=3, target_id=6), fake_os)
     assert result['deprecated'] is True
     assert len(fake_os.update_calls) == 1
@@ -495,6 +511,22 @@ async def test_merge_class_appends_history(monkeypatch: pytest.MonkeyPatch) -> N
     assert history[-1]['writer'] == 'class_merge'
     assert history[-1]['class_id'] == 3
     assert history[-1]['class_source'] == 'item_model'
+
+
+@pytest.mark.asyncio
+async def test_merge_class_history_records_pre_merge_validation_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F-56: a human-validated crop merged into another class must have
+    its pre-merge validated=true state on record — not just the class it
+    came from — so an audit can tell it apart from a merely-suggested
+    label. class_validated on the doc itself gets cleared by the merge
+    (unrelated to what class_id_history remembers about the past)."""
+    history = await _run_class_merge_case(monkeypatch, source_validated=True)
+    assert history[-1]['class_validated'] is True
+
+    history_unvalidated = await _run_class_merge_case(monkeypatch, source_validated=False)
+    assert history_unvalidated[-1]['class_validated'] is False
 
 
 if __name__ == '__main__':

@@ -179,6 +179,50 @@ def test_restore_name_clash_is_409(client: TestClient, registry: ClassRegistry) 
 
 
 # =============================================================================
+# Restore on a merged class (F-56: class merge is one-way)
+# =============================================================================
+
+
+def test_restore_on_merged_class_is_409_with_structured_detail(
+    client: TestClient, registry: ClassRegistry
+) -> None:
+    """A class merged via ``POST /classes/merge`` has already had its
+    crops bulk-relabeled onto the target; restoring it directly would
+    resurrect an empty class while the data stays put. Refused with a
+    structured detail naming the merge target, distinct from the
+    plain-string detail a name clash produces."""
+    registry.merge_class(source_id=0, target_id=1)  # sedan -> suv
+    assert _entry(registry, 0).deprecated is True
+    assert _entry(registry, 0).merged_into == 1
+
+    resp = client.post('/curation/classes/0/restore')
+    assert resp.status_code == 409, resp.text
+    detail = resp.json()['detail']
+    assert detail['error'] == 'class_merged'
+    assert detail['class_id'] == 0
+    assert detail['merged_into'] == {'class_id': 1, 'class_name': 'suv'}
+    assert 'relabel' in detail['hint']
+    # Refusing to restore must not touch the registry.
+    assert _entry(registry, 0).deprecated is True
+    assert _entry(registry, 0).merged_into == 1
+
+
+def test_restore_on_plain_deprecated_class_still_works_after_merge_guard(
+    client: TestClient, registry: ClassRegistry
+) -> None:
+    """The merge guard must only fire when merged_into is set -- a class
+    deprecated directly (no merge, no target) keeps restoring exactly as
+    before."""
+    assert client.post('/curation/classes/0/deprecate').status_code == 200
+    assert _entry(registry, 0).merged_into is None
+
+    resp = client.post('/curation/classes/0/restore')
+    assert resp.status_code == 200, resp.text
+    assert resp.json()['deprecated'] is False
+    assert _entry(registry, 0).deprecated is False
+
+
+# =============================================================================
 # Deprecated classes stay excluded from consumers that already filter them
 # =============================================================================
 
