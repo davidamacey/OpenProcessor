@@ -73,6 +73,11 @@ def is_open_proposal(doc: dict[str, Any], label: str) -> bool:
         return False
     if doc.get('review_dismissed_at') is not None:
         return False
+    # R5: a resolved class_id means this item no longer needs a new class,
+    # whatever a stale needs_new_class flag says (mirrors the
+    # must_not-exists-class_id guard in review_queries.build_tab_query).
+    if doc.get('class_id') is not None:
+        return False
     return bool(doc.get('needs_new_class')) or (
         doc.get('class_source') == VLM_NEW_CLASS_PENDING_CLASS_SOURCE
     )
@@ -126,6 +131,35 @@ def load_term_rules(registry: Any) -> ProposalTermRules:
     )
 
 
+def _matches_non_object_pattern(term: str, patterns: frozenset[str]) -> bool:
+    """True when ``term`` (or one of its ``_``-separated tokens) matches a
+    configured non-object rule.
+
+    L3: a plain rule (e.g. ``blur``) matches the whole term or one whole
+    token, exactly as before. A rule ending in ``*`` (``unidentifiable_*``)
+    also matches a term/token it PREFIXES; a rule starting with ``*``
+    (``*_scene``) also matches a term/token it SUFFIXES -- so a single
+    configured rule covers a family of terms (``unidentifiable_vehicle``,
+    ``dark_scene``, ``blurred_object``) instead of needing every literal
+    variant enumerated.
+    """
+    candidates = (term, *term.split('_'))
+    for pattern in patterns:
+        is_prefix_rule = pattern.endswith('*') and not pattern.startswith('*')
+        is_suffix_rule = pattern.startswith('*') and not pattern.endswith('*')
+        if is_prefix_rule:
+            stem = pattern[:-1].rstrip('_')
+            if stem and any(c.startswith(stem) for c in candidates):
+                return True
+        elif is_suffix_rule:
+            stem = pattern[1:].lstrip('_')
+            if stem and any(c.endswith(stem) for c in candidates):
+                return True
+        elif pattern in candidates:
+            return True
+    return False
+
+
 def classify_term(label: str, rules: ProposalTermRules) -> tuple[str | None, int | None]:
     """``(flag, class_id)``: ``flag`` is ``None`` for a term worth offering
     as a new class; ``class_id`` is set only for ``existing_class``."""
@@ -134,9 +168,7 @@ def classify_term(label: str, rules: ProposalTermRules) -> tuple[str | None, int
         return FLAG_EXISTING_CLASS, rules.existing_classes[term]
     if term in rules.generic_terms or term in rules.registry_groups:
         return FLAG_GENERIC_PARENT, None
-    if term in rules.non_object_terms or any(
-        token in rules.non_object_terms for token in term.split('_')
-    ):
+    if _matches_non_object_pattern(term, rules.non_object_terms):
         return FLAG_NON_OBJECT, None
     return None, None
 

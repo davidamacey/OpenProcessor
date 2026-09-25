@@ -19,6 +19,7 @@ import asyncio
 # doesn't trigger ``src.services.__init__`` (which pulls Triton client
 # deps that aren't installed in slim test environments).
 import importlib.util as _ilu
+import io
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -293,34 +294,60 @@ def test_thumbnail_cache_uses_pil_correctly(
 
 
 # =============================================================================
-# Bbox overlay rendering
+# K6: served images are the clean source render, never an overlay
 # =============================================================================
 
 
-def test_render_image_with_bbox_returns_jpeg(sample_image: Path) -> None:
-    jpeg = asyncio.run(svc.render_image_with_bbox(sample_image, [0.2, 0.2, 0.6, 0.6]))
+def test_render_source_image_returns_jpeg(sample_image: Path) -> None:
+    jpeg = asyncio.run(svc.render_source_image(sample_image))
     assert jpeg.startswith(b'\xff\xd8'), 'must be JPEG magic bytes'
     assert jpeg.endswith(b'\xff\xd9'), 'must be JPEG end-of-image marker'
 
 
-def test_render_image_with_bbox_rejects_bad_bbox(sample_image: Path) -> None:
-    with pytest.raises(ValueError, match=r'.'):
-        asyncio.run(svc.render_image_with_bbox(sample_image, [0.0, 0.0, 1.0]))
+def test_render_source_image_is_pixel_identical_to_a_clean_manual_render(
+    sample_image: Path,
+) -> None:
+    """K6: `render_source_image` must never draw a box/label — its output
+    must be pixel-identical to the same EXIF-transpose+RGB-convert+encode
+    pipeline applied with no drawing step at all."""
+    from PIL import Image, ImageOps
+
+    jpeg = asyncio.run(svc.render_source_image(sample_image))
+    got = Image.open(io.BytesIO(jpeg))
+
+    with Image.open(sample_image) as src:
+        expected_img = ImageOps.exif_transpose(src)
+        if expected_img.mode != 'RGB':
+            expected_img = expected_img.convert('RGB')
+        buf = io.BytesIO()
+        expected_img.save(buf, format='JPEG', quality=88)
+        expected = Image.open(io.BytesIO(buf.getvalue()))
+
+    assert got.size == expected.size
+    assert list(got.getdata()) == list(expected.getdata())
 
 
-def test_render_image_with_multiple_bboxes_returns_jpeg(sample_image: Path) -> None:
-    bboxes = [
-        {'bbox_norm': [0.1, 0.1, 0.4, 0.4], 'class_name': 'item', 'color': (255, 80, 80)},
-        {'bbox_norm': [0.5, 0.5, 0.9, 0.9], 'class_name': 'region'},
-    ]
-    jpeg = asyncio.run(svc.render_image_with_multiple_bboxes(sample_image, bboxes))
-    assert jpeg.startswith(b'\xff\xd8')
-    assert len(jpeg) > 0
+def test_render_source_image_has_no_overlay_drawing_helpers_left() -> None:
+    """K6: the drawing helpers themselves must be gone, not just unused —
+    guards against a future caller quietly re-wiring an overlay back in."""
+    for name in (
+        'render_image_with_bbox',
+        'render_image_with_multiple_bboxes',
+        '_load_label_font',
+        '_DEFAULT_BBOX_COLOR',
+        '_BBOX_LINE_WIDTH',
+        '_LABEL_BG_COLOR',
+        '_LABEL_TEXT_COLOR',
+    ):
+        assert not hasattr(svc, name), f'{name} should have been removed (K6)'
 
 
-def test_render_image_with_multiple_bboxes_empty_list(sample_image: Path) -> None:
-    jpeg = asyncio.run(svc.render_image_with_multiple_bboxes(sample_image, []))
-    assert jpeg.startswith(b'\xff\xd8')
+def test_render_source_image_downscales_with_max_dim(sample_image: Path) -> None:
+    jpeg = asyncio.run(svc.render_source_image(sample_image, max_dim=8))
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(jpeg))
+    assert max(img.size) <= 8
 
 
 # =============================================================================
@@ -392,18 +419,20 @@ def test_fetch_crop_uses_source_includes_covering_every_caller_field() -> None:
     assert client.last_call is not None
     includes = client.last_call['_source_includes']
     assert includes is not None
-    # image_path + bbox_norm: all three crops_router routes.
-    # class_name: crop_full_image's overlay label.
-    # region bbox field: crop_full_image overlay + crop_region_thumbnail.
-    # candidate bbox field: crop_region_thumbnail's verify_rejected fallback.
+    # image_path: all three crops_router routes.
+    # bbox_norm: crop_thumbnail.
+    # region bbox field + candidate bbox field: crop_region_thumbnail.
+    # K6: crop_full_image no longer reads bbox_norm/class_name/region bbox
+    # (it only resolves image_path and serves the clean source) so
+    # class_name is deliberately NOT in this list any more.
     for field in (
         'image_path',
         'bbox_norm',
-        'class_name',
         get_region_fields().bbox_norm,
         get_region_fields().candidate_bbox_norm,
     ):
         assert field in includes, f'{field!r} missing from _source_includes: {includes}'
+    assert 'class_name' not in includes
 
 
 if __name__ == '__main__':

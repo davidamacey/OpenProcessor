@@ -45,6 +45,7 @@ async def test_export_yolo_handler_passes_version_tag_and_seed_to_service(
             split_counts=SplitCounts(),
             image_count=0,
             class_count=0,
+            classes_with_objects=0,
             started_at='2026-01-01T00:00:00+00:00',
             finished_at='2026-01-01T00:00:01+00:00',
             current_symlink='/tmp/fake-export/current',

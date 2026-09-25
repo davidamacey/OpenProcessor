@@ -19,6 +19,7 @@ from fastapi import HTTPException
 
 from src.config.curation import ITEM_EMBEDDING_FIELD, PROBE_ENTROPY_REVIEW_MIN
 from src.config.region_fields import get_region_fields
+from src.config.region_rejection import compose_rejection_reason
 from src.config.region_state import RegionStatus
 from src.services.curation.class_sources import VLM_CLASS_SOURCES
 from src.services.curation.ingest_class_sources import (
@@ -26,7 +27,7 @@ from src.services.curation.ingest_class_sources import (
     unlabeled_proposal_class_sources,
 )
 from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
-from src.services.curation.vlm_class_attempt import VLM_CLASS_EMPTY_REASON_FIELD
+from src.services.curation.vlm_class_attempt import VLM_CLASS_EMPTY_REASON_FIELD, EmptyClassReason
 
 
 KNOWN_TABS: tuple[str, ...] = (
@@ -217,15 +218,23 @@ def region_reason(src: dict[str, Any], fields: Any, default: str) -> str:
 
     A verifier-rejected candidate needs a different reason than an
     accepted-but-unreviewed box: the reviewer is confirming/reversing a
-    rejection, not just validating a fresh detection. Includes
-    ``region_rejection_reason`` when the worker recorded one.
+    rejection, not just validating a fresh detection.
+
+    R10: this used to always say "...— needs human review" even for a
+    reason whose own kind is a firm model/automatic verdict, and embedded
+    the raw ``region_rejection_reason`` id verbatim instead of its served
+    vocabulary label -- so a box the verifier actually rejected read
+    "rejected (bad detection)" next to a reason that also claimed "needs
+    human review", contradicting itself. :func:`compose_rejection_reason`
+    words the reason from the served rejection-reason vocabulary and only
+    says "needs human review" for a ``needs_human``-kind reason.
     """
     if src.get(fields.status) != RegionStatus.VERIFY_REJECTED.value:
         return default
     why = src.get(fields.rejection_reason)
     if why:
-        return f'verifier rejected this candidate ({why}) — needs human review'
-    return 'verifier rejected this candidate — needs human review'
+        return compose_rejection_reason(why)
+    return 'needs human review: verifier rejected this candidate with no reason recorded'
 
 
 def _escape_wildcard(text: str) -> str:
@@ -523,6 +532,18 @@ def build_tab_query(
                 }
             }
         )
+        # R5: two ways a stale/mismatched flag lands an item here that
+        # doesn't need a new class at all:
+        #  1. the VLM attempt gave no answer at all (empty_reason ==
+        #     no_answer) -- nothing was proposed, so it can't need a new
+        #     class for a term that doesn't exist;
+        #  2. the item already carries a resolved class_id -- either a
+        #     later write (resolve/reclassify/human label) settled it and
+        #     left needs_new_class stale, or the human flag was set on an
+        #     already-classed item. Either way "needs a new class" no
+        #     longer describes it once it has one.
+        must_not.append({'term': {VLM_CLASS_EMPTY_REASON_FIELD: EmptyClassReason.NO_ANSWER.value}})
+        must_not.append({'exists': {'field': 'class_id'}})
         reason = 'needs a class the registry does not have yet'
     else:
         raise HTTPException(

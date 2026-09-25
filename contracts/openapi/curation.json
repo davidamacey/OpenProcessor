@@ -575,9 +575,28 @@
             ],
             "title": "Hotkey Letter"
           },
+          "kind": {
+            "default": "item",
+            "enum": [
+              "item",
+              "region"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "sample_count": {
             "default": 0,
             "title": "Sample Count",
+            "type": "integer"
+          },
+          "trainable": {
+            "default": 0,
+            "title": "Trainable",
+            "type": "integer"
+          },
+          "trainable_gap": {
+            "default": 0,
+            "title": "Trainable Gap",
             "type": "integer"
           },
           "validated_count": {
@@ -1260,6 +1279,18 @@
       },
       "HealthResponse": {
         "properties": {
+          "mlflow_public_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "T1: the browser-reachable MLflow base URL (CurationConfig.mlflow_public_url / OP_MLFLOW_PUBLIC_URL), null when unset. A served train run may carry its own mlflow_run_url that is correct host-side but unreachable from an operator browser -- a client should build the link from this base rather than guessing a port.",
+            "title": "Mlflow Public Url"
+          },
           "opensearch": {
             "additionalProperties": true,
             "title": "Opensearch",
@@ -1447,6 +1478,17 @@
             ],
             "title": "Error"
           },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Kind"
+          },
           "image_id": {
             "default": "",
             "title": "Image Id",
@@ -1470,6 +1512,17 @@
             "default": 0,
             "title": "N Regions",
             "type": "integer"
+          },
+          "source_identifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Identifier"
           },
           "status": {
             "enum": [
@@ -4715,7 +4768,7 @@
         "title": "_PublishEvent",
         "type": "object"
       },
-      "src__routers__curation___common__BatchIngestResponse": {
+      "src__routers__curation___common_models__BatchIngestResponse": {
         "properties": {
           "disagreements": {
             "items": {
@@ -6904,7 +6957,7 @@
     },
     "/curation/crops/{crop_id}/image": {
       "get": {
-        "description": "Source image with the item bbox drawn.\n\nDefaults to full resolution to preserve compatibility with callers\nthat need pixel-accurate frames. Pass ``max_dim`` for the labeler\nreview queue, where the user is glancing at one bbox at a time and\na sub-MB preview is plenty. If the item also carries a\nregion-of-interest sub-bbox (``RegionFields.bbox_norm``), it is\ndrawn as a second overlay.",
+        "description": "The clean source image for this crop's parent frame — no box, label\nor other overlay drawn (K6). Only resize, EXIF-transpose and RGB\nconversion apply.\n\nDefaults to full resolution to preserve compatibility with callers\nthat need pixel-accurate frames. Pass ``max_dim`` for the labeler\nreview queue, where the user is glancing at one item at a time and a\nsub-MB preview is plenty. The frontend draws the item box, the\nregion box and any rejected-candidate box itself, from the geometry\n``GET {prefix}/crops/{id}/context`` serves in source-image-normalized\ncoordinates.",
         "operationId": "crop_full_image_curation_crops__crop_id__image_get",
         "parameters": [
           {
@@ -8204,7 +8257,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__curation___common__BatchIngestResponse"
+                  "$ref": "#/components/schemas/src__routers__curation___common_models__BatchIngestResponse"
                 }
               }
             },
@@ -8380,7 +8433,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__curation___common__BatchIngestResponse"
+                  "$ref": "#/components/schemas/src__routers__curation___common_models__BatchIngestResponse"
                 }
               }
             },
@@ -11327,7 +11380,7 @@
     },
     "/curation/stats/classes": {
       "get": {
-        "description": "Per-class total/validated breakdown.\n\nReturns both the raw ``by_class`` aggregation and a flattened ``classes``\narray (``{class_id, class_name, count, validated_count, adequacy,\naug_target, aug_gap}``, plus the ``thresholds`` behind them) joined against\nthe registry for the names. The labeler's ``getStats()`` (Export + Home\npages) consumes ``classes`` — the aggregation alone has no class names, so\nwithout this join the Export dataset table renders empty.",
+        "description": "Per-class total/validated breakdown.\n\nReturns both the raw ``by_class`` aggregation and a flattened ``classes``\narray (``{class_id, class_name, count, validated_count, trainable,\ntrainable_gap, adequacy, aug_target, aug_gap}``, plus the ``thresholds``\nbehind them) joined against the registry for the names. The labeler's\n``getStats()`` (Export + Home pages) consumes ``classes`` — the\naggregation alone has no class names, so without this join the Export\ndataset table renders empty.\n\n``trainable`` = validated minus frozen test-holdout minus human-excluded\ncrops — the frontend used to compute ``validated - holdout`` itself\nclient-side; this serves the real number (also excluding\n``class_excluded`` crops, which the client-side version didn't\naccount for) so every page agrees. ``trainable_gap`` is the shortfall\nagainst :func:`dataset_thresholds`'s per-class minimum, floored at 0.",
         "operationId": "stats_classes_curation_stats_classes_get",
         "responses": {
           "200": {

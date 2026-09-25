@@ -19,6 +19,15 @@ from fastapi.testclient import TestClient
 from curation.query_fakes import QueryFakeOpenSearch
 from curation.test_curation_settings_client import FakeSettingsOpenSearch
 from src.config import get_curation_config
+from src.services.curation.review_sorts import REVIEW_SORTS
+
+
+def test_classifier_blind_spots_default_label_has_no_stale_coco_name() -> None:
+    """R4: the tab is 'Classifier blind spots' now; its default sort's
+    served label must not still say 'COCO'."""
+    label = REVIEW_SORTS['classifier_blind_spots_default'].label
+    assert 'coco' not in label.lower()
+    assert 'classifier' in label.lower()
 
 
 if TYPE_CHECKING:

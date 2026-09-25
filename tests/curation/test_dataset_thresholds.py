@@ -137,6 +137,58 @@ def test_classes_list_serves_adequacy(monkeypatch: pytest.MonkeyPatch) -> None:
     }
 
 
+_BY_CLASS_WITH_HOLDOUT_AND_EXCLUDED = {
+    'aggregations': {
+        'by_class': {
+            'buckets': [
+                {
+                    'key': 1,
+                    'doc_count': 900,
+                    'validated': {'doc_count': 600},
+                    'validated_test_holdout': {'doc_count': 5},
+                    'validated_excluded': {'doc_count': 3},
+                },
+                {
+                    'key': 2,
+                    'doc_count': 30,
+                    'validated': {'doc_count': 10},
+                    'validated_test_holdout': {'doc_count': 5},
+                    'validated_excluded': {'doc_count': 0},
+                },
+            ]
+        },
+        'by_cluster': {'buckets': []},
+    }
+}
+
+
+def test_stats_classes_serves_trainable_minus_holdout_and_excluded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The frontend used to compute validated - holdout client-side, and
+    never accounted for class_excluded crops at all. /stats/classes now
+    serves the real trainable count and its gap to the hard minimum."""
+    r = _client(monkeypatch, _BY_CLASS_WITH_HOLDOUT_AND_EXCLUDED).get('/curation/stats/classes')
+    assert r.status_code == 200, r.text
+    rows = {c['class_id']: c for c in r.json()['classes']}
+    assert rows[1]['validated_count'] == 600
+    assert rows[1]['trainable'] == 600 - 5 - 3
+    assert rows[1]['trainable_gap'] == 0
+    assert rows[2]['trainable'] == 10 - 5 - 0
+    assert rows[2]['trainable_gap'] == T.HARD_MIN_CROPS_PER_CLASS - (10 - 5)
+
+
+def test_classes_list_serves_trainable_minus_holdout_and_excluded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    r = _client(monkeypatch, _BY_CLASS_WITH_HOLDOUT_AND_EXCLUDED).get('/curation/classes')
+    assert r.status_code == 200, r.text
+    rows = {c['class_id']: c for c in r.json()['classes']}
+    assert rows[1]['trainable'] == 600 - 5 - 3
+    assert rows[2]['trainable'] == 10 - 5 - 0
+    assert rows[2]['trainable_gap'] == T.HARD_MIN_CROPS_PER_CLASS - (10 - 5)
+
+
 def test_classes_by_cluster_agg_is_filtered_to_class_kind_ids(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

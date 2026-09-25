@@ -169,6 +169,13 @@ def _images_body() -> dict[str, Any]:
             'properties': {
                 'image_id': {'type': 'keyword'},
                 'image_path': {'type': 'keyword'},
+                # BA-1: the client-supplied identifier for a byte-upload
+                # ingest (POST /ingest/upload), kept distinct from
+                # image_path once image_path became the server-persisted
+                # servable path. null for a server-path ingest.
+                'source_identifier': {'type': 'keyword'},
+                # BA-4: optional client-supplied tag for one upload call.
+                'ingest_run_id': {'type': 'keyword'},
                 'source': {'type': 'keyword'},
                 'width': {'type': 'integer'},
                 'height': {'type': 'integer'},
@@ -1275,6 +1282,45 @@ async def ensure_items_region_embedding(
             recoverable=is_field_conflict,
         )
         return {'acknowledged': False, 'index': index, 'fields_added': fields, 'error': msg}
+
+
+async def ensure_images_upload_fields(
+    client: AsyncOpenSearch,
+) -> dict[str, Any]:
+    """PUT the BA-1/BA-4 ``source_identifier`` / ``ingest_run_id`` keyword
+    fields onto the existing images mapping.
+
+    Additive ``PUT <index>/_mapping`` — idempotent.
+    """
+    index = config.images_index
+    fields = ['source_identifier', 'ingest_run_id']
+    body = {'properties': {f: {'type': 'keyword'} for f in fields}}
+    try:
+        resp = await client.indices.put_mapping(index=index, body=body)
+        ack = bool(resp.get('acknowledged', False))
+        logger.info(
+            'curation_mapping_migration',
+            index=index,
+            fields=fields,
+            acknowledged=ack,
+        )
+        return {'acknowledged': ack, 'index': index, 'fields_added': fields}
+    except Exception as exc:
+        msg = str(exc)
+        is_field_conflict = _is_recoverable_mapping_conflict(msg)
+        log_fn = logger.info if is_field_conflict else logger.error
+        log_fn(
+            'curation_mapping_migration_failed',
+            index=index,
+            error=msg,
+            recoverable=is_field_conflict,
+        )
+        return {
+            'acknowledged': False,
+            'index': index,
+            'fields_added': fields,
+            'error': msg,
+        }
 
 
 async def ensure_items_request_id_field(

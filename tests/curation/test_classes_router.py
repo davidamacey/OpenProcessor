@@ -110,58 +110,78 @@ def test_get_class_unknown_id_is_404(app_client: TestClient) -> None:
 
 
 # =============================================================================
-# Region-class count override (was hardcoded to the literal 'license_plate';
-# now reads the active region profile's region_class_name)
+# Region-class ``kind`` marking (X2). This used to override
+# sample_count/validated_count/cluster_size with the region inventory
+# total, which made a region slot (e.g. license_plate) look like an item
+# class with thousands of validated crops -- inflating /train's class
+# picker and /export's per-class table. Region classes are now only
+# flagged via ``kind='region'``; their item counts stay the real (usually
+# zero) class-aggregation numbers so item-count consumers aren't fooled.
 # =============================================================================
 
 
-def test_region_class_override_uses_the_active_profiles_region_class_name(
+def test_region_class_is_marked_kind_region_and_keeps_real_item_counts(
     app_client: TestClient,
     registry: ClassRegistry,
     fake_opensearch: AsyncMock,
     reference_region_profile: None,
 ) -> None:
     """The example license_plate profile is active (region_class_name=
-    'license_plate'); a registry class of that name gets its counts
-    overridden with the region inventory total."""
+    'license_plate'); a registry class of that name is marked
+    kind='region' but its sample_count/validated_count/cluster_size are
+    NOT overridden with the region inventory total -- they stay whatever
+    the class/cluster aggregations reported (0 here, since no item doc
+    has that class_id)."""
     registry.add_class('license_plate', group='region')
     fake_opensearch.count = AsyncMock(side_effect=[{'count': 7}, {'count': 3}])
 
     resp = app_client.get('/curation/classes')
     assert resp.status_code == 200, resp.text
     entry = next(c for c in resp.json()['classes'] if c['class_name'] == 'license_plate')
-    assert entry['sample_count'] == 7
-    assert entry['validated_count'] == 3
-    assert entry['cluster_size'] == 7
+    assert entry['kind'] == 'region'
+    assert entry['sample_count'] == 0
+    assert entry['validated_count'] == 0
+    assert entry['cluster_size'] == 0
 
 
-def test_region_class_override_is_a_noop_without_an_active_profile(
+def test_non_region_class_is_marked_kind_item(
+    app_client: TestClient,
+    fake_opensearch: AsyncMock,
+    reference_region_profile: None,
+) -> None:
+    resp = app_client.get('/curation/classes')
+    assert resp.status_code == 200, resp.text
+    for entry in resp.json()['classes']:
+        assert entry['kind'] == 'item'
+
+
+def test_region_class_kind_marking_is_a_noop_without_an_active_profile(
     app_client: TestClient,
     registry: ClassRegistry,
     fake_opensearch: AsyncMock,
 ) -> None:
     """No region profile configured -- a class happening to be named
-    'license_plate' must NOT get the region-inventory override (it isn't
-    hardcoded to that literal anymore)."""
+    'license_plate' must NOT be marked kind='region' (it isn't hardcoded
+    to that literal)."""
     registry.add_class('license_plate', group='region')
-    fake_opensearch.count = AsyncMock(return_value={'count': 999})
 
     resp = app_client.get('/curation/classes')
     assert resp.status_code == 200, resp.text
     entry = next(c for c in resp.json()['classes'] if c['class_name'] == 'license_plate')
+    assert entry['kind'] == 'item'
     assert entry['sample_count'] == 0
     assert entry['validated_count'] == 0
 
 
-def test_region_class_override_uses_a_differently_named_profiles_region_class(
+def test_region_class_kind_marking_uses_a_differently_named_profiles_region_class(
     app_client: TestClient,
     registry: ClassRegistry,
     fake_opensearch: AsyncMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A deployment with a different region_class_name overrides THAT
-    class, not 'license_plate' -- proves the lookup isn't secretly still
-    hardcoded to the example's name."""
+    """A deployment with a different region_class_name marks THAT class,
+    not 'license_plate' -- proves the lookup isn't secretly hardcoded to
+    the example's name."""
     from src.services.detection import profile_registry
 
     monkeypatch.setenv(f'{profile_registry.REGION_DETECTION_ENV_PREFIX}NAME', 'widget')
@@ -171,12 +191,10 @@ def test_region_class_override_uses_a_differently_named_profiles_region_class(
     profile_registry._reset_registry_for_tests()
     try:
         registry.add_class('widget_label', group='region')
-        fake_opensearch.count = AsyncMock(side_effect=[{'count': 5}, {'count': 1}])
 
         resp = app_client.get('/curation/classes')
         assert resp.status_code == 200, resp.text
         entry = next(c for c in resp.json()['classes'] if c['class_name'] == 'widget_label')
-        assert entry['sample_count'] == 5
-        assert entry['validated_count'] == 1
+        assert entry['kind'] == 'region'
     finally:
         profile_registry._reset_registry_for_tests()

@@ -82,6 +82,8 @@ async def export_yolo(
         'manifest_path': result.manifest_path,
         'dataset_sha': result.dataset_sha,
         'split_counts': result.split_counts.to_dict(),
+        'class_count': result.class_count,
+        'classes_with_objects': result.classes_with_objects,
         'dedup': payload.dedup_threshold,
         'started_at': result.started_at or None,
         'finished_at': result.finished_at or None,
@@ -120,7 +122,12 @@ def _dataset_row(
         'split_counts': meta.get('split_counts'),
         'dataset_sha': meta.get('dataset_sha'),
         'exported_at': meta.get('exported_at') or meta.get('started_at'),
+        # E2: class_count is the registry size written into data.yaml
+        # (nc); classes_with_objects is how many of those actually have a
+        # labeled object in this export -- older manifests written before
+        # this field existed serve null, never a fabricated 0.
         'class_count': meta.get('class_count'),
+        'classes_with_objects': meta.get('classes_with_objects'),
         'is_current': current is not None and str(d) == current,
     }
 
@@ -236,6 +243,7 @@ async def export_status() -> dict[str, Any]:
         'last_run': meta.get('finished_at') or meta.get('started_at'),
         'dataset_sha': meta.get('dataset_sha'),
         'class_count': meta.get('class_count'),
+        'classes_with_objects': meta.get('classes_with_objects'),
     }
 
 

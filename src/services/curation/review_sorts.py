@@ -289,7 +289,11 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
         ),
         ReviewSort(
             id='classifier_blind_spots_default',
-            label='Largest COCO blind spot',
+            # R4: the tab was renamed 'Classifier blind spots' (from the
+            # COCO-detector-specific name), but this served label still
+            # said 'COCO' — the one place a client could not avoid
+            # rendering the stale name since it's served text, not an id.
+            label='Largest classifier blind spot',
             clause=[
                 {
                     'crop_area_norm': {

@@ -82,6 +82,19 @@ def _docs() -> dict[str, dict[str, Any]]:
         'e1': _pending('e1', 'empty_road'),
         'c1': _pending('c1', 'Cars'),
         's1': _pending('s1', 'sedan'),
+        # R5: the VLM gave no answer at all -- must not surface as "needs
+        # a new class" for a term that was never proposed.
+        'no_answer1': {
+            'crop_id': 'no_answer1',
+            'class_source': None,
+            'vlm_class_empty_reason': 'no_answer',
+            'needs_new_class': True,
+        },
+        # R5: a stale flag on an item that already has a resolved
+        # class_id (e.g. left over from before a later reclassify/human
+        # label settled it, or a human flag fired on an already-classed
+        # item) -- it no longer needs a new class.
+        'already_classed': _pending('already_classed', 'adventurebike', class_id=1),
     }
 
 
@@ -95,6 +108,28 @@ def test_summary_total_equals_the_queue_total(
     assert summary['without_term'] == 1
     counted = sum(t['count'] for t in summary['top_terms'] + summary['flagged_terms'])
     assert counted + summary['without_term'] == summary['total_pending']
+
+
+def test_no_answer_items_are_excluded_from_the_queue(
+    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R5: a VLM attempt with no answer at all (empty_reason=no_answer)
+    proposed nothing, so it must never appear in the new-class queue."""
+    client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), registry, monkeypatch)
+    queue = client.get('/curation/review/new_class_proposals', params={'page_size': 100}).json()
+    ids = {row['crop_id'] for row in queue['items']}
+    assert 'no_answer1' not in ids
+
+
+def test_already_classed_items_are_excluded_from_the_queue(
+    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R5: once an item has a resolved class_id, a stale needs_new_class
+    flag must not keep surfacing it as a new-class proposal."""
+    client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), registry, monkeypatch)
+    queue = client.get('/curation/review/new_class_proposals', params={'page_size': 100}).json()
+    ids = {row['crop_id'] for row in queue['items']}
+    assert 'already_classed' not in ids
 
 
 def test_term_count_equals_resolve_match(
@@ -166,6 +201,48 @@ def test_no_configured_rule_flags_only_registry_matches(
     body = client.get('/curation/review/new_class_proposals/summary').json()
     assert {t['label'] for t in body['flagged_terms']} == {'Cars', 'sedan'}
     assert body['term_rules']['generic_terms'] == []
+
+
+def test_non_object_prefix_rule_flags_a_family_of_terms() -> None:
+    """L3: a rule ending in '*' flags every term/token it prefixes, not
+    just an exact literal ('unidentifiable_vehicle', not just
+    'unidentifiable')."""
+    rules = ProposalTermRules(
+        generic_terms=frozenset(),
+        non_object_terms=frozenset({'unidentifiable_*'}),
+        registry_groups=frozenset(),
+        existing_classes={},
+    )
+    assert classify_term('unidentifiable_vehicle', rules) == ('non_object', None)
+    assert classify_term('unidentifiable', rules) == ('non_object', None)
+    assert classify_term('sedan', rules) == (None, None)
+
+
+def test_non_object_suffix_rule_flags_a_family_of_terms() -> None:
+    """L3: a rule starting with '*' flags every term/token it suffixes
+    ('dark_scene', 'night_scene', ... from one '*_scene' rule)."""
+    rules = ProposalTermRules(
+        generic_terms=frozenset(),
+        non_object_terms=frozenset({'*_scene'}),
+        registry_groups=frozenset(),
+        existing_classes={},
+    )
+    assert classify_term('dark_scene', rules) == ('non_object', None)
+    assert classify_term('night_scene', rules) == ('non_object', None)
+    assert classify_term('scenery', rules) == (None, None)
+
+
+def test_non_object_prefix_rule_matches_a_token_not_just_the_whole_term() -> None:
+    """'blur*' flags 'blurred_object' via its 'blurred' token, not just a
+    term that is literally 'blur' or starts with 'blur'."""
+    rules = ProposalTermRules(
+        generic_terms=frozenset(),
+        non_object_terms=frozenset({'blur*'}),
+        registry_groups=frozenset(),
+        existing_classes={},
+    )
+    assert classify_term('blurred_object', rules) == ('non_object', None)
+    assert classify_term('object_clear', rules) == (None, None)
 
 
 def test_generic_terms_match_whole_terms_only() -> None:

@@ -11,6 +11,7 @@ from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
     is_not_found,
+    logger,
     router,
 )
 from src.services.curation.wire import (
@@ -21,6 +22,32 @@ from src.services.curation.wire import (
 
 
 _MAX_SIBLINGS = 500
+
+
+def _pixel_size_from_header(image_path: str) -> tuple[int, int] | None:
+    """Best-effort ``(width, height)`` read straight from the image file
+    header (K6 completeness): a client drawing boxes from
+    ``GET /crops/{id}/context`` needs real pixel dimensions to convert
+    normalized geometry, and the images-index doc doesn't always carry
+    them (e.g. an item ingested before width/height were captured).
+    ``PIL.Image.open`` only reads the header, not the full pixel buffer,
+    until something actually accesses the decoded data -- ``.size`` is
+    header-only. Returns ``None`` on any resolution/decode failure
+    (unservable path, missing file, corrupt image) rather than raising —
+    this is a best-effort fill-in, not a hard dependency of the route.
+    """
+    try:
+        from PIL import Image
+
+        from src.services.curation.image_serving import resolve_crop_root, resolve_safe_path
+
+        root = resolve_crop_root(image_path)
+        safe_path = resolve_safe_path(image_path, root)
+        with Image.open(safe_path) as img:
+            return img.size
+    except Exception as exc:
+        logger.debug('crop_context_pixel_size_failed', image_path=image_path, error=str(exc))
+        return None
 
 
 async def _get_source(opensearch: Any, index: str, doc_id: str, **kw: Any) -> dict[str, Any] | None:
@@ -61,11 +88,22 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
     if image_id:
         img = await _get_source(opensearch, CURATION_IMAGES_INDEX, image_id)
         if img is not None:
+            width = img.get('width')
+            height = img.get('height')
+            image_path = img.get('image_path')
+            # K6 completeness: a full-image labeling view needs real
+            # pixel dimensions to convert the served normalized geometry
+            # to on-screen boxes. Fill from the file header rather than
+            # ever leaving width/height null when the image is servable.
+            if (width is None or height is None) and image_path:
+                pixel_size = _pixel_size_from_header(image_path)
+                if pixel_size is not None:
+                    width, height = pixel_size
             image = {
                 'image_id': image_id,
-                'image_path': img.get('image_path'),
-                'width': img.get('width'),
-                'height': img.get('height'),
+                'image_path': image_path,
+                'width': width,
+                'height': height,
                 'source': img.get('source') or '',
                 'indexed_at': img.get('indexed_at'),
             }

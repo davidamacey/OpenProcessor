@@ -114,6 +114,7 @@ async def test_export_dataset_writes_manifest_and_labels(tmp_path):
 
     assert result.image_count == 2
     assert result.class_count == 2
+    assert result.classes_with_objects == 2
     assert result.split_counts.test == 1  # crop-1's test_holdout=True is honored
 
     current_link = tmp_path / 'exports' / 'current'
@@ -122,8 +123,35 @@ async def test_export_dataset_writes_manifest_and_labels(tmp_path):
     manifest = json.loads(Path(result.manifest_path).read_text())
     assert manifest['dataset_sha'] == result.dataset_sha
     assert manifest['image_count'] == 2
+    assert manifest['classes_with_objects'] == 2
     assert manifest['frozen_holdout_sha'] is not None
     assert manifest['code_sha']
+
+
+@pytest.mark.asyncio
+async def test_classes_with_objects_excludes_registry_classes_with_no_labeled_crops(tmp_path):
+    """E2: class_count is the registry size (data.yaml's nc); a class
+    with zero labeled objects in this export must not count as one that
+    "has data" -- classes_with_objects is the honest denominator."""
+    docs = [
+        {
+            'crop_id': 'crop-1',
+            'image_id': 'img-1',
+            'image_path': 'a.jpg',
+            'bbox_norm': [0.1, 0.1, 0.5, 0.5],
+            'class_id': 0,
+            'class_name': 'car',
+        },
+    ]
+    # 'truck' and 'bus' are registered classes with no crops at all.
+    service = _service(tmp_path, docs, ['car', 'truck', 'bus'])
+    result = await service.export_dataset(version_tag='t1', seed=7, copy_images=False)
+
+    assert result.class_count == 3
+    assert result.classes_with_objects == 1
+    manifest = json.loads(Path(result.manifest_path).read_text())
+    assert manifest['class_count'] == 3
+    assert manifest['classes_with_objects'] == 1
 
 
 @pytest.mark.asyncio
@@ -396,6 +424,7 @@ async def test_manifest_structure_and_deterministic_sha(tmp_path, monkeypatch):
         'image_count',
         'split_counts',
         'class_count',
+        'classes_with_objects',
         'started_at',
         'finished_at',
         'code_sha',

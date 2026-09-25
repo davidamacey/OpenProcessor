@@ -56,6 +56,32 @@ def _fake_dataset_search_response() -> dict[str, Any]:
                     {'key': '__none__', 'doc_count': 2},
                 ],
             },
+            # D1: labeled.* is built from this class_id-scoped breakdown,
+            # not the flat 'class_sources' agg above. Only writers that
+            # actually assign a class_id (human / human_move / item_model)
+            # land here.
+            'class_sources_with_class': {
+                'doc_count': 6,
+                'by_source': {
+                    'buckets': [
+                        {'key': 'human', 'doc_count': 3},
+                        {'key': 'human_move', 'doc_count': 1},
+                        {'key': 'item_model', 'doc_count': 2},
+                    ],
+                },
+            },
+            # The class-less remainder: a proposal awaiting classification
+            # and two crops with no class_source at all -- neither has a
+            # class_id, so neither belongs in labeled.*.
+            'class_sources_no_class': {
+                'doc_count': 4,
+                'by_source': {
+                    'buckets': [
+                        {'key': 'coco_yolo11_proposal', 'doc_count': 2},
+                        {'key': '__none__', 'doc_count': 2},
+                    ],
+                },
+            },
             'region_detectors': {'buckets': [{'key': 'region_detector_v1', 'doc_count': 3}]},
             'region_verifiers': {'buckets': [{'key': 'human', 'doc_count': 2}]},
             'regions_validated_by_human': {'doc_count': 2},
@@ -118,7 +144,7 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
 
     unlabeled = body.get('unlabeled')
     assert isinstance(unlabeled, dict)
-    for k in ('pending_detection', 'pending_verification', 'no_label_source'):
+    for k in ('pending_detection', 'pending_verification', 'no_label_source', 'vlm_no_class'):
         assert k in unlabeled, f'unlabeled.{k} missing'
         assert isinstance(unlabeled[k], int)
         assert unlabeled[k] >= 0
@@ -151,18 +177,23 @@ def test_stats_dataset_labeled_counts_consistent(app_client: TestClient) -> None
 
     What we can assert:
     - every bucket is non-negative,
-    - the buckets sum to ``total_crops`` (every crop has exactly one
-      ``class_source`` bucket assigned),
+    - the buckets sum to the count of crops that actually carry a
+      class_id (D1: a class_source alone -- e.g. a VLM proposal that
+      never matched a registry class -- must NOT count as labeled),
     - ``by_human <= validated`` (humans always validate when they
       label).
     """
     body = app_client.get('/curation/stats/dataset').json()
     labeled = body['labeled']
-    total = int(body.get('total_crops', 0))
     validated = int(body.get('validated', 0))
+    # From the fixture: class_sources_with_class.doc_count is the number
+    # of crops with a class_id -- the only crops labeled.* should cover.
+    with_class_total = 6
 
     bucket_sum = sum(int(labeled[k]) for k in labeled)
-    assert bucket_sum == total, f'labeled.* buckets sum to {bucket_sum} but total_crops={total}'
+    assert bucket_sum == with_class_total, (
+        f'labeled.* buckets sum to {bucket_sum} but {with_class_total} crops carry a class_id'
+    )
 
     by_human = int(labeled['by_human'])
     assert by_human >= 0

@@ -40,28 +40,74 @@ REJECTION_REASON_KINDS: tuple[str, ...] = ('model_verdict', 'automatic', 'needs_
 
 @dataclass(frozen=True)
 class RejectionReasonInfo:
-    """How one rejection reason reads to a reviewer."""
+    """How one rejection reason reads to a reviewer.
+
+    ``short_label`` is a lower-case fragment (no leading "rejected" /
+    "needs human review" framing of its own) that a per-item reason
+    string composes onto the right verb for its ``kind`` (R10) — see
+    :func:`compose_rejection_reason`.
+    """
 
     label: str
     kind: str
     match: str = 'exact'
     label_template: str | None = None
+    short_label: str = ''
 
 
 REJECTION_REASON_INFO: dict[str, RejectionReasonInfo] = {
     REJECT_REASON_VERIFIER: RejectionReasonInfo(
-        'Verifier: the box is wrong (region is elsewhere)', 'model_verdict'
+        'Verifier: the box is wrong (region is elsewhere)',
+        'model_verdict',
+        short_label='the detection is wrong (region is elsewhere)',
     ),
     REJECT_REASON_SANITY_PREFIX: RejectionReasonInfo(
         'Box failed the geometry check',
         'automatic',
         match='prefix',
         label_template='Box failed the geometry check ({detail})',
+        short_label='the box failed the geometry check',
     ),
     REJECT_REASON_NO_VERDICT: RejectionReasonInfo(
-        'Verifier gave no verdict — needs human review', 'needs_human'
+        'Verifier gave no verdict — needs human review',
+        'needs_human',
+        short_label='verifier gave no verdict',
     ),
 }
+
+
+def resolve_rejection_reason(why: str) -> tuple[RejectionReasonInfo | None, str | None]:
+    """``(info, detail)`` for a stored ``region_rejection_reason`` value.
+
+    Matches an ``exact`` entry first, then a ``prefix`` entry with
+    ``detail`` set to the remainder after the prefix. ``(None, None)``
+    for an unrecognized value (e.g. a human's free-text reason).
+    """
+    info = REJECTION_REASON_INFO.get(why)
+    if info is not None:
+        return info, None
+    for reason_id, candidate in REJECTION_REASON_INFO.items():
+        if candidate.match == 'prefix' and why.startswith(reason_id):
+            return candidate, why[len(reason_id) :]
+    return None, None
+
+
+def compose_rejection_reason(why: str) -> str:
+    """A reviewer-facing sentence for a stored rejection reason that
+    never says both "rejected" and "needs human review" about the same
+    box (R10) -- the verb matches ``kind``: ``needs_human`` reads
+    "needs human review: ...", everything else reads "rejected: ...".
+    Falls back to the raw value, unrecognized-but-still-labelled, for a
+    human's free-text reason.
+    """
+    info, detail = resolve_rejection_reason(why)
+    if info is None:
+        return f'rejected: {why}'
+    short = info.short_label or info.label
+    if detail:
+        short = f'{short} ({detail.lstrip(": ")})'
+    verb = 'needs human review' if info.kind == 'needs_human' else 'rejected'
+    return f'{verb}: {short}'
 
 
 def rejection_reason_catalog() -> list[dict[str, Any]]:
@@ -86,5 +132,7 @@ __all__ = [
     'REJECT_REASON_SANITY_PREFIX',
     'REJECT_REASON_VERIFIER',
     'RejectionReasonInfo',
+    'compose_rejection_reason',
     'rejection_reason_catalog',
+    'resolve_rejection_reason',
 ]

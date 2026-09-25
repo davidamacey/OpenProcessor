@@ -100,6 +100,7 @@ def test_lists_both_kinds_newest_first(client: TestClient) -> None:
             'dataset_sha',
             'exported_at',
             'class_count',
+            'classes_with_objects',
             'is_current',
         }
 
