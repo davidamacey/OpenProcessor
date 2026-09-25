@@ -107,6 +107,7 @@ async def curation_events_publish(payload: _PublishEvent) -> dict[str, Any]:
 
 
 @router.get('/events/stats')
-async def curation_events_stats() -> dict[str, int]:
-    """Ops counters: subscribers, events_published, events_dropped."""
+async def curation_events_stats() -> dict[str, Any]:
+    """Ops counters: subscribers, events_published, events_dropped, plus
+    the active ``bus`` (``file``/``process``) and its ``log_path``."""
     return get_event_hub().stats()

@@ -156,6 +156,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   measurement.
 
 ### Added
+- **S-2: heartbeat-based curation worker healthchecks.** The four
+  curation background workers (detection, VLM, auto-label,
+  cluster-refresh) now write a heartbeat file on their main loop —
+  including while idle — checked by
+  `python -m src.services.curation.worker_liveness check <name>
+  --max-age 120`, replacing `pgrep -f <module>` (which can't see a
+  deadlocked-but-still-running event loop). `yolo-api` gained its own
+  `/health`-based healthcheck so `curation-vlm-worker` /
+  `curation-cluster-refresh`'s `depends_on` can gate on
+  `condition: service_healthy` instead of merely "container started."
+  New `OP_HEARTBEAT_DIR` env var (container-local, no mount needed).
+- **S-3: cross-process event bus.** `GET /events` SSE subscribers on any
+  of `yolo-api`'s 8 uvicorn worker processes now see every published
+  event, not just the ones published on the same process. Backed by a
+  shared, bounded, rotated JSONL log
+  (`{OP_STATE_DIR}/events/events.jsonl`) every process tails; new
+  `OP_EVENT_BUS` (`file` default, `process` restores the old
+  in-process-only behavior) and `OP_EVENT_LOG_MAX_BYTES` env vars.
+  `curation-detection-worker` now sets `OP_EVENT_API_URL` so its
+  `crop.region_verified` events reach every subscriber, not one
+  arbitrarily-chosen worker; `bulk_writer.py`'s event-publish URL also
+  falls back to `OP_API_BASE_URL`/`OP_API` when `OP_EVENT_API_URL` is
+  unset. `GET /events/stats` now also reports `bus` and `log_path`.
 - **Class deprecate/restore.** `POST /classes/{class_id}/deprecate` flips
   `deprecated` on a class nothing references (idempotent; refuses on a
   still-referenced class); `POST /classes/{class_id}/restore` undoes it

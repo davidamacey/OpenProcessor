@@ -11221,16 +11221,14 @@
     },
     "/curation/events/stats": {
       "get": {
-        "description": "Ops counters: subscribers, events_published, events_dropped.",
+        "description": "Ops counters: subscribers, events_published, events_dropped, plus\nthe active ``bus`` (``file``/``process``) and its ``log_path``.",
         "operationId": "curation_events_stats_curation_events_stats_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "integer"
-                  },
+                  "additionalProperties": true,
                   "title": "Response Curation Events Stats Curation Events Stats Get",
                   "type": "object"
                 }

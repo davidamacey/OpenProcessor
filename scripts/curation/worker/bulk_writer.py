@@ -146,7 +146,16 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
 
 # Task #92 — module-level lazy client for the publish endpoint. Reused
 # across calls so we don't tear down the connection pool every batch.
-_EVENT_API_URL = os.environ.get('OP_EVENT_API_URL', '').rstrip('/')
+# S-3: fall back to whatever env var already names the API base — the
+# detection worker's own OP_API_BASE_URL/OP_API (used elsewhere for the
+# same host:port) is a zero-config default instead of requiring a
+# fourth, worker-specific env var just for this.
+_EVENT_API_URL = (
+    os.environ.get('OP_EVENT_API_URL')
+    or os.environ.get('OP_API_BASE_URL')
+    or os.environ.get('OP_API')
+    or ''
+).rstrip('/')
 _EVENT_CLIENT: httpx.AsyncClient | None = None
 
 
