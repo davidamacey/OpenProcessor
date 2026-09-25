@@ -380,3 +380,42 @@ async def test_probe_inference_does_not_block_the_event_loop(
 
     # 5 x 50 ms of inference: a free loop ticks ~20 times at 10 ms.
     assert ticks >= 10
+
+
+@pytest.mark.asyncio
+async def test_disagreement_is_null_for_a_class_the_probe_cannot_predict(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, tiny_image: Path
+) -> None:
+    """A probe trained on a class subset has no opinion on other classes, so
+    their items must not flood the disagreement queue."""
+    from src.services.curation import probe_predictions as pp
+
+    def predict(_crop: Any) -> tuple[str, float, float, float]:
+        return ('sedan', 0.8, 0.5, 0.6)
+
+    predict.class_names = ('sedan', 'suv')  # type: ignore[attr-defined]
+
+    def build_predictor(_model_path: Path, _architecture: str) -> tuple[Any, str]:
+        return predict, 'v'
+
+    def resolve_image(_image_path: str, *, config: Any) -> Path:
+        return tiny_image
+
+    monkeypatch.setattr(pp, '_build_predictor', build_predictor)
+    monkeypatch.setattr(pp, '_resolve_image', resolve_image)
+    docs = [
+        {'crop_id': 'in', 'image_path': 'x.jpg', 'bbox_norm': [0, 0, 1, 1], 'class_name': 'suv'},
+        {'crop_id': 'out', 'image_path': 'x.jpg', 'bbox_norm': [0, 0, 1, 1], 'class_name': 'bus'},
+    ]
+    fake_os = _FakeOpenSearch(docs)
+
+    await pp.run_probe_inference(
+        tmp_path / 'ckpt.pt',
+        fake_os,  # type: ignore[arg-type]
+        model_version=None,
+        architecture='yolo11',
+    )
+
+    by_id = {u['id']: u['doc'] for u in fake_os.updates}
+    assert by_id['in']['probe_disagreement'] is True
+    assert by_id['out']['probe_disagreement'] is None

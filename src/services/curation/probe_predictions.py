@@ -8,12 +8,13 @@ item document and record:
 - ``probe_pred_class`` — top-1 class name predicted on the crop.
 - ``probe_pred_class_id`` — that name's class-registry id (``None`` when the
   registry has no active class of that name).
-- ``probe_pred_confidence`` — top-1 softmax score, ``p(ŷ)``.
+- ``probe_pred_confidence`` — top-1 posterior probability, ``p(ŷ)``.
 - ``probe_pred_entropy`` — real Shannon entropy of the class posterior.
 - ``probe_pred_margin`` — ``p(top1) - p(top2)`` (feeds the
   ``item_scores.mistakenness`` overlay).
 - ``probe_disagreement`` — ``true`` iff the probe's top-1 differs from the
-  current ``class_name`` in OpenSearch.
+  current ``class_name``; ``null`` when that class is not one the probe
+  can predict (a probe trained on a class subset has no opinion on it).
 
 **Class-posterior fix:** naively calling a high-level ``model.predict()``
 runs NMS (``ultralytics.utils.nms.non_max_suppression``) before this module
@@ -30,15 +31,13 @@ internally (same preprocessing, same ``AutoBackend``) but replaces its
 instead of running NMS. We then apply the exact same box-selection
 criterion ultralytics' own NMS uses (``cls.max(1)`` — best class per
 anchor, then the globally highest-confidence anchor) to pick one box per
-crop, and softmax-normalize its full ``nc``-length class-score row into a
-genuine posterior. Note: the YOLO detection head already applies a
-per-class **sigmoid** in its forward pass (each class is an independent
-Bernoulli, not mutually exclusive logits) — softmax-normalizing those
-sigmoid outputs (rather than raw pre-activation logits) is what this
-module means by "class posterior"; it yields a valid distribution that
-sums to 1 and preserves the top-1 class (softmax is monotonic), which is
-what entropy/margin need. This is a documented approximation, not a
-hidden one.
+crop, and normalize its full ``nc``-length class-score row into a
+posterior. The YOLO head already applies a per-class **sigmoid** (each
+class an independent Bernoulli), so the row is divided by its sum; that
+keeps the top-1 class and the scores' relative strength. A softmax over
+values already in [0, 1] would flatten every row toward uniform (a 0.9 vs
+0.05 row would read as ~0.37 confidence). This is a documented
+approximation, not a hidden one.
 
 This module is intentionally importable in tests **without** ultralytics or
 onnxruntime installed — those heavy imports happen inside
@@ -57,9 +56,8 @@ versus YOLO11's ``(4 + nc, num_anchors)`` with no objectness channel. This
 module therefore loads that family directly via onnxruntime (CPU only) and
 applies the fork's own box-selection criterion (``x[:, 5:] *= x[:, 4:5]``
 then best-class-only ``.max(1)``) to pick one anchor per crop, then
-softmax-normalizes that anchor's raw per-class row into a genuine
-posterior — the same "class posterior" convention
-``_summarize_prediction_raw`` uses above.
+sum-normalizes that anchor's per-class row into a posterior — the same
+convention ``_summarize_prediction_raw`` uses above.
 """
 
 from __future__ import annotations
@@ -203,6 +201,8 @@ async def run_probe_inference(
     logger.info('probe_init', model=str(model_path), architecture=architecture)
     predict_fn, default_version = _build_predictor(model_path, architecture)
     version_tag = model_version or default_version
+    names = getattr(predict_fn, 'class_names', None)
+    probe_classes = set(names) if names is not None else None
 
     body: dict[str, Any] = {
         'size': page_size,
@@ -248,9 +248,14 @@ async def run_probe_inference(
                 if prediction is None:
                     continue
                 pred_cls, pred_conf, entropy, margin = prediction
-                disagreement = bool(
-                    src.get('class_name') and pred_cls and pred_cls != src['class_name']
-                )
+                stored = src.get('class_name')
+                # A probe trained on a class subset has no opinion on other
+                # classes: their items get null, not a disagreement.
+                disagreement: bool | None
+                if not stored or (probe_classes is not None and stored not in probe_classes):
+                    disagreement = None
+                else:
+                    disagreement = pred_cls != stored
                 bulk_body.append({'update': {'_index': cfg.items_index, '_id': hit['_id']}})
                 bulk_body.append(
                     {
@@ -319,7 +324,7 @@ def _entropy(probs: list[float]) -> float:
     Kept for callers that only have a list of scores (not a torch tensor)
     to normalize — e.g. ad-hoc scripts/tests. Production
     :func:`_summarize_prediction_raw` computes entropy directly on the
-    softmax'd torch tensor instead.
+    normalized torch tensor instead.
     """
     s = sum(p for p in probs if p > 0)
     if s <= 0:

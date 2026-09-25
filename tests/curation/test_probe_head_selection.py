@@ -57,7 +57,7 @@ def test_post_selection_rows_are_not_read_as_a_posterior() -> None:
 def test_class_score_tensor_yields_a_posterior_over_the_model_classes() -> None:
     model = _Model(end2end=False, nc=5)
     scores = torch.zeros(4 + 5, 10)
-    scores[4 + 2, 7] = 0.9
+    scores[4:, 7] = torch.tensor([0.1, 0.1, 0.9, 0.1, 0.1])
 
     name, confidence, entropy, margin = probe_predictions._summarize_prediction_raw(
         [probe_predictions._RawPreds(scores)], model
@@ -67,3 +67,19 @@ def test_class_score_tensor_yields_a_posterior_over_the_model_classes() -> None:
     assert 0.0 < confidence < 1.0
     assert entropy > 0.0
     assert margin > 0.0
+
+
+def test_confident_class_scores_give_a_confident_posterior() -> None:
+    """Per-class sigmoid scores are normalized by their sum; a softmax over
+    values already in [0, 1] flattens every posterior toward uniform."""
+    model = _Model(end2end=False, nc=5)
+    scores = torch.zeros(4 + 5, 3)
+    scores[4:, 1] = torch.tensor([0.9, 0.05, 0.05, 0.05, 0.05])
+
+    name, confidence, _entropy, margin = probe_predictions._summarize_prediction_raw(
+        [probe_predictions._RawPreds(scores)], model
+    )
+
+    assert name == 'class_0'
+    assert confidence == pytest.approx(0.9 / 1.1, abs=1e-6)
+    assert margin == pytest.approx((0.9 - 0.05) / 1.1, abs=1e-6)
