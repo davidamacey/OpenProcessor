@@ -60,7 +60,7 @@ export const CORE_REVIEW_TABS: ReviewTabDef[] = [
   // missed entirely. Genuinely distinct failure mode from the rest.
   {
     id: 'coco_blind_spots',
-    label: 'COCO Blind Spots',
+    label: 'Classifier Blind Spots',
     urlId: 'coco_blind_spots',
     endpointId: 'coco_blind_spots',
   },

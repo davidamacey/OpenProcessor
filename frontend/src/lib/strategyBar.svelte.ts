@@ -150,7 +150,12 @@ export function createStrategyBar(opts: StrategyBarOptions = {}): StrategyBar {
 export function formatAppliedSort(
   requested: string,
   applied: string | null | undefined,
+  sorts: ReadonlyArray<{ id: string; label: string }> = [],
 ): string | null {
   if (!applied) return null;
-  return applied === requested ? null : applied;
+  if (applied === requested) return null;
+  // R4 (visual audit 2026-09-24): show the served `/methods` label, not the
+  // raw id ("atypicality" → "Atypicality (outlier-first)"); the id only when
+  // the backend serves no label for it.
+  return sorts.find((s) => s.id === applied)?.label ?? applied;
 }
