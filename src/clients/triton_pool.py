@@ -359,6 +359,18 @@ class AsyncTritonPool:
             logger.error(f'Health check failed: {e}')
             return False
 
+    async def is_model_ready(self, model_name: str) -> bool:
+        """Is ``model_name`` READY on the server -- ``False`` on any error
+        (not initialized, unreachable, unknown model) rather than raising,
+        so a startup gate can treat "can't tell" the same as "not ready"."""
+        if not self._initialized:
+            return False
+        try:
+            return bool(await self._clients[0].is_model_ready(model_name))
+        except Exception as e:
+            logger.warning(f'is_model_ready({model_name!r}) failed: {e}')
+            return False
+
     async def close(self) -> None:
         """Close all client connections."""
         if not self._initialized:
