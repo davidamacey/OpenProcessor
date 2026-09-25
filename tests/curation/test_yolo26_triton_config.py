@@ -49,6 +49,37 @@ class TestRenderConfig:
         assert 'tensorrt' in out
         assert 'trt_engine_cache_enable' in out
 
+    def test_trt_engine_cache_path_is_not_a_model_repo_root_entry(self) -> None:
+        """Item 4 (fresh-start E2E findings 2026-09-25, round 2): the ORT-TRT
+        engine cache used to render as the bare '/models/cache' -- a
+        SIBLING of every model directory at the model repository root,
+        which Triton's repository index then listed as a bogus model
+        named "cache". The cache path must live one level under this
+        model's own directory instead, where Triton's version scan
+        (integer subdirs only) ignores it and it's never a top-level
+        repo entry."""
+        cfg = Yolo26TritonConfig(model_name='yolo26m_v7_test')
+        out = render_config(cfg)
+
+        import re
+
+        (cache_path,) = re.findall(r'trt_engine_cache_path" value: "([^"]+)"', out)
+
+        assert cache_path == '/models/yolo26m_v7_test/trt_cache'
+        # Not the bare repo-root path, and not equal to a top-level dir
+        # name Triton's repository scan would enumerate as a model.
+        assert cache_path != '/models/cache'
+        assert cache_path.count('/') > 2  # nested under the model's own dir
+
+    def test_trt_engine_cache_path_is_unique_per_model(self) -> None:
+        """Two promoted models must never share a cache dir."""
+        out_a = render_config(Yolo26TritonConfig(model_name='model_a'))
+        out_b = render_config(Yolo26TritonConfig(model_name='model_b'))
+
+        assert '/models/model_a/trt_cache' in out_a
+        assert '/models/model_b/trt_cache' in out_b
+        assert '/models/model_a/trt_cache' not in out_b
+
     def test_fp32_mode(self) -> None:
         cfg = Yolo26TritonConfig(model_name='m1', fp16=False)
         out = render_config(cfg)
