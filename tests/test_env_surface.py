@@ -70,6 +70,11 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     'OP_INGEST_SECONDARY_',
     'OP_REGION_DETECTION_',
     'OP_BAKEOFF_PROFILE_',
+    # G-06: compose-only var -- docker-compose.yml's own
+    # ${OP_SOURCE_ROOT_HOST:-./data/source} interpolation is the reader,
+    # not Python code. OP_SOURCE_ROOT (the in-container path it feeds)
+    # IS read by src/config/curation.py and stays subject to this check.
+    'OP_SOURCE_ROOT_HOST',
 }
 
 

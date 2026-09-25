@@ -16,6 +16,7 @@ Usage:
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -28,9 +29,13 @@ import requests
 # Configuration
 # =============================================================================
 
-API_BASE = 'http://localhost:4603'
-TRITON_BASE = 'http://localhost:4600'
-OPENSEARCH_BASE = 'http://localhost:4607'
+# G-26: read the ports THIS deployment's docker-compose.yml/.env actually
+# publish, not hardcoded defaults -- a remapped API_PORT (e.g. a second
+# isolated stack) must not silently test the wrong stack. Override via
+# real environment variables: API_PORT, TRITON_HTTP_PORT, OPENSEARCH_PORT.
+API_BASE = f'http://localhost:{os.environ.get("API_PORT", "4603")}'
+TRITON_BASE = f'http://localhost:{os.environ.get("TRITON_HTTP_PORT", "4600")}'
+OPENSEARCH_BASE = f'http://localhost:{os.environ.get("OPENSEARCH_PORT", "4607")}'
 
 TEST_IMAGE = Path('test_images/zidane.jpg')
 TEST_IMAGE_2 = Path('test_images/bus.jpg')
