@@ -41,6 +41,7 @@ import datetime
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -58,6 +59,13 @@ SCREENSHOT_ROOT = ROOT / "artifacts_local" / "cw-live" / "live-tier"
 # even though the app never issues it today — it's exactly as read-only
 # as GET, and excluding it would be an arbitrary asymmetry.
 _SAFE_METHODS = {"GET", "HEAD"}
+
+# POSTs the backend documents as side-effect free, allowed by exact path.
+# Keep this minimal: every entry needs a citation to the backend's own
+# docstring/contract saying it doesn't write.
+#   /train/preflight: OpenProcessor curation_train.py `preflight` — "no side
+#   effects"; /train fires it on mount whenever an export exists.
+_READ_ONLY_POSTS = {f"{API_PREFIX}/train/preflight"}
 
 
 def _env_live_url() -> str | None:
@@ -175,6 +183,10 @@ def guarded_page(live_url: str, page: Any) -> Any:
     gp = GuardedPage(page)
 
     def _guard_curation(route: Any, request: Any) -> None:
+        path = urllib.parse.urlsplit(request.url).path
+        if request.method == "POST" and path in _READ_ONLY_POSTS:
+            route.continue_()
+            return
         if request.method not in _SAFE_METHODS:
             gp.write_attempts.append((request.method, request.url))
             route.abort("failed")
