@@ -49,6 +49,10 @@ def register_train_mount(stub):
     stub.on("GET", r"/train/status(\?|$)", (200, None))
     stub.on("GET", r"/training_cohorts(\?|$)", {"cohorts": []})
     stub.on("POST", r"/train/preflight(\?|$)", {"blocked": False, "checks": [], "summary": None})
+    # Coordinator finding: the class-subset picker's "N validated crops"
+    # summary now shows a served holdout figure alongside it — /train
+    # fetches this on mount the same way /export already does.
+    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
 
 
 def test_train_gpu_options(stub, page, app_url):

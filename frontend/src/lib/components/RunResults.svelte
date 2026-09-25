@@ -22,6 +22,8 @@
     isTerminalTrainState,
   } from '$lib/trainResults';
   import { formatCount } from '$lib/formatCount';
+  import { focusOnMount } from '$lib/actions/focusOnMount';
+  import { trapFocus } from '$lib/actions/trapFocus';
   import type { TrainJobStatus, TrainManifest } from '$lib/types_train';
 
   interface Props {
@@ -38,6 +40,9 @@
   // the starting open/closed state, not a live-tracked prop.
   let open = $state(untrack(() => startOpen));
   let manifest = $state<TrainManifest | null>(null);
+  // Confusion-matrix lightbox — thumbnail-only in the panel, opened full
+  // size on click (see the "Confusion matrix" section below).
+  let matrixLightboxOpen = $state(false);
   let manifestLoading = $state(false);
   let manifestError = $state<string | null>(null);
   let manifestRequested = false;
@@ -117,35 +122,59 @@
         </p>
       {/if}
 
-      <!-- Validation metrics -->
+      <!-- Validation metrics. `best_metric` is a per-key max across
+           epochs (mAP50 and mAP50-95 can come from different epochs);
+           `last_metric` is actually the *best checkpoint's* own final
+           validation pass (Ultralytics re-fires on_fit_epoch_end for
+           best.pt), not "the last training epoch" — labelled to match
+           until the backend serves `last_epoch`/`best_checkpoint`
+           explicitly. -->
       <section>
         <h3 class="mb-1 text-[11px] uppercase tracking-wide text-zinc-500">
           Metrics — validation
         </h3>
-        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div>
-            <dt class="text-zinc-500">best mAP50</dt>
-            <dd class="font-mono text-zinc-100">
-              {formatMetric(status.best_metric?.map50)}
-            </dd>
+        <div class="mb-2">
+          <p
+            class="mb-1 text-[10px] uppercase tracking-wide text-zinc-600"
+            title="Per-key max across epochs — mAP50 and mAP50-95 can come from different epochs"
+          >
+            best per metric (val, may span epochs)
+          </p>
+          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div>
+              <dt class="text-zinc-500">best mAP50</dt>
+              <dd class="font-mono text-zinc-100">
+                {formatMetric(status.best_metric?.map50)}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-zinc-500">best mAP50-95</dt>
+              <dd class="font-mono text-zinc-100">
+                {formatMetric(status.best_metric?.map50_95)}
+              </dd>
+            </div>
           </div>
-          <div>
-            <dt class="text-zinc-500">best mAP50-95</dt>
-            <dd class="font-mono text-zinc-100">
-              {formatMetric(status.best_metric?.map50_95)}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-zinc-500">last mAP50</dt>
-            <dd class="font-mono text-zinc-100">
-              {formatMetric(status.last_metric?.map50)}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-zinc-500">last mAP50-95</dt>
-            <dd class="font-mono text-zinc-100">
-              {formatMetric(status.last_metric?.map50_95)}
-            </dd>
+        </div>
+        <div>
+          <p
+            class="mb-1 text-[10px] uppercase tracking-wide text-zinc-600"
+            title="Ultralytics re-fires on_fit_epoch_end for best.pt — this is the best checkpoint's own final validation pass, not necessarily the last training epoch"
+          >
+            best checkpoint (final val)
+          </p>
+          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div>
+              <dt class="text-zinc-500">mAP50</dt>
+              <dd class="font-mono text-zinc-100">
+                {formatMetric(status.last_metric?.map50)}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-zinc-500">mAP50-95</dt>
+              <dd class="font-mono text-zinc-100">
+                {formatMetric(status.last_metric?.map50_95)}
+              </dd>
+            </div>
           </div>
         </div>
       </section>
@@ -230,14 +259,24 @@
           {/if}
 
           <!-- Confusion matrix — image only from the servable URL, never
-               the server filesystem path. -->
+               the server filesystem path. Rendered as a bounded
+               thumbnail (it used to render at full panel width, ~1094×
+               821 at 1600px, dwarfing the rest of the past-runs row) —
+               click opens it full size in a lightbox. -->
           <div class="mt-2">
             {#if evalData.confusion_matrix_url}
-              <img
-                src={resolveApiUrl(evalData.confusion_matrix_url)}
-                alt="Confusion matrix"
-                class="max-w-full rounded border border-zinc-800"
-              />
+              <button
+                type="button"
+                class="block max-w-full cursor-zoom-in rounded border border-zinc-800 p-0"
+                onclick={() => (matrixLightboxOpen = true)}
+                aria-label="Enlarge confusion matrix"
+              >
+                <img
+                  src={resolveApiUrl(evalData.confusion_matrix_url)}
+                  alt="Confusion matrix (click to enlarge)"
+                  class="max-h-64 max-w-full rounded object-contain"
+                />
+              </button>
             {:else if evalData.confusion_matrix_path}
               <p class="text-zinc-500">
                 confusion matrix (server path, not viewable here):
@@ -372,3 +411,38 @@
     </div>
   {/if}
 </div>
+
+{#if matrixLightboxOpen && evalData?.confusion_matrix_url}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Confusion matrix"
+    use:focusOnMount
+    use:trapFocus={{ onEscape: () => (matrixLightboxOpen = false) }}
+    onclick={(e) => {
+      if (e.target === e.currentTarget) matrixLightboxOpen = false;
+    }}
+    tabindex="-1"
+  >
+    <div class="relative max-h-full max-w-6xl">
+      <img
+        src={resolveApiUrl(evalData.confusion_matrix_url)}
+        alt="Confusion matrix, full size"
+        class="max-h-[90vh] max-w-full rounded-md border border-zinc-700 object-contain"
+      />
+      <button
+        type="button"
+        class="absolute -top-3 -right-3 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white"
+        onclick={(e) => {
+          e.stopPropagation();
+          matrixLightboxOpen = false;
+        }}
+        aria-label="Close"
+      >
+        ×
+      </button>
+    </div>
+  </div>
+{/if}

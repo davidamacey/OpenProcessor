@@ -37,15 +37,21 @@ conftest is layered under that one, so no need to redeclare it here.
 
 from __future__ import annotations
 
+import datetime
 import os
 import re
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 API_PREFIX = "/curation"
+
+# e2e/live/conftest.py -> e2e/live -> e2e -> repo root.
+ROOT = Path(__file__).resolve().parents[2]
+SCREENSHOT_ROOT = ROOT / "artifacts_local" / "cw-live" / "live-tier"
 
 # Requests to `**/curation/**` matching this method set pass through
 # untouched; everything else is aborted and recorded. HEAD is included
@@ -105,6 +111,25 @@ def browser_context_args(browser_context_args: dict[str, Any]) -> dict[str, Any]
         **browser_context_args,
         "viewport": {"width": 1280, "height": 720},
     }
+
+
+@pytest.fixture(scope="session")
+def screenshot_run_dir() -> Path:
+    """One timestamped directory per test-session run
+    (`artifacts_local/cw-live/live-tier/<run-timestamp>/`), holding every
+    route's full-page screenshots at both the desktop (1600x1000) and
+    narrow (800x1000) viewports — captured unconditionally by
+    `test_route_sweep.py`, not only on a failure.
+
+    These are NOT a substitute for a human looking at them: per CLAUDE.md's
+    "Live read-only tier" section, someone must actually open a sample of
+    the saved PNGs after each run — the sweep only proves a route mounted
+    without erroring, never that it looks right.
+    """
+    ts = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+    d = SCREENSHOT_ROOT / ts
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def api_get(live_url: str, path: str) -> Any:

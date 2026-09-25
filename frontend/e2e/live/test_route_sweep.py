@@ -18,7 +18,17 @@ a live OpenProcessor backend). For each we assert:
     template;
   * every `<img>` whose bounding box intersects the 1280x720 viewport
     finishes loading (`naturalWidth > 0`) — a lazy offscreen image is
-    allowed to still be pending.
+    allowed to still be pending;
+  * (2026-09-24 visual-review follow-up) no horizontal page overflow at
+    the narrow 800px viewport — `document.documentElement.scrollWidth <=
+    window.innerWidth + 1`.
+
+Every route also gets a full-page screenshot saved at both a desktop
+(1600x1000) and a narrow (800x1000) viewport, unconditionally — not just
+on failure — under `artifacts_local/cw-live/live-tier/<run-timestamp>/
+<route-slug>-<width>.png` (`screenshot_run_dir`, conftest.py). These are
+NOT self-checking: per CLAUDE.md's "Live read-only tier" section, a human
+must actually open a sample of them after each run.
 
 This is deliberately a shallow "did it mount cleanly" sweep, not a
 feature check — see test_data_agreement.py and test_deep_link.py for
@@ -27,12 +37,25 @@ tests that check the UI's numbers actually match the API's.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from conftest import is_allowlisted_bad_response
 from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID
+
+# Viewport widths every route is screenshotted at; height is fixed so a
+# route's screenshot is comparable across runs regardless of content
+# length (full_page=True still captures anything below the fold).
+SCREENSHOT_VIEWPORTS: list[tuple[int, int]] = [(1600, 1000), (800, 1000)]
+
+
+def _route_slug(path: str) -> str:
+    """`/review?tab=model_disagreements` -> `review-tab-model_disagreements`."""
+    slug = re.sub(r"[^a-zA-Z0-9_]+", "-", path).strip("-").lower()
+    return slug or "root"
 
 # (path, a selector proving the route actually mounted its real content,
 # not just an empty shell / loading spinner).
@@ -62,7 +85,13 @@ def _bad_responses(gp: Any) -> list[tuple[str, str, int]]:
 
 
 @pytest.mark.parametrize("path,ready_selector", ROUTES, ids=[r[0] for r in ROUTES])
-def test_route_mounts_cleanly(guarded_page: Any, live_url: str, path: str, ready_selector: str) -> None:
+def test_route_mounts_cleanly(
+    guarded_page: Any,
+    live_url: str,
+    path: str,
+    ready_selector: str,
+    screenshot_run_dir: Path,
+) -> None:
     gp = guarded_page
     page = gp.page
 
@@ -85,6 +114,37 @@ def test_route_mounts_cleanly(guarded_page: Any, live_url: str, path: str, ready
 
     page.goto(f"{live_url}{path}", wait_until="domcontentloaded")
     page.wait_for_selector(ready_selector, timeout=15_000)
+
+    # Full-page screenshots at both viewports, saved unconditionally
+    # (before any assertion below can fail) — see the module docstring
+    # and CLAUDE.md's live-tier section: these must be visually reviewed
+    # by a human, the sweep itself only proves the route mounted.
+    # `wait_for_timeout` here is a deliberate, narrow exception to this
+    # tier's "no fixed sleep" rule — there is no DOM condition to wait on
+    # for "the post-resize reflow has settled" the way there is for a
+    # fetch or an image load.
+    default_viewport = page.viewport_size
+    slug = _route_slug(path)
+    narrow_overflow: bool | None = None
+    for width, height in SCREENSHOT_VIEWPORTS:
+        page.set_viewport_size({"width": width, "height": height})
+        page.wait_for_timeout(150)
+        page.screenshot(
+            path=str(screenshot_run_dir / f"{slug}-{width}.png"),
+            full_page=True,
+        )
+        if width == 800:
+            narrow_overflow = page.evaluate(
+                "document.documentElement.scrollWidth <= window.innerWidth + 1"
+            )
+    if default_viewport is not None:
+        page.set_viewport_size(default_viewport)
+
+    assert narrow_overflow, (
+        f"{path}: horizontal page overflow at 800px "
+        f"(document.documentElement.scrollWidth > window.innerWidth + 1) — "
+        f"see {screenshot_run_dir / f'{slug}-800.png'}"
+    )
 
     # Give in-flight `{API_PREFIX}` fetches issued on mount a chance to
     # land and their images to start loading, without a fixed sleep or

@@ -58,6 +58,32 @@ describe('RunResults — val vs test labelling', () => {
   });
 });
 
+describe('RunResults — best_metric/last_metric relabel (coordinator finding 7)', () => {
+  // `last_metric` is actually the best checkpoint's own final validation
+  // pass (Ultralytics re-fires on_fit_epoch_end for best.pt), not "the
+  // last training epoch"; `best_metric` is a per-key max that can span
+  // different epochs for mAP50 vs mAP50-95. Both sub-groups render under
+  // "Metrics — validation" but must carry their own, more accurate label.
+  it('labels the best_metric block "best per metric (val, may span epochs)"', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const el = renderRunResults(trainStatusFixture);
+    expect(el.textContent).toContain('best per metric (val, may span epochs)');
+  });
+
+  it('labels the last_metric block "best checkpoint (final val)"', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const el = renderRunResults(trainStatusFixture);
+    expect(el.textContent).toContain('best checkpoint (final val)');
+  });
+
+  it('still renders the served best_metric/last_metric values under their new labels', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const el = renderRunResults(trainStatusFixture);
+    expect(el.textContent).toContain(trainStatusFixture.best_metric!.map50!.toFixed(3));
+    expect(el.textContent).toContain(trainStatusFixture.last_metric!.map50!.toFixed(3));
+  });
+});
+
 describe('RunResults — per-class table', () => {
   it('renders one row per served per_class entry with name/precision/recall/f1/ap50/support', async () => {
     getTrainManifestMock.mockResolvedValue(trainManifestFixture);
@@ -258,5 +284,89 @@ describe('RunResults — lazy manifest load', () => {
     const tables = el.querySelectorAll('table');
     const remapTable = tables[tables.length - 1];
     expect(remapTable.textContent).toContain('38');
+  });
+});
+
+describe('RunResults — confusion matrix lightbox', () => {
+  const withMatrixUrl: TrainJobStatus = {
+    ...trainStatusFixture,
+    eval: {
+      ...trainStatusFixture.eval,
+      confusion_matrix_url: '/curation/train/artifacts/job1/confusion_matrix.png',
+    },
+  };
+
+  it('renders the confusion matrix as a bounded thumbnail (max-h-64, object-contain), not full width', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const el = renderRunResults(withMatrixUrl);
+    const img = el.querySelector('img[alt="Confusion matrix (click to enlarge)"]');
+    expect(img).not.toBeNull();
+    expect(img?.className).toContain('max-h-64');
+    expect(img?.className).toContain('object-contain');
+    // No lightbox open yet.
+    expect(el.querySelector('[aria-label="Confusion matrix"]')).toBeNull();
+  });
+
+  it('opens a full-size lightbox on click', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const el = renderRunResults(withMatrixUrl);
+    const thumbButton = el.querySelector(
+      'button[aria-label="Enlarge confusion matrix"]',
+    ) as HTMLButtonElement;
+    expect(thumbButton).not.toBeNull();
+    thumbButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    flushSync();
+    const dialog = document.querySelector(
+      '[role="dialog"][aria-label="Confusion matrix"]',
+    );
+    expect(dialog).not.toBeNull();
+    const fullImg = dialog?.querySelector('img');
+    expect(fullImg?.getAttribute('src')).toBe(
+      'https://api.test/curation/train/artifacts/job1/confusion_matrix.png',
+    );
+  });
+
+  it('closes the lightbox via the close button', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const el = renderRunResults(withMatrixUrl);
+    const thumbButton = el.querySelector(
+      'button[aria-label="Enlarge confusion matrix"]',
+    ) as HTMLButtonElement;
+    thumbButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    flushSync();
+    const closeButton = document.querySelector(
+      '[role="dialog"][aria-label="Confusion matrix"] button[aria-label="Close"]',
+    ) as HTMLButtonElement;
+    expect(closeButton).not.toBeNull();
+    closeButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    flushSync();
+    expect(
+      document.querySelector('[role="dialog"][aria-label="Confusion matrix"]'),
+    ).toBeNull();
+  });
+
+  it('closes the lightbox on Escape', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const el = renderRunResults(withMatrixUrl);
+    const thumbButton = el.querySelector(
+      'button[aria-label="Enlarge confusion matrix"]',
+    ) as HTMLButtonElement;
+    thumbButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    flushSync();
+    const dialog = document.querySelector(
+      '[role="dialog"][aria-label="Confusion matrix"]',
+    ) as HTMLElement;
+    expect(dialog).not.toBeNull();
+    dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    flushSync();
+    expect(
+      document.querySelector('[role="dialog"][aria-label="Confusion matrix"]'),
+    ).toBeNull();
+  });
+
+  it('does not open a lightbox when no confusion_matrix_url is served', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const el = renderRunResults(trainStatusFixture);
+    expect(el.querySelector('button[aria-label="Enlarge confusion matrix"]')).toBeNull();
   });
 });
