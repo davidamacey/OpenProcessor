@@ -26,7 +26,7 @@ _MAX_SIBLINGS = 500
 
 def _pixel_size_from_header(image_path: str) -> tuple[int, int] | None:
     """Best-effort ``(width, height)`` read straight from the image file
-    header (K6 completeness): a client drawing boxes from
+    header: a client drawing boxes from
     ``GET /crops/{id}/context`` needs real pixel dimensions to convert
     normalized geometry, and the images-index doc doesn't always carry
     them (e.g. an item ingested before width/height were captured).
@@ -71,7 +71,7 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
     ``crop_rank_in_image`` (largest first), at most 500. ``image`` is null
     when the images index has no record of the frame.
     """
-    # F-25 (adjacent fix): this endpoint's bare .get() had zero _source
+    # This endpoint's bare .get() had zero _source
     # excludes at all -- not even the embedding vectors every other item
     # endpoint drops. Bring it in line: exclude vectors like a
     # single-item fetch (item_source_excludes), and the sibling list
@@ -91,7 +91,7 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
             width = img.get('width')
             height = img.get('height')
             image_path = img.get('image_path')
-            # K6 completeness: a full-image labeling view needs real
+            # A full-image labeling view needs real
             # pixel dimensions to convert the served normalized geometry
             # to on-screen boxes. Fill from the file header rather than
             # ever leaving width/height null when the image is servable.

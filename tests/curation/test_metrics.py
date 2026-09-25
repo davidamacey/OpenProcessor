@@ -5,7 +5,7 @@ Previously ``test_all_counters_increment_without_error`` and
 and asserted nothing about the effect — they'd pass identically if the
 metric objects were no-ops. Replaced with real assertions on the
 collected sample values, label sets, and the actual ``/metrics``
-exposition text (plan Wave 5 W5.d).
+exposition text.
 """
 
 from __future__ import annotations

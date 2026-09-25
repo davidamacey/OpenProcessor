@@ -1,4 +1,4 @@
-"""LG-1: src.services.detection.region_embed."""
+"""Unit tests for src.services.detection.region_embed."""
 
 from __future__ import annotations
 

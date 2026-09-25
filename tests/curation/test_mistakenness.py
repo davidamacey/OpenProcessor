@@ -1,8 +1,7 @@
-"""Tests for the mistakenness (confident-learning margin) scorer
-(curation-strategy plan §2.4/§6/§9).
+"""Tests for the mistakenness (confident-learning margin) scorer.
 
 The acceptance-bar test (``test_synthetic_label_flip_auroc``) is the real
-gate from plan §6: synthetic 5% label-flip over n=500 separable synthetic
+gate: synthetic 5% label-flip over n=500 separable synthetic
 classes, AUROC >= 0.8 on the canonical ``p(argmax) - p(stored)`` formula. A
 second test covers the production scalar-field approximation
 (``compute_mistakenness_from_margin``) that ``MistakennessScorer`` actually
@@ -67,7 +66,7 @@ def _synthetic_posteriors(
 
 
 def test_synthetic_label_flip_auroc() -> None:
-    """Plan §6 acceptance bar: AUROC >= 0.80 on synthetic 5% label-flip."""
+    """Acceptance bar: AUROC >= 0.80 on synthetic 5% label-flip."""
     probs, stored_labels, is_mislabeled = _synthetic_posteriors()
     assert is_mislabeled.sum() >= 15, 'sanity: flip cohort too small to measure AUROC meaningfully'
 
@@ -76,7 +75,7 @@ def test_synthetic_label_flip_auroc() -> None:
     assert np.all(scores >= -1e-6)  # p(argmax) >= p(anything), including p(stored)
 
     auroc = roc_auc_score(is_mislabeled, scores)
-    assert auroc >= 0.80, f'AUROC {auroc:.3f} below the plan §6 acceptance bar (0.80)'
+    assert auroc >= 0.80, f'AUROC {auroc:.3f} below the acceptance bar (0.80)'
 
 
 def test_agreement_rows_score_zero() -> None:

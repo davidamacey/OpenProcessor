@@ -1,4 +1,4 @@
-"""Registry of curation-score overlays (curation-strategy plan §3.3).
+"""Registry of curation-score overlays.
 
 Mirrors ``cluster_methods/__init__.py``'s ``get_method``/``available_methods``
 pattern, but for the *score* axis — see ``base.py`` for why this is a

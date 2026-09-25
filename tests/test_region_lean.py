@@ -1,5 +1,5 @@
 """Synthetic-geometry coverage for ``src/services/detection/region_lean.py``
-(plan Wave 5 W5.b — a zero-coverage pure cv2/numpy leaf).
+— a zero-coverage pure cv2/numpy leaf.
 """
 
 from __future__ import annotations

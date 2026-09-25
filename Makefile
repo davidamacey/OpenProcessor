@@ -1059,7 +1059,7 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
 	@bash $(SCRIPTS_DIR)/clone_reference_repos.sh --repo $(REPO)
 
 # ==================================================================================
-# Curation subsystem — EXPERIMENTAL, opt-in compose profile (D7)
+# Curation subsystem — EXPERIMENTAL, opt-in compose profile
 # ==================================================================================
 # The curation worker services (curation-detection-worker, curation-vlm-worker,
 # curation-auto-label-worker, curation-cluster-refresh) all carry
@@ -1091,11 +1091,10 @@ curation-status: ## Show running curation worker containers
 		curation-auto-label-worker curation-cluster-refresh curation-evaluator
 
 .PHONY: curation-seed
-curation-seed: ## Seed a demo curation dataset (not yet implemented — Wave 6 scope)
+curation-seed: ## Seed a demo curation dataset (not yet implemented)
 	@echo "curation-seed: not yet implemented."
 	@echo "scripts/curation/seed_live_harness.py does not exist on this branch yet"
-	@echo "(see docs/design/oss_main_completion_plan.md, Wave 6 — live write-path"
-	@echo "verification harness). Nothing was run."
+	@echo "(live write-path verification harness). Nothing was run."
 
 # ==================================================================================
 # Phony targets (targets that don't create files)

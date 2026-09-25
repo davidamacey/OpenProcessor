@@ -1,5 +1,5 @@
-"""Tests for ``GET /curation/review/{tab}`` Phase 3 additions (curation-strategy
-plan §7 Phase 3): the ``sort``/``min_mistakenness``/``hide_near_duplicates``
+"""Tests for ``GET /curation/review/{tab}`` Phase 3 additions: the
+``sort``/``min_mistakenness``/``hide_near_duplicates``
 query params, the additive ``sort_applied``/``sort_fallback_reason``
 response fields, and the golden-body regression guard for all 9 tabs with
 ``?sort`` absent (see ``test_review_disagreements.py`` for the
@@ -285,7 +285,7 @@ def test_test_holdout_filter_unchanged_by_sort_params(app_client: TestClient) ->
 
 
 def test_review_page_too_deep_is_422(app_client: TestClient) -> None:
-    """F-7: from+size past the 10000 result-window ceiling must 422
+    """from+size past the 10000 result-window ceiling must 422
     explicitly rather than let OpenSearch 500 past index.max_result_window."""
     r = app_client.get('/curation/review/all', params={'page': 400, 'page_size': 30})
     assert r.status_code == 422, r.text

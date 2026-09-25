@@ -1,6 +1,5 @@
 """Targeted tests for two of the worst-covered functions in
-``src/services/curation/clustering/orchestrator.py`` (plan Wave 5 W5.c
-— 31.92% coverage, 465 statements missed): ``refine_region_cluster``
+``src/services/curation/clustering/orchestrator.py``: ``refine_region_cluster``
 and ``cluster_residuals``.
 """
 
@@ -79,8 +78,8 @@ async def test_refine_region_cluster_splits_two_separated_groups() -> None:
     assert result['n_members'] == 6
     assert result['n_subclusters'] == 2
 
-    # Wrote through RegionFields.cluster_subid (not the vehicle-class field)
-    # via a guarded script (F-3) — noop unless the doc's cluster_id_field
+    # Wrote through RegionFields.cluster_subid (not the class field)
+    # via a guarded script — noop unless the doc's cluster_id_field
     # still equals the cluster being refined.
     subids_written = set()
     for chunk in client.bulk_calls:
@@ -233,7 +232,7 @@ async def test_cluster_residuals_writes_land_in_the_residual_band(
     written_cluster_ids = []
     for chunk in bulk_calls:
         for _action, doc in zip(chunk[0::2], chunk[1::2], strict=True):
-            # F-3: guarded script, not a blind 'doc' update.
+            # Guarded script, not a blind 'doc' update.
             written_cluster_ids.append(doc['script']['params']['cid'])
     assert written_cluster_ids  # something was written
     for cid in written_cluster_ids:

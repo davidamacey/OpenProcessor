@@ -1,7 +1,6 @@
 """Tests for the file-based training-job service.
 
-Ported from a private reference vehicle/license-plate curation stack's
-training-pipeline test suite (Chunk 6). These tests exercise the API
+These tests exercise the API
 <-> trainer protocol: writing a ``job.json``, reading a ``status.json``,
 dropping a ``cancel`` sentinel, and detecting stale heartbeats. The
 fixtures redirect ``OP_TRAIN_JOBS_DIR`` to a per-test ``tmp_path`` so
@@ -40,7 +39,7 @@ def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture
 def restricted_gpu_ids(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Configure an allowlist of {0, 2} -- the reference deployment's
+    """Configure an allowlist of {0, 2} -- this deployment's
     two A6000s -- for tests that exercise the *restrictive* path. The
     generic default (no fixture) is permissive: any GPU id validates."""
     import src.config.gpu_arbiter as gpu_arbiter_config_module
@@ -123,7 +122,7 @@ async def test_write_job_rejects_duplicate(jobs_dir: Path) -> None:
 #
 # The generic default (GpuArbiterConfig.allowed_gpu_ids == frozenset(), no
 # restriction) accepts any GPU id combination. A deployment that pins
-# training to specific GPUs (e.g. the reference deployment's two A6000s,
+# training to specific GPUs (e.g. this deployment's two A6000s,
 # {0, 2}, with GPU 1 -- a 3080 Ti -- reserved for an unrelated app)
 # configures that allowlist and gets the restrictive behavior back --
 # see the ``restricted_gpu_ids`` fixture.
@@ -160,7 +159,7 @@ def test_default_cuda_visible_devices_is_neutral_single_gpu() -> None:
 
 @pytest.mark.usefixtures('restricted_gpu_ids')
 def test_spec_rejects_gpu1_when_allowlist_configured() -> None:
-    """GPU 1 is the 3080 Ti reserved for an unrelated app in the reference
+    """GPU 1 is the 3080 Ti reserved for an unrelated app in this
     deployment -- must never be selectable once the allowlist excludes it."""
     with pytest.raises(ValueError, match='allowed GPU id'):
         TrainJobSpec(dataset_export_dir='/data/exports/x', cuda_visible_devices='1')
@@ -298,7 +297,7 @@ async def test_write_job_copies_lineage_from_a_full_export_manifest(
 ) -> None:
     """write_job copies dataset_sha / frozen_test_sha / test_label_sha /
     dataset_version_tag straight off a manifest that already has them (a
-    fresh, post-W1 export) -- no on-disk recomputation needed."""
+    fresh export) -- no on-disk recomputation needed."""
     export_dir = tmp_path / 'export'
     (export_dir / 'labels' / 'test').mkdir(parents=True)
     (export_dir / 'labels' / 'test' / 'a.txt').write_text('0 0.5 0.5 0.1 0.1\n')
@@ -327,7 +326,7 @@ async def test_write_job_copies_lineage_from_a_full_export_manifest(
 async def test_write_job_computes_test_hashes_for_an_older_export_manifest(
     jobs_dir: Path, tmp_path: Path
 ) -> None:
-    """An export written before W1 has no frozen_test_sha/test_label_sha in
+    """An export written before this field existed has no frozen_test_sha/test_label_sha in
     its manifest -- write_job must compute both from the on-disk test
     split rather than leaving them None, so every *new* run still records
     them even against an old export. dataset_sha is never computed (it's

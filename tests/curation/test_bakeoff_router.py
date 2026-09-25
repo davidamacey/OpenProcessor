@@ -24,7 +24,7 @@ from src.services.curation.export_support import frozen_test_sha_of
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# CFG-6: this harness used to default to owner-private absolute paths --
+# This harness used to default to owner-private absolute paths --
 # one of which named the location of a licensed proprietary image corpus
 # (a "/mnt/<host-specific-mount>/..." style path) and must never appear
 # in this repo as a literal string again. A generic "any absolute path"
@@ -115,7 +115,7 @@ def make_export(
     return d
 
 
-# The live 84-class export's shape (plan 1.2): 5 classes present in test.
+# The live 84-class export's shape: 5 classes present in test.
 LIVE_NAMES = [f'class_{i}' for i in range(84)]
 for _eid, _n in {37: 'miata', 38: 'minicooper', 43: 'mustang', 51: 'porsche', 78: 'vw'}.items():
     LIVE_NAMES[_eid] = _n

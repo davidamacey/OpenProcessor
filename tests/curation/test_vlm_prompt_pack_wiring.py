@@ -1,10 +1,10 @@
-"""Labeling-assist plan task (a): the VLM labeler singleton and the
+"""The VLM labeler singleton and the
 pipeline's inline class-catalog formatting must both resolve their
 ``PromptPack`` via ``resolve_prompt_pack()`` (config-driven) rather than
 importing ``GENERIC_ITEM_PACK`` as a hardcoded module constant.
 
-``src/routers/curation/models.py`` -- the third call site named in the
-task -- is intentionally NOT re-tested here: it never imported
+``src/routers/curation/models.py`` -- another call site -- is
+intentionally NOT re-tested here: it never imported
 ``GENERIC_ITEM_PACK`` directly, it only calls ``_get_vlm_labeler()``, so it
 already inherits whatever pack that singleton resolves. Fixing ``vlm.py``'s
 singleton construction (below) fixes ``models.py`` for free.

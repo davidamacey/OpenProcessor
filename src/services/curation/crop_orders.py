@@ -5,7 +5,7 @@ the request's filters matched, pages the ranked ids, and hydrates them
 through the caller's ``fetch_items``. ``None`` means "fall back to the
 request's plain ``sort``" (pool too large, no embeddings, feature off).
 
-``core_first`` (DQ-M3) is the cluster view's cut-line order: members
+``core_first`` is the cluster view's cut-line order: members
 nearest their cluster's centroid first. The centroid is computed live
 from the matched members (the same member-mean centroid as
 ``order=outliers``), and each served item's ``cluster_distance`` /
@@ -62,7 +62,7 @@ async def ordered_crops_page(
             compute_centroid_distances,
         )
 
-        # F-16: pool query + exact count scoped to the embedding-bearing subset.
+        # Pool query + exact count scoped to the embedding-bearing subset.
         pool_query, pool_count = await embedding_pool_query_and_count(
             opensearch, index, query_clause, OUTLIER_EMBEDDING_FIELD
         )

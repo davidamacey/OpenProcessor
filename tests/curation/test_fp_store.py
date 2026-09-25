@@ -1,10 +1,8 @@
 """Tests for :mod:`src.services.detection.fp_store`.
 
-No direct coverage exists on the reference branch for this module —
-written fresh. In particular, proves the state-dir/prefix derivation
+Proves the state-dir/prefix derivation
 (``CurationConfig.state_dir`` + ``RegionFields.prefix``) actually drives
-the on-disk location, rather than being hardcoded — the whole point of
-the Chunk 3 config extraction for this file.
+the on-disk location, rather than being hardcoded.
 """
 
 from __future__ import annotations
@@ -103,13 +101,13 @@ class TestFalsePositiveCentroidStore:
 
         dist, idx = store.search(np.array([[0.9, 0.1]], dtype=np.float32))
         assert idx[0] == 0
-        # CM-3: plain L2, not faiss.IndexFlatL2's raw squared L2.
+        # Plain L2, not faiss.IndexFlatL2's raw squared L2.
         # Squared distance is (0.1)^2 + (0.1)^2 = 0.02; plain L2 is its
         # square root.
         assert dist[0] == pytest.approx(np.sqrt(0.02), abs=1e-4)
 
     def test_search_returns_plain_l2_not_squared_l2(self, tmp_path: Path) -> None:
-        """CM-3: orthogonal unit vectors -> sqrt(2); identical -> 0.
+        """Orthogonal unit vectors -> sqrt(2); identical -> 0.
 
         Every caller (auto-assign FP threshold in orchestrator.py,
         suspected-FP threshold in regions_fp.py, both documented as "L2

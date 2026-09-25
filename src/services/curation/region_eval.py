@@ -3,7 +3,7 @@
 The region cascade (``OP_REGION_PROFILE``) writes one region box per item
 into the items index (:class:`~src.config.region_fields.RegionFields`).
 This module checks those boxes against YOLO ground truth drawn on the
-*whole source frame* (e.g. a single-class license-plate dataset with
+*whole source frame* (e.g. a single-class region-of-interest dataset with
 background images) and reports recall / precision / F1 / mean IoU, the
 false-positive gate on background images, and why each missed box was
 missed.

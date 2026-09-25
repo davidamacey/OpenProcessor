@@ -1,9 +1,7 @@
 """Ingest OCC upsert + human-label preservation.
 
-The reference this was ported from ran these scenarios against a real
-dev OpenSearch instance (skipped when unreachable). Per plan §6.0's
-house rule ("do not add the repo's first live-stack dependency" — fake
-the I/O boundary instead), this port exercises
+Per this repo's house rule ("do not add the repo's first live-stack
+dependency" — fake the I/O boundary instead), this exercises
 :func:`src.clients.occ.occ_upsert_bulk` against a small in-memory fake
 OpenSearch that implements just enough of ``mget``/``bulk`` (create,
 with a 409 on an existing id)/``update`` (with ``if_seq_no``/
@@ -17,11 +15,11 @@ scenarios:
    on the existing doc — i.e. the OCC path is invisible in the happy
    case.
 
-A fourth reference scenario (`test_occ_skip_on_conflict_bulk_human_wins_on_real_conflict`)
+A fourth scenario (`test_occ_skip_on_conflict_bulk_human_wins_on_real_conflict`)
 deliberately provokes a genuine OpenSearch version-conflict by mutating
 the document via a raw HTTP side-channel between the internal mget and
 bulk calls of a real cluster — that is exactly the "live smoke" case
-plan §6.0 says not to force into a fake (reproducing real engine-level
+the house rule above says not to force into a fake (reproducing real engine-level
 OCC semantics precisely enough to be meaningful would mean
 reimplementing OpenSearch's version-conflict detection); it's covered
 generically instead by ``tests/curation/test_occ.py``'s conflict-branch
@@ -92,7 +90,7 @@ class FakeUpsertOpenSearch:
     ) -> dict[str, Any]:
         # Two shapes land here: occ_upsert_bulk's own {'ids': [...]} calls,
         # and mget_crops' {'docs': [{'_id':..., '_index':...}, ...]} shape
-        # (occ_update_bulk, F-26 Phase 2).
+        # (occ_update_bulk).
         self.mget_calls.append(body)
         ids = body['ids'] if 'ids' in body else [d['_id'] for d in body['docs']]
         docs = []
@@ -129,7 +127,7 @@ class FakeUpsertOpenSearch:
                 self._seq[doc_id] = 0
                 items.append({'create': {'_id': doc_id, 'status': 201}})
             elif 'update' in action:
-                # F-26 Phase 2: occ_upsert_bulk's per-doc human-guard
+                # occ_upsert_bulk's per-doc human-guard
                 # updates now go through occ_update_bulk's conditional
                 # bulk instead of one client.update() per doc.
                 meta = action['update']
@@ -358,7 +356,7 @@ async def test_non_human_doc_overwritten_normally() -> None:
 
 
 async def test_bulk_update_phase_issues_one_bulk_call_not_n() -> None:
-    """F-26: the update phase of occ_upsert_bulk (existing docs whose
+    """The update phase of occ_upsert_bulk (existing docs whose
     human-guard fields must be preserved/checked) must batch through
     one occ_update_bulk call -- one mget + one bulk -- instead of one
     client.update() per doc."""

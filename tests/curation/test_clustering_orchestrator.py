@@ -4,19 +4,14 @@ All heavy IO is mocked. Synthetic embeddings stand in for the
 foundation-model / classifier embeddings so we get well-separated
 gaussians the clusterer can resolve in < 1s.
 
-This is the "distinct file, same basename as tests/test_legacy_clustering.py"
-file from the reference tree's clustering-package test module — see
-``tests/curation/test_clustering_orchestrator_extra.py`` for the
-other one.
+See ``tests/curation/test_clustering_orchestrator_extra.py`` for the
+other clustering-package test module.
 
-Deviation from the reference file: the reference version also exercises
-a standalone CLI clustering-eval bench/eval harness script via
-``compute_metrics``. That script is never scheduled for porting
-anywhere in the genericization plan (not in §1's target layout, not in
-Appendix A future scope) — it is reference-line-only tooling, out of
-scope for this wave. Those two eval-harness tests are dropped here;
-only the ``cluster_residuals``-through-AHC test, which exercises
-ported orchestrator code, is kept.
+This module intentionally does not exercise a standalone CLI
+clustering-eval bench/eval harness script via ``compute_metrics`` — that
+script is out of scope for this package. Only the
+``cluster_residuals``-through-AHC test, which exercises the orchestrator
+code that ships here, is kept.
 """
 
 from __future__ import annotations

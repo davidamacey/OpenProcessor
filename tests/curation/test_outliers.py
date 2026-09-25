@@ -1,5 +1,5 @@
-"""Coverage for ``src/services/curation/clustering/outliers.py`` (plan
-Wave 5 W5.b — a zero-coverage leaf feeding ``/curation/review/outliers``).
+"""Coverage for ``src/services/curation/clustering/outliers.py`` (a
+zero-coverage leaf feeding ``/curation/review/outliers``).
 """
 
 from __future__ import annotations
@@ -156,7 +156,7 @@ async def test_members_missing_embedding_field_are_skipped() -> None:
 async def test_too_large_cluster_never_issues_a_search_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """F-16: the count-first check must skip the scroll entirely (not just
+    """The count-first check must skip the scroll entirely (not just
     break out of it early) when the pool is already known to be too large."""
     monkeypatch.setattr(outliers_mod, '_MAX_MEMBERS', 2)
 

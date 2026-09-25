@@ -4,8 +4,8 @@ Replaces hardcoded per-domain constants in the detection cascade and
 verification modules (see ``docs/design/curation_design_rationale.md``
 §2.3 for the design rationale, including known gaps in how generic the
 shipped defaults are today). A ``DetectionProfile`` instance describes
-one detectable "region of interest" type (a license plate, a barcode, a
-defect on a manufactured part, …); a deployment constructs its own
+one detectable "region of interest" type (a barcode, a
+defect on a manufactured part, a tag on livestock, …); a deployment constructs its own
 instance — or loads one from a profile file (see
 ``examples/region_profiles/``) — instead of forking the
 detection-cascade code. No region type ships built in: with no active
@@ -126,7 +126,7 @@ class DetectionProfile:
     # classes (line index = class id), recorded as the proposal name.
     labels_path: str = ''
     # The registry class name this profile's detections should be treated
-    # as (e.g. 'license_plate'), so generic code (class merge guards,
+    # as (e.g. 'defect'), so generic code (class merge guards,
     # training presets, export pairing scans) can special-case "the
     # region class" without hardcoding a domain name. '' (default) means
     # no region class name is configured -- callers must degrade to "not

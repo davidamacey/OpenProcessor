@@ -1,4 +1,4 @@
-"""F-9 regression: ``GET /regions?text=`` must match case-insensitively and
+"""Regression: ``GET /regions?text=`` must match case-insensitively and
 escape wildcard metacharacters in user input, same as the review 'regions'
 tab's already-correct helper (``review_queries.region_text_clause``).
 

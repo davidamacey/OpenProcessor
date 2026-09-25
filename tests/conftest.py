@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 
-# S7: OP_VLM_MODEL has no hardcoded default (src/services/labeling/vlm_client.py
+# OP_VLM_MODEL has no hardcoded default (src/services/labeling/vlm_client.py
 # DEFAULT_MODEL). A deterministic test value, set before any test module
 # imports vlm_client, so the whole suite doesn't have to configure it
 # per-test just to get a stable, non-empty verifier/labeler string.

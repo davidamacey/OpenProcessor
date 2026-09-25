@@ -109,7 +109,7 @@ class FalsePositiveCentroidStore:
     def search(self, embeddings: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Return ``(distances, subtype_indices)`` to the nearest FP centroid.
 
-        CM-3: ``faiss.IndexFlatL2`` returns *squared* L2 distance, not L2.
+        ``faiss.IndexFlatL2`` returns *squared* L2 distance, not L2.
         Every caller (auto-assign FP threshold, suspected-FP threshold,
         the "L2 on unit-norm" comments at the call sites) was written
         assuming plain L2, where orthogonal unit vectors are ``sqrt(2)``

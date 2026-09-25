@@ -2,7 +2,7 @@
 
 Pivoted to as the default residual-pool clusterer on 2026-05-23 after
 HDBSCAN's density-based stability selection collapsed on the
-continuously-dense vehicle-embedding manifold (parameter sweep over
+continuously-dense item-embedding manifold (parameter sweep over
 ``min_cluster_size`` ∈ {5, 20, 50, 100, 200} and
 ``cluster_selection_method`` ∈ {eom, leaf} produced either one
 mega-cluster or 100 % noise — there are no density gaps for HDBSCAN to
@@ -37,8 +37,7 @@ method produces results comparable to the existing `vehicles` FAISS
 index that the rest of the system already trusts. This is a
 deliberate constant match, not a shared import — the two clustering
 subsystems (this residual-pool clusterer and the unrelated
-``src/services/clustering.py`` visual-search module, see plan §0.11)
-stay independent.
+``src/services/clustering.py`` visual-search module) stay independent.
 """
 
 from __future__ import annotations

@@ -41,7 +41,7 @@ _MAX_K = 2000
 
 
 def _source_excludes(fields: RegionFields) -> list[str]:
-    """Never ship raw embedding vectors or class_id_history (F-25 — this
+    """Never ship raw embedding vectors or class_id_history (this
     is a paginated list endpoint; history is undo-only)."""
     return item_list_source_excludes(fields)
 
@@ -225,7 +225,7 @@ async def semantic_text_search(
         include_test=include_test,
     )
 
-    # F-24: `k` is the ANN candidate depth (how many nearest neighbors the
+    # `k` is the ANN candidate depth (how many nearest neighbors the
     # kNN plugin considers) — it must cover through the end of the
     # requested page, so it stays `page * page_size` (capped at _MAX_K).
     # `from`/`size` are a *separate* concern: which slice of those k

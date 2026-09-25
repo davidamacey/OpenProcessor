@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`src.clients.pe_encoder` (B-PR3).
+"""Unit tests for :mod:`src.clients.pe_encoder`.
 
 The PE text encoder needs PE's tokenizer plus an ONNX Runtime / PyTorch /
 Triton backend. None of those heavy dependencies are exercised here — we

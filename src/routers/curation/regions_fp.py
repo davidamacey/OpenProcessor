@@ -1,13 +1,13 @@
 """Curation region-clustering + false-positive endpoints.
 
-Ported from the reference implementation's region-FP router. Split out of
-``regions.py`` to keep each router sub-module focused (and under the
-700-LOC gate). Covers the region-cluster *view* (coarse KMeans buckets
-+ AHC refine), the permanent false-positive bucket, and the
+Split out of ``regions.py`` to keep each router sub-module focused (and
+under the 700-LOC gate). Covers the region-cluster *view* (coarse KMeans
+buckets + AHC refine), the permanent false-positive bucket, and the
 FP-centroid matcher.
 
-False positives are heterogeneous (lights, bumpers, stickers, fake
-regions, empty brackets), so the matcher is **double-layered**:
+False positives are heterogeneous (background clutter, similar-looking
+non-target objects, empty/spurious detections), so the matcher is
+**double-layered**:
 :func:`~src.services.curation.clustering.orchestrator.build_region_fp_centroids`
 sub-types the FP bucket into ``k`` sub-clusters and persists **one
 centroid per sub-type**; :func:`suspected_false_positives` matches
@@ -49,13 +49,13 @@ suggested as a false positive (served as ``default_threshold``)."""
 
 
 _SUSPECTED_FP_CACHE_TTL_SEC = 60.0
-"""F-18 interim fix: ``/regions/suspected_false_positives`` scrolled the
+"""Interim fix: ``/regions/suspected_false_positives`` scrolled the
 entire region-embedding pool on every single page request (the pool is
 independent of ``page``/``page_size``). Cache the scored
 ``[(dist, crop_id, subid)]`` list keyed by ``(trained_at, threshold)`` for
 60s so paging through results doesn't re-scroll. The persisted-write
 version (store ``region_fp_distance`` at write time) is the long-term
-fix but is out of scope here — see the audit doc."""
+fix but is out of scope here."""
 
 _suspected_fp_cache: dict[tuple[Any, float], tuple[float, list[tuple[float, str, str | None]]]] = {}
 
@@ -168,7 +168,7 @@ async def list_region_clusters(
                         'top_hits': {
                             'size': per_cluster,
                             # crop_id == _id here; only _id is ever read
-                            # below (F-15) — no need to decompress _source.
+                            # below — no need to decompress _source.
                             '_source': False,
                             'sort': [
                                 {

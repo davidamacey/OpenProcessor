@@ -1,12 +1,11 @@
-"""Shared embedding-pool fetch for the selection overlay
-(curation-strategy plan §3.4/§7 Phase 4).
+"""Shared embedding-pool fetch for the selection overlay.
 
 Scroll-based ``ids + pe_embedding`` fetch for an arbitrary OpenSearch query,
 capped at a caller-supplied ``cap`` — same scroll-then-break shape as
 :func:`src.services.curation.clustering.outliers.compute_outlier_order`'s
 member fetch, generalized to an arbitrary query clause instead of one
 hardcoded to a single cluster. Lives in ``selection/`` (not the
-reference select router) so both the router's synchronous path and
+select router) so both the router's synchronous path and
 :mod:`selection.job`'s backgrounded path import the same code — a router
 module must not be a dependency of a service module (the reverse is the
 normal direction everywhere else in this package).
@@ -63,7 +62,7 @@ async def fetch_pool_embeddings(
     it; a truncated pool means "give up on this cap", not "here's a
     partial answer").
     """
-    # F-16: count first — a pool far past `cap` should never pay for a
+    # Count first — a pool far past `cap` should never pay for a
     # scroll (even a break-early one) just to discover it's too large.
     count_resp = await client.count(index=index, body={'query': query})
     if int((count_resp or {}).get('count', 0)) > cap:

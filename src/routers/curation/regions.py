@@ -1,10 +1,9 @@
 """Curation router sub-module — region-of-interest browse endpoints.
 
-Ported from the reference implementation's region router. Covers browsing
-items that carry a region-of-interest sub-bbox (filtered by
-provenance/score/text/status), the curated training-cohort picker, and the
-served region lifecycle / vocabulary catalogs. The human-edit endpoints
-that set, clear and patch the sub-bbox live in
+Covers browsing items that carry a region-of-interest sub-bbox
+(filtered by provenance/score/text/status), the curated training-cohort
+picker, and the served region lifecycle / vocabulary catalogs. The
+human-edit endpoints that set, clear and patch the sub-bbox live in
 :mod:`src.routers.curation.regions_edit`.
 """
 
@@ -46,7 +45,7 @@ def _region_item(src: dict[str, Any], crop_id: str) -> dict[str, Any]:
     return serialize_item(src, crop_id)
 
 
-# Large embedding fields (1024 floats) + class_id_history (F-25, a
+# Large embedding fields (1024 floats) + class_id_history (a
 # list-only field no browse renderer reads) — excluded from browse _source.
 _REGION_SOURCE_EXCLUDES = item_list_source_excludes()
 
@@ -102,7 +101,7 @@ async def list_regions(
             detail=f'status must be one of {sorted(_STATUS_VALUES)}; got {status!r}',
         )
     await _ensure_indexes(opensearch)
-    # F-19: every clause here is a pure predicate (exists/term/range/
+    # Every clause here is a pure predicate (exists/term/range/
     # wildcard-as-boolean-match) -- filter context, not must.
     filt: list[dict[str, Any]] = (
         [{'exists': {'field': F.bbox_norm}}] if status is None else [{'term': {F.status: status}}]
@@ -354,8 +353,7 @@ async def region_statuses() -> dict[str, Any]:
 
 @router.get('/regions/vocabulary', response_model=RegionVocabularyResponse)
 async def regions_vocabulary() -> dict[str, Any]:
-    """The deployment-configured detector/segmenter/verifier vocabulary
-    (W0: naming sweep finding m9).
+    """The deployment-configured detector/segmenter/verifier vocabulary.
 
     ``{detectors: [{id, label, role, filterable}], region_sources:
     [{id, label, role}], chain_actors: [{id, label, role}], text_rules,

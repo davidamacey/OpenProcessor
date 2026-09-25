@@ -1,13 +1,8 @@
 """Router-level tests for the curation export endpoints.
 
-The reference test this was ported from exercised the reference's
-Bucket-B domain-specific export service's version_tag/seed passthrough
-bug fix directly. That service is never ported (plan §1), so this file instead
-exercises the generic port's equivalent: ``POST /curation/export/yolo``
-passes ``version_tag``/``seed`` through to
-:class:`~src.services.curation.export.GenericYoloExportService`, plus
-the registry-artifact-serving endpoints (ported close to verbatim — pure
-filesystem serving, no Bucket-B dependency).
+Exercises ``POST /curation/export/yolo`` passing ``version_tag``/``seed``
+through to :class:`~src.services.curation.export.GenericYoloExportService`,
+plus the registry-artifact-serving endpoints (pure filesystem serving).
 """
 
 from __future__ import annotations
@@ -309,7 +304,7 @@ def test_registry_artifact_missing_file_in_valid_export_dir(
 
 
 # =============================================================================
-# Single-class / class-subset export endpoints (plan §4.1 G2)
+# Single-class / class-subset export endpoints
 # =============================================================================
 
 

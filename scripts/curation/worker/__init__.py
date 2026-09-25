@@ -1,17 +1,16 @@
 """Curation detection worker package.
 
-Ported from the reference detection-worker package (9 files,
-3458 LOC). The top-level shim file is preserved as a re-export so
-legacy invocation shapes (``python -m scripts.curation.region_worker_main``
-and direct file runs) keep working — see
-``scripts/curation/region_worker_main.py``.
+Split into focused submodules (9 files, 3458 LOC combined). The top-level
+shim file is preserved as a re-export so legacy invocation shapes
+(``python -m scripts.curation.region_worker_main`` and direct file runs)
+keep working — see ``scripts/curation/region_worker_main.py``.
 
 Sub-modules:
     state        — constants, ``_ItemTask`` dataclass, crop IO helpers
     cascade      — pending fetch, ``SegmenterClient``, geometry helpers, ``_process_crop``
     verify       — VLM verify + region doc builders + auto-confirm
     bulk_writer  — ``_bulk_update`` + ``_publish_region_events``
-    combined     — B-PR5 combined class+region+OCR cohort routing
+    combined     — combined class+region+OCR cohort routing
     client       — SAM3 HTTP client with circuit breaker
     runner       — the long-running ``run()`` entry point
     __main__     — ``parse_args`` + ``main`` for ``python -m`` invocation

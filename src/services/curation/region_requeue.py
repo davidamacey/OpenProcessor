@@ -112,7 +112,7 @@ def _value_filter(field: str, values: tuple[str, ...]) -> dict[str, Any]:
 
 def requeue_query(sel: RequeueSelection, fields: RegionFields | None = None) -> dict[str, Any]:
     F = fields or get_region_fields()
-    # F-19: every clause is a pure predicate (term/exists/should-of-terms
+    # Every clause is a pure predicate (term/exists/should-of-terms
     # via _value_filter) -- filter context, not must.
     filt: list[dict[str, Any]] = []
     must_not: list[dict[str, Any]] = [{'term': {F.validated: True}}]

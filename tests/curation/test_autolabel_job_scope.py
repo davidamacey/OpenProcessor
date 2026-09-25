@@ -133,8 +133,8 @@ def _scope_docs() -> dict[str, dict[str, Any]]:
     base = {'updated_at': '2026-09-01T00:00:00+00:00', 'bbox_norm': [0, 0, 1, 1]}
     return {
         # In the cluster, carrying a class but not yet in its class cluster.
-        # (class_source 'vlm': what the VLM stage writes; F-10 normalizes only
-        # confident or validated labels.)
+        # (class_source 'vlm': what the VLM stage writes; normalization only
+        # applies to confident or validated labels.)
         'in': {
             **base,
             'crop_id': 'in',

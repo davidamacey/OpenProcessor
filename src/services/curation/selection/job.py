@@ -1,12 +1,11 @@
-"""Singleton job runner for pool-scale ``POST /curation/select/diverse`` requests
-(curation-strategy plan §3.4/§7 Phase 4).
+"""Singleton job runner for pool-scale ``POST /curation/select/diverse`` requests.
 
 Mirrors :mod:`src.services.curation.item_scores.job`'s state.json / heartbeat
 / cancel.flag file-backed conventions (itself mirroring
 ``auto_label_job.py``), simplified for a single selection run instead of a
-list of scorers. See the reference select router's module docstring for *when* this
-job path is used instead of answering inline — short version: the plan's
-own compute budget says k-center-greedy at pool scale (n≈128k, k≈1000) is
+list of scorers. See the select router's module docstring for *when* this
+job path is used instead of answering inline — short version: the
+compute budget says k-center-greedy at pool scale (n≈128k, k≈1000) is
 ~1-2 min CPU, too slow to block an HTTP request, so anything above a
 documented sync-ops budget runs here as a backgrounded ``asyncio`` task
 instead (no separate worker container, same as ``crop_scores.job``).
@@ -17,9 +16,8 @@ Directory resolved lazily via ``OP_SELECT_JOBS_DIR`` (default
 
 Read-only with respect to crop documents: this job only ever *reads*
 embeddings and writes its own job-state file under ``OP_SELECT_JOBS_DIR``
-— it never issues an OpenSearch ``update``/``bulk`` write (plan §8
-non-goal #3 / the "never writes a crop field" hard constraint for the
-whole selection overlay).
+— it never issues an OpenSearch ``update``/``bulk`` write (the "never
+writes a crop field" hard constraint for the whole selection overlay).
 """
 
 from __future__ import annotations

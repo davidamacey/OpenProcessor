@@ -1,4 +1,4 @@
-"""Review-queue sort/filter strategy registry (curation-strategy plan §3.2).
+"""Review-queue sort/filter strategy registry.
 
 Mirrors ``cluster_methods/__init__.py``'s ``get_method``/``available_methods``
 pattern, but for the *sort* axis — a :class:`ReviewSort` never assigns a crop
@@ -11,13 +11,13 @@ for what each of the 9 existing tabs used to hardcode — its return values
 MUST byte-match those legacy literals exactly (the golden-body regression
 guard in ``tests/curation/test_review_sorts.py`` is the enforcement).
 
-Selection semantics (plan §3.6 / §7 Phase 3): ``?sort`` absent or literal
+Selection semantics: ``?sort`` absent or literal
 ``'default'`` resolves per-tab and always succeeds. An explicit, *unknown*
 ``sort_id``, or one whose current :class:`ReviewSort.status` is ``'shadow'``
 or ``'disabled'``, is a real user-facing selection error — :func:`build_sort`
 raises :class:`ValueError` so the router turns it into
 ``HTTPException(400, ...)`` ("shadow entries are computed+logged but
-``?sort=<shadow-id>`` returns 400", plan §3). This is deliberately NOT a
+``?sort=<shadow-id>`` returns 400"). This is deliberately NOT a
 silent fallback to the tab default — that would hide a mistaken/stale
 client request behind a result that looks fine but isn't what was asked for.
 A *resolved default* (the tab's own, or the deployment-pinned one) whose
@@ -53,7 +53,7 @@ class ReviewSort:
     """Field whose presence this sort actually depends on for a meaningful
     order (``None`` for fields like ``updated_at`` every crop always has).
     Informational only here — the frontend uses ``/curation/scores/coverage`` on
-    this field to decide whether to offer the sort at all (plan §5)."""
+    this field to decide whether to offer the sort at all."""
     status: StrategyStatus
     description: str
 
@@ -63,7 +63,7 @@ def _mistakenness_status() -> StrategyStatus:
     ``strategy_registry.py``'s live ``OP_SCORES_ENABLED``/``OP_SCORES_SHADOW``
     + ``VALIDATED_SCORERS`` promotion currently computes — NOT a hardcoded
     ``'experimental'`` literal, even though that promotion is real today
-    (docs/design/curation_scores.md §3: synthetic label-flip gate passed
+    (synthetic label-flip gate passed
     outright). Delegates to the shared helper so this can never drift from
     what ``GET /curation/methods`` reports for the same scorer id."""
     from src.services.curation.strategy_registry import effective_scorer_status
@@ -117,7 +117,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             requires_field='cluster_distance',
             status='stable',
             description=(
-                'Closest to the IVF cluster centroid first (plan §2.1) — proximity '
+                'Closest to the IVF cluster centroid first — proximity '
                 'to centroid, i.e. FiftyOne compute_representativeness renamed and '
                 'exposed. Zero new math: same cluster_distance field atypicality '
                 'uses, just ascending instead of descending.'
@@ -180,7 +180,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
                 'Confident-learning mistakenness (Northcutt/Jiang/Chuang, JAIR '
                 '2021). The only scorer whose complete Phase 2 gate passed '
                 '(synthetic 5% label-flip: AUROC=0.997, precision@100=0.98 at '
-                'n=5000 — docs/design/curation_scores.md §3); status here always '
+                'n=5000); status here always '
                 "mirrors strategy_registry.py's live promotion, never hardcoded."
             ),
         ),
@@ -201,7 +201,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             description=(
                 'k-NN density uniqueness. Spearman pre-screen passed on real data '
                 '(rho=0.384 >= 0.25 bar) but the real gate — a blind 200-vs-200 '
-                'operator A/B — has not run (docs/design/curation_scores.md §2). '
+                'operator A/B — has not run. '
                 'Stays shadow (never selectable via ?sort) until that gate clears; '
                 'unlike mistakenness this is NOT tied to OP_SCORES_ENABLED/SHADOW '
                 '— the validation gap is the reason, not the feature flag.'
@@ -273,7 +273,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
                     }
                 },
                 {
-                    # D-1 (F-6): classifier_raw_confidence is never written
+                    # classifier_raw_confidence is never written
                     # in production -- sort on the stored `confidence`
                     # field instead (ascending: least confident first).
                     'confidence': {
@@ -289,7 +289,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
         ),
         ReviewSort(
             id='classifier_blind_spots_default',
-            # R4: the tab was renamed 'Classifier blind spots' (from the
+            # The tab was renamed 'Classifier blind spots' (from the
             # COCO-detector-specific name), but this served label still
             # said 'COCO' — the one place a client could not avoid
             # rendering the stale name since it's served text, not an id.
@@ -342,7 +342,7 @@ _TAB_DEFAULTS: dict[str, str] = {
 }
 """The literal legacy ``sort = [...]`` each of the 9 ``GET /curation/review/{tab}``
 tabs hardcoded before this registry existed, keyed by the sort id whose
-``clause`` byte-matches it. Read directly off the reference review-queries module — do not
+``clause`` byte-matches it. Read directly off the review-queries module — do not
 edit without re-checking the router against this table."""
 
 
@@ -393,7 +393,7 @@ async def _first_covered(
 def default_sort_for_tab(tab: str) -> str:
     """The legacy default sort id for ``tab``. Raises :class:`ValueError`
     for a tab this registry doesn't know about (should never happen in
-    practice — the reference review-queries module validates ``tab`` against its own known
+    practice — the review-queries module validates ``tab`` against its own known
     set before this is ever called)."""
     try:
         return _TAB_DEFAULTS[tab]
@@ -420,7 +420,7 @@ async def build_sort(
     * ``sort_id`` is unknown, or names a ``'shadow'``/``'disabled'`` entry →
       raises :class:`ValueError` (the router converts this to
       ``HTTPException(400, ...)``). This is an explicit user-facing
-      selection error, not a silent fallback (plan §3/§3.6) — the caller
+      selection error, not a silent fallback — the caller
       asked for something that either doesn't exist or isn't ready, and
       the honest response is "that's not a valid choice," not quietly
       substituting the tab default.

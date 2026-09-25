@@ -1,8 +1,6 @@
 """Unit tests for :func:`is_plausible_region_bbox` and provenance helpers.
 
-Ported from the reference license-plate sanity-gate tests. Deferred here
-from Chunk 3 because every test exercises
-``src.services.detection.cascade_detect``, which lands in this chunk.
+These tests exercise ``src.services.detection.cascade_detect``.
 
 ``is_plausible_region_bbox`` is a GEOMETRY GUARD only — it rejects
 non-finite / degenerate boxes but applies no aspect or

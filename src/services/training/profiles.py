@@ -8,7 +8,7 @@ picks it up via ``GET /curation/train/profiles``.
 
 Why YOLO26 only:
     YOLO26 is the official Ultralytics recipe (YOLO Vision 2025) and the
-    only family the reference trainer container supports.
+    only family the trainer container supports.
 
 Critical hyperparameter notes:
     - ``optimizer="MuSGD"`` is **required**. Submitting ``optimizer="auto"``
@@ -22,7 +22,7 @@ Critical hyperparameter notes:
       small models (which converge faster) than for large ones. Set
       ``patience=0`` to disable early stopping.
 
-Class-subset presets (naming-sweep D7/F12): ``get_class_subset_presets()``
+Class-subset presets: ``get_class_subset_presets()``
 is generic -- ``all`` is always served; ``all_except_region`` /
 ``region_only`` only appear when the active region profile names a
 ``region_class_name``; a deployment appends its own presets via

@@ -1,5 +1,5 @@
-"""Guard against CFG-4 (see docs/design/curation_design_rationale.md and
-the OSS completion plan §0.6): ``env.template`` used to document *zero*
+"""Guard against a documentation/reality mismatch (see
+docs/design/curation_design_rationale.md): ``env.template`` used to document *zero*
 curation vars while the code read over a hundred ``OP_*`` env vars, and
 there is no mechanism to keep the two in sync as new ones get added.
 

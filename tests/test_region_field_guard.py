@@ -1,5 +1,5 @@
-"""Behavioural tests for ``scripts/codegen/check_no_literal_region_fields.py``
-(plan Wave 5 W5.d, T-5). Before this file the guard had zero tests
+"""Behavioural tests for ``scripts/codegen/check_no_literal_region_fields.py``.
+Before this file the guard had zero tests
 beyond hook-registration/path-existence checks in
 ``tests/curation/test_precommit_paths.py`` — none of its accumulated
 skip rules (8 commits' worth) were ever exercised.
@@ -101,8 +101,8 @@ def test_scan_file_catches_a_genuine_bare_status_literal_outside_any_exemption(
 ) -> None:
     """The case that MUST be caught: a bare `'plate_status'` dict-key
     literal whose *value* is a hardcoded string, not routed through
-    RegionFields/payload/a URL — exactly what a copy-paste from the
-    reference tree without genericization would leave behind."""
+    RegionFields/payload/a URL — exactly what a copy-pasted
+    domain-specific literal would leave behind."""
     content = "        'plate_status': 'detected',\n"
     path = _write(tmp_path, content)
     violations = guard._scan_file(path)

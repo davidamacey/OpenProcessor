@@ -1,4 +1,4 @@
-"""Wave 4 — pin the ``docker-compose.yml`` service contract.
+"""Pin the ``docker-compose.yml`` service contract.
 
 The compose analogue of ``tests/curation/test_precommit_paths.py``:
 convert silent compose drift into a loud test failure instead of a
@@ -24,7 +24,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PATH = REPO_ROOT / 'docker-compose.yml'
 
-# The four curation worker services this wave adds (Wave 4 §4). Any
+# The four curation worker services. Any
 # service whose name starts with this prefix must also carry
 # `profiles: [curation]` — see the loop in
 # test_curation_services_carry_curation_profile for the general form.
@@ -156,7 +156,7 @@ def test_no_duplicate_host_ports() -> None:
 
 
 # =============================================================================
-# Build identity (plan W1 §8) -- OP_BUILD_SHA baked in at build time so
+# Build identity -- OP_BUILD_SHA baked in at build time so
 # code_versions.api_sha/trainer_sha reflect the actual built commit rather
 # than a dev checkout's live `git rev-parse HEAD` fallback.
 # =============================================================================

@@ -238,7 +238,7 @@ async def run(args: argparse.Namespace) -> int:
     # region bbox source (it's too loose; produced visibly-oversized
     # regions).
     ocr_recognizer = PaddleOcrTextRecognizer(pool, profile)
-    # D5: the segmenter leg is optional. An empty ``--segmenter-url``/``OP_SEGMENTER_URL``
+    # The segmenter leg is optional. An empty ``--segmenter-url``/``OP_SEGMENTER_URL``
     # constructs a disabled SegmenterClient — segment() then always
     # returns None (the same "no candidate" result callers already
     # handle) without attempting any HTTP call. A deployment with no
@@ -282,7 +282,7 @@ async def run(args: argparse.Namespace) -> int:
         item_text_enabled=item_text_enabled,
     )
     vlm = _wkr.VlmLabeler(base_url=args.vlm_url, pack=pack) if vlm_available else None
-    # B-PR5: populate class_names so ``label_combined`` callers (the
+    # Populate class_names so ``label_combined`` callers (the
     # primary-detector-missed cohort gate in cascade._process_crop) can
     # classify in the same VLM round-trip as region verify + OCR.
     # Best-effort: if the registry can't be loaded the cohort gate
@@ -458,7 +458,7 @@ async def run(args: argparse.Namespace) -> int:
     async def producer() -> None:
         """Fetch eligible crops and queue task DESCRIPTORS only.
 
-        F-20: in-flight crops are now excluded server-side (``must_not
+        In-flight crops are now excluded server-side (``must_not
         ids``), so the fetch no longer needs to over-fetch
         ``batch_size + in_flight_count`` and then filter in Python — the
         old bug this over-fetch fixed (batch_size=96, in_flight=132, the

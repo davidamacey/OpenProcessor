@@ -11,7 +11,7 @@ names; a deployment with existing data under other names (e.g. a future
 overlay for that deployment) constructs its own instance with those
 names — a rename becomes a config flip, not a code change.
 
-**Scope — what this module does and does NOT govern** (§3.2 scope table):
+**Scope — what this module does and does NOT govern:**
 
 - OpenSearch query bodies, ``_source`` lists, bulk update docs, painless
   scripts, and index mapping bodies — YES, governed by ``RegionFields``.
@@ -37,7 +37,7 @@ from dataclasses import dataclass, fields
 @dataclass(frozen=True)
 class RegionFields:
     """OpenSearch field names for the per-item "region of interest"
-    sub-annotation (e.g. the license plate on a vehicle crop).
+    sub-annotation (e.g. a defect region on an item crop).
 
     Defaults are the generic OSS names. A deployment that already has
     data under different names (e.g. ``roi_status``,
@@ -114,9 +114,8 @@ class RegionFields:
     pairing: str = 'region_pairing'
     # Internal cascade flag: set when a detector's confidence was high
     # enough to skip the VLM verify round-trip entirely (see
-    # DetectionProfile / the curation worker's fast-path). Not part of
-    # the original attribute count in the reference audit -- added while
-    # porting Chunk 8's worker, per the standing instruction: "if you hit
+    # DetectionProfile / the curation worker's fast-path). Added while
+    # porting the curation worker, per the standing instruction: "if you hit
     # a literal with no matching attribute, add the attribute." (See
     # docs/design/curation_design_rationale.md §4.)
     skip_verify: str = 'region_skip_verify'

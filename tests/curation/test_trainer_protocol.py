@@ -456,8 +456,8 @@ def test_unattached_gpu_request_fails_instead_of_mis_scheduling(
 
 
 # =============================================================================
-# Orientation-sensitive class resolution (replaces the reference stack's
-# hardcoded plate class id)
+# Orientation-sensitive class resolution (text classes resolve by name
+# against the dataset's data.yaml instead of a hardcoded class id)
 # =============================================================================
 
 

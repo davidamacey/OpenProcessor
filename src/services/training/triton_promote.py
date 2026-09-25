@@ -1,7 +1,6 @@
 """Promote a trained YOLO26 checkpoint into the Triton model repo.
 
-Ported from a reference curation stack's
-training pipeline (Phase 4). The workflow:
+The workflow:
 
 1. The user clicks "Promote to Triton" on a finished training run in
    the labeler frontend's train page.
@@ -58,9 +57,9 @@ logger = get_logger(__name__)
 # Same default as src/routers/models.py — the Triton model repo mounted
 # into the API container. Override at construction time for tests.
 #
-# TR-1: this used to be a plain module-level constant, so a deployment
-# that mounts the Triton repo somewhere other than /app/models (the
-# private deployment overlay mounts it at /models) silently wrote
+# This used to be a plain module-level constant, so a deployment
+# that mounts the Triton repo somewhere other than /app/models (some
+# deployment overlays mount it at /models) silently wrote
 # promoted models into a directory Triton never sees, with no error —
 # the copy + config-write both "succeed" against a path in the
 # container's writable layer. Resolving OP_TRITON_MODEL_REPO here, at
@@ -245,7 +244,7 @@ class TritonPromoter:
         # hard-fail-on-4xx distinction in _trigger_load is unchanged.
         http_timeout: float = 300.0,
     ) -> None:
-        # TR-1: resolved from OP_TRITON_MODEL_REPO / OP_TRITON_HTTP_URL at
+        # Resolved from OP_TRITON_MODEL_REPO / OP_TRITON_HTTP_URL at
         # construction time (not import time), so a caller that doesn't
         # pass these explicitly still gets whatever this container's env
         # actually says, and tests can monkeypatch os.environ per-test.
@@ -653,7 +652,7 @@ async def unload_triton_model(
 
 
 async def reload_promoted_models(promoter: TritonPromoter | None = None) -> dict[str, Any]:
-    """TR-4: re-``/load`` every promoted model Triton doesn't report READY.
+    """Re-``/load`` every promoted model Triton doesn't report READY.
 
     Triton in explicit-control mode only loads its ``--load-model`` list
     at startup. A model promoted through this module stays on disk (its

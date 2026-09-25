@@ -1,12 +1,11 @@
 """Generic curation/labeling subsystem configuration.
 
 Holds index names, filesystem roots and API-surface constants for the
-`curation` namespace (OpenProcessor's generic port of a private
-reference curation stack — see
+`curation` namespace (see
 ``docs/design/curation_design_rationale.md`` §2.1).
 
-``CurationConfig`` replaces the module-level constants and the
-private string enum that the reference implementation hardcoded.
+``CurationConfig`` replaces module-level constants and hardcoded
+enum values with typed, deployment-configurable settings.
 Index *values* are deployment data (a given operator's OpenSearch may
 already have data under different index names), so they live on this
 dataclass rather than in code. ``IndexRole`` + ``index_name()`` give a
@@ -40,7 +39,7 @@ BACKBONE_EMBEDDING_FIELD = 'backbone_embedding'
 # generic ``embedding`` field.
 ITEM_EMBEDDING_FIELD = 'pe_embedding'
 
-# F-6: minimum active-learning probe entropy (nats) for the 'all' review
+# Minimum active-learning probe entropy (nats) for the 'all' review
 # tab's catch-all clause. Before this, the tab matched on `exists
 # probe_pred_entropy`, which after one probe run matches almost every
 # non-holdout item -- a no-op filter in practice. Tune per-deployment;
@@ -63,7 +62,7 @@ class IndexRole(str, Enum):
     LABELS_CONFIRMED = 'labels_confirmed'
     CLASSES = 'classes'
     SETTINGS = 'settings'
-    # F-27: the two UMAP state indexes (see the ``umap_state_index`` /
+    # The two UMAP state indexes (see the ``umap_state_index`` /
     # ``umap_viz_state_index`` fields below) were previously auto-created
     # by dynamic mapping on first ``client.index()`` call -- no explicit
     # mapping, replicas=1 (keeps a single-node cluster yellow). They now
@@ -146,7 +145,7 @@ class CurationConfig:
 
     # Bake-off harness (src/routers/curation/bakeoff.py,
     # scripts/curation/bakeoff/). Previously hardcoded to owner-private
-    # absolute paths (CFG-6) -- one of which named the location of a
+    # absolute paths -- one of which named the location of a
     # licensed proprietary image corpus and must never appear in this repo
     # as a literal string. jobs/out mirror the state_dir/training_staging
     # precedent below; eval_root is a data root, so it mirrors
@@ -172,7 +171,7 @@ class CurationConfig:
 
     @property
     def pause_sentinel_path(self) -> Path:
-        """S-4: the ONE path every pause-sentinel writer/reader must agree on.
+        """The ONE path every pause-sentinel writer/reader must agree on.
 
         The GPU arbiter (``src/services/training/gpu_arbiter.py``) used
         to default to ``{state_dir}/training_worker/pause.sentinel``

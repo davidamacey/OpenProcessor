@@ -2,10 +2,10 @@
 ``/search/*`` surface, ``visual_search_*``, or ``MobileCLIP``.
 
 Mirrors what ``scripts/codegen/check_no_legacy_search.py`` /
-``check_no_mobileclip.py`` enforce on the reference tree at pre-commit
-time (neither guard is ported here — see plan §0.6, reference-line-only
-guards are not inherited), scoped explicitly to the files this task
-added — an independent, in-repo double-check that
+``check_no_mobileclip.py`` enforce at pre-commit time (neither guard is
+wired up here — this test stands in for them at file scope), scoped
+explicitly to the files this task added — an independent, in-repo
+double-check that
 ``/curation/search/text`` is the only ``/search/*``-shaped route string
 these files ever emit.
 """

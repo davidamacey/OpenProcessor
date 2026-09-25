@@ -40,7 +40,7 @@ imported with it the first time); ``--relabel-duplicates`` sends them through
 ``--images-only`` ingests the images without their labels: no
 ``label_txt_path``, no registry class check, no label checks. Use it when
 the dataset's labels are not item classes — e.g. whole frames labeled with
-the *region* class (``names: {0: license_plate}``) that should be checked
+the *region* class (``names: {0: defect}``) that should be checked
 against the region cascade, not imported into the item registry.
 Resume, checkpoints, ``--limit`` (still stratified by positive = non-empty
 label file), ``--seed``, ``--splits`` and ``--path-map`` behave as usual.

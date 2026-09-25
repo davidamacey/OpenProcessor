@@ -1,4 +1,4 @@
-"""``GET /curation/ingest/status`` (F-13).
+"""``GET /curation/ingest/status``.
 
 Two bugs fixed together: the request was missing ``track_total_hits``
 (OpenSearch silently caps the reported ``total`` at 10000 once the images

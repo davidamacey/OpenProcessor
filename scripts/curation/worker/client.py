@@ -20,7 +20,7 @@ Failure model:
   HTTPError classes (5xx, PoolTimeout, ConnectError) count as one
   failure with no retry budget.
 
-The segmenter leg is optional (D5): passing an empty/``None``
+The segmenter leg is optional: passing an empty/``None``
 ``base_url`` (e.g. ``OP_SEGMENTER_URL=''``) constructs a *disabled* client
 instead of raising. A disabled client's :meth:`SegmenterClient.segment`
 always returns ``None`` — the same "no candidate" result an unhealthy
@@ -119,7 +119,7 @@ class SegmenterClient:
         text_prompt: str = '',
     ) -> None:
         urls = [u.strip().rstrip('/') for u in (base_url or '').split(',') if u.strip()]
-        # D5: no segmenter configured is a supported deployment shape, not
+        # No segmenter configured is a supported deployment shape, not
         # an error. Disabled clients skip the HTTP leg entirely (see
         # segment) rather than raising at construction time.
         self.enabled = bool(urls)
@@ -347,7 +347,7 @@ class SegmenterClient:
         Raises :class:`SegmenterAllHostsDown` if every host is UNHEALTHY.
         Returns ``None`` on a single-host failure (recorded against
         the circuit breaker), when SAM3 returned no candidate, or
-        (D5) when this client is disabled — no segmenter configured.
+        when this client is disabled — no segmenter configured.
         The disabled case never attempts an HTTP call.
         """
         if not self.enabled:

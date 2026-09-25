@@ -1,4 +1,4 @@
-"""F-26 coverage for ``src.services.curation.export_support.scroll_hits``.
+"""Coverage for ``src.services.curation.export_support.scroll_hits``.
 
 Default page size bump (500 -> 2000): export ``_source`` is ~8 small
 fields, so a bigger scroll page is safe and cuts round trips on large

@@ -1,23 +1,22 @@
-"""Single source of truth for ``GET /curation/methods`` (curation-strategy plan §3).
+"""Single source of truth for ``GET /curation/methods``.
 
 Phase 0 reports only what exists in production today: the real
 ``cluster_methods`` registry entries (``ivf`` / ``ahc`` / ``hdbscan``), all
 ``status='stable'`` except ``ivf`` which also carries ``default=True``
 (mirrors :data:`src.services.curation.clustering.methods.DEFAULT_METHOD` — that
-constant does NOT move, see plan §8 non-goal #1).
+constant does NOT move).
 
 Phase 1 adds placeholder entries for the new ``crop_scores/`` scorers
 (``uniqueness`` / ``mistakenness`` / ``near_dup``). Their ``status`` tracks
 the ``OP_SCORES_ENABLED`` feature flag: ``'disabled'`` until an operator
 opts in, ``'shadow'`` (computed + logged, not selectable — ``OP_SCORES_SHADOW``)
 once enabled-but-shadow, ``'experimental'`` once out of shadow. The frontend
-renders only ``stable``/``experimental`` entries (plan §3, "capability-
+renders only ``stable``/``experimental`` entries ("capability-
 discovery linchpin"); ``shadow``/``disabled`` entries are never offered as a
 ``?sort=`` value.
 
-Phase 2 (curation-strategy plan §6/§9, 2026-09-10) ran every method's
-go/no-go validation protocol against the real ~350k-crop pool (see
-``docs/design/curation_scores.md`` for the full writeup + numbers).
+A validation pass (2026-09-10) ran every method's
+go/no-go validation protocol against the real ~350k-crop pool.
 ``VALIDATED_SCORERS`` below promotes the scorers whose *complete* gate
 passed (no human-in-the-loop or GPU-training step left unexecuted) one
 notch above the flag-driven status computed for the rest — i.e. from
@@ -27,7 +26,7 @@ label-flip AUROC >= 0.80 *and* precision@100 >= 0.50) is a pure synthetic
 check with no human/GPU step, and both bars passed. ``uniqueness`` and
 ``near_dup`` passed their cheap pre-screens on real data (Spearman
 rho=0.38 vs >=0.25; 100% class-coverage retention across a 0.95-0.99
-threshold sweep) but each method's plan-table gate also requires a step
+threshold sweep) but each method's full gate also requires a step
 this validation pass could not execute (a blind operator A/B for
 uniqueness; 50 manually-judged pairs per threshold for near_dup) — they
 stay at whatever the flag-driven status says (``shadow``/``disabled``)
@@ -69,7 +68,7 @@ def _scores_shadow() -> bool:
 
 
 def _select_diverse_enabled() -> bool:
-    """Mirrors the reference select router's own flag check — kept independent (not
+    """Mirrors the select router's own flag check — kept independent (not
     imported from there) so this dependency-light module never needs to
     import a router module just to read one env var."""
     return os.environ.get('OP_SELECT_DIVERSE_ENABLED', '').strip().lower() in {
@@ -81,7 +80,7 @@ def _select_diverse_enabled() -> bool:
 
 
 def _semantic_search_enabled() -> bool:
-    """Mirrors the reference semantic-search module's own flag check — same "don't import a
+    """Mirrors the semantic-search module's own flag check — same "don't import a
     router module just to read one env var" reasoning as
     ``_select_diverse_enabled``/``_viz_projection_enabled``."""
     return os.environ.get('OP_SEMANTIC_SEARCH_ENABLED', '').strip().lower() in {
@@ -93,7 +92,7 @@ def _semantic_search_enabled() -> bool:
 
 
 def _viz_projection_enabled() -> bool:
-    """Mirrors the reference embedding-viz module's own flag check — same "don't import a
+    """Mirrors the embedding-viz module's own flag check — same "don't import a
     router module just to read one env var" reasoning as
     ``_select_diverse_enabled``."""
     return os.environ.get('OP_VIZ_PROJECTION_ENABLED', '').strip().lower() in {
@@ -104,17 +103,15 @@ def _viz_projection_enabled() -> bool:
     }
 
 
-# Curation-strategy plan §6's UMAP row / §7 Phase 5 — the one validation
-# protocol Phase 2 explicitly skipped ("Phase 5 scope",
-# docs/design/curation_scores.md §7) and this pass ran for real: 2-d
-# neighborhood purity vs. the real FAISS IVF-assigned ``cluster_id``, a
-# real random 10,000-crop sample (561 distinct real cluster_id buckets --
-# see docs/design/curation_scores.md's new UMAP-viz section for the full
-# write-up, including why the *first* attempt at this measurement was
-# discarded: a plain scroll-order 10k pull hit only 66 distinct buckets,
-# an artifact of single-shard insertion-order bias, not a real geometry
-# result). Bar (plan §6): >=0.30 ship plain; 0.15-0.30 ship w/ banner;
-# <0.15 do not ship.
+# The UMAP row is the one validation check the earlier validation pass
+# explicitly skipped, and this pass ran for real: 2-d neighborhood purity
+# vs. the real FAISS IVF-assigned ``cluster_id``, a real random
+# 10,000-crop sample (561 distinct real cluster_id buckets), including why
+# the *first* attempt at this measurement was discarded: a plain
+# scroll-order 10k
+# pull hit only 66 distinct buckets, an artifact of single-shard
+# insertion-order bias, not a real geometry result). Bar: >=0.30 ship
+# plain; 0.15-0.30 ship w/ banner; <0.15 do not ship.
 VIZ_PROJECTION_PURITY = 0.472
 """Measured mean 10-NN 2-d neighborhood purity vs real ``cluster_id``,
 random n=10,000 sample, the offline purity-evaluation script. Clears the
@@ -123,17 +120,17 @@ random n=10,000 sample, the offline purity-evaluation script. Clears the
 
 VIZ_PROJECTION_SHIP_MODE: StrategyStatus | str = 'ship_plain'
 """One of ``'ship_plain'`` / ``'ship_with_banner'`` / ``'do_not_ship'`` —
-derived from :data:`VIZ_PROJECTION_PURITY` against the plan §6 bar. Kept as
+derived from :data:`VIZ_PROJECTION_PURITY` against the bar above. Kept as
 an explicit constant (not re-derived at import time) so the number that was
 actually measured and the shipping decision that was actually made are
 both visible side-by-side in this file, the same way
-``VALIDATED_SCORERS``' docstring pairs the Phase 2 numbers with the
+``VALIDATED_SCORERS``' docstring pairs the validation numbers with the
 promotion decision they justify."""
 
 VIZ_PROJECTION_REQUIRES_BANNER = VIZ_PROJECTION_SHIP_MODE == 'ship_with_banner'
 """Surfaced on the ``viz_projection`` entry in ``GET /curation/methods`` as
 ``requires_banner`` — the field a future frontend reads to decide whether
-to render the plan's required persistent "projection is approximate"
+to render the required persistent "projection is approximate"
 banner. Named to match this file's existing boolean-flag vocabulary
 (``default``, ``scores_enabled``, ...) rather than inventing a
 banner/message-string convention with no other precedent in this response
@@ -155,12 +152,12 @@ def _score_strategy_status() -> StrategyStatus:
 
 
 VALIDATED_SCORERS: frozenset[str] = frozenset({'mistakenness'})
-"""Scorer ids whose Phase 2 validation (curation-strategy plan §6) passed
-the *complete* gate in ``docs/design/curation_scores.md`` -- promoted one
+"""Scorer ids whose validation passed
+the *complete* gate -- promoted one
 notch above the flag-driven status (``shadow`` -> ``experimental``) so an
 operator running with ``OP_SCORES_SHADOW=1`` still sees it as selectable.
 Deliberately NOT ``uniqueness``/``near_dup``: their pre-screens passed on
-real data but the plan's full gate for each needs a step this validation
+real data but each one's full gate needs a step this validation
 pass couldn't execute (human blind A/B; manually-judged near-dup pairs) --
 see the doc for exact numbers before adding anything here."""
 
@@ -247,8 +244,7 @@ def _score_strategies() -> list[dict[str, Any]]:
 
 
 def _sort_strategies(default_id: str | None) -> list[dict[str, Any]]:
-    """Phase 3 ``review_sorts.py`` registry entries (curation-strategy plan
-    §3.2) — the ``'sort'`` axis this module's ``StrategyAxis`` type has
+    """Phase 3 ``review_sorts.py`` registry entries — the ``'sort'`` axis this module's ``StrategyAxis`` type has
     declared since Phase 3 but ``get_registry()`` never actually populated
     until now (found via a live end-to-end check: real ``GET /curation/methods``
     reported zero sort-axis entries, so nothing this registry marks
@@ -261,11 +257,11 @@ def _sort_strategies(default_id: str | None) -> list[dict[str, Any]]:
 
     The ``'default'`` sentinel id is excluded on purpose. It isn't a real,
     independently-selectable sort — ``default_sort_for_tab`` resolves it
-    differently per review tab (plan §3.2) — so surfacing it here would
+    differently per review tab — so surfacing it here would
     just be a confusing, always-present duplicate of whichever tab-specific
     entry is actually in effect for the tab currently open.
 
-    ``default_id`` (curation deployment-settings plan) is
+    ``default_id`` is
     :func:`resolve_effective_default`'s answer for the ``'sort'`` axis —
     an *additional*, opt-in global default an operator can set via ``PUT
     /curation/settings`` on top of the untouched per-tab defaults; ``None``
@@ -293,15 +289,15 @@ def _sort_strategies(default_id: str | None) -> list[dict[str, Any]]:
 
 
 def _overlay_strategies() -> list[dict[str, Any]]:
-    """Phase 4 ``selection/`` overlays (curation-strategy plan §2.6/§3.4).
+    """Phase 4 ``selection/`` overlays.
     One entry today: ``diverse`` (k-center-greedy). Status tracks
     ``OP_SELECT_DIVERSE_ENABLED`` the same live-read pattern
     ``effective_scorer_status`` uses for the score axis, but capped at
     ``experimental`` — never ``stable`` — regardless of the flag, because
     only the cheap pre-screen has passed
-    (``docs/design/curation_scores.md`` §6, 1.50x >= 1.3x bar); the full
+    (1.50x >= 1.3x bar); the full
     training A/B gate (mAP50-95 >= +1.0pt via ``/curation/bakeoff``) has not run,
-    and plan §6/§10.2 is explicit that diversity is not promotable past
+    and diversity is not promotable past
     ``experimental`` without it."""
     return [
         {
@@ -319,7 +315,7 @@ def _overlay_strategies() -> list[dict[str, Any]]:
 
 
 def _semantic_search_strategy() -> list[dict[str, Any]]:
-    """P2-14 reference semantic-search overlay — PE-Core text-to-image kNN search.
+    """Semantic-search overlay — PE-Core text-to-image kNN search.
     Same "flag on -> experimental, flag off -> disabled, never stable
     without a full validation gate" shape ``diverse`` uses above: no
     real-usage go/no-go protocol has run yet, so it can never surface as
@@ -346,7 +342,7 @@ def _viz_projection_status() -> StrategyStatus:
     turn a validated thing on, never revive a failed one" rule
     ``VALIDATED_SCORERS`` enforces for the score axis). Otherwise tracks
     the flag, capped at ``experimental`` — never ``stable`` — because the
-    plan §6 UMAP protocol has two halves (2-d neighborhood purity +
+    UMAP protocol has two halves (2-d neighborhood purity +
     interactive perf) and this backend-only pass could only execute the
     first; the labeler's ``EmbeddingPlot.svelte`` interactive-perf check
     is Phase 5's frontend half and hasn't run yet (same reasoning
@@ -360,13 +356,13 @@ def _viz_projection_status() -> StrategyStatus:
 
 
 def _viz_projection_strategy() -> list[dict[str, Any]]:
-    """Phase 5 ``embedding_viz.py`` overlay (curation-strategy plan
-    §2.7/§3.5). One entry: ``viz_projection`` (2-d UMAP, visualization
+    """Phase 5 ``embedding_viz.py`` overlay.
+    One entry: ``viz_projection`` (2-d UMAP, visualization
     only — never feeds clustering, see ``embedding_viz.py``'s module
     docstring). ``purity``/``requires_banner`` are the fields
-    docs/design/curation_scores.md's new UMAP-viz section calls for: a
+    the UMAP-viz validation calls for: a
     future frontend reads ``requires_banner`` to decide whether to render
-    the plan's required persistent "projection is approximate" banner,
+    the required persistent "projection is approximate" banner,
     and ``purity`` so the number backing that decision is never hidden
     behind just a status string."""
     return [
@@ -385,20 +381,17 @@ def _viz_projection_strategy() -> list[dict[str, Any]]:
 
 
 def _export_strategies() -> list[dict[str, Any]]:
-    """Dataset-export capability axis (cropwright_backend_integration_plan.md
-    §4.3/T-C2).
+    """Dataset-export capability axis.
 
     Advertises which export *kinds* ``POST {prefix}/export/{kind}`` can
     actually produce on this deployment, so a consumer gates an export UI
-    on capability rather than probing a write endpoint (a proprietary
-    single-class export route would kick off a real dataset build) with
+    on capability rather than probing a write endpoint (a single-class
+    export route would kick off a real dataset build) with
     a throwaway request just to see whether it 404s.
 
-    ``single_class`` is the generic replacement for the reference
-    implementation's proprietary single-class license-plate export: it
-    takes the target class ids from the request rather than hardcoding a
-    domain vocabulary, so it covers that use case and any other narrowed
-    export without this repo carrying a deployment-specific overlay.
+    ``single_class`` takes the target class ids from the request rather
+    than hardcoding a domain vocabulary, so it covers any narrowed-export
+    use case without this repo carrying a deployment-specific overlay.
     There is deliberately no domain-named export kind id — that would be
     exactly the hardcoding this axis exists to avoid.
     """
@@ -421,12 +414,11 @@ def _export_strategies() -> list[dict[str, Any]]:
 
 
 def _detection_profile_strategies(default_id: str | None) -> list[dict[str, Any]]:
-    """Configured sub-region ``DetectionProfile`` axis (labeling-assist
-    plan task (b)).
+    """Configured sub-region ``DetectionProfile`` axis.
 
     Reads :mod:`src.services.detection.profile_registry` -- a real,
     process-lifetime registry a deployment can add more than one profile
-    to (e.g. a license-plate profile AND a shipping-label profile) --
+    to (e.g. a badge profile AND a shipping-label profile) --
     rather than hardcoding any one profile here. Neutral by default: an
     unconfigured deployment registers nothing, so this axis is empty; the
     env-selected profile (``OP_REGION_PROFILE`` / ``OP_REGION_DETECTION_*``)
@@ -453,7 +445,7 @@ def _detection_profile_strategies(default_id: str | None) -> list[dict[str, Any]
 
 
 def _prompt_pack_strategies(default_id: str | None) -> list[dict[str, Any]]:
-    """Selectable VLM ``PromptPack`` axis (labeling-assist plan task (c)).
+    """Selectable VLM ``PromptPack`` axis.
 
     Lists every pack :func:`~src.services.labeling.vlm_prompts.
     available_prompt_packs` can load, keyed by pack ``name``: the built-in
@@ -490,8 +482,7 @@ structure just to hold one extra number."""
 
 async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> dict[str, int | None]:
     """``{field: exists_count}`` for every field in ``fields``, plus the
-    pool total under :data:`_COVERAGE_TOTAL_KEY` -- the real fix for P1-2/
-    P1-3 (audit-remediation plan Phase 6). Mirrors
+    pool total under :data:`_COVERAGE_TOTAL_KEY`. Mirrors
     ``crop_scores/job.py::compute_coverage``'s query shape (one
     ``opensearch.count`` per field, one ``match_all`` count for the
     denominator) but keyed by raw field name across every axis, not just
@@ -501,7 +492,7 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
     sorts live (see this module's Phase 6 note above).
 
     TTL-cached at module scope (``_COVERAGE_CACHE`` / ``time.monotonic()``
-    freshness check), the same pattern the reference select router's ``_ORDER_CACHE``
+    freshness check), the same pattern the select router's ``_ORDER_CACHE``
     and ``cluster_outliers.py``'s ``_CACHE`` use -- ``GET /curation/methods``
     must stay an O(1)-per-request endpoint (its own docstring promises it
     "never fails or blocks"), not an O(distinct-fields) OpenSearch round
@@ -509,13 +500,13 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
 
     A field whose count query fails is cached as ``None`` -- "unknown",
     never ``0`` ("empty") -- so a transient OpenSearch hiccup can never
-    make a working sort/chip disappear (plan Phase 6: "fall back to None
+    make a working sort/chip disappear ("fall back to None
     (not 0) on OpenSearch failure, so a transient error hides nothing that
     already works"). The whole helper never raises; callers get a dict
     with real ints, ``None``s, or (only if OpenSearch is totally
     unreachable) a ``None`` total too.
 
-    F-28.2: on a cache miss this used to be N+1 round trips (one
+    On a cache miss this used to be N+1 round trips (one
     ``opensearch.count`` per field plus one for the total). Now it's a
     single ``_search`` (``size: 0``, ``track_total_hits: true``, one
     ``filter: {exists}`` sub-agg per field) -- same answer, one request.

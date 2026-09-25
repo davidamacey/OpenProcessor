@@ -1,7 +1,6 @@
 """GPU arbiter — coordinate GPU-resident services around training runs.
 
-Ported from a reference curation stack's
-training pipeline (Phase 3a). Two regimes:
+Two regimes:
 
 * **Single-GPU training**: the trainer takes one configured GPU-resident
   service; a paired worker (if configured) is paused via a sentinel file
@@ -30,7 +29,7 @@ so an unconfigured install degrades to a no-op
 
 Implementation note: container control uses the docker SDK over the
 mounted host socket (``/var/run/docker.sock``), by name, so restart
-preserves each container's config (GPU pins included). S-5: a claim
+preserves each container's config (GPU pins included). A claim
 that must stop a configured container and can't (SDK/socket
 unavailable, or the stop fails) raises
 :class:`GpuArbiterStopFailedError` rather than falling back to a
@@ -65,7 +64,7 @@ def _state_dir() -> Path:
 
 
 def _default_sentinel_path() -> Path:
-    # S-4: suffix must match CurationConfig.pause_sentinel_path (readers).
+    # Suffix must match CurationConfig.pause_sentinel_path (readers).
     return _state_dir() / 'vlm_worker' / 'pause.sentinel'
 
 
@@ -130,7 +129,7 @@ class ArbiterAction:
 
 
 class GpuArbiterStopFailedError(RuntimeError):
-    """S-5: a claim needed to stop a configured GPU-resident container and
+    """A claim needed to stop a configured GPU-resident container and
     couldn't (docker SDK/socket unavailable, or the stop call failed).
     Used to fall back to a sentinel-only pause instead, which doesn't
     stop the container -- training could start next to it on the same
@@ -321,7 +320,7 @@ def _docker_client() -> Any:
 
 
 def docker_client_available() -> bool:
-    """S-5: preflight probe -- can a docker client reach the daemon?"""
+    """Preflight probe -- can a docker client reach the daemon?"""
     return _docker_client() is not None
 
 
@@ -370,7 +369,7 @@ async def stop_gpu_services(
     Otherwise uses the docker SDK over the mounted socket; restart later
     preserves each container's original config (GPU pins included).
 
-    S-5: fails closed -- raises :class:`GpuArbiterStopFailedError` if the
+    Fails closed -- raises :class:`GpuArbiterStopFailedError` if the
     docker SDK/socket is unavailable or the stop call fails, rather than
     falling back to a sentinel (which pauses a paired *worker*, not a
     sibling container sharing the GPU). Callers must not proceed (or
@@ -502,7 +501,7 @@ async def claim_gpus_for_training(
     (:func:`containers_to_stop`), not claim size: a single-GPU claim that
     intersects a *scoped* container's GPU set stops that container just
     like a multi-GPU claim would. ``stop_gpu_services`` also sets the
-    pause sentinel (belt-and-suspenders). S-5: if it raises
+    pause sentinel (belt-and-suspenders). If it raises
     :class:`GpuArbiterStopFailedError`, the lock written above is
     cleared before the exception propagates -- a refused claim never
     leaves a stale lock behind.

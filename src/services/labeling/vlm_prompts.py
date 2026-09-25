@@ -1,21 +1,20 @@
-"""``PromptPack`` — the domain half of the VLM labeler split (§3.4).
+"""``PromptPack`` — the domain half of the VLM labeler split.
 
-The reference VLM labeler hardcodes ~180 lines of domain-specific
-prompt prose (system + user templates, a class description table, a
-synonym table) as module constants. That prose is domain content for a
-proprietary dataset family and is **not** shipped here — only the
+A deployment's prompt prose (system + user templates, a class
+description table, a synonym table) is domain-specific, so it lives in
+a ``PromptPack`` instance rather than module constants — only the
 generic *shape* (this dataclass) plus one small, neutral example
-instance so the OSS product works out of the box and has test
+instance ship here, so the product works out of the box and has test
 coverage.
 
-A future deployment-specific pack (in a proprietary-dataset config
-overlay) would carry the same field set with the real domain prose.
+A deployment-specific pack (in a deployment's own config overlay)
+carries the same field set with its own domain prose.
 
 Field-naming note: the *wire* keys a pack's prompts ask the VLM to
 return for the region-of-interest sub-annotation (``region_visible``,
 ``region_bbox_correct``, ``region_text``, ``region_confidence`` below)
 intentionally match ``RegionFields``' defaults — ``vlm_labeler.py``'s
-reply parser reads those same keys via ``RegionFields`` (§3.2) rather
+reply parser reads those same keys via ``RegionFields`` rather
 than hardcoding them, so a pack and the parser agree on vocabulary by
 construction.
 """
@@ -38,8 +37,7 @@ logger = get_logger(__name__)
 class PromptPack:
     """Prompt templates + domain vocabulary for one VLM labeling deployment.
 
-    Mirrors the field set the reference VLM labeler carried as
-    inline module constants (§3.4): closed- and open-vocabulary item
+    Carries the field set a deployment needs: closed- and open-vocabulary item
     classification, a combined single-call classify+region-verify+text
     prompt (single crop and numbered-batch variants), a region-only
     verify prompt (single + batch), and a region-visibility pre-filter
@@ -128,9 +126,9 @@ class PromptPack:
 # ---------------------------------------------------------------------------
 # Neutral example pack — generic "product photo" domain.
 #
-# Mirrors the reference domain-specific structure (item to classify + a
-# text-bearing sub-region-of-interest to verify/read) without any
-# proprietary vocabulary: classify a package photo into a shipping-type
+# Same structure any deployment pack needs (item to classify + a
+# text-bearing sub-region-of-interest to verify/read), with no
+# domain-specific vocabulary: classify a package photo into a shipping-type
 # class, then verify/read its shipping-label sub-region.
 # ---------------------------------------------------------------------------
 

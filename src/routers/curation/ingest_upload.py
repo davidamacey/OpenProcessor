@@ -1,4 +1,4 @@
-"""``POST /ingest/upload`` — multipart byte-upload ingest (BA-1/BA-2/BA-4).
+"""``POST /ingest/upload`` — multipart byte-upload ingest.
 
 Split out of ``ingest.py`` to stay under the 700-LOC ratchet: this route's
 body (extension sniffing, per-item size/type accounting, content-addressed
@@ -26,7 +26,7 @@ from src.routers.curation.ingest import _batch_response, _get_ingest_service
 from src.services.curation.ingest_models import ERROR_KIND_UNSUPPORTED_TYPE
 
 
-# BA-2: kept as the interim fallback default; the served source of truth
+# Kept as the interim fallback default; the served source of truth
 # is GET /ingest/config, which reads CurationConfig.upload_max_images_per_request.
 MAX_UPLOAD_IMAGES = 128
 
@@ -74,7 +74,7 @@ async def curation_ingest_upload(
             description=(
                 'JSON list of stable identifiers, one per image, stored as '
                 'source_identifier (default: the upload filenames). Need not exist '
-                'on the server -- BA-1: image_path is now the server-persisted path '
+                'on the server -- image_path is now the server-persisted path '
                 'the uploaded bytes were written under.'
             )
         ),
@@ -82,7 +82,7 @@ async def curation_ingest_upload(
     source: Annotated[str, Form(description='Provenance tag for every image')] = 'upload',
     run_id: Annotated[
         str | None,
-        Form(description='BA-4: optional tag for this upload call, recorded as ingest_run_id.'),
+        Form(description='Optional tag for this upload call, recorded as ingest_run_id.'),
     ] = None,
 ) -> _BatchIngestResponse:
     """Ingest a batch of images sent as bytes (multipart), not server-side paths.
@@ -90,7 +90,7 @@ async def curation_ingest_upload(
     For storage the API container cannot mount (a laptop, a remote NAS, a
     high-latency share): the client reads the files and uploads them.
 
-    BA-1: the uploaded bytes are now persisted server-side, content-addressed,
+    The uploaded bytes are now persisted server-side, content-addressed,
     under ``CurationConfig.upload_root`` (see
     :func:`src.services.curation.image_serving.persist_uploaded_bytes`) —
     that path is stored as ``image_path`` (so thumbnails, the region worker

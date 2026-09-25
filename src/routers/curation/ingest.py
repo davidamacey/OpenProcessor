@@ -206,7 +206,7 @@ async def curation_ingest_batch(
             )
             continue
         if item.label_txt_path is not None and not is_servable_image_path(item.label_txt_path):
-            # BA-5: label_txt_path gets the same root guard as the image
+            # label_txt_path gets the same root guard as the image
             # path -- a client-controlled label file path must not escape
             # the configured source roots either.
             failed_early.append(
@@ -351,13 +351,13 @@ async def ingest_status(
     opensearch: OpenSearchDep,
     run_id: Annotated[
         str | None,
-        Query(description='BA-4: scope counts to one POST /ingest/upload run_id.'),
+        Query(description='Scope counts to one POST /ingest/upload run_id.'),
     ] = None,
 ) -> IngestStatusResponse:
     """Recent ingest summary — counts grouped by source.
 
     ``run_id`` scopes ``total``/``by_source``/``by_day`` to images carrying
-    that ``ingest_run_id`` (BA-4) -- an upload run's own images doc field,
+    that ``ingest_run_id`` -- an upload run's own images doc field,
     set by ``POST /ingest/upload``'s optional ``run_id`` form field.
     """
     await _ensure_indexes(opensearch)
@@ -372,7 +372,7 @@ async def ingest_status(
             'by_source': {
                 'terms': {'field': 'source', 'size': 64},
             },
-            # F-13: filter to the last 14 days in the query rather than
+            # Filter to the last 14 days in the query rather than
             # date-histogramming the whole index and slicing to [:14] in
             # Python -- the histogram used to run over every doc ever
             # indexed just to keep the first 14 desc-sorted buckets.
@@ -405,7 +405,7 @@ async def ingest_status(
 
 @router.get('/ingest/config', response_model=IngestConfigResponse)
 async def ingest_config() -> IngestConfigResponse:
-    """Typed ingest capability + limits (BA-2).
+    """Typed ingest capability + limits.
 
     ``upload``/``batch``/``region_drain`` are all real config, not
     hardcoded client-side constants: ``upload.max_images_per_request`` /
@@ -450,7 +450,7 @@ async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainRes
     detect-then-verify chain has caught up after a folder finishes, before
     triggering ``/curation/pipeline/auto_label``. The walker polls this
     endpoint every ``region_drain.poll_interval_s`` (``GET /ingest/config``)
-    and proceeds once ``drained`` is true (BA-3) -- computed server-side
+    and proceeds once ``drained`` is true -- computed server-side
     now, not invented client-side from ``total_unfinished == 0``.
 
     Returns:
@@ -466,7 +466,7 @@ async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainRes
     * ``observed_at``          — this poll's timestamp.
 
     Re-ingested data can never carry the retired ``'pending'`` /
-    ``'pending_verify'`` short names (S5), so there is no legacy rollup.
+    ``'pending_verify'`` short names, so there is no legacy rollup.
     """
     from src.services.curation.region_drain import observe_drain
 
@@ -516,7 +516,7 @@ async def curation_ingest_path_lookup(
 
     Used by an ingest walker to short-circuit the read+hash work for
     re-scans of immutable archive media. Matches on ``image_path`` OR
-    ``source_identifier`` (BA-1): a byte-upload ingest's client identifier
+    ``source_identifier``: a byte-upload ingest's client identifier
     is recorded as ``source_identifier`` now that ``image_path`` is the
     server-persisted path, so a re-scan driver that only knows its own
     identifiers still gets a hit. Both fields are mapped keyword on the

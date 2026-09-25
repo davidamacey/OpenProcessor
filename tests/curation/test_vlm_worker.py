@@ -1,4 +1,4 @@
-"""Unit tests for ``scripts/curation/vlm_worker.py`` (F-11).
+"""Unit tests for ``scripts/curation/vlm_worker.py``.
 
 Two independent bugs: (1) the producer's in-flight guard didn't account
 for the label-write route's ``refresh=False``, so a crop released right

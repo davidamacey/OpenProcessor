@@ -1,13 +1,11 @@
 """Transport layer for an OpenAI-compatible vision-language-model endpoint.
 
-Split out of the reference VLM labeler (see
+Split out of the VLM labeler (see
 ``docs/design/curation_design_rationale.md`` §5 for why this split
 exists — vlm_labeler.py is one of the ratchet-exempt oversize files)
 — this half owns
 "how do I reliably POST to a ``/chat/completions`` endpoint", not "what
-do I ask it". Generic: works against any OpenAI-shaped vision chat API
-(the reference deployment happens to run behind
-OpenWebUI, but nothing here names that model).
+do I ask it". Generic: works against any OpenAI-shaped vision chat API.
 
 Design notes
 ------------
@@ -41,10 +39,10 @@ from src.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-# Defaults (env-overridable). No hardcoded vendor model id (S7): a
+# Defaults (env-overridable). No hardcoded vendor model id: a
 # deployment that sets OP_VLM_URL without OP_VLM_MODEL must fail loudly at
 # VlmLabeler construction (see its __init__) rather than silently talking
-# to the reference deployment's model name.
+# to some other deployment's model name.
 DEFAULT_BASE_URL = os.environ.get('OP_VLM_URL', '')
 DEFAULT_MODEL = os.environ.get('OP_VLM_MODEL', '')
 DEFAULT_API_KEY = os.environ.get('OP_VLM_API_KEY', 'EMPTY')

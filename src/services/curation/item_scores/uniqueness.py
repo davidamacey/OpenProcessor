@@ -1,18 +1,17 @@
-"""Uniqueness scorer — k-NN density/typicality (curation-strategy plan §2.3).
+"""Uniqueness scorer — k-NN density/typicality.
 
 FiftyOne's ``compute_uniqueness``: local k-NN density, distinct from
 "representativeness" (global proximity to the assigned cluster centroid,
-already available today as ``cluster_distance`` — plan §2.1, zero new math).
+already available today as ``cluster_distance``, zero new math).
 A crop with few near neighbours in embedding space is locally novel even if
 it sits close to its cluster's centroid.
 
 Implementation reuses the already-persisted 512 IVF centroids
 (:class:`src.services.curation.clustering.methods.ivf_store.IVFCentroidStore`)
 as the coarse quantizer for a ``faiss.IndexIVFFlat`` — this is the validated
-production partition, not a new geometry (plan §2.3/§3.8). ``nprobe`` buckets
-are searched per query instead of a brute-force flat kNN, which is the
-difference between ~2-8 min and ~30-60 min CPU at 350k crops (plan §3
-compute budget).
+production partition, not a new geometry. ``nprobe`` buckets are
+searched per query instead of a brute-force flat kNN, which is the
+difference between ~2-8 min and ~30-60 min CPU at 350k crops.
 
 Score = mean cosine distance to the ``k`` nearest neighbours, min-max
 normalized to ``[0, 1]`` across the batch. Higher = more unique (locally

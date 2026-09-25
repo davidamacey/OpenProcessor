@@ -1,6 +1,6 @@
-"""Guard against dangling relative markdown links (see D-1 /
-docs/design/curation_design_rationale.md): 42 references across 36
-files once pointed at a design doc that did not exist on this branch.
+"""Guard against dangling relative markdown links: 42 references across 36
+files once pointed at a design doc (``docs/design/curation_design_rationale.md``)
+that did not exist on this branch.
 Three of those were *live* links that rendered broken in
 ``docs/README.md``, ``docs/ARCHITECTURE.md`` and ``CLAUDE.md``. This
 test converts that whole class of bug into a hard failure so it cannot

@@ -1,19 +1,17 @@
-"""Singleton job runner for ``POST /curation/scores/compute``
-(curation-strategy plan §3.3/§7 Phase 1).
+"""Singleton job runner for ``POST /curation/scores/compute``.
 
 Mirrors :mod:`src.services.curation.auto_label_job`'s state.json / heartbeat /
 cancel.flag file-backed conventions, simplified for in-process execution —
-there is no separate scores worker container (plan §3 "everything CPU in
-the existing worker for Phase 1" refers to compute *location* (CPU vs GPU),
-not a new container; the job runs as an ``asyncio`` background task inside
-the yolo-api process itself, started by the router handler and polled via
-the same state-file pattern the labeler already knows how to render).
+there is no separate scores worker container; the job runs as an
+``asyncio`` background task inside the yolo-api process itself, started
+by the router handler and polled via the same state-file pattern the
+labeler already knows how to render.
 
 Directory resolved lazily via ``OP_SCORES_STATE_DIR`` (default ``/jobs/scores``)
 so tests can override with ``monkeypatch.setenv`` + ``tmp_path`` without
 reimporting — same convention as ``train_jobs._resolve_jobs_dir``.
 
-**Single-fetch design (load-bearing, plan §3.3):** embeddings are fetched
+**Single-fetch design (load-bearing):** embeddings are fetched
 ONCE via :func:`clustering.embedding_reduce.fetch_residual_embeddings_parallel`
 and the same matrix is handed to every enabled scorer — the OpenSearch read
 is the dominant cost (350k crops x 1024-d f32 = 1.43 GB), not the math.
@@ -256,8 +254,8 @@ async def run_scoring_job(
     try:
         ids, embeddings = await fetch_residual_embeddings_parallel(
             opensearch,
-            # Belt-and-suspenders test_holdout exclusion (plan §8 non-goal
-            # #12) — see module docstring for why this is already implied.
+            # Belt-and-suspenders test_holdout exclusion — see module
+            # docstring for why this is already implied.
             extra_must=[{'bool': {'must_not': [{'term': {'test_holdout': True}}]}}],
         )
         state.total = len(ids)

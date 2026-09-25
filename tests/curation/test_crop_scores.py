@@ -1,4 +1,4 @@
-"""Tests for the crop_scores/ overlay scorers (curation-strategy plan §9).
+"""Tests for the crop_scores/ overlay scorers.
 
 Pure-math tests against synthetic embeddings — no OpenSearch, no faiss
 index files on disk. ``compute_uniqueness`` / ``compute_near_dup_groups``
@@ -135,8 +135,8 @@ def test_near_dup_bucket_scoping_matches_global_for_small_pools() -> None:
 def test_near_dup_raises_when_centroid_store_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     """``NearDupScorer._load_centroids`` must fail loudly when the persisted
     IVF centroid store is missing, not silently degrade to an unscoped
-    global O(n^2) pass over the full residual pool (plan §3 compute budget —
-    the exact cost bucket-scoping exists to avoid)."""
+    global O(n^2) pass over the full residual pool -- the exact cost
+    bucket-scoping exists to avoid."""
     from src.services.curation.clustering.methods.ivf_store import IVFCentroidStore
 
     monkeypatch.setattr(IVFCentroidStore, 'load', lambda _self: False)
@@ -146,7 +146,7 @@ def test_near_dup_raises_when_centroid_store_missing(monkeypatch: pytest.MonkeyP
 
 
 # =============================================================================
-# Regression guard — no scorer ever writes a cluster field (plan §8 #3)
+# Regression guard — no scorer ever writes a cluster field
 # =============================================================================
 
 

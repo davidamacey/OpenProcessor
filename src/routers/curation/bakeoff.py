@@ -30,8 +30,7 @@ deleting the job file releases the GPU on the next reconcile tick.
 What a run measures (classes, thresholds, rank metric, cascade context
 classes) comes from a ``BakeoffProfile`` (``scripts/curation/bakeoff/profile.py``)
 -- see ``docs/design/curation_design_rationale.md`` §8 ("The detector
-bake-off harness"). Wire shapes: ``docs/design/generic_model_comparison_plan.md``
-section 7.
+bake-off harness").
 """
 
 from __future__ import annotations

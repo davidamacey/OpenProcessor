@@ -35,7 +35,7 @@ def _fake_os(hits: list[dict]) -> AsyncMock:
 
 
 def _fake_os_paged(candidates: list[dict]) -> AsyncMock:
-    """Simulates OpenSearch's real from/size/min_score slicing (F-24) —
+    """Simulates OpenSearch's real from/size/min_score slicing —
     ``candidates`` is the fixed, already score-ordered ANN result set the
     ``knn`` clause would produce server-side; the fake applies min_score
     then from/size the same way OpenSearch would, so tests exercise the
@@ -79,7 +79,7 @@ def test_build_filter_default_excludes_validated_and_dismissed_and_holdout():
     assert {'term': {'class_validated': True}} in must_not
     assert {'exists': {'field': 'review_dismissed_at'}} in must_not
     assert {'term': {'test_holdout': True}} in must_not
-    # F-4: an excluded item must never surface in semantic search either.
+    # An excluded item must never surface in semantic search either.
     assert {'term': {'class_excluded': True}} in must_not
 
 
@@ -273,7 +273,7 @@ async def test_semantic_text_search_actually_offloads_to_the_given_executor():
 
 @pytest.mark.asyncio
 async def test_semantic_text_search_min_score_is_sent_to_opensearch():
-    """F-24: min_score moves into the request body's top-level
+    """min_score moves into the request body's top-level
     min_score, applied by OpenSearch itself instead of filtered out of
     the full hit list in Python."""
     hits = [
@@ -298,7 +298,7 @@ async def test_semantic_text_search_min_score_is_sent_to_opensearch():
 
 @pytest.mark.asyncio
 async def test_semantic_text_search_pages_via_from_size_not_python_slicing():
-    """F-24: OpenSearch's from/size do the paging now (not a Python
+    """OpenSearch's from/size do the paging now (not a Python
     slice over an over-fetched k-sized hit list)."""
     hits = [{'_id': str(i), '_score': 1.0, '_source': {'crop_id': str(i)}} for i in range(5)]
     fake_os = _fake_os_paged(hits)
@@ -347,7 +347,7 @@ async def test_semantic_text_search_from_size_paging_matches_old_python_slicing(
 
 @pytest.mark.asyncio
 async def test_semantic_text_search_k_is_ann_depth_not_page_size():
-    """F-24: `k` (ANN candidate depth) stays page*page_size — it must not
+    """`k` (ANN candidate depth) stays page*page_size — it must not
     collapse to page_size just because from/size now do the slicing."""
     fake_os = _fake_os_paged([])
     await semantic_search.semantic_text_search(
@@ -392,7 +392,7 @@ async def test_semantic_text_search_excludes_embedding_fields_from_source():
     )
     _args, kwargs = fake_os.search.call_args
     body = kwargs['body']
-    # F-25: also excludes class_id_history — this is a paginated list
+    # Also excludes class_id_history — this is a paginated list
     # endpoint, and no list renderer reads it.
     assert set(body['_source']['excludes']) == {
         'pe_embedding',

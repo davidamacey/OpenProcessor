@@ -1,4 +1,4 @@
-"""BA-2: `GET /curation/ingest/config`. BA-3: the typed drain verdict on
+"""`GET /curation/ingest/config`. Also covers the typed drain verdict on
 `GET /curation/ingest/region_drain`.
 """
 

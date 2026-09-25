@@ -1,4 +1,4 @@
-"""S-4: the GPU-arbiter pause sentinel writer and readers must agree on a path.
+"""The GPU-arbiter pause sentinel writer and readers must agree on a path.
 
 Before this fix, ``gpu_arbiter._default_sentinel_path()`` defaulted to
 ``{state_dir}/training_worker/pause.sentinel`` while the two readers

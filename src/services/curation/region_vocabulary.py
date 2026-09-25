@@ -1,6 +1,6 @@
 """Served region-detection vocabulary — ``GET {prefix}/regions/vocabulary``.
 
-W0 of ``docs/design/naming_sweep_plan.md`` (finding m9): after S3/S7 the
+After the naming sweep, the
 worker's detector/segmenter/VLM identifiers come entirely from deployment
 config (``DetectionProfile``, ``OP_VLM_*``), so the frontend can no longer
 hardcode a label/palette map keyed on private model ids
@@ -50,7 +50,7 @@ def _detectors(vlm_model: str) -> list[dict[str, Any]]:
     """Every identifier that can appear in ``region_detector``,
     ``region_verifier``, ``class_labeler`` or ``class_detector`` — with
     ``filterable=True`` reserved for the ``region_detector`` values only
-    (see ``docs/design/naming_sweep_plan.md`` W0)."""
+    (see this module's docstring)."""
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
 
@@ -98,7 +98,7 @@ def _detectors(vlm_model: str) -> list[dict[str, Any]]:
 
 
 def _region_sources() -> list[dict[str, Any]]:
-    """Every S3 ``region_source`` / ``candidate_source`` value, plus the
+    """Every ``region_source`` / ``candidate_source`` value, plus the
     fixed ``human`` value (a human-drawn/edited box)."""
     out: list[dict[str, Any]] = []
     for source_id in CANDIDATE_SOURCES:

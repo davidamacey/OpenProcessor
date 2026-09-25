@@ -1,4 +1,4 @@
-"""D5 — the segmenter leg of the detection cascade is optional.
+"""The segmenter leg of the detection cascade is optional.
 
 A deployment with no segmentation service of its own leaves
 ``OP_SEGMENTER_URL``/``--segmenter-url`` empty. :class:`SegmenterClient` then constructs

@@ -36,8 +36,7 @@ if TYPE_CHECKING:
 
 
 def _resolve_current_export_dir() -> Path:
-    """Thin wrapper so tests can patch this module's call site, mirroring
-    the reference's ``_resolve_current_vehicle_export_dir`` patch point."""
+    """Thin wrapper so tests can patch this module's call site."""
     return resolve_current_export_dir()
 
 
@@ -147,7 +146,7 @@ def _dataset_row(
         'split_counts': meta.get('split_counts'),
         'dataset_sha': meta.get('dataset_sha'),
         'exported_at': meta.get('exported_at') or meta.get('started_at'),
-        # E2: class_count is the registry size written into data.yaml
+        # class_count is the registry size written into data.yaml
         # (nc); classes_with_objects is how many of those actually have a
         # labeled object in this export -- older manifests written before
         # this field existed serve null, never a fabricated 0.

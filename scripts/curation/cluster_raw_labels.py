@@ -196,7 +196,7 @@ async def write_back(
                 # fields a previous run wrote.
                 stats['unassigned'] += 1
                 continue
-            # F-29: skip the write if this doc's label-cluster id already
+            # Skip the write if this doc's label-cluster id already
             # matches the fresh assignment — a stable-hash re-cluster of an
             # unchanged label corpus would otherwise rewrite every row.
             if src.get(CLUSTER_ID_FIELD) == int(assignment.cluster_id):

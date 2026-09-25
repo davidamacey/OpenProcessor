@@ -55,7 +55,7 @@ async def _build_knn_graph(
     def _gpu_knn() -> Any:
         from cuml.neighbors import NearestNeighbors as cuNN  # type: ignore[import-not-found]
 
-        # CM-8: cuML's kneighbors_graph includes each point as its own
+        # cuML's kneighbors_graph includes each point as its own
         # nearest neighbor (n_neighbors=k+1 asks for k *other* points
         # plus self); sklearn's CPU path below passes include_self=False
         # instead. Left in, the self-loop is an always-1.0-similarity

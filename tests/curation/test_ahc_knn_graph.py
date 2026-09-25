@@ -1,4 +1,4 @@
-"""CM-8: GPU/CPU kNN-graph parity for the AHC residual method.
+"""GPU/CPU kNN-graph parity for the AHC residual method.
 
 cuML's ``kneighbors_graph`` includes each point as its own nearest
 neighbor (``n_neighbors=k+1`` requests k *other* points plus self); the

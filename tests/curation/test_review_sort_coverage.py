@@ -66,7 +66,7 @@ class _CoverageOpenSearch:
         return {'count': self.total}
 
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
-        """F-28: coverage is one ``size: 0`` search with a ``filter: exists``
+        """Coverage is one ``size: 0`` search with a ``filter: exists``
         sub-agg per field (plus ``track_total_hits`` for the denominator)."""
         aggs = {
             name: {'doc_count': self.coverage.get(agg['filter']['exists']['field'], 0)}

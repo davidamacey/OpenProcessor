@@ -1,4 +1,4 @@
-"""Curation-score scorer interface (curation-strategy plan §3.3/§3.8).
+"""Curation-score scorer interface.
 
 Mirrors ``cluster_methods/base.py``'s ``ClusterMethod`` Protocol, but for the
 *overlay* axis: a :class:`CropScorer` never assigns a crop to a cluster — it
@@ -8,7 +8,7 @@ a scorer may write; :func:`crop_scores.job.run_scoring_job` uses it to build
 bulk-update bodies, and
 ``tests/curation/test_crop_scores.py::test_no_scorer_writes_cluster_fields``
 asserts none of them ever contains ``cluster_id`` / ``cluster_subid`` /
-``cluster_distance`` (curation-strategy plan §8 non-goal #3).
+``cluster_distance``.
 
 Shape contract:
 
@@ -16,7 +16,7 @@ Shape contract:
   array of L2-normalized embeddings (fetched ONCE per job by
   :mod:`crop_scores.job` and hand to every enabled scorer — the dominant
   cost is the OpenSearch read, not the math, so re-fetching per scorer would
-  be wasteful; see plan §3.3/§3).
+  be wasteful).
 * Output — a :class:`ScoreResult` whose ``fields`` dict is keyed by
   ``crop_id`` and maps to a ``{field_name: value}`` dict ready to merge into
   a bulk ``update`` doc body.
@@ -24,7 +24,7 @@ Shape contract:
 Scorers that need more than embeddings (e.g. mistakenness, which reads
 ``probe_pred_*`` + ``class_name`` off the crop doc) accept the raw
 ``opensearch`` client and fetch their own supplementary fields — only the
-embedding fetch is shared, per plan §3.3.
+embedding fetch is shared.
 """
 
 from __future__ import annotations
@@ -47,8 +47,7 @@ class ScoreResult:
 
     version: str
     """Scorer algorithm version — bumped whenever the math changes so a
-    partial re-score never leaves a mixed-version field (plan §4,
-    "Versioning rule"). ``/curation/scores/coverage`` reports distinct
+    partial re-score never leaves a mixed-version field. ``/curation/scores/coverage`` reports distinct
     ``(method, version)`` pairs."""
 
     scored_at: str
@@ -78,7 +77,7 @@ class CropScorer(Protocol):
     writes: ClassVar[tuple[str, ...]]
     """OpenSearch field names this scorer may write. MUST NOT contain
     ``cluster_id`` / ``cluster_subid`` / ``cluster_distance`` — enforced by
-    a regression test (plan §8 non-goal #3)."""
+    a regression test."""
 
     version: ClassVar[str]
     """Algorithm version stamped onto every field this scorer writes."""

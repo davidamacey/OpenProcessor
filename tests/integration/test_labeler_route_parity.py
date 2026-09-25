@@ -1,5 +1,5 @@
 """Static route-parity guard between this backend and Cropwright (the
-labeler frontend) — cropwright_backend_integration_plan.md §5.1 (T-D1).
+labeler frontend).
 
 Two independent checks, both pure import + introspection (no GPU, no
 OpenSearch, no browser, no frontend checkout required at test time):
@@ -10,12 +10,12 @@ OpenSearch, no browser, no frontend checkout required at test time):
    param-normalized) resolves to a route actually registered under
    ``CurationConfig.api_prefix``.
 2. **The critical clause** (this is what would have caught the
-   ``plate_thumbnail`` bug, plan §1.3): every ``f'{config.api_prefix}/...'``
+   ``plate_thumbnail`` bug): every ``f'{config.api_prefix}/...'``
    literal found in a curation router's *response payload* (as opposed to
    an ``APIRouter(prefix=...)`` declaration, which legitimately builds the
    route table itself) is scanned and checked against the same route
    table. A handler that emits a URL pointing at a segment nothing
-   registers — the exact shape of the T-A1 bug — fails this test, not a
+   registers — the same shape of bug — fails this test, not a
    live GET-only smoke test that never noticed the string inside a 200
    response was dead.
 
@@ -28,9 +28,7 @@ Regenerating the fixture (frontend call sites may drift):
     | sort -u
 
 That one-liner over-matches (rg doesn't parse out comments/JSDoc), so the
-raw output needs a hand pass to drop comment-only hits before it's usable
-— see docs/design/cropwright_backend_integration_plan.md §1.2 for the
-audited executable/comment split as of the commit this fixture snapshots.
+raw output needs a hand pass to drop comment-only hits before it's usable.
 After filtering, strip the leading ``/curation``, collapse ``${...}``
 interpolations to the literal token ``{param}``, dedupe, sort, and update
 ``tests/fixtures/labeler_call_sites.txt``'s header commit hash.
@@ -52,18 +50,14 @@ _CURATION_ROUTER_FILES: list[Path] = [
     REPO_ROOT / 'src' / 'routers' / 'curation_umap.py',
 ]
 
-# Known, plan-documented gaps (cropwright_backend_integration_plan.md
-# §0.2/§4/§1.3) — real frontend call sites that do NOT resolve against
-# this backend, either by design or because a paired fix hasn't landed on
-# the frontend side of this cross-repo migration yet. Excluded so this
+# Known, documented gaps — real frontend call sites that do NOT resolve
+# against this backend, either by design or because a paired fix hasn't
+# landed on the frontend side of this cross-repo migration yet. Excluded so this
 # guard catches NEW accidental drift, not these already-decided/in-flight
 # items. Keep this dict and the fixture's own "Excluded on purpose"
 # comment block in sync.
 KNOWN_GAPS: dict[str, str] = {
-    '/export/lpr': (
-        'proprietary single-class LPR dataset export — Bucket B, '
-        'deliberately never ported (plan §4.1).'
-    ),
+    '/export/lpr': ('proprietary single-class LPR dataset export — deliberately never ported.'),
     '/export/lpr/status': 'status endpoint for the export above, same reason.',
 }
 
@@ -135,7 +129,7 @@ def test_known_gaps_are_not_present_in_the_fixture() -> None:
 
 
 def test_every_frontend_call_site_resolves_to_a_registered_route() -> None:
-    """§5.1: every fixture entry (Cropwright's executable call paths,
+    """Every fixture entry (Cropwright's executable call paths,
     prefix-stripped + param-normalized) must resolve to something this
     backend actually serves."""
     routes = _registered_relative_routes()
@@ -177,8 +171,8 @@ def _extract_response_payload_prefix_literals() -> list[tuple[str, int, str]]:
 
 
 def test_response_payload_url_literals_resolve_to_registered_routes() -> None:
-    """The clause that would have caught the plate_thumbnail bug (plan
-    §1.3/§5.1): a response handler must never build a URL pointing at a
+    """The clause that would have caught the plate_thumbnail bug:
+    a response handler must never build a URL pointing at a
     path segment nothing registers. A GET-only smoke test can't see this
     — the endpoint still returns 200, just with a dead string inside."""
     literals = _extract_response_payload_prefix_literals()

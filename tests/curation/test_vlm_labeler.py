@@ -1,20 +1,17 @@
 """Unit tests for ``src.services.labeling.vlm_labeler.VlmLabeler``.
 
-Ported from the reference VLM labeler's test suite (§5 Chunk 7 —
-see ``docs/design/curation_design_rationale.md`` for the genericization
-approach). Mechanism only — the reference file used generic placeholder
-class names ('acura', 'bmw', 'porsche') purely as opaque strings for the
-chunking/parsing tests; this port swaps them for equally-opaque neutral
-strings so nothing vehicle-specific survives, per the "port the
-mechanism, not the vocabulary" principle.
+See ``docs/design/curation_design_rationale.md`` for the genericization
+approach. Mechanism only — the class names used here ('alpha', 'beta',
+'gamma') are purely opaque strings for the chunking/parsing tests, kept
+neutral so nothing domain-specific leaks into the suite.
 
 Tests are intentionally hermetic:
 - All upstream HTTP traffic is replaced with a fake httpx transport.
 - Tenacity retry waits are monkeypatched to zero so retry tests don't
   block the suite.
 - Async tests use ``asyncio.run`` directly so we don't depend on the
-  optional ``pytest-asyncio`` plugin for this file (other ported files
-  in this chunk do use it).
+  optional ``pytest-asyncio`` plugin for this file (other files in this
+  suite do use it).
 """
 
 from __future__ import annotations

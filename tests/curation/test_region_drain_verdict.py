@@ -1,4 +1,4 @@
-"""BA-3: the server-computed drain-stability verdict."""
+"""The server-computed drain-stability verdict."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""S4: raw VLM label clustering — pure clustering logic plus the end-to-end
+"""Raw VLM label clustering — pure clustering logic plus the end-to-end
 contract with ``GET /review/raw_label_clusters`` (the script must write
 exactly the fields that endpoint aggregates on)."""
 
@@ -272,7 +272,7 @@ async def test_rerun_keeps_cluster_ids_stable(script_mod: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_rerun_on_unchanged_corpus_writes_nothing(script_mod: Any) -> None:
-    """F-29: a re-cluster of an unchanged label corpus must not rewrite
+    """A re-cluster of an unchanged label corpus must not rewrite
     every row — write_back skips docs whose stored cluster id already
     matches the fresh assignment."""
     fake = FakeItemsOpenSearch(_corpus())

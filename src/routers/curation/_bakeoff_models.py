@@ -1,7 +1,6 @@
 """Wire models for the model-comparison (bake-off) routes.
 
-Shapes are specified in ``docs/design/generic_model_comparison_plan.md``
-section 7. Result files written by the evaluator (``status.json``,
+Result files written by the evaluator (``status.json``,
 ``<dataset>/comparison.json``, ``matrix.json``) are validated with these
 models on read; a file that does not validate is an unsupported (pre-v2)
 schema and the route answers 409.
@@ -30,7 +29,7 @@ MappingMethod = Literal[
 
 
 # =============================================================================
-# Eval datasets: plan 7.2
+# Eval datasets
 # =============================================================================
 
 
@@ -85,7 +84,7 @@ class EvalDatasetList(BaseModel):
 
 
 # =============================================================================
-# Trained models: plan 7.3
+# Trained models
 # =============================================================================
 
 
@@ -141,7 +140,7 @@ class TrainedModelList(BaseModel):
 
 
 # =============================================================================
-# Profiles and baselines: plan 7.4 to 7.6
+# Profiles and baselines
 # =============================================================================
 
 
@@ -194,7 +193,7 @@ class BaselineModelList(BaseModel):
 
 
 # =============================================================================
-# Run request and response: plan 7.7
+# Run request and response
 # =============================================================================
 
 
@@ -322,7 +321,7 @@ class BakeoffRunAccepted(BaseModel):
 
 
 # =============================================================================
-# Status and runs: plan 7.8, 7.9
+# Status and runs
 # =============================================================================
 
 
@@ -373,7 +372,7 @@ class BakeoffRunList(BaseModel):
 
 
 # =============================================================================
-# Comparison: plan 7.10
+# Comparison
 # =============================================================================
 
 
@@ -512,7 +511,7 @@ class BakeoffComparison(BaseModel):
 
 
 # =============================================================================
-# Matrix: plan 7.11
+# Matrix
 # =============================================================================
 
 
@@ -556,7 +555,7 @@ class BakeoffMatrix(BaseModel):
 
 
 # =============================================================================
-# Job spec v2, API to evaluator (not a route): plan 7.12
+# Job spec v2, API to evaluator (not a route)
 # =============================================================================
 
 

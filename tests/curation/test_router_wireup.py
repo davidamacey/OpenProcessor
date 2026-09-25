@@ -12,11 +12,10 @@ Covered:
 - ``/curation/crops`` server-side filters out test_holdout by default.
 
 ``POST /curation/ingest/image`` and the region-metadata PATCH endpoint
-from the reference test file this was ported from are not covered here:
-the former depends on a Bucket-B ingest service never ported (plan §1,
-§7 R5 — see ``src/routers/curation/ingest.py``'s module docstring); the
-latter (``PATCH /crops/{id}/plate_meta``) lives on ``regions.py``,
-ported in an earlier wave.
+are not covered here: the former depends on an ingest service this
+repo doesn't wire up (see ``src/routers/curation/ingest.py``'s module
+docstring); the latter (``PATCH /crops/{id}/region_meta``) lives on
+``regions.py``.
 """
 
 from __future__ import annotations
@@ -345,7 +344,7 @@ def test_human_class_writers_replace_detector_provenance(
     human relabel (batch label / move) must overwrite it — otherwise a
     human-validated crop keeps claiming the detector produced its class.
 
-    Batch label/move route through occ_update_bulk (F-17: one mget + one
+    Batch label/move route through occ_update_bulk (one mget + one
     bulk call instead of one get+update round-trip per crop)."""
     source = {
         'class_id': 1,
@@ -531,7 +530,7 @@ def test_crops_listing_filters_test_holdout_by_default(
 
     r = app_client.get('/curation/crops')
     assert r.status_code == 200, r.text
-    # F-19: this is a pure predicate (must_not term), so it lives in
+    # This is a pure predicate (must_not term), so it lives in
     # filter context now, not must.
     filt = captured['body']['query']['bool']['filter']
     has_test_filter = any(
@@ -571,7 +570,7 @@ def test_crops_listing_includes_test_when_requested(
 
 
 def test_batch_label_rejects_more_than_5000_crop_ids(app_client: Any) -> None:
-    """F-17: crop_ids batch fields are capped at 5000 (max_length) so a
+    """crop_ids batch fields are capped at 5000 (max_length) so a
     malformed/huge payload 422s instead of driving an unbounded OCC-bulk
     write."""
     r = app_client.put(

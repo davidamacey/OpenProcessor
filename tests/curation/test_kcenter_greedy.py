@@ -1,6 +1,6 @@
-"""Tests for k-center-greedy core-set selection (curation-strategy plan
-§2.6/§3.4/§9). Plan §9's own validation framing for this method: on a
-known synthetic layout, assert the algorithm picks corners/extremes
+"""Tests for k-center-greedy core-set selection.
+
+On a known synthetic layout, assert the algorithm picks corners/extremes
 first (not random interior points), and that results are deterministic
 given the same ``seed_idx``.
 """
@@ -16,7 +16,7 @@ from src.services.curation.selection.kcenter_greedy import k_center_greedy
 def _corners_plus_redundant_mass(d: int = 4, n_dup: int = 30) -> np.ndarray:
     """4 mutually-orthonormal "corner" directions (rows 0-3, standard
     basis vectors in R^d) plus ``n_dup`` exact duplicate copies of corner
-    0 (rows 4..4+n_dup-1) — a stand-in for "one common vehicle type with
+    0 (rows 4..4+n_dup-1) — a stand-in for "one common class with
     lots of near-identical crops, plus a few genuinely distinct rare
     ones". A good diversity sampler should spend its early picks on the
     4 distinct directions, not repeatedly reselect the redundant mass."""

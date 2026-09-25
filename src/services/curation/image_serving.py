@@ -7,7 +7,7 @@ The labeler frontend needs two things:
 2. Crop+resize a 128px thumbnail of a single item bbox, cached LRU
    (2000 entries ~50MB). Used by cluster grids.
 
-K6: this module used to also burn bbox overlays into the full-resolution
+This module used to also burn bbox overlays into the full-resolution
 source image server-side (the "expand to source" view). Every served
 image is now the clean source render (resize + EXIF transpose + crop,
 never a drawn box or label) — the frontend draws its own boxes from the
@@ -115,7 +115,7 @@ def _configured_roots(config: CurationConfig | None = None) -> tuple[Path, ...]:
     unmatched.
     """
     cfg = config or get_curation_config()
-    # BA-1: the upload root is a server-managed root too -- an uploaded
+    # The upload root is a server-managed root too -- an uploaded
     # item's persisted image_path must pass the same servability guard
     # as any mounted source root.
     return (cfg.source_root, cfg.upload_root, *cfg.source_path_aliases.values())
@@ -155,7 +155,7 @@ def persist_uploaded_bytes(
     config: CurationConfig | None = None,
 ) -> Path:
     """Persist uploaded image bytes under ``CurationConfig.upload_root``,
-    content-addressed (BA-1).
+    content-addressed.
 
     Path shape: ``<upload_root>/<imohash[:2]>/<imohash><extension>`` —
     the same bytes always resolve to the same path, so re-uploading the
@@ -452,7 +452,7 @@ THUMBNAIL_CACHE = ThumbnailCache()
 
 
 # =============================================================================
-# Clean source-image rendering (K6: no server-side overlays)
+# Clean source-image rendering (no server-side overlays)
 # =============================================================================
 
 
@@ -483,7 +483,7 @@ async def render_source_image(
 ) -> bytes:
     """Render the clean source image as JPEG bytes: EXIF-transpose,
     RGB-convert, optionally downscale, re-encode. No box, label or other
-    overlay is ever drawn (K6) — the frontend draws every box itself from
+    overlay is ever drawn — the frontend draws every box itself from
     the geometry ``GET {prefix}/crops/{id}/context`` serves.
 
     Pass ``max_dim`` to cap the longest side so the labeler can pull a
@@ -519,13 +519,13 @@ def _crop_source_includes() -> list[str]:
     (``crop_thumbnail``), and the region-of-interest bbox field plus the
     verifier-rejected candidate bbox (both ``crop_region_thumbnail`` --
     the candidate bbox is its fallback for a ``verify_rejected`` item,
-    which never has the region bbox field). K6: ``crop_full_image`` used
+    which never has the region bbox field). ``crop_full_image`` used
     to also read ``bbox_norm``/``class_name``/the region bbox to draw a
     server-side overlay; it now only resolves ``image_path`` and serves
     the clean source, so ``class_name`` is no longer read by anything
     here. Without this narrowed list, a bare ``.get()`` also decompresses
     the item's embedding vectors + nested history JSON, none of which any
-    caller reads (see F-14).
+    caller reads.
     """
     from src.config import get_region_fields
 
@@ -551,7 +551,7 @@ async def _fetch_crop(
     Fetches only :func:`_crop_source_includes` via ``_source_includes``
     — embedding vectors and history arrays are never read by any
     ``crops_router`` route, so there's no reason to decompress them on
-    every thumbnail/image request (F-14).
+    every thumbnail/image request.
 
     Tests mock this function; production wires the real OpenSearch
     client through the router dependency.

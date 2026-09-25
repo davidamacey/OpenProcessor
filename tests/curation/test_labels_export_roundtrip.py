@@ -70,7 +70,7 @@ def fake() -> QueryFakeOpenSearch:
         'never': _item('never', image='img5'),
     }
     # One high-purity CANDIDATE cluster (cluster_id >= the residual
-    # offset -- CM-1 excludes class-range clusters, cluster_id ==
+    # offset -- auto-promote excludes class-range clusters, cluster_id ==
     # class_id, from auto-promote entirely since their purity is 1.0 by
     # construction): 4 members all predicted 'gadget' by the detector ->
     # auto-promote validates them.

@@ -12,7 +12,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-# BA-7: stable machine error codes, served alongside the free-text
+# Stable machine error codes, served alongside the free-text
 # ``error`` message on a failed ingest item. Not an exhaustive enum on
 # the wire model (a future failure mode should still surface a message
 # even if this list hasn't been extended for it) but every current
@@ -54,7 +54,7 @@ class IngestResult(BaseModel):
     n_region_queued: int = 0
     error: str | None = None
     error_kind: str | None = None
-    # BA-1: the client-supplied identifier, for a byte-upload ingest
+    # The client-supplied identifier, for a byte-upload ingest
     # where image_path is now the server-persisted path.
     source_identifier: str | None = None
 

@@ -1,12 +1,11 @@
-"""Tests for ``src/routers/curation/regions_fp.py`` (plan Wave 5 W5.c —
-18.18% coverage, no prior test on any route).
+"""Tests for ``src/routers/curation/regions_fp.py``.
 
 Covers the read-side cluster-card assembly (``GET /regions/clusters``,
 where the permanent false-positive bucket must sort first and carry
 ``cluster_kind='false_positive'``) and the "no centroids built yet"
 short-circuit on ``GET /regions/suspected_false_positives`` — the two
 routes cheaply testable against a fake OpenSearch without pulling in
-the background-job machinery (``cluster_plates``,
+the background-job machinery (``cluster_regions``,
 ``build_fp_centroids_endpoint``) or a real FAISS/embedding store.
 """
 
@@ -148,7 +147,7 @@ def test_plate_cluster_status_and_fp_centroid_status_are_reachable(
 
 
 class _FakeFpSearchOS:
-    """Fake OS for the suspected-FP scoring path (F-1): one page of embedding
+    """Fake OS for the suspected-FP scoring path: one page of embedding
     hits via ``search``/``scroll``, then ``mget`` to hydrate item fields for
     the scored page. Records the exact ``mget`` kwargs so the test can assert
     the fix uses ``_source_excludes=`` rather than the broken ``_source={...}``
@@ -189,7 +188,7 @@ class _FakeFpSearchOS:
 def test_suspected_false_positives_mget_uses_source_excludes_kwarg(
     app_client_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """F-1 regression: the mget call must pass ``_source_excludes=`` (a real
+    """Regression: the mget call must pass ``_source_excludes=`` (a real
     opensearch-py kwarg), not ``_source={'excludes': [...]}`` (silently
     stringified into a useless include pattern -> every item comes back with
     an empty ``_source``).
@@ -287,7 +286,7 @@ def _patch_fp_store(monkeypatch: pytest.MonkeyPatch, *, trained_at: str = 'T1') 
 def test_suspected_fp_second_page_within_ttl_does_not_rescroll(
     app_client_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """F-18: the scored-list cache means a page-2 request shortly after
+    """The scored-list cache means a page-2 request shortly after
     page-1 doesn't re-scroll the whole region-embedding pool."""
     from src.routers.curation import regions_fp as regions_fp_mod
 
@@ -307,7 +306,7 @@ def test_suspected_fp_second_page_within_ttl_does_not_rescroll(
 
 
 def test_suspected_fp_scroll_exception_still_clears_scroll(monkeypatch: pytest.MonkeyPatch) -> None:
-    """F-18: an exception mid-scroll must still hit clear_scroll (finally),
+    """An exception mid-scroll must still hit clear_scroll (finally),
     not leak an open scroll context."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

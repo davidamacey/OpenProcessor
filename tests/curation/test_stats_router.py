@@ -109,7 +109,7 @@ async def test_stats_dataset_vlm_labeled_excludes_class_less_vlm_proposals() -> 
 
 @pytest.mark.asyncio
 async def test_stats_dataset_uses_request_cache() -> None:
-    """F-21: request_cache=True lets identical size:0 stats queries
+    """request_cache=True lets identical size:0 stats queries
     within an OpenSearch shard-cache refresh window skip re-execution."""
     os_client = AsyncMock()
     os_client.search = AsyncMock(return_value={'hits': {'total': {'value': 0}}, 'aggregations': {}})

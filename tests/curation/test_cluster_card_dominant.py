@@ -78,7 +78,7 @@ async def test_labelled_count_includes_classes_beyond_top_buckets() -> None:
     cards = await _cards(_bucket(CANDIDATE + 2, 40, classes))
     card = cards[CANDIDATE + 2]
     assert card['labelled_count'] == 8
-    # The top class's share of the labels is label_purity (DQ-M2).
+    # The top class's share of the labels is label_purity.
     assert card['label_purity'] == pytest.approx(0.5)
 
 
@@ -90,7 +90,7 @@ async def test_class_cluster_keeps_its_dominant_class() -> None:
 
 
 # =============================================================================
-# F-12 — kind push-down: kind='class'/'candidate' must filter the query
+# Kind push-down: kind='class'/'candidate' must filter the query
 # *before* aggregating (a bounded cluster_id range), not terms-aggregate
 # everything then drop mismatched-kind buckets in Python. Otherwise, with
 # more than max_clusters distinct candidate ids outranking the ~80 class

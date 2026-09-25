@@ -1,6 +1,6 @@
 """Model class id -> eval class id mapping for one (model, dataset) pair.
 
-The one owner of the class-mapping algorithm (plan D5). Stdlib only: the
+The one owner of the class-mapping algorithm. Stdlib only: the
 API imports it at enqueue time (when the run manifest or an explicit map
 already says how the model's classes relate to the eval export), and the
 harness imports it inside the evaluator (when only the loaded model knows
@@ -196,7 +196,7 @@ def resolve_by_names(
 
 @dataclass
 class ClassMapping:
-    """A resolved (model, dataset) class mapping (plan section 3.3 shape).
+    """A resolved (model, dataset) class mapping.
 
     ``model_to_eval`` is ``None`` only for an unresolved mapping the
     evaluator still has to name-match (the API's placeholder).
@@ -270,7 +270,7 @@ def resolve_for_loaded_model(
     eval_names: Mapping[int, str],
     scored_class_ids: Iterable[int],
 ) -> ClassMapping:
-    """Harness-side resolution when the job carries no map (plan rules 4-5).
+    """Harness-side resolution when the job carries no map.
 
     Name-match the loaded model's own class names. A model without names
     (e.g. a Triton engine) is single-class only: its class 0 maps to the

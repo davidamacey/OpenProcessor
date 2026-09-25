@@ -1,8 +1,6 @@
-"""``src.services.training.profiles.get_class_subset_presets`` (F12/W2.5).
+"""``src.services.training.profiles.get_class_subset_presets``.
 
-Replaces the hardcoded vehicle/license-plate presets
-(``all_vehicles``/``plates_only``/``vehicles_and_plates``/``cars_only``/
-``bikes_only``) with:
+Presets served:
 
 * ``all`` -- always served, generic.
 * ``all_except_region`` / ``region_only`` -- only when the active region

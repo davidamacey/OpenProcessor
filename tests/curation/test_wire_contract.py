@@ -183,7 +183,7 @@ def test_region_values_reach_the_wire(monkeypatch: pytest.MonkeyPatch) -> None:
     for attr, value in _region_values().items():
         assert crop[wire.region_wire_key(attr)] == value, attr
     assert crop['vlm_confidence'] == 'medium'
-    # F-6 / D-1: classifier_raw_confidence is retired -- never written in
+    # classifier_raw_confidence is retired -- never written in
     # production, so it must no longer appear on the wire at all.
     assert 'classifier_raw_confidence' not in crop
 

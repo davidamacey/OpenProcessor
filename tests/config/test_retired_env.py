@@ -1,6 +1,6 @@
 """``src/config/retired_env.py`` — startup guard for retired env-var names.
 
-D4 (``docs/design/naming_sweep_plan.md``): a clean break, no aliases. A
+A clean break, no aliases. A
 retired name being *set* must fail loudly at startup, naming its
 replacement, rather than being silently ignored (which would look like
 a working config that quietly does nothing -- e.g. a stale ``SAM3_URL``
@@ -40,7 +40,7 @@ def test_retired_env_table_covers_every_section_3_name() -> None:
         'SAM_WORKER_METRICS_PORT',
         'OP_REGION_DETECTION_SAM_TEXT_PROMPT',
         'GEMMA_CROP_CACHE_DIR',
-        # generic model comparison W3: bake-offs score every class.
+        # Bake-offs score every class.
         'OP_BAKEOFF_PROFILE_TARGET_CLASS_ID',
         'OP_BAKEOFF_PROFILE_TARGET_CLASS_NAME',
     }

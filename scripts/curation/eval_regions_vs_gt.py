@@ -2,7 +2,7 @@
 """Check the region-detection cascade against a ground-truth YOLO dataset.
 
 Point it at a YOLO dataset of whole frames labeled with the *region* class
-(e.g. ``nc: 1, names: {0: license_plate}``, background frames included) whose
+(e.g. ``nc: 1, names: {0: defect}``, background frames included) whose
 images were ingested — typically with ``import_labeled_dataset.py
 --images-only`` so the region labels never enter the item class registry.
 It reads every item on those frames from the items index, takes the region

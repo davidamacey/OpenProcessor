@@ -1,4 +1,4 @@
-"""Pins for ``GpuArbiterConfig`` (Chunk 6).
+"""Pins for ``GpuArbiterConfig``.
 
 See ``docs/design/curation_design_rationale.md`` for the
 config-driven-genericity design principle this follows — a generic
@@ -28,7 +28,7 @@ def test_defaults_are_empty_and_permissive() -> None:
     assert cfg.container_gpus == ()
     assert cfg.trainer_container is None
     # Never None: the router and the reconcile loop must watch the same dir
-    # even when OP_BAKEOFF_JOBS_DIR is unset (plan section 5, bug 4).
+    # even when OP_BAKEOFF_JOBS_DIR is unset.
     assert cfg.bakeoff_jobs_dir == str(get_curation_config().state_dir / 'bakeoff_jobs')
     assert cfg.gpu_labels == {}
     assert cfg.default_train_gpus is None
@@ -70,7 +70,7 @@ def test_probe_trainer_reachable_skips_when_unconfigured() -> None:
 
 
 # =============================================================================
-# GpuArbiterConfig.from_env (cutover plan: GPU policy as config, not code)
+# GpuArbiterConfig.from_env (GPU policy as config, not code)
 # =============================================================================
 
 _ARBITER_ENV_VARS = (

@@ -1,11 +1,10 @@
 """Generic YOLO ``.txt`` label import for the curation ingest path.
 
-Near-verbatim port of the private reference generic label importer (see
-``docs/design/curation_design_rationale.md`` §2.1 for the citation
-convention; the reference file is ~444 LOC and, per that design doc,
-was misclassified as domain-specific — it is a plain YOLO-format
-parser + IoU matcher with no domain coupling beyond two index-name
-constants, which now come from :class:`~src.config.CurationConfig`).
+A plain YOLO-format parser + IoU matcher with no domain coupling beyond
+two index-name constants, which come from
+:class:`~src.config.CurationConfig` (see
+``docs/design/curation_design_rationale.md`` §2.1 for the design
+approach).
 
 Imports a YOLO-format ``.txt`` label file alongside an already-ingested
 image document. Builds ``labels_confirmed`` rows and flips matching
@@ -133,7 +132,7 @@ async def _lookup_image(
 ) -> dict[str, Any] | None:
     """Fetch the images-index doc whose ``image_path`` matches.
 
-    F-26: restricted to ``image_id`` — the only field any caller reads
+    Restricted to ``image_id`` — the only field any caller reads
     (previously returned the full doc, including vectors)."""
     body = {
         'size': 1,
@@ -297,7 +296,7 @@ async def import_yolo_labels(
         mismatch_sink: Optional list that disagreement records (each
             carrying a ``kind``) are appended to, so a caller can
             count/inspect them without re-querying.
-        image_doc: Pre-resolved images-index doc (F-26) — pass this when
+        image_doc: Pre-resolved images-index doc — pass this when
             the caller already has it (a batch import's ``_msearch``
             page, or an ingest result) to skip the per-file lookup.
             ``None`` (default) falls back to the single-file lookup.
@@ -505,7 +504,7 @@ _MSEARCH_CHUNK = 100
 async def _msearch_images(
     image_paths: list[str], opensearch: AsyncOpenSearch
 ) -> dict[str, dict[str, Any]]:
-    """Batched image-doc lookup (F-26): one ``_msearch`` per
+    """Batched image-doc lookup: one ``_msearch`` per
     :data:`_MSEARCH_CHUNK` paths instead of one ``search`` per file.
 
     Returns ``{image_path: doc}`` for every path that resolved (missing
@@ -559,7 +558,7 @@ async def import_labels_batch(
         disagreement_sink: Optional list the per-file disagreement
             records are appended to.
         image_docs: Optional ``{image_path: doc}`` the caller already has
-            (F-26 — e.g. an ingest batch's own just-written results) —
+            (e.g. an ingest batch's own just-written results) —
             skips the ``_msearch`` lookup for any path present here. Any
             path NOT present is still resolved via the batched
             ``_msearch`` fallback below.
@@ -577,7 +576,7 @@ async def import_labels_batch(
         'missed_labels': 0,
         'unmatched_detections': 0,
     }
-    # F-26: resolve every remaining image doc via chunked _msearch, instead
+    # Resolve every remaining image doc via chunked _msearch, instead
     # of import_yolo_labels doing one `search` per file — the per-file
     # crop-lookup + bulk write (genuinely per-image-scoped) stay as-is.
     image_docs = dict(image_docs or {})

@@ -1,21 +1,16 @@
-"""VLM-based labeling endpoints — ported from the reference VLM router (§5 Chunk 7).
+"""VLM-based labeling endpoints.
 
 ``POST /curation/vlm/label_batch`` classifies item crops via the shared
 :class:`~src.services.labeling.vlm_labeler.VlmLabeler` singleton;
 ``/verify_regions``, ``/verify_region_batch`` and ``/region_visible_batch``
 verify (and, for the first two, read) the crop's sub-region-of-interest
-(e.g. a printed label, a license plate).
+(e.g. a printed label or sticker).
 
-Deviation from the plan's file-for-file mapping: the reference router
-derives its class-label provenance dict from the reference cascade
-module's ``class_provenance``, which lives in
-``src.services.detection.cascade_detect`` — not ported until Chunk 8.
-Importing it here would either forward-reference a module that doesn't
-exist yet (breaking ``import src.main`` for every wave between Chunk 7
-and Chunk 8) or force Chunk 8 to land early. The helper is four lines
-(build a provenance dict), so it is inlined as ``_class_provenance``
-below rather than deferred-imported; Chunk 8 is unaffected since
-``cascade_detect.py``'s own copy is unrelated to this router.
+``_class_provenance`` (below) builds the class-label provenance dict
+inline rather than importing it from
+``src.services.detection.cascade_detect``, which carries its own,
+unrelated copy of the same four-line helper — importing across modules
+for four lines isn't worth the coupling.
 """
 
 from __future__ import annotations
@@ -114,9 +109,8 @@ def _class_provenance(
     """Build the class-provenance dict for crop class label writers.
 
     Inlined here rather than imported from ``cascade_detect.py`` — see
-    module docstring. Mirrors the reference ``class_provenance`` helper
-    exactly (field names are class-label provenance, not
-    ``RegionFields``-governed).
+    module docstring. Field names are class-label provenance, not
+    ``RegionFields``-governed.
     """
     return {
         'class_detector': detector,
@@ -238,7 +232,7 @@ async def vlm_label_batch(
     # Same OP_CROP_CACHE_DIR / CurationConfig.crop_cache_dir the worker
     # (scripts/curation/worker/state.py) writes into -- this used to read a
     # different env var with a different default, which meant a 100% cache
-    # miss out of the box (CFG-2).
+    # miss out of the box.
     crop_cache_dir = str(get_curation_config().crop_cache_dir)
 
     def _vlm_jpeg_for(crop_id: str, image_path: str, bbox: tuple) -> bytes | None:
@@ -270,7 +264,7 @@ async def vlm_label_batch(
     crops: list[ItemCrop] = []
     cache_hits = 0
     cache_misses = 0
-    # F-26: one mget_crops() call instead of N separate opensearch.get()
+    # One mget_crops() call instead of N separate opensearch.get()
     # round trips. The guard's fields are fetched too: its read token must be
     # built from the same class state the write-time re-check compares.
     from src.clients.curation_opensearch import mget_crops
@@ -430,14 +424,14 @@ async def vlm_verify_regions(
 
     labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
     n_verified = 0
-    # F-26: keyed by crop_id rather than written straight to a plain bulk
+    # Keyed by crop_id rather than written straight to a plain bulk
     # body -- the actual write goes through occ_skip_on_conflict_bulk
     # below so a human verify/label landing on the same crop while this
     # loop's VLM round-trips are in flight wins outright (conflict -> skip,
     # never retried against).
     updates_by_id: dict[str, dict[str, Any]] = {}
     now = _now_iso()
-    # F-26: one mget_crops() call instead of N separate opensearch.get()
+    # One mget_crops() call instead of N separate opensearch.get()
     # round trips.
     from src.clients.curation_opensearch import mget_crops
 
@@ -485,7 +479,7 @@ async def vlm_verify_regions(
             # `current` (occ_skip_on_conflict_bulk re-fetches with
             # seq_no) rather than the stale per-crop doc read at the top
             # of the loop above. Mirrors the region-write human guard the
-            # clustering orchestrator's bulk writers use (F-3).
+            # clustering orchestrator's bulk writers use.
             if current.get(_F.verifier) == 'human' or current.get(_F.label_source) == 'human':
                 return {}
             return updates_by_id[doc_id]

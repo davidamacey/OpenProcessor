@@ -342,7 +342,7 @@ cmd_test() {
 }
 
 # =============================================================================
-# Curation subsystem — EXPERIMENTAL, opt-in compose profile (D7)
+# Curation subsystem — EXPERIMENTAL, opt-in compose profile
 # =============================================================================
 # Mirrors the `curation-*` Makefile targets. The curation worker services
 # (curation-detection-worker, curation-vlm-worker, curation-auto-label-worker,
@@ -379,8 +379,7 @@ cmd_curation() {
         seed)
             log_warn "curation seed: not yet implemented."
             echo "scripts/curation/seed_live_harness.py does not exist on this branch yet"
-            echo "(see docs/design/oss_main_completion_plan.md, Wave 6 — live"
-            echo "write-path verification harness). Nothing was run."
+            echo "(live write-path verification harness). Nothing was run."
             ;;
         *)
             log_error "Unknown curation subcommand: $subcommand"

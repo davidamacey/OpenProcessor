@@ -45,7 +45,7 @@ HARD_NEGATIVE_REGION_STATUSES: frozenset[str] = frozenset({RegionStatus.FALSE_PO
 # into the negatives teaches the next detector the current one's mistakes.
 EMPTY_REGION_STATUSES: frozenset[str] = frozenset({RegionStatus.NO_REGION_VISIBLE.value})
 
-# F-29: fixed seed for the empty-frame sample's random_score. A scroll
+# Fixed seed for the empty-frame sample's random_score. A scroll
 # with no sort effectively returns index/segment order — always the same
 # leading docs — which is a biased sample repeated on every export. A
 # fixed seed keeps repeated exports of the same pool reproducible while
@@ -211,7 +211,7 @@ class RowCollector:
             empty_hits = await scroll_hits(
                 self.opensearch,
                 index=self.config.items_index,
-                # F-29: random_score with a fixed seed instead of the bare
+                # random_score with a fixed seed instead of the bare
                 # bool query, which a sort-less scroll returns in
                 # index/segment order — the same leading docs on every
                 # export.

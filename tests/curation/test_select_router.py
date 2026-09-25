@@ -1,5 +1,5 @@
-"""Tests for the diversity/core-set selection overlay (curation-strategy
-plan §2.6/§3.4/§7 Phase 4/§9): ``GET /curation/crops?order=diverse``'s helper
+"""Tests for the diversity/core-set selection overlay:
+``GET /curation/crops?order=diverse``'s helper
 (``select.compute_diverse_order``) and ``POST /curation/select/diverse`` +
 its ``status``/``cancel`` lifecycle.
 
@@ -104,7 +104,7 @@ def test_scope_query_review_tab_reuses_review_queries() -> None:
 
     q = _build_scope_query(SelectDiverseScope(review_tab='outliers'))
     # review_queries.build_tab_query's 'outliers' tab adds the
-    # cluster_distance clause verbatim (F-6: outlier_flagged -- never
+    # cluster_distance clause verbatim (outlier_flagged -- never
     # written anywhere -- was deleted, so this is no longer wrapped in a
     # should).
     assert {'range': {'cluster_distance': {'gte': 0.35}}} in q['bool']['must']
@@ -188,7 +188,7 @@ async def test_compute_diverse_order_empty_pool_returns_empty_list(
 async def test_compute_diverse_order_cache_hits_when_k_caps_the_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """F-16: the cache stores the pool size (len(ids)), not len(order)
+    """The cache stores the pool size (len(ids)), not len(order)
     (which is capped at k) — otherwise a second call with the same
     current_count=pool_size could never hit the cache when k < pool_size,
     since len(order) < pool_size would never equal the fresh current_count."""
@@ -251,7 +251,7 @@ def crops_app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
             ]
         }
     )
-    # F-16: order=diverse/outliers do a dedicated exact count of the
+    # order=diverse/outliers do a dedicated exact count of the
     # embedding-bearing pool before ranking.
     fake_os.count = AsyncMock(return_value={'count': 2})
     app = FastAPI()
@@ -414,8 +414,8 @@ def test_select_cancel_with_no_job_running(select_app_client: TestClient) -> Non
 
 # =============================================================================
 # Regression guard — the selection overlay never writes cluster fields or
-# mutates OpenSearch at all (plan §8 non-goal #3 / the Phase 4 hard
-# constraint: "100% read-only selection"). Equivalent in spirit to
+# mutates OpenSearch at all (hard constraint: "100% read-only selection").
+# Equivalent in spirit to
 # test_crop_scores.py::test_no_scorer_writes_cluster_fields, but this
 # overlay isn't a CropScorer (it has no `writes` ClassVar to parametrize
 # over — it writes NOTHING), so the guard here is structural: scan the

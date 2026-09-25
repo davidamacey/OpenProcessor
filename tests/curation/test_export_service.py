@@ -189,7 +189,7 @@ async def test_export_dataset_respects_max_images(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Class-balanced sampling under a max_images cap (plan §4.2 G10)
+# Class-balanced sampling under a max_images cap (G10)
 # ---------------------------------------------------------------------------
 
 
@@ -291,7 +291,7 @@ async def test_capped_export_is_reproducible_from_the_recorded_seed(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# W3.a restored cases (plan §4 Wave 3)
+# Restored stratified-sampling cases
 # ---------------------------------------------------------------------------
 
 
@@ -483,7 +483,7 @@ async def test_manifest_structure_and_deterministic_sha(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_manifest_has_frozen_test_sha_and_test_label_sha(tmp_path):
-    """W1 lineage: the multi-class manifest must record both test-split
+    """Lineage: the multi-class manifest must record both test-split
     identity hashes, independently recomputable from the written files by
     the same functions the exporter used (parity with the single-class
     exporter and with ``scripts.curation.bakeoff.freeze.test_sha``)."""

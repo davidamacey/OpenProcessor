@@ -1,14 +1,11 @@
-"""Grep guard over the default detector model name (plan Wave 5 T-6).
+"""Grep guard over the default detector model name.
 
-Ported from the reference's ``test_active_model_pointer.py``. That file
-named six call sites; on this tree only one exists —
-``src/config/settings.py``'s ``TritonModelConfig.YOLO_MODEL`` default.
-The other five reference sites
-(``src/routers/detect.py``, ``src/services/inference.py`` x2,
-the domain ingest service, the domain model-management router) either
-already read the single settings default here (``detect.py``,
-``inference.py``) or were never ported (the two domain-named files) —
-so the expected hardcode count on this tree is 1, not 6.
+On this tree there is exactly one place the default detector model name
+is hardcoded — ``src/config/settings.py``'s
+``TritonModelConfig.YOLO_MODEL`` default. ``src/routers/detect.py`` and
+``src/services/inference.py`` both read that single settings default
+rather than hardcoding their own, so the expected hardcode count here is
+1.
 """
 
 from __future__ import annotations

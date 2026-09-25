@@ -6,7 +6,8 @@ fake OpenSearch + a scripted detector/PE-encoder, then asserts
 (``crop_area_norm``, ``blur_lap_var``, ``blur_lap_ratio``) populated,
 and ``GET /curation/ingest/status`` reflects the new images.
 
-Per plan §6.0 house rule, this fakes the OpenSearch/Triton I/O boundary
+Per this repo's house rule (don't add the repo's first live-stack
+dependency), this fakes the OpenSearch/Triton I/O boundary
 rather than standing up a live stack — see
 ``tests/integration/test_ingest_occ.py`` for the same convention.
 """

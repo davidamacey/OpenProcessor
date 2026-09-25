@@ -92,7 +92,7 @@ _REPS_SOURCE = [
 def _rep_msearch_body(cluster_id: int, per_cluster: int) -> dict[str, Any]:
     """One msearch query body: top ``per_cluster`` reps for one cluster.
 
-    F-15 / D-4: replaces the old per-bucket ``top_hits`` sub-agg (which
+    Replaces the old per-bucket ``top_hits`` sub-agg (which
     decompressed stored ``_source`` for every representative across
     *every* bucket) with one ``_msearch`` request per cluster in the
     caller's page — issued only for clusters actually on screen.
@@ -176,7 +176,7 @@ async def list_clusters(
     max_rank: int | None = Query(None, ge=1),
     min_blur_ratio: float | None = Query(None, ge=0.0),
     class_source: str | None = Query(None),
-    # F-15 / D-4: representatives are only computed for this page of the
+    # Representatives are only computed for this page of the
     # ordered (post-kind-filter) card list, not for every bucket the
     # aggregation returns. offset/limit page *representatives only* —
     # every card up to max_clusters is still returned, just with an
@@ -198,7 +198,7 @@ async def list_clusters(
       ``dominant_count``/``labelled_count``/``label_purity`` are always
       reported,
     * ``purity`` / ``purity_n`` / ``purity_basis`` / ``purity_tier``
-      (DQ-M2): the share of the ``purity_n`` members the cluster-geometry
+      : the share of the ``purity_n`` members the cluster-geometry
       pass measured for this cluster whose nearest cluster centroid is
       this cluster's own — independent of the labels that placed them, so
       a class cluster is no longer 1.0 by construction; ``null`` when no
@@ -248,7 +248,7 @@ async def list_clusters(
         # class_source is mapped keyword directly on the live index — no
         # .keyword subfield exists (same root cause as top_class below).
         gate_filter.append({'term': {'class_source': class_source}})
-    # F-12: push `kind` into the query as a bounded cluster_id range filter
+    # Pushes `kind` into the query as a bounded cluster_id range filter
     # *before* aggregating, rather than terms-aggregating every kind
     # together (size: max_clusters) and dropping mismatched-kind buckets
     # in Python afterward. Without this, candidate cluster ids (>= the
@@ -290,7 +290,7 @@ async def list_clusters(
             # cluster_subid is mapped keyword directly on the live index —
             # no .keyword subfield exists.
             'subclusters': {'cardinality': {'field': 'cluster_subid'}},
-            # DQ-M2 purity: members measured against their current cluster
+            # Purity: members measured against their current cluster
             # by the geometry pass, and those whose nearest centroid is it.
             'geometry_measured': {'filter': _MEASURED},
             'geometry_fits': {'filter': {'bool': {'filter': [_MEASURED, _FITS]}}},
@@ -344,7 +344,7 @@ async def list_clusters(
                 'dominant_class_id': dominant_class_id,
                 'dominant_class_name': top_name,
                 'dominant_count': top_count,
-                # DQ-M2: share of the purity_n measured members whose
+                # Share of the purity_n measured members whose
                 # nearest cluster centroid is this cluster's own.
                 'purity': purity,
                 'purity_n': purity_n,
@@ -355,7 +355,7 @@ async def list_clusters(
                 # a label at all.
                 'label_purity': label_purity,
                 'labelled_share': (labelled_total / size) if size else None,
-                # CM-1: only candidate clusters are ever auto-promote
+                # Only candidate clusters are ever auto-promote
                 # targets. Class clusters have cluster_id == class_id by
                 # construction, so their label purity is always 1.0 and
                 # they'd otherwise show 'promotable' for a self-referential
@@ -367,7 +367,7 @@ async def list_clusters(
                 'n_subclusters': n_subclusters,
                 'updated_at': bucket.get('latest_update', {}).get('value_as_string'),
                 # Populated below, only for the [offset, offset+limit) page
-                # (F-15 / D-4) — every other card keeps an empty list.
+                # — every other card keeps an empty list.
                 'representatives': [],
             },
         )
@@ -402,7 +402,7 @@ async def cluster_representatives(
 ) -> dict[str, Any]:
     """Return up to ``per_cluster`` representative crop_ids per cluster, one page.
 
-    F-15 / D-4: the cluster id list still comes from one cheap ``terms``
+    The cluster id list still comes from one cheap ``terms``
     aggregation (no sub-agg), but representatives are fetched via one
     ``_msearch`` covering only the ``[offset, offset+max_clusters)`` page
     of cluster ids (ordered by member count desc) — not via a
@@ -415,7 +415,7 @@ async def cluster_representatives(
     class so the agg only returns clusters that contain at least one
     member of the class — driving the labeler's class-sidebar filter.
     """
-    # F-12: excluded items must not surface as cluster representatives
+    # Excluded items must not surface as cluster representatives
     # either -- this endpoint had no class_excluded guard at all before.
     query: dict[str, Any] = {
         'bool': {
@@ -476,7 +476,7 @@ async def refine_cluster_endpoint(
         ),
     ),
 ) -> dict[str, Any]:
-    """Run AHC refinement on a curation "vehicles" cluster.
+    """Run AHC refinement on a curation item cluster.
 
     Writes ``cluster_subid`` (keyword, e.g. ``"47a"``) to every member.
     Skips clusters below the small-cluster floor or above ``max_members``

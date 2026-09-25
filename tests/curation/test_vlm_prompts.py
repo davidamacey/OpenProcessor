@@ -1,5 +1,5 @@
-"""Tests for :mod:`src.services.labeling.vlm_prompts` (labeling-assist plan
-task (a)): ``PromptPack`` JSON round-trip and ``resolve_prompt_pack``'s
+"""Tests for :mod:`src.services.labeling.vlm_prompts`:
+``PromptPack`` JSON round-trip and ``resolve_prompt_pack``'s
 deployment-config resolution + fallback behavior.
 """
 

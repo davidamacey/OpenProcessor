@@ -1,11 +1,10 @@
-"""Tests for the visualization-only UMAP projection overlay
-(curation-strategy plan §2.7/§3.5/§7 Phase 5/§9).
+"""Tests for the visualization-only UMAP projection overlay.
 
 Never fits a real UMAP here — ``fit_projection`` (the only
 function in ``embedding_viz.py`` that imports ``umap``) is monkeypatched
-wholesale in every test that exercises the job lifecycle, same convention
-``test_legacy_clustering.py``'s ``_patch_umap_passthrough`` and
-``test_scores_router.py``'s ``run_scoring_job`` monkeypatch both use.
+wholesale in every test that exercises the job lifecycle, the same
+convention ``test_scores_router.py``'s ``run_scoring_job`` monkeypatch
+uses for its own job entrypoint.
 """
 
 from __future__ import annotations
@@ -19,8 +18,7 @@ import pytest
 
 
 # =============================================================================
-# Own state slot — never the retired clustering reducer's names (plan §2.7
-# non-negotiable rule / §8 non-goal #4)
+# Own state slot — never the retired clustering reducer's names
 # =============================================================================
 
 
@@ -160,7 +158,7 @@ async def test_run_projection_job_writes_only_viz_fields_and_metadata(
     assert index_kwargs['index'] != 'op_umap_state'
 
     # Every bulk doc body writes ONLY viz_x/viz_y/viz_projection_version --
-    # never cluster_id/cluster_subid/cluster_distance (plan §8 non-goal #3).
+    # never cluster_id/cluster_subid/cluster_distance.
     forbidden = {'cluster_id', 'cluster_subid', 'cluster_distance'}
     written_ids: set[str] = set()
     for body in bulk_bodies:
@@ -246,7 +244,7 @@ async def test_get_cached_projection_not_built_when_no_metadata(
 async def test_get_cached_projection_never_triggers_a_fit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The load-bearing assertion the plan calls out explicitly: the GET
+    """The load-bearing assertion: the GET
     read path is genuinely unreachable from the fit function. Monkeypatch
     `fit_projection` to explode if ever called, then drive the
     full GET path with a metadata doc present and confirm no exception."""
@@ -349,7 +347,7 @@ async def test_get_cached_projection_applies_cluster_and_class_filters(
 async def test_get_cached_projection_pages_with_search_after_no_oversized_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """F-2 regression: OpenSearch's index.max_result_window is 10000, so a
+    """OpenSearch's index.max_result_window is 10000, so a
     single `size: max_points` request always 400s once max_points exceeds
     it. get_cached_projection() must page with search_after in bounded
     chunks instead -- no single search request may ask for size > 10000,
@@ -404,8 +402,8 @@ async def test_get_cached_projection_pages_with_search_after_no_oversized_reques
 
 
 # =============================================================================
-# Regression guard — never writes cluster fields (plan §8 non-goal #3),
-# mirrors test_crop_scores.py::test_no_scorer_writes_cluster_fields /
+# Regression guard — never writes cluster fields, mirrors
+# test_crop_scores.py::test_no_scorer_writes_cluster_fields /
 # test_select_router.py's structural source-scan guard.
 # =============================================================================
 

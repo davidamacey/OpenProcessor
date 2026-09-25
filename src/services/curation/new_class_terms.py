@@ -5,7 +5,7 @@
 ``POST /review/new_class_proposals/resolve`` (bulk-resolve a name) all
 select through :func:`proposal_query`, so the summary's total equals the
 queue's total and a term's count equals what a resolve for it matches
-(DQ-M11: the summary used to count only ``vlm_new_class_pending`` rows).
+(the summary used to count only ``vlm_new_class_pending`` rows).
 
 A proposed name is not always a class worth creating. :func:`classify_term`
 flags three kinds, from rules that are served back to the client
@@ -73,7 +73,7 @@ def is_open_proposal(doc: dict[str, Any], label: str) -> bool:
         return False
     if doc.get('review_dismissed_at') is not None:
         return False
-    # R5: a resolved class_id means this item no longer needs a new class,
+    # A resolved class_id means this item no longer needs a new class,
     # whatever a stale needs_new_class flag says (mirrors the
     # must_not-exists-class_id guard in review_queries.build_tab_query).
     if doc.get('class_id') is not None:
@@ -135,11 +135,11 @@ def _matches_non_object_pattern(term: str, patterns: frozenset[str]) -> bool:
     """True when ``term`` (or one of its ``_``-separated tokens) matches a
     configured non-object rule.
 
-    L3: a plain rule (e.g. ``blur``) matches the whole term or one whole
+    A plain rule (e.g. ``blur``) matches the whole term or one whole
     token, exactly as before. A rule ending in ``*`` (``unidentifiable_*``)
     also matches a term/token it PREFIXES; a rule starting with ``*``
     (``*_scene``) also matches a term/token it SUFFIXES -- so a single
-    configured rule covers a family of terms (``unidentifiable_vehicle``,
+    configured rule covers a family of terms (``unidentifiable_object``,
     ``dark_scene``, ``blurred_object``) instead of needing every literal
     variant enumerated.
     """

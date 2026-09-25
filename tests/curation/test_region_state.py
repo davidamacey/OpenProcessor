@@ -1,10 +1,8 @@
-"""Pins for :class:`RegionStatus` (Wave 5 — §0.3's overturned classification).
+"""Pins for :class:`RegionStatus`.
 
-Ported from the reference's ``PlateStatus`` enum (a bare ``str, Enum``
-state machine with zero domain logic — see
-``docs/design/curation_design_rationale.md``). On-disk string values are
-kept byte-identical to what earlier ported code already writes; only the
-Python symbol is new.
+``RegionStatus`` is a bare ``str, Enum`` state machine with zero domain
+logic — see ``docs/design/curation_design_rationale.md``. On-disk string
+values are kept byte-identical to what earlier code already writes.
 """
 
 from __future__ import annotations
@@ -26,7 +24,7 @@ def test_every_member_round_trips_through_its_value() -> None:
 
 def test_expected_values_are_byte_identical_to_prior_literals() -> None:
     # These are the exact strings already written to OpenSearch by
-    # pre-Wave-5 code (see the worker + routers this wave migrated) —
+    # earlier code (see the worker + routers that migrated to this enum) —
     # changing any of them would be a silent data-migration bug.
     assert RegionStatus.PENDING_DETECTION.value == 'pending_detection'
     assert RegionStatus.PENDING_VERIFICATION.value == 'pending_verification'
