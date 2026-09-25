@@ -70,8 +70,19 @@ help: ## Show this help message
 # Service Management
 # ==================================================================================
 
+.PHONY: ensure-host-bind-mount-dirs
+ensure-host-bind-mount-dirs: ## F-29/F-71: pre-create bind-mount source dirs as the invoking (host) user, before compose ever runs. Docker auto-creates a missing bind-mount source root-owned on first 'up', which then blocks any host-user write into it (e.g. 'make download-test-images') -- and, if a tracked placeholder file is ever shipped inside one of these, blocks 'git pull' too (F-71). Run before every 'up' target instead of shipping a tracked file inside them.
+	@mkdir -p test_images data/source cache/huggingface cache/vllm
+	@for d in test_images data/source cache/huggingface cache/vllm; do \
+		owner="$$(stat -c '%U' "$$d" 2>/dev/null || echo unknown)"; \
+		if [ "$$owner" != "$$(id -un)" ] && [ "$$(stat -c '%u' "$$d" 2>/dev/null)" = "0" ]; then \
+			echo "WARNING: $$d is root-owned (likely from a Docker auto-create before this fix)."; \
+			echo "  Recovery: sudo chown -R \$$(id -u):\$$(id -g) $$d"; \
+		fi; \
+	done
+
 .PHONY: up
-up: ## Start the core stack (Triton + API + OpenSearch) -- see 'make up-monitoring' for Prometheus/Grafana/Loki/dcgm
+up: ensure-host-bind-mount-dirs ## Start the core stack (Triton + API + OpenSearch) -- see 'make up-monitoring' for Prometheus/Grafana/Loki/dcgm
 	@echo "Starting core services..."
 	$(COMPOSE) up -d
 	@echo ""
@@ -80,7 +91,7 @@ up: ## Start the core stack (Triton + API + OpenSearch) -- see 'make up-monitori
 	@echo "Monitoring (Prometheus/Grafana/Loki/dcgm) is opt-in: make up-monitoring"
 
 .PHONY: up-monitoring
-up-monitoring: ## Start the core stack PLUS monitoring (F-3: opt-in on a shared host -- alloy mounts docker.sock and tails every container, dcgm-exporter reserves all GPUs)
+up-monitoring: ensure-host-bind-mount-dirs ## Start the core stack PLUS monitoring (F-3: opt-in on a shared host -- alloy mounts docker.sock and tails every container, dcgm-exporter reserves all GPUs)
 	@echo "Starting core + monitoring services..."
 	$(COMPOSE) --profile monitoring up -d
 	@echo ""

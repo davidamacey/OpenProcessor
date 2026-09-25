@@ -81,16 +81,23 @@ faiss_indexes/
 # ============================================================================
 
 # Test images and videos (use external paths or download separately).
-# `test_images/*` (not `test_images/`) -- a parent-directory exclude can
-# never be re-included, and F-29 needs test_images/.gitkeep tracked (see
-# below) so the directory itself exists, host-user-owned, before compose
-# ever runs.
-test_images/*
-# F-29 (fresh-start E2E findings 2026-09-25): yolo-api bind-mounts
+#
+# F-29/F-71 (fresh-start E2E findings 2026-09-25): yolo-api bind-mounts
 # ./test_images. On a fresh clone that host dir doesn't exist, so Docker
 # auto-creates it root-owned on the first `up`, and `make
 # download-test-images` (running as the host user) can't write into it.
-!test_images/.gitkeep
+# F-29's first fix shipped a tracked `test_images/.gitkeep` placeholder so
+# `git clone` itself created the dir, host-user-owned, before compose
+# ever ran -- but that broke `git pull` on any EXISTING install whose
+# `test_images/` was already root-owned from before this fix (git needs
+# write access to materialize the new tracked file there; the pull
+# aborted half-applied, HEAD unmoved). Fixed properly instead: `make up`
+# / `make up-monitoring` now depend on `ensure-host-bind-mount-dirs`,
+# which `mkdir -p`s this (and the other bind-mount source dirs) as the
+# invoking host user before compose ever runs -- no tracked file needed.
+# Recovery for an install already stuck with a root-owned test_images/:
+#   sudo chown -R $(id -u):$(id -g) test_images
+test_images/
 test_videos/
 sample_data/
 IMGS_TEST/
