@@ -194,6 +194,11 @@ ingest-ui-and-acceptance-plan-2026-09-24.md` land; pieces 1-10 were
 
 ### Fixed
 
+- `/ingest` showed internal backend-ask ids to operators ("(BA-2
+  `batch.source_roots`)", "Drained (BA-3)"). The copy is plain now, and
+  `uiCopy.scan.test.ts` fails on any `BA-<n>` id in rendered `.svelte`
+  markup. The live route sweep's `/models` screenshot waits for the
+  loaded roster instead of capturing "Loading…".
 - The live tier's always-on review screenshots were saved inside
   pytest-playwright's `--output` directory, which the plugin deletes at
   the start of every run, so each run silently erased the previous run's

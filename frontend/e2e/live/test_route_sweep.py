@@ -75,7 +75,7 @@ ROUTES: list[tuple[str, str]] = [
     ("/classes", 'h1:has-text("Class management")'),
     ("/export", 'h1:has-text("Export dataset")'),
     ("/train", 'h1:has-text("Train model")'),
-    ("/models", 'h1:has-text("Models")'),
+    ("/models", '[data-testid="models-status"] span:has-text("Updated")'),
     ("/bakeoff", 'h1:has-text("Bake-off")'),
     ("/settings", 'h1:has-text("Deployment defaults")'),
 ]

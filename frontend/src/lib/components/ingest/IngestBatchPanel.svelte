@@ -96,8 +96,7 @@
 <div class="space-y-3">
   <div>
     <p class="text-xs text-zinc-500">
-      Source roots this backend will serve paths from (BA-2 <code>batch.source_roots</code
-      >):
+      Paths must be under one of these folders on the server:
     </p>
     <ul class="mt-1 text-xs text-zinc-300">
       {#each config.batchSourceRoots as root (root)}
@@ -146,7 +145,7 @@
   {#if overLimit}
     <p class="text-xs text-red-300">
       {paths.length} paths exceeds this backend's per-request limit of {config.batchMaxItems}
-      (BA-2 <code>batch.max_items</code>) — split into smaller batches.
+      — split into smaller batches.
     </p>
   {/if}
 

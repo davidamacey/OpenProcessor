@@ -90,7 +90,7 @@
         </div>
       </div>
       <div>
-        <div class="text-zinc-500">Drained (BA-3)</div>
+        <div class="text-zinc-500">Drained</div>
         <div
           class="font-mono {drain.drained ? 'text-emerald-400' : 'text-zinc-200'}"
           data-testid="region-drain-drained"
