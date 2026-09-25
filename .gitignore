@@ -100,6 +100,12 @@ IMGS_TEST/
 # manifests under scripts/datasets/manifests/ ARE committed; only the
 # downloaded imagery/CSVs under data/samples/ are ignored here.
 /data/samples/
+# F-15: export_models.py's --generate-config / --save-labels run writes
+# this every invocation, reflecting whichever models/formats *that* run
+# exported (host paths, per-model results) -- a run artifact, not source,
+# and it was previously tracked, so every export run dirtied the tree
+# even when nothing about the repo's own config changed.
+/scripts/export_results.json
 # Class registry generated at runtime (default OP_REGISTRY_PATH); the
 # warehouse example data/class_registry.example.json IS committed.
 /data/class_registry.json
