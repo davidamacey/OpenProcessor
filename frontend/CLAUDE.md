@@ -818,8 +818,11 @@ verifier | human | classifier | proposal`) via `paletteForRole`
   Beyond the per-slot capability summary described above, it lazily
   fetches (on open, keyed to `crop.id`) the label-write history
   (`getCropHistory`) and the source image's metadata + sibling crops
-  (`getCropImage`), and renders `item_text_lines` with the optional box
-  overlay.
+  (`getCropContext`), and renders `item_text_lines` with the optional box
+  overlay. Since K6 (`docs/design/k6-frontend-overlay-plan-2026-09-24.md`)
+  its "Source image" section also embeds `SourceImageOverlay` (see
+  below), passing its own already-fetched context down instead of
+  double-fetching.
 
 **New API helpers:**
 
@@ -831,9 +834,53 @@ verifier | human | classifier | proposal`) via `paletteForRole`
   with 5 cohort modes.
 - `getCropHistory(cropId)` — `GET {API_PREFIX}/crops/{id}/history`, the
   item's class-write history oldest-first (`{crop_id, entries}`).
-- `getCropImage(cropId)` — `GET {API_PREFIX}/crops/{id}/image`, the
+- `getCropContext(cropId)` — `GET {API_PREFIX}/crops/{id}/context`, the
   shared source image's metadata plus every item cropped from it
-  (siblings, mapped through `mapRawCrop` like any other crop list).
+  (siblings, including the requested crop, mapped through `mapRawCrop`
+  like any other crop list). The image itself is served separately by
+  `getSourceImageScaled`/`getSourceImageFull` (`{API_PREFIX}/crops/{id}/image`).
+
+## Client-side source-image overlay (K6, 2026-09-24)
+
+OpenProcessor removed its server-side burn-in of boxes/labels on
+`GET {API_PREFIX}/crops/{id}/image` — the endpoint now always serves a
+clean image (optionally `?max_dim=N`). Cropwright draws every box/label
+itself from `getCropContext`'s `items`, via
+`src/lib/components/SourceImageOverlay.svelte`
+(`docs/design/k6-frontend-overlay-plan-2026-09-24.md`):
+
+- Each item's own box (`bbox_norm`, already source-image-normalized)
+  renders labelled (emerald), proposed (amber, "`<name>` (proposed)"),
+  or unlabeled (zinc) — colors/label text only, no slot involved.
+- For an item carrying evidence for a registered slot
+  (`subBoxSlotFor`/`slotOf`, same mechanism `CropMetaPanel`/`SlotCard`
+  use), the slot's region box renders solid in the slot's own
+  `capabilities.subBox.ring.confirmed` color, and a verify-rejected
+  candidate box (dq-region) renders dashed in `ring.proposed` —
+  projected out of the parent-local frame `readSlot` always produces
+  (`SlotData.subBox.parent`/`.candidate.parent`) back into the source
+  image's absolute frame via `projectFromParent(box, itemSourceXyxy,
+'source')` (`readSlot.ts`) — no new wire field, no new projection math.
+- The requested crop renders with a thicker ring; every sibling is
+  dimmed and, when the caller passes `onselect`, clickable.
+- A "hide/show boxes" toggle removes the overlay layer so the raw image
+  can be inspected; hover shows a native tooltip (label/score).
+- Fetches `getCropContext` itself (a small module-level cache keyed by
+  crop id, so the cluster modal / lightbox / review panel don't each
+  refetch the same crop's context within a session) unless a caller
+  that already has the response (`CropMetaPanel`) passes it via the
+  `context` prop.
+
+Wired into every full-source-image surface: `/review`'s source panel,
+`CropDetailModal` (`/clusters`, `/clusters/[id]`), `CropCard`'s expanded
+lightbox, and `CropMetaPanel`'s "Source image" section. `api.ts`'s old
+`getSourceImageWithBbox` (server-overlay-era name, with a cache-busting
+`cacheKey` param the burn-in needed and the client-drawn overlay
+doesn't) is retired; `getSourceImageScaled(cropId, maxDim)` is its
+replacement — same downscaled-image URL, honest naming.
+`SlotBboxEditor`/`BboxCanvas` are unaffected (they only ever draw the
+crop's own thumbnail via `getThumbUrl`, never the full source image, so
+never depended on the burn-in).
 
 ## Deployment annotation profiles (tier 2, 2026-09-20)
 

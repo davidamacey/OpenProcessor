@@ -1717,7 +1717,9 @@ export function getCropHistory(
  * `GET {API_PREFIX}/crops/{id}/context` — the crop's shared source image
  * metadata plus every item cropped from it (siblings, including the
  * requested crop). The image itself is served by `/crops/{id}/image`
- * (`getSourceImageWithBbox`).
+ * (`getSourceImageScaled`/`getSourceImageFull`) — as of K6 this is a
+ * clean image with no server-drawn boxes; `SourceImageOverlay.svelte`
+ * draws every box/label from this response's `items`.
  */
 export async function getCropContext(
   cropId: string,
@@ -3235,25 +3237,18 @@ export function getSourceImageUrl(cropId: string): string {
 }
 
 /**
- * Source image with bbox overlay, downscaled to ~1280px on the longest
- * side. The review page only needs the bbox to be readable, not pixel-
- * perfect — full resolution would push 2+ MB per cursor change. Callers
- * that need a pixel-accurate frame (e.g. SlotBboxEditor) should hit
- * ``getSourceImageFull`` so the bbox lines up with the editor canvas.
+ * Source image downscaled to ~`maxDim`px on the longest side — plenty
+ * for `SourceImageOverlay`'s client-drawn boxes to be readable without
+ * pushing 2+ MB per open. K6 (docs/design/
+ * k6-frontend-overlay-plan-2026-09-24.md): the backend no longer burns
+ * any box/label into this image (`getSourceImageWithBbox` — the
+ * server-overlay-era name — is retired; `SourceImageOverlay` draws
+ * everything itself from `getCropContext`). Callers that need a
+ * pixel-accurate frame (e.g. SlotBboxEditor) should hit
+ * ``getSourceImageFull`` instead.
  */
-export function getSourceImageWithBbox(
-  cropId: string,
-  maxDim: number = 1280,
-  cacheKey?: string | null,
-): string {
-  // The server reads region_bbox_norm from OpenSearch and burns the
-  // overlay into the JPEG. The crop_id alone produces an identical URL
-  // across edits, so the browser cache returns the pre-edit JPEG and
-  // the left-side preview lags the right-side canvas. Pass a key that
-  // changes when the bbox changes (e.g. the bbox tuple) to bust the
-  // cache on edits while still hitting the cache between cursor moves.
-  const base = `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/image?max_dim=${maxDim}`;
-  return cacheKey ? `${base}&v=${encodeURIComponent(cacheKey)}` : base;
+export function getSourceImageScaled(cropId: string, maxDim: number = 1280): string {
+  return `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/image?max_dim=${maxDim}`;
 }
 
 /** Full-resolution source image; used by SlotBboxEditor where pixel accuracy matters. */

@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Client-side source-image overlay (K6, `docs/design/
+k6-frontend-overlay-plan-2026-09-24.md`).** OpenProcessor is removing
+  its server-side burn-in of boxes/labels on
+  `GET {API_PREFIX}/crops/{id}/image` — Cropwright now draws every box
+  and label itself, from `GET {API_PREFIX}/crops/{id}/context`, via a
+  new `SourceImageOverlay.svelte` component: the item box (labelled/
+  proposed/unlabeled, colored and captioned accordingly), a registered
+  slot's region box (solid) and verify-rejected candidate box (dashed,
+  colored from the slot's own `capabilities.subBox.ring`), the current
+  crop highlighted against dimmed siblings, a hover tooltip, and a
+  "hide/show boxes" toggle — domain-neutral by construction, nothing
+  hardcodes a slot's noun. Wired into every full-source-image surface:
+  `/review`'s source panel, the cluster crop-detail modal
+  (`CropDetailModal`), `CropCard`'s expanded lightbox, and
+  `CropMetaPanel`'s "Source image" section (reusing that panel's
+  already-fetched context instead of double-fetching). `api.ts`'s
+  `getSourceImageWithBbox` (the server-overlay-era helper) is retired in
+  favor of `getSourceImageScaled` — same downscaled-image URL, honest
+  naming now that the backend draws nothing. `e2e/conftest.py`'s `Stub`
+  gained default handlers for `/crops/{id}/context` and the now-fetched
+  `/crops/{id}/image`, matching the existing pattern for every other
+  endpoint hit on every `/review` load.
+
 ### Fixed
 
 - `/export`'s class table buried the classes that have data under dozens
