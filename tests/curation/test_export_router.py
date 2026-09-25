@@ -163,6 +163,25 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     return TestClient(app)
 
 
+def test_export_yolo_rejects_unknown_keys(app_client: TestClient) -> None:
+    """G-16: /export/yolo used to silently ignore unknown keys (e.g. a
+    'classes' field a caller might expect to narrow the export -- that
+    lives on /export/single_class or train's include_classes instead).
+    422, not a silent full export."""
+    response = app_client.post('/curation/export/yolo', json={'classes': ['car', 'truck']})
+    assert response.status_code == 422, response.text
+    assert 'classes' in response.text
+
+
+def test_export_yolo_still_accepts_known_fields(app_client: TestClient) -> None:
+    response = app_client.post(
+        '/curation/export/yolo', json={'version_tag': 'v1', 'seed': 7, 'max_images': 10}
+    )
+    # Not 422 -- may fail downstream (no real OpenSearch data), but the
+    # request body itself must validate.
+    assert response.status_code != 422, response.text
+
+
 def test_export_registry_route_is_mounted(app_client: TestClient) -> None:
     route_paths = {route.path for route in app_client.app.routes}
     assert '/curation/export/registry/{artifact}' in route_paths

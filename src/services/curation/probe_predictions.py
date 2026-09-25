@@ -149,7 +149,7 @@ async def run_probe_inference(
     batch_size: int = 32,  # noqa: ARG001 - kept for call-site compat; raw path is one-crop-at-a-time
     max_crops: int | None = None,
     model_version: str | None = None,
-    architecture: str = 'yolo11',
+    architecture: str = 'yolo26',
     page_size: int = 1000,
     resume: bool = False,
     class_ids: dict[str, int] | None = None,
@@ -159,10 +159,11 @@ async def run_probe_inference(
     uncertainty.
 
     Args:
-        model_path: Path to the probe checkpoint. For ``architecture='yolo11'``
-            an ultralytics-loadable ONNX. For ``architecture='yolov5_objectness'`` an
-            already-deployed second-family ONNX (reused rather than
-            training a fresh probe).
+        model_path: Path to the probe checkpoint. For ``architecture='yolo26'``
+            (default; the only trained family, see G-22) or the older
+            ``'yolo11'``, an ultralytics-loadable ONNX. For
+            ``architecture='yolov5_objectness'`` an already-deployed
+            second-family ONNX (reused rather than training a fresh probe).
         opensearch: AsyncOpenSearch client.
         config: :class:`CurationConfig` supplying ``items_index`` and the
             filesystem roots used to resolve stored ``image_path`` values
@@ -173,7 +174,8 @@ async def run_probe_inference(
         max_crops: Optional cap (useful in tests + smoke runs).
         model_version: Provenance tag stamped onto ``probe_model_version``.
             Defaults to ``model_path.name``.
-        architecture: ``'yolo11'`` (default) or ``'yolov5_objectness'``.
+        architecture: ``'yolo26'`` (default), ``'yolo11'``, or
+            ``'yolov5_objectness'``.
         page_size: Items per scroll page. Every page is fully inferred
             before the next scroll call, so a slow (CPU) probe needs a
             page small enough to finish inside the scroll keep-alive.

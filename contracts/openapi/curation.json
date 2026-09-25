@@ -2997,6 +2997,7 @@
         "type": "object"
       },
       "ExportYoloRequest": {
+        "additionalProperties": false,
         "properties": {
           "dedup_threshold": {
             "anyOf": [
@@ -5510,7 +5511,7 @@
       "ProbeRunRequest": {
         "properties": {
           "architecture": {
-            "default": "yolo11",
+            "default": "yolo26",
             "title": "Architecture",
             "type": "string"
           },

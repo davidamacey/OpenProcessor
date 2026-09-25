@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.config.region_state import HUMAN_WRITABLE_STATUSES
 from src.routers.curation._region_vocabulary_models import RegionProfileSummary  # noqa: TC001
@@ -277,6 +277,12 @@ class HealthResponse(BaseModel):
 
 
 class ExportYoloRequest(BaseModel):
+    # G-16: this endpoint used to silently ignore unknown keys (e.g. a
+    # 'classes' field a caller expected to narrow the export, which
+    # actually lives on ExportSingleClassRequest / train include_classes).
+    # 422 on typos/misplaced fields instead of quietly exporting everything.
+    model_config = ConfigDict(extra='forbid')
+
     export_dir: str | None = None
     # Free-form version tag (e.g. 'v7.0a'). Recorded in manifest.json only.
     version_tag: str = ''

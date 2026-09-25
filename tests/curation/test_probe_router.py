@@ -107,6 +107,42 @@ def test_probe_run_starts_and_status_reflects_it(monkeypatch: pytest.MonkeyPatch
     assert r2.json()['status'] in ('running', 'completed')
 
 
+def test_probe_run_default_architecture_is_yolo26(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """G-22: yolo26 is the only trained family, so the default (and an
+    explicit request for it) must not 422/fail -- a stale yolo11 default
+    would silently mismatch every promoted model."""
+    from src.routers.curation.probe import ProbeRunRequest
+
+    assert ProbeRunRequest(job_id='run-1').architecture == 'yolo26'
+
+    weights = tmp_path / 'best.onnx'
+    weights.write_bytes(b'fake')
+    monkeypatch.setattr(
+        'src.services.training.jobs.read_status',
+        AsyncMock(return_value=_finished_status(str(weights))),
+    )
+    seen_architectures: list[str] = []
+
+    async def _fake_run_probe_inference(model_path, opensearch, **kwargs):
+        seen_architectures.append(kwargs['architecture'])
+        await asyncio.sleep(0.05)
+        return 7
+
+    monkeypatch.setattr(
+        'src.services.curation.probe_predictions.run_probe_inference',
+        _fake_run_probe_inference,
+    )
+    client = _client()
+    r = client.post('/curation/probe/run', json={'job_id': 'run-1', 'architecture': 'yolo26'})
+    assert r.status_code == 200, r.text
+    for _ in range(50):
+        if client.get('/curation/probe/status').json()['status'] == 'completed':
+            break
+    assert seen_architectures == ['yolo26']
+
+
 def test_probe_run_409_when_already_running(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     weights = tmp_path / 'best.onnx'
     weights.write_bytes(b'fake')

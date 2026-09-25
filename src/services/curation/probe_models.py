@@ -305,7 +305,7 @@ def _build_yolov5_objectness_predictor(model_path: Path) -> tuple[_PredictFn, st
     return predict, model_path.name
 
 
-_PROBE_ARCHITECTURES = ('yolo11', 'yolov5_objectness')
+_PROBE_ARCHITECTURES = ('yolo11', 'yolo26', 'yolov5_objectness')
 
 
 def _build_predictor(model_path: Path, architecture: str) -> tuple[_PredictFn, str]:
@@ -313,8 +313,14 @@ def _build_predictor(model_path: Path, architecture: str) -> tuple[_PredictFn, s
 
     A dedicated (non-underscore-internal) seam so tests can monkeypatch the
     whole thing and avoid loading a real model file.
+
+    ``yolo11`` and ``yolo26`` share a builder: both are ultralytics-family
+    checkpoints loaded generically via ``ultralytics.YOLO(..., task='detect')``,
+    which dispatches on the checkpoint's own saved architecture rather than
+    on anything this code passes in. YOLO26 is the only trained family
+    (G-22), so the router/job default names it explicitly.
     """
-    if architecture == 'yolo11':
+    if architecture in ('yolo11', 'yolo26'):
         return _build_yolo11_predictor(model_path)
     if architecture == 'yolov5_objectness':
         return _build_yolov5_objectness_predictor(model_path)

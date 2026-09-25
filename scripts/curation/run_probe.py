@@ -54,7 +54,7 @@ from src.services.curation.probe_predictions import count_probe_candidates, run_
 
 
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
-ARCHITECTURES = ('yolo11', 'yolov5_objectness')
+ARCHITECTURES = ('yolo11', 'yolo26', 'yolov5_objectness')
 
 logging.basicConfig(
     level=logging.INFO,
@@ -123,9 +123,10 @@ def main() -> int:
     p.add_argument(
         '--architecture',
         choices=ARCHITECTURES,
-        default='yolo11',
+        default='yolo26',
         help=(
-            "'yolo11' (default): ultralytics-loadable ONNX from a probe training run. "
+            "'yolo26' (default; the only trained family, see G-22) or 'yolo11': "
+            'ultralytics-loadable ONNX from a probe training run. '
             "'yolov5_objectness': a non-ultralytics YOLOv5-family ONNX with an objectness channel "
             '(reuse an already deployed detector instead of training a probe).'
         ),
