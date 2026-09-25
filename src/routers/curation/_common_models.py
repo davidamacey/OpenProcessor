@@ -54,6 +54,11 @@ class IngestImageResponse(BaseModel):
     # image_path is now the server-persisted path. Null for a server-path
     # ingest (image_path already IS the client-meaningful identifier).
     source_identifier: str | None = None
+    # F-43: set when a configured secondary detector call failed for this
+    # image (e.g. a Triton DEADLINE_EXCEEDED) -- the image still ingests
+    # successfully on the primary detector's output alone, but a caller
+    # asking for a secondary classifier needs to know it never ran.
+    secondary_detector_error: str | None = None
 
 
 class BatchIngestSummaryResponse(BaseModel):
@@ -65,6 +70,10 @@ class BatchIngestSummaryResponse(BaseModel):
     unmatched_detections: int = 0
     labels_imported: int = 0
     crops_indexed: int = 0
+    # F-43: count of images (among 'successful') where the configured
+    # secondary detector call failed and was silently skipped before this
+    # fix. Previously only a per-image 'warning' log line, invisible here.
+    secondary_detector_failures: int = 0
 
 
 class BatchIngestResponse(BaseModel):

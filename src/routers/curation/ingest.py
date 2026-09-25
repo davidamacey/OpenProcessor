@@ -167,6 +167,7 @@ async def curation_ingest_image(
         error=result.error,
         error_kind=result.error_kind,
         source_identifier=result.source_identifier,
+        secondary_detector_error=result.secondary_detector_error,
     )
 
 
@@ -277,6 +278,7 @@ def _batch_response(
                 error=r.error,
                 error_kind=r.error_kind,
                 source_identifier=r.source_identifier,
+                secondary_detector_error=r.secondary_detector_error,
             )
             for r in batch_result.results
         )
@@ -288,6 +290,7 @@ def _batch_response(
         summary.mismatches += batch_result.summary.mismatches
         summary.missed_labels += batch_result.summary.missed_labels
         summary.unmatched_detections += batch_result.summary.unmatched_detections
+        summary.secondary_detector_failures += batch_result.summary.secondary_detector_failures
 
     if summary.failed == 0:
         status: Any = 'success'

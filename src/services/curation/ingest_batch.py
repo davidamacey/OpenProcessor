@@ -268,6 +268,11 @@ async def run_ingest_batch(
             summary.crops_indexed += res.n_crops
         else:
             summary.failed += 1
+        # F-43: an otherwise-'successful' ingest that silently skipped a
+        # configured secondary detector call must still be visible in the
+        # batch summary, not just a per-item field a caller has to notice.
+        if res.secondary_detector_error:
+            summary.secondary_detector_failures += 1
 
     disagreements: list[dict[str, Any]] = []
     if label_paths is not None:

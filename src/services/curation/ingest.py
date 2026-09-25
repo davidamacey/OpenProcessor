@@ -422,12 +422,17 @@ class CurationIngestService:
                     error_kind=ERROR_KIND_DETECTOR_INFER,
                 )
 
+        # F-43: surfaced on the response (IngestResult.secondary_detector_error)
+        # and rolled into IngestSummary.secondary_detector_failures instead of
+        # only ever reaching a 'warning' log line.
+        secondary_detector_error: str | None = None
         if self.secondary_profile is not None and items:
             secondary = prefilled_secondary
             if secondary is None:
                 try:
                     secondary = await self.detector.run_secondary_raw(img)
                 except Exception as exc:
+                    secondary_detector_error = str(exc)
                     logger.warning(
                         'ingest_secondary_detector_failed', path=image_path, error=str(exc)
                     )
@@ -581,6 +586,7 @@ class CurationIngestService:
             crops_preserved_human=bulk_result.get('crops_preserved_human', 0),
             crops_final_conflicts=bulk_result.get('crops_final_conflicts', 0),
             n_region_queued=bulk_result.get('region_queued', 0),
+            secondary_detector_error=secondary_detector_error,
         )
 
     @staticmethod

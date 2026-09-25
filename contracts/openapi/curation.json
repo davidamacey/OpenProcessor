@@ -1033,6 +1033,11 @@
             "title": "Missed Labels",
             "type": "integer"
           },
+          "secondary_detector_failures": {
+            "default": 0,
+            "title": "Secondary Detector Failures",
+            "type": "integer"
+          },
           "successful": {
             "default": 0,
             "title": "Successful",
@@ -3431,6 +3436,17 @@
             "default": 0,
             "title": "N Regions",
             "type": "integer"
+          },
+          "secondary_detector_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secondary Detector Error"
           },
           "source_identifier": {
             "anyOf": [

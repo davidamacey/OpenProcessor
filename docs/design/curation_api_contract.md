@@ -109,13 +109,14 @@ output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 
 ### Ingest
 
-- `IngestImageRequest`: `path`, `source`
-- `IngestImageResponse`: `status` (`success`/`duplicate`/`failed`), `image_id`, `image_path`, `imohash`, `n_crops`, `n_regions`, `error`
-- `BatchIngestSummaryResponse`: `successful`, `duplicates`, `failed`, `mismatches`, `missed_labels`, `unmatched_detections`, `labels_imported`, `crops_indexed`
+- `IngestImageRequest`: `path`, `source` (F-22: `extra='forbid'` -- an unknown key 422s instead of silently ingesting on defaults)
+- `IngestImageResponse`: `status` (`success`/`duplicate`/`failed`), `image_id`, `image_path`, `imohash`, `n_crops`, `n_regions`, `error`, `secondary_detector_error` (F-43: set when a configured secondary detector call failed for this image -- the image still ingests successfully on the primary detector's output alone)
+- `BatchIngestSummaryResponse`: `successful`, `duplicates`, `failed`, `mismatches`, `missed_labels`, `unmatched_detections`, `labels_imported`, `crops_indexed`, `secondary_detector_failures` (F-43: count of otherwise-successful images where the configured secondary detector call failed, e.g. a Triton `DEADLINE_EXCEEDED` -- previously only a `warning` log line, invisible on the wire)
 - `BatchIngestResponse`: `status` (`success`/`partial`/`error`), `summary`, `results`, `disagreements` (with `detect_mismatches`: one record per model-vs-label disagreement, `kind` = `class_mismatch`/`missed_label`/`unmatched_detection`; also returned by `POST /import_labels/batch`)
 - `POST /ingest/upload` (multipart): `images` (files), `image_paths` (JSON list of identifiers, optional), `source` -> `BatchIngestResponse`
-- `ImportLabelsRequest`: `image_path`, `label_txt_path`, `label_source`
-- `ImportLabelsBatchRequest`: `items`
+- `IngestBatchRequest`: `items` (F-22: required, non-empty; `extra='forbid'` -- a wrong key like `paths` used to 200 with all-zero counts instead of 422)
+- `ImportLabelsRequest`: `image_path`, `label_txt_path`, `label_source` (F-22: `extra='forbid'`)
+- `ImportLabelsBatchRequest`: `items` (F-22: required, non-empty; `extra='forbid'`)
 
 ### Crops
 
