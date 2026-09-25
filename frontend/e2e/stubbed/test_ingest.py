@@ -30,7 +30,20 @@ IDLE_JOB = {
 }
 
 
-def _base_ingest_stubs(stub, *, status_total=0, drain_unfinished=0) -> None:
+def _base_ingest_stubs(
+    stub, *, status_total=0, drain_unfinished=0, drained=None, batch_source_roots=None
+) -> None:
+    """BA-1..BA-7 (OpenProcessor #36, c676d2b) baseline: `/ingest/config` is
+    now real and always stubbed here (the page fetches it once
+    `ingestAvailability` confirms the router is mounted), and the drain
+    response always carries the BA-3 `drained` verdict.
+
+    `drained` defaults to `drain_unfinished == 0` (the obvious case — a
+    caller that wants to exercise "just reached zero, not yet stable"
+    passes `drained=False` explicitly alongside `drain_unfinished=0`).
+    """
+    if drained is None:
+        drained = drain_unfinished == 0
     # The root layout's classesStore.acquire() fires on every route.
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
     stub.on(
@@ -40,11 +53,33 @@ def _base_ingest_stubs(stub, *, status_total=0, drain_unfinished=0) -> None:
     )
     stub.on(
         "GET",
+        r"/ingest/config(\?|$)",
+        {
+            "upload": {
+                "enabled": True,
+                "max_images_per_request": 128,
+                "max_bytes_per_request": 268435456,
+                "accepted_extensions": [".jpg", ".jpeg", ".png"],
+                "persists_bytes": True,
+            },
+            "batch": {
+                "enabled": True,
+                "max_items": 256,
+                "source_roots": batch_source_roots or [],
+            },
+            "region_drain": {"poll_interval_s": 10, "stable_polls": 3},
+        },
+    )
+    stub.on(
+        "GET",
         r"/ingest/region_drain(\?|$)",
         {
             "pending_detection": drain_unfinished,
             "pending_verification": 0,
             "total_unfinished": drain_unfinished,
+            "drained": drained,
+            "stable_for_s": 30 if drained else 0,
+            "observed_at": "2026-09-25T00:00:00Z",
         },
     )
     stub.on("GET", r"/pipeline/auto_label/status", IDLE_JOB)
@@ -77,17 +112,22 @@ def test_upload_folder_happy_path(stub, page, app_url):
         parsed = parse_multipart(request.post_data)
         upload_calls.append(parsed)
         results = []
-        for p in parsed.image_paths:
+        for i, p in enumerate(parsed.image_paths):
             if p.endswith("b.jpg"):
                 results.append(
                     {
                         "status": "failed",
                         "image_id": "",
+                        # BA-1: even a failed item's image_path is whatever the
+                        # client sent (never persisted) -- source_identifier
+                        # still echoes the client identifier either way.
                         "image_path": p,
                         "imohash": "",
                         "n_crops": 0,
                         "n_regions": 0,
                         "error": "decode failed",
+                        "error_kind": "decode_failed",
+                        "source_identifier": p,
                     }
                 )
             else:
@@ -95,11 +135,16 @@ def test_upload_folder_happy_path(stub, page, app_url):
                     {
                         "status": "success",
                         "image_id": f"img-{p}",
-                        "image_path": p,
-                        "imohash": "h",
+                        # BA-1: the server-persisted, content-addressed path --
+                        # deliberately NOT the client identifier, to prove the
+                        # controller maps back by source_identifier, not this.
+                        "image_path": f"/data/uploads/ab/ab12{i}.jpg",
+                        "imohash": f"ab12{i}",
                         "n_crops": 2,
                         "n_regions": 0,
                         "error": None,
+                        "error_kind": None,
+                        "source_identifier": p,
                     }
                 )
         return {
@@ -136,6 +181,11 @@ def test_upload_folder_happy_path(stub, page, app_url):
 
     assert "decode failed" in page.locator("body").inner_text()
     assert "skipped 1" in page.locator("body").inner_text()
+
+    # BA-7: the Failed tab groups/filters by the served error_kind.
+    page.wait_for_selector("text=decode_failed (1)")
+    page.get_by_role("button", name="decode_failed (1)", exact=True).click()
+    assert "decode failed" in page.locator("body").inner_text()
 
 
 def test_503_pauses_with_detail(stub, page, app_url):
@@ -186,12 +236,41 @@ def test_drain_gate(stub, page, app_url):
     recluster_btn.wait_for()
     assert recluster_btn.is_disabled()
 
-    # Flip the drain stub to 0 and reload the panel's next poll by
-    # re-navigating (avoids waiting out the real 10s poll interval).
+    # BA-3: total_unfinished reaching 0 is not enough on its own — the
+    # gate reads the server's own `drained` verdict. Flip the drain stub
+    # to zero counts but drained=False (just reached zero, still inside
+    # the stable_polls window) and reload; the gate must stay blocked.
     stub.on(
         "GET",
         r"/ingest/region_drain(\?|$)",
-        {"pending_detection": 0, "pending_verification": 0, "total_unfinished": 0},
+        {
+            "pending_detection": 0,
+            "pending_verification": 0,
+            "total_unfinished": 0,
+            "drained": False,
+            "stable_for_s": 1,
+            "observed_at": "2026-09-25T00:00:01Z",
+        },
+    )
+    page.goto(f"{app_url}/ingest")
+    page.wait_for_selector('h1:has-text("Ingest")')
+    recluster_btn = page.get_by_role("button", name="Recluster now", exact=True)
+    recluster_btn.wait_for()
+    assert recluster_btn.is_disabled()
+    assert "waiting for the served stability verdict" in page.locator("body").inner_text()
+
+    # Now the server actually confirms drained=True — the gate lifts.
+    stub.on(
+        "GET",
+        r"/ingest/region_drain(\?|$)",
+        {
+            "pending_detection": 0,
+            "pending_verification": 0,
+            "total_unfinished": 0,
+            "drained": True,
+            "stable_for_s": 30,
+            "observed_at": "2026-09-25T00:00:30Z",
+        },
     )
     page.goto(f"{app_url}/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
@@ -201,6 +280,69 @@ def test_drain_gate(stub, page, app_url):
     recluster_btn.click()
     page.get_by_role("dialog").get_by_role("button", name="Start", exact=True).click()
     assert start_calls
+
+
+def test_server_path_batch_panel(stub, page, app_url):
+    """Piece 11: the server-path panel is absent without served
+    `batch.source_roots`, and renders/submits against `POST
+    /ingest/batch` when the backend advertises at least one root."""
+    _base_ingest_stubs(stub, batch_source_roots=["/data/archive"])
+    stub.on("POST", r"/ingest/path_lookup", {"known_paths": {}})
+
+    batch_calls = []
+
+    def batch_handler(request, _match):
+        parsed = json.loads(request.post_data)
+        batch_calls.append(parsed)
+        return {
+            "status": "success",
+            "summary": {
+                "successful": 1,
+                "duplicates": 0,
+                "failed": 0,
+                "mismatches": 0,
+                "missed_labels": 0,
+                "unmatched_detections": 0,
+                "labels_imported": 0,
+                "crops_indexed": 3,
+            },
+            "results": [
+                {
+                    "status": "success",
+                    "image_id": "img-1",
+                    "image_path": parsed["items"][0]["path"],
+                    "imohash": "h",
+                    "n_crops": 3,
+                    "n_regions": 0,
+                    "error": None,
+                    "error_kind": None,
+                    "source_identifier": None,
+                }
+            ],
+            "disagreements": [],
+        }
+
+    stub.on("POST", r"/ingest/batch", batch_handler)
+
+    page.goto(f"{app_url}/ingest")
+    page.wait_for_selector('h1:has-text("Ingest")')
+    page.wait_for_selector("text=Server-path ingest")
+    assert "/data/archive" in page.locator("body").inner_text()
+
+    page.locator("textarea").first.fill("/data/archive/img001.jpg")
+    page.get_by_role("button", name="Ingest 1 path", exact=True).click()
+
+    page.wait_for_selector("text=successful 1")
+    assert batch_calls
+    assert batch_calls[0]["items"][0]["path"] == "/data/archive/img001.jpg"
+
+
+def test_server_path_batch_panel_absent_without_source_roots(stub, page, app_url):
+    _base_ingest_stubs(stub)  # batch_source_roots defaults to []
+    page.goto(f"{app_url}/ingest")
+    page.wait_for_selector('h1:has-text("Ingest")')
+    page.wait_for_selector("text=Upload")
+    assert "Server-path ingest" not in page.locator("body").inner_text()
 
 
 def test_ingest_absent(stub, page, app_url):

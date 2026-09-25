@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api';
-import type { BatchIngestResponse, IngestPathLookupResponse } from '$lib/types';
+import type {
+  BatchIngestResponse,
+  IngestPathLookupResponse,
+  IngestUploadRequest,
+} from '$lib/types';
 import type { IngestFile } from './fileSource';
 import { resolveIngestConfig } from './ingestConfig';
 import { createIngestRun, type IngestRunDeps } from './ingestRunController.svelte';
@@ -35,6 +39,8 @@ function successResponse(identifiers: string[]): BatchIngestResponse {
       n_crops: 1,
       n_regions: 0,
       error: null,
+      error_kind: null,
+      source_identifier: image_path,
     })),
     disagreements: [],
   };
@@ -255,6 +261,8 @@ describe('createIngestRun — response handling', () => {
             n_crops: 3,
             n_regions: 0,
             error: null,
+            error_kind: null,
+            source_identifier: 'src/a.jpg',
           },
           {
             status: 'duplicate',
@@ -264,6 +272,8 @@ describe('createIngestRun — response handling', () => {
             n_crops: 0,
             n_regions: 0,
             error: null,
+            error_kind: null,
+            source_identifier: 'src/b.jpg',
           },
           {
             status: 'failed',
@@ -273,6 +283,8 @@ describe('createIngestRun — response handling', () => {
             n_crops: 0,
             n_regions: 0,
             error: 'decode error',
+            error_kind: 'decode_failed',
+            source_identifier: 'src/c.jpg',
           },
         ],
         disagreements: [],
@@ -295,12 +307,61 @@ describe('createIngestRun — response handling', () => {
     expect(run.results.get('c.jpg')).toMatchObject({
       kind: 'failed',
       error: 'decode error',
+      error_kind: 'decode_failed',
     });
     expect(run.totals).toMatchObject({
       successful: 1,
       duplicates: 1,
       failed: 1,
       crops_indexed: 3,
+    });
+  });
+
+  it('maps a byte-upload result by source_identifier, not the server-persisted image_path (BA-1)', async () => {
+    const upload = vi.fn(
+      async (req: IngestUploadRequest): Promise<BatchIngestResponse> => ({
+        status: 'success',
+        summary: {
+          successful: req.identifiers.length,
+          duplicates: 0,
+          failed: 0,
+          mismatches: 0,
+          missed_labels: 0,
+          unmatched_detections: 0,
+          labels_imported: 0,
+          crops_indexed: req.identifiers.length,
+        },
+        results: req.identifiers.map((identifier, i) => ({
+          status: 'success' as const,
+          image_id: `img-${i}`,
+          // The server-persisted, content-addressed path -- deliberately
+          // NOT equal to the identifier the client sent.
+          image_path: `/data/uploads/ab/ab12${i}.jpg`,
+          imohash: `ab12${i}`,
+          n_crops: 1,
+          n_regions: 0,
+          error: null,
+          error_kind: null,
+          source_identifier: identifier,
+        })),
+        disagreements: [],
+      }),
+    );
+    const run = createIngestRun(
+      baseDeps({
+        lookup: vi.fn(async () => ({ known_paths: {} })),
+        upload,
+        concurrency: 1,
+      }),
+    );
+    await run.start([mkFile('a.jpg')], {
+      source: 'src',
+      identifierPrefix: 'src/',
+      skipLookup: true,
+    });
+    expect(run.results.get('a.jpg')).toMatchObject({
+      kind: 'ingested',
+      image_id: 'img-0',
     });
   });
 
@@ -355,6 +416,29 @@ describe('createIngestRun — response handling', () => {
     expect(run.state).toBe('done');
     expect(run.totals.successful).toBe(2);
     expect(calls).toBeGreaterThan(1);
+  });
+
+  it('marks a single-file chunk failed with error_kind too_large on a persistent backend-style 413', async () => {
+    const upload = vi.fn(async () => {
+      throw new ApiError(413, 'x', { detail: 'single image exceeds the byte limit' });
+    });
+    const run = createIngestRun(
+      baseDeps({
+        lookup: vi.fn(async () => ({ known_paths: {} })),
+        upload,
+        concurrency: 1,
+      }),
+    );
+    await run.start([mkFile('a.jpg')], {
+      source: 'src',
+      identifierPrefix: 'src/',
+      skipLookup: true,
+    });
+    expect(run.results.get('a.jpg')).toMatchObject({
+      kind: 'failed',
+      error: 'single image exceeds the byte limit',
+      error_kind: 'too_large',
+    });
   });
 
   it('stops the run on an nginx-style (HTML) 413, never retrying', async () => {
@@ -428,6 +512,8 @@ describe('createIngestRun — retry failed', () => {
               n_crops: 1,
               n_regions: 0,
               error: null,
+              error_kind: null,
+              source_identifier: 'src/a.jpg',
             },
             {
               status: 'failed' as const,
@@ -437,6 +523,8 @@ describe('createIngestRun — retry failed', () => {
               n_crops: 0,
               n_regions: 0,
               error: 'transient',
+              error_kind: 'detector_infer',
+              source_identifier: 'src/b.jpg',
             },
           ],
           disagreements: [],

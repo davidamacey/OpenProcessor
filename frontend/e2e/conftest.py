@@ -258,6 +258,25 @@ class Stub:
         # (same pattern as bakeoff/runs above) — every existing test needs
         # this default so the /ingest nav link's probe doesn't 501.
         self.on("GET", r"/ingest/status(\?|$)", {"total": 0, "by_source": [], "by_day": []})
+        # BA-2 (OpenProcessor #36, c676d2b): once the probe above confirms
+        # the ingest router is mounted, /ingest's own page fetches
+        # `GET /ingest/config` on mount — every existing test needs this
+        # default too, same reasoning as /ingest/status above.
+        self.on(
+            "GET",
+            r"/ingest/config(\?|$)",
+            {
+                "upload": {
+                    "enabled": True,
+                    "max_images_per_request": 128,
+                    "max_bytes_per_request": 268435456,
+                    "accepted_extensions": [".jpg", ".jpeg", ".png"],
+                    "persists_bytes": True,
+                },
+                "batch": {"enabled": True, "max_items": 256, "source_roots": []},
+                "region_drain": {"poll_interval_s": 10, "stable_polls": 3},
+            },
+        )
 
         page.route(f"**{api_prefix}/**", self._dispatch)
         page.route("**/curation/**", self._dispatch_kb)

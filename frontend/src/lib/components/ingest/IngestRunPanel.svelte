@@ -35,6 +35,9 @@
   let concurrency = $state(DEFAULT_UPLOAD_CONCURRENCY);
   let advancedOpen = $state(false);
   let activeTab = $state<IngestResultKind>('failed');
+  // BA-7: the Failed tab's error_kind filter chip. `null` = no filter
+  // (every failed result shows). Only meaningful on the 'failed' tab.
+  let errorKindFilter = $state<string | null>(null);
   const PAGE_SIZE = 100;
   let pageOffset = $state<Record<IngestResultKind, number>>({
     ingested: 0,
@@ -243,7 +246,10 @@
               ? 'border-b-2 border-blue-500 text-white'
               : 'text-zinc-400'}"
             type="button"
-            onclick={() => (activeTab = t.kind)}
+            onclick={() => {
+              activeTab = t.kind;
+              errorKindFilter = null;
+            }}
           >
             {t.label} ({run.results.countOf(t.kind)})
           </button>
@@ -253,17 +259,43 @@
           >Download CSV</button
         >
       </div>
+
+      {#if activeTab === 'failed' && run.results.errorKindCounts().length > 0}
+        <!-- BA-7: group/filter Failed by the served error_kind. -->
+        <div class="flex flex-wrap gap-1 border-b border-zinc-800 py-2 text-xs">
+          <button
+            class="chip {errorKindFilter === null ? 'bg-blue-900 text-blue-100' : ''}"
+            type="button"
+            onclick={() => (errorKindFilter = null)}
+          >
+            all ({run.totals.failed})
+          </button>
+          {#each run.results.errorKindCounts() as [kind, count] (kind)}
+            <button
+              class="chip {errorKindFilter === kind ? 'bg-blue-900 text-blue-100' : ''}"
+              type="button"
+              onclick={() => (errorKindFilter = kind)}
+            >
+              {kind} ({count})
+            </button>
+          {/each}
+        </div>
+      {/if}
+
       <ul class="max-h-64 overflow-y-auto text-xs">
-        {#each run.results.page(activeTab, pageOffset[activeTab], PAGE_SIZE) as [id, r] (id)}
+        {#each run.results.page(activeTab, pageOffset[activeTab], PAGE_SIZE, activeTab === 'failed' ? (errorKindFilter ?? undefined) : undefined) as [id, r] (id)}
           <li class="border-b border-zinc-900 py-1 font-mono">
             {r.identifier}
+            {#if r.error_kind}
+              <span class="text-zinc-500"> [{r.error_kind}]</span>
+            {/if}
             {#if r.error}
               <span class="text-red-300"> — {r.error}</span>
             {/if}
           </li>
         {/each}
       </ul>
-      {#if run.results.countOf(activeTab) > PAGE_SIZE}
+      {#if (activeTab === 'failed' && errorKindFilter !== null ? run.results.countOfErrorKind(errorKindFilter) : run.results.countOf(activeTab)) > PAGE_SIZE}
         <div class="flex justify-between text-xs">
           <button
             class="btn btn-sm"
@@ -280,7 +312,10 @@
           <button
             class="btn btn-sm"
             type="button"
-            disabled={pageOffset[activeTab] + PAGE_SIZE >= run.results.countOf(activeTab)}
+            disabled={pageOffset[activeTab] + PAGE_SIZE >=
+              (activeTab === 'failed' && errorKindFilter !== null
+                ? run.results.countOfErrorKind(errorKindFilter)
+                : run.results.countOf(activeTab))}
             onclick={() =>
               (pageOffset = {
                 ...pageOffset,

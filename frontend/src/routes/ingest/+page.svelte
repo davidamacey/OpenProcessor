@@ -9,11 +9,20 @@
    * §A.7 "absent, not disabled": `ingestAvailability.available === false`
    * renders the absence copy with no other requests fired at all.
    *
-   * §A.7 / F1 upload caveat: BA-2 (`GET {API_PREFIX}/ingest/config`)
-   * isn't served by any backend yet, so `resolveIngestConfig(null)` is
-   * always the interim config — upload mode always renders WITH the
-   * caveat banner unless the operator has explicitly set
-   * `PUBLIC_CROPWRIGHT_INGEST_UPLOAD=1`.
+   * BA-2 (landed, OpenProcessor c676d2b): `GET {API_PREFIX}/ingest/config`
+   * is now real. Once `ingestAvailability` confirms the router is
+   * mounted, the page fetches it once and resolves every limit/caveat
+   * from the served `IngestConfig` — `resolveIngestConfig(null)` (the
+   * documented interim fallback) only applies while the fetch is
+   * in flight or against a pre-BA-2 backend (a 404 → `getIngestConfig()`
+   * resolves `null`, same shape as "not yet served").
+   *
+   * §A.7 / F1 upload caveat: with BA-2 served and `upload.persists_bytes
+   * === true` (the deployed backend's actual value), no caveat banner
+   * renders at all — the served truth replaces the old always-on
+   * warning. The "not yet advertised" banner is now only the fallback
+   * for a pre-BA-2 backend (`config` still resolved from `null`) that
+   * hasn't set `PUBLIC_CROPWRIGHT_INGEST_UPLOAD=1`.
    *
    * Plan deviation (recorded per CLAUDE.md's "trust the code" rule): the
    * plan names the override env var `CROPWRIGHT_INGEST_UPLOAD` (no
@@ -29,18 +38,33 @@
   import IngestStatusTable from '$lib/components/ingest/IngestStatusTable.svelte';
   import RegionDrainPanel from '$lib/components/ingest/RegionDrainPanel.svelte';
   import ClusteringHandoff from '$lib/components/ingest/ClusteringHandoff.svelte';
+  import IngestBatchPanel from '$lib/components/ingest/IngestBatchPanel.svelte';
   import { ingestAvailability } from '$lib/ingest/ingestAvailability.svelte';
+  import { getIngestConfig } from '$lib/api';
   import { resolveIngestConfig } from '$lib/ingest/ingestConfig';
   import { regionProfileStore } from '$stores/regionProfile.svelte';
   import type { IngestFile } from '$lib/ingest/fileSource';
   import type { IngestRunState } from '$lib/ingest/ingestRunController.svelte';
-  import type { RegionDrain } from '$lib/types';
+  import type { IngestConfig, RegionDrain } from '$lib/types';
+
+  let servedConfig = $state<IngestConfig | null>(null);
 
   $effect(() => {
     void ingestAvailability.init();
   });
 
-  const config = resolveIngestConfig(null);
+  $effect(() => {
+    if (ingestAvailability.available === true) {
+      void getIngestConfig()
+        .then((c) => (servedConfig = c))
+        .catch(() => {
+          // Leave servedConfig at null — resolveIngestConfig(null) falls
+          // back to the documented interim config, same as a 404.
+        });
+    }
+  });
+
+  const config = $derived(resolveIngestConfig(servedConfig));
 
   const uploadOverride =
     (import.meta.env?.PUBLIC_CROPWRIGHT_INGEST_UPLOAD as string | undefined) === '1';
@@ -85,7 +109,11 @@
         This backend indexes uploads without keeping the image; use server-path ingest or
         the command-line uploader.
       </p>
-    {:else if !uploadOverride}
+    {:else if config.uploadPersistsBytes === null && !uploadOverride}
+      <!-- Pre-BA-2 fallback only: the served IngestConfig hasn't loaded
+           yet, or this backend predates it entirely. Once BA-2 is served
+           and `persists_bytes === true` (the deployed backend's real
+           value), no banner renders at all — the served truth. -->
       <p
         class="rounded border border-amber-900 bg-amber-950/30 p-3 text-xs text-amber-200"
       >
@@ -110,6 +138,19 @@
         onStateChange={(s) => (runState = s)}
       />
     </section>
+
+    {#if config.batchSourceRoots.length > 0}
+      <!-- Piece 11: server-path ingest, gated on the backend actually
+           advertising source roots via BA-2's `batch.source_roots` — a
+           deployment with no mounted server-side root has nothing to
+           offer here. `POST {API_PREFIX}/ingest/batch` itself predates
+           #36; BA-2/BA-5 are what make gating and the label_txt_path
+           root guard real. -->
+      <section class="space-y-3 rounded-lg border border-zinc-800 p-4">
+        <h2 class="text-sm font-semibold text-zinc-200">Server-path ingest</h2>
+        <IngestBatchPanel {config} />
+      </section>
+    {/if}
 
     <!-- The region drain only exists with a served region profile; without
          one there is no region worklog to wait on, so the panel (and its

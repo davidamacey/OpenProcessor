@@ -10,10 +10,12 @@
  * between "unsupported" and "nothing ingested yet" the way probing a
  * write route would produce.
  *
- * Once BA-2 (`GET {API_PREFIX}/ingest/config`) ships, this should probe
- * that endpoint instead and also expose the served `config` — the
- * richer capability signal the rest of `$lib/ingest` wants (§A.7). Until
- * then `available` is the only thing this store answers.
+ * BA-2 (`GET {API_PREFIX}/ingest/config`) has since landed
+ * (OpenProcessor c676d2b), but this store still probes `/ingest/status`
+ * deliberately — it stays the single, minimal availability signal;
+ * `/routes/ingest/+page.svelte` fetches the richer `IngestConfig` itself
+ * once `available` is confirmed `true`, so a config fetch never fires
+ * against a backend that lacks the router at all.
  *
  * `available` starts `null` (optimistic) so the nav link renders
  * immediately and disappears only on *confirmed* absence, exactly like

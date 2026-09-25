@@ -37,11 +37,13 @@ describe('ingest contract', () => {
   it('IngestImageResult (types.ts) has exactly the served IngestImageResponse properties', () => {
     const IMAGE_RESULT_KEYS = [
       'error',
+      'error_kind',
       'image_id',
       'image_path',
       'imohash',
       'n_crops',
       'n_regions',
+      'source_identifier',
       'status',
     ] satisfies (keyof IngestImageResult)[];
     expect([...IMAGE_RESULT_KEYS].sort()).toEqual(keysOf('IngestImageResponse'));
@@ -70,10 +72,12 @@ describe('ingest contract', () => {
     ] satisfies (keyof BatchIngestResponse)[];
     // The generated schema name is mangled by the module path FastAPI
     // resolved the model from (two `BatchIngestResponse`-titled models
-    // exist server-side); `src__routers__curation___common__` is the
-    // real one this endpoint's response references.
+    // exist server-side); `src__routers__curation___common_models__` is
+    // the real one this endpoint's response references (BA-1/BA-7 split
+    // the wire models out of `_common.py` into `_common_models.py` —
+    // this schema name moved with them, was `___common__` before).
     expect([...RESPONSE_KEYS].sort()).toEqual(
-      keysOf('src__routers__curation___common__BatchIngestResponse'),
+      keysOf('src__routers__curation___common_models__BatchIngestResponse'),
     );
   });
 
@@ -88,8 +92,41 @@ describe('ingest contract', () => {
 
   it('the upload multipart body field names match the served request schema', () => {
     const schema = schemas['Body_curation_ingest_upload_curation_ingest_upload_post'];
+    // BA-4 added an optional `run_id` form field (client identifier for
+    // an upload run, echoed on `GET /ingest/status?run_id=`) — not sent
+    // by `ingestUpload()` today (no run_id UI yet), but it's a real,
+    // served field on the request schema this test mirrors.
     expect(Object.keys(schema.properties ?? {}).sort()).toEqual(
-      ['image_paths', 'images', 'source'].sort(),
+      ['image_paths', 'images', 'run_id', 'source'].sort(),
     );
+  });
+
+  it('IngestConfig (types.ts) has exactly the served IngestConfigResponse shape', () => {
+    const uploadKeys = keysOf('IngestUploadConfig');
+    const batchKeys = keysOf('IngestBatchConfig');
+    const drainKeys = keysOf('IngestRegionDrainConfig');
+    expect(uploadKeys).toEqual(
+      [
+        'enabled',
+        'max_images_per_request',
+        'max_bytes_per_request',
+        'accepted_extensions',
+        'persists_bytes',
+      ].sort(),
+    );
+    expect(batchKeys).toEqual(['enabled', 'max_items', 'source_roots'].sort());
+    expect(drainKeys).toEqual(['poll_interval_s', 'stable_polls'].sort());
+  });
+
+  it('RegionDrain (types.ts) has exactly the served IngestRegionDrainResponse properties', () => {
+    const DRAIN_KEYS = [
+      'pending_detection',
+      'pending_verification',
+      'total_unfinished',
+      'drained',
+      'stable_for_s',
+      'observed_at',
+    ];
+    expect([...DRAIN_KEYS].sort()).toEqual(keysOf('IngestRegionDrainResponse'));
   });
 });

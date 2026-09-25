@@ -198,10 +198,18 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
   }
 
   function applyResponse(chunk: Chunk, res: BatchIngestResponse): void {
-    const byPath = new Map(res.results.map((r) => [r.image_path, r]));
+    // BA-1: for an upload result, `image_path` is now the server-persisted
+    // path, not the client identifier — the identifier this controller
+    // sent (`image_paths` form field) comes back as `source_identifier`.
+    // Fall back to `image_path` for a pre-BA-1 backend that doesn't echo
+    // `source_identifier` at all (both fields collapse to the same value
+    // there, since it never rewrote the path).
+    const byIdentifier = new Map(
+      res.results.map((r) => [r.source_identifier ?? r.image_path, r]),
+    );
     for (const f of chunk) {
       const id = identifierFor(f);
-      const r = byPath.get(id);
+      const r = byIdentifier.get(id);
       totals.uploaded_bytes += f.size;
       if (!r) {
         results.set(f.id, {
@@ -225,7 +233,12 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
         results.set(f.id, { identifier: id, kind: 'duplicate', image_id: r.image_id });
         totals.duplicates++;
       } else {
-        results.set(f.id, { identifier: id, kind: 'failed', error: r.error });
+        results.set(f.id, {
+          identifier: id,
+          kind: 'failed',
+          error: r.error,
+          error_kind: r.error_kind,
+        });
         totals.failed++;
       }
     }
@@ -235,11 +248,17 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
     chunk: Chunk,
     kind: 'failed' | 'not_sent',
     error?: string | null,
+    errorKind?: string | null,
   ): void {
     for (const f of chunk) {
       const id = identifierFor(f);
       if (kind === 'failed') totals.failed++;
-      results.set(f.id, { identifier: id, kind, error: error ?? null });
+      results.set(f.id, {
+        identifier: id,
+        kind,
+        error: error ?? null,
+        error_kind: errorKind,
+      });
     }
   }
 
@@ -265,7 +284,7 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
             halvedOnce.add(b);
             queue.splice(cursor, 0, a, b);
           } else {
-            markChunk(chunk, 'failed', e.detail ?? 'request too large');
+            markChunk(chunk, 'failed', e.detail ?? 'request too large', 'too_large');
           }
         } else {
           // nginx-style 413 — HTML body, not JSON. Stop the whole run;

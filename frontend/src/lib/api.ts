@@ -71,6 +71,7 @@ import type {
   IngestBatchRequest,
   IngestUploadRequest,
   BatchIngestResponse,
+  IngestConfig,
 } from './types';
 import type {
   AugmentationPresetsResponse,
@@ -3979,13 +3980,23 @@ export function ingestBatch(
   );
 }
 
-// getIngestConfig (BA-2, GET {API_PREFIX}/ingest/config) is intentionally
-// NOT wrapped here yet: the route doesn't exist in the vendored OpenAPI,
-// and endpointCatalog.test.ts would (correctly) fail on an unresolvable
-// call site. Add the wrapper only once `npm run contract:sync` picks up
-// the route. ingestConfig.ts's `resolveIngestConfig` already accepts
-// `IngestConfig | null` so the caller side needs no rework — every call
-// site just passes `null` until then.
+/**
+ * BA-2 (landed, OpenProcessor c676d2b): typed ingest capability + limits,
+ * actually enforced by `/ingest/upload`/`/ingest/batch`/`/ingest/region_drain`
+ * — replaces every interim client constant in `ingestConfig.ts`. A 404
+ * (pre-BA-2 backend) resolves to `null`; `resolveIngestConfig(null)` falls
+ * back to the documented interim values, same as before this landed.
+ */
+export async function getIngestConfig(
+  signal?: AbortSignal,
+): Promise<IngestConfig | null> {
+  try {
+    return await apiFetch<IngestConfig>(`${API_PREFIX}/ingest/config`, {}, signal);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
+}
 
 // ===========================================================================
 // Detector bake-off ({API_PREFIX}/bakeoff) — model comparison runs + results.
