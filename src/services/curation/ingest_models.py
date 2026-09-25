@@ -12,6 +12,20 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+# BA-7: stable machine error codes, served alongside the free-text
+# ``error`` message on a failed ingest item. Not an exhaustive enum on
+# the wire model (a future failure mode should still surface a message
+# even if this list hasn't been extended for it) but every current
+# writer uses one of these.
+ERROR_KIND_EMPTY = 'empty'
+ERROR_KIND_UNSERVABLE_PATH = 'unservable_path'
+ERROR_KIND_UNSUPPORTED_TYPE = 'unsupported_type'
+ERROR_KIND_TOO_LARGE = 'too_large'
+ERROR_KIND_DECODE_FAILED = 'decode_failed'
+ERROR_KIND_DETECTOR_INFER = 'detector_infer'
+ERROR_KIND_BULK_INDEX = 'bulk_index'
+
+
 class IngestSummary(BaseModel):
     successful: int = 0
     duplicates: int = 0
@@ -40,6 +54,9 @@ class IngestResult(BaseModel):
     n_region_queued: int = 0
     error: str | None = None
     error_kind: str | None = None
+    # BA-1: the client-supplied identifier, for a byte-upload ingest
+    # where image_path is now the server-persisted path.
+    source_identifier: str | None = None
 
 
 class BatchIngestResult(BaseModel):

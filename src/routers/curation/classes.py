@@ -7,7 +7,6 @@ from typing import Annotated, Any
 from fastapi import HTTPException, Query, status
 
 from src.clients.curation_opensearch import ClassRegistry, ClassRegistryError
-from src.config.region_fields import get_region_fields
 from src.routers.curation._class_models import (
     ClassCreateRequest,
     ClassEntry,
@@ -94,6 +93,8 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
     counts: dict[int, int] = {}
     validated: dict[int, int] = {}
     cluster_size: dict[int, int] = {}
+    validated_test_holdout: dict[int, int] = {}
+    validated_excluded: dict[int, int] = {}
     try:
         body = {
             'size': 0,
@@ -103,6 +104,28 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                     'aggs': {
                         'validated': {
                             'filter': {'term': {'class_validated': True}},
+                        },
+                        # Trainable = validated minus these two (frozen
+                        # test-holdout, human-excluded) -- see ClassEntry.trainable.
+                        'validated_test_holdout': {
+                            'filter': {
+                                'bool': {
+                                    'filter': [
+                                        {'term': {'class_validated': True}},
+                                        {'term': {'test_holdout': True}},
+                                    ]
+                                }
+                            }
+                        },
+                        'validated_excluded': {
+                            'filter': {
+                                'bool': {
+                                    'filter': [
+                                        {'term': {'class_validated': True}},
+                                        {'term': {'class_excluded': True}},
+                                    ]
+                                }
+                            }
                         },
                     },
                 },
@@ -130,6 +153,12 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
             cid = int(bucket['key'])
             counts[cid] = int(bucket.get('doc_count', 0))
             validated[cid] = int((bucket.get('validated') or {}).get('doc_count', 0))
+            validated_test_holdout[cid] = int(
+                (bucket.get('validated_test_holdout') or {}).get('doc_count', 0)
+            )
+            validated_excluded[cid] = int(
+                (bucket.get('validated_excluded') or {}).get('doc_count', 0)
+            )
         by_cluster_buckets = (aggs.get('by_cluster') or {}).get('classes', {}).get('buckets', [])
         for bucket in by_cluster_buckets:
             cid = int(bucket['key'])
@@ -137,48 +166,38 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
 
-    # A region-of-interest class (e.g. license_plate) lives as a sub-bbox on
-    # every parent item that has one, NOT as a separate doc whose primary
-    # class_id == that class. The class-aggregation count above only
-    # captures the rare mis-labels. Override with the real region
-    # inventory, keyed by the configured region-bbox field, so the sidebar
-    # matches the region-browse view.
-    fields = get_region_fields()
-    try:
-        region_count = await opensearch.count(
-            index=CURATION_ITEMS_INDEX,
-            body={'query': {'exists': {'field': fields.bbox_norm}}},
-        )
-        region_validated = await opensearch.count(
-            index=CURATION_ITEMS_INDEX,
-            body={
-                'query': {
-                    'bool': {
-                        'filter': [
-                            {'exists': {'field': fields.bbox_norm}},
-                            {'term': {'class_validated': True}},
-                        ]
-                    }
-                }
-            },
-        )
-        from src.services.detection.profile_registry import get_active_region_profile
+    # A region-of-interest class (e.g. the active region profile's
+    # region_class_name) lives as a sub-bbox on every parent item that has
+    # one, NOT as a separate doc whose primary class_id == that class. The
+    # class-aggregation count above only captures the rare mis-labels.
+    #
+    # X2: this used to override sample_count/validated_count/cluster_size
+    # with the region inventory total, which made the region "class" look
+    # like an item class with thousands of validated crops -- it inflated
+    # /train's class picker and /export's per-class table (the served
+    # sample_count disagreed with the real item-crop count everywhere
+    # else). The region inventory is already served separately (GET
+    # /regions, /regions/statuses, stats/dataset). Here we only mark
+    # ``kind='region'`` so item-count consumers can exclude it; item
+    # counts stay the real (usually zero) class-aggregation numbers.
+    from src.services.detection.profile_registry import get_active_region_profile
 
+    region_kind_class_ids: set[int] = set()
+    try:
         active_profile = get_active_region_profile()
         region_class_name = (active_profile.region_class_name if active_profile else '').lower()
-        for c in reg.classes:
-            if region_class_name and (c.class_name or '').lower() == region_class_name:
-                # All three counts share the region inventory total: the
-                # region lives as a sub-bbox, not as its own cluster, so
-                # there's no separate FAISS bucket to count.
-                region_total = int(region_count.get('count', 0))
-                region_val = int(region_validated.get('count', 0))
-                counts[c.class_id] = region_total
-                validated[c.class_id] = region_val
-                cluster_size[c.class_id] = region_total
-                break
+        if region_class_name:
+            for c in reg.classes:
+                if (c.class_name or '').lower() == region_class_name:
+                    region_kind_class_ids.add(c.class_id)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+
+    thresholds = dataset_thresholds()
+    hard_min = int(thresholds.get('block_below', 0))
+
+    def _trainable(cid: int, n_valid: int) -> int:
+        return n_valid - validated_test_holdout.get(cid, 0) - validated_excluded.get(cid, 0)
 
     return ClassListResponse(
         classes=[
@@ -193,10 +212,16 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                 hotkey_letter=getattr(c, 'hotkey_letter', None),
                 adequacy=adequacy(validated.get(c.class_id, c.validated_count)),
                 added_at=getattr(c, 'added_at', None),
+                kind='region' if c.class_id in region_kind_class_ids else 'item',
+                trainable=_trainable(c.class_id, validated.get(c.class_id, c.validated_count)),
+                trainable_gap=max(
+                    0,
+                    hard_min - _trainable(c.class_id, validated.get(c.class_id, c.validated_count)),
+                ),
             )
             for c in reg.classes
         ],
-        thresholds=dataset_thresholds(),
+        thresholds=thresholds,
         reserved_hotkeys=sorted(RESERVED_HOTKEY_LETTERS),
     )
 

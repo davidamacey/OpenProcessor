@@ -436,7 +436,7 @@
                 "type": "null"
               }
             ],
-            "description": "JSON list of stable identifiers, one per image, stored as image_path (default: the upload filenames). Need not exist on the server.",
+            "description": "JSON list of stable identifiers, one per image, stored as source_identifier (default: the upload filenames). Need not exist on the server -- BA-1: image_path is now the server-persisted path the uploaded bytes were written under.",
             "title": "Image Paths"
           },
           "images": {
@@ -447,6 +447,18 @@
             },
             "title": "Images",
             "type": "array"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "BA-4: optional tag for this upload call, recorded as ingest_run_id.",
+            "title": "Run Id"
           },
           "source": {
             "default": "upload",
@@ -627,9 +639,28 @@
             ],
             "title": "Hotkey Letter"
           },
+          "kind": {
+            "default": "item",
+            "enum": [
+              "item",
+              "region"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "sample_count": {
             "default": 0,
             "title": "Sample Count",
+            "type": "integer"
+          },
+          "trainable": {
+            "default": 0,
+            "title": "Trainable",
+            "type": "integer"
+          },
+          "trainable_gap": {
+            "default": 0,
+            "title": "Trainable Gap",
             "type": "integer"
           },
           "validated_count": {
@@ -1359,6 +1390,18 @@
             "description": "Objects per class per split.",
             "title": "Class Split Counts"
           },
+          "classes_with_objects": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Of class_count registry classes, how many have >=1 object.",
+            "title": "Classes With Objects"
+          },
           "dataset_sha": {
             "anyOf": [
               {
@@ -1630,6 +1673,18 @@
       },
       "HealthResponse": {
         "properties": {
+          "mlflow_public_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "T1: the browser-reachable MLflow base URL (CurationConfig.mlflow_public_url / OP_MLFLOW_PUBLIC_URL), null when unset. A served train run may carry its own mlflow_run_url that is correct host-side but unreachable from an operator browser -- a client should build the link from this base rather than guessing a port.",
+            "title": "Mlflow Public Url"
+          },
           "opensearch": {
             "additionalProperties": true,
             "title": "Opensearch",
@@ -1726,6 +1781,32 @@
         "title": "ImportLabelsRequest",
         "type": "object"
       },
+      "IngestBatchConfig": {
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "max_items": {
+            "title": "Max Items",
+            "type": "integer"
+          },
+          "source_roots": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Roots",
+            "type": "array"
+          }
+        },
+        "required": [
+          "max_items",
+          "source_roots"
+        ],
+        "title": "IngestBatchConfig",
+        "type": "object"
+      },
       "IngestBatchItem": {
         "description": "One batch entry: an image, and optionally its ground-truth labels.\n\n``label_txt_path`` is what makes an \"ingest an already-labeled\ndataset and compare the detector against ground truth\" pass a single\ncall instead of an ingest followed by a second\n``POST /import_labels/batch`` round trip.",
         "properties": {
@@ -1784,6 +1865,26 @@
         "title": "IngestBatchRequest",
         "type": "object"
       },
+      "IngestConfigResponse": {
+        "properties": {
+          "batch": {
+            "$ref": "#/components/schemas/IngestBatchConfig"
+          },
+          "region_drain": {
+            "$ref": "#/components/schemas/IngestRegionDrainConfig"
+          },
+          "upload": {
+            "$ref": "#/components/schemas/IngestUploadConfig"
+          }
+        },
+        "required": [
+          "upload",
+          "batch",
+          "region_drain"
+        ],
+        "title": "IngestConfigResponse",
+        "type": "object"
+      },
       "IngestImageRequest": {
         "properties": {
           "path": {
@@ -1817,6 +1918,17 @@
             ],
             "title": "Error"
           },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Kind"
+          },
           "image_id": {
             "default": "",
             "title": "Image Id",
@@ -1841,6 +1953,17 @@
             "title": "N Regions",
             "type": "integer"
           },
+          "source_identifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Identifier"
+          },
           "status": {
             "enum": [
               "success",
@@ -1856,6 +1979,127 @@
           "image_path"
         ],
         "title": "IngestImageResponse",
+        "type": "object"
+      },
+      "IngestRegionDrainConfig": {
+        "properties": {
+          "poll_interval_s": {
+            "title": "Poll Interval S",
+            "type": "number"
+          },
+          "stable_polls": {
+            "title": "Stable Polls",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "poll_interval_s",
+          "stable_polls"
+        ],
+        "title": "IngestRegionDrainConfig",
+        "type": "object"
+      },
+      "IngestRegionDrainResponse": {
+        "properties": {
+          "drained": {
+            "title": "Drained",
+            "type": "boolean"
+          },
+          "observed_at": {
+            "title": "Observed At",
+            "type": "string"
+          },
+          "pending_detection": {
+            "title": "Pending Detection",
+            "type": "integer"
+          },
+          "pending_verification": {
+            "title": "Pending Verification",
+            "type": "integer"
+          },
+          "stable_for_s": {
+            "title": "Stable For S",
+            "type": "number"
+          },
+          "total_unfinished": {
+            "title": "Total Unfinished",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pending_detection",
+          "pending_verification",
+          "total_unfinished",
+          "drained",
+          "stable_for_s",
+          "observed_at"
+        ],
+        "title": "IngestRegionDrainResponse",
+        "type": "object"
+      },
+      "IngestStatusResponse": {
+        "properties": {
+          "by_day": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "By Day",
+            "type": "array"
+          },
+          "by_source": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "By Source",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total"
+        ],
+        "title": "IngestStatusResponse",
+        "type": "object"
+      },
+      "IngestUploadConfig": {
+        "properties": {
+          "accepted_extensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Accepted Extensions",
+            "type": "array"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "max_bytes_per_request": {
+            "title": "Max Bytes Per Request",
+            "type": "integer"
+          },
+          "max_images_per_request": {
+            "title": "Max Images Per Request",
+            "type": "integer"
+          },
+          "persists_bytes": {
+            "default": true,
+            "title": "Persists Bytes",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "max_images_per_request",
+          "max_bytes_per_request",
+          "accepted_extensions"
+        ],
+        "title": "IngestUploadConfig",
         "type": "object"
       },
       "ItemBatchRegionRequest": {
@@ -3237,6 +3481,141 @@
         "title": "PresetsResponse",
         "type": "object"
       },
+      "ProbeRunRequest": {
+        "properties": {
+          "architecture": {
+            "default": "yolo11",
+            "title": "Architecture",
+            "type": "string"
+          },
+          "gpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "resume": {
+            "default": false,
+            "title": "Resume",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "ProbeRunRequest",
+        "type": "object"
+      },
+      "ProbeStatusResponse": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "gpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "model_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Path"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "train_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Train Job Id"
+          },
+          "updated_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated Count"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ProbeStatusResponse",
+        "type": "object"
+      },
       "Profile": {
         "description": "Profile envelope returned by ``GET /curation/train/profiles``.",
         "properties": {
@@ -3401,6 +3780,10 @@
             "title": "Display Name",
             "type": "string"
           },
+          "display_name_singular": {
+            "title": "Display Name Singular",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -3417,6 +3800,7 @@
         "required": [
           "name",
           "display_name",
+          "display_name_singular",
           "region_class_name",
           "text_reader"
         ],
@@ -3723,6 +4107,25 @@
         "title": "ResolveNewClassResponse",
         "type": "object"
       },
+      "ReviewEmptyState": {
+        "description": "C3: underlying-state flags a client uses to word ANY tab's\nzero-result state without a per-tab round trip -- the same signals\n``GET /review/{tab}``'s own ``empty_reason`` is derived from.",
+        "properties": {
+          "has_item_scores": {
+            "title": "Has Item Scores",
+            "type": "boolean"
+          },
+          "has_probe_predictions": {
+            "title": "Has Probe Predictions",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_probe_predictions",
+          "has_item_scores"
+        ],
+        "title": "ReviewEmptyState",
+        "type": "object"
+      },
       "ReviewFilterOption": {
         "properties": {
           "label": {
@@ -3824,6 +4227,9 @@
       },
       "ReviewTabsResponse": {
         "properties": {
+          "empty_state": {
+            "$ref": "#/components/schemas/ReviewEmptyState"
+          },
           "tabs": {
             "items": {
               "$ref": "#/components/schemas/ReviewTab"
@@ -3833,7 +4239,8 @@
           }
         },
         "required": [
-          "tabs"
+          "tabs",
+          "empty_state"
         ],
         "title": "ReviewTabsResponse",
         "type": "object"
@@ -5174,7 +5581,7 @@
         "title": "_PublishEvent",
         "type": "object"
       },
-      "src__routers__curation___common__BatchIngestResponse": {
+      "src__routers__curation___common_models__BatchIngestResponse": {
         "properties": {
           "disagreements": {
             "items": {
@@ -7363,7 +7770,7 @@
     },
     "/curation/crops/{crop_id}/image": {
       "get": {
-        "description": "Source image with the item bbox drawn.\n\nDefaults to full resolution to preserve compatibility with callers\nthat need pixel-accurate frames. Pass ``max_dim`` for the labeler\nreview queue, where the user is glancing at one bbox at a time and\na sub-MB preview is plenty. If the item also carries a\nregion-of-interest sub-bbox (``RegionFields.bbox_norm``), it is\ndrawn as a second overlay.",
+        "description": "The clean source image for this crop's parent frame — no box, label\nor other overlay drawn (K6). Only resize, EXIF-transpose and RGB\nconversion apply.\n\nDefaults to full resolution to preserve compatibility with callers\nthat need pixel-accurate frames. Pass ``max_dim`` for the labeler\nreview queue, where the user is glancing at one item at a time and a\nsub-MB preview is plenty. The frontend draws the item box, the\nregion box and any rejected-candidate box itself, from the geometry\n``GET {prefix}/crops/{id}/context`` serves in source-image-normalized\ncoordinates.",
         "operationId": "crop_full_image_curation_crops__crop_id__image_get",
         "parameters": [
           {
@@ -8661,7 +9068,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__curation___common__BatchIngestResponse"
+                  "$ref": "#/components/schemas/src__routers__curation___common_models__BatchIngestResponse"
                 }
               }
             },
@@ -8679,6 +9086,28 @@
           }
         },
         "summary": "Curation Ingest Batch",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/ingest/config": {
+      "get": {
+        "description": "Typed ingest capability + limits (BA-2).\n\n``upload``/``batch``/``region_drain`` are all real config, not\nhardcoded client-side constants: ``upload.max_images_per_request`` /\n``max_bytes_per_request`` / ``accepted_extensions`` are enforced (413 /\nper-item ``unsupported_type``) by ``POST /ingest/upload``;\n``batch.max_items`` is enforced by ``POST /ingest/batch``;\n``region_drain.*`` are the parameters ``GET /ingest/region_drain``'s\nstability verdict uses.",
+        "operationId": "ingest_config_curation_ingest_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ingest Config",
         "tags": [
           "Curation"
         ]
@@ -8728,7 +9157,7 @@
     },
     "/curation/ingest/path_lookup": {
       "post": {
-        "description": "Filter a list of paths down to those already ingested.\n\nUsed by an ingest walker to short-circuit the read+hash work for\nre-scans of immutable archive media. Safe because ingest writes\nimage_path verbatim and image_path is mapped as keyword on the\nimages index.",
+        "description": "Filter a list of paths down to those already ingested.\n\nUsed by an ingest walker to short-circuit the read+hash work for\nre-scans of immutable archive media. Matches on ``image_path`` OR\n``source_identifier`` (BA-1): a byte-upload ingest's client identifier\nis recorded as ``source_identifier`` now that ``image_path`` is the\nserver-persisted path, so a re-scan driver that only knows its own\nidentifiers still gets a hit. Both fields are mapped keyword on the\nimages index.",
         "operationId": "curation_ingest_path_lookup_curation_ingest_path_lookup_post",
         "requestBody": {
           "content": {
@@ -8770,18 +9199,14 @@
     },
     "/curation/ingest/region_drain": {
       "get": {
-        "description": "Region-detection worklog: how many items are still waiting for the\ndetection worker.\n\nUsed by an ingest walker to decide when the asynchronous\ndetect-then-verify chain has caught up after a folder finishes, before\ntriggering ``/curation/pipeline/auto_label``. The walker polls this\nendpoint every ~10s and proceeds when ``total_unfinished`` reaches 0\n(with a stability window).\n\nReturns:\n* ``pending_detection``    — items the detection worker hasn't reached\n                              yet (region status == 'pending_detection').\n* ``pending_verification`` — items where the detector found a\n                              candidate and the verify step is queued.\n* ``total_unfinished``     — sum of the two; what the walker polls.\n\nRe-ingested data can never carry the retired ``'pending'`` /\n``'pending_verify'`` short names (S5), so there is no legacy rollup.",
+        "description": "Region-detection worklog: how many items are still waiting for the\ndetection worker.\n\nUsed by an ingest walker to decide when the asynchronous\ndetect-then-verify chain has caught up after a folder finishes, before\ntriggering ``/curation/pipeline/auto_label``. The walker polls this\nendpoint every ``region_drain.poll_interval_s`` (``GET /ingest/config``)\nand proceeds once ``drained`` is true (BA-3) -- computed server-side\nnow, not invented client-side from ``total_unfinished == 0``.\n\nReturns:\n* ``pending_detection``    — items the detection worker hasn't reached\n                              yet (region status == 'pending_detection').\n* ``pending_verification`` — items where the detector found a\n                              candidate and the verify step is queued.\n* ``total_unfinished``     — sum of the two; what a legacy walker polled.\n* ``drained``              — true once ``total_unfinished`` has read 0\n                              for ``region_drain.stable_polls`` consecutive\n                              polls of this endpoint.\n* ``stable_for_s``         — seconds since the last non-zero reading.\n* ``observed_at``          — this poll's timestamp.\n\nRe-ingested data can never carry the retired ``'pending'`` /\n``'pending_verify'`` short names (S5), so there is no legacy rollup.",
         "operationId": "ingest_region_drain_curation_ingest_region_drain_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "integer"
-                  },
-                  "title": "Response Ingest Region Drain Curation Ingest Region Drain Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/IngestRegionDrainResponse"
                 }
               }
             },
@@ -8796,20 +9221,48 @@
     },
     "/curation/ingest/status": {
       "get": {
-        "description": "Recent ingest summary — counts grouped by source.",
+        "description": "Recent ingest summary — counts grouped by source.\n\n``run_id`` scopes ``total``/``by_source``/``by_day`` to images carrying\nthat ``ingest_run_id`` (BA-4) -- an upload run's own images doc field,\nset by ``POST /ingest/upload``'s optional ``run_id`` form field.",
         "operationId": "ingest_status_curation_ingest_status_get",
+        "parameters": [
+          {
+            "description": "BA-4: scope counts to one POST /ingest/upload run_id.",
+            "in": "query",
+            "name": "run_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "BA-4: scope counts to one POST /ingest/upload run_id.",
+              "title": "Run Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Ingest Status Curation Ingest Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/IngestStatusResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Ingest Status",
@@ -8820,7 +9273,7 @@
     },
     "/curation/ingest/upload": {
       "post": {
-        "description": "Ingest a batch of images sent as bytes (multipart), not server-side paths.\n\nFor storage the API container cannot mount (a laptop, a remote NAS, a\nhigh-latency share): the client reads the files and uploads them.\n``image_paths`` are identifiers, recorded verbatim — keep them stable\nacross runs so ``/ingest/path_lookup`` can pre-filter a re-scan.\n\nResume is server-side content dedup: every image is fingerprinted\n(imohash over the uploaded bytes) and one already in the images index\ncomes back as ``duplicate`` without re-running inference, so a\ncrashed upload run can simply be restarted. The whole-frame embedding\nis computed from the uploaded bytes, not by re-opening the path.",
+        "description": "Ingest a batch of images sent as bytes (multipart), not server-side paths.\n\nFor storage the API container cannot mount (a laptop, a remote NAS, a\nhigh-latency share): the client reads the files and uploads them.\n\nBA-1: the uploaded bytes are now persisted server-side, content-addressed,\nunder ``CurationConfig.upload_root`` (see\n:func:`src.services.curation.image_serving.persist_uploaded_bytes`) —\nthat path is stored as ``image_path`` (so thumbnails, the region worker\nand the VLM can all re-open it), and the client's own identifier is kept\nverbatim in the new ``source_identifier`` field. ``POST\n/curation/ingest/path_lookup`` matches on either field.\n\nResume is server-side content dedup: every image is fingerprinted\n(imohash over the uploaded bytes) and one already in the images index\ncomes back as ``duplicate`` without re-running inference — and since\nthe persisted path is itself content-addressed by that same hash, the\nsame bytes are only ever written to disk once, so a crashed upload run\ncan simply be restarted. The whole-frame embedding is computed from the\nuploaded bytes, not by re-opening the path.",
         "operationId": "curation_ingest_upload_curation_ingest_upload_post",
         "requestBody": {
           "content": {
@@ -8837,11 +9290,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__curation___common__BatchIngestResponse"
+                  "$ref": "#/components/schemas/src__routers__curation___common_models__BatchIngestResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "413": {
+            "description": "Too many images, or total upload bytes, in one request."
           },
           "422": {
             "content": {
@@ -9663,6 +10119,94 @@
           }
         },
         "summary": "Pipeline Events",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/probe/cancel": {
+      "post": {
+        "description": "Best-effort cancel of the active probe job.",
+        "operationId": "probe_cancel_curation_probe_cancel_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Probe Cancel Curation Probe Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Probe Cancel",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/probe/run": {
+      "post": {
+        "description": "Start a probe pass from a finished training run's export.\n\n``409`` when: the referenced training job isn't finished or has no\nexported checkpoint, or a probe job is already running. GPU claim\n(when ``gpu`` is given) goes through the same arbiter\n``POST /train/start`` uses; a claim failure is also ``409`` (never\nsilent -- see ``src.services.curation.probe_job``).",
+        "operationId": "probe_run_curation_probe_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProbeRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Probe Run",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/probe/status": {
+      "get": {
+        "description": "Poll the current/last probe job.",
+        "operationId": "probe_status_curation_probe_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Probe Status",
         "tags": [
           "Curation"
         ]
@@ -10662,7 +11206,7 @@
     },
     "/curation/review/tabs": {
       "get": {
-        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) plus ``filters`` (the query parameters it honours)\n``filter_defaults`` (values it applies when one is omitted) and\n``filter_specs`` (self-describing enum filters) — the frontend renders this instead of hardcoding tab labels or assuming a\nfilter works everywhere. Must be registered before ``GET /review/{tab}``\nso it isn't shadowed as ``tab='tabs'``.",
+        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) plus ``filters`` (the query parameters it honours)\n``filter_defaults`` (values it applies when one is omitted) and\n``filter_specs`` (self-describing enum filters) — the frontend renders this instead of hardcoding tab labels or assuming a\nfilter works everywhere. Must be registered before ``GET /review/{tab}``\nso it isn't shadowed as ``tab='tabs'``.\n\nC3: also carries ``empty_state`` -- ``{has_probe_predictions,\nhas_item_scores}`` -- computed once here so a client can annotate any\ntab's zero-result state (the same reasons ``GET /review/{tab}``'s own\n``empty_reason`` uses) without a per-tab round trip.",
         "operationId": "review_tabs_curation_review_tabs_get",
         "responses": {
           "200": {
@@ -11784,7 +12328,7 @@
     },
     "/curation/stats/classes": {
       "get": {
-        "description": "Per-class total/validated breakdown.\n\nReturns both the raw ``by_class`` aggregation and a flattened ``classes``\narray (``{class_id, class_name, count, validated_count, adequacy,\naug_target, aug_gap}``, plus the ``thresholds`` behind them) joined against\nthe registry for the names. The labeler's ``getStats()`` (Export + Home\npages) consumes ``classes`` — the aggregation alone has no class names, so\nwithout this join the Export dataset table renders empty.",
+        "description": "Per-class total/validated breakdown.\n\nReturns both the raw ``by_class`` aggregation and a flattened ``classes``\narray (``{class_id, class_name, count, validated_count, trainable,\ntrainable_gap, adequacy, aug_target, aug_gap}``, plus the ``thresholds``\nbehind them) joined against the registry for the names. The labeler's\n``getStats()`` (Export + Home pages) consumes ``classes`` — the\naggregation alone has no class names, so without this join the Export\ndataset table renders empty.\n\n``trainable`` = validated minus frozen test-holdout minus human-excluded\ncrops — the frontend used to compute ``validated - holdout`` itself\nclient-side; this serves the real number (also excluding\n``class_excluded`` crops, which the client-side version didn't\naccount for) so every page agrees. ``trainable_gap`` is the shortfall\nagainst :func:`dataset_thresholds`'s per-class minimum, floored at 0.",
         "operationId": "stats_classes_curation_stats_classes_get",
         "responses": {
           "200": {

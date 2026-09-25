@@ -11,6 +11,7 @@ instead.
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE_PATH
@@ -23,10 +24,15 @@ from src.services.curation.review_queries import KNOWN_TABS
 
 @pytest.fixture
 def client() -> Any:
-    from src.routers.curation import router as curation_router
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
     app.include_router(curation_router)
+    # C3: GET /review/tabs now also serves empty_state, which issues a
+    # couple of `count` calls against opensearch.
+    fake = AsyncMock()
+    fake.count = AsyncMock(return_value={'count': 0})
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as c:
         yield c
 
@@ -80,6 +86,25 @@ def test_regions_vocabulary_reflects_the_active_profile(
         # for the suite), never a hardcoded default.
         assert by_id['test-vlm-model']['role'] == 'verifier'
         assert by_id['test-vlm-model']['filterable'] is False
+    finally:
+        profile_registry._reset_registry_for_tests()
+
+
+def test_region_profile_summary_serves_both_display_names(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The client labels one region ("Confirm Plate") and the tab ("Plates")
+    from served names, never from its own word list."""
+    from src.services.detection import profile_registry
+
+    monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
+    profile_registry._reset_registry_for_tests()
+    try:
+        resp = client.get('/curation/regions/vocabulary')
+        assert resp.status_code == 200, resp.text
+        summary = resp.json()['region_profile']
+        assert summary['display_name'] == 'Plates'
+        assert summary['display_name_singular'] == 'Plate'
     finally:
         profile_registry._reset_registry_for_tests()
 

@@ -118,11 +118,13 @@ def test_unknown_region_status_filter_is_400(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_rejected_item_reason_mentions_rejection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """R10: the reason is worded from the served rejection-reason
+    vocabulary label, not the raw region_rejection_reason id verbatim."""
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), monkeypatch)
     r = client.get('/curation/review/regions')
     items = {i['crop_id']: i for i in r.json()['items']}
-    assert 'rejected' in items['rejected1']['reason']
-    assert 'region_visible_elsewhere' in items['rejected1']['reason']
+    assert items['rejected1']['reason'] == 'rejected: the detection is wrong (region is elsewhere)'
+    assert 'region_visible_elsewhere' not in items['rejected1']['reason']
     assert items['detected1']['reason'] == 'region detected — needs human confirmation'
 
 

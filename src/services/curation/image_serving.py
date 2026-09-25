@@ -1,14 +1,20 @@
 """Image-serving primitives for the curation labeling pipeline.
 
-The labeler frontend needs three things:
+The labeler frontend needs two things:
 
 1. Stream a source JPEG from disk (any mounted volume — NAS, NVM, object
-   store passthrough, etc.).
+   store passthrough, etc.), optionally downscaled.
 2. Crop+resize a 128px thumbnail of a single item bbox, cached LRU
    (2000 entries ~50MB). Used by cluster grids.
-3. Render a full-resolution source image with one or more bbox overlays
-   drawn (used by the "expand to source" view in the labeling UI and the
-   QA review pages).
+
+K6: this module used to also burn bbox overlays into the full-resolution
+source image server-side (the "expand to source" view). Every served
+image is now the clean source render (resize + EXIF transpose + crop,
+never a drawn box or label) — the frontend draws its own boxes from the
+geometry ``GET {prefix}/crops/{id}/context`` already serves in
+source-image-normalized coordinates. There is no overlay flag to opt
+back into: the drawing code was removed, not hidden behind a query
+param.
 
 Why the API service and not a static file server: it is the only service
 with both OpenSearch metadata and the source files mounted, so the crop
@@ -27,6 +33,7 @@ archive or a training-corpus mount).
 from __future__ import annotations
 
 import io
+import os
 from collections import OrderedDict
 from pathlib import Path
 from threading import Lock
@@ -34,7 +41,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageOps
 
 from src.config import CurationConfig, get_curation_config
 
@@ -108,7 +115,10 @@ def _configured_roots(config: CurationConfig | None = None) -> tuple[Path, ...]:
     unmatched.
     """
     cfg = config or get_curation_config()
-    return (cfg.source_root, *cfg.source_path_aliases.values())
+    # BA-1: the upload root is a server-managed root too -- an uploaded
+    # item's persisted image_path must pass the same servability guard
+    # as any mounted source root.
+    return (cfg.source_root, cfg.upload_root, *cfg.source_path_aliases.values())
 
 
 def is_servable_image_path(path: str) -> bool:
@@ -135,6 +145,39 @@ UNSERVABLE_PATH_ERROR = (
     'image path is not under a configured source root (OP_SOURCE_ROOT / '
     'OP_SOURCE_PATH_ALIASES), so its images could not be served'
 )
+
+
+def persist_uploaded_bytes(
+    payload: bytes,
+    *,
+    imohash: str,
+    extension: str,
+    config: CurationConfig | None = None,
+) -> Path:
+    """Persist uploaded image bytes under ``CurationConfig.upload_root``,
+    content-addressed (BA-1).
+
+    Path shape: ``<upload_root>/<imohash[:2]>/<imohash><extension>`` —
+    the same bytes always resolve to the same path, so re-uploading the
+    same image is a no-op write (dedup by content hash) and the file is
+    written atomically (temp file + ``os.replace``) so a concurrent
+    reader never observes a partial file. Returns the absolute
+    destination path; the caller stores this as the item's ``image_path``
+    (it is guaranteed servable -- ``upload_root`` is one of
+    :func:`_configured_roots`).
+    """
+    cfg = config or get_curation_config()
+    root = cfg.upload_root
+    shard = imohash[:2] if len(imohash) >= 2 else '00'
+    dest_dir = root / shard
+    dest = dest_dir / f'{imohash}{extension}'
+    if dest.exists():
+        return dest
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    tmp = dest_dir / f'.{imohash}{extension}.{os.getpid()}.tmp'
+    tmp.write_bytes(payload)
+    tmp.replace(dest)
+    return dest
 
 
 # =============================================================================
@@ -409,29 +452,8 @@ THUMBNAIL_CACHE = ThumbnailCache()
 
 
 # =============================================================================
-# Bbox-overlay rendering
+# Clean source-image rendering (K6: no server-side overlays)
 # =============================================================================
-
-
-_DEFAULT_BBOX_COLOR: tuple[int, int, int] = (255, 80, 80)
-_BBOX_LINE_WIDTH = 3
-_LABEL_BG_COLOR: tuple[int, int, int] = (0, 0, 0)
-_LABEL_TEXT_COLOR: tuple[int, int, int] = (255, 255, 255)
-
-
-def _load_label_font(size: int = 18) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
-    """Best-effort font lookup so labels are legible on QA screenshots."""
-    for candidate in (
-        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-        '/Library/Fonts/Arial.ttf',
-        '/System/Library/Fonts/Helvetica.ttc',
-    ):
-        try:
-            return ImageFont.truetype(candidate, size=size)
-        except OSError:
-            continue
-    return ImageFont.load_default()
 
 
 def _maybe_downscale(img: Image.Image, max_dim: int | None) -> Image.Image:
@@ -455,23 +477,19 @@ def _maybe_downscale(img: Image.Image, max_dim: int | None) -> Image.Image:
     return img.resize(new_size, Image.LANCZOS)
 
 
-async def render_image_with_bbox(
+async def render_source_image(
     image_path: Path,
-    bbox_norm: list[float],
-    color: tuple[int, int, int] = _DEFAULT_BBOX_COLOR,
     max_dim: int | None = None,
 ) -> bytes:
-    """Render the source image with a single bbox drawn as JPEG bytes.
+    """Render the clean source image as JPEG bytes: EXIF-transpose,
+    RGB-convert, optionally downscale, re-encode. No box, label or other
+    overlay is ever drawn (K6) — the frontend draws every box itself from
+    the geometry ``GET {prefix}/crops/{id}/context`` serves.
 
-    Used by the labeler "expand crop to source image" view. Pass
-    ``max_dim`` to cap the longest side so the labeler can pull a
+    Pass ``max_dim`` to cap the longest side so the labeler can pull a
     review-friendly preview (~1024px) instead of the full-resolution
-    source — the JPEG drops from ~2.2 MB to ~200 KB and the bbox
-    overlay still reads clearly.
+    source — the JPEG drops from ~2.2 MB to ~200 KB.
     """
-    if len(bbox_norm) != 4:
-        raise ValueError(f'bbox_norm must have 4 elements, got {len(bbox_norm)}')
-
     with Image.open(image_path) as src:
         # JPEG draft mode lets the decoder return a pre-scaled buffer
         # directly — for a 5472x3648 source asked to fit in 1280px the
@@ -483,84 +501,6 @@ async def render_image_with_bbox(
         if img.mode != 'RGB':
             img = img.convert('RGB')
         img = _maybe_downscale(img, max_dim)
-        w, h = img.size
-        x1 = int(bbox_norm[0] * w)
-        y1 = int(bbox_norm[1] * h)
-        x2 = int(bbox_norm[2] * w)
-        y2 = int(bbox_norm[3] * h)
-        draw = ImageDraw.Draw(img)
-        draw.rectangle([(x1, y1), (x2, y2)], outline=color, width=_BBOX_LINE_WIDTH)
-        buf = io.BytesIO()
-        img.save(buf, format='JPEG', quality=88)
-        return buf.getvalue()
-
-
-async def render_image_with_multiple_bboxes(
-    image_path: Path,
-    bboxes: list[dict[str, Any]],
-    max_dim: int | None = None,
-) -> bytes:
-    """Render the source image with multiple labeled bboxes.
-
-    Each ``bboxes`` entry must be a dict with at least:
-
-    - ``bbox_norm``: ``(x1, y1, x2, y2)`` normalized 0-1
-    - ``class_name``: human-readable label
-
-    Optional:
-
-    - ``color``: ``(r, g, b)`` tuple, default red
-    - ``label_text``: override displayed text (else uses ``class_name``)
-
-    Used by the QA review pages to show multiple detections at once.
-    """
-    if not bboxes:
-        # Trivial case — return the unannotated image. Still re-encode
-        # to guarantee JPEG output regardless of source format.
-        with Image.open(image_path) as src:
-            if max_dim and src.format == 'JPEG':
-                src.draft('RGB', (max_dim, max_dim))
-            img = ImageOps.exif_transpose(src)
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-            img = _maybe_downscale(img, max_dim)
-            buf = io.BytesIO()
-            img.save(buf, format='JPEG', quality=88)
-            return buf.getvalue()
-
-    font = _load_label_font(size=18)
-
-    with Image.open(image_path) as src:
-        if max_dim and src.format == 'JPEG':
-            src.draft('RGB', (max_dim, max_dim))
-        img = ImageOps.exif_transpose(src)
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        img = _maybe_downscale(img, max_dim)
-        w, h = img.size
-        draw = ImageDraw.Draw(img)
-        for entry in bboxes:
-            bbox_norm = entry['bbox_norm']
-            class_name = entry.get('class_name', '')
-            color = tuple(entry.get('color') or _DEFAULT_BBOX_COLOR)
-            text = entry.get('label_text') or class_name
-            x1 = int(bbox_norm[0] * w)
-            y1 = int(bbox_norm[1] * h)
-            x2 = int(bbox_norm[2] * w)
-            y2 = int(bbox_norm[3] * h)
-            draw.rectangle([(x1, y1), (x2, y2)], outline=color, width=_BBOX_LINE_WIDTH)
-            if text:
-                # Filled label background in the bbox upper-left.
-                try:
-                    text_box = draw.textbbox((0, 0), text, font=font)
-                    text_w = text_box[2] - text_box[0]
-                    text_h = text_box[3] - text_box[1]
-                except AttributeError:  # pragma: no cover - very old PIL
-                    text_w, text_h = draw.textsize(text, font=font)
-                pad = 4
-                bg_xy = (x1, y1, x1 + text_w + 2 * pad, y1 + text_h + 2 * pad)
-                draw.rectangle(bg_xy, fill=_LABEL_BG_COLOR)
-                draw.text((x1 + pad, y1 + pad), text, fill=_LABEL_TEXT_COLOR, font=font)
         buf = io.BytesIO()
         img.save(buf, format='JPEG', quality=88)
         return buf.getvalue()
@@ -575,19 +515,22 @@ def _crop_source_includes() -> list[str]:
     """``_source_includes`` for :func:`_fetch_crop`.
 
     Every field any ``crops_router`` route actually reads off the
-    returned doc: ``image_path`` + ``bbox_norm`` (all three routes),
-    ``class_name`` (``crop_full_image``'s overlay label), and the
-    region-of-interest bbox field (``crop_full_image`` overlay +
-    ``crop_region_thumbnail``) plus the verifier-rejected candidate bbox
-    (``crop_region_thumbnail``'s fallback for a ``verify_rejected`` item,
-    which never has the region bbox field). Without this, a bare
-    ``.get()`` also decompresses the item's embedding vectors + nested
-    history JSON, none of which any caller reads (see F-14).
+    returned doc: ``image_path`` (all three routes), ``bbox_norm``
+    (``crop_thumbnail``), and the region-of-interest bbox field plus the
+    verifier-rejected candidate bbox (both ``crop_region_thumbnail`` --
+    the candidate bbox is its fallback for a ``verify_rejected`` item,
+    which never has the region bbox field). K6: ``crop_full_image`` used
+    to also read ``bbox_norm``/``class_name``/the region bbox to draw a
+    server-side overlay; it now only resolves ``image_path`` and serves
+    the clean source, so ``class_name`` is no longer read by anything
+    here. Without this narrowed list, a bare ``.get()`` also decompresses
+    the item's embedding vectors + nested history JSON, none of which any
+    caller reads (see F-14).
     """
     from src.config import get_region_fields
 
     fields = get_region_fields()
-    return ['image_path', 'bbox_norm', 'class_name', fields.bbox_norm, fields.candidate_bbox_norm]
+    return ['image_path', 'bbox_norm', fields.bbox_norm, fields.candidate_bbox_norm]
 
 
 async def _fetch_crop(

@@ -153,6 +153,7 @@ class ExportResult:
     split_counts: SplitCounts
     image_count: int
     class_count: int
+    classes_with_objects: int
     started_at: str
     finished_at: str
     current_symlink: str
@@ -578,6 +579,13 @@ class GenericYoloExportService:
         (resolved_export_dir / ARTIFACT_FILENAMES['label_stats']).write_text(
             json.dumps(label_stats, indent=2)
         )
+        # E2: class_count is the registry size written into data.yaml
+        # (nc/names) -- it stays that way for back-compat, but a class
+        # with zero labeled objects in this export inflates that number
+        # into looking like "84 classes of real data" when only a
+        # handful have any objects at all. classes_with_objects is the
+        # honest denominator for a per-class table.
+        classes_with_objects = sum(1 for v in label_stats.values() if v > 0)
 
         class_registry_payload = {
             'version': 1,
@@ -615,6 +623,7 @@ class GenericYoloExportService:
             'split_object_counts': object_counts.to_dict(),
             'class_split_counts': _class_split_rows(per_class, id_map, names),
             'class_count': len(names),
+            'classes_with_objects': classes_with_objects,
             **partial,
             'started_at': started_at,
             'finished_at': finished_at,
@@ -649,6 +658,7 @@ class GenericYoloExportService:
             split_counts=counts,
             image_count=len(images),
             class_count=len(names),
+            classes_with_objects=classes_with_objects,
             started_at=started_at,
             finished_at=finished_at,
             current_symlink=str(current_symlink),

@@ -37,8 +37,24 @@ class ReviewTab(BaseModel):
     )
 
 
+class ReviewEmptyState(BaseModel):
+    """C3: underlying-state flags a client uses to word ANY tab's
+    zero-result state without a per-tab round trip -- the same signals
+    ``GET /review/{tab}``'s own ``empty_reason`` is derived from."""
+
+    has_probe_predictions: bool
+    has_item_scores: bool
+
+
 class ReviewTabsResponse(BaseModel):
     tabs: list[ReviewTab]
+    empty_state: ReviewEmptyState
 
 
-__all__ = ['ReviewFilterOption', 'ReviewFilterSpec', 'ReviewTab', 'ReviewTabsResponse']
+__all__ = [
+    'ReviewEmptyState',
+    'ReviewFilterOption',
+    'ReviewFilterSpec',
+    'ReviewTab',
+    'ReviewTabsResponse',
+]

@@ -395,13 +395,15 @@ async def bakeoff_trained_models(limit: int = 100) -> dict[str, Any]:
             continue
         if not _checkpoint_exists(r.checkpoint_path):
             continue
+        run_eval = r.eval or {}
         models.append(
             {
                 'run_id': r.job_id,
                 'name': r.job_id,
                 'model_size': _infer_model_size(r.job_id, getattr(r, 'model_size', None)),
                 'checkpoint_path': r.checkpoint_path,
-                'map50': (r.best_checkpoint_metric or {}).get('map50'),
+                'map50': run_eval.get('map50'),
+                'map50_split': run_eval.get('split'),
                 'finished_at': r.finished_at,
                 'campaign_id': r.campaign_id,
             }

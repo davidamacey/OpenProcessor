@@ -119,13 +119,15 @@ def _text_rules() -> dict[str, Any] | None:
 
 
 def region_profile_summary(profile: Any) -> dict[str, Any]:
-    """``{name, display_name, region_class_name, text_reader}`` for one
+    """``{name, display_name, display_name_singular, region_class_name,
+    text_reader}`` for one
     ``DetectionProfile`` -- served on ``GET /health`` and
     ``GET /regions/vocabulary``. THE signal a client keys on to decide
     whether region-scoped UI/routes are available."""
     return {
         'name': profile.name,
         'display_name': profile.display_name,
+        'display_name_singular': profile.display_name_singular,
         'region_class_name': profile.region_class_name,
         'text_reader': profile.text_reader,
     }

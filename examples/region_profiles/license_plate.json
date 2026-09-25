@@ -50,5 +50,6 @@
   "segmenter_text_prompt": "license plate, registration plate, number plate",
   "secondary_shape_groups": ["sportbikes", "cruisers", "touring-adventurebikes", "trikes-dirtbikes-motards-scooters-bicycles"],
   "region_class_name": "license_plate",
-  "display_name": "Plates"
+  "display_name": "Plates",
+  "display_name_singular": "Plate"
 }

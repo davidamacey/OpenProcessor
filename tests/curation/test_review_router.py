@@ -87,6 +87,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     fake_os = AsyncMock()
     fake_os.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})
+    # C3: a zero-result tab computes empty_reason via a couple of `count`
+    # calls; default to "nothing scored yet" for every field they check.
+    fake_os.count = AsyncMock(return_value={'count': 0})
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     monkeypatch.delenv('OP_SCORES_ENABLED', raising=False)
     monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)

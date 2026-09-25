@@ -27,6 +27,7 @@ import src.routers.curation.events
 import src.routers.curation.export
 import src.routers.curation.export_single_class
 import src.routers.curation.ingest
+import src.routers.curation.ingest_upload
 import src.routers.curation.label_undo
 import src.routers.curation.methods
 import src.routers.curation.models
@@ -34,6 +35,7 @@ import src.routers.curation.pipeline
 import src.routers.curation.pipeline_control
 import src.routers.curation.pipeline_events
 import src.routers.curation.pipeline_health
+import src.routers.curation.probe
 import src.routers.curation.regions
 import src.routers.curation.regions_edit
 import src.routers.curation.regions_fp

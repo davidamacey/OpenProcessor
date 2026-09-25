@@ -120,6 +120,19 @@ class CurationConfig:
     source_path_aliases: Mapping[str, Path] = field(default_factory=dict)
     state_dir: Path = Path('/var/lib/openprocessor')
     crop_cache_dir: Path = Path('/dev/shm/openprocessor_crops')  # nosec B108 — intentional tmpfs cache
+    # BA-1: server-managed, content-addressed root for uploaded image
+    # bytes (POST /ingest/upload). Added to _configured_roots() (see
+    # image_serving.py) so the path guards accept it. Default lives
+    # under state_dir, following the crop_cache_dir precedent for a
+    # server-owned data directory that isn't a mounted source archive.
+    upload_root: Path = Path('/var/lib/openprocessor/uploads')
+
+    # BA-2/BA-5: /ingest/upload + /ingest/batch request limits, served on
+    # GET /ingest/config so a client never has to hardcode them.
+    upload_max_images_per_request: int = 128
+    upload_max_bytes_per_request: int = 512 * 1024 * 1024  # 512 MiB
+    upload_accepted_extensions: tuple[str, ...] = ('.jpg', '.jpeg', '.png')
+    batch_max_items_per_request: int = 512
 
     api_prefix: str = '/curation'
     api_tag: str = 'Curation'
@@ -240,9 +253,27 @@ class CurationConfig:
             ),
             state_dir=_path('STATE_DIR', defaults.state_dir),
             crop_cache_dir=_path('CROP_CACHE_DIR', defaults.crop_cache_dir),
+            upload_root=_path('UPLOAD_ROOT', defaults.upload_root),
+            upload_max_images_per_request=_int(
+                'UPLOAD_MAX_IMAGES_PER_REQUEST', defaults.upload_max_images_per_request
+            ),
+            upload_max_bytes_per_request=_int(
+                'UPLOAD_MAX_BYTES_PER_REQUEST', defaults.upload_max_bytes_per_request
+            ),
+            upload_accepted_extensions=tuple(
+                e.strip().lower()
+                for e in _str(
+                    'UPLOAD_ACCEPTED_EXTENSIONS', ','.join(defaults.upload_accepted_extensions)
+                ).split(',')
+                if e.strip()
+            ),
+            batch_max_items_per_request=_int(
+                'BATCH_MAX_ITEMS_PER_REQUEST', defaults.batch_max_items_per_request
+            ),
             bakeoff_eval_root=_path('BAKEOFF_EVAL_ROOT', defaults.bakeoff_eval_root),
             api_prefix=_str('API_PREFIX', defaults.api_prefix),
             api_tag=_str('API_TAG', defaults.api_tag),
+            mlflow_public_url=_optional_str('MLFLOW_PUBLIC_URL', defaults.mlflow_public_url),
             embedding_dim=_int('EMBEDDING_DIM', defaults.embedding_dim),
             encoder_embedding_dim=_int('ENCODER_EMBEDDING_DIM', defaults.encoder_embedding_dim),
             backbone_embedding_dim=_int('BACKBONE_EMBEDDING_DIM', defaults.backbone_embedding_dim),
@@ -252,7 +283,6 @@ class CurationConfig:
             item_text_min_confidence=_float(
                 'ITEM_TEXT_MIN_CONFIDENCE', defaults.item_text_min_confidence
             ),
-            mlflow_public_url=_optional_str('MLFLOW_PUBLIC_URL', defaults.mlflow_public_url),
         )
 
 

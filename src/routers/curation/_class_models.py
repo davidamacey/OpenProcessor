@@ -29,6 +29,24 @@ class ClassEntry(BaseModel):
     # ok / warn / block from validated_count (dataset_thresholds.py).
     adequacy: Literal['ok', 'warn', 'block'] = 'block'
     added_at: str | None = None
+    # X2: 'region' when this class_name equals the active region profile's
+    # region_class_name (DetectionProfile.region_class_name) -- i.e. this
+    # "class" is really a sub-bbox slot on parent items, not a class item
+    # crops get primarily labeled into. Region classes must not have their
+    # sample_count/validated_count/cluster_size inflated with the region
+    # inventory total -- those fields stay real item counts (usually the
+    # rare mis-labels). Callers (e.g. the /train class picker) that must
+    # only offer item classes should filter on kind == 'item'.
+    kind: Literal['item', 'region'] = 'item'
+    # trainable/trainable_gap: validated minus frozen test-holdout minus
+    # human-excluded crops, and the shortfall against the per-class hard
+    # minimum (dataset_thresholds().block_below), floored at 0. The
+    # frontend used to compute "validated - holdout" client-side (and
+    # didn't account for excluded crops at all); this serves the real
+    # number so /classes, /stats/classes and the export/preflight class
+    # list all agree.
+    trainable: int = 0
+    trainable_gap: int = 0
 
 
 class ClassListResponse(BaseModel):

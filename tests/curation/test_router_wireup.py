@@ -432,6 +432,52 @@ def test_health_reports_down_when_opensearch_unreachable(
     assert body['status'] in ('degraded', 'down')
 
 
+def test_health_mlflow_public_url_is_null_when_unset(
+    app_client: Any,
+    fake_opensearch: AsyncMock,
+    fake_triton_pool: AsyncMock,
+    monkeypatch: Any,
+) -> None:
+    """T1: GET /curation/health serves the configured public MLflow base
+    URL, null when unset -- a client must not guess a port."""
+    import src.config.curation as curation_config_mod
+
+    monkeypatch.setattr(
+        curation_config_mod,
+        '_default_curation_config',
+        curation_config_mod.CurationConfig(mlflow_public_url=None),
+    )
+    fake_triton_pool.health_check = AsyncMock(return_value=True)
+    fake_vlm = MagicMock()
+    fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
+    with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
+        r = app_client.get('/curation/health')
+    assert r.status_code == 200, r.text
+    assert r.json()['mlflow_public_url'] is None
+
+
+def test_health_mlflow_public_url_reflects_config(
+    app_client: Any,
+    fake_opensearch: AsyncMock,
+    fake_triton_pool: AsyncMock,
+    monkeypatch: Any,
+) -> None:
+    import src.config.curation as curation_config_mod
+
+    monkeypatch.setattr(
+        curation_config_mod,
+        '_default_curation_config',
+        curation_config_mod.CurationConfig(mlflow_public_url='http://mlflow.example.com:4731'),
+    )
+    fake_triton_pool.health_check = AsyncMock(return_value=True)
+    fake_vlm = MagicMock()
+    fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
+    with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
+        r = app_client.get('/curation/health')
+    assert r.status_code == 200, r.text
+    assert r.json()['mlflow_public_url'] == 'http://mlflow.example.com:4731'
+
+
 def test_health_region_profile_is_null_without_an_active_profile(
     app_client: Any, fake_opensearch: AsyncMock, fake_triton_pool: AsyncMock
 ) -> None:
@@ -460,6 +506,7 @@ def test_health_region_profile_reflects_the_active_profile(
     assert region_profile == {
         'name': 'license_plate',
         'display_name': 'Plates',
+        'display_name_singular': 'Plate',
         'region_class_name': 'license_plate',
         'text_reader': 'both',
     }
