@@ -6,7 +6,7 @@
  * classes. `Array.prototype.sort` is stable (guaranteed since ES2019), so
  * a tie falls back to the server's own `per_class` order, which is
  * alphabetical — cutting the strip to the first 30 names alphabetically
- * hid `pickup` and `suv` regardless of how many crops they actually have.
+ * hid some high-count classes regardless of how many crops they actually have.
  *
  * `sortClassBalance` adds `count` (total crops with that class_id, served
  * alongside `validated_count`) as a tiebreaker before falling back to

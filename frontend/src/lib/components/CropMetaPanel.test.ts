@@ -8,8 +8,8 @@
  *  - DQ-m7: the modal showed item text and class history but never the
  *    region's status/text/candidates/chain, because it looked up slots via
  *    `forClass(crop.class_id, ...)` — which only ever matches a crop
- *    literally classified "widget_tag", never the vehicle crops (class
- *    "sedan", "suv", ...) a region sub-box actually lives on. Fixed to
+ *    literally classified "widget_tag", never the item crops (class
+ *    "widget_a", "widget_b", ...) a region sub-box actually lives on. Fixed to
  *    iterate every REGISTERED slot and gate on slotIsPresent(), the same
  *    presence check every other slot-generic surface in this app uses.
  *  - DQ-M8: `label_confidence` is the detector/v6 score on every row

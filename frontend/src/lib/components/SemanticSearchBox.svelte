@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * Free-text semantic search over vehicle crops (P2-14 — `GET
+   * Free-text semantic search over crops (P2-14 — `GET
    * {API_PREFIX}/search/text`). Renders alongside `<StrategyBar>` on `/review` and
    * `/clusters`/`/clusters/[id]`, gated by `isSemanticSearchAvailable`
    * (`$lib/strategies`) exactly like every other overlay control in this
@@ -45,7 +45,7 @@
   let {
     filter = {},
     pageSize = 30,
-    placeholder = 'Search crops (e.g. "red sedan", "pickup at night")…',
+    placeholder = 'Search crops (e.g. "blurry closeup", "dark background")…',
     initialQuery = null,
     onResults,
     onClear,

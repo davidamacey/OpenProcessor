@@ -13,7 +13,7 @@
    * path — just with operator visibility. The previous CLIP-prototype
    * labeling stage was removed because a single mean centroid couldn't
    * represent visually diverse classes and produced confident mis-labels
-   * that Gemma was then prevented from reviewing.
+   * that the VLM was then prevented from reviewing.
    *
    * Since 2026-09 the run can optionally be scoped: <AssistScopeBar>
    * picks one class (and, when the backend advertises them, a detection
@@ -503,7 +503,7 @@
       {#if isRunning}
         <!-- Per-stage progress bar. Indeterminate when total=0 (AHC /
              normalize stages don't expose a counter); determinate for the
-             Gemma stage which is the dominant cost. -->
+             VLM stage which is the dominant cost. -->
         <div class="h-2 overflow-hidden rounded bg-zinc-800">
           {#if percent != null}
             <div

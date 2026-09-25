@@ -106,21 +106,21 @@ describe('setClassHotkey — server 400/409/422 detail surfaces verbatim in the 
   it('shows the server ApiError.detail, not a generic "API 409 ..." string', async () => {
     vi.mocked(renameClass).mockRejectedValue(
       new ApiError(409, '/curation/classes/4', {
-        detail: "hotkey 'q' is already bound to 'audi' (class_id=4)",
+        detail: "hotkey 'q' is already bound to 'widget_b' (class_id=4)",
       }),
     );
-    const target = cls({ id: 8, name: 'bmw' });
+    const target = cls({ id: 8, name: 'widget_a' });
     await setClassHotkey(target, 'q');
     const last = toastStore.toasts.at(-1);
     expect(last?.kind).toBe('error');
     expect(last?.text).toBe(
-      "Hotkey set failed: hotkey 'q' is already bound to 'audi' (class_id=4)",
+      "Hotkey set failed: hotkey 'q' is already bound to 'widget_b' (class_id=4)",
     );
   });
 
   it('rejects a server-reserved letter client-side before any API call', async () => {
     classesStore.reservedHotkeys = ['b'];
-    const target = cls({ id: 4, name: 'audi' });
+    const target = cls({ id: 4, name: 'widget_b' });
     await setClassHotkey(target, 'b');
     expect(renameClass).not.toHaveBeenCalled();
     const last = toastStore.toasts.at(-1);

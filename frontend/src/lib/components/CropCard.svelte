@@ -54,7 +54,7 @@
   // letterbox-compensate the region-ring overlay. The thumbnail is
   // served as a *non-square* JPEG (PIL `crop.thumbnail((size, size))`
   // preserves aspect ratio), but we render it inside an aspect-square
-  // container with `object-contain`. That means a 200x600 motorcycle
+  // container with `object-contain`. That means a 200x600 tall, narrow
   // crop sits in a vertical band centered in a square cell — and a
   // ring positioned as a percentage of the *container* lands in the
   // wrong spot. We measure the natural size on load, then place the
@@ -141,7 +141,7 @@
 
   // Badge color + text reflect the ACTUAL source of the validated label.
   // Previously every validated crop showed a green 'human' chip — but
-  // most crops in the ensemble pipeline are auto-validated by Gemma,
+  // most crops in the ensemble pipeline are auto-validated by the VLM,
   // ensemble consensus, or cluster propagation; only true human labels
   // (label_source='human') get the green chip.
   const badge = $derived(

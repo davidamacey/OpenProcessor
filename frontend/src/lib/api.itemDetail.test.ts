@@ -21,7 +21,7 @@ afterEach(() => {
 describe('getCropHistory', () => {
   it('hits GET /crops/{id}/history and passes the entries through verbatim', async () => {
     const entries = [
-      { writer: 'human:label_crop', at: '2026-09-24T00:00:00Z', class_name: 'sedan' },
+      { writer: 'human:label_crop', at: '2026-09-24T00:00:00Z', class_name: 'widget_a' },
       { writer: 'vlm_pipeline', at: '2026-09-23T00:00:00Z', class_name: null },
     ];
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ crop_id: 'c1', entries }));

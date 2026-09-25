@@ -604,7 +604,7 @@
   // "Unlabeled" = cluster_kind !== 'class', i.e. the candidate (IVF/AHC)
   // and unassigned buckets the operator still needs to sort. Keying on
   // cluster_kind (not dominant_class_name) is the fix for "only 16
-  // showed": candidate clusters dominated by gemma_unmatched crops DO
+  // showed": candidate clusters dominated by VLM-unmatched crops DO
   // carry a dominant_class_name, so the old !dominant_class_name test
   // wrongly excluded them.
   // Sort the loaded clusters client-side. The {API_PREFIX}/clusters endpoint only

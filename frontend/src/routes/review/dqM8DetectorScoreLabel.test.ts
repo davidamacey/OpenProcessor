@@ -1,8 +1,8 @@
 /**
  * DQ-M8 (docs/design/data-quality-pass-2026-09-24.md §7 FRONTEND item 5):
- * the review panel's repro was exactly "Current label dumptruck (vlm)"
+ * the review panel's repro was exactly "Current label widget_a (vlm)"
  * directly above "Confidence 94.6%" — `label_confidence` is the
- * vehicle-detector/v6 score on every row (including VLM-sourced ones,
+ * classifier-detector score on every row (including VLM-sourced ones,
  * range 0.25-0.97 per the audit), never the VLM's own confidence, but the
  * row was unconditionally labeled "Confidence". Fixed to relabel
  * "Detector score" whenever the current label's role (served, via

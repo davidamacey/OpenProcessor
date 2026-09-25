@@ -178,11 +178,11 @@
     </dd>
 
     <!-- DQ-M8 (docs/design/data-quality-pass-2026-09-24.md): `label_confidence`
-       (wire `confidence`) is the vehicle-detector/v6 score on EVERY row,
+       (wire `confidence`) is the classifier-detector score on EVERY row,
        including ones the VLM labeled — never the VLM's own confidence.
        Calling it plain "Confidence" next to a VLM-sourced label reads as
        the VLM's certainty (the design doc's repro: "Confidence 94.6%"
-       under "Current label dumptruck (vlm)"). Label it for what it is
+       under "Current label widget_a (vlm)"). Label it for what it is
        whenever the class came from the VLM, and show the VLM's own
        categorical confidence (`vlm_confidence`, served separately) as
        its own row instead of folding it in as a same-row detail. -->

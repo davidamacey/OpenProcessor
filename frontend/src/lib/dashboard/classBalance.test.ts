@@ -15,17 +15,17 @@ describe('sortClassBalance (DQ-m11)', () => {
   });
 
   it('reproduces the DQ-m11 repro: all validated_count=0 breaks ties by total count, not alphabetically', () => {
-    // Alphabetically, 'alfa' and 'bmw' would sort before 'pickup'/'suv' —
-    // the bug hid pickup/suv (557/large counts) behind small alphabetically-
+    // Alphabetically, 'bin' and 'crate' would sort before 'pallet'/'tote' —
+    // the bug hid pallet/tote (557/large counts) behind small alphabetically-
     // earlier classes once every validated_count tied at 0.
     const rows = [
-      row({ class_name: 'alfa', count: 2, validated_count: 0 }),
-      row({ class_name: 'bmw', count: 3, validated_count: 0 }),
-      row({ class_name: 'pickup', count: 557, validated_count: 0 }),
-      row({ class_name: 'suv', count: 400, validated_count: 0 }),
+      row({ class_name: 'crate', count: 2, validated_count: 0 }),
+      row({ class_name: 'bin', count: 3, validated_count: 0 }),
+      row({ class_name: 'pallet', count: 557, validated_count: 0 }),
+      row({ class_name: 'tote', count: 400, validated_count: 0 }),
     ];
     const sorted = sortClassBalance(rows).map((r) => r.class_name);
-    expect(sorted).toEqual(['pickup', 'suv', 'bmw', 'alfa']);
+    expect(sorted).toEqual(['pallet', 'tote', 'bin', 'crate']);
   });
 
   it('falls back to class_name alphabetically only when both validated_count and count tie', () => {

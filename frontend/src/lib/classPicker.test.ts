@@ -35,7 +35,7 @@ function bigPool(): RegistryClass[] {
   }
   out.push(cls({ id: 900, name: 'scion', validated_count: 0 }));
   out.push(cls({ id: 901, name: 'acura', validated_count: 0 }));
-  out.push(cls({ id: 902, name: 'brand_b', validated_count: 0 }));
+  out.push(cls({ id: 902, name: 'widget_c', validated_count: 0 }));
   out.push(
     cls({
       id: 903,
@@ -50,7 +50,7 @@ function bigPool(): RegistryClass[] {
 describe('searchClasses', () => {
   it('ranks a prefix match above a substring-only match', () => {
     const pool = [
-      cls({ id: 1, name: 'subaru_impreza' }), // 'sci' is not a substring
+      cls({ id: 1, name: 'crate_alpha' }), // 'sci' is not a substring
       cls({ id: 2, name: 'sci' }), // exact
       cls({ id: 3, name: 'scion' }), // prefix
       cls({ id: 4, name: 'old_scion_2000' }), // substring only
@@ -97,7 +97,7 @@ describe('searchClasses — widget_tag is a normal assignable class', () => {
   // 2026-09-12: it stays reachable like any other class.
   it('finds widget_tag like any other class', () => {
     const pool: RegistryClass[] = [
-      cls({ id: 8, name: 'bmw', validated_count: 6 }),
+      cls({ id: 8, name: 'widget_a', validated_count: 6 }),
       cls({ id: 80, name: 'widget_tag', validated_count: 72 }),
     ];
     const results = searchClasses(pool, 'widget_tag');

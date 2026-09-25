@@ -4,7 +4,7 @@
  * `flagged_terms` (existing class / generic parent / not an object). The
  * page used to render the flagged ones in a collapsed section with no
  * actions at all, although they held most of the pending crops
- * (motorcycle 156, sports_car 46, car 29, ...), while about 80 one- and
+ * (the top few terms accounted for the bulk of them), while about 80 one- and
  * two-crop terms each got the full Create/Map controls above them.
  *
  * Now every term is one list, biggest first, and every term can be

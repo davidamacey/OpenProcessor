@@ -37,7 +37,7 @@ describe('unloadButtonState', () => {
     ).toBe('hidden');
   });
 
-  it('hides the button for non-Triton models (Gemma)', () => {
+  it('hides the button for non-Triton models (the VLM)', () => {
     expect(
       unloadButtonState({
         kind: 'external',
@@ -48,7 +48,7 @@ describe('unloadButtonState', () => {
   });
 
   it('requires explicit force confirmation for the active/core model — never a bare single confirm', () => {
-    // This is the safety-relevant case: the active vehicle model must
+    // This is the safety-relevant case: the active production model must
     // never be unloadable via the same one-click path as a disposable
     // throwaway promote.
     expect(

@@ -143,7 +143,7 @@
   const classSourceOptions = $derived(classSourcesStore.list);
 
   // Primary-subject scope: 0 = all crops, 1 = largest only, 2 = largest + 2nd.
-  // Maps to the {API_PREFIX}/crops?max_rank= filter (the "biggest vehicle in frame" the
+  // Maps to the {API_PREFIX}/crops?max_rank= filter (the "biggest subject in frame" the
   // business sorts on). null = no rank filter.
   let subjectScope = $state<0 | 1 | 2>(0);
   const maxRank = $derived<number | null>(subjectScope === 0 ? null : subjectScope);
@@ -508,7 +508,7 @@
     { value: 'ignore', label: 'Ignore (generic)' },
     { value: 'blurry', label: 'Blurry' },
     { value: 'unidentifiable', label: 'Unidentifiable' },
-    { value: 'not_a_vehicle', label: 'Not a vehicle' },
+    { value: 'not_the_subject', label: 'Not the subject' },
     { value: 'partial_crop', label: 'Partial crop' },
   ];
 
@@ -1073,7 +1073,7 @@
     {/if}
   </div>
 
-  <!-- Primary-subject controls: focus on the largest vehicle(s) in frame
+  <!-- Primary-subject controls: focus on the largest subject(s) in frame
        (what the business sorts on) and hide too-blurry crops. View-only —
        no data is deleted; the slider commits on release to avoid a reload
        per pixel. -->

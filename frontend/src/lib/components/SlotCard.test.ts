@@ -36,7 +36,7 @@ function fakeRegionItem(overrides: Partial<RegionBrowseItem> = {}): RegionBrowse
     region_text_source: 'ocr',
     region_text_confidence: 0.8,
     class_id: 3,
-    class_name: 'sedan',
+    class_name: 'widget_a',
     cluster_id: null,
     updated_at: '',
     ...overrides,

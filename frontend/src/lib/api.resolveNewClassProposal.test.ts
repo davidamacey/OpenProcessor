@@ -29,9 +29,9 @@ describe('resolveNewClassProposal', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         class_id: 12,
-        class_name: 'sidecar',
+        class_name: 'widget_f',
         created: false,
-        label: 'sidecar',
+        label: 'widget_f',
         matched: 40,
         matched_ids: [],
         updated: 39,
@@ -42,12 +42,12 @@ describe('resolveNewClassProposal', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await resolveNewClassProposal({ label: 'sidecar', class_id: 12 });
+    const res = await resolveNewClassProposal({ label: 'widget_f', class_id: 12 });
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${API_PREFIX}/review/new_class_proposals/resolve`);
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body)).toEqual({ label: 'sidecar', class_id: 12 });
+    expect(JSON.parse(init.body)).toEqual({ label: 'widget_f', class_id: 12 });
     expect(res.matched).toBe(40);
     expect(res.updated).toBe(39);
     expect(res.updated_ids).toEqual(['a', 'b']);
@@ -59,9 +59,9 @@ describe('resolveNewClassProposal', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         class_id: null,
-        class_name: 'sidecar',
+        class_name: 'widget_f',
         created: false,
-        label: 'sidecar',
+        label: 'widget_f',
         matched: 40,
         matched_ids: ['a', 'b'],
         updated: 0,
@@ -73,8 +73,8 @@ describe('resolveNewClassProposal', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const body = {
-      label: 'sidecar',
-      create: { class_name: 'sidecar', group: 'motorcycle' },
+      label: 'widget_f',
+      create: { class_name: 'widget_f', group: 'widget_c' },
     };
     const res = await resolveNewClassProposal(body, { dryRun: true });
 
@@ -102,9 +102,11 @@ describe('resolveNewClassProposal', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(resolveNewClassProposal({ label: 'sidecar' })).rejects.toThrow(ApiError);
+    await expect(resolveNewClassProposal({ label: 'widget_f' })).rejects.toThrow(
+      ApiError,
+    );
     try {
-      await resolveNewClassProposal({ label: 'sidecar' });
+      await resolveNewClassProposal({ label: 'widget_f' });
       expect.unreachable('should have thrown');
     } catch (e) {
       expect((e as ApiError).status).toBe(422);
@@ -115,18 +117,20 @@ describe('resolveNewClassProposal', () => {
   it('propagates a 409 (duplicate create.class_name) with the server detail', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ detail: "class 'sidecar' already exists" }, 409));
+      .mockResolvedValue(
+        jsonResponse({ detail: "class 'widget_f' already exists" }, 409),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     try {
       await resolveNewClassProposal({
-        label: 'sidecar',
-        create: { class_name: 'sidecar' },
+        label: 'widget_f',
+        create: { class_name: 'widget_f' },
       });
       expect.unreachable('should have thrown');
     } catch (e) {
       expect((e as ApiError).status).toBe(409);
-      expect((e as ApiError).detail).toBe("class 'sidecar' already exists");
+      expect((e as ApiError).detail).toBe("class 'widget_f' already exists");
     }
   });
 
@@ -137,7 +141,7 @@ describe('resolveNewClassProposal', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     try {
-      await resolveNewClassProposal({ label: 'sidecar', class_id: 999 });
+      await resolveNewClassProposal({ label: 'widget_f', class_id: 999 });
       expect.unreachable('should have thrown');
     } catch (e) {
       expect((e as ApiError).status).toBe(400);

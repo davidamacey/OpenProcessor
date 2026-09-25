@@ -113,8 +113,8 @@
   // backend serves non-square JPEGs (aspect-preserved), so the
   // object-contain'd image inside an aspect-square container is
   // letterboxed. Pointer math + ring placement must compensate or the
-  // bbox lands in the wrong spot for non-square crops (motorcycles,
-  // wide trucks). dispRect describes the actual image rect inside the
+  // bbox lands in the wrong spot for non-square crops (tall-and-narrow,
+  // wide-and-short). dispRect describes the actual image rect inside the
   // unit-square canvas: {offX, offY, w, h} all in [0, 1].
   let imgNaturalW = $state<number>(0);
   let imgNaturalH = $state<number>(0);

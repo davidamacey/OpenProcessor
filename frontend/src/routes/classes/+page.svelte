@@ -477,8 +477,8 @@
   // ('generic_parent'), junk ('non_object') and already-registered
   // ('existing_class') proposed terms. No "create class" action is
   // offered for any of these (that was the original DQ-M11 bug — a
-  // one-click create over 89 "motorcycle" crops would have made a
-  // super-class). `existing_class` still gets a one-click map action,
+  // one-click create over 89 crops proposing a generic-parent term would
+  // have made a super-class). `existing_class` still gets a one-click map action,
   // using the server's own `class_id`, not an operator-picked select.
   function flagReason(term: NewClassProposalTerm): string {
     if (term.flag === 'generic_parent') return 'generic parent';
@@ -844,7 +844,7 @@
                 {/if}
               </td>
               <!-- L1 (visual audit 2026-09-24): this showed sample_count
-                   (bmw 271) under a header promising the cluster page's
+                   (271 for one live class) under a header promising the cluster page's
                    "in cluster" number (270) — it now shows cluster_size. -->
               <td
                 class="px-2 py-1.5 lg:px-3 text-right font-mono text-zinc-400"

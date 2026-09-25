@@ -259,6 +259,44 @@ ingest-ui-and-acceptance-plan-2026-09-24.md` land; pieces 1-10 were
 
 ### Fixed
 
+- **Domain-neutral wording sweep (audit §8 — vehicle/car-brand copy and
+  identifiers, plus our own hardcoded Gemma/vLLM/Triton-as-generic-noun
+  copy).** Removed our own hardcoded car/vehicle-domain nouns from
+  product code — identifiers (`train/+page.svelte`'s
+  `vehiclesExportState`/`vehiclesDir` → `multiClassExportState`/
+  `multiClassExportDir`; the `ExcludeReason` union's `not_a_vehicle` →
+  `not_the_subject`), user-visible copy (`/models`' "Triton models...
+  external vLLM service" intro, `SemanticSearchBox`'s "red sedan"/"pickup
+  at night" placeholder, a review-panel proposal-chip tooltip, the
+  unload-confirm dialog's "active vehicle model" text, `TrainForm`'s "the
+  vehicle class registry" note), and ~25 code comments across `api.ts`,
+  `CropCard.svelte`, `BboxCanvas.svelte`, `SlotBboxEditor.svelte`,
+  `AutoLabelPanel.svelte`, `DatasetStats.svelte`, `builtinDetectors.ts`,
+  `ProvenanceChip.svelte`, `reviewTabs.ts`, `classBalance.ts`,
+  `proposalRows.ts`, `classes/+page.svelte`, `dashboard/+page.svelte`,
+  `review/+page.svelte` and `clusters/[id]/+page.svelte`. Served model/
+  dataset ids (`vehicle_classifier_v6_trt`, `lpr_nanov11_640`,
+  `gemma-4-e4b`, `sam3`) are untouched — approved content per owner
+  direction. Test fixtures across ~20 files that hardcoded car-brand or
+  car-body-style class names as arbitrary example data now use the
+  neutral `widget_*` naming already used elsewhere in the suite.
+  `src/lib/domainNeutral.scan.test.ts` gained a `VEHICLE_DOMAIN_PATTERN`
+  ratchet (word-bounded car/vehicle nouns) and a one-file allow-list entry
+  for `test/fixtures/trainRun.ts` (a real served fixture, not domain
+  fiction). See `docs/design/domain-neutral-audit-2026-09-24.md` §8 for
+  the full scope decision (what stayed vs. what moved, and why `Gemma`/
+  `SAM3` are deliberately not scanned).
+- The crop detail modal (`CropDetailModal.svelte`) switched to its
+  two-column layout at the `md` (768px) breakpoint with the Source column
+  `flex-1`, so at 800px the column stretched to the taller meta column's
+  height around a narrow, small image — a lot of empty black space. The
+  split now starts at `lg` (1024px, stays stacked/single-column at
+  800px), and the source area caps its own height with `max-h` below
+  `lg` instead of `flex-1`; 1600px is unchanged.
+  `/settings`' "last changed" timestamp rendered the raw ISO value —
+  now formatted via the existing `formatTimestamp` helper, raw value kept
+  in a `title` (visual-audit S1, timestamp half; the copy half was
+  already fixed by an earlier pass — see that finding's updated status).
 - `/ingest` showed internal backend-ask ids to operators ("(BA-2
   `batch.source_roots`)", "Drained (BA-3)"). The copy is plain now, and
   `uiCopy.scan.test.ts` fails on any `BA-<n>` id in rendered `.svelte`

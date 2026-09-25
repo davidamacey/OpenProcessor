@@ -61,8 +61,8 @@ const EXPORT_STATUS_SUCCESS = {
   images_with_unlabeled_items: 9,
   images_dropped_not_fully_labeled: 30,
   class_split_counts: [
-    { class_id: 1, export_id: 0, class_name: 'bmw', train: 200, val: 40, test: 10 },
-    { class_id: 2, export_id: 1, class_name: 'audi', train: 0, val: 40, test: 10 },
+    { class_id: 1, export_id: 0, class_name: 'widget_a', train: 200, val: 40, test: 10 },
+    { class_id: 2, export_id: 1, class_name: 'widget_b', train: 0, val: 40, test: 10 },
   ],
 };
 
@@ -99,7 +99,7 @@ function makeFetchMock(
     classes: [
       {
         class_id: 1,
-        class_name: 'bmw',
+        class_name: 'widget_a',
         count: 300,
         validated_count: 200,
         adequacy: 'ok',
@@ -207,14 +207,14 @@ describe('/export — served split counts (OpenProcessor 6c77deb)', () => {
     (summary?.closest('details') as HTMLDetailsElement).open = true;
     flushSync();
 
-    expect(target.textContent).toContain('audi');
+    expect(target.textContent).toContain('widget_b');
     const audiRow = Array.from(target.querySelectorAll('tr')).find((tr) =>
-      tr.textContent?.includes('audi'),
+      tr.textContent?.includes('widget_b'),
     );
     expect(audiRow?.className).toContain('bg-red-500/10');
 
     const bmwRow = Array.from(target.querySelectorAll('tr')).find((tr) =>
-      tr.textContent?.includes('bmw'),
+      tr.textContent?.includes('widget_a'),
     );
     expect(bmwRow?.className ?? '').not.toContain('bg-red-500/10');
   });

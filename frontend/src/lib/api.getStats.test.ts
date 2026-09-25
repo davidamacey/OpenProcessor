@@ -27,7 +27,9 @@ describe('getStats', () => {
       }
       return Promise.resolve(
         ok({
-          classes: [{ class_id: 1, class_name: 'sedan', count: 10, validated_count: 4 }],
+          classes: [
+            { class_id: 1, class_name: 'widget_a', count: 10, validated_count: 4 },
+          ],
         }),
       );
     });
@@ -36,7 +38,7 @@ describe('getStats', () => {
     const result = await getStats();
 
     expect(result.per_class).toEqual([
-      { class_id: 1, class_name: 'sedan', count: 10, validated_count: 4 },
+      { class_id: 1, class_name: 'widget_a', count: 10, validated_count: 4 },
     ]);
     expect(result.total_crops).toBe(0);
     expect(result.dataset_error).toMatch(/503/);
@@ -95,7 +97,7 @@ describe('getStats', () => {
           classes: [
             {
               class_id: 8,
-              class_name: 'bmw',
+              class_name: 'widget_a',
               count: 8,
               validated_count: 8,
               adequacy: 'block',

@@ -2,7 +2,7 @@
   /**
    * Primary-subject scope tri-state, shared by /clusters, /clusters/[id]
    * and /review. Maps to the API's `max_rank` filter — "the biggest
-   * vehicle(s) in frame", which is what the business sorts on.
+   * subject(s) in frame", which is what the business sorts on.
    *
    * Option labels differ per page (the review tabs default to top-2
    * server-side, so 0 reads as "Top 2" there), hence the `labels` prop.

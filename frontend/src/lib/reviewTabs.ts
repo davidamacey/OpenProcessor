@@ -23,7 +23,7 @@ export interface ReviewTabDef {
  *
  * A review of all 9 tabs against the real 1,000-crop index found three
  * were too big to be curated queues — Mismatches (1,000 · 97.5% the size
- * of "All"), Gemma Low-Conf (1,000 · 11% of the dataset), and Primary ·
+ * of "All"), VLM Low-Conf (1,000 · 11% of the dataset), and Primary ·
  * Low-Conf (1,000 · 92% of the ENTIRE dataset). Those three collapsed
  * into quick-filter preset chips shown on the `all` tab instead (see
  * REVIEW_PRESETS below) — same backend cohort query as before

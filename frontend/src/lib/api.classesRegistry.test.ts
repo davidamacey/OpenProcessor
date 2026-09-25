@@ -28,7 +28,7 @@ describe('getClasses', () => {
           classes: [
             {
               class_id: 8,
-              class_name: 'bmw',
+              class_name: 'widget_a',
               group: 'single',
               sample_count: 8,
               validated_count: 8,
@@ -54,7 +54,7 @@ describe('getClasses', () => {
 
     expect(res.classes[0]).toMatchObject({
       id: 8,
-      name: 'bmw',
+      name: 'widget_a',
       hotkey_letter: 'b',
       adequacy: 'block',
     });

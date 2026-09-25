@@ -1,5 +1,5 @@
 /**
- * Regression test for the cobalt->subaru drag-drop "flicker back and stay"
+ * Regression test for the one-class-to-another drag-drop "flicker back and stay"
  * bug (2026-09-11 live report): dragging crops out of a cluster onto
  * another class in the sidebar (or via the M move-picker / discard / ignore
  * paths) removed them from `cropPager.items` optimistically, but nothing

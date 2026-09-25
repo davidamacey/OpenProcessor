@@ -329,7 +329,7 @@ describe('getReviewQueue', () => {
             crop_id: 'c1',
             image_path: '/x/y.jpg',
             bbox_norm: [0, 0, 1, 1],
-            reason: "VLM said 'coupe', no registry match",
+            reason: "VLM said 'widget_e', no registry match",
           },
           {
             crop_id: 'c2',
@@ -343,7 +343,7 @@ describe('getReviewQueue', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const res = await getReviewQueue('mismatches', 1, 30, {});
-    expect(res.items[0]?.reason).toBe("VLM said 'coupe', no registry match");
+    expect(res.items[0]?.reason).toBe("VLM said 'widget_e', no registry match");
     expect(res.items[1]?.reason).toBe("VLM said 'wagon-ish', low confidence");
     expect(res.items[0]?.reason).not.toBe(res.items[1]?.reason);
   });
@@ -364,7 +364,7 @@ describe('getReviewQueue', () => {
             bbox_norm: [0, 0, 1, 1],
             class_confidence: 0.7,
             class_confidence_source: 'vlm',
-            vlm_raw_class: 'coupe',
+            vlm_raw_class: 'widget_e',
             vlm_class_empty_reason: null,
           },
         ],
@@ -375,7 +375,7 @@ describe('getReviewQueue', () => {
     const res = await getReviewQueue('mismatches', 1, 30, {});
     expect(res.items[0]?.class_confidence).toBe(0.7);
     expect(res.items[0]?.class_confidence_source).toBe('vlm');
-    expect(res.items[0]?.vlm_raw_class).toBe('coupe');
+    expect(res.items[0]?.vlm_raw_class).toBe('widget_e');
   });
 
   it('leaves mistakenness fields null when the server omits them (un-backfilled pool)', async () => {
@@ -409,8 +409,8 @@ describe('getReviewQueue', () => {
             image_path: '/x/y.jpg',
             bbox_norm: [0, 0, 1, 1],
             proposed_class_id: 12,
-            proposed_class_name: 'suv',
-            probe_pred_class: 'sedan',
+            proposed_class_name: 'widget_b',
+            probe_pred_class: 'widget_a',
             probe_pred_class_id: 7,
             probe_pred_entropy: 0.42,
             needs_new_class: true,
@@ -424,8 +424,8 @@ describe('getReviewQueue', () => {
     const res = await getReviewQueue('all', 1, 30, {});
     const item = res.items[0];
     expect(item?.proposed_class_id).toBe(12);
-    expect(item?.proposed_class_name).toBe('suv');
-    expect(item?.probe_pred_class).toBe('sedan');
+    expect(item?.proposed_class_name).toBe('widget_b');
+    expect(item?.probe_pred_class).toBe('widget_a');
     expect(item?.probe_pred_class_id).toBe(7);
     expect(item?.probe_pred_entropy).toBe(0.42);
     expect(item?.needs_new_class).toBe(true);
@@ -621,14 +621,14 @@ describe('getNewClassProposalsSummary', () => {
         top_terms: [],
         flagged_terms: [
           {
-            label: 'motorcycle',
+            label: 'widget_c',
             count: 89,
             sample_crop_ids: ['a'],
             flag: 'generic_parent',
             class_id: null,
           },
           {
-            label: 'suv',
+            label: 'widget_b',
             count: 4,
             sample_crop_ids: ['b'],
             flag: 'existing_class',
@@ -643,7 +643,7 @@ describe('getNewClassProposalsSummary', () => {
           },
         ],
         term_rules: {
-          generic_terms: ['car', 'motorcycle'],
+          generic_terms: ['container', 'widget_c'],
           non_object_terms: ['abstract_blur'],
           registry_groups_are_generic: true,
           existing_classes_flagged: true,
@@ -658,7 +658,7 @@ describe('getNewClassProposalsSummary', () => {
     expect(res.without_term).toBe(12);
     expect(res.flagged_terms).toHaveLength(3);
     expect(res.flagged_terms[0]).toEqual({
-      label: 'motorcycle',
+      label: 'widget_c',
       count: 89,
       sample_crop_ids: ['a'],
       flag: 'generic_parent',
@@ -666,7 +666,7 @@ describe('getNewClassProposalsSummary', () => {
     });
     expect(res.flagged_terms[1].flag).toBe('existing_class');
     expect(res.flagged_terms[1].class_id).toBe(67);
-    expect(res.term_rules?.generic_terms).toEqual(['car', 'motorcycle']);
+    expect(res.term_rules?.generic_terms).toEqual(['container', 'widget_c']);
   });
 });
 
@@ -694,11 +694,11 @@ describe('searchCrops', () => {
       .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await searchCrops('red sedan', 1, 30);
+    await searchCrops('red widget_a', 1, 30);
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).toContain(`${API_PREFIX}/search/text`);
-    expect(url).toContain('q=red+sedan');
+    expect(url).toContain('q=red+widget_a');
     expect(url).toContain('page=1');
     expect(url).toContain('page_size=30');
   });
@@ -734,7 +734,7 @@ describe('searchCrops', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await searchCrops('red sedan', 1, 30);
+    const res = await searchCrops('red widget_a', 1, 30);
     expect(res.items[0]?.similarity_score).toBe(0.91);
     expect(res.items[0]?.id).toBe('c1');
   });
@@ -757,7 +757,7 @@ describe('searchCrops', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await searchCrops('red sedan', 1, 30);
+    const res = await searchCrops('red widget_a', 1, 30);
     expect(res.items[0]?.similarity_score).toBe(0.73);
   });
 
@@ -780,7 +780,7 @@ describe('searchCrops', () => {
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
-    const res1 = await searchCrops('red sedan', 1, 30);
+    const res1 = await searchCrops('red widget_a', 1, 30);
     expect(res1.items[0]?.similarity_score).toBe(0.91);
 
     const fetchMock2 = vi.fn().mockResolvedValue(
@@ -800,7 +800,7 @@ describe('searchCrops', () => {
       }),
     );
     vi.stubGlobal('fetch', fetchMock2);
-    const res2 = await searchCrops('red sedan', 1, 30);
+    const res2 = await searchCrops('red widget_a', 1, 30);
     expect(res2.items[0]?.similarity_score).toBe(0.73);
   });
 
@@ -817,7 +817,7 @@ describe('searchCrops', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await searchCrops('red sedan', 1, 30);
+    const res = await searchCrops('red widget_a', 1, 30);
     expect(res.items[0]?.similarity_score).toBe(0.5);
   });
 
@@ -832,7 +832,7 @@ describe('searchCrops', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await searchCrops('red sedan', 1, 30);
+    const res = await searchCrops('red widget_a', 1, 30);
     expect(res.items[0]?.similarity_score).toBe(0);
   });
 
@@ -1025,7 +1025,7 @@ describe('getVizProjection', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         points: [
-          { crop_id: 'a', x: 1.5, y: -2.3, cluster_id: 17, class_name: 'sedan' },
+          { crop_id: 'a', x: 1.5, y: -2.3, cluster_id: 17, class_name: 'widget_a' },
           { crop_id: 'b', x: 0, y: 0, cluster_id: null, class_name: null },
           // Malformed entries — must be dropped, not crash the whole parse.
           { crop_id: '', x: 1, y: 1 },
@@ -1050,7 +1050,7 @@ describe('getVizProjection', () => {
         x: 1.5,
         y: -2.3,
         cluster_id: 17,
-        class_name: 'sedan',
+        class_name: 'widget_a',
         class_source: null,
       },
       {
@@ -1824,7 +1824,7 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
             validated_count: 30,
             labelled_count: 37,
             dominant_class_id: 67,
-            dominant_class_name: 'suv',
+            dominant_class_name: 'widget_b',
             dominant_count: 37,
             purity: 1.0,
             purity_tier: 'pure',
@@ -1962,7 +1962,7 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
               validated_count: 30,
               labelled_count: 37,
               dominant_class_id: 67,
-              dominant_class_name: 'suv',
+              dominant_class_name: 'widget_b',
               dominant_count: 37,
               purity: 1.0,
               purity_tier: 'pure',
@@ -2091,7 +2091,7 @@ describe('getClusters purity_n/purity_basis/label_purity/labelled_share (DQ-M2)'
             validated_count: 0,
             labelled_count: 10,
             dominant_class_id: 67,
-            dominant_class_name: 'suv',
+            dominant_class_name: 'widget_b',
             dominant_count: 10,
             purity: 1.0,
             purity_tier: 'pure',

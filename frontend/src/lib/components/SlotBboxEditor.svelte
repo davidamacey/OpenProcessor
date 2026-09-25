@@ -80,7 +80,7 @@
   // backend serves aspect-preserved JPEGs, so object-contain inside the
   // aspect-square canvas letterboxes non-square crops. Pointer math and
   // the ring must compensate or the box lands in the wrong spot (it
-  // rendered too low for wide vehicle crops). baseDisp is the actual
+  // rendered too low for wide item crops). baseDisp is the actual
   // image rect inside the unit-square canvas: {offX, offY, w, h} ∈ [0,1].
   // Mirrors BboxCanvas.svelte's baseDisp.
   let imgNaturalW = $state<number>(0);
@@ -129,7 +129,7 @@
   // sanity — via the same projectFromParent used at save time.
   const sourceFrameSummary = $derived.by<string>(() => {
     if (boxLocal == null) return `no ${activeSlot?.label.singular ?? 'box'}`;
-    if (!crop.bbox_norm) return '(missing parent vehicle box)';
+    if (!crop.bbox_norm) return '(missing parent item box)';
     if (!activeSlot) return '';
     const parentXyxy = bboxNormToXYXY(crop.bbox_norm);
     const frame = activeSlot.capabilities.subBox?.storedFrame ?? 'source';

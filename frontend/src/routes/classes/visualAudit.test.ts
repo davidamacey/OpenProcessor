@@ -1,9 +1,9 @@
 /**
  * Mount tests for the /classes fixes from docs/design/visual-audit-2026-09-24.md:
  *
- *  - L1: "Total (in cluster)" showed `sample_count` (bmw 271) though its
+ *  - L1: "Total (in cluster)" showed `sample_count` (widget_a 271) though its
  *    header promised the cluster page's "in cluster" number (270).
- *  - L2: flagged terms (motorcycle 156, ...) sat in a collapsed section
+ *  - L2: flagged terms (widget_c 156, ...) sat in a collapsed section
  *    with no action at all, below ~80 tiny create-able terms.
  *  - L5: Validated includes frozen test crops with no hint.
  */
@@ -18,7 +18,7 @@ const CLASSES = {
   classes: [
     {
       class_id: 5,
-      class_name: 'bmw',
+      class_name: 'widget_a',
       group: 'cars',
       sample_count: 271,
       validated_count: 35,
@@ -30,7 +30,7 @@ const CLASSES = {
     },
     {
       class_id: 6,
-      class_name: 'suv',
+      class_name: 'widget_b',
       group: 'cars',
       sample_count: 12,
       validated_count: 0,
@@ -47,17 +47,29 @@ const SUMMARY = {
   total_pending: 170,
   without_term: 0,
   top_terms: [
-    { label: 'classic_car', count: 3, sample_crop_ids: [], flag: null, class_id: null },
+    {
+      label: 'classic_widget',
+      count: 3,
+      sample_crop_ids: [],
+      flag: null,
+      class_id: null,
+    },
   ],
   flagged_terms: [
     {
-      label: 'motorcycle',
+      label: 'widget_c',
       count: 156,
       sample_crop_ids: [],
       flag: 'generic_parent',
       class_id: null,
     },
-    { label: 'suvs', count: 9, sample_crop_ids: [], flag: 'existing_class', class_id: 6 },
+    {
+      label: 'widget_bs',
+      count: 9,
+      sample_crop_ids: [],
+      flag: 'existing_class',
+      class_id: 6,
+    },
   ],
   term_rules: null,
 };
@@ -123,12 +135,12 @@ describe('L1: Total (in cluster) is cluster_size', () => {
 describe('L5: Validated says how many are frozen test crops', () => {
   it('adds "incl. 5 test" for a class with held-out crops, nothing otherwise', async () => {
     const el = await render();
-    const bmw = el.querySelector('[data-testid="class-row-5"]');
-    expect(bmw?.querySelector('[data-testid="validated-test-suffix"]')?.textContent).toBe(
-      'incl. 5 test',
-    );
-    const suv = el.querySelector('[data-testid="class-row-6"]');
-    expect(suv?.querySelector('[data-testid="validated-test-suffix"]')).toBeNull();
+    const widget_a = el.querySelector('[data-testid="class-row-5"]');
+    expect(
+      widget_a?.querySelector('[data-testid="validated-test-suffix"]')?.textContent,
+    ).toBe('incl. 5 test');
+    const widget_b = el.querySelector('[data-testid="class-row-6"]');
+    expect(widget_b?.querySelector('[data-testid="validated-test-suffix"]')).toBeNull();
   });
 });
 
@@ -138,15 +150,15 @@ describe('L2: every proposal term is actionable, biggest first', () => {
     const labels = [...el.querySelectorAll('[data-testid="proposal-row"]')].map((r) =>
       r.querySelector('.text-sm')?.textContent?.trim(),
     );
-    expect(labels).toEqual(['motorcycle', 'suvs', 'classic_car']);
+    expect(labels).toEqual(['widget_c', 'widget_bs', 'classic_widget']);
   });
 
   it('a generic-parent term can be mapped to an existing class but not created', async () => {
     const el = await render();
     const row = [...el.querySelectorAll('[data-testid="proposal-row"]')].find((r) =>
-      r.textContent?.includes('motorcycle'),
+      r.textContent?.includes('widget_c'),
     );
-    expect(row?.querySelector('select[aria-label^="Map motorcycle"]')).not.toBeNull();
+    expect(row?.querySelector('select[aria-label^="Map widget_c"]')).not.toBeNull();
     expect(row?.textContent).not.toContain('Create class & assign');
     expect(row?.textContent).toContain('generic parent');
   });
@@ -154,18 +166,18 @@ describe('L2: every proposal term is actionable, biggest first', () => {
   it('an existing-class term keeps its one-click map to the served class', async () => {
     const el = await render();
     const row = [...el.querySelectorAll('[data-testid="proposal-row"]')].find((r) =>
-      r.textContent?.includes('suvs'),
+      r.textContent?.includes('widget_bs'),
     );
-    expect(row?.textContent).toContain('Map to suv');
+    expect(row?.textContent).toContain('Map to widget_b');
     expect(row?.querySelector('select')).toBeNull();
   });
 
   it('proposalRows only lets an un-flagged term be created', () => {
     const rows = proposalRows(SUMMARY as NewClassProposalsSummary);
     expect(rows.map((r) => [r.term.label, r.canCreate])).toEqual([
-      ['motorcycle', false],
-      ['suvs', false],
-      ['classic_car', true],
+      ['widget_c', false],
+      ['widget_bs', false],
+      ['classic_widget', true],
     ]);
   });
 });

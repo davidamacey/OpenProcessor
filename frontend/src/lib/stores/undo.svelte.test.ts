@@ -94,7 +94,7 @@ describe('undoStore.undoLast — single-crop entry routes to the single undo end
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
-        jsonResponse(200, { crop_id: 'c1', class_id: 3, class_name: 'sedan' }),
+        jsonResponse(200, { crop_id: 'c1', class_id: 3, class_name: 'widget_a' }),
       );
     vi.stubGlobal('fetch', fetchMock);
     undoStore.recordWrites(['c1']);
@@ -172,9 +172,9 @@ describe('undoStore.undoLast — multi-crop entry routes to the batch undo endpo
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
         items: [
-          { crop_id: 'c1', class_id: 1, class_name: 'sedan' },
-          { crop_id: 'c2', class_id: 1, class_name: 'sedan' },
-          { crop_id: 'c3', class_id: 1, class_name: 'sedan' },
+          { crop_id: 'c1', class_id: 1, class_name: 'widget_a' },
+          { crop_id: 'c2', class_id: 1, class_name: 'widget_a' },
+          { crop_id: 'c3', class_id: 1, class_name: 'widget_a' },
         ],
         undone: 3,
         nothing_to_undo: [],
@@ -206,7 +206,7 @@ describe('undoStore.undoLast — multi-crop entry routes to the batch undo endpo
       'fetch',
       vi.fn().mockResolvedValue(
         jsonResponse(200, {
-          items: [{ crop_id: 'c1', class_id: 1, class_name: 'sedan' }],
+          items: [{ crop_id: 'c1', class_id: 1, class_name: 'widget_a' }],
           undone: 1,
           nothing_to_undo: ['c2'],
           conflicts: ['c3'],
@@ -354,7 +354,7 @@ describe("undoStore.undoLast — kind: 'vlm_dismiss' routes to vlm_dismiss/undo"
       jsonResponse(200, {
         crop_id: 'c1',
         vlm_proposed_class_id: 5,
-        vlm_proposed_class_name: 'sedan',
+        vlm_proposed_class_name: 'widget_a',
       }),
     );
     vi.stubGlobal('fetch', fetchMock);

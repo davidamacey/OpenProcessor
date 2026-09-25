@@ -88,8 +88,8 @@
    * Unload + delete a model (follow-up gap 2,
    * docs/design/audit-remediation-plan-2026-09.md Appendix D item 3,
    * 2026-09-11). `unloadButtonState` decides what's shown at all — this
-   * only handles the click. Force-required models (active vehicle model
-   * / other core pipeline models) get a second, stronger confirmation on
+   * only handles the click. Force-required models (the active production
+   * model / other core pipeline models) get a second, stronger confirmation on
    * top of the normal one before ever sending `force=true`; the server
    * is the real guard (region-protected models 403 unconditionally) but the double
    * confirm here matches CLAUDE.md's "bulk ops show a confirmation
@@ -129,8 +129,8 @@
     <div class="min-w-0 flex-1 basis-80">
       <h1 class="text-xl font-semibold tracking-tight">Models</h1>
       <p class="mt-1 text-sm text-zinc-400">
-        Inference services that drive the labeling pipeline. Triton models live on the GPU
-        box; the VLM is an external vLLM service. Auto-refreshes every 15 seconds.
+        Inference services that drive the labeling pipeline. Locally-hosted models run on
+        the GPU box; the VLM is an external service. Auto-refreshes every 15 seconds.
       </p>
     </div>
     <div

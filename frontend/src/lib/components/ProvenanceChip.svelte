@@ -38,7 +38,7 @@
   interface Props {
     /** The detector that produced the stored bbox. Maps to a color family. */
     detector?: string | null;
-    /** Optional outcome suffix — 'hit' / 'miss' / 'gemma_ok' / 'gemma_reject' / etc. */
+    /** Optional outcome suffix — 'hit' / 'miss' / 'vlm_ok' / 'vlm_reject' / etc. */
     tag?: string | null;
     /** Convenience for chain entries like 'tag_detector_v1:miss'. Parses to detector+tag. */
     raw?: string | null;

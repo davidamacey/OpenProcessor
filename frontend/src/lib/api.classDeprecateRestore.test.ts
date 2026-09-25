@@ -29,7 +29,9 @@ afterEach(() => {
 
 describe('deprecateClass', () => {
   it('POSTs to /classes/{id}/deprecate', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(ok({ class_id: 8, class_name: 'bmw' }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(ok({ class_id: 8, class_name: 'widget_a' }));
     vi.stubGlobal('fetch', fetchMock);
 
     await deprecateClass(8);
@@ -42,7 +44,9 @@ describe('deprecateClass', () => {
 
 describe('restoreClass', () => {
   it('POSTs to /classes/{id}/restore', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(ok({ class_id: 8, class_name: 'bmw' }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(ok({ class_id: 8, class_name: 'widget_a' }));
     vi.stubGlobal('fetch', fetchMock);
 
     await restoreClass(8);
@@ -57,7 +61,7 @@ describe('classStillReferencedDetail', () => {
   const body409 = {
     detail: {
       error: 'class_still_referenced',
-      message: 'class "bmw" is still referenced by 12 item(s)',
+      message: 'class "widget_a" is still referenced by 12 item(s)',
       class_id: 8,
       item_count: 12,
       confirmed_label_count: 3,
@@ -68,7 +72,7 @@ describe('classStillReferencedDetail', () => {
     const e = new ApiError(409, `${API_PREFIX}/classes/8/deprecate`, body409);
     expect(classStillReferencedDetail(e)).toEqual({
       error: 'class_still_referenced',
-      message: 'class "bmw" is still referenced by 12 item(s)',
+      message: 'class "widget_a" is still referenced by 12 item(s)',
       class_id: 8,
       item_count: 12,
       confirmed_label_count: 3,
@@ -80,12 +84,12 @@ describe('classStillReferencedDetail', () => {
   });
 
   it("ignores restore's plain-string 409 detail — never confused for the structured shape", () => {
-    const plainStringBody = { detail: 'a live class already uses the name "bmw"' };
+    const plainStringBody = { detail: 'a live class already uses the name "widget_a"' };
     const e = new ApiError(409, `${API_PREFIX}/classes/8/restore`, plainStringBody);
     expect(classStillReferencedDetail(e)).toBeNull();
     // The plain string still reaches ApiError.detail verbatim, which is
     // what the restore call site shows in its toast.
-    expect(e.detail).toBe('a live class already uses the name "bmw"');
+    expect(e.detail).toBe('a live class already uses the name "widget_a"');
   });
 
   it('ignores a non-ApiError and a non-object detail', () => {

@@ -93,7 +93,7 @@ describe('/classes Proposals section', () => {
  * super-category/junk/already-registered terms (`flagged_terms`) instead
  * of offering them through the same one-click "Create class & assign"
  * path as `top_terms` — the original DQ-M11 bug was exactly a one-click
- * create over 89 "motorcycle" crops making a super-class.
+ * create over 89 "widget_c" crops making a super-class.
  */
 describe('/classes Proposals section — flagged_terms (DQ-M11)', () => {
   // Rendering (one list sorted by count, no Create for a flagged term, the

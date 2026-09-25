@@ -155,7 +155,7 @@
   // its own dataset export needs no change here.
   const MULTI_CLASS = 'yolo';
   let datasetKind = $state<string>(MULTI_CLASS);
-  let vehiclesDir = $state<string>('');
+  let multiClassExportDir = $state<string>('');
   // Full GET {API_PREFIX}/export/status response for the current
   // multi-class export — `class_split_counts`/`split_counts`/
   // `image_count`/`class_count` drive the dataset card's "current
@@ -163,7 +163,7 @@
   // total (which double-counted holdout crops). `null`/missing fields
   // on a pre-6c77deb backend fall back to the labelled global-pool
   // numbers — see the card markup.
-  let vehiclesExportState = $state<ExportStatus | null>(null);
+  let multiClassExportState = $state<ExportStatus | null>(null);
   let singleClassExportDir = $state<string>('');
   // All materialized dataset versions on disk (both kinds), newest first.
   let datasets = $state<ExportDataset[]>([]);
@@ -176,8 +176,8 @@
   // when nothing is picked or the pick is that same directory.
   const showsCurrentExport = $derived(
     !selectedExportDir ||
-      selectedExportDir === vehiclesExportState?.export_dir ||
-      selectedExportDir === vehiclesExportState?.path,
+      selectedExportDir === multiClassExportState?.export_dir ||
+      selectedExportDir === multiClassExportState?.path,
   );
   // Multi-class rows are `kind: 'yolo'`; a slot's rows are `single_class`
   // rows written under its own `profile_name`.
@@ -193,7 +193,7 @@
     selectedExportDir ||
       (datasetKind === datasetExportSpec?.datasetKind
         ? singleClassExportDir
-        : vehiclesDir),
+        : multiClassExportDir),
   );
   let datasetMessage = $state<string | null>(null);
   let refreshing = $state<boolean>(false);
@@ -219,10 +219,10 @@
     datasetMessage = null;
     try {
       const [e, ds] = await Promise.all([exportStatus(), listDatasets()]);
-      vehiclesDir = e.export_dir ?? '';
-      vehiclesExportState = e;
+      multiClassExportDir = e.export_dir ?? '';
+      multiClassExportState = e;
       datasets = ds.datasets ?? [];
-      if (!vehiclesDir) {
+      if (!multiClassExportDir) {
         datasetMessage =
           'No frozen export available — run /export first to produce a dataset.';
       }
@@ -791,8 +791,8 @@
 
   // m-train-cohorts (2026-09-24 interactive pass): with ~85 classes × up
   // to 8 cohorts, most classes' chips are all 0 — a wall of zeros
-  // ("subaru_brz", "dumptruck", "class_e", …) dominating the section above
-  // the actually-useful Past runs table. Collapsing logic lives in
+  // (long-tail class names, each with a handful of examples) dominating
+  // the section above the actually-useful Past runs table. Collapsing logic lives in
   // `$lib/trainCohortGroups.ts` (pure, unit-tested) — a class only
   // collapses once every one of its cohorts SERVED a count of exactly 0.
   const cohortGroupSplit = $derived(splitCohortGroups(cohortGroups, cohortCounts));
@@ -1038,7 +1038,7 @@
         <p class="mt-2 text-xs text-zinc-400">
           {datasetExportSpec.blurb}
         </p>
-      {:else if showsCurrentExport && vehiclesExportState?.class_split_counts}
+      {:else if showsCurrentExport && multiClassExportState?.class_split_counts}
         <!-- Current export's own contents (OpenProcessor 6c77deb's
              GET {API_PREFIX}/export/status) — only valid for the current
              export, so this branch renders for the `current` symlink or an
@@ -1048,52 +1048,52 @@
              bigger — number than what this specific export actually
              contains. -->
         <div class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
-          {#if vehiclesExportState.class_count != null}
+          {#if multiClassExportState.class_count != null}
             <span class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5">
-              {#if vehiclesExportState.classes_with_objects != null}
-                {vehiclesExportState.classes_with_objects} of {vehiclesExportState.class_count}
+              {#if multiClassExportState.classes_with_objects != null}
+                {multiClassExportState.classes_with_objects} of {multiClassExportState.class_count}
                 classes with objects
               {:else}
-                {vehiclesExportState.class_count} classes
+                {multiClassExportState.class_count} classes
               {/if}
             </span>
           {/if}
-          {#if vehiclesExportState.image_count != null || vehiclesExportState.object_count != null}
+          {#if multiClassExportState.image_count != null || multiClassExportState.object_count != null}
             <span
               class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono"
             >
-              {formatCount(vehiclesExportState.object_count)} objects in {formatCount(
-                vehiclesExportState.image_count,
+              {formatCount(multiClassExportState.object_count)} objects in {formatCount(
+                multiClassExportState.image_count,
               )} images
-              {#if vehiclesExportState.group_key}
-                <span class="text-zinc-500">(by {vehiclesExportState.group_key})</span>
+              {#if multiClassExportState.group_key}
+                <span class="text-zinc-500">(by {multiClassExportState.group_key})</span>
               {/if}
             </span>
           {/if}
-          {#if vehiclesExportState.split_counts}
+          {#if multiClassExportState.split_counts}
             <span
               class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono"
               title="Images per split"
             >
-              images: train {vehiclesExportState.split_counts.train.toLocaleString()} · val
-              {vehiclesExportState.split_counts.val.toLocaleString()}
-              · test {vehiclesExportState.split_counts.test.toLocaleString()}
+              images: train {multiClassExportState.split_counts.train.toLocaleString()} · val
+              {multiClassExportState.split_counts.val.toLocaleString()}
+              · test {multiClassExportState.split_counts.test.toLocaleString()}
             </span>
           {/if}
-          {#if vehiclesExportState.split_object_counts}
+          {#if multiClassExportState.split_object_counts}
             <span
               class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono"
               title="Objects (label lines) per split"
             >
-              objects: train {vehiclesExportState.split_object_counts.train.toLocaleString()}
-              · val {vehiclesExportState.split_object_counts.val.toLocaleString()}
-              · test {vehiclesExportState.split_object_counts.test.toLocaleString()}
+              objects: train {multiClassExportState.split_object_counts.train.toLocaleString()}
+              · val {multiClassExportState.split_object_counts.val.toLocaleString()}
+              · test {multiClassExportState.split_object_counts.test.toLocaleString()}
             </span>
           {/if}
         </div>
         <details class="mt-2 text-xs text-zinc-400">
           <summary class="cursor-pointer hover:text-zinc-200">
-            per-class object counts ({vehiclesExportState.class_split_counts.length})
+            per-class object counts ({multiClassExportState.class_split_counts.length})
           </summary>
           <div class="mt-1 max-h-48 overflow-auto rounded border border-zinc-800">
             <table class="w-full text-xs">
@@ -1108,7 +1108,7 @@
                 </tr>
               </thead>
               <tbody>
-                {#each vehiclesExportState.class_split_counts as c (c.class_id)}
+                {#each multiClassExportState.class_split_counts as c (c.class_id)}
                   {@const missing = c.train === 0 || c.val === 0}
                   <tr
                     class="border-b border-zinc-900 {missing

@@ -3,7 +3,7 @@
  * the class-balance strip used a plain `sort(validated_count desc)`,
  * which degenerated to the server's alphabetical per_class order whenever
  * every class tied at 0 validated (the live state throughout the audit),
- * hiding `pickup`/`suv` behind small early-alphabet classes once sliced
+ * hiding `widget_d`/`widget_b` behind small early-alphabet classes once sliced
  * to 30. See src/lib/dashboard/classBalance.test.ts for
  * sortClassBalance()'s full behavior coverage; this pins that the page
  * actually uses it.

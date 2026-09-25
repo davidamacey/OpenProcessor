@@ -12,13 +12,13 @@ describe('isAssignableClass', () => {
   });
 
   it('accepts an ordinary active class', () => {
-    expect(isAssignableClass({ name: 'bmw', deprecated: false })).toBe(true);
+    expect(isAssignableClass({ name: 'widget_a', deprecated: false })).toBe(true);
   });
 });
 
 describe('isPickerHiddenClass', () => {
   it('hides nothing today — kept as a named chokepoint for a future per-class toggle', () => {
     expect(isPickerHiddenClass('widget_tag')).toBe(false);
-    expect(isPickerHiddenClass('bmw')).toBe(false);
+    expect(isPickerHiddenClass('widget_a')).toBe(false);
   });
 });

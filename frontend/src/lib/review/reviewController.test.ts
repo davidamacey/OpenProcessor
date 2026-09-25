@@ -82,7 +82,7 @@ afterEach(() => {
 describe('assign', () => {
   it('removes the item, advances past it, and records the write on success', async () => {
     vi.mocked(putCropLabel).mockResolvedValue({} as never);
-    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'sedan' } as never);
+    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
     const successSpy = vi
       .spyOn(toastStore, 'success')
       .mockImplementation(() => 'toast-id');
@@ -97,7 +97,7 @@ describe('assign', () => {
     expect(queue.total).toBe(1);
     expect(handledIds.has('a')).toBe(true);
     expect(putCropLabel).toHaveBeenCalledWith('a', 3);
-    expect(successSpy).toHaveBeenCalledWith('Labeled "sedan".');
+    expect(successSpy).toHaveBeenCalledWith('Labeled "widget_a".');
     expect(recordWritesSpy).toHaveBeenCalledWith(['a']);
   });
 
@@ -366,7 +366,7 @@ describe('undoLast', () => {
 
   it('m2 (2026-09-24 interactive pass): restores the item’s own served reason after assign+undo, never an invented "restored by undo" string', async () => {
     vi.mocked(putCropLabel).mockResolvedValue({} as never);
-    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'sedan' } as never);
+    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
     vi.spyOn(toastStore, 'success').mockImplementation(() => 'toast-id');
     const a = { ...item('a'), reason: 'mistakenness_score high' };
     const b = item('b');

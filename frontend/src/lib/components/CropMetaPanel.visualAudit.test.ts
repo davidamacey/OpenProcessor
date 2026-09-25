@@ -94,15 +94,15 @@ describe('R6: no blank class, no raw ids', () => {
 
 describe('R11: embedded Details drops rows the review panel already shows', () => {
   it('standalone (the /clusters modal) keeps Class, Label source, score and VLM confidence', () => {
-    const el = render({ crop: crop({ class_name: 'sedan', class_id: 3 }) });
-    expect(rowValue(el, 'Class')).toMatch(/^sedan/);
+    const el = render({ crop: crop({ class_name: 'widget_a', class_id: 3 }) });
+    expect(rowValue(el, 'Class')).toMatch(/^widget_a/);
     expect(rowValue(el, 'Label source')).not.toBeNull();
     expect(rowValue(el, 'VLM confidence')).toBe('medium');
   });
 
   it('embedded (/review) hides them, and keeps the rest (Cluster)', () => {
     const el = render({
-      crop: crop({ class_name: 'sedan', class_id: 3 }),
+      crop: crop({ class_name: 'widget_a', class_id: 3 }),
       embedded: true,
     });
     expect(rowValue(el, 'Class')).toBeNull();

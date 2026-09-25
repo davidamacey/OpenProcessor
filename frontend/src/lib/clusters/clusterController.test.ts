@@ -136,7 +136,7 @@ afterEach(() => {
 describe('assignClassToSelected', () => {
   it('labels the selection, records undo off putCropLabel, and clears the selection on success (single crop)', async () => {
     vi.mocked(putCropLabel).mockResolvedValue({} as never);
-    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'sedan' } as never);
+    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
     const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const a = crop('a');
@@ -161,7 +161,7 @@ describe('assignClassToSelected', () => {
       updated_ids: ['a', 'b'],
       conflicts: [],
     });
-    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'sedan' } as never);
+    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
     const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const a = crop('a');
@@ -181,17 +181,17 @@ describe('assignClassToSelected', () => {
 
   it('rolls back every optimistically-labeled crop when the write fails', async () => {
     vi.mocked(bulkLabel).mockRejectedValue(new Error('network down'));
-    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'sedan' } as never);
+    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
     const errorSpy = vi.spyOn(toastStore, 'error').mockImplementation(() => 'x');
-    const a = crop('a', { class_id: 1, class_name: 'coupe' });
-    const b = crop('b', { class_id: 1, class_name: 'coupe' });
+    const a = crop('a', { class_id: 1, class_name: 'widget_e' });
+    const b = crop('b', { class_id: 1, class_name: 'widget_e' });
     const { cropPager, sel, controller } = setup([a, b]);
     sel.ids = new Set(['a', 'b']);
 
     await controller.assignClassToSelected(3);
 
     expect(cropPager.items.map((c) => c.class_id)).toEqual([1, 1]);
-    expect(cropPager.items.map((c) => c.class_name)).toEqual(['coupe', 'coupe']);
+    expect(cropPager.items.map((c) => c.class_name)).toEqual(['widget_e', 'widget_e']);
     expect(errorSpy).toHaveBeenCalledWith('Label failed: network down');
   });
 
@@ -224,7 +224,7 @@ describe('assignClassToSelected', () => {
   // a successful write must re-fetch it rather than leave it stale.
   it('refreshes classesStore after a successful label write so the header count is current', async () => {
     vi.mocked(putCropLabel).mockResolvedValue({} as never);
-    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'sedan' } as never);
+    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
     const refreshSpy = vi.spyOn(classesStore, 'refresh').mockResolvedValue();
     const a = crop('a');
     const { sel, controller } = setup([a]);
@@ -237,7 +237,7 @@ describe('assignClassToSelected', () => {
 
   it('does NOT refresh classesStore when the label write fails', async () => {
     vi.mocked(putCropLabel).mockRejectedValue(new Error('boom'));
-    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'sedan' } as never);
+    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
     vi.spyOn(toastStore, 'error').mockImplementation(() => 'x');
     const refreshSpy = vi.spyOn(classesStore, 'refresh').mockResolvedValue();
     const a = crop('a');
@@ -480,7 +480,10 @@ describe('acceptVlmForCrop', () => {
   it("applies the suggestion in place, without removing the crop, when it matches this cluster's own class", async () => {
     vi.mocked(putCropLabel).mockResolvedValue({} as never);
     const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
-    const a = crop('a', { vlm_suggested_class_id: 42, vlm_suggested_class_name: 'suv' });
+    const a = crop('a', {
+      vlm_suggested_class_id: 42,
+      vlm_suggested_class_name: 'widget_b',
+    });
     const { cropPager, controller } = setup([a]);
 
     await controller.acceptVlmForCrop(a);
@@ -489,7 +492,7 @@ describe('acceptVlmForCrop', () => {
     expect(cropPager.items[0]!.class_id).toBe(42);
     // ?? null (not && null): a truthy name must survive, not collapse to
     // null.
-    expect(cropPager.items[0]!.class_name).toBe('suv');
+    expect(cropPager.items[0]!.class_name).toBe('widget_b');
     expect(putCropLabel).toHaveBeenCalledWith('a', 42);
     expect(recordWritesSpy).toHaveBeenCalledWith(['a']);
   });
@@ -511,7 +514,10 @@ describe('acceptVlmForCrop', () => {
   it('reverts the optimistic label in place when the write fails, for a same-cluster accept', async () => {
     vi.mocked(putCropLabel).mockRejectedValue(new Error('nope'));
     const errorSpy = vi.spyOn(toastStore, 'error').mockImplementation(() => 'x');
-    const a = crop('a', { vlm_suggested_class_id: 42, vlm_suggested_class_name: 'suv' });
+    const a = crop('a', {
+      vlm_suggested_class_id: 42,
+      vlm_suggested_class_name: 'widget_b',
+    });
     const { cropPager, controller } = setup([a]);
 
     await controller.acceptVlmForCrop(a);
@@ -673,7 +679,10 @@ describe('acceptAllVlmOnPage', () => {
       updated_ids: ids,
       conflicts: [],
     }));
-    const a = crop('a', { vlm_suggested_class_id: 42, vlm_suggested_class_name: 'suv' });
+    const a = crop('a', {
+      vlm_suggested_class_id: 42,
+      vlm_suggested_class_name: 'widget_b',
+    });
     const b = crop('b', { vlm_suggested_class_id: 9, vlm_suggested_class_name: 'van' });
     const { cropPager, exclusionGuard, controller, setVisible } = setup([a, b]);
     setVisible([a, b]);

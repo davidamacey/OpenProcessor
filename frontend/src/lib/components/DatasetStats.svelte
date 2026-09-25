@@ -53,7 +53,7 @@
   // Drain-rate samples for ETA. We keep a small ring buffer of
   // (unfinished, t) samples so the displayed rate is averaged over the
   // last ~minute instead of a single tick — kills the jitter when
-  // sam-worker bursts on a chunk of Gemma-visible-filter results.
+  // a worker bursts on a chunk of VLM-visible-filter results.
   type Sample = { unfinished: number; t: number };
   let samples = $state<Sample[]>([]);
   const SAMPLE_WINDOW_MS = 60_000;

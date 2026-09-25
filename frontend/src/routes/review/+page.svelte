@@ -91,7 +91,7 @@
 
   // Unified review by default — one continuous queue of every crop that
   // needs a human, sorted most-uncertain first. Down to 5 top-level tabs
-  // (2026-09 consolidation, see $lib/reviewTabs.ts) — Mismatches / Gemma
+  // (2026-09 consolidation, see $lib/reviewTabs.ts) — Mismatches / VLM
   // Low-Conf / Primary·Low-Conf collapsed into preset chips on the All
   // tab (below); Outliers retired entirely (see reviewTabs.ts doc
   // comment). The remaining 4 narrower tabs stay available for
@@ -1359,7 +1359,7 @@
 
   /** [x1,y1,x2,y2] of `box` (a parent-crop-normalized BBoxNorm), for the
    *  `frame: 'parent'` write path — no projection through the parent
-   *  vehicle bbox needed; the server does that itself. */
+   *  item bbox needed; the server does that itself. */
   function _parentFrameTuple(box: BBoxNorm): [number, number, number, number] {
     return [
       box.cx - box.w / 2,
@@ -1933,7 +1933,7 @@
 
     {#if tab === 'all'}
       <!-- Quick-filter preset chips (2026-09 tab consolidation) — Mismatches
-           / Gemma Low-Conf / Primary·Low-Conf collapsed from top-level tabs
+           / VLM Low-Conf / Primary·Low-Conf collapsed from top-level tabs
            into these, since live counts showed each was too big (11-97% of
            the dataset) to be a curated queue. Each chip reuses that former
            tab's exact backend query unchanged (see $lib/reviewTabs.ts);
@@ -2195,7 +2195,7 @@
 
             <!-- m1 (2026-09-24 interactive pass): a name-only proposal
                  (proposed_class_id absent — proposed_class_name a
-                 non-registry term like "motorcycle") used to render in
+                 non-registry term) used to render in
                  the same confirmable
                  yellow style as a real proposal, though Enter opens the
                  picker instead of confirming it — the row now says so. -->
@@ -2247,10 +2247,10 @@
             {/if}
 
             <!-- DQ-M8 (docs/design/data-quality-pass-2026-09-24.md):
-                 `label_confidence` (wire `confidence`) is the vehicle-
-                 detector/v6 score on every row, including VLM-sourced
+                 `label_confidence` (wire `confidence`) is the classifier-
+                 detector score on every row, including VLM-sourced
                  ones — the repro was exactly this panel, "Current label
-                 dumptruck (vlm)" directly above "Confidence 94.6%", which
+                 widget_a (vlm)" directly above "Confidence 94.6%", which
                  reads as the VLM's own certainty. Label it for what it is
                  whenever the current label came from the VLM (served
                  role, not a hardcoded string match), and show the VLM's
@@ -2301,7 +2301,7 @@
               <dd>
                 <span
                   class="rounded border border-cyan-500/40 bg-cyan-500/15 px-1.5 py-0.5 text-[11px] text-cyan-200"
-                  title="COCO YOLO11 detected a vehicle here that v6 missed. Coarse class — pick the make below (bicycle/motorcycle/boat may be near one-click)."
+                  title="A general-purpose detector found a subject here that the primary classifier missed. Coarse class — pick the specific class below (a close variant may be near one-click)."
                 >
                   {current.proposal_name}
                 </span>

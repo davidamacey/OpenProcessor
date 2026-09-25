@@ -15,7 +15,7 @@ import type { MutedTagConfig } from '../detectorRegistry';
 
 export const builtinDetectorRegistry: MutedTagConfig = {
   // `accepted_unverified` (2026-09-24 logic-moves W8): a chain step the
-  // backend accepted without a human/Gemma verification pass — muted,
+  // backend accepted without a human/VLM verification pass — muted,
   // same as a miss/reject, so it reads as "lower confidence" rather than
   // a confirmed step.
   mutedTagPattern: /miss|reject|skipped|degenerate|unparseable|accepted_unverified/,

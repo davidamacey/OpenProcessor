@@ -383,7 +383,7 @@
   <!-- Class subset — m23 (2026-09-24 interactive pass): irrelevant for a
        single-class export (`include_classes`/`single_cls` are already
        forced above regardless of any selection here), so it showed "All
-       84 classes · N validated crops" for the vehicle registry even
+       84 classes · N validated crops" for the item registry even
        while training a single-class dataset. Replaced with a
        plain note instead of an interactive picker that has no effect. -->
   {#if singleClassExport}
@@ -391,7 +391,7 @@
       class="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-400"
     >
       Single-class dataset — trains the one class the export was built for, not a
-      selection from the vehicle class registry.
+      selection from the class registry.
     </p>
   {:else}
     <ClassSubsetPicker

@@ -58,7 +58,7 @@ describe('/classes + AddClassModal: no client-side class-name slug regex', () =>
   });
 });
 
-describe('/classes: reserved-hotkey conflict banner (live bmw→b, 2026-09-24)', () => {
+describe('/classes: reserved-hotkey conflict banner (live widget_a→b, 2026-09-24)', () => {
   it('derives reservedConflicts from reservedHotkeyLetters() + bound classes', () => {
     expect(classesSrc).toMatch(/reservedHotkeyLetters\(\)/);
     expect(classesSrc).toMatch(/reservedConflicts/);

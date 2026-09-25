@@ -64,12 +64,12 @@ describe('TrainForm — preflight panel renders new check ids generically', () =
             name: 'export_class_split_coverage',
             severity: 'block',
             message:
-              '1 class(es) this run trains on are below the per-class minimum of 8 train / 2 val instance(s): audi (class 2): train=0, val=0.',
+              '1 class(es) this run trains on are below the per-class minimum of 8 train / 2 val instance(s): widget_b (class 2): train=0, val=0.',
             detail: {
               classes: [
                 {
                   class_id: 2,
-                  class_name: 'audi',
+                  class_name: 'widget_b',
                   train: 0,
                   val: 0,
                   test: 10,
@@ -87,10 +87,10 @@ describe('TrainForm — preflight panel renders new check ids generically', () =
     flushSync();
 
     expect(target.textContent).toContain('export_class_split_coverage');
-    expect(target.textContent).toContain('audi (class 2): train=0, val=0');
+    expect(target.textContent).toContain('widget_b (class 2): train=0, val=0');
     const detailsEl = target.querySelector('details');
     expect(detailsEl).toBeTruthy();
-    expect(detailsEl?.textContent).toContain('audi');
+    expect(detailsEl?.textContent).toContain('widget_b');
     expect(detailsEl?.textContent).toContain('min_train_per_class');
   });
 

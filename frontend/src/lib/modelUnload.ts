@@ -29,7 +29,7 @@ export type UnloadButtonState = 'hidden' | 'normal' | 'force-required';
  *   detector).
  * - `force-required`: rendered, but the action requires an explicit
  *   second, stronger confirmation and is sent with `force=true` — the
- *   active item model or another core pipeline model currently
+ *   active production model or another core pipeline model currently
  *   serving live traffic.
  * - `normal`: rendered, single confirmation, `force=false`.
  *
@@ -66,7 +66,7 @@ export function unloadConfirmMessage(
 ): string {
   if (model.requires_force_to_unload) {
     return (
-      `${model.name} is currently serving live traffic (the active vehicle model, or another ` +
+      `${model.name} is currently serving live traffic (the active production model, or another ` +
       'core pipeline model). Unloading it removes it from Triton and permanently deletes its ' +
       'files on disk — inference for this model will be DOWN until a replacement is loaded. ' +
       'This cannot be undone. Continue?'

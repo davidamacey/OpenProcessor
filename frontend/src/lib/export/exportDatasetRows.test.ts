@@ -24,7 +24,7 @@ function perClass(
   return [
     {
       class_id: 8,
-      class_name: 'bmw',
+      class_name: 'widget_a',
       count: 8,
       validated_count: 8,
       ...over,
@@ -102,7 +102,7 @@ describe('buildExportRows — W4: server-served aug_target/aug_gap/deficient, no
       min_test_per_class: 5,
       by_class: [{ key: 44, doc_count: 5, deficient: false }],
     };
-    // class_id 8 (bmw) has never been validated/frozen, so it has no
+    // class_id 8 (widget_a) has never been validated/frozen, so it has no
     // bucket in `by_class` at all — it must not inherit class 44's
     // min_test_per_class comparison.
     const rows = buildExportRows(perClass({ class_id: 8 }), holdout);
@@ -152,7 +152,7 @@ describe('hasCurrentMulticlassExport (m15)', () => {
 function row(over: Partial<ExportRow>): ExportRow {
   return {
     class_id: 1,
-    class_name: 'bmw',
+    class_name: 'widget_a',
     total: 10,
     validated: 5,
     aug_target: 0,

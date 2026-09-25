@@ -34,7 +34,7 @@ describe('createSemanticSearchBox', () => {
     const search = vi.fn().mockResolvedValue({ items: [crop('a')], total: 1 });
     const box = createSemanticSearchBox({ search, debounceMs: 300 });
 
-    box.oninput('red sedan');
+    box.oninput('red widget_a');
     expect(search).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(299);
@@ -42,7 +42,7 @@ describe('createSemanticSearchBox', () => {
 
     await vi.advanceTimersByTimeAsync(1);
     expect(search).toHaveBeenCalledTimes(1);
-    expect(search).toHaveBeenCalledWith('red sedan', expect.any(AbortSignal));
+    expect(search).toHaveBeenCalledWith('red widget_a', expect.any(AbortSignal));
   });
 
   it('submit() (Enter) fires immediately, bypassing the debounce', async () => {
@@ -73,7 +73,7 @@ describe('createSemanticSearchBox', () => {
     expect(search).toHaveBeenCalledTimes(1);
     expect(firstSignal?.aborted).toBe(false);
 
-    box.oninput('red sedan');
+    box.oninput('red widget_a');
     await vi.advanceTimersByTimeAsync(300);
     expect(search).toHaveBeenCalledTimes(2);
     expect(firstSignal?.aborted).toBe(true);
@@ -88,7 +88,7 @@ describe('createSemanticSearchBox', () => {
     box.submit(); // blank query — no-op
     expect(search).not.toHaveBeenCalled();
 
-    box.query = 'sedan';
+    box.query = 'widget_a';
     box.submit();
     await Promise.resolve();
     await Promise.resolve();
@@ -102,7 +102,7 @@ describe('createSemanticSearchBox', () => {
     const onClear = vi.fn();
     const box = createSemanticSearchBox({ search, debounceMs: 300, onClear });
 
-    box.query = 'sedan';
+    box.query = 'widget_a';
     box.submit();
     await Promise.resolve();
     await Promise.resolve();
@@ -128,7 +128,7 @@ describe('createSemanticSearchBox', () => {
     const box = createSemanticSearchBox({ search, debounceMs: 300, onClear });
 
     // Simulate having been active already.
-    box.oninput('sedan');
+    box.oninput('widget_a');
     box.oninput('');
     expect(search).not.toHaveBeenCalled();
     expect(onClear).not.toHaveBeenCalled(); // wasn't active yet, nothing to clear
@@ -138,7 +138,7 @@ describe('createSemanticSearchBox', () => {
     const search = vi.fn().mockRejectedValue(new Error('backend unavailable'));
     const box = createSemanticSearchBox({ search, debounceMs: 300 });
 
-    box.query = 'sedan';
+    box.query = 'widget_a';
     box.submit();
     await Promise.resolve();
     await Promise.resolve();
@@ -180,7 +180,7 @@ describe('createSemanticSearchBox', () => {
 
     box.oninput('red');
     await vi.advanceTimersByTimeAsync(300);
-    box.oninput('red sedan');
+    box.oninput('red widget_a');
     await vi.advanceTimersByTimeAsync(300);
     await Promise.resolve();
     await Promise.resolve();

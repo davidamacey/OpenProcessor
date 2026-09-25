@@ -576,7 +576,7 @@ export interface Cluster {
   // Optional explicit thumbnail URLs (one per representative_crop_ids
   // entry, same order). Used by the synthetic region card so its
   // tiles show region close-ups (API_PREFIX-relative /crops/{id}/region_thumbnail) rather
-  // than the default vehicle-crop thumbnail. Regular clusters leave
+  // than the default item-crop thumbnail. Regular clusters leave
   // this undefined; the grid then falls back to getThumbUrl().
   representative_thumb_urls?: string[];
   has_subclusters: boolean;
@@ -1048,7 +1048,7 @@ export interface ModelInfo {
    */
   /** Region-detection pipeline model (backend `_is_region_protected_model`) — never unloadable through the UI, no override. */
   is_region_protected?: boolean;
-  /** ACTIVE_VEHICLE_MODEL or another core pipeline model — unload requires force=true. */
+  /** The active production model or another core pipeline model — unload requires force=true. */
   requires_force_to_unload?: boolean;
   /** Served directly (2026-09-25 follow-up to #36 item 5) — `false` for
    *  every external-service entry (the segmenter, the VLM) and any model

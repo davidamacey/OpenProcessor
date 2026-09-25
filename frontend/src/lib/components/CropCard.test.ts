@@ -25,7 +25,7 @@ function baseCrop(overrides: Partial<Crop> = {}): Crop {
     source_image_path: '/img.jpg',
     bbox_norm: { cx: 0.5, cy: 0.5, w: 0.4, h: 0.4 },
     class_id: 3,
-    class_name: 'sedan',
+    class_name: 'widget_a',
     class_source: null,
     label_source: 'model_x',
     label_validated: false,
@@ -130,7 +130,7 @@ describe('CropCard — source badge', () => {
         class_name: null,
         label_source: 'vlm',
         class_confidence: 0.7,
-        vlm_raw_class: 'car',
+        vlm_raw_class: 'widget_g',
       } as Partial<Crop>),
     });
     expect(chip(el)).toBeNull();
@@ -138,7 +138,7 @@ describe('CropCard — source badge', () => {
     expect(el.querySelector('[data-testid="class-name"]')?.textContent?.trim()).toBe(
       'Unlabeled',
     );
-    expect(el.textContent).toContain('VLM said: car');
+    expect(el.textContent).toContain('VLM said: widget_g');
     expect(el.textContent).not.toContain('70%');
   });
 });
@@ -184,15 +184,15 @@ describe('CropCard — dq-queues cutover: class_confidence / vlm_raw_class', () 
 
   it('shows "VLM said: <raw>" when vlm_raw_class differs from the applied class', () => {
     const el = renderCard({
-      crop: baseCrop({ class_name: 'sedan', vlm_raw_class: 'coupe' }),
+      crop: baseCrop({ class_name: 'widget_a', vlm_raw_class: 'widget_e' }),
     });
-    expect(el.textContent).toContain('VLM said: coupe');
+    expect(el.textContent).toContain('VLM said: widget_e');
   });
 
   it('shows the VLM empty reason instead of "VLM said" when set', () => {
     const el = renderCard({
       crop: baseCrop({
-        class_name: 'sedan',
+        class_name: 'widget_a',
         vlm_raw_class: null,
         vlm_class_empty_reason: 'no_match',
       }),

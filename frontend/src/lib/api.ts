@@ -2693,7 +2693,7 @@ export async function locateInReviewQueue(
  *  term worth one-click creating (the only kind `top_terms` holds now),
  *  or the served reason it isn't: `existing_class` (map to `class_id`
  *  instead of creating), `generic_parent` (a super-category, e.g.
- *  "motorcycle"), or `non_object` (junk, e.g. "abstract_blur"). */
+ *  a super-category term), or `non_object` (junk, e.g. "abstract_blur"). */
 export interface NewClassProposalTerm {
   label: string;
   count: number;
@@ -3083,7 +3083,7 @@ export async function cancelScores(
 }
 
 /**
- * Free-text semantic search over vehicle crops (P2-14). Backend:
+ * Free-text semantic search over crops (P2-14). Backend:
  * `GET {API_PREFIX}/search/text`, gated behind the `semantic_search` overlay in
  * `{API_PREFIX}/methods` (see `isSemanticSearchAvailable` in `./strategies`) — a
  * caller must check that gate before rendering a UI that calls this.
@@ -3448,7 +3448,7 @@ export type ExcludeReason =
   | 'ignore'
   | 'blurry'
   | 'unidentifiable'
-  | 'not_a_vehicle'
+  | 'not_the_subject'
   | 'partial_crop';
 
 export function excludeCrops(
@@ -3540,7 +3540,7 @@ export function getManifestUrl(): string {
 /**
  * URL for a crop thumbnail. Defaults to 160px — small enough to load
  * fast for fast grid scanning of thousands of crops, large enough that
- * vehicle details (color, body shape, headlight style) remain readable.
+ * subject details (color, shape, fine texture) remain readable.
  * Server-side aspect-correct rendering preserves the bbox proportions.
  *
  * Pass a larger ``size`` (256-512) for click-to-inspect / focused review
@@ -3867,7 +3867,7 @@ export function cancelProbe(signal?: AbortSignal): Promise<ProbeStatusResponse> 
 // -- Auto-label (recluster) job ------------------------------------------
 // Wraps POST {API_PREFIX}/pipeline/auto_label/{start,status,cancel}. The pipeline
 // re-runs prototype assignment → cluster_id normalize → AHC residuals → auto-
-// promote → Gemma sweep, fixing prototype drift and stale cluster_id on
+// promote → VLM sweep, fixing prototype drift and stale cluster_id on
 // labeled crops. Hours at HDD scale; the panel polls status while it runs.
 
 export interface AutoLabelStartParams {

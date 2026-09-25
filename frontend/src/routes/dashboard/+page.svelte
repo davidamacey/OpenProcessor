@@ -9,7 +9,7 @@
    * dropped — see below for where each piece landed:
    *
    *   1. `AutoLabelPanel` / `DatasetStats` — unchanged, already here.
-   *   2. Quick actions (Run Gemma / Export / Snapshot) — brought over
+   *   2. Quick actions (Run VLM Labeling / Export / Snapshot) — brought over
    *      verbatim, same handlers.
    *   3. Class balance bar chart — brought over verbatim; this is a
    *      genuinely different view from DatasetStats' "Labeled by
