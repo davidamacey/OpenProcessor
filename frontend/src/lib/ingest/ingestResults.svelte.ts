@@ -6,6 +6,8 @@
  * "Download CSV" button.
  */
 
+import { SvelteMap } from 'svelte/reactivity';
+
 export type IngestResultKind =
   | 'ingested'
   | 'duplicate'
@@ -46,7 +48,12 @@ function csvField(v: string | number | null | undefined): string {
 }
 
 export function createIngestResults(): IngestResults {
-  const map = $state(new Map<string, IngestFileResult>());
+  // Plain `$state(new Map())` only makes the *binding* reactive (a full
+  // reassignment), not `.set()`/`.delete()` mutation on the same
+  // instance — `SvelteMap` (svelte/reactivity) is the built-in that
+  // actually tracks per-key mutation, which is exactly how this store
+  // is used (`set()`/`delete()` on the same map for the run's lifetime).
+  const map = new SvelteMap<string, IngestFileResult>();
 
   function entriesByKind(kind: IngestResultKind): [string, IngestFileResult][] {
     const out: [string, IngestFileResult][] = [];
