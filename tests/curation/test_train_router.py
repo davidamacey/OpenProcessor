@@ -169,6 +169,101 @@ def test_preflight_ok_when_trainer_reachable(
     assert trainer_check['severity'] == 'ok'
 
 
+# =============================================================================
+# trainer_gpus preflight check (W5.2 -- TR-2 GPU scoping)
+# =============================================================================
+
+
+def _write_trainer_capabilities(jobs_dir: Any, gpu_order: list[int]) -> None:
+    (jobs_dir / '.trainer_capabilities.json').write_text(
+        json.dumps({'gpu_order': gpu_order, 'visible_count': len(gpu_order) or None})
+    )
+
+
+def test_preflight_blocks_gpu_the_trainer_is_not_attached_to(
+    app_client: TestClient, tmp_path: Any
+) -> None:
+    """A capabilities file naming [2] and a request for host GPU 0 must
+    block -- the original TR-2 failure mode (API accepts a GPU the trainer
+    isn't attached to, job hangs in queued/starting forever)."""
+    _write_trainer_capabilities(tmp_path, [2])
+    body = {
+        'dataset_export_dir': '/data/exports/x',
+        'profile': 'medium',
+        'cuda_visible_devices': '0',
+    }
+    r = app_client.post('/curation/train/preflight', json=body)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    check = next(c for c in out['checks'] if c['name'] == 'trainer_gpus')
+    assert check['severity'] == 'block'
+    assert '[2]' in check['message'] or '2' in str(check['detail']['trainer_gpu_order'])
+    assert out['blocked'] is True
+
+
+def test_preflight_ok_for_gpu_the_trainer_is_attached_to(
+    app_client: TestClient, tmp_path: Any
+) -> None:
+    _write_trainer_capabilities(tmp_path, [0, 2])
+    body = {
+        'dataset_export_dir': '/data/exports/x',
+        'profile': 'medium',
+        'cuda_visible_devices': '2',
+    }
+    r = app_client.post('/curation/train/preflight', json=body)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    check = next(c for c in out['checks'] if c['name'] == 'trainer_gpus')
+    assert check['severity'] == 'ok'
+
+
+def test_preflight_warns_when_no_capabilities_file(app_client: TestClient) -> None:
+    """No file (older trainer image, or not started yet) is a warning, not
+    a block -- an absent file must never be read as 'attached to nothing'."""
+    body = {'dataset_export_dir': '/data/exports/x', 'profile': 'medium'}
+    r = app_client.post('/curation/train/preflight', json=body)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    check = next(c for c in out['checks'] if c['name'] == 'trainer_gpus')
+    assert check['severity'] == 'warn'
+
+
+def test_preflight_ok_when_capabilities_file_reports_unrestricted(
+    app_client: TestClient, tmp_path: Any
+) -> None:
+    """An empty gpu_order means the trainer sees every GPU at its host
+    index (OP_TRAIN_GPU_ORDER unset) -- no restriction, any id passes."""
+    _write_trainer_capabilities(tmp_path, [])
+    body = {
+        'dataset_export_dir': '/data/exports/x',
+        'profile': 'medium',
+        'cuda_visible_devices': '5',
+    }
+    r = app_client.post('/curation/train/preflight', json=body)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    check = next(c for c in out['checks'] if c['name'] == 'trainer_gpus')
+    assert check['severity'] == 'ok'
+
+
+def test_train_gpus_intersects_with_trainer_capabilities(
+    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """/train/gpus must not offer a GPU the trainer isn't attached to, even
+    though OP_GPU_ALLOWED_IDS never restricted it (a policy allowlist is a
+    different fact than physical GPU attachment)."""
+    from src.config import GpuArbiterConfig
+
+    _set_arbiter_config(monkeypatch, GpuArbiterConfig())
+    _write_trainer_capabilities(tmp_path, [2])
+    r = app_client.get('/curation/train/gpus')
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body['allowed_ids'] == [2]
+    values = {o['value'] for o in body['options']}
+    assert values == {'2'}
+
+
 def test_start_returns_422_when_trainer_unreachable(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

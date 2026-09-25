@@ -154,6 +154,7 @@ class GpuArbiterConfig:
     bakeoff_jobs_dir: str = field(default_factory=_default_bakeoff_jobs_dir)
     gpu_labels: dict[int, str] = field(default_factory=dict)
     default_train_gpus: str | None = None
+    bakeoff_host_gpus: str | None = None
 
     @classmethod
     def from_env(cls) -> GpuArbiterConfig:
@@ -186,6 +187,14 @@ class GpuArbiterConfig:
           new training spec defaults to when the caller omits it. Unset =
           derive from ``allowed_gpu_ids`` (see
           ``src.services.training.jobs.default_train_gpu_value``).
+        - ``OP_BAKEOFF_HOST_GPUS`` — comma-separated *host* GPU ids the
+          bake-off evaluator container is attached to (e.g. ``0``; distinct
+          from ``OP_BAKEOFF_GPUS``, which is the evaluator's *container-local*
+          id). When set, enqueueing a bake-off only stops containers whose
+          configured GPU scope (:func:`containers_to_stop`) intersects this
+          set, instead of stopping every configured container -- a bake-off
+          on an idle GPU must not stop a service pinned to a different one.
+          Unset = today's behavior (stop everything configured).
 
         A malformed ``OP_GPU_ALLOWED_IDS`` (non-integer or negative token),
         ``OP_GPU_ARBITER_CONTAINERS`` scope (non-integer or negative id, or
@@ -216,6 +225,7 @@ class GpuArbiterConfig:
         jobs_dir = os.environ.get('OP_BAKEOFF_JOBS_DIR', '').strip() or _default_bakeoff_jobs_dir()
         gpu_labels = _parse_gpu_labels(os.environ.get('OP_GPU_LABELS', ''))
         default_train_gpus = os.environ.get('OP_TRAIN_DEFAULT_GPUS', '').strip() or None
+        bakeoff_host_gpus = os.environ.get('OP_BAKEOFF_HOST_GPUS', '').strip() or None
         return cls(
             allowed_gpu_ids=frozenset(ids),
             containers=containers,
@@ -224,6 +234,7 @@ class GpuArbiterConfig:
             bakeoff_jobs_dir=jobs_dir,
             gpu_labels=gpu_labels,
             default_train_gpus=default_train_gpus,
+            bakeoff_host_gpus=bakeoff_host_gpus,
         )
 
     def is_gpu_allowed(self, gpu_id: int) -> bool:

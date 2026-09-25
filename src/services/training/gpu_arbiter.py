@@ -632,12 +632,13 @@ async def reconcile_on_startup(
             active_stems.add('__lock__')
             _accumulate(lock.get('cuda_visible_devices'))
 
-    # A queued/running bake-off claims every configured container (only
-    # meaningful when a bake-off jobs dir is configured) -- conservative,
-    # same as an unknown device set.
+    # A queued bake-off claims every configured container unless
+    # OP_BAKEOFF_HOST_GPUS scopes it to the evaluator's host GPUs (then
+    # only an intersecting container stays stopped).
     if bakeoff_active():
         active_stems.add('__bakeoff__')
-        stop_names.update(all_configured)
+        scope = get_gpu_arbiter_config().bakeoff_host_gpus
+        stop_names.update(containers_to_stop(scope) if scope else all_configured)
 
     if active_stems:
         ordered_stop = tuple(name for name in all_configured if name in stop_names)

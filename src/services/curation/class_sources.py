@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any, Literal, get_args
 
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
+from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.ingest_class_sources import (
     CLUSTER_MAJORITY_CLASS_SOURCE,
     DEFAULT_PROPOSAL_CLASS_SOURCE,
@@ -185,6 +186,53 @@ def class_confidence(src: dict[str, Any]) -> tuple[float | None, str | None]:
     return None, None
 
 
+def unmatched_class_clear(current: dict[str, Any]) -> dict[str, Any]:
+    """Fields to merge onto a ``vlm_unmatched`` write's ``update_doc`` so the
+    row never keeps the class the VLM's answer just contradicted.
+
+    A ``vlm_unmatched`` write means "the VLM read a label that isn't in the
+    registry" -- keeping the item's *prior* ``class_id``/``class_name``
+    (usually from a proposal/classifier/earlier VLM pass) would show a class
+    the write's own ``class_source`` says wasn't matched. Clearing it is
+    restorable: the caller's history snapshot (``record_class_snapshot`` /
+    ``with_class_snapshot``) records the prior state before this lands.
+
+    Returns ``{}`` when the item is human-owned or class-validated
+    (:func:`src.services.curation.class_write_guard.class_write_locked`) --
+    an unmatched VLM answer must never reset a locked item's class out from
+    under a human decision.
+
+    When ``current``'s ``cluster_id`` is a *class* cluster (``0 <=
+    cluster_id < RESIDUAL_CLUSTER_ID_OFFSET``, i.e. it mirrored the class
+    that's being cleared), also resets ``cluster_id=-1`` and
+    ``cluster_subid=None`` so the residual clustering pass re-clusters the
+    item instead of leaving it parked in a class cluster it no longer
+    belongs to. A candidate cluster (``>= RESIDUAL_CLUSTER_ID_OFFSET``) is
+    left alone -- the item's residual grouping isn't a class-cluster fact.
+    """
+    from src.services.curation.class_write_guard import class_write_locked
+
+    if class_write_locked(current):
+        return {}
+    out: dict[str, Any] = {
+        'class_id': None,
+        'class_name': None,
+        'class_detector': None,
+        'class_detector_version': None,
+        'class_labeler': None,
+        'class_labeled_at': None,
+    }
+    cluster_id = current.get('cluster_id')
+    if (
+        isinstance(cluster_id, int)
+        and not isinstance(cluster_id, bool)
+        and 0 <= cluster_id < RESIDUAL_CLUSTER_ID_OFFSET
+    ):
+        out['cluster_id'] = -1
+        out['cluster_subid'] = None
+    return out
+
+
 def vlm_suggestion(src: dict[str, Any]) -> tuple[int | None, str | None]:
     """``(class_id, class_name)`` the VLM suggests for a stored item.
 
@@ -213,6 +261,7 @@ __all__ = [
     'HumanLabelSource',
     'class_confidence',
     'class_source_catalog',
+    'unmatched_class_clear',
     'vlm_suggestion',
     'vlm_suggestion_dismissed',
 ]

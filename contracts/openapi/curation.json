@@ -15413,7 +15413,7 @@
     },
     "/curation/train/gpus": {
       "get": {
-        "description": "Serve the training GPU picker: values, labels, and stop advisories.\n\nBackend owns these decisions -- the frontend must never hardcode a\ndeployment's GPU topology. Unrestricted installs (no\n``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.",
+        "description": "Serve the training GPU picker: values, labels, and stop advisories.\n\nBackend owns these decisions -- the frontend must never hardcode a\ndeployment's GPU topology. Unrestricted installs (no\n``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.\n\nWhen the trainer's published ``gpu_order`` (see ``_trainer_gpu_order``)\nis known and non-empty, the option list is intersected with it -- a\ntrainer physically attached to only host GPU 2 must not offer GPU 0 as\nselectable, even if ``OP_GPU_ALLOWED_IDS`` (a policy allowlist, not a\nphysical-attachment fact) says otherwise.",
         "operationId": "list_train_gpu_options_curation_train_gpus_get",
         "responses": {
           "200": {
