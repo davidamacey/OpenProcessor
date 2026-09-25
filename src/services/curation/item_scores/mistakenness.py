@@ -111,6 +111,7 @@ class MistakennessScorer:
         'mistakenness_scored_at',
     )
     version: ClassVar[str] = MISTAKENNESS_VERSION
+    pool: ClassVar[str] = 'probe_scored'
 
     async def score(
         self,

@@ -11,15 +11,41 @@ Directory resolved lazily via ``OP_SCORES_STATE_DIR`` (default ``/jobs/scores``)
 so tests can override with ``monkeypatch.setenv`` + ``tmp_path`` without
 reimporting — same convention as ``train_jobs._resolve_jobs_dir``.
 
-**Single-fetch design (load-bearing):** embeddings are fetched
-ONCE via :func:`clustering.embedding_reduce.fetch_residual_embeddings_parallel`
-and the same matrix is handed to every enabled scorer — the OpenSearch read
-is the dominant cost (350k crops x 1024-d f32 = 1.43 GB), not the math.
-``test_holdout=true`` crops are excluded via an explicit ``must_not`` (belt
-and suspenders — they're also implicitly excluded because
-``fetch_residual_embeddings_parallel`` already drops ``class_validated:
-true`` crops, and a crop can only be ``test_holdout=true`` if it was
-``class_validated=true`` at freeze time; see the reference review module's ``freeze_test_holdout``).
+**Per-pool single-fetch design (load-bearing):** not every scorer wants the
+same items. Each scorer declares a :attr:`~item_scores.base.CropScorer.pool`
+(``'residual'`` or ``'probe_scored'`` — see ``base.py`` for the semantics),
+and this module builds each *needed* pool exactly ONCE per job — never
+unconditionally, and never once per scorer — then hands each scorer the
+pool it asked for:
+
+* ``'residual'`` — :func:`clustering.embedding_reduce.fetch_residual_embeddings_parallel`,
+  unchanged from the original single-pool design. The OpenSearch read (with
+  embeddings) is the dominant cost here (350k crops x 1024-d f32 = 1.43 GB),
+  not the math, so scorers sharing this pool (``uniqueness``, ``near_dup``)
+  share one fetch. ``test_holdout=true`` crops are excluded via an explicit
+  ``must_not`` (belt and suspenders — they're also implicitly excluded
+  because ``fetch_residual_embeddings_parallel`` already drops
+  ``class_validated: true`` crops, and a crop can only be
+  ``test_holdout=true`` if it was ``class_validated=true`` at freeze time;
+  see the reference review module's ``freeze_test_holdout``).
+* ``'probe_scored'`` — ids only (no embeddings — a ``(n, 0)`` array is
+  handed to the scorer), every item with ``probe_pred_class`` set, minus
+  ``test_holdout`` / ``class_excluded`` / ``class_validated``. This is the
+  pool ``mistakenness`` needs: it audits machine-confident labels via
+  ``probe_pred_*`` scalar fields, never embeddings, so the residual pool
+  (which excludes exactly the confidently-labeled items mistakenness
+  exists to check) was the wrong pool for it (fixed 2026-09-25 — see
+  ``git log`` for the incident: 1,351 residual items yielded
+  ``n_scored=1``, ``n_skipped_outside_probe_classes=1350``, while 7,936
+  items were actually probe-scored).
+
+``state.total`` / ``state.processed`` are the SUM of each requested
+scorer's own pool size (a scorer sharing a pool with another requested
+scorer counts that pool's size again — this is "work units across
+requested scorers", not "distinct items touched this job"). Per-scorer
+detail (which pool, how many items in it, how many it actually wrote) is
+in ``state.results[scorer_name]`` — additive fields on the existing shape,
+not a breaking change to ``/curation/scores/status``.
 """
 
 from __future__ import annotations
@@ -33,6 +59,8 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import numpy as np
 
 from src.core.logging import get_logger
 
@@ -246,20 +274,95 @@ async def bulk_write_result(
             await opensearch.bulk(body=bulk, refresh=False)
 
 
+_PROBE_SCORED_PAGE_SIZE = 2000
+_PROBE_SCORED_SCROLL_TTL = '2m'
+
+
+async def _fetch_probe_scored_ids(client: AsyncOpenSearch) -> list[str]:
+    """The ``'probe_scored'`` pool: ids only, no embeddings.
+
+    Every item the probe has an opinion on (``exists probe_pred_class``),
+    minus ``test_holdout`` (frozen eval set), ``class_excluded`` (human
+    said "not usable"), and ``class_validated`` (human-validated labels are
+    human-owned — not audited by an automated mistakenness pass). Full
+    scroll, no cap — a silent partial pool here would silently under-audit
+    machine labels, the exact failure mode this pool exists to fix.
+    """
+    from src.config.curation import IndexRole, get_curation_config, index_name
+
+    index = index_name(get_curation_config(), IndexRole.ITEMS)
+    query = {
+        'bool': {
+            'filter': [{'exists': {'field': 'probe_pred_class'}}],
+            'must_not': [
+                {'term': {'test_holdout': True}},
+                {'term': {'class_excluded': True}},
+                {'term': {'class_validated': True}},
+            ],
+        },
+    }
+    ids: list[str] = []
+    body: dict[str, Any] = {
+        'size': _PROBE_SCORED_PAGE_SIZE,
+        'query': query,
+        '_source': False,
+    }
+    resp = await client.search(index=index, body=body, scroll=_PROBE_SCORED_SCROLL_TTL)
+    scroll_id = resp.get('_scroll_id')
+    try:
+        while True:
+            hits = resp['hits']['hits']
+            if not hits:
+                break
+            ids.extend(h['_id'] for h in hits)
+            if not scroll_id:
+                break
+            resp = await client.scroll(scroll_id=scroll_id, scroll=_PROBE_SCORED_SCROLL_TTL)
+            scroll_id = resp.get('_scroll_id')
+    finally:
+        if scroll_id:
+            with contextlib.suppress(Exception):
+                await client.clear_scroll(scroll_id=scroll_id)
+    return ids
+
+
+async def _build_pools(
+    opensearch: AsyncOpenSearch,
+    needed: set[str],
+) -> dict[str, tuple[list[str], np.ndarray]]:
+    """Fetch each needed pool exactly once. ``needed`` is the set of
+    ``pool`` values actually declared by the requested scorers — a pool
+    nothing asked for is never fetched."""
+    from src.services.curation.clustering.embedding_reduce import fetch_residual_embeddings_parallel
+
+    pools: dict[str, tuple[list[str], np.ndarray]] = {}
+    if 'residual' in needed:
+        pools['residual'] = await fetch_residual_embeddings_parallel(
+            opensearch,
+            # Belt-and-suspenders test_holdout exclusion — see module
+            # docstring for why this is already implied.
+            extra_must=[{'bool': {'must_not': [{'term': {'test_holdout': True}}]}}],
+        )
+    if 'probe_scored' in needed:
+        probe_ids = await _fetch_probe_scored_ids(opensearch)
+        pools['probe_scored'] = (probe_ids, np.zeros((len(probe_ids), 0), dtype=np.float32))
+    return pools
+
+
 async def run_scoring_job(
     job_id: str,
     opensearch: AsyncOpenSearch,
     scorer_names: list[str],
 ) -> None:
-    """Actual compute body: single embedding fetch, then one scorer at a
-    time, writing results back via bulk update + checkpointing state.json
-    between scorers so ``/curation/scores/status`` reflects real progress.
+    """Actual compute body: fetch each pool the requested scorers need
+    (once each), then one scorer at a time, writing results back via bulk
+    update + checkpointing state.json between scorers so
+    ``/curation/scores/status`` reflects real progress.
 
     A dedicated (non-underscore) symbol so tests can monkeypatch it
     wholesale for deterministic job-lifecycle testing without racing a
     real background task against synchronous test-client HTTP calls.
     """
-    from src.services.curation.clustering.embedding_reduce import fetch_residual_embeddings_parallel
     from src.services.curation.item_scores import get_scorer
 
     state = _read_state()
@@ -269,13 +372,11 @@ async def run_scoring_job(
         return
     _touch_heartbeat()
     try:
-        ids, embeddings = await fetch_residual_embeddings_parallel(
-            opensearch,
-            # Belt-and-suspenders test_holdout exclusion — see module
-            # docstring for why this is already implied.
-            extra_must=[{'bool': {'must_not': [{'term': {'test_holdout': True}}]}}],
-        )
-        state.total = len(ids)
+        scorers = {name: get_scorer(name) for name in scorer_names}
+        needed_pools = {scorer.pool for scorer in scorers.values()}
+        pools = await _build_pools(opensearch, needed_pools)
+
+        state.total = sum(len(pools[scorer.pool][0]) for scorer in scorers.values())
         _atomic_write(state)
         _touch_heartbeat()
 
@@ -286,12 +387,18 @@ async def run_scoring_job(
                 state.finished_at = time.time()
                 _atomic_write(state)
                 return
-            scorer = get_scorer(name)
+            scorer = scorers[name]
+            ids, embeddings = pools[scorer.pool]
             result = await scorer.score(ids, embeddings, opensearch=opensearch)
             await bulk_write_result(opensearch, result)
-            results[name] = {'n_scored': result.n_scored, 'extra': result.extra}
+            results[name] = {
+                'n_scored': result.n_scored,
+                'extra': result.extra,
+                'pool': scorer.pool,
+                'pool_size': len(ids),
+            }
             state.results = results
-            state.processed = state.total
+            state.processed += len(ids)
             _atomic_write(state)
             _touch_heartbeat()
 

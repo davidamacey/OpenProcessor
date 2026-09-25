@@ -112,6 +112,7 @@ class NearDupScorer:
         'dup_scored_at',
     )
     version: ClassVar[str] = NEAR_DUP_VERSION
+    pool: ClassVar[str] = 'residual'
 
     def __init__(self, threshold: float | None = None, centroids: np.ndarray | None = None) -> None:
         self.threshold = threshold if threshold is not None else _threshold()
