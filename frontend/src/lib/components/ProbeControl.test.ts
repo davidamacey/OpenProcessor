@@ -23,7 +23,7 @@ function status(over: Partial<TrainJobStatus> = {}): TrainJobStatus {
   return {
     job_id: 'train-1',
     state: 'finished',
-    checkpoint_sha256: 'deadbeef',
+    checkpoint_path: '/x/train-1/weights/best.pt',
     ...over,
   } as TrainJobStatus;
 }
@@ -61,12 +61,12 @@ describe('ProbeControl', () => {
   });
 
   it('is absent for a run with no exported checkpoint and no prior result', async () => {
-    const el = await renderControl({ status: status({ checkpoint_sha256: null }) });
+    const el = await renderControl({ status: status({ checkpoint_path: null }) });
     expect(el.querySelector('[data-testid="probe-control"]')).toBeNull();
   });
 
   it('does not poll /probe/status at all for a run that cannot qualify (no checkpoint)', async () => {
-    await renderControl({ status: status({ checkpoint_sha256: null }) });
+    await renderControl({ status: status({ checkpoint_path: null }) });
     expect(getProbeStatus).not.toHaveBeenCalled();
   });
 

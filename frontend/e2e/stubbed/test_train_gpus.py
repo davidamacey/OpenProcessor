@@ -53,6 +53,12 @@ def register_train_mount(stub):
     # summary now shows a served holdout figure alongside it — /train
     # fetches this on mount the same way /export already does.
     stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
+    # #36 item 8: ProbeControl fires GET /probe/status for any finished
+    # run that has a checkpoint_path once its Results panel is opened
+    # (adopt-in-flight check) — a default "idle" answer here means every
+    # existing /train test that doesn't care about probing still passes
+    # the fail-closed unhandled-request guard.
+    stub.on("GET", r"/probe/status(\?|$)", {"status": "idle"})
 
 
 def test_train_gpu_options(stub, page, app_url):

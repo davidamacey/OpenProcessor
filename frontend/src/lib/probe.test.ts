@@ -29,7 +29,7 @@ function run(over: Partial<TrainJobStatus> = {}): TrainJobStatus {
   return {
     job_id: 'job-1',
     state: 'finished',
-    checkpoint_sha256: 'deadbeef',
+    checkpoint_path: '/var/lib/openprocessor/training_runs/job-1/weights/best.pt',
     ...over,
   } as TrainJobStatus;
 }
@@ -45,7 +45,17 @@ describe('canRunProbe', () => {
   });
 
   it('false for a finished run with no recorded checkpoint', () => {
-    expect(canRunProbe(run({ checkpoint_sha256: null }))).toBe(false);
-    expect(canRunProbe(run({ checkpoint_sha256: undefined }))).toBe(false);
+    expect(canRunProbe(run({ checkpoint_path: null }))).toBe(false);
+    expect(canRunProbe(run({ checkpoint_path: undefined }))).toBe(false);
+  });
+
+  // Live regression (2026-09-25): GET {API_PREFIX}/train/status/{job_id}
+  // serves checkpoint_path on a finished run but NOT checkpoint_sha256
+  // (that only appears inside the manifest) — gating on the sha would
+  // hide the button for every real finished run on this deployment.
+  it('true even when checkpoint_sha256 is absent, as long as checkpoint_path is served', () => {
+    expect(
+      canRunProbe(run({ checkpoint_sha256: undefined, checkpoint_path: '/x/best.pt' })),
+    ).toBe(true);
   });
 });

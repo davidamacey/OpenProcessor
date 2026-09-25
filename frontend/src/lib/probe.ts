@@ -28,7 +28,17 @@ export function classifyProbePoll(status: string): ProbePollOutcome {
  *  exported checkpoint, but the control shouldn't even render the button
  *  for a run that can't possibly qualify (still running, failed, no
  *  checkpoint recorded), so an operator isn't invited to click something
- *  that always 409s. */
+ *  that always 409s.
+ *
+ *  Gates on `checkpoint_path`, not `checkpoint_sha256` — verified live
+ *  (2026-09-25) that `GET {API_PREFIX}/train/status/{job_id}` (and
+ *  `/train/runs`) serves `checkpoint_path` on every finished run but
+ *  `checkpoint_sha256` only inside the run's manifest
+ *  (`GET {API_PREFIX}/train/manifest/{job_id}` `results.checkpoint_sha256`),
+ *  which this control never fetches (it renders instantly off the
+ *  already-loaded status, same as the rest of `RunResults`). Gating on
+ *  the sha here would hide the button for every real, checkpoint-bearing
+ *  finished run on this deployment. */
 export function canRunProbe(status: TrainJobStatus): boolean {
-  return status.state === 'finished' && !!status.checkpoint_sha256;
+  return status.state === 'finished' && !!status.checkpoint_path;
 }

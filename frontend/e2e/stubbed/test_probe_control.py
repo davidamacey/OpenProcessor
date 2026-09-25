@@ -18,7 +18,10 @@ FINISHED_STATUS = {
     "finished_at": "2026-09-24T23:51:09Z",
     "current_epoch": 20,
     "total_epochs": 20,
-    "checkpoint_sha256": "cc5ffb75e020b54d87df6f534de2a7a74eaa02519c69658a9504e2fe42d15e81",
+    # Live regression (2026-09-25): GET {API_PREFIX}/train/status/{job_id}
+    # serves checkpoint_path on a finished run but NOT checkpoint_sha256
+    # (that only appears inside the manifest) — the control gates on
+    # checkpoint_path, matching what this endpoint actually serves.
     "checkpoint_path": "/var/lib/openprocessor/training_runs/{}/weights/best.pt".format(
         JOB_ID
     ),
@@ -27,7 +30,7 @@ FINISHED_STATUS = {
 NO_CHECKPOINT_STATUS = {
     **FINISHED_STATUS,
     "job_id": "run-no-checkpoint",
-    "checkpoint_sha256": None,
+    "checkpoint_path": None,
 }
 
 
