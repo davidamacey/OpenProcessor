@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Probe opinion on review items (F8 D1, OpenProcessor d817605).** Items
+  carry the served `probe_disagreement`, `probe_in_scope` and
+  `probe_model_version`. An item outside the probe's classes reads "Model
+  predicts: no opinion (outside the probe's classes)" instead of the
+  probe's out-of-vocabulary top-1, and "Accept model's class" is offered
+  only when the server says the probe disagrees (`probeOpinion`), never
+  when `probe_disagreement` is null. The uniqueness sort appears in the
+  sort dropdown now that `/methods` serves it `experimental` (F8 D2; no
+  gating change needed, pinned by a test). Vendored contract synced to
+  `d817605`.
+
 - **Setup, export, clusters (F-48, F-49, F-55, F-61, F-68).**
   `.env.example` no longer ships `PUBLIC_TRITON_API_URL` active (a verbatim
   copy pointed a Docker build straight at `localhost:4603`). The README

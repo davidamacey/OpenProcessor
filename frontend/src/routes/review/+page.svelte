@@ -38,6 +38,7 @@
     queuePosition,
     vlmEmptyReasonText,
   } from '$lib/review/reviewCopy';
+  import { NO_OPINION_TEXT, probeOpinion } from '$lib/review/probeOpinion';
   import {
     humanWritableStates,
     statusClearsBox,
@@ -986,8 +987,14 @@
    *  model_disagreements tab's probe prediction now carries its own
    *  `probe_pred_class_id`, so this assigns it directly — no name→id
    *  lookup needed (closes G4). */
+  // F8 D1: the served probe opinion decides whether a prediction is
+  // shown and whether "Accept model's class" is offered.
+  const opinion = $derived(
+    current ? probeOpinion(current) : { kind: 'none' as const, showAccept: false },
+  );
+
   async function acceptModelClass(): Promise<void> {
-    if (!current || current.probe_pred_class_id == null) return;
+    if (!current || current.probe_pred_class_id == null || !opinion.showAccept) return;
     await assign(current.probe_pred_class_id);
   }
 
@@ -2315,7 +2322,14 @@
               <dd class="text-yellow-200">{current.proposed_class_name ?? '—'}</dd>
             {/if}
 
-            {#if current.probe_pred_class}
+            {#if opinion.kind === 'no_opinion'}
+              <!-- F8 D1: out of the probe's classes: no opinion, never
+                   shown as a prediction or as agreement. -->
+              <dt class="text-zinc-500">Model predicts</dt>
+              <dd class="text-zinc-400" data-testid="probe-no-opinion">
+                {NO_OPINION_TEXT}
+              </dd>
+            {:else if opinion.kind === 'prediction'}
               <!-- G4 closed 2026-09-24 (logic-moves item 14): the backend
                  now serves `probe_pred_class_id` alongside the display
                  name, so "Accept" no longer needs a client-side
@@ -2330,7 +2344,7 @@
                     size="sm"
                   />
                 {/if}
-                {#if current.probe_pred_class_id != null && current.probe_pred_class_id !== current.class_id}
+                {#if opinion.showAccept}
                   <button
                     type="button"
                     class="rounded border border-blue-500/60 bg-blue-500/15 px-1.5 py-0.5 text-[11px] text-blue-100 hover:bg-blue-500/25"

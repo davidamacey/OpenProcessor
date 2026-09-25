@@ -1481,6 +1481,10 @@ export type RawCrop = {
   mistakenness_method?: string | null;
   mistakenness_version?: string | null;
   mistakenness_scored_at?: string | null;
+  // F8 D1 (OpenProcessor d817605): the probe's opinion on this item.
+  probe_disagreement?: boolean | null;
+  probe_in_scope?: boolean | null;
+  probe_model_version?: string | null;
   thumbnail_url?: string;
   updated_at?: string;
   class_excluded?: boolean;
@@ -1539,6 +1543,9 @@ export const RAW_CROP_KEYS = [
   'mistakenness_method',
   'mistakenness_version',
   'mistakenness_scored_at',
+  'probe_disagreement',
+  'probe_in_scope',
+  'probe_model_version',
   'thumbnail_url',
   'updated_at',
   'class_excluded',
@@ -1620,6 +1627,9 @@ function mapRawCrop(c: RawCrop): Crop {
     mistakenness_method: c.mistakenness_method ?? null,
     mistakenness_version: c.mistakenness_version ?? null,
     mistakenness_scored_at: c.mistakenness_scored_at ?? null,
+    probe_disagreement: c.probe_disagreement ?? null,
+    probe_in_scope: c.probe_in_scope ?? null,
+    probe_model_version: c.probe_model_version ?? null,
     class_excluded: !!c.class_excluded,
     excluded_reason: c.excluded_reason ?? null,
     excluded_at: c.excluded_at ?? null,

@@ -61,6 +61,9 @@
     "probe_pred_class",
     "probe_pred_class_id",
     "probe_pred_entropy",
+    "probe_disagreement",
+    "probe_in_scope",
+    "probe_model_version",
     "mistakenness_score",
     "mistakenness_method",
     "mistakenness_version",
@@ -598,6 +601,42 @@
         ],
         "default": null,
         "title": "Needs New Class Note"
+      },
+      "probe_disagreement": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Probe Disagreement"
+      },
+      "probe_in_scope": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Probe In Scope"
+      },
+      "probe_model_version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Probe Model Version"
       },
       "probe_pred_class": {
         "default": null,

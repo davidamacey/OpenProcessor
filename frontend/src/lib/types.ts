@@ -513,6 +513,16 @@ export interface Crop {
   mistakenness_method?: string | null;
   mistakenness_version?: string | null;
   mistakenness_scored_at?: string | null;
+  /**
+   * F8 D1 (OpenProcessor d817605): the probe's opinion on this item.
+   * `probe_in_scope`: null = not scored yet, true = the item's class is
+   * one the probe knows (a real opinion), false = outside the probe's
+   * classes (no opinion; `probe_disagreement` is then null).
+   * `probe_disagreement`: true/false only when the probe has an opinion.
+   */
+  probe_disagreement?: boolean | null;
+  probe_in_scope?: boolean | null;
+  probe_model_version?: string | null;
   updated_at: string;
 }
 
