@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Setup, export, clusters (F-48, F-49, F-55, F-61, F-68).**
+  `.env.example` no longer ships `PUBLIC_TRITON_API_URL` active (a verbatim
+  copy pointed a Docker build straight at `localhost:4603`). The README
+  lists the served reserved hotkeys, names the sample-data command
+  (`make sample-coco-readme`) and drops the empty Screenshots section.
+  `/export`'s registry downloads are enabled when either the served
+  datasets list flags the current export or `/export/status` reports a
+  finished one (`registryArtifactsAvailable`), and the version-tag
+  placeholder no longer suggests a private version scheme.
+  `/clusters/[id]`'s relabel action reads "Assign class to selected" and
+  the Move dialog points to it. The embedding plot has a color legend
+  (biggest clusters, their color and most common class).
+
 - **Copy and layout (F8 D5, D7, D9, D10; F-37, F-51, F-69).** The route
   crumb next to the logo no longer truncates at 800px ("reviev"); the
   primary nav strip scrolls instead. `/bakeoff` result tables show a

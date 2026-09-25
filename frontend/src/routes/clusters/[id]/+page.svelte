@@ -918,8 +918,12 @@
       </button>
       <span class="font-mono text-xs text-zinc-500">{sel.size} selected</span>
 
-      <select bind:value={confirmClassId} class="select">
-        <option value={null}>— class —</option>
+      <select
+        bind:value={confirmClassId}
+        class="select"
+        aria-label="Class to assign to the selected crops"
+      >
+        <option value={null}>— assign to class —</option>
         {#each classesStore.classes.filter(isAssignableClass) as cls (cls.id)}
           <option value={cls.id}>{cls.name}</option>
         {/each}
@@ -929,9 +933,10 @@
         type="button"
         onclick={confirmSelected}
         disabled={sel.size === 0 || confirmClassId == null}
-        title="Enter — confirm selected to chosen class"
+        title="Enter — label the selected crops with the chosen class (relabel)"
+        data-testid="assign-selected"
       >
-        Confirm Selected
+        Assign class to selected
       </button>
 
       <!-- Selection-aware action chips. Always rendered so the user knows
@@ -1349,8 +1354,13 @@
         Move {sel.size} crop{sel.size === 1 ? '' : 's'}
       </h3>
       <p class="mb-3 text-xs text-zinc-400">
-        Move these from cluster #{clusterId} to a target cluster id. The operation is reversible
-        per crop via the cluster page.
+        Move these from cluster #{clusterId} to another cluster, by its id (the #N on each
+        <a class="text-blue-400 underline" href="/clusters">/clusters</a> card). Reversible
+        with Z.
+      </p>
+      <p class="mb-3 text-xs text-zinc-400" data-testid="move-relabel-hint">
+        To change their <strong>class</strong> instead, close this and pick a class, then "Assign
+        class to selected" (Enter), or press the class's hotkey.
       </p>
       <label class="mb-3 block text-sm">
         <span class="mb-1 block text-zinc-400">Target cluster id</span>

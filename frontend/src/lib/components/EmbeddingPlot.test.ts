@@ -43,6 +43,12 @@ describe('EmbeddingPlot.svelte', () => {
     expect(src).not.toMatch(/svelte:document/);
   });
 
+  it('F-68: renders a color legend from legendEntries(points)', () => {
+    const src = read('./EmbeddingPlot.svelte');
+    expect(src).toContain('data-testid="embedding-legend"');
+    expect(src).toContain('{#each legendEntries(points) as e');
+  });
+
   it('never registers a window/document keydown listener of any kind', () => {
     const src = read('./EmbeddingPlot.svelte');
     expect(src).not.toMatch(/(window|document)\.addEventListener\(['"]keydown['"]/);

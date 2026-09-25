@@ -16,11 +16,7 @@ Built with SvelteKit 2 + Svelte 5 runes + TypeScript strict + Tailwind
 v4. Pointer-event drag-and-drop via `svelte-dnd-action`. Dark theme,
 Apple system colors, keyboard-first UX.
 
-## Screenshots
-
-<!-- TODO(F10): add screenshots captured from the public-data fresh-start run
-     (COCO val2017 + Open Images plates). The earlier screenshots showed
-     non-public imagery and were deleted. -->
+## Walkthrough
 
 Full walkthrough of every route with explanations: **[docs/FEATURES.md](docs/FEATURES.md)**.
 
@@ -127,12 +123,10 @@ human label diverge).
 
 **Trying it with sample data.** For a new install with no images yet,
 OpenProcessor ships a small script to fetch a public COCO val2017
-subset as sample data (never bundled with Cropwright itself) — see the
-OpenProcessor README for the exact command
-
-<!-- TODO(coordinator): the backend's sample-dataset script/command is still being finalized; fill in the exact invocation once its runbook lands. --> —
-
-then ingest it through `/ingest`'s server-path panel, pointing at the
+subset as sample data (never bundled with Cropwright itself): run
+`make sample-coco-readme` in the OpenProcessor checkout (200 images, 20
+per class; `make sample-coco` fetches the larger 800-image set), then
+ingest it through `/ingest`'s server-path panel, pointing at the
 sample folder the backend mounts under its configured batch source
 roots (`/ingest` only shows this panel when the backend advertises at
 least one source root).
@@ -167,9 +161,11 @@ the code, not duplicated here to avoid drift). Highlights: `/dashboard`
 
 There is a single class-assignment scheme: a per-class `hotkey_letter`
 configured on `/classes` or the `` ` `` shortcut overlay. Reserved
-action keys (`g n d z x u a m /`, plus whatever a registered region
-slot's own keymap declares) can never be bound to a class — rejected
-both client- and server-side.
+action keys can never be bound to a class — rejected both client- and
+server-side. The backend serves the reserved set itself
+(`GET {API_PREFIX}/classes` → `reserved_hotkeys`; with a region profile
+that is currently `/ a b d e f g m n u x z`), and Cropwright adds any
+key a registered region slot's own keymap declares.
 
 ## Configuration
 

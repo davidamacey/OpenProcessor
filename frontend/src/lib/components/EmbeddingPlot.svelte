@@ -44,6 +44,8 @@
   import {
     classifyRebuildPoll,
     colorForCluster,
+    legendEntries,
+    PALETTE_SIZE,
     computeScale,
     embeddingCoverageSuffix,
     selectIdsInLasso,
@@ -512,6 +514,29 @@
         </p>
       {/if}
     </div>
+    {#if points.length > 0}
+      <!-- F-68: what the colors mean. Color = cluster id; the biggest
+           clusters in this projection are listed. -->
+      <div
+        class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-zinc-400"
+        data-testid="embedding-legend"
+      >
+        <span class="text-zinc-500">Color = cluster:</span>
+        {#each legendEntries(points) as e (e.clusterId ?? 'none')}
+          <span class="flex items-center gap-1">
+            <span
+              class="inline-block h-2.5 w-2.5 rounded-full"
+              style:background-color={e.color}
+            ></span>
+            {e.clusterId == null ? 'no cluster' : `#${e.clusterId}`}{e.className
+              ? ` ${e.className}`
+              : ''}
+            <span class="text-zinc-600">({e.count})</span>
+          </span>
+        {/each}
+        <span class="text-zinc-600">· colors repeat every {PALETTE_SIZE} clusters</span>
+      </div>
+    {/if}
 
     {#if selectedIds.size > 0}
       <!-- Capped (SELECTED_PREVIEW_CAP) so a huge lasso doesn't render

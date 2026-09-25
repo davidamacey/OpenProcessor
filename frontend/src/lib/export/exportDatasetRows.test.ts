@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildExportRows,
   hasCurrentMulticlassExport,
+  registryArtifactsAvailable,
   isNothingExportable,
   splitExportClasses,
   type ExportRow,
@@ -146,6 +147,33 @@ describe('hasCurrentMulticlassExport (m15)', () => {
     expect(
       hasCurrentMulticlassExport([dataset({ kind: 'yolo', is_current: true })]),
     ).toBe(true);
+  });
+});
+
+describe('registryArtifactsAvailable (F-61)', () => {
+  it('a finished export reported by /export/status makes the downloads available', () => {
+    expect(
+      registryArtifactsAvailable([dataset({ kind: 'yolo', is_current: false })], {
+        status: 'success',
+        export_dir: '/exports/20260925T185030Z',
+      }),
+    ).toBe(true);
+    expect(
+      registryArtifactsAvailable(null, { status: 'success', export_dir: '/x' }),
+    ).toBe(true);
+  });
+
+  it('not available with neither a current dataset nor a finished export', () => {
+    expect(
+      registryArtifactsAvailable([dataset({ kind: 'yolo', is_current: false })], {
+        status: 'unknown',
+        export_dir: null,
+      }),
+    ).toBe(false);
+    expect(
+      registryArtifactsAvailable(null, { status: 'success', export_dir: null }),
+    ).toBe(false);
+    expect(registryArtifactsAvailable([], null)).toBe(false);
   });
 });
 

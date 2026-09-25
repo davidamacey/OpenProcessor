@@ -15,7 +15,7 @@
   import type { ExportStatus, StatsSummary, TestHoldoutStats } from '$lib/types';
   import {
     buildExportRows,
-    hasCurrentMulticlassExport,
+    registryArtifactsAvailable,
     isNothingExportable,
     splitExportClasses,
     type ExportRow,
@@ -85,8 +85,10 @@
       stats = s.status === 'fulfilled' ? s.value : null;
       holdout = h.status === 'fulfilled' ? h.value : null;
       exportState = e.status === 'fulfilled' ? e.value : null;
-      hasMulticlassExport =
-        d.status === 'fulfilled' && hasCurrentMulticlassExport(d.value.datasets);
+      hasMulticlassExport = registryArtifactsAvailable(
+        d.status === 'fulfilled' ? d.value.datasets : null,
+        exportState,
+      );
       if (s.status === 'rejected' && h.status === 'rejected') {
         error = 'API unavailable';
       }
@@ -603,7 +605,7 @@
         <input
           type="text"
           bind:value={versionTag}
-          placeholder="e.g. v7.1.0"
+          placeholder="optional, e.g. baseline-a"
           class="input w-48"
         />
       </label>
