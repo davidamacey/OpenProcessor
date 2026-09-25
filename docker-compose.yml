@@ -82,7 +82,11 @@ services:
       # `curation`): the API writes /jobs/auto_label/trigger.json and
       # polls state.json/heartbeat; the worker claims and runs it. Also
       # backs OP_TRAIN_JOBS_DIR / OP_SCORES_STATE_DIR / OP_SELECT_JOBS_DIR
-      # / OP_VIZ_JOBS_DIR (all default under /jobs — see env.template).
+      # / OP_VIZ_JOBS_DIR / OP_PROBE_JOBS_DIR / OP_REGION_DRAIN_STATE_DIR
+      # (all default under /jobs — see env.template). This same shared
+      # mount is what makes state.json/heartbeat/cancel.flag visible to
+      # every yolo-api --workers process, not just whichever one handled
+      # a given request.
       - openprocessor-jobs:/jobs
       - ./cache/huggingface:/home/appuser/.cache/huggingface  # HuggingFace tokenizers (appuser)
     environment:

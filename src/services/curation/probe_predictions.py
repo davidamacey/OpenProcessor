@@ -74,6 +74,7 @@ from src.core.logging import get_logger
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from opensearchpy import AsyncOpenSearch
@@ -90,14 +91,14 @@ logger = get_logger(__name__)
 class _RawPreds:
     """Wraps one image's raw pre-NMS prediction tensor.
 
-    ``BasePredictor.stream_inference`` unconditionally does
-    ``self.results[i].speed = {...}`` bookkeeping after postprocess — this
-    thin wrapper just needs to accept that attribute assignment so we can
-    skip constructing real ``Results`` objects (which would require running
-    NMS first).
+    ``BasePredictor.stream_inference``/``write_results`` do bookkeeping
+    attribute assignments on each result object post-postprocess (e.g.
+    ``speed``, and ultralytics 8.4.x's ``save_dir``) -- deliberately NOT
+    ``__slots__``-restricted: a fixed attribute tuple is exactly what
+    broke against a newer ultralytics release setting attributes this
+    module never anticipated (``'_RawPreds' object has no attribute
+    'save_dir' and no __dict__ for setting new attributes``).
     """
-
-    __slots__ = ('speed', 'tensor')
 
     def __init__(self, tensor: Any) -> None:
         self.tensor = tensor
@@ -139,6 +140,15 @@ def _build_raw_predictor(model: Any) -> Any:
         'mode': 'predict',
         'rect': True,
         'verbose': False,
+        # Explicit, not left to ultralytics' own default (``save`` was
+        # True by default in 8.4.161): any of these routes through
+        # ``BasePredictor.write_results``, which calls ``result.verbose()``
+        # and sets ``result.save_dir`` unconditionally -- neither of which
+        # ``_RawPreds`` needs, and this pass never wants disk/window output.
+        'save': False,
+        'save_txt': False,
+        'save_crop': False,
+        'show': False,
     }
     _use_class_score_head(model)
     predictor = DetectionPredictor(overrides=args, _callbacks=model.callbacks)
@@ -390,6 +400,7 @@ async def run_probe_inference(
     page_size: int = 1000,
     resume: bool = False,
     class_ids: dict[str, int] | None = None,
+    should_cancel: Callable[[], bool] | None = None,
 ) -> int:
     """Run the probe checkpoint over every non-holdout item and record
     uncertainty.
@@ -418,6 +429,10 @@ async def run_probe_inference(
             where it stopped instead of re-scoring everything.
         class_ids: class name -> registry id, for ``probe_pred_class_id``.
             Defaults to the active classes of the configured registry.
+        should_cancel: Optional cheap callable checked once per scroll page
+            (after that page's bulk write). Defaults to a no-op;
+            :mod:`src.services.curation.probe_job` passes its file-backed
+            ``is_cancelled`` here.
 
     Returns:
         Number of item docs updated.
@@ -522,6 +537,9 @@ async def run_probe_inference(
                     logger.warning(
                         'probe_bulk_partial_errors', sample=bulk_resp.get('items', [])[:3]
                     )
+            if should_cancel is not None and should_cancel():
+                logger.info('probe_cancelled', processed=processed)
+                return processed
             resp = await opensearch.scroll(scroll_id=scroll_id, scroll='5m')
             scroll_id = resp.get('_scroll_id')
             hits = resp.get('hits', {}).get('hits', [])

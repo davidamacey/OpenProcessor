@@ -1,4 +1,4 @@
-"""C1: `POST /curation/probe/run`, `GET /curation/probe/status`,
+"""`POST /curation/probe/run`, `GET /curation/probe/status`,
 `POST /curation/probe/cancel`."""
 
 from __future__ import annotations
@@ -15,7 +15,11 @@ from src.services.curation import probe_job
 
 
 @pytest.fixture(autouse=True)
-def _reset():
+def _reset(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    # Real filesystem state (not module memory) as of the multi-worker
+    # fix -- point it at a per-test tmp_path rather than the real /jobs
+    # mount.
+    monkeypatch.setenv('OP_PROBE_JOBS_DIR', str(tmp_path / 'probe_jobs'))
     probe_job._reset_for_tests()
     yield
     probe_job._reset_for_tests()
