@@ -20,12 +20,17 @@ Endpoints:
     GET  /bakeoff/results/{id}      ranked comparison for one dataset of a job
     GET  /bakeoff/matrix/{id}       model x dataset matrix
 
-GPU: enqueueing stops the configured GPU-resident containers
-(``GpuArbiterConfig``) and answers 409 if it cannot. The arbiter's reconcile
-loop keeps them stopped while any job file is queued in ``JOBS_DIR`` and
-restarts them once the evaluator moves it to ``done/``. A job queued with no
-evaluator running keeps them stopped; its status stays ``queued`` and
-deleting the job file releases the GPU on the next reconcile tick.
+GPU: enqueueing stops the GPU-resident containers configured in
+``GpuArbiterConfig`` and answers 409 if it cannot. When ``OP_BAKEOFF_HOST_GPUS``
+is set (the host GPU ids the evaluator container is attached to), only
+containers scoped (``GpuArbiterConfig.container_gpus``) to those ids are
+stopped -- a bake-off on an idle GPU no longer stops a service pinned to a
+different one. Unset keeps the old behavior: stop everything configured. The
+arbiter's reconcile loop keeps the scoped set stopped while any job file is
+queued in ``JOBS_DIR`` and restarts them once the evaluator moves it to
+``done/``. A job queued with no evaluator running keeps them stopped; its
+status stays ``queued`` and deleting the job file releases the GPU on the
+next reconcile tick.
 
 What a run measures (classes, thresholds, rank metric, cascade context
 classes) comes from a ``BakeoffProfile`` (``scripts/curation/bakeoff/profile.py``)
@@ -220,8 +225,11 @@ async def bakeoff_run(payload: BakeoffRunRequest) -> BakeoffRunAccepted:
     )
     _write_json(status_file, status.model_dump(mode='json'))
     _write_json(job_file, spec.model_dump(mode='json'))
+    scope = get_gpu_arbiter_config().bakeoff_host_gpus
     try:
-        action = await gpu_arbiter.stop_gpu_services()
+        action = await gpu_arbiter.stop_gpu_services(
+            containers=gpu_arbiter.containers_to_stop(scope) if scope else None
+        )
     except gpu_arbiter.GpuArbiterStopFailedError as exc:
         job_file.unlink(missing_ok=True)
         status.state, status.error = 'error', f'could not free the GPU: {exc}'
