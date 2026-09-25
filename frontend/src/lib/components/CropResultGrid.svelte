@@ -105,7 +105,7 @@
 </script>
 
 <div
-  class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8"
+  class="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3"
   use:dndzone={{
     items: renderItems,
     type: 'crop-card',
@@ -135,7 +135,7 @@
              scrim behind the whole top strip keeps them legible without
              needing per-image letterbox-rect math. -->
         <div
-          class="pointer-events-none absolute inset-x-0 top-0 h-7 rounded-t-md bg-gradient-to-b from-black/55 to-transparent"
+          class="pointer-events-none absolute inset-x-0 top-0 h-7 rounded-t-md bg-black/55"
         ></div>
       {/if}
       {#if scoreOf}

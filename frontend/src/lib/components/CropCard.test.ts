@@ -57,7 +57,9 @@ afterEach(() => {
 });
 
 describe('CropCard — source badge', () => {
-  it('renders the class-source catalog label, not the raw source id', () => {
+  const chip = (el: HTMLElement) => el.querySelector('[data-testid="source-chip"]');
+
+  it('shows a short role code, with the served catalog label in the tooltip (K2)', () => {
     classSourcesStore.list = [
       { id: 'model_x', label: 'Model X Detector', role: 'model' },
     ] as never;
@@ -65,17 +67,28 @@ describe('CropCard — source badge', () => {
       crop: baseCrop({ label_source: 'model_x', class_validated: true }),
     });
 
-    const badge = el.querySelector('span[title="sedan"]');
-    expect(badge?.textContent?.trim()).toBe('Model X Detector');
+    expect(chip(el)?.textContent?.trim()).toBe('M');
+    expect(chip(el)?.getAttribute('title')).toBe('Label source: Model X Detector');
+  });
+
+  it('gives the class name its own element, never truncated by the source label (K2)', () => {
+    classSourcesStore.list = [
+      { id: 'vlm_write', label: 'Labeled by the VLM', role: 'vlm' },
+    ] as never;
+    const el = renderCard({
+      crop: baseCrop({ label_source: 'vlm_write', class_name: 'class_b' }),
+    });
+    expect(el.querySelector('[data-testid="class-name"]')?.textContent?.trim()).toBe(
+      'class_b',
+    );
+    expect(chip(el)?.textContent).not.toContain('Labeled by');
   });
 
   it('follows class_validated, not label_validated, for the vlm badge suffix', () => {
     classSourcesStore.list = [{ id: 'vlm_write', label: 'VLM', role: 'vlm' }] as never;
 
     // class_validated=false, label_validated=true (region validated, class
-    // is not) — the badge must still render the unvalidated form. p4
-    // (2026-09-24 interactive pass): no longer a literal "?" suffix — the
-    // unvalidated state now lives in the title tooltip instead.
+    // is not) — the badge must still render the unvalidated form.
     const el = renderCard({
       crop: baseCrop({
         label_source: 'vlm_write',
@@ -83,8 +96,8 @@ describe('CropCard — source badge', () => {
         label_validated: true,
       }),
     });
-    const badge = el.querySelector('span[title="sedan — not yet validated"]');
-    expect(badge?.textContent?.trim()).toBe('VLM ·');
+    expect(chip(el)?.getAttribute('title')).toBe('Label source: VLM — not yet validated');
+    expect(chip(el)?.textContent?.trim()).toBe('VLM·');
   });
 
   it('renders the validated form when class_validated is true regardless of label_validated', () => {
@@ -97,8 +110,30 @@ describe('CropCard — source badge', () => {
         label_validated: false,
       }),
     });
-    const badge = el.querySelector('span[title="sedan"]');
-    expect(badge?.textContent?.trim()).toBe('VLM');
+    expect(chip(el)?.getAttribute('title')).toBe('Label source: VLM');
+    expect(chip(el)?.textContent?.trim()).toBe('VLM');
+  });
+
+  it('K3: a crop with no class reads Unlabeled with no "labeled by" chip, even with a label_source', () => {
+    classSourcesStore.list = [
+      { id: 'vlm', label: 'Labeled by the VLM', role: 'vlm' },
+    ] as never;
+    const el = renderCard({
+      crop: baseCrop({
+        class_id: null,
+        class_name: null,
+        label_source: 'vlm',
+        class_confidence: 0.7,
+        vlm_raw_class: 'car',
+      } as Partial<Crop>),
+    });
+    expect(chip(el)).toBeNull();
+    expect(el.textContent).not.toContain('Labeled by');
+    expect(el.querySelector('[data-testid="class-name"]')?.textContent?.trim()).toBe(
+      'Unlabeled',
+    );
+    expect(el.textContent).toContain('VLM said: car');
+    expect(el.textContent).not.toContain('70%');
   });
 });
 
@@ -156,7 +191,18 @@ describe('CropCard — dq-queues cutover: class_confidence / vlm_raw_class', () 
         vlm_class_empty_reason: 'no_match',
       }),
     });
-    expect(el.textContent).toContain('VLM empty: no_match');
+    expect(el.textContent).toContain('VLM answer matched no class');
+    expect(el.textContent).not.toContain('no_match');
     expect(el.textContent).not.toContain('VLM said');
+  });
+});
+
+describe('CropCard — K4: readable VLM empty reason', () => {
+  it('maps no_answer to a sentence, not the raw id', () => {
+    const el = renderCard({
+      crop: baseCrop({ vlm_raw_class: null, vlm_class_empty_reason: 'no_answer' }),
+    });
+    expect(el.textContent).toContain('VLM gave no answer');
+    expect(el.textContent).not.toContain('no_answer');
   });
 });
