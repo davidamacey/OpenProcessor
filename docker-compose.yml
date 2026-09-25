@@ -348,6 +348,9 @@ services:
     volumes:
       - ./scripts:/app/scripts:ro
       - ./src:/app/src:ro
+      # Exports are eval datasets: same /app/data path as yolo-api, where
+      # the API resolved them (OP_EXPORT_ROOT defaults to ./data/exports).
+      - ./data:/app/data:ro
       - openprocessor-state:/var/lib/openprocessor
     deploy:
       resources:

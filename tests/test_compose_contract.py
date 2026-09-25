@@ -192,3 +192,13 @@ def test_build_sha_baked_into_the_final_stage_of_every_dockerfile() -> None:
         assert 'org.opencontainers.image.revision=${OP_BUILD_SHA}' in tail, (
             f'{path}: missing revision LABEL binding OP_BUILD_SHA'
         )
+
+
+def test_evaluator_sees_exports_at_the_api_path() -> None:
+    """Bake-off eval datasets are exports: the evaluator must read them at the
+    path the API resolved (default ``OP_EXPORT_ROOT=./data/exports`` -> ``/app/data``)."""
+    services = _services()
+    api_mounts = services['yolo-api'].get('volumes') or []
+    evaluator_mounts = services['curation-evaluator'].get('volumes') or []
+    assert any(str(v).startswith('./data:/app/data') for v in api_mounts)
+    assert './data:/app/data:ro' in evaluator_mounts
