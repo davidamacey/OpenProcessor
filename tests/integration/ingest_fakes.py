@@ -180,6 +180,21 @@ class FakeOpenSearch:
                 if d.get('image_path') in wanted
             ]
             return {'hits': {'hits': hits}}
+        # BA-1: /ingest/path_lookup matches on image_path OR
+        # source_identifier -- {'bool': {'should': [{'terms':
+        # {'image_path': [...]}}, {'terms': {'source_identifier': [...]}}]}}.
+        should = (query.get('bool') or {}).get('should')
+        if should is not None and any('image_path' in (c.get('terms') or {}) for c in should):
+            wanted_by_field: dict[str, set[str]] = {}
+            for clause in should:
+                for field, values in (clause.get('terms') or {}).items():
+                    wanted_by_field.setdefault(field, set()).update(values)
+            hits = [
+                {'_id': d.get('image_id', k), '_source': d}
+                for k, d in self._view('images').items()
+                if any(d.get(field) in values for field, values in wanted_by_field.items())
+            ]
+            return {'hits': {'hits': hits}}
         path_term = (query.get('term') or {}).get('image_path')
         if path_term is not None:
             hits = [
@@ -342,6 +357,15 @@ def curation_app(
 
     temp_root = Path(tempfile.gettempdir()).resolve()
     monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (temp_root,))  # noqa: ARG005
+
+    # BA-1: POST /ingest/upload persists bytes under CurationConfig.upload_root
+    # -- give it a real, writable directory under the same temp root the
+    # source-path tests already declare servable, and force the process-wide
+    # config singleton to rebuild so it picks this env var up.
+    import src.config.curation as curation_config_mod
+
+    monkeypatch.setenv('OP_UPLOAD_ROOT', str(temp_root / 'op_test_uploads'))
+    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
 
     try:
         with TestClient(main_module.app) as c:

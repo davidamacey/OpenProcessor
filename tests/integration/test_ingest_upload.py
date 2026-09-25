@@ -80,11 +80,19 @@ def test_upload_ingests_bytes_under_client_identifiers(
     payload = resp.json()
     assert payload['status'] == 'success'
     assert payload['summary']['successful'] == 2
-    assert [r['image_path'] for r in payload['results']] == ids
+    # BA-1: image_path is now the server-persisted path, not the client
+    # identifier -- the identifier is served/stored separately.
+    assert [r['source_identifier'] for r in payload['results']] == ids
+    assert all(r['image_path'] not in ids for r in payload['results'])
 
-    docs = {d['image_path']: d for d in fake_opensearch.images.values()}
+    docs = {d['source_identifier']: d for d in fake_opensearch.images.values()}
     assert set(docs) == set(ids)
     assert {d['source'] for d in docs.values()} == {'upload_test'}
+    # The persisted image_path is real and distinct per image, under the
+    # configured upload root, content-addressed.
+    persisted_paths = {d['image_path'] for d in docs.values()}
+    assert len(persisted_paths) == 2
+    assert all('op_test_uploads' in p for p in persisted_paths)
     # The identifiers do not exist on the server: the whole-frame
     # embedding must come from the uploaded bytes, never a path re-read.
     assert pe.whole_frame_paths == []
@@ -122,7 +130,7 @@ def test_identifiers_default_to_filenames(
 ) -> None:
     resp = client.post('/curation/ingest/upload', files=_files(jpeg_bytes(31)))
     assert resp.status_code == 200, resp.text
-    assert [d['image_path'] for d in fake_opensearch.images.values()] == ['img0.jpg']
+    assert [d['source_identifier'] for d in fake_opensearch.images.values()] == ['img0.jpg']
 
 
 def test_path_count_mismatch_rejected(client: TestClient) -> None:
@@ -142,9 +150,10 @@ def test_bad_paths_json_rejected(client: TestClient) -> None:
 
 
 def test_oversized_upload_rejected(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.routers.curation import ingest
+    import src.config.curation as curation_config_mod
 
-    monkeypatch.setattr(ingest, 'MAX_UPLOAD_IMAGES', 1)
+    monkeypatch.setenv('OP_UPLOAD_MAX_IMAGES_PER_REQUEST', '1')
+    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     resp = client.post('/curation/ingest/upload', files=_files(jpeg_bytes(44), jpeg_bytes(45)))
     assert resp.status_code == 413
 
@@ -162,7 +171,7 @@ def test_undecodable_upload_fails_per_item(
     assert payload['status'] == 'partial'
     assert payload['summary']['successful'] == 1
     assert payload['summary']['failed'] == 1
-    assert [d['image_path'] for d in fake_opensearch.images.values()] == ['good.jpg']
+    assert [d['source_identifier'] for d in fake_opensearch.images.values()] == ['good.jpg']
 
 
 # =============================================================================
@@ -221,7 +230,7 @@ def test_driver_uploads_tree_and_resumes(
     )
     assert counts.successful == 5
     assert counts.failed == 0
-    stored = sorted(d['image_path'] for d in fake_opensearch.images.values())
+    stored = sorted(d['source_identifier'] for d in fake_opensearch.images.values())
     assert stored == sorted(f'corpus://{p.relative_to(root)}' for p in expected)
     snapshot = json.loads(progress.read_text())
     assert snapshot['final'] is True
@@ -312,3 +321,37 @@ def test_path_map_rewrites_prefix_only() -> None:
     assert map_identifier(Path('/media/usb0/archive2/x.jpg'), pm) == '/media/usb0/archive2/x.jpg'
     pm2 = parse_path_map('/data=/mnt/shared')
     assert map_identifier(Path('/data/x.jpg'), pm2) == '/mnt/shared/x.jpg'
+
+
+# =============================================================================
+# BA-2 / BA-5: served limits enforced with typed errors
+# =============================================================================
+
+
+def test_unsupported_extension_fails_per_item_with_a_stable_code(
+    client: TestClient, fake_opensearch: FakeOpenSearch
+) -> None:
+    resp = client.post(
+        '/curation/ingest/upload',
+        files=_files(jpeg_bytes(51)),
+        data={'image_paths': json.dumps(['weird.gif'])},
+    )
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload['summary']['failed'] == 1
+    result = payload['results'][0]
+    assert result['status'] == 'failed'
+    assert result['error_kind'] == 'unsupported_type'
+    assert result['source_identifier'] == 'weird.gif'
+    assert len(fake_opensearch.images) == 0
+
+
+def test_total_bytes_over_the_configured_limit_is_413(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import src.config.curation as curation_config_mod
+
+    monkeypatch.setenv('OP_UPLOAD_MAX_BYTES_PER_REQUEST', '10')
+    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
+    resp = client.post('/curation/ingest/upload', files=_files(jpeg_bytes(52)))
+    assert resp.status_code == 413

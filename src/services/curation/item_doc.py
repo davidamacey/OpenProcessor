@@ -68,8 +68,23 @@ def build_image_doc(
     imohash: str,
     now: str,
     whole_frame_embedding: Any | None = None,
+    source_identifier: str | None = None,
+    ingest_run_id: str | None = None,
 ) -> dict[str, Any]:
-    """Build the single images-index document for one ingested photo."""
+    """Build the single images-index document for one ingested photo.
+
+    BA-1: ``source_identifier`` is the client-supplied identifier for a
+    byte-upload ingest (``POST /ingest/upload``) -- ``image_path`` there
+    is now the server-persisted, servable path, so the client's own
+    identifier (which need not exist on the server and previously WAS
+    ``image_path``, before bytes were persisted) is kept in this
+    separate field. ``None`` for a server-path ingest, where
+    ``image_path`` already *is* the client-meaningful identifier.
+
+    BA-4: ``ingest_run_id`` is an optional client-supplied tag for one
+    upload call, so ``GET /ingest/status?run_id=`` can scope counts to
+    it.
+    """
     doc: dict[str, Any] = {
         'image_id': image_id,
         'image_path': image_path,
@@ -82,6 +97,10 @@ def build_image_doc(
     }
     if whole_frame_embedding is not None:
         doc['pe_embedding'] = list(whole_frame_embedding)
+    if source_identifier is not None:
+        doc['source_identifier'] = source_identifier
+    if ingest_run_id is not None:
+        doc['ingest_run_id'] = ingest_run_id
     return doc
 
 

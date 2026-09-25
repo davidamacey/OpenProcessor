@@ -77,7 +77,15 @@ from src.services.curation.ingest_detect import (
     SecondaryOutput,
     WholeImageDetector,
 )
-from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
+from src.services.curation.ingest_models import (
+    ERROR_KIND_BULK_INDEX,
+    ERROR_KIND_DECODE_FAILED,
+    ERROR_KIND_DETECTOR_INFER,
+    ERROR_KIND_EMPTY,
+    BatchIngestResult,
+    IngestResult,
+    IngestSummary,
+)
 from src.services.curation.item_doc import (
     DetectedItem,
     build_image_doc,
@@ -325,6 +333,8 @@ class CurationIngestService:
         prefilled_items: list[DetectedItem] | None = None,
         prefilled_secondary: SecondaryOutput | None = None,
         whole_frame_from_bytes: bool = False,
+        source_identifier: str | None = None,
+        ingest_run_id: str | None = None,
     ) -> IngestResult:
         """Run the full pipeline on a single image.
 
@@ -358,8 +368,9 @@ class CurationIngestService:
             return IngestResult(
                 status='failed',
                 image_path=image_path,
+                source_identifier=source_identifier,
                 error='empty image bytes',
-                error_kind='empty',
+                error_kind=ERROR_KIND_EMPTY,
             )
 
         if prefilled_image is not None:
@@ -372,22 +383,28 @@ class CurationIngestService:
                 return IngestResult(
                     status='failed',
                     image_path=image_path,
+                    source_identifier=source_identifier,
                     error=str(exc),
-                    error_kind='unidentified_image',
+                    error_kind=ERROR_KIND_DECODE_FAILED,
                 )
             except Exception as exc:
                 return IngestResult(
                     status='failed',
                     image_path=image_path,
+                    source_identifier=source_identifier,
                     error=str(exc),
-                    error_kind='decode_error',
+                    error_kind=ERROR_KIND_DECODE_FAILED,
                 )
 
         image_hash = _imohash_bytes(image_bytes)
         existing_id = await self._check_duplicate(image_hash)
         if existing_id:
             return IngestResult(
-                status='duplicate', image_id=existing_id, image_path=image_path, imohash=image_hash
+                status='duplicate',
+                image_id=existing_id,
+                image_path=image_path,
+                source_identifier=source_identifier,
+                imohash=image_hash,
             )
 
         if prefilled_items is not None:
@@ -400,8 +417,9 @@ class CurationIngestService:
                 return IngestResult(
                     status='failed',
                     image_path=image_path,
+                    source_identifier=source_identifier,
                     error=str(exc),
-                    error_kind='detector_infer',
+                    error_kind=ERROR_KIND_DETECTOR_INFER,
                 )
 
         if self.secondary_profile is not None and items:
@@ -465,6 +483,8 @@ class CurationIngestService:
             imohash=image_hash,
             now=now,
             whole_frame_embedding=whole_frame_embedding,
+            source_identifier=source_identifier,
+            ingest_run_id=ingest_run_id,
         )
 
         try:
@@ -538,9 +558,10 @@ class CurationIngestService:
             return IngestResult(
                 status='failed',
                 image_path=image_path,
+                source_identifier=source_identifier,
                 imohash=image_hash,
                 error=str(exc),
-                error_kind='bulk_index',
+                error_kind=ERROR_KIND_BULK_INDEX,
             )
         self._publish_created(created_ids, image_path)
 
@@ -548,6 +569,7 @@ class CurationIngestService:
             status='success',
             image_id=image_id,
             image_path=image_path,
+            source_identifier=source_identifier,
             imohash=image_hash,
             n_crops=len(crop_docs),
             crops_created=bulk_result.get('crops_created', 0),
@@ -591,6 +613,8 @@ class CurationIngestService:
         label_source: str = '',
         detect_mismatches: bool = False,
         whole_frame_from_bytes: bool = False,
+        source_identifiers: list[str | None] | None = None,
+        ingest_run_id: str | None = None,
     ) -> BatchIngestResult:
         """Batch ingest: msearch dedup, batched detector inference, per-image finish.
 
@@ -630,6 +654,8 @@ class CurationIngestService:
             label_source=label_source,
             detect_mismatches=detect_mismatches,
             whole_frame_from_bytes=whole_frame_from_bytes,
+            source_identifiers=source_identifiers,
+            ingest_run_id=ingest_run_id,
         )
 
 
