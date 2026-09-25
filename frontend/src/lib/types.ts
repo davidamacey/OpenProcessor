@@ -48,7 +48,7 @@ export interface RegistryClass {
    *  recomputed client-side from `validated_count`. */
   adequacy?: string;
   /** `'item'` (an ordinary item class) or `'region'` (a slot-bound
-   *  region class, e.g. the license-plate class) — served on
+   *  region class, i.e. the served profile's region_class_name) — served on
    *  `GET {API_PREFIX}/classes`/`/stats/classes` (OpenProcessor #36 item 1,
    *  X2/R1). The single source of truth for excluding a region class from
    *  an item-class picker; `isSlotBoundClass`/`isItemClassTarget`
