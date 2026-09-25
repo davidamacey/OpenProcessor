@@ -39,6 +39,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to the `license_plate` example profile; paper-only scripts (a dedup-threshold
   sweep and a LaTeX-number generator that hardcoded a private model id and a
   live-deployment URL) removed from the public tree (W7).
+- **Model comparison (bake-off) API v2, generic and multi-class** (clean break,
+  no compatibility fields; plan `docs/design/generic_model_comparison_plan.md`
+  §7, shapes in `docs/design/curation_api_contract.md`). Every
+  `/curation/bakeoff/*` route is typed and result files carry
+  `schema_version: 2` (older result files answer 409).
+  `POST /bakeoff/run` takes `datasets: [{id}]` (`export:<path>`,
+  `external:<group>/<name>`, or `run:<job_id>`) and `models[]` discriminated
+  on `source` (`run` / `baseline` / `custom`), plus
+  `quantize: {run_id, formats, n_calib, calib_split, throughput}`; removed:
+  `dataset`, `datasets[].path/name`, `verify_frozen`, free-form model specs
+  (`backend`/`profile`/`gt_class_id`/`gt_class_name`/`pred_class_id`/
+  `lpdnet_variant`/`primary_classes`), `quantize.coreml`. Responses: eval
+  datasets use `source` + `group` (no `n_test`/`frozen_sha`/`kind`);
+  `trained_models` serves `trainer_map50` / `trainer_map50_split` (were
+  `map50` / `map50_split`); comparison rows put metrics under `overall` /
+  `common` with `per_class` and `coverage`; `results` takes `?dataset_id=`;
+  matrix `best` values are lists of tied winners; job state adds `queued`.
+- **`BakeoffProfile` loses `target_class_id` / `target_class_name`**: a
+  profile scores every class in the eval split (`class_filter` narrows by
+  name). `OP_BAKEOFF_PROFILE_TARGET_CLASS_ID` / `_NAME` are retired (startup
+  fails with a pointer to `OP_BAKEOFF_PROFILE_CLASS_FILTER`). The
+  license-plate profile, baselines, converters and the `lpdnet` /
+  `open-image-models` backends moved to `examples/bakeoff/license_plate/`
+  and load only by profile path; `GET /bakeoff/profiles` no longer lists
+  example profiles and the default baseline registry is empty.
+- The trainer's opt-in auto-quantize posts `POST /curation/bakeoff/run`
+  (via `OP_API_BASE_URL` + `OP_API_PREFIX`) instead of writing a job file;
+  `campaign.py` no longer reads `OP_BAKEOFF_JOBS_DIR` / `OP_BAKEOFF_OUT_DIR`.
 - **Naming sweep, wave W1 — stored-data renames** (`docs/design/naming_sweep_plan.md`
   S1-S8; re-ingest required):
   - Items index kNN field `v6_embedding` → `backbone_embedding`
@@ -106,6 +134,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   posts to `/segment`).
 
 ### Added
+- **Per-class model comparison.** Every export with a labelled test split is
+  an eval dataset (`GET /bakeoff/eval_datasets`, class counts and
+  test-split hashes computed from the files); finished training runs are
+  contenders directly (`GET /bakeoff/trained_models?dataset_id=` with
+  same-export / same-frozen-test / train-test overlap). The harness scores
+  per class and overall (COCO mAP50, mAP50-95, micro P/R/F1), maps each
+  model's classes onto the dataset's (run class remap, registry ids, names
+  or an explicit map) and reports uncovered classes and unmapped
+  predictions; rows rank on the classes every model covers.
+- **Test-split identity and build identity in run lineage.** Export
+  manifests record `frozen_test_sha` (which frames) and `test_label_sha`
+  (which boxes); training job specs and run manifests record `dataset_sha`,
+  `frozen_test_sha`, `test_label_sha` and `dataset_version_tag` separately,
+  plus `code_versions.api_sha`, `trainer_sha` and `trainer_image_id`.
+  `OP_BUILD_SHA` is baked into the API, trainer and evaluator images at
+  build time (`build.args`, OCI revision label; `make build` passes it); a
+  runtime value still overrides it.
 - **VLM class-attempt fields** `vlm_class_attempted_at` (date) and
   `vlm_class_empty_reason` (keyword: `no_answer` / `no_match` /
   `invalid_index` / `unparseable`; `null` when the attempt answered) on items
@@ -206,6 +251,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restricted allowlist that excludes GPU 0 no longer rejects the default spec.
 
 ### Fixed
+- Run lineage recorded the frozen test-split hash as `lineage.dataset_sha`
+  and nothing for multi-class exports; `code_versions.api_sha` /
+  `trainer_image` were always null (read from the trainer's own env, which
+  nothing set); the trainer's MLflow dataset tags read keys the job spec
+  does not have and were always empty.
+- The GPU arbiter did not see queued bake-offs on the default config
+  (`bakeoff_jobs_dir` was unset while the router wrote to
+  `<state_dir>/bakeoff_jobs`), and the router claimed hardcoded GPUs
+  `0,1` and continued when containers could not be stopped: a GPU-resident
+  container could be restarted under a running bake-off. The arbiter now
+  defaults to the router's dir, and enqueueing answers 409 (job removed)
+  when it cannot stop them.
+- The bake-off evaluator could not read exports (no mount); compose now
+  mounts `./data` read-only on `curation-evaluator`.
 - **Most VLM class answers were read as empty and recorded as `vlm_unmatched`**
   (live: 2,927 of 3,102 `vlm_unmatched` items had `vlm_raw_class=''`). The
   class calls sent no JSON-object `response_format`, so against a vLLM server

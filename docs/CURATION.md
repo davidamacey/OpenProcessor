@@ -281,7 +281,7 @@ This starts, in addition to the base services:
 | `curation-vlm-worker` | Verifies/labels items via the configured VLM. |
 | `curation-auto-label-worker` | Drives the `/curation/pipeline/auto_label` protocol as a long-lived process. |
 | `curation-cluster-refresh` | Periodically retrains/refreshes the residual clustering. |
-| `curation-evaluator` (run on demand, not long-lived) | `docker compose --profile curation run --rm curation-evaluator` — the bake-off evaluation harness. |
+| `curation-evaluator` (run on demand, not long-lived) | `docker compose --profile curation run --rm curation-evaluator` — the model-comparison (bake-off) harness: scores training runs and baselines per class on the test split of any export (`/curation/bakeoff/*`, see `docs/design/curation_design_rationale.md` §8). Mounts `./data` read-only to read exports. |
 
 None of these workers requires Triton or a GPU to *start* — they will
 sit idle or error per-call until you've configured a real detector/VLM
@@ -426,7 +426,7 @@ be changed at runtime once the app has started.
 | Training pipeline | `OP_TRAIN_JOBS_DIR`, `OP_TRAIN_RUNS_ROOT`, `OP_TRAIN_STAGING`, `OP_PREFLIGHT_SCAN_CAP`, `OP_MLFLOW_PUBLIC_URL` (browser-reachable MLflow base; served `mlflow_run_url` is null when unset) |
 | GPU arbiter (`GpuArbiterConfig.from_env()`) | `OP_GPU_ALLOWED_IDS` (comma list; empty = unrestricted), `OP_GPU_ARBITER_CONTAINERS` (comma-separated `name` or `name@ids`, e.g. `vllm-server@2`, `segmenter@0/2` — `/`-separated ids scope a container to specific GPUs; a bare `name` keeps the old "stop only on a multi-GPU claim" behavior), `OP_GPU_ARBITER_TRAINER_CONTAINER`, `OP_GPU_LABELS` (comma-separated `id=label`, e.g. `0=RTX A6000,2=RTX A6000`, used by `GET /train/gpus`), `OP_TRAIN_DEFAULT_GPUS` (default `cuda_visible_devices` for new specs; falls back to the smallest allowed id, else `0`), plus `OP_BAKEOFF_JOBS_DIR` |
 | Export | `OP_BUILD_SHA` |
-| Bake-off harness | `OP_BAKEOFF_JOBS_DIR`, `OP_BAKEOFF_OUT_DIR`, `OP_BAKEOFF_EVAL_ROOT`, `OP_BAKEOFF_CONCURRENCY`, `OP_BAKEOFF_GPUS`, `OP_BAKEOFF_BASELINES_PATH`, `OP_BAKEOFF_PROFILE`, `OP_BAKEOFF_PROFILE_<FIELD>` |
+| Bake-off harness | `OP_BAKEOFF_JOBS_DIR` (default `$OP_STATE_DIR/bakeoff_jobs`, shared by the router and the GPU arbiter), `OP_BAKEOFF_OUT_DIR`, `OP_BAKEOFF_EVAL_ROOT`, `OP_BAKEOFF_CONCURRENCY`, `OP_BAKEOFF_GPUS`, `OP_BAKEOFF_BASELINES_PATH`, `OP_BAKEOFF_PROFILE` (registered name or profile `.json` path; examples load by path), `OP_BAKEOFF_PROFILE_<FIELD>` |
 | Worker / pipeline flags | `OP_API`, `OP_AUTO_LABEL_STATE_DIR`, `OP_EVENT_API_URL`, `OP_ITEMS_INDEX_OVERRIDE`, `OP_PAUSE_SENTINEL`, `OP_WORKER_PAUSE_SENTINEL`, `OP_VIZ_JOBS_DIR`, `OP_VIZ_MAX_N` |
 | VLM connection | `OP_VLM_URL`, `OP_VLM_MODEL` (required whenever `OP_VLM_URL` is set — no default), `OP_VLM_API_KEY`, `OP_VLM_MAX_IMAGES_PER_CALL` (per-request image cap, default 8 — keep <= the engine's per-prompt image limit), `GEMMA_IMAGES_PER_CALL` (open-vocab chunk only, default 3), `GEMMA_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_KEEPALIVE` |
 | Segmenter connection | `SAM3_URL`, `SAM3_URLS`, `SAM3_HTTPX_MAX_CONNECTIONS`, `SAM3_HTTPX_KEEPALIVE` |

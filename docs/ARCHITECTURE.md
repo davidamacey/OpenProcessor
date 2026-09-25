@@ -140,7 +140,8 @@ consumer among anticipated others) is documented in
 | Export | `src/services/curation/export.py` | Generic YOLO-format dataset export (deterministic split, manifest checksum) |
 | Detection cascade | `src/services/detection/` | Crop quality, frame dedup, PE preprocessing, ensemble NMS, region lean, FP store, cascade orchestration |
 | VLM labeling | `src/services/labeling/{vlm_client,vlm_labeler,vlm_prompts}.py` | VLM transport/retry, class-resolution + region-verify orchestration, prompt/vocabulary packs |
-| Training | `src/services/training/` | Job lifecycle, preflight scan, GPU arbiter, Triton promote, bakeoff harness |
+| Training | `src/services/training/` | Job lifecycle, preflight scan, GPU arbiter, Triton promote |
+| Model comparison (bake-off) | `src/services/curation/{eval_datasets,bakeoff_jobs}.py`, `scripts/curation/bakeoff/` | Eval datasets (exports + frozen external sets), run/baseline resolution and per-class class mapping into job spec v2; the harness the evaluator runs (multi-class COCO metrics, comparison, matrix) |
 | Routers | `src/routers/curation/` (23 modules) + `curation_images.py`, `curation_train.py`, `curation_umap.py` | HTTP surface — see `curation_api_contract.md` for the full route table |
 | Workers | `scripts/curation/{vlm_worker,auto_label_worker,cluster_refresh_daemon,region_worker_main}.py`, `scripts/curation/worker/` | Long-lived out-of-process consumers (VLM labeling loop, auto-label dispatcher, periodic cluster refresh, detection cascade worker) |
 
@@ -160,7 +161,7 @@ docker compose --profile curation up -d
 | `curation-vlm-worker` | Verifies/labels items via the configured VLM. |
 | `curation-auto-label-worker` | Long-lived driver for the `/curation/pipeline/auto_label` protocol. |
 | `curation-cluster-refresh` | Periodically retrains/refreshes residual clustering. |
-| `curation-evaluator` (run on demand) | Bake-off evaluation harness — `docker compose --profile curation run --rm curation-evaluator`. |
+| `curation-evaluator` (run on demand) | Model-comparison (bake-off) harness — `docker compose --profile curation run --rm curation-evaluator`. Watches the bake-off job dir the API writes; reads exports via a read-only `./data` mount. |
 
 None of these workers requires the base API image to be rebuilt — they
 run the same `davidamacey/openprocessor` image with a different
