@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateOnly } from './formatDate';
+import { formatDateOnly, formatTimestamp } from './formatDate';
+
+describe('formatTimestamp (visual audit K7)', () => {
+  it('drops microseconds and the offset suffix, normalised to UTC', () => {
+    expect(formatTimestamp('2026-09-24T21:13:41.995236+00:00')).toBe(
+      '2026-09-24 21:13:41 UTC',
+    );
+    expect(formatTimestamp('2026-09-24T23:13:41-02:00')).toBe('2026-09-25 01:13:41 UTC');
+  });
+
+  it('renders a dash for a missing value and the raw text when unparseable', () => {
+    expect(formatTimestamp(null)).toBe('—');
+    expect(formatTimestamp('yesterday')).toBe('yesterday');
+  });
+});
 
 describe('formatDateOnly (m14, 2026-09-24 interactive pass)', () => {
   it('never rolls a date-only string back a day, in any timezone', () => {

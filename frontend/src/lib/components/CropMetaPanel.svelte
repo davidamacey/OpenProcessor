@@ -7,6 +7,7 @@
   import { slotIsPresent } from '$lib/annotations/types';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
+  import { formatTimestamp } from '$lib/formatDate';
 
   interface Props {
     crop: Crop;
@@ -121,12 +122,14 @@
       <span class="ml-1 text-amber-300/80">({crop.excluded_reason})</span>
     {/if}
     {#if crop.excluded_at}
-      <span class="ml-1 font-mono text-amber-300/60">{crop.excluded_at}</span>
+      <span class="ml-1 font-mono text-amber-300/60" title={crop.excluded_at}
+        >{formatTimestamp(crop.excluded_at)}</span
+      >
     {/if}
   </div>
 {/if}
 
-<dl class="grid grid-cols-2 gap-y-1 text-xs">
+<dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
   <dt class="text-zinc-500">Class</dt>
   <dd class="text-zinc-200">
     {crop.class_name ?? '—'}
@@ -220,7 +223,9 @@
     <!-- p6 (2026-09-24 interactive pass): the ISO timestamp has no
          whitespace to wrap on, so it overflowed the fixed-width panel and
          got visually clipped ("…+00:0") instead of wrapping. -->
-    <dd class="font-mono break-all text-zinc-400">{crop.class_labeled_at}</dd>
+    <dd class="font-mono text-zinc-400" title={crop.class_labeled_at}>
+      {formatTimestamp(crop.class_labeled_at)}
+    </dd>
   {/if}
 
   {#if crop.class_labeler}
@@ -236,7 +241,7 @@
       <div class="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
         {spec.label.title}
       </div>
-      <dl class="grid grid-cols-2 gap-y-1 text-xs">
+      <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
         {#if data?.lifecycle?.state}
           <dt class="text-zinc-500">Status</dt>
           <dd class="text-zinc-200">{data.lifecycle.state.label}</dd>
@@ -343,7 +348,7 @@
 
         {#if data?.text?.value != null}
           <dt class="text-zinc-500">Text</dt>
-          <dd class="flex items-center gap-1.5">
+          <dd class="flex min-w-0 flex-wrap items-center gap-1.5">
             <span
               class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-zinc-100"
             >
@@ -359,7 +364,7 @@
             {/if}
             {#if data.text.disagreement}
               <span
-                class="rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
+                class="whitespace-nowrap rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
                 title="The VLM and OCR readers disagree on this text"
               >
                 readers disagree
@@ -497,16 +502,27 @@
   {:else}
     <ul class="space-y-1 text-[11px]">
       {#each historyEntries as entry, i (i)}
-        <li class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-zinc-400">
+        <!-- K7 (visual audit 2026-09-24): every row names its resulting
+             class ("no class" when the write left none) with the source
+             labelled, and a short timestamp (raw value in the tooltip). -->
+        <li
+          class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-zinc-400"
+          data-testid="history-entry"
+        >
           <span class="font-mono text-zinc-300">{entry.writer ?? 'unknown'}</span>
-          {#if entry.class_name}
-            <span>→ {entry.class_name}</span>
-          {/if}
+          <span class={entry.class_name ? '' : 'text-zinc-500'}
+            >→ {entry.class_name ?? 'no class'}</span
+          >
           {#if entry.class_source}
-            <span class="text-zinc-600">({entry.class_source})</span>
+            <span class="text-zinc-600"
+              >source: {classSourcesStore.labelFor(entry.class_source) ||
+                entry.class_source}</span
+            >
           {/if}
           {#if entry.at}
-            <span class="font-mono text-zinc-600">{entry.at}</span>
+            <span class="font-mono text-zinc-600" title={entry.at}
+              >{formatTimestamp(entry.at)}</span
+            >
           {/if}
         </li>
       {/each}
@@ -534,7 +550,9 @@
       {/if}
       {#if imageMeta.indexed_at}
         <dt class="text-zinc-500">Indexed</dt>
-        <dd class="font-mono">{imageMeta.indexed_at}</dd>
+        <dd class="font-mono" title={imageMeta.indexed_at}>
+          {formatTimestamp(imageMeta.indexed_at)}
+        </dd>
       {/if}
     </dl>
     {#if siblings && siblings.length > 0}
@@ -566,7 +584,9 @@
     {#if crop.updated_at}
       <div>
         <span class="text-zinc-600">updated:</span>
-        <span class="font-mono">{crop.updated_at}</span>
+        <span class="font-mono" title={crop.updated_at}
+          >{formatTimestamp(crop.updated_at)}</span
+        >
       </div>
     {/if}
     <div>
