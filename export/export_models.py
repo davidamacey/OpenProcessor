@@ -1057,7 +1057,12 @@ def export_model(
 
     # Validate input file
     if not validate_pt_file(pt_file):
-        return {'model': model_id, 'status': 'error', 'error': 'Model file not found'}
+        return {
+            'model': model_id,
+            'triton_name': config['triton_name'],
+            'status': 'error',
+            'error': f'Model file not found: {pt_file}',
+        }
 
     results = {
         'model': model_id,
@@ -1175,7 +1180,11 @@ def print_summary(results: list[dict[str, Any]]) -> None:
     logger.info('=' * 70)
 
     for result in results:
-        logger.info(f'{result["model"]} ({result["triton_name"]}):')
+        logger.info(f'{result["model"]} ({result.get("triton_name", "?")}):')
+
+        if result.get('status') == 'error':
+            logger.info(f'  [FAIL] {result.get("error", "unknown error")}')
+            continue
 
         if 'onnx' in result:
             status = '[OK]' if result['onnx']['status'] == 'success' else '[FAIL]'

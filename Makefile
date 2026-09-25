@@ -496,9 +496,15 @@ api-test-quick: ## Quick API test (no export, just endpoint verification)
 # Model Export (CLI-based)
 # ==================================================================================
 
+.PHONY: download-models
+download-models: ## Fetch the .pt/.onnx weights export-models etc. need (yolo11s.pt, SCRFD, ArcFace, MobileCLIP)
+	@echo "Downloading base model weights into pytorch_models/ (inside $(API_SERVICE))..."
+	$(COMPOSE) exec $(API_SERVICE) bash -c 'source scripts/lib/download.sh && download_essential_models'
+
 .PHONY: export-models
 export-models: ## Export YOLO models (TRT + End2End with normalized boxes)
 	@echo "Exporting YOLO models to TensorRT formats (normalized boxes)..."
+	@echo "(run 'make download-models' first on a fresh clone if yolo11s.pt is missing)"
 	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_models.py --models small --formats trt trt_end2end --normalize-boxes --save-labels --generate-config
 
 .PHONY: export-all
