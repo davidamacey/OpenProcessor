@@ -523,6 +523,12 @@ class VisualSearchService:
         client = get_triton_client(settings.triton_url)
         face_client = get_fast_face_client(settings.triton_url)
 
+        ocr_service = None
+        if enable_ocr:
+            from src.services.ocr_service import get_ocr_service
+
+            ocr_service = get_ocr_service()
+
         # Step 1: Compute hashes in parallel
         def compute_hash(img_bytes: bytes) -> str:
             import io
@@ -629,6 +635,23 @@ class VisualSearchService:
                             'face_quality': face_result.get('face_quality', []),
                         }
                     )
+
+                # Run OCR text extraction if enabled (DF2: this used to be
+                # skipped entirely, so num_texts stayed 0 and the OCR
+                # indexing step below never had anything to index).
+                if enable_ocr:
+                    ocr_result = ocr_service.extract_text(img_bytes, filter_by_score=True)
+                    if ocr_result.get('status') == 'success':
+                        result.update(
+                            {
+                                'num_texts': ocr_result.get('num_texts', 0),
+                                'texts': ocr_result.get('texts', []),
+                                'text_boxes': ocr_result.get('boxes', []),
+                                'text_boxes_normalized': ocr_result.get('boxes_normalized', []),
+                                'text_det_scores': ocr_result.get('det_scores', []),
+                                'text_rec_scores': ocr_result.get('rec_scores', []),
+                            }
+                        )
 
                 return result
             except Exception as e:
