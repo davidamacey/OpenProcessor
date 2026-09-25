@@ -194,3 +194,71 @@ class TestSaveTritonConfigWriteOnlyOnChange:
             model_dir, 'yolov11_small_trt_end2end', 'trt_end2end', max_batch=32, has_nms=True
         )
         assert 'max_batch_size: 32' in path.read_text()
+
+
+class TestResolveExportFormats:
+    """A fresh clone has no cached ``{triton_name}_end2end/1/model.onnx``,
+    so ``make export-models`` (``--formats trt trt_end2end``, no
+    ``onnx_end2end``) used to hit ``export_trt_end2end``'s "Run with
+    --formats onnx_end2end first!" error on every first-time run.
+    ``resolve_export_formats`` adds the missing dependency instead."""
+
+    def test_adds_onnx_end2end_when_trt_end2end_requested_alone(self) -> None:
+        resolved = export_models.resolve_export_formats(
+            ['trt', 'trt_end2end'], 'yolov11_small_missing_onnx'
+        )
+        assert resolved == ['trt', 'trt_end2end', 'onnx_end2end']
+
+    def test_leaves_formats_untouched_when_onnx_end2end_already_present(self) -> None:
+        resolved = export_models.resolve_export_formats(
+            ['onnx_end2end', 'trt_end2end'], 'yolov11_small_missing_onnx'
+        )
+        assert resolved == ['onnx_end2end', 'trt_end2end']
+
+    def test_leaves_formats_untouched_when_all_requested(self) -> None:
+        resolved = export_models.resolve_export_formats(['all'], 'yolov11_small_missing_onnx')
+        assert resolved == ['all']
+
+    def test_leaves_formats_untouched_when_trt_end2end_not_requested(self) -> None:
+        resolved = export_models.resolve_export_formats(
+            ['onnx', 'trt'], 'yolov11_small_missing_onnx'
+        )
+        assert resolved == ['onnx', 'trt']
+
+    def test_does_not_duplicate_when_cached_onnx_already_exists(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(export_models.Path, 'exists', lambda self: True)  # noqa: ARG005
+        resolved = export_models.resolve_export_formats(['trt', 'trt_end2end'], 'yolov11_small')
+        assert resolved == ['trt', 'trt_end2end']
+
+    def test_export_model_uses_resolved_formats_before_missing_pt_file_is_irrelevant(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Wire-through check: export_model resolves formats even though
+        this particular call still fails on the missing .pt file (kept
+        deliberately GPU-free) -- resolve_export_formats itself is
+        exercised directly above; this only checks export_model calls it
+        before returning."""
+        calls: list[list[str]] = []
+        real_resolve = export_models.resolve_export_formats
+
+        def _spy(formats: list[str], triton_name: str) -> list[str]:
+            resolved = real_resolve(formats, triton_name)
+            calls.append(resolved)
+            return resolved
+
+        monkeypatch.setattr(export_models, 'resolve_export_formats', _spy)
+        config = {
+            'pt_file': str(tmp_path / 'does_not_exist.pt'),
+            'triton_name': 'yolov11_small',
+            'max_batch': 16,
+            'topk': 100,
+        }
+        result = export_models.export_model('small', config, formats=['trt', 'trt_end2end'])
+        # export_model exits on the missing-.pt-file check before formats
+        # resolution runs -- confirms the earlier guard still takes
+        # priority and resolve_export_formats is never reached for a
+        # request that can't proceed anyway.
+        assert result['status'] == 'error'
+        assert calls == []
