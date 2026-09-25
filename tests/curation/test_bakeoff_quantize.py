@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 import pytest
 
-from scripts.curation.bakeoff import bakeoff_runner, quantize
+from scripts.curation.bakeoff import bakeoff_runner, quant_stage, quantize
 
 
 def _img(path: Path, w: int = 64, h: int = 48) -> Path:
@@ -165,7 +165,7 @@ def test_runner_reports_coreml_as_failed_stage(tmp_path: Path, monkeypatch) -> N
     _fake_scoring(monkeypatch)
     ds = tmp_path / 'ds'
     ds.mkdir()
-    monkeypatch.setattr(bakeoff_runner, '_quantize_and_variant_models', lambda *_a: [])
+    monkeypatch.setattr(quant_stage, '_quantize_and_variant_models', lambda *_a: [])
     status = bakeoff_runner.run_job(
         {
             'job_id': 'c1',
@@ -226,7 +226,7 @@ def test_runner_quant_variants_default_under_job_out_dir(tmp_path: Path, monkeyp
         (out_root / model_id / 'fp16.onnx').write_bytes(b'x')
 
     monkeypatch.setattr(quantize, 'run', fake_run)
-    models = bakeoff_runner._quantize_and_variant_models(
+    models = quant_stage._quantize_and_variant_models(
         {'model_id': 'cand', 'checkpoint': '/c.pt', 'formats': ['fp16_onnx'], 'imgsz': 320},
         [{'name': 'd', 'path': '/data/d'}],
         tmp_path / 'job',

@@ -22,7 +22,6 @@ backends; latency is reported per the model's native runtime.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
 import time
@@ -33,9 +32,11 @@ from typing import TYPE_CHECKING, Any
 
 import cv2
 
+from .backends.factory import _build_backend, parse_class_ids
 from .dataset import YoloTestSet
 from .metrics import coco_eval, detections_to_coco, operating_point, percentiles
 from .profile import BACKENDS, BakeoffProfile, resolve_profile
+from .report import log_mlflow, weights_size_mb, write_report
 
 
 if TYPE_CHECKING:
@@ -45,167 +46,6 @@ if TYPE_CHECKING:
 def _str2bool(value: str) -> bool:
     """Parse a CLI bool that may arrive as a string from the job runner."""
     return str(value).strip().lower() in {'1', 'true', 'yes', 'y', 'on'}
-
-
-def _weights_size_mb(weights: str | None) -> float | None:
-    """On-disk size of a weights file/dir in MB (recursive for .mlpackage dirs)."""
-    if not weights:
-        return None
-    path = Path(weights)
-    if path.is_file():
-        return round(path.stat().st_size / (1024 * 1024), 3)
-    if path.is_dir():  # CoreML .mlpackage is a directory
-        total = sum(f.stat().st_size for f in path.rglob('*') if f.is_file())
-        return round(total / (1024 * 1024), 3)
-    return None
-
-
-def _build_detector(args: argparse.Namespace, backend: str) -> Detector:
-    """Build ONE model detector (the model under test) for a backend."""
-    if backend == 'ultralytics':
-        from .backends.ultralytics_pt import UltralyticsDetector
-
-        return UltralyticsDetector(
-            args.weights,
-            name=args.name,
-            imgsz=args.imgsz,
-            device=args.device,
-            conf=args.conf_floor,
-            iou=args.nms_iou,
-            pred_class_id=args.pred_class_id,
-        )
-    if backend == 'triton':
-        from .backends.triton_trt import TritonYoloDetector
-
-        return TritonYoloDetector(
-            url=args.triton_url,
-            model=args.triton_model,
-            name=args.name,
-            input_size=args.imgsz,
-            conf=args.conf_floor,
-            iou=args.nms_iou,
-        )
-    if backend == 'open-image-models':
-        from .backends.open_image_models import OpenImageModelsDetector
-
-        return OpenImageModelsDetector(
-            name=args.name,
-            conf=args.conf_floor,
-            device='cpu' if str(args.device) == 'cpu' else 'cuda',
-        )
-    if backend == 'lpdnet':
-        from .backends.lpdnet import LpdnetDetector
-
-        return LpdnetDetector(
-            args.weights,
-            name=args.name,
-            variant=args.lpdnet_variant,
-            conf=args.conf_floor,
-            iou=args.nms_iou,
-            device='cpu' if str(args.device) == 'cpu' else 'cuda',
-        )
-    if backend == 'onnxruntime':
-        from .backends.onnxruntime_ort import OnnxRuntimeDetector
-
-        return OnnxRuntimeDetector(
-            args.weights,
-            name=args.name,
-            imgsz=args.imgsz,
-            conf=args.conf_floor,
-            iou=args.nms_iou,
-            providers=args.ort_providers,
-            coords_normalized=args.coords_normalized,
-        )
-    if backend == 'coreml':
-        from .backends.coreml import CoreMLDetector
-
-        return CoreMLDetector(
-            args.weights,
-            name=args.name,
-            imgsz=args.imgsz,
-            conf=args.conf_floor,
-            iou=args.nms_iou,
-            compute_units=args.coreml_compute_units,
-            coords_normalized=args.coords_normalized,
-        )
-    raise SystemExit(f'unknown / not-yet-wired backend: {backend!r}')
-
-
-def parse_class_ids(value: str | None) -> tuple[int, ...]:
-    """``'2,3'`` -> ``(2, 3)``; empty/None -> ``()`` (keep every class)."""
-    return tuple(int(c) for c in str(value or '').split(',') if c.strip())
-
-
-def _primary_detector(args: argparse.Namespace) -> Detector:
-    """Coarse-stage detector for crop mode / two-stage.
-
-    Keeps only the context (parent) classes from the profile or
-    ``--primary-classes``; an empty list keeps every class.
-    """
-    from .backends.ultralytics_pt import UltralyticsDetector
-
-    keep = set(parse_class_ids(args.primary_classes))
-    return UltralyticsDetector(
-        args.primary_weights,
-        name='primary',
-        imgsz=args.primary_imgsz,
-        device=args.device,
-        conf=args.primary_conf,
-        iou=args.nms_iou,
-        keep_classes=keep or None,
-    )
-
-
-def _build_backend(args: argparse.Namespace) -> Detector:
-    """Build the system under test, honoring --mode (full vs crop).
-
-    ``--mode crop`` wraps ANY backend in a coarse-detector->crop->detector
-    pipeline (parent object -> part, any two-stage cascade);
-    ``--mode full`` runs the detector directly on the source frame. The
-    ``two-stage`` backend is a fixed, non-wrapped variant of that same
-    cascade for when the coarse+fine pair is the system under test itself
-    (not a wrapper around one of the other single backends above).
-    """
-    if args.backend == 'two-stage':
-        from .backends.two_stage import TwoStageDetector
-        from .backends.ultralytics_pt import UltralyticsDetector
-
-        primary = _primary_detector(args)
-        if args.secondary_backend == 'triton':
-            from .backends.triton_trt import TritonYoloDetector
-
-            secondary: Detector = TritonYoloDetector(
-                url=args.triton_url,
-                model=args.triton_model,
-                input_size=640,
-                conf=args.conf_floor,
-                iou=args.nms_iou,
-            )
-        else:
-            secondary = UltralyticsDetector(
-                args.weights,
-                name='secondary',
-                imgsz=args.secondary_imgsz,
-                device=args.device,
-                conf=args.conf_floor,
-                iou=args.nms_iou,
-            )
-        return TwoStageDetector(
-            primary, secondary, name=args.name or 'two-stage', nms_iou=args.nms_iou
-        )
-
-    inner = _build_detector(args, args.backend)
-    if args.mode == 'crop':
-        from .backends.two_stage import TwoStageDetector
-
-        return TwoStageDetector(
-            _primary_detector(args),
-            inner,
-            name=args.name or inner.name,
-            primary_conf=args.primary_conf,
-            nms_iou=args.nms_iou,
-        )
-    return inner
 
 
 def _run_inference(
@@ -462,20 +302,18 @@ def main(argv: list[str] | None = None) -> int:
         'per_stratum': strata,
     }
 
-    size_mb = _weights_size_mb(args.weights)
+    size_mb = weights_size_mb(args.weights)
     if size_mb is not None:
         report['size_mb'] = size_mb
 
     if args.training_data:
         report['training_data'] = args.training_data
 
-    args.out_dir.mkdir(parents=True, exist_ok=True)
     safe = backend.name.replace('/', '_').replace(' ', '_')
-    (args.out_dir / f'{safe}.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
-    _write_summary_row(args.out_dir / 'summary.csv', report)
+    write_report(args.out_dir, safe, report)
 
     if args.mlflow:
-        _log_mlflow(report, args)
+        log_mlflow(report, args)
 
     print(
         f'\n{backend.name}\n'
@@ -488,101 +326,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _log_mlflow(report: dict[str, Any], args: argparse.Namespace) -> None:
-    """Optionally log this run to MLflow so its UI charts the comparison.
-
-    Flag-gated and import-guarded: if mlflow isn't installed we just skip,
-    keeping it off the harness's hard dependencies.
-    """
-    try:
-        import mlflow
-    except ImportError:
-        print('mlflow not installed; skipping (.venv/bin/pip install mlflow)')
-        return
-    try:
-        if args.mlflow_uri:
-            mlflow.set_tracking_uri(args.mlflow_uri)
-        mlflow.set_experiment(args.mlflow_experiment)
-        with mlflow.start_run(run_name=report['model']):
-            mlflow.log_params(
-                {
-                    'model': report['model'],
-                    'runtime': report['runtime'],
-                    'imgsz': report['imgsz'],
-                    'training_data': args.training_data or 'unknown',
-                }
-            )
-            c, op, lat = report['coco'], report['operating_point'], report['latency_ms']
-            mlflow.log_metrics(
-                {
-                    'map_50_95': c['map_50_95'],
-                    'map_50': c['map_50'],
-                    'map_75': c['map_75'],
-                    'ap_small': c['ap_small'],
-                    'ap_medium': c['ap_medium'],
-                    'ap_large': c['ap_large'],
-                    'precision': op['precision'],
-                    'recall': op['recall'],
-                    'f1': op['f1'],
-                    'mean_iou': op['mean_iou'],
-                    'latency_mean_ms': lat['mean'],
-                    'throughput_fps': report['throughput_fps'],
-                }
-            )
-            for stratum, vals in report.get('per_stratum', {}).items():
-                key = ''.join(ch if ch.isalnum() or ch in '-_./' else '_' for ch in stratum)
-                mlflow.log_metric(f'stratum_map50/{key}', float(vals['map_50']))
-            # Artifact upload is best-effort: it needs the server's
-            # --serve-artifacts proxy and can fail on artifact-root perms
-            # without invalidating the (already-committed) metrics.
-            try:
-                safe = report['model'].replace('/', '_').replace(' ', '_')
-                mlflow.log_dict(report, f'{safe}.json')
-            except Exception as art_exc:
-                print(f'mlflow artifact upload skipped: {art_exc}')
-        print(f'logged to mlflow: {args.mlflow_uri} (experiment={args.mlflow_experiment})')
-    except Exception as exc:  # server unreachable / transient — don't fail the run
-        print(f'mlflow logging skipped: {exc}')
-
-
-def _write_summary_row(path: Path, report: dict[str, Any]) -> None:
-    """Append one row to a shared summary.csv so models accumulate."""
-    fields = [
-        'model',
-        'runtime',
-        'imgsz',
-        'map_50_95',
-        'map_50',
-        'map_75',
-        'ap_small',
-        'precision',
-        'recall',
-        'f1',
-        'mean_iou',
-        'latency_mean_ms',
-        'throughput_fps',
-    ]
-    row = {
-        'model': report['model'],
-        'runtime': report['runtime'],
-        'imgsz': report['imgsz'],
-        'map_50_95': round(report['coco']['map_50_95'], 4),
-        'map_50': round(report['coco']['map_50'], 4),
-        'map_75': round(report['coco']['map_75'], 4),
-        'ap_small': round(report['coco']['ap_small'], 4),
-        'precision': round(report['operating_point']['precision'], 4),
-        'recall': round(report['operating_point']['recall'], 4),
-        'f1': round(report['operating_point']['f1'], 4),
-        'mean_iou': round(report['operating_point']['mean_iou'], 4),
-        'latency_mean_ms': round(report['latency_ms']['mean'], 2),
-        'throughput_fps': round(report['throughput_fps'], 2),
-    }
-    exists = path.is_file()
-    with path.open('a', newline='', encoding='utf-8') as f:
-        w = csv.DictWriter(f, fieldnames=fields)
-        if not exists:
-            w.writeheader()
-        w.writerow(row)
+__all__ = ['build_parser', 'main', 'parse_class_ids', 'resolve_args']
 
 
 if __name__ == '__main__':
