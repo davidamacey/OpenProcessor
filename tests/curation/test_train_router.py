@@ -81,10 +81,10 @@ def app_client(
     )
 
     from src.routers.curation._common import _raw_opensearch_dep
-    from src.routers.curation_train import router as legacy_train_router
+    from src.routers.curation_train import router as curation_train_router
 
     app = FastAPI()
-    app.include_router(legacy_train_router)
+    app.include_router(curation_train_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
 
     with TestClient(app) as client:
@@ -416,14 +416,14 @@ def test_preflight_lpr_single_class_alias_is_retired(app_client: TestClient, tmp
     assert 999 in check['detail']['unresolvable_class_ids']
 
 
-def test_preflight_skips_include_classes_check_for_lpr(
+def test_preflight_skips_include_classes_check_for_single_class(
     app_client: TestClient, tmp_path: Any
 ) -> None:
-    """LPR jobs have no include_classes concept — the check must not even
-    appear, per the existing dataset_kind branch."""
+    """Single-class jobs have no include_classes concept — the check must
+    not even appear, per the existing dataset_kind branch."""
     import json
 
-    export_dir = tmp_path / 'export_lpr'
+    export_dir = tmp_path / 'export_single_class_no_include'
     export_dir.mkdir()
     (export_dir / 'manifest.json').write_text(
         json.dumps(
@@ -509,12 +509,12 @@ def test_preflight_empty_labels_blocks_when_whole_export_is_empty(
     assert out['blocked'] is True
 
 
-def test_preflight_lpr_export_skips_scan_and_reports_not_applicable(
+def test_preflight_single_class_export_skips_scan_and_reports_not_applicable(
     app_client: TestClient, tmp_path: Any
 ) -> None:
     import json
 
-    export_dir = tmp_path / 'export_lpr'
+    export_dir = tmp_path / 'export_single_class_scan_skip'
     export_dir.mkdir()
     (export_dir / 'manifest.json').write_text(
         json.dumps(
@@ -532,11 +532,11 @@ def test_preflight_lpr_export_skips_scan_and_reports_not_applicable(
     assert r.status_code == 200, r.text
     out = r.json()
     empty_check = next(c for c in out['checks'] if c['name'] == 'empty_labels')
-    plate_check = next(c for c in out['checks'] if c['name'] == 'region_pairing')
+    region_check = next(c for c in out['checks'] if c['name'] == 'region_pairing')
     assert empty_check['severity'] == 'ok'
     assert 'background' in empty_check['message'].lower()
-    assert plate_check['severity'] == 'ok'
-    assert 'not applicable' in plate_check['message'].lower()
+    assert region_check['severity'] == 'ok'
+    assert 'not applicable' in region_check['message'].lower()
 
 
 # =============================================================================
@@ -635,8 +635,8 @@ def test_start_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
         monkeypatch,
         GpuArbiterConfig(
             allowed_gpu_ids=frozenset({0}),
-            containers=('vllm-gemma4-e4b',),
-            container_gpus=(('vllm-gemma4-e4b', frozenset({0})),),
+            containers=('vlm-inference-container',),
+            container_gpus=(('vlm-inference-container', frozenset({0})),),
         ),
     )
     from src.services.training import gpu_arbiter as _gpu_arbiter
@@ -659,7 +659,7 @@ def test_start_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
         r = app_client.post('/curation/train/start', json=body)
 
     assert r.status_code == 409, r.text
-    assert 'vllm-gemma4-e4b' in r.json()['detail']['message']
+    assert 'vlm-inference-container' in r.json()['detail']['message']
     assert list(tmp_path.glob('*.job.json')) == []
 
 
@@ -676,8 +676,8 @@ def test_preflight_reports_blocking_gpu_arbiter_check_when_docker_unavailable(
         monkeypatch,
         GpuArbiterConfig(
             allowed_gpu_ids=frozenset({0}),
-            containers=('vllm-gemma4-e4b',),
-            container_gpus=(('vllm-gemma4-e4b', frozenset({0})),),
+            containers=('vlm-inference-container',),
+            container_gpus=(('vlm-inference-container', frozenset({0})),),
         ),
     )
     from src.services.training import gpu_arbiter as _gpu_arbiter
@@ -711,8 +711,8 @@ def test_start_campaign_refuses_with_409_when_gpu_stop_required_and_docker_unava
         monkeypatch,
         GpuArbiterConfig(
             allowed_gpu_ids=frozenset({0}),
-            containers=('vllm-gemma4-e4b',),
-            container_gpus=(('vllm-gemma4-e4b', frozenset({0})),),
+            containers=('vlm-inference-container',),
+            container_gpus=(('vlm-inference-container', frozenset({0})),),
         ),
     )
     from src.services.training import gpu_arbiter as _gpu_arbiter
@@ -727,7 +727,7 @@ def test_start_campaign_refuses_with_409_when_gpu_stop_required_and_docker_unava
     r = app_client.post('/curation/train/start_campaign?force=true', json=body)
 
     assert r.status_code == 409, r.text
-    assert 'vllm-gemma4-e4b' in r.json()['detail']['message']
+    assert 'vlm-inference-container' in r.json()['detail']['message']
     assert list(tmp_path.glob('*.job.json')) == []
 
 
@@ -910,8 +910,8 @@ def test_train_gpus_single_allowed_with_label_and_scoped_container(
         monkeypatch,
         GpuArbiterConfig(
             allowed_gpu_ids=frozenset({2}),
-            containers=('vllm-gemma4-e4b',),
-            container_gpus=(('vllm-gemma4-e4b', frozenset({2})),),
+            containers=('vlm-inference-container',),
+            container_gpus=(('vlm-inference-container', frozenset({2})),),
             gpu_labels={0: 'RTX A6000', 1: 'RTX 3080 Ti', 2: 'RTX A6000'},
         ),
     )
@@ -925,8 +925,8 @@ def test_train_gpus_single_allowed_with_label_and_scoped_container(
     assert opt['value'] == '2'
     assert opt['gpu_ids'] == [2]
     assert opt['label'] == 'RTX A6000 (GPU 2)'
-    assert opt['stops_containers'] == ['vllm-gemma4-e4b']
-    assert 'Stops vllm-gemma4-e4b' in opt['advisory']
+    assert opt['stops_containers'] == ['vlm-inference-container']
+    assert 'Stops vlm-inference-container' in opt['advisory']
     assert opt['default'] is True
 
 

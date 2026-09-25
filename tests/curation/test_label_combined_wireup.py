@@ -126,7 +126,7 @@ class TestCohortRouting:
         await worker._process_crop(
             task,
             detector=MagicMock(detect_batch=AsyncMock(return_value=[])),
-            sam3=MagicMock(segment=AsyncMock(return_value=None), aclose=AsyncMock()),
+            segmenter=MagicMock(segment=AsyncMock(return_value=None), aclose=AsyncMock()),
             ocr_recognizer=MagicMock(
                 detect_regions=AsyncMock(return_value=[]),
                 pick_best_text_region=MagicMock(return_value=None),
@@ -148,7 +148,9 @@ class TestCohortRouting:
         assert 'vlm_verify_completed_at' in doc
 
     @pytest.mark.asyncio
-    async def test_broadened_cohort_v6_low_conf_with_plate_uses_label_combined(self) -> None:
+    async def test_broadened_cohort_classifier_low_conf_with_region_uses_label_combined(
+        self,
+    ) -> None:
         """Phase C: primary-classifier + low conf + candidate → label_combined."""
         reply = VlmCombinedReply(
             img_id='crop-low',
@@ -170,7 +172,7 @@ class TestCohortRouting:
         await worker._process_crop(
             task,
             detector=MagicMock(detect_batch=AsyncMock(return_value=[])),
-            sam3=MagicMock(segment=AsyncMock(return_value=None), aclose=AsyncMock()),
+            segmenter=MagicMock(segment=AsyncMock(return_value=None), aclose=AsyncMock()),
             ocr_recognizer=MagicMock(
                 detect_regions=AsyncMock(return_value=[]),
                 pick_best_text_region=MagicMock(return_value=None),
@@ -185,7 +187,7 @@ class TestCohortRouting:
         assert 'vlm_verify_completed_at' in task.update_doc
 
     @pytest.mark.asyncio
-    async def test_high_conf_v6_skips_label_combined(self) -> None:
+    async def test_high_conf_classifier_skips_label_combined(self) -> None:
         """Phase C: primary classifier with conf >= 0.80 → legacy 2-call path."""
         vlm = _vlm_with_combined(reply=VlmCombinedReply(img_id='x', class_id=None))
         vlm.verify_region = AsyncMock(
@@ -202,7 +204,7 @@ class TestCohortRouting:
         await worker._process_crop(
             task,
             detector=MagicMock(detect_batch=AsyncMock(return_value=[])),
-            sam3=MagicMock(segment=AsyncMock(return_value=None), aclose=AsyncMock()),
+            segmenter=MagicMock(segment=AsyncMock(return_value=None), aclose=AsyncMock()),
             ocr_recognizer=MagicMock(
                 detect_regions=AsyncMock(return_value=[]),
                 pick_best_text_region=MagicMock(return_value=None),
@@ -236,7 +238,7 @@ class TestCohortRouting:
         await worker._process_crop(
             task,
             detector=MagicMock(detect_batch=AsyncMock(return_value=[])),
-            sam3=MagicMock(segment=AsyncMock(return_value=None), aclose=AsyncMock()),
+            segmenter=MagicMock(segment=AsyncMock(return_value=None), aclose=AsyncMock()),
             ocr_recognizer=MagicMock(
                 detect_regions=AsyncMock(return_value=[]),
                 pick_best_text_region=MagicMock(return_value=None),
@@ -248,12 +250,12 @@ class TestCohortRouting:
         assert task.update_doc[F.status] == 'no_region_box'
 
     @pytest.mark.asyncio
-    async def test_pending_detection_cohort_lpr_hit_uses_combined(self) -> None:
+    async def test_pending_detection_cohort_detector_hit_uses_combined(self) -> None:
         """primary-missed + pending_detection + primary-detector candidate → one combined call."""
         detector_cand = RegionCandidate(
             bbox_norm=(0.3, 0.4, 0.5, 0.45),
             score=0.82,
-            source='lpr_nanov11_640',
+            source='region_det_test',
         )
         reply = VlmCombinedReply(
             img_id='crop-2',
@@ -274,7 +276,7 @@ class TestCohortRouting:
         await worker._process_crop(
             task,
             detector=MagicMock(detect_batch=AsyncMock(return_value=[detector_cand])),
-            sam3=MagicMock(segment=AsyncMock(return_value=None), aclose=AsyncMock()),
+            segmenter=MagicMock(segment=AsyncMock(return_value=None), aclose=AsyncMock()),
             ocr_recognizer=MagicMock(
                 detect_regions=AsyncMock(return_value=[]),
                 pick_best_text_region=MagicMock(return_value=None),

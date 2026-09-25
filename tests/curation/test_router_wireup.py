@@ -304,7 +304,7 @@ def test_unlabel_crop_clears_stale_human_provenance(
         return_value={
             '_source': {
                 'class_id': 18,
-                'class_name': 'cruiserbike',
+                'class_name': 'class_b',
                 'class_source': 'human',
                 'class_detector': 'human',
                 'class_labeler': 'human',

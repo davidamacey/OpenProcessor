@@ -58,10 +58,10 @@ def _spec(**overrides: Any) -> dict[str, Any]:
     return spec
 
 
-def test_preflight_reports_checks_and_writes_no_job_file(client: Any) -> None:
+def test_preflight_reports_checks_and_writes_no_job_file(api_client: Any) -> None:
     before = sorted(p.name for p in JOBS_DIR.glob('*.job.json'))
 
-    resp = client.post('/train/preflight', json=_spec())
+    resp = api_client.post('/train/preflight', json=_spec())
     assert resp.status_code == 200, resp.text
     report = resp.json()
     assert isinstance(report['blocked'], bool)
@@ -72,10 +72,12 @@ def test_preflight_reports_checks_and_writes_no_job_file(client: Any) -> None:
     assert after == before, 'preflight must be side-effect free'
 
 
-def test_start_writes_a_job_file_and_stops_no_container(client: Any, run_state: dict[str, Any]) -> None:
+def test_start_writes_a_job_file_and_stops_no_container(
+    api_client: Any, run_state: dict[str, Any]
+) -> None:
     containers_before = docker_ps_snapshot()
 
-    resp = client.post('/train/start', params={'force': True}, json=_spec())
+    resp = api_client.post('/train/start', params={'force': True}, json=_spec())
     assert resp.status_code == 201, resp.text
     job_id = resp.json()['job_id']
     assert resp.json()['preflight']['checks']
@@ -101,13 +103,15 @@ def test_start_writes_a_job_file_and_stops_no_container(client: Any, run_state: 
     run_state['job_id'] = job_id
 
 
-def test_fake_trainer_drives_the_run_to_finished(client: Any, run_state: dict[str, Any]) -> None:
+def test_fake_trainer_drives_the_run_to_finished(
+    api_client: Any, run_state: dict[str, Any]
+) -> None:
     job_id = run_state.get('job_id')
     assert job_id, 'the start scenario must run first'
     paths = _job_files(job_id)
 
     state = wait_for_state(
-        lambda: client.get(f'/train/status/{job_id}').json(),
+        lambda: api_client.get(f'/train/status/{job_id}').json(),
         lambda s: bool(s) and s.get('state') == 'finished',
         timeout=120,
     )
@@ -121,52 +125,52 @@ def test_fake_trainer_drives_the_run_to_finished(client: Any, run_state: dict[st
     assert paths['status'].is_file()
     assert paths['manifest'].is_file()
 
-    latest = client.get('/train/status')
+    latest = api_client.get('/train/status')
     assert latest.status_code == 200, latest.text
     assert latest.json()['job_id'] == job_id
 
-    runs = client.get('/train/runs', params={'limit': 10})
+    runs = api_client.get('/train/runs', params={'limit': 10})
     assert runs.status_code == 200, runs.text
     assert job_id in {item['job_id'] for item in runs.json()['items']}
 
-    log = client.get(f'/train/log/tail/{job_id}', params={'lines': 20})
+    log = api_client.get(f'/train/log/tail/{job_id}', params={'lines': 20})
     assert log.status_code == 200, log.text
     assert any(job_id in line for line in log.json()['lines']), log.json()
 
 
-def test_manifest_is_served_for_a_finished_run(client: Any, run_state: dict[str, Any]) -> None:
+def test_manifest_is_served_for_a_finished_run(api_client: Any, run_state: dict[str, Any]) -> None:
     job_id = run_state.get('job_id')
     assert job_id
-    resp = client.get(f'/train/manifest/{job_id}')
+    resp = api_client.get(f'/train/manifest/{job_id}')
     assert resp.status_code == 200, resp.text
     assert resp.json()['job_id'] == job_id
 
 
-def test_cancel_drops_the_sentinel_and_the_trainer_honours_it(client: Any) -> None:
-    started = client.post('/train/start', params={'force': True}, json=_spec(model_size='s'))
+def test_cancel_drops_the_sentinel_and_the_trainer_honours_it(api_client: Any) -> None:
+    started = api_client.post('/train/start', params={'force': True}, json=_spec(model_size='s'))
     assert started.status_code == 201, started.text
     job_id = started.json()['job_id']
     paths = _job_files(job_id)
 
-    resp = client.post(f'/train/cancel/{job_id}')
+    resp = api_client.post(f'/train/cancel/{job_id}')
     assert resp.status_code == 200, resp.text
     assert resp.json() == {'cancelled': True, 'job_id': job_id}
     assert paths['cancel'].is_file(), 'the cancel sentinel was not written'
 
     state = wait_for_state(
-        lambda: client.get(f'/train/status/{job_id}').json(),
+        lambda: api_client.get(f'/train/status/{job_id}').json(),
         lambda s: bool(s) and s.get('state') == 'cancelled',
         timeout=60,
     )
     assert state['state'] == 'cancelled', state
 
 
-def test_unknown_job_id_is_a_404(client: Any) -> None:
-    resp = client.get('/train/status/2026-01-01T00-00-00_nosuchrun')
+def test_unknown_job_id_is_a_404(api_client: Any) -> None:
+    resp = api_client.get('/train/status/2026-01-01T00-00-00_nosuchrun')
     assert resp.status_code == 404, resp.text
 
 
-def test_campaign_submit_then_cancel_campaign(client: Any) -> None:
+def test_campaign_submit_then_cancel_campaign(api_client: Any) -> None:
     campaign_spec = {
         'dataset_export_dir': CONTAINER_EXPORT_CURRENT,
         'cuda_visible_devices': '0',
@@ -175,7 +179,7 @@ def test_campaign_submit_then_cancel_campaign(client: Any) -> None:
             {'profile': 'probe', 'model_size': 's'},
         ],
     }
-    resp = client.post('/train/start_campaign', params={'force': True}, json=campaign_spec)
+    resp = api_client.post('/train/start_campaign', params={'force': True}, json=campaign_spec)
     assert resp.status_code == 201, resp.text
     body = resp.json()
     campaign_id = body['campaign_id']
@@ -186,7 +190,7 @@ def test_campaign_submit_then_cancel_campaign(client: Any) -> None:
         payload = json.loads(_job_files(job_id)['job'].read_text())
         assert payload['campaign_id'] == campaign_id
 
-    resp = client.post(f'/train/cancel_campaign/{campaign_id}')
+    resp = api_client.post(f'/train/cancel_campaign/{campaign_id}')
     assert resp.status_code == 200, resp.text
     assert resp.json()['cancelled'] >= 1, resp.text
     # A run the fake trainer already drove to a terminal state is skipped by
@@ -194,10 +198,10 @@ def test_campaign_submit_then_cancel_campaign(client: Any) -> None:
     assert any(_job_files(job_id)['cancel'].is_file() for job_id in body['job_ids'])
 
 
-def test_profiles_and_presets_are_served(client: Any) -> None:
-    profiles = client.get('/train/profiles')
+def test_profiles_and_presets_are_served(api_client: Any) -> None:
+    profiles = api_client.get('/train/profiles')
     assert profiles.status_code == 200, profiles.text
     assert profiles.json()['profiles'], profiles.text
 
-    presets = client.get('/train/presets')
+    presets = api_client.get('/train/presets')
     assert presets.status_code == 200, presets.text

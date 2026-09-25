@@ -20,12 +20,12 @@ REPO = Path(__file__).resolve().parents[2]
 
 def test_unmatched_item_serves_the_vlm_answer() -> None:
     item = serialize_item(
-        {'class_source': 'vlm_unmatched', 'class_name': 'cruiserbike', 'vlm_raw_class': 'trike'},
+        {'class_source': 'vlm_unmatched', 'class_name': 'class_b', 'vlm_raw_class': 'trike'},
         'x',
         api_prefix='',
     )
     assert item['vlm_raw_class'] == 'trike'
-    assert item['class_name'] == 'cruiserbike'
+    assert item['class_name'] == 'class_b'
 
 
 def test_missing_answer_is_null() -> None:

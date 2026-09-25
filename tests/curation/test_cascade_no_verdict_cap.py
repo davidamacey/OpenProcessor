@@ -90,14 +90,14 @@ def _accept() -> VlmRegionVerdict:
 
 
 def _mocks() -> dict[str, Any]:
-    sam3 = MagicMock()
-    sam3.segment = AsyncMock(return_value=None)
+    segmenter = MagicMock()
+    segmenter.segment = AsyncMock(return_value=None)
     ocr = MagicMock()
     ocr.detect_regions = AsyncMock(return_value=[])
     ocr.pick_best_text_region = MagicMock(return_value=None)
     detector = MagicMock()
     detector.detect_batch = AsyncMock(return_value=[])
-    return {'sam3': sam3, 'ocr_recognizer': ocr, 'detector': detector}
+    return {'segmenter': segmenter, 'ocr_recognizer': ocr, 'detector': detector}
 
 
 async def _pass(vlm: MagicMock, **task_kw: Any) -> Any:

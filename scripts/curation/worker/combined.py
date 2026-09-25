@@ -188,10 +188,10 @@ async def _try_combined_class_region(
     return False
 
 
-async def _try_combined_on_sam3(
+async def _try_combined_on_segmenter(
     task: _ItemTask,
     *,
-    sam3: SegmenterClient,
+    segmenter: SegmenterClient,
     vlm: VlmLabeler,
 ) -> bool:
     """Run the secondary segmenter on the crop, then a combined VLM call.
@@ -200,7 +200,7 @@ async def _try_combined_on_sam3(
     combined call or the terminal no_region_box helper); False means the
     caller should keep going through legacy paths.
     """
-    cand = await sam3.segment(task.crop_jpeg or b'')
+    cand = await segmenter.segment(task.crop_jpeg or b'')
     if cand is None:
         task.detection_trace.append(f'{region_profile().segmenter_name}:miss')
         _finalize_no_region(task)
@@ -234,7 +234,7 @@ async def _run_combined_cohort_path(
     task: _ItemTask,
     *,
     detector: RegionDetector,
-    sam3: SegmenterClient,
+    segmenter: SegmenterClient,
     vlm: VlmLabeler,
 ) -> bool:
     """Route a primary-detector-missed cohort crop through the combined VLM path.
@@ -270,7 +270,9 @@ async def _run_combined_cohort_path(
         )
 
     if task.region_status in _PENDING_DETECTION_ALIASES and not is_secondary:
-        return await _run_combined_pending_detection(task, detector=detector, sam3=sam3, vlm=vlm)
+        return await _run_combined_pending_detection(
+            task, detector=detector, segmenter=segmenter, vlm=vlm
+        )
 
     return False
 
@@ -279,7 +281,7 @@ async def _run_combined_pending_detection(
     task: _ItemTask,
     *,
     detector: RegionDetector,
-    sam3: SegmenterClient,
+    segmenter: SegmenterClient,
     vlm: VlmLabeler,
 ) -> bool:
     """pending_detection cohort branch — run the primary detector, then
@@ -290,7 +292,7 @@ async def _run_combined_pending_detection(
     cand = detector_results[0] if detector_results else None
     if cand is None:
         task.detection_trace.append(f'{region_profile().detector_model}:miss')
-        return await _try_combined_on_sam3(task, sam3=sam3, vlm=vlm)
+        return await _try_combined_on_segmenter(task, segmenter=segmenter, vlm=vlm)
     gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_norm, task.vehicle_bbox_norm)
     if not gate_ok:
         task.detection_trace.append(f'{region_profile().detector_model}:hit')
@@ -315,4 +317,4 @@ async def _run_combined_pending_detection(
     if ok:
         return True
     # Primary-detector bbox combined rejected; try secondary segmenter + combined.
-    return await _try_combined_on_sam3(task, sam3=sam3, vlm=vlm)
+    return await _try_combined_on_segmenter(task, segmenter=segmenter, vlm=vlm)

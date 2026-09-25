@@ -16,7 +16,7 @@ reference file's seven) per-writer ``test_holdout``-exclusion checks
 ``TestShouldClassifyHoldoutGuard`` above, and the reference's
 label-import lookup-query check targets a module never ported anywhere
 in this plan (out of Wave 5's scope — that's Wave 2 territory). The
-reference's two one-off-migration-script checks (``cleanup_low_conf_v6_labels``
+reference's two one-off-migration-script checks (``cleanup_low_conf_classifier_labels``
 / class-id-realign) target operator tooling this plan never ports;
 their live equivalents on this tree are the two ``must_not`` clauses in
 ``src/services/curation/probe_predictions.py``'s
@@ -88,13 +88,13 @@ class TestShouldClassifyHumanGuard:
         t = _make_task(class_source='classifier_model', class_confidence=0.2, class_validated=True)
         assert _should_classify(t, registry_loaded=True) is False
 
-    def test_still_classifies_low_conf_v6_non_human_non_holdout(self) -> None:
+    def test_still_classifies_low_conf_classifier_non_human_non_holdout(self) -> None:
         # Non-regression: the fix must not swallow the legitimate cohort
         # the worker exists to serve.
         t = _make_task(class_source='classifier_model', class_confidence=0.3, class_validated=False)
         assert _should_classify(t, registry_loaded=True) is True
 
-    def test_still_skips_high_conf_v6_cohort(self) -> None:
+    def test_still_skips_high_conf_classifier_cohort(self) -> None:
         t = _make_task(class_source='classifier_model', class_confidence=0.9, class_validated=False)
         assert _should_classify(t, registry_loaded=True) is False
 
@@ -167,13 +167,13 @@ class TestCombinedClassUpdateResetsProvenance:
             class_id=0,
             class_confidence='high',
             region_visible=True,
-            make='Honda',
-            model='CBR',
+            make='Acme',
+            model='X100',
         )
         update = _combined_class_update(reply, None)
         assert update[get_region_fields().visible] is True
-        assert update['vlm_item_make'] == 'Honda'
-        assert update['vlm_item_model'] == 'CBR'
+        assert update['vlm_item_make'] == 'Acme'
+        assert update['vlm_item_model'] == 'X100'
         assert 'class_source' not in update
 
 
@@ -383,7 +383,7 @@ class TestVlmLabelBatchHumanGuard:
 
         from PIL import Image
 
-        monkeypatch.setenv('GEMMA_CROP_CACHE_DIR', str(tmp_path))
+        monkeypatch.setenv('OP_CROP_CACHE_DIR', str(tmp_path))
         crop_id = 'human-crop-1'
         buf = io.BytesIO()
         Image.new('RGB', (64, 64), (10, 20, 30)).save(buf, format='JPEG')

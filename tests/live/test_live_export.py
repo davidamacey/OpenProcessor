@@ -30,8 +30,8 @@ def _host_path(container_path: str) -> Any:
 
 
 @pytest.fixture(scope='module')
-def first_export(client: Any) -> dict[str, Any]:
-    resp = client.post('/export/yolo', json={'version_tag': 'live-a', 'seed': 42})
+def first_export(api_client: Any) -> dict[str, Any]:
+    resp = api_client.post('/export/yolo', json={'version_tag': 'live-a', 'seed': 42})
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -83,8 +83,10 @@ def test_export_writes_labels_artifacts_and_flips_the_current_symlink(
     assert current.readlink().as_posix() == body['export_dir']
 
 
-def test_export_is_deterministic_across_two_tags(client: Any, first_export: dict[str, Any]) -> None:
-    resp = client.post('/export/yolo', json={'version_tag': 'live-b', 'seed': 42})
+def test_export_is_deterministic_across_two_tags(
+    api_client: Any, first_export: dict[str, Any]
+) -> None:
+    resp = api_client.post('/export/yolo', json={'version_tag': 'live-b', 'seed': 42})
     assert resp.status_code == 200, resp.text
     second = resp.json()
 
@@ -107,12 +109,12 @@ def test_export_is_deterministic_across_two_tags(client: Any, first_export: dict
     assert (EXPORTS_DIR / 'current').readlink().as_posix() == second['export_dir']
 
 
-def test_export_status_and_dataset_listing_see_both_runs(client: Any) -> None:
-    status = client.get('/export/status')
+def test_export_status_and_dataset_listing_see_both_runs(api_client: Any) -> None:
+    status = api_client.get('/export/status')
     assert status.status_code == 200, status.text
     assert status.json()['status'] == 'success'
 
-    listing = client.get('/export/datasets')
+    listing = api_client.get('/export/datasets')
     assert listing.status_code == 200, listing.text
     datasets = listing.json()['datasets']
     tags = {d['version_tag'] for d in datasets}
@@ -130,10 +132,10 @@ def test_export_status_and_dataset_listing_see_both_runs(client: Any) -> None:
     ],
 )
 def test_registry_artifact_is_served_byte_for_byte(
-    client: Any, artifact: str, content_type: str
+    api_client: Any, artifact: str, content_type: str
 ) -> None:
-    current_dir = client.get('/export/status').json()['export_dir']
-    resp = client.get(f'/export/registry/{artifact}')
+    current_dir = api_client.get('/export/status').json()['export_dir']
+    resp = api_client.get(f'/export/registry/{artifact}')
     assert resp.status_code == 200, resp.text
     assert resp.headers['content-type'].startswith(content_type)
     assert resp.headers['cache-control'] == 'no-store'
@@ -142,7 +144,7 @@ def test_registry_artifact_is_served_byte_for_byte(
     assert resp.content == on_disk
 
 
-def test_unknown_export_artifact_is_a_404(client: Any) -> None:
+def test_unknown_export_artifact_is_a_404(api_client: Any) -> None:
     for artifact in ('secrets.json', '../../etc/passwd'):
-        resp = client.get(f'/export/registry/{artifact}')
+        resp = api_client.get(f'/export/registry/{artifact}')
         assert resp.status_code == 404, (artifact, resp.status_code, resp.text)

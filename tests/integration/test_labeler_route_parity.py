@@ -6,7 +6,7 @@ OpenSearch, no browser, no frontend checkout required at test time):
 
 1. Every path in the checked-in fixture
    (``tests/fixtures/labeler_call_sites.txt`` — a snapshot of Cropwright's
-   executable ``/legacy/...`` call sites, prefix-stripped and
+   executable ``/curation/...`` call sites, prefix-stripped and
    param-normalized) resolves to a route actually registered under
    ``CurationConfig.api_prefix``.
 2. **The critical clause** (this is what would have caught the
@@ -21,7 +21,7 @@ OpenSearch, no browser, no frontend checkout required at test time):
 
 Regenerating the fixture (frontend call sites may drift):
 
-    rg -o "/legacy/[A-Za-z0-9_./{}$-]+" \\
+    rg -o "/curation/[A-Za-z0-9_./{}$-]+" \\
       <cropwright-checkout>/src/lib/api.ts \\
       <cropwright-checkout>/src/lib/sse.ts \\
       <cropwright-checkout>/src/routes/export/+page.svelte \\
@@ -31,7 +31,7 @@ That one-liner over-matches (rg doesn't parse out comments/JSDoc), so the
 raw output needs a hand pass to drop comment-only hits before it's usable
 — see docs/design/cropwright_backend_integration_plan.md §1.2 for the
 audited executable/comment split as of the commit this fixture snapshots.
-After filtering, strip the leading ``/legacy``, collapse ``${...}``
+After filtering, strip the leading ``/curation``, collapse ``${...}``
 interpolations to the literal token ``{param}``, dedupe, sort, and update
 ``tests/fixtures/labeler_call_sites.txt``'s header commit hash.
 """

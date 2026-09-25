@@ -290,7 +290,7 @@ def _project_subcrop_box_to_parent(
 async def _resegment_from_text_hint(
     crop_jpeg: bytes,
     hint_in_crop: tuple[float, float, float, float],
-    sam3: SegmenterClient,
+    segmenter: SegmenterClient,
 ) -> tuple[RegionCandidate | None, tuple[float, float, float, float]]:
     """Run the secondary segmenter on a tight sub-crop around an OCR text hint.
 
@@ -301,7 +301,7 @@ async def _resegment_from_text_hint(
     """
     sub_box = _expand_bbox(hint_in_crop, _TEXT_HINT_SUBCROP_MARGIN)
     sub_jpeg = _crop_region_jpeg(crop_jpeg, sub_box)
-    sub_cand = await sam3.segment(sub_jpeg)
+    sub_cand = await segmenter.segment(sub_jpeg)
     if sub_cand is None:
         return None, sub_box
     projected = _project_subcrop_box_to_parent(sub_cand.bbox_norm, sub_box)
@@ -356,7 +356,7 @@ async def _process_crop(
     task: _ItemTask,
     *,
     detector: RegionDetector,
-    sam3: SegmenterClient,
+    segmenter: SegmenterClient,
     ocr_recognizer: PaddleOcrTextRecognizer,
     vlm: VlmLabeler,
 ) -> None:
@@ -393,7 +393,7 @@ async def _process_crop(
         # region candidate exists or can be cheaply produced. One VLM call
         # returns class + region verify + OCR instead of two/three round-trips.
         # Implementation lives in ``combined._run_combined_cohort_path``.
-        if await _run_combined_cohort_path(task, detector=detector, sam3=sam3, vlm=vlm):
+        if await _run_combined_cohort_path(task, detector=detector, segmenter=segmenter, vlm=vlm):
             raise _CascadeDoneError
         # Non-cohort or cohort fell back — legacy cascade resumes.
 
@@ -506,7 +506,7 @@ async def _process_crop(
         # ---- Step 3: secondary segmenter (always — secondary-shape pending,
         #              non-secondary primary-detector miss/reject, or
         #              pending_verify reject). ----
-        sam_candidate = await sam3.segment(task.crop_jpeg)
+        sam_candidate = await segmenter.segment(task.crop_jpeg)
         if sam_candidate is None:
             task.detection_trace.append(f'{seg_name}:miss')
         else:
@@ -601,7 +601,7 @@ async def _process_crop(
         if ocr_pick is not None:
             task.detection_trace.append(f'{ocr_det_model}:text_hint:hit')
             sub_cand, _sub_box = await _resegment_from_text_hint(
-                task.crop_jpeg, ocr_pick.bbox_norm, sam3
+                task.crop_jpeg, ocr_pick.bbox_norm, segmenter
             )
             if sub_cand is None:
                 task.detection_trace.append(f'{seg_name}:text_hint:miss')

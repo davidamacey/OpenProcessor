@@ -173,7 +173,7 @@ PORTED_PATHS: tuple[str, ...] = (
     # DetectionProfile and renamed to region terms.
     'src/services/detection/cascade_detect.py',
     'tests/curation/test_cascade_detect.py',
-    'tests/curation/test_plate_sanity.py',
+    'tests/curation/test_region_sanity.py',
     'tests/curation/test_detection_profile_second_profile.py',
     # Chunk 8 commit (b) — region + region-fp routers.
     'src/routers/curation/regions.py',
@@ -181,10 +181,10 @@ PORTED_PATHS: tuple[str, ...] = (
     # Chunk 8 commit (c) — curation detection worker package.
     'scripts/curation/worker/',
     'scripts/curation/region_worker_main.py',
-    'tests/curation/test_sam_worker.py',
+    'tests/curation/test_region_worker.py',
     'tests/curation/test_label_combined_wireup.py',
-    'tests/curation/test_sam3_telemetry.py',
-    'tests/integration/test_sam3_circuit_breaker.py',
+    'tests/curation/test_segmenter_telemetry.py',
+    'tests/integration/test_segmenter_circuit_breaker.py',
     # Chunk 9 commit (a) — remaining services.
     'src/services/curation/semantic_search.py',
     'src/services/curation/event_hub.py',

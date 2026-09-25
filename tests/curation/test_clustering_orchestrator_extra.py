@@ -94,7 +94,7 @@ def _make_client(search_response: dict[str, Any], *, count: int = 0) -> MagicMoc
 
 _PRE_WRITE_SOURCE: dict[str, Any] = {
     'class_id': 1,
-    'class_name': 'cruiserbike',
+    'class_name': 'class_b',
     'class_source': 'classifier_model',
     'class_validated': False,
     'test_holdout': False,
@@ -169,7 +169,7 @@ async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
     """3 buckets: pure (promote) / mixed (skip) / unlabelled (skip).
 
     The only auto-promotion path is the ``cluster_majority_agreement``
-    write — crops where v6 already chose the cluster's dominant class
+    write — crops where the classifier already chose the cluster's dominant class
     get ``class_validated=True`` set. Unlabeled crops are left for the
     VLM + the review queue. This avoids the prototype-era pattern of
     silently labelling crops by cluster proximity, which was shown to
@@ -177,7 +177,7 @@ async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
     """
     buckets = [
         # Cluster 1: purity = 10/10 = 1.0, members 10 → promote.
-        _bucket(1, members=10, classes=[('cruiserbike', 10)]),
+        _bucket(1, members=10, classes=[('class_b', 10)]),
         # Cluster 2: purity = 5/10 = 0.5, members 10 → skip.
         _bucket(2, members=10, classes=[('sportycar', 5), ('pickup', 5)]),
         # Cluster 3: 8 members, zero labelled → skip.
@@ -218,7 +218,7 @@ async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
     must_not = scroll_init_call['query']['bool']['must_not']
     assert {'term': {'cluster_id': 1}} in filt
     assert {'terms': {'class_source': ['classifier_model']}} in filt
-    assert {'term': {'class_name': 'cruiserbike'}} in filt
+    assert {'term': {'class_name': 'class_b'}} in filt
     assert {'term': {'class_validated': True}} in must_not
     assert {'term': {'test_holdout': True}} in must_not
 
@@ -226,7 +226,7 @@ async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
     summaries = {s['cluster_id']: s for s in out['clusters']}
     assert set(summaries.keys()) == {1, 2, 3}
     assert summaries[1]['promote'] is True
-    assert summaries[1]['top_class'] == 'cruiserbike'
+    assert summaries[1]['top_class'] == 'class_b'
     assert summaries[1]['top_count'] == 10
     assert summaries[1]['purity'] == 1.0
     assert summaries[2]['promote'] is False
@@ -237,7 +237,7 @@ async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
 @pytest.mark.asyncio
 async def test_auto_promote_clusters_dry_run_does_not_call_update() -> None:
     buckets = [
-        _bucket(1, members=10, classes=[('cruiserbike', 10)]),
+        _bucket(1, members=10, classes=[('class_b', 10)]),
         _bucket(2, members=10, classes=[('sportycar', 5), ('pickup', 5)]),
     ]
     # CM-2: dry-run's count must come from an actual client.count(...) call
@@ -285,7 +285,7 @@ async def test_auto_promote_clusters_skips_zero_label_buckets() -> None:
 async def test_auto_promote_clusters_respects_min_members() -> None:
     """A pure cluster with only 3 members fails the ``min_members=4`` gate."""
     buckets = [
-        _bucket(7, members=3, classes=[('cruiserbike', 3)]),
+        _bucket(7, members=3, classes=[('class_b', 3)]),
     ]
     client = _make_client(_search_response(buckets))
     out = await auto_promote_clusters(client, min_purity=0.85, min_members=4)
@@ -308,7 +308,7 @@ async def test_auto_promote_clusters_search_targets_correct_index() -> None:
     # 1.0 and every member trivially "agrees" -- a self-referential signal,
     # not an independent one. Purity is still computed across ALL labelled
     # crops in a candidate cluster (validated and unvalidated); the
-    # validated/v6 distinction is enforced at write time, not at agg time.
+    # validated/classifier distinction is enforced at write time, not at agg time.
     from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 
     assert body['query']['bool']['filter'] == [
@@ -371,8 +371,8 @@ async def test_auto_promote_clusters_never_promotes_a_class_cluster() -> None:
     class_cluster_id = 7  # cluster_id == class_id, well under the offset
     candidate_cluster_id = RESIDUAL_CLUSTER_ID_OFFSET + 3
     buckets = [
-        _bucket(class_cluster_id, members=10, classes=[('cruiserbike', 10)]),
-        _bucket(candidate_cluster_id, members=10, classes=[('cruiserbike', 10)]),
+        _bucket(class_cluster_id, members=10, classes=[('class_b', 10)]),
+        _bucket(candidate_cluster_id, members=10, classes=[('class_b', 10)]),
     ]
     crop_ids = [f'crop-{i}' for i in range(10)]
     client = _FilteringAutoPromoteClient(

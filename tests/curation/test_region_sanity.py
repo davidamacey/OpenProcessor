@@ -123,12 +123,12 @@ class TestRegionProvenance:
 class TestClassProvenance:
     def test_basic(self) -> None:
         doc = class_provenance(
-            detector='vehicle_classifier_v6_trt',
+            detector='item_classifier_trt',
             detector_version='1',
-            labeler='ingest_v6',
+            labeler='ingest_classifier',
         )
-        assert doc['class_detector'] == 'vehicle_classifier_v6_trt'
-        assert doc['class_labeler'] == 'ingest_v6'
+        assert doc['class_detector'] == 'item_classifier_trt'
+        assert doc['class_labeler'] == 'ingest_classifier'
         assert 'class_labeled_at' in doc
 
 

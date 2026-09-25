@@ -38,7 +38,7 @@ OPENSEARCH_URL = os.environ.get('VERIFY_OPENSEARCH_URL', 'http://localhost:14702
 FAKE_VLM_URL = os.environ.get('VERIFY_FAKE_VLM_URL', 'http://localhost:14704')
 
 # Must match docker/test/compose.yml's OP_API_PREFIX + OP_*_INDEX values.
-API_PREFIX = os.environ.get('VERIFY_API_PREFIX', '/legacy')
+API_PREFIX = os.environ.get('VERIFY_API_PREFIX', '/curation')
 INDEXES = {
     'images': 'verify_images',
     'items': 'verify_items',
@@ -258,8 +258,8 @@ def seeded(api: Any, opensearch: Any) -> dict[str, Any]:
 
 
 @pytest.fixture(scope='session')
-def client(api: Any) -> Any:
-    """Prefix-aware helper: ``client.get('/crops')`` hits ``/legacy/crops``."""
+def api_client(api: Any) -> Any:
+    """Prefix-aware helper: ``api_client.get('/crops')`` hits ``{API_PREFIX}/crops``."""
 
     class _Prefixed:
         def __getattr__(self, name: str) -> Any:

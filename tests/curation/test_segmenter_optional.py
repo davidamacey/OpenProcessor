@@ -1,7 +1,7 @@
 """D5 — the segmenter leg of the detection cascade is optional.
 
 A deployment with no segmentation service of its own leaves
-``SAM3_URL``/``--sam3-url`` empty. :class:`SegmenterClient` then constructs
+``OP_SEGMENTER_URL``/``--segmenter-url`` empty. :class:`SegmenterClient` then constructs
 in a *disabled* state: ``segment`` always returns ``None`` (the
 same "no candidate" result an unhealthy or empty-response segmenter
 already produces) without ever attempting an HTTP call, so the cascade
@@ -9,7 +9,7 @@ degrades cleanly instead of crashing or hanging on an unreachable host.
 
 These tests exercise both the client in isolation and the real
 cascade routing path (``scripts.curation.region_worker_main._process_crop``,
-the same entry point ``tests/curation/test_sam_worker.py`` covers) with
+the same entry point ``tests/curation/test_region_worker.py`` covers) with
 a genuinely-disabled ``SegmenterClient`` — not a mock standing in for it.
 """
 
@@ -59,7 +59,7 @@ def _make_task(
     )
 
 
-def _lpr_mock(candidates):
+def _detector_mock(candidates):
     from unittest.mock import AsyncMock, MagicMock
 
     detector = MagicMock()
@@ -91,7 +91,7 @@ def _ocr_recognizer_mock():
     return r
 
 
-class TestSam3ClientDisabled:
+class TestSegmenterClientDisabled:
     """Unit-level: the client itself never touches the network when disabled."""
 
     @pytest.mark.parametrize('base_url', [None, '', '   ', ',,'])
@@ -117,10 +117,10 @@ class TestSam3ClientDisabled:
         await client.aclose()
 
     async def test_enabled_client_is_unaffected(self) -> None:
-        client = SegmenterClient(base_url='http://sam3-fake:8000')
+        client = SegmenterClient(base_url='http://segmenter-fake:8000')
         assert client.enabled is True
-        assert client.base_urls == ['http://sam3-fake:8000']
-        assert client.base_url == 'http://sam3-fake:8000'
+        assert client.base_urls == ['http://segmenter-fake:8000']
+        assert client.base_url == 'http://segmenter-fake:8000'
         await client.aclose()
 
 
@@ -134,14 +134,14 @@ class TestCascadeWithoutSegmenter:
         silently omitting it.
         """
         F = get_region_fields()
-        sam3 = SegmenterClient(base_url=None)
-        assert sam3.enabled is False
+        segmenter = SegmenterClient(base_url=None)
+        assert segmenter.enabled is False
 
         task = _make_task(region_status='pending', group='cars')
         await worker._process_crop(
             task,
-            detector=_lpr_mock([None]),
-            sam3=sam3,
+            detector=_detector_mock([None]),
+            segmenter=segmenter,
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=_vlm_mock(is_region=False),
         )
@@ -158,13 +158,13 @@ class TestCascadeWithoutSegmenter:
         (segment returns None) instead of raising.
         """
         F = get_region_fields()
-        sam3 = SegmenterClient(base_url='')
+        segmenter = SegmenterClient(base_url='')
 
-        task = _make_task(region_status='pending', class_name='sportbike', group='sportbikes')
+        task = _make_task(region_status='pending', class_name='class_c', group='group_c')
         await worker._process_crop(
             task,
-            detector=_lpr_mock([]),
-            sam3=sam3,
+            detector=_detector_mock([]),
+            segmenter=segmenter,
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=_vlm_mock(is_region=False),
         )

@@ -206,9 +206,9 @@ def test_from_env_name_kwarg_used_when_name_env_unset() -> None:
 
 
 def test_two_distinct_profiles_are_independent() -> None:
-    """A second, non-plate profile through the same cascade must not
+    """A second, distinct profile through the same cascade must not
     share mutable state with the first (§6.1 wave-8 coverage note)."""
-    plate = DetectionProfile(name='license_plate', detector_model='lpr_nanov11_640')
+    region_a = DetectionProfile(name='license_plate', detector_model='region_det_test')
     box = DetectionProfile(
         name='box',
         detector_model='box_detector_v1',
@@ -216,7 +216,7 @@ def test_two_distinct_profiles_are_independent() -> None:
         aspect_max=2.0,
         secondary_shape_groups=frozenset({'small_box', 'large_box'}),
     )
-    assert plate.detector_model != box.detector_model
-    assert plate.aspect_min != box.aspect_min
+    assert region_a.detector_model != box.detector_model
+    assert region_a.aspect_min != box.aspect_min
     assert box.secondary_shape_groups == frozenset({'small_box', 'large_box'})
-    assert plate.secondary_shape_groups == frozenset()
+    assert region_a.secondary_shape_groups == frozenset()

@@ -204,14 +204,14 @@ def _patch_worker_io(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
     os_client.search = AsyncMock(return_value={'hits': {'hits': []}})
     os_client.bulk = AsyncMock()
     os_client.close = AsyncMock()
-    sam3 = MagicMock()
-    sam3.aclose = AsyncMock()
+    segmenter = MagicMock()
+    segmenter.aclose = AsyncMock()
     vlm = MagicMock()
     vlm.aclose = AsyncMock()
     mocks = {
         'AsyncTritonPool': MagicMock(return_value=pool),
         'AsyncOpenSearch': MagicMock(return_value=os_client),
-        'SegmenterClient': MagicMock(return_value=sam3),
+        'SegmenterClient': MagicMock(return_value=segmenter),
         'VlmLabeler': MagicMock(return_value=vlm),
     }
     for name, mock in mocks.items():
@@ -226,16 +226,18 @@ def _patch_worker_io(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
         _noop_signal_handler,
         raising=False,
     )
-    monkeypatch.setenv('SAM_WORKER_METRICS_PORT', '0')
+    monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
     return mocks
 
 
-def _worker_args(tmp_path: Path, sam3_url: str = 'http://sam3.local:8000') -> argparse.Namespace:
+def _worker_args(
+    tmp_path: Path, segmenter_url: str = 'http://segmenter.local:8000'
+) -> argparse.Namespace:
     return worker.parse_args(
         [
             '--opensearch=http://os.local:9200',
             '--triton=triton:8001',
-            f'--sam3-url={sam3_url}',
+            f'--segmenter-url={segmenter_url}',
             '--vlm-url=http://vlm.local:8000',
             f'--pause-sentinel={tmp_path / "pause.sentinel"}',
             '--max-iterations=1',
@@ -264,7 +266,7 @@ async def test_worker_sends_the_profile_segmenter_prompt(
     mocks = _patch_worker_io(region_env)
     assert await worker.run(_worker_args(tmp_path)) == 0
     mocks['SegmenterClient'].assert_called_once_with(
-        'http://sam3.local:8000', text_prompt='shipping label'
+        'http://segmenter.local:8000', text_prompt='shipping label'
     )
 
 
@@ -296,7 +298,7 @@ def test_secondary_shape_routing_follows_env_groups(
     )
     monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'tall_things')
     assert worker._is_secondary_shape(task)
-    monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'sportbikes')
+    monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'unrelated_group')
     assert not worker._is_secondary_shape(task)
 
 
@@ -311,7 +313,7 @@ def test_no_secondary_shape_routing_when_profile_has_no_groups(
         image_path='/x',
         vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
         region_status=None,
-        class_name='cruiserbike',
+        class_name='class_b',
     )
     monkeypatch.setattr(worker_state, '_class_group', lambda _name: None)
     assert not worker._is_secondary_shape(task)

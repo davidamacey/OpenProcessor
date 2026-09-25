@@ -83,7 +83,7 @@ EXPECTED_DEFAULT_SORT_ID = {
 
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    from src.routers.curation import _raw_opensearch_dep, router as legacy_router
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     fake_os = AsyncMock()
     fake_os.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})
@@ -92,7 +92,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
 
     app = FastAPI()
-    app.include_router(legacy_router)
+    app.include_router(curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
 
     client = TestClient(app)
@@ -230,7 +230,7 @@ def test_hide_near_duplicates_false_by_default(app_client: TestClient) -> None:
 def test_response_item_whitelist_includes_new_score_fields(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.routers.curation import _raw_opensearch_dep, router as legacy_router
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     fake_os = AsyncMock()
     fake_os.search = AsyncMock(
@@ -257,7 +257,7 @@ def test_response_item_whitelist_includes_new_score_fields(
     )
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     app = FastAPI()
-    app.include_router(legacy_router)
+    app.include_router(curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     client = TestClient(app)
 

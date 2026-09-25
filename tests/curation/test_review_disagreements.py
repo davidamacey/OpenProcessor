@@ -24,7 +24,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """Mount the real curation router with OpenSearch stubbed."""
-    from src.routers.curation import _raw_opensearch_dep, router as legacy_router
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     fake_os = AsyncMock()
 
@@ -64,7 +64,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     )
 
     app = FastAPI()
-    app.include_router(legacy_router)
+    app.include_router(curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
 
     client = TestClient(app)

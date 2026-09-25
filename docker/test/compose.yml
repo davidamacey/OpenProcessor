@@ -108,7 +108,7 @@ services:
       # already calls, so it can be pointed at the harness without a
       # rebuild. Every curation router builds its prefix at module
       # import, so this must be set before src.main is imported.
-      - OP_API_PREFIX=/legacy
+      - OP_API_PREFIX=/curation
       # Belt and braces: every configured index name carries the
       # `verify_` prefix, and tests/live/conftest.py refuses to run if
       # any of them does not.

@@ -38,13 +38,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument('--opensearch', default=DEFAULT_OPENSEARCH)
     p.add_argument('--triton', default=DEFAULT_TRITON)
     p.add_argument(
-        '--sam3-url',
+        '--segmenter-url',
         default=DEFAULT_SEGMENTER_URLS or DEFAULT_SEGMENTER_URL,
         help=(
             'Secondary-segmenter base URL. May be a comma-separated list '
             'to round-robin across multiple segmenter services on '
-            'different GPUs (env OP_SEGMENTER_URLS=http://sam3-gpu0:8000,'
-            'http://sam3-gpu1:8000).'
+            'different GPUs (env OP_SEGMENTER_URLS=http://segmenter-gpu0:8000,'
+            'http://segmenter-gpu1:8000).'
         ),
     )
     p.add_argument(

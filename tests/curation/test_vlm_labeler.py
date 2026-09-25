@@ -1,6 +1,6 @@
 """Unit tests for ``src.services.labeling.vlm_labeler.VlmLabeler``.
 
-Ported from the reference ``tests/test_gemma_labeler.py`` (§5 Chunk 7 —
+Ported from the reference VLM labeler's test suite (§5 Chunk 7 —
 see ``docs/design/curation_design_rationale.md`` for the genericization
 approach). Mechanism only — the reference file used generic placeholder
 class names ('acura', 'bmw', 'porsche') purely as opaque strings for the

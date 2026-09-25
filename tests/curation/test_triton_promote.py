@@ -86,7 +86,7 @@ async def test_promote_does_not_rmtree_before_copy(
     the copy, gated only on `overwrite`. A successful promote over an
     existing model must never delete anything — old version 1 must survive
     untouched and a new version 2 must appear alongside it."""
-    triton_name = 'legacy_vehicle_smoke_v1'
+    triton_name = 'op_smoke_v1'
     model_dir = scratch_models_dir / triton_name
     v1 = model_dir / '1'
     v1.mkdir(parents=True)
@@ -133,11 +133,11 @@ async def test_promote_fresh_model_uses_version_1(
     promoter = _promoter(scratch_models_dir)
     result = await promoter.promote(
         status=fake_status,
-        triton_name='legacy_vehicle_smoke_v1',
+        triton_name='op_smoke_v1',
         class_id_to_name=CLASS_MAP,
     )
     assert result.version == '1'
-    assert (scratch_models_dir / 'legacy_vehicle_smoke_v1' / '1' / 'model.onnx').is_file()
+    assert (scratch_models_dir / 'op_smoke_v1' / '1' / 'model.onnx').is_file()
 
 
 @pytest.mark.asyncio
@@ -147,7 +147,7 @@ async def test_promote_without_overwrite_still_conflicts(
 ) -> None:
     """The 409 conflict guard must still fire for an existing *served*
     version when overwrite=False — versioning doesn't silently disable it."""
-    model_dir = scratch_models_dir / 'legacy_vehicle_smoke_v1'
+    model_dir = scratch_models_dir / 'op_smoke_v1'
     (model_dir / '1').mkdir(parents=True)
     (model_dir / '1' / 'model.onnx').write_bytes(b'x')
 
@@ -155,7 +155,7 @@ async def test_promote_without_overwrite_still_conflicts(
     with pytest.raises(ModelNameConflictError):
         await promoter.promote(
             status=fake_status,
-            triton_name='legacy_vehicle_smoke_v1',
+            triton_name='op_smoke_v1',
             class_id_to_name=CLASS_MAP,
             overwrite=False,
         )
@@ -176,7 +176,7 @@ async def test_promote_restores_previous_version_on_failure(
     was already rmtree'd — the model dir would simply be gone. Now: the
     previously-serving version must remain fully intact and servable, and
     the half-written new version must not linger to confuse Triton."""
-    triton_name = 'legacy_vehicle_smoke_v1'
+    triton_name = 'op_smoke_v1'
     model_dir = scratch_models_dir / triton_name
     v1 = model_dir / '1'
     v1.mkdir(parents=True)
@@ -215,7 +215,7 @@ async def test_promote_config_write_failure_also_rolls_back_new_version(
 ) -> None:
     """A failure writing config.pbtxt (after a successful ONNX copy) must
     also roll back the new version dir, not leave a weights-only half-model."""
-    triton_name = 'legacy_vehicle_smoke_v1'
+    triton_name = 'op_smoke_v1'
     monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=True))
 
     def _boom(*_args: Any, **_kwargs: Any) -> str:
@@ -253,7 +253,7 @@ async def test_promote_writes_job_id_backpointer_and_version(
     back to the run that produced it."""
     monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=True))
     promoter = _promoter(scratch_models_dir)
-    triton_name = 'legacy_vehicle_smoke_v1'
+    triton_name = 'op_smoke_v1'
 
     result: PromoteResult = await promoter.promote(
         status=fake_status,
@@ -281,7 +281,7 @@ async def test_promote_backpointer_written_even_when_triton_load_times_out(
     picked it up yet — it must exist even on a fail-soft load outcome."""
     monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=False))
     promoter = _promoter(scratch_models_dir)
-    triton_name = 'legacy_vehicle_smoke_v1'
+    triton_name = 'op_smoke_v1'
 
     result = await promoter.promote(
         status=fake_status,
@@ -434,12 +434,12 @@ async def test_promote_copies_class_remap_into_model_dir(
     )
     result = await promoter.promote(
         status=fake_status,
-        triton_name='legacy_vehicle_smoke_remap',
+        triton_name='op_smoke_remap',
         class_id_to_name={0: 'pickup', 1: 'license_plate'},
         class_remap=remap,
     )
     assert result.class_remap_source == 'manifest'
-    model_dir = scratch_models_dir / 'legacy_vehicle_smoke_remap'
+    model_dir = scratch_models_dir / 'op_smoke_remap'
     remap_dest = json.loads((model_dir / 'class_remap.json').read_text())
     assert remap_dest['original_to_new'] == {'12': 0, '81': 1}
     assert remap_dest['source'] == 'manifest'
@@ -469,7 +469,7 @@ def test_default_http_timeout_raised_above_30s() -> None:
 # =============================================================================
 
 
-def _make_promoted_model_dir(scratch_models_dir: Path, name: str = 'legacy_smoke_unload_v1') -> Path:
+def _make_promoted_model_dir(scratch_models_dir: Path, name: str = 'op_smoke_unload_v1') -> Path:
     model_dir = scratch_models_dir / name
     v1 = model_dir / '1'
     v1.mkdir(parents=True)
@@ -486,7 +486,7 @@ async def test_unload_happy_path_calls_triton_and_removes_directory(
 ) -> None:
     """The happy path: Triton confirms unload (mocked — no real HTTP call),
     then the model repo directory is actually removed from disk."""
-    name = 'legacy_smoke_unload_v1'
+    name = 'op_smoke_unload_v1'
     model_dir = _make_promoted_model_dir(scratch_models_dir, name)
     assert model_dir.is_dir()
 
@@ -521,7 +521,7 @@ async def test_unload_refuses_to_delete_when_triton_unload_fails(
     from under a model Triton still thinks is loaded is exactly the kind
     of irreversible mistake P1-10 already burned once (promote's old
     rmtree-before-copy bug)."""
-    name = 'legacy_smoke_unload_v1'
+    name = 'op_smoke_unload_v1'
     model_dir = _make_promoted_model_dir(scratch_models_dir, name)
 
     monkeypatch.setattr(TritonPromoter, '_trigger_unload', AsyncMock(return_value=False))
@@ -542,7 +542,7 @@ async def test_unload_posts_to_the_unload_endpoint_not_load(
     """Confirms the real (unmocked) _trigger_unload hits
     `/v2/repository/models/<name>/unload`, not `/load` — a copy-paste from
     _trigger_load would silently re-load the model instead of releasing it."""
-    name = 'legacy_smoke_unload_v1'
+    name = 'op_smoke_unload_v1'
     _make_promoted_model_dir(scratch_models_dir, name)
 
     requested_urls: list[str] = []
@@ -698,9 +698,9 @@ async def test_reload_promoted_models_skips_already_ready_models(
 ) -> None:
     from src.services.training.triton_promote import reload_promoted_models
 
-    _make_promoted_model_dir(scratch_models_dir, 'legacy_ready_v1')
+    _make_promoted_model_dir(scratch_models_dir, 'op_ready_v1')
     fake_client = _FakeIndexAndLoadClient(
-        index_response=[{'name': 'legacy_ready_v1', 'state': 'READY'}], load_ok=set()
+        index_response=[{'name': 'op_ready_v1', 'state': 'READY'}], load_ok=set()
     )
     monkeypatch.setattr('src.services.training.triton_promote.httpx.AsyncClient', fake_client)
 
@@ -716,17 +716,17 @@ async def test_reload_promoted_models_reloads_unavailable_promoted_models(
 ) -> None:
     from src.services.training.triton_promote import reload_promoted_models
 
-    _make_promoted_model_dir(scratch_models_dir, 'legacy_stranded_v1')
+    _make_promoted_model_dir(scratch_models_dir, 'op_stranded_v1')
     fake_client = _FakeIndexAndLoadClient(
-        index_response=[{'name': 'legacy_stranded_v1', 'state': 'UNAVAILABLE'}],
-        load_ok={'legacy_stranded_v1'},
+        index_response=[{'name': 'op_stranded_v1', 'state': 'UNAVAILABLE'}],
+        load_ok={'op_stranded_v1'},
     )
     monkeypatch.setattr('src.services.training.triton_promote.httpx.AsyncClient', fake_client)
 
     result = await reload_promoted_models(_promoter(scratch_models_dir))
 
-    assert result == {'status': 'ok', 'reloaded': ['legacy_stranded_v1'], 'failed': []}
-    assert fake_client.load_calls == ['legacy_stranded_v1']
+    assert result == {'status': 'ok', 'reloaded': ['op_stranded_v1'], 'failed': []}
+    assert fake_client.load_calls == ['op_stranded_v1']
 
 
 @pytest.mark.asyncio
@@ -758,7 +758,7 @@ async def test_reload_promoted_models_is_best_effort_on_unreachable_triton(
 ) -> None:
     from src.services.training.triton_promote import reload_promoted_models
 
-    _make_promoted_model_dir(scratch_models_dir, 'legacy_v1')
+    _make_promoted_model_dir(scratch_models_dir, 'op_v1')
 
     class _RaisingClient:
         def __call__(self, *_a: Any, **_kw: Any) -> _RaisingClient:

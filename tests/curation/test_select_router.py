@@ -55,11 +55,11 @@ def _clear_diverse_order_cache() -> Iterator[None]:
     tests often reuse the same trivial query across differently-mocked
     OpenSearch clients without it, so clear the module-level cache
     between tests to avoid one test's result leaking into the next."""
-    from src.routers.curation import select as legacy_select
+    from src.routers.curation import select as select_mod
 
-    legacy_select._ORDER_CACHE.clear()
+    select_mod._ORDER_CACHE.clear()
     yield
-    legacy_select._ORDER_CACHE.clear()
+    select_mod._ORDER_CACHE.clear()
 
 
 def _orthonormal_pool(n: int, d: int = 8) -> list[tuple[str, list[float]]]:
@@ -133,7 +133,7 @@ async def test_compute_diverse_order_disabled_returns_none_without_any_os_call(
 
     monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
     fake_os = _fake_scroll_client(_orthonormal_pool(5))
-    result = await compute_diverse_order(fake_os, 'legacy_vehicle_crops', {'match_all': {}})
+    result = await compute_diverse_order(fake_os, 'op_items', {'match_all': {}})
     assert result is None
     fake_os.search.assert_not_called()
 
@@ -147,7 +147,7 @@ async def test_compute_diverse_order_returns_full_ranking_when_enabled_and_small
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     pool = _orthonormal_pool(6)
     fake_os = _fake_scroll_client(pool)
-    result = await compute_diverse_order(fake_os, 'legacy_vehicle_crops', {'match_all': {}})
+    result = await compute_diverse_order(fake_os, 'op_items', {'match_all': {}})
     assert result is not None
     assert set(result) == {cid for cid, _ in pool}
     assert len(result) == 6
@@ -168,7 +168,7 @@ async def test_compute_diverse_order_falls_back_above_inline_cap(
     # 5 trips truncation immediately on the first (only) scroll page.
     monkeypatch.setenv('OP_SELECT_SYNC_MAX_OPS', '4')
     fake_os = _fake_scroll_client(_orthonormal_pool(5))
-    result = await compute_diverse_order(fake_os, 'legacy_vehicle_crops', {'match_all': {}})
+    result = await compute_diverse_order(fake_os, 'op_items', {'match_all': {}})
     assert result is None
 
 
@@ -180,7 +180,7 @@ async def test_compute_diverse_order_empty_pool_returns_empty_list(
 
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     fake_os = _fake_scroll_client([])
-    result = await compute_diverse_order(fake_os, 'legacy_vehicle_crops', {'match_all': {}})
+    result = await compute_diverse_order(fake_os, 'op_items', {'match_all': {}})
     assert result == []
 
 
@@ -199,14 +199,14 @@ async def test_compute_diverse_order_cache_hits_when_k_caps_the_order(
     fake_os = _fake_scroll_client(pool)
 
     first = await compute_diverse_order(
-        fake_os, 'legacy_vehicle_crops', {'match_all': {}}, current_count=6, k=2
+        fake_os, 'op_items', {'match_all': {}}, current_count=6, k=2
     )
     assert first is not None
     assert len(first) == 2
     assert fake_os.search.await_count == 1
 
     second = await compute_diverse_order(
-        fake_os, 'legacy_vehicle_crops', {'match_all': {}}, current_count=6, k=2
+        fake_os, 'op_items', {'match_all': {}}, current_count=6, k=2
     )
     assert second == first
     # Still 1 -- the second call hit the cache instead of re-scrolling.
@@ -220,7 +220,7 @@ async def test_compute_diverse_order_cache_hits_when_k_caps_the_order(
 
 @pytest.fixture
 def crops_app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    from src.routers.curation import _raw_opensearch_dep, router as legacy_router
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     fake_os = AsyncMock()
@@ -255,7 +255,7 @@ def crops_app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # embedding-bearing pool before ranking.
     fake_os.count = AsyncMock(return_value={'count': 2})
     app = FastAPI()
-    app.include_router(legacy_router)
+    app.include_router(curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     client = TestClient(app)
     client.fake_os = fake_os  # type: ignore[attr-defined]
@@ -305,7 +305,7 @@ def test_get_crops_order_diverse_falls_back_when_helper_returns_none(
 
 @pytest.fixture
 def select_app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
-    from src.routers.curation import _raw_opensearch_dep, router as legacy_router
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     monkeypatch.setenv('OP_SELECT_JOBS_DIR', str(tmp_path / 'select'))
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
@@ -313,7 +313,7 @@ def select_app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
 
     fake_os = AsyncMock()
     app = FastAPI()
-    app.include_router(legacy_router)
+    app.include_router(curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     client = TestClient(app)
     client.fake_os = fake_os  # type: ignore[attr-defined]

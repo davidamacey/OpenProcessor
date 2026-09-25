@@ -37,7 +37,7 @@ def app_client():
 
 def _mock_unload(monkeypatch: pytest.MonkeyPatch, **overrides) -> AsyncMock:
     result = UnloadResult(
-        triton_name=overrides.get('triton_name', 'legacy_smoke_v1'),
+        triton_name=overrides.get('triton_name', 'op_smoke_v1'),
         triton_unloaded=True,
         directory_removed=True,
     )

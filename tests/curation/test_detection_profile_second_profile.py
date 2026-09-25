@@ -104,10 +104,10 @@ async def test_region_detector_uses_profile_model_name_and_floor() -> None:
     assert result is not None
     assert isinstance(result, RegionCandidate)
     # Source is stamped with the profile's own model name, not the
-    # reference LPR default.
+    # reference region-detector default.
     assert result.source == 'box_detector_v1'
 
-    # A score that clears the LPR default floor (0.4) but not the box
+    # A score that clears the reference detector's default floor (0.4) but not the box
     # profile's stricter 0.6 floor must be dropped — proves the floor
     # really is profile-driven, not the old hardcoded constant.
     raw_low = raw.copy()
@@ -157,7 +157,7 @@ def test_ocr_region_text_candidate_gate_is_profile_scoped() -> None:
     )
     assert region.is_region_text_candidate
 
-    # Same bbox + text bound to the LPR default profile fails on both
+    # Same bbox + text bound to the reference detector's default profile fails on both
     # counts: aspect 1.0 is outside the default's 1.5-7.0 band, and
     # length 2 is below the default's text_hint_len_min=4. Proves the
     # gate reads the bound profile rather than a module constant.

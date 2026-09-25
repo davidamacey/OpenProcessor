@@ -30,7 +30,7 @@ import revert_class_cluster_promotions as revert_script  # noqa: E402
 def _history_entry(**overrides: Any) -> dict[str, Any]:
     base = {
         'class_id': 3,
-        'class_name': 'cruiserbike',
+        'class_name': 'class_b',
         'class_source': 'classifier_model',
         'label_source': 'classifier_model',
         'confidence': 0.62,
@@ -49,7 +49,7 @@ class TestLastAutoPromoteEntry:
         }
         entry = revert_script._last_auto_promote_entry(source)
         assert entry is not None
-        assert entry['class_name'] == 'cruiserbike'
+        assert entry['class_name'] == 'class_b'
 
     def test_ignores_candidate_range_promotions(self) -> None:
         """A promotion out of a real candidate cluster (>= the residual
@@ -115,7 +115,7 @@ async def test_dry_run_does_not_write(monkeypatch: pytest.MonkeyPatch) -> None:
             'crop-class-range',
             {
                 'cluster_id': 3,
-                'class_name': 'cruiserbike',
+                'class_name': 'class_b',
                 'class_source': 'cluster_majority_agreement',
                 'class_id_history': [_history_entry()],
             },
@@ -139,7 +139,7 @@ async def test_apply_reverts_only_class_range_promotions(
             'crop-class-range',
             {
                 'cluster_id': 3,
-                'class_name': 'cruiserbike',
+                'class_name': 'class_b',
                 'class_source': 'cluster_majority_agreement',
                 'class_id_history': [_history_entry()],
             },
@@ -166,6 +166,6 @@ async def test_apply_reverts_only_class_range_promotions(
     written = client.bulk_calls[0]
     assert written['id'] == 'crop-class-range'
     assert written['doc']['class_id'] == 3
-    assert written['doc']['class_name'] == 'cruiserbike'
+    assert written['doc']['class_name'] == 'class_b'
     assert written['doc']['class_source'] == 'classifier_model'
     assert written['doc']['class_validated'] is False

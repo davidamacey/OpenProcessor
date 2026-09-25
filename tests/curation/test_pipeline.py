@@ -2,7 +2,7 @@
 
 Ports the ``TestPipelineSkipFilter`` class from the reference tree's
 ``test_label_combined_wireup.py`` (deferred out of Chunk 8 there because
-it exercises ``legacy_pipeline.py``, ported here in Chunk 9).
+it exercises the reference pipeline module, ported here in Chunk 9).
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ class TestPipelineSkipFilter:
         assert 'range' in src
         assert 'vlm_verify_completed_at' in src
 
-    def test_pipeline_skips_gemma_for_completed_crops(self) -> None:
+    def test_pipeline_skips_vlm_for_completed_crops(self) -> None:
         """The skip filter is purely time-based (24h window) and therefore
         applies to ANY crop class_source whose combined call set
         ``vlm_verify_completed_at`` within the last 24h. Pin the cutoff

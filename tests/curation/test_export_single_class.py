@@ -257,7 +257,7 @@ async def test_unknown_image_mode_rejected(tmp_path):
 @pytest.mark.asyncio
 async def test_single_class_export_writes_labels_yaml_and_symlink(tmp_path):
     docs = [_item(i, 0) for i in range(6)] + [_item(100 + i, 1) for i in range(4)]
-    profile = SingleClassExportProfile(class_ids=(0,), name='plates')
+    profile = SingleClassExportProfile(class_ids=(0,), name='regions')
     service = _service(tmp_path, _FakeOpenSearch(docs), profile)
 
     result = await service.export(version_tag='v1', seed=11, copy_images=False)
@@ -279,7 +279,7 @@ async def test_single_class_export_writes_labels_yaml_and_symlink(tmp_path):
 
     # The profile gets its OWN current symlink, under its own root — the
     # multi-class export root is untouched.
-    link = tmp_path / 'exports' / 'plates' / 'current'
+    link = tmp_path / 'exports' / 'regions' / 'current'
     assert link.resolve() == export_dir.resolve()
     assert not (tmp_path / 'exports' / 'current').exists()
     assert resolve_current_single_class_dir(profile, service.config) == export_dir.resolve()
@@ -436,7 +436,7 @@ async def test_region_mode_splits_positives_hard_negatives_and_empties(tmp_path)
         *[_region_item(100 + i, RegionStatus.FALSE_POSITIVE) for i in range(3)],
         *[_region_item(200 + i, RegionStatus.NO_REGION_VISIBLE) for i in range(20)],
     ]
-    profile = SingleClassExportProfile(box_source='region', region_class_name='plate')
+    profile = SingleClassExportProfile(box_source='region', region_class_name='region')
     service = _service(tmp_path, _FakeOpenSearch(docs, by_status=True), profile)
 
     result = await service.export(empty_bg_ratio=0.2, seed=2, copy_images=False)
@@ -447,8 +447,8 @@ async def test_region_mode_splits_positives_hard_negatives_and_empties(tmp_path)
     assert result.background_images == 3 + 2
     manifest = json.loads(Path(result.manifest_path).read_text())
     assert manifest['false_positive_background_images'] == 3
-    assert manifest['class_name'] == 'plate'
-    assert '  0: plate\n' in (Path(result.export_dir) / 'data.yaml').read_text()
+    assert manifest['class_name'] == 'region'
+    assert '  0: region\n' in (Path(result.export_dir) / 'data.yaml').read_text()
 
 
 @pytest.mark.asyncio
@@ -461,7 +461,7 @@ async def test_region_mode_empty_frame_sample_uses_random_score_with_fixed_seed(
     docs = [
         _region_item(i, RegionStatus.DETECTED, region_bbox=[0.4, 0.4, 0.5, 0.45]) for i in range(4)
     ]
-    profile = SingleClassExportProfile(box_source='region', region_class_name='plate')
+    profile = SingleClassExportProfile(box_source='region', region_class_name='region')
     fake_os = _FakeOpenSearch(docs, by_status=True)
     service = _service(tmp_path, fake_os, profile)
 
@@ -564,7 +564,7 @@ async def test_item_crop_mode_crops_the_written_image(tmp_path):
 # ---------------------------------------------------------------------------
 
 # Exact manifest key set written by the reference implementation's
-# single-class (license-plate) export service. Pinned here as literal
+# single-class export service. Pinned here as literal
 # data so this test fails if the generic exporter ever drops one of the
 # fields a downstream training lineage reads.
 _REFERENCE_MANIFEST_KEYS: frozenset[str] = frozenset(
@@ -632,15 +632,15 @@ async def test_manifest_shape_matches_reference_single_class_export(tmp_path):
         *[_region_item(200 + i, RegionStatus.NO_REGION_VISIBLE) for i in range(10)],
     ]
     profile = SingleClassExportProfile(
-        name='plates',
+        name='regions',
         box_source='region',
-        region_class_name='license_plate',
-        dataset_kind='lpr_single_class',
+        region_class_name='region',
+        dataset_kind='region_single_class',
     )
     service = _service(tmp_path, _FakeOpenSearch(docs, by_status=True), profile)
 
     result = await service.export(
-        version_tag='lpr-v1',
+        version_tag='region-v1',
         seed=42,
         empty_bg_ratio=0.1,
         max_positive_images=20,
@@ -655,10 +655,10 @@ async def test_manifest_shape_matches_reference_single_class_export(tmp_path):
     assert not missing, f'manifest is missing reference keys: {sorted(missing)}'
 
     # Same semantics, not just the same key names.
-    assert manifest['dataset_kind'] == 'lpr_single_class'
-    assert manifest['version_tag'] == 'lpr-v1'
+    assert manifest['dataset_kind'] == 'region_single_class'
+    assert manifest['version_tag'] == 'region-v1'
     assert manifest['class_count'] == 1
-    assert manifest['class_name'] == 'license_plate'
+    assert manifest['class_name'] == 'region'
     assert manifest['image_mode'] == 'whole_frame'
     assert manifest['img_max_side'] == 1280
     assert manifest['empty_bg_ratio'] == 0.1
@@ -686,6 +686,6 @@ async def test_manifest_shape_matches_reference_single_class_export(tmp_path):
 
     # ...and the atomically-flipped current symlink the reference export
     # also guaranteed.
-    link = tmp_path / 'exports' / 'plates' / 'current'
+    link = tmp_path / 'exports' / 'regions' / 'current'
     assert link.is_symlink()
     assert link.resolve() == export_dir.resolve()

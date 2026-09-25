@@ -429,7 +429,7 @@ async def _drive_worker(
     ``until_writes`` writes landed (or a timeout); ``on_write(n)`` is
     called as the n-th write is seen."""
     handlers = _capture_signal_handler(monkeypatch)
-    monkeypatch.setenv('SAM_WORKER_METRICS_PORT', '0')
+    monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
 
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
     monkeypatch.setattr(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
@@ -473,7 +473,7 @@ async def _drive_worker(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
-            '--sam3-url=http://seg.invalid:8000',
+            '--segmenter-url=http://seg.invalid:8000',
             '--vlm-url=http://vlm.invalid:8000',
             f'--pause-sentinel={tmp_path / "absent.sentinel"}',
             '--continuous',

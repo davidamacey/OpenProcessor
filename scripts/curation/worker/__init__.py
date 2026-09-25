@@ -29,7 +29,7 @@ from __future__ import annotations
 # Public, top-level re-exports. These are needed because:
 #   1. ``scripts/curation/region_worker_main.py`` does ``from ... import *`` —
 #      these names are what ``*`` picks up.
-#   2. ``tests/curation/test_sam_worker.py`` monkeypatches the heavy-IO
+#   2. ``tests/curation/test_region_worker.py`` monkeypatches the heavy-IO
 #      constructors (``AsyncTritonPool``, ``AsyncOpenSearch``,
 #      ``SegmenterClient``, ``VlmLabeler``) on the shim module; the runner
 #      looks them up via the shim (``from scripts.curation import

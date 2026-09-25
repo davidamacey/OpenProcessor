@@ -13,7 +13,7 @@ route paths, request/response schemas, base64 decoding, candidate
 sorting, box normalization, the pool lock, the client's parsing and
 failure handling — is the code that ships.
 
-Complements ``test_sam3_optional.py``, which proves the *absence* of a
+Complements ``test_segmenter_optional.py``, which proves the *absence* of a
 segmenter degrades cleanly. This proves the presence of one actually
 works.
 """
@@ -235,7 +235,7 @@ class TestWireSurface:
     @pytest.mark.usefixtures('served')
     async def test_generic_path_serves_the_wire_contract(self) -> None:
         """``/segment`` is the shipped client's only path (W3: the
-        ``/sam3/segment`` alias was removed -- no deployed worker
+        ``/segmenter/segment`` alias was removed -- no deployed worker
         posts to it anymore)."""
         payload = {
             'crop_jpeg_b64': base64.b64encode(_make_jpeg()).decode('ascii'),
@@ -256,7 +256,7 @@ class TestWireSurface:
             'text_prompt': _PROMPT,
         }
         async with _asgi_client() as http:
-            legacy = await http.post('/sam3/segment', json=payload)
+            legacy = await http.post('/segmenter/segment', json=payload)
         assert legacy.status_code == 404
 
     @pytest.mark.asyncio
@@ -368,7 +368,7 @@ class TestWireSurface:
 # =============================================================================
 
 
-def _lpr_mock(candidates):
+def _detector_mock(candidates):
     from unittest.mock import AsyncMock, MagicMock
 
     detector = MagicMock()
@@ -410,13 +410,15 @@ class TestCascadeWithTheShippedSegmenter:
     ) -> None:
         """The whole point of G4: with a segmenter deployed, a crop the
         primary detector missed comes back with a segmenter-sourced box
-        and segmenter provenance — where ``test_sam3_optional`` sees
+        and segmenter provenance — where ``test_segmenter_optional`` sees
         ``no_region_box``.
         """
         F = get_region_fields()
         async with _asgi_client() as http:
-            sam3 = SegmenterClient(base_url='http://segmenter', client=http, text_prompt=_PROMPT)
-            assert sam3.enabled is True
+            segmenter = SegmenterClient(
+                base_url='http://segmenter', client=http, text_prompt=_PROMPT
+            )
+            assert segmenter.enabled is True
 
             task = worker._ItemTask(
                 crop_id='crop-1',
@@ -431,8 +433,8 @@ class TestCascadeWithTheShippedSegmenter:
             )
             await worker._process_crop(
                 task,
-                detector=_lpr_mock([None]),
-                sam3=sam3,
+                detector=_detector_mock([None]),
+                segmenter=segmenter,
                 ocr_recognizer=_ocr_recognizer_mock(),
                 vlm=_vlm_mock(is_region=True),
             )

@@ -51,7 +51,7 @@ def test_items_mapping_region_fields_match_the_module_singleton() -> None:
         'cluster_distance',
         'cluster_subid',
         # CFG-8: this was a domain-named, vendor-named literal
-        # ('gemma_plate_visible', historic) baked into the mapping until
+        # (historic) baked into the mapping until
         # it was wired through RegionFields.visible.
         'visible',
     )

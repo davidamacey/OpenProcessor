@@ -238,7 +238,7 @@ async def run(args: argparse.Namespace) -> int:
     # region bbox source (it's too loose; produced visibly-oversized
     # regions).
     ocr_recognizer = PaddleOcrTextRecognizer(pool, profile)
-    # D5: the segmenter leg is optional. An empty ``--sam3-url``/``OP_SEGMENTER_URL``
+    # D5: the segmenter leg is optional. An empty ``--segmenter-url``/``OP_SEGMENTER_URL``
     # constructs a disabled SegmenterClient — segment() then always
     # returns None (the same "no candidate" result callers already
     # handle) without attempting any HTTP call. A deployment with no
@@ -246,15 +246,15 @@ async def run(args: argparse.Namespace) -> int:
     # The segmenter is prompt-driven; the prompt is region-type config
     # (OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT). A segmenter URL with no prompt
     # would be rejected by the service on every call, so disable the leg.
-    sam3_url = args.sam3_url
-    if sam3_url and not profile.segmenter_text_prompt:
+    segmenter_url = args.segmenter_url
+    if segmenter_url and not profile.segmenter_text_prompt:
         logger.warning(
             'segmenter_disabled_no_text_prompt',
             profile=profile.name,
             detail='set OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT to use the segmenter leg',
         )
-        sam3_url = ''
-    sam3 = _wkr.SegmenterClient(sam3_url, text_prompt=profile.segmenter_text_prompt)
+        segmenter_url = ''
+    segmenter = _wkr.SegmenterClient(segmenter_url, text_prompt=profile.segmenter_text_prompt)
     # The deployment's prompt pack (OP_PROMPT_PACK_PATH) tells the VLM what
     # the region IS and that ``region_text`` is its transcribed text. The
     # built-in generic pack describes an unspecified "labeled sub-region",
@@ -447,7 +447,7 @@ async def run(args: argparse.Namespace) -> int:
         'region_worker_start_streaming',
         opensearch=args.opensearch,
         triton=args.triton,
-        sam3_url=args.sam3_url,
+        segmenter_url=args.segmenter_url,
         batch_size=args.batch_size,
         concurrency=args.concurrency,
         continuous=args.continuous,
@@ -854,7 +854,7 @@ async def run(args: argparse.Namespace) -> int:
 
                 _sam_t0 = time.monotonic()
                 try:
-                    sam_candidate = await sam3.segment(t.crop_jpeg)
+                    sam_candidate = await segmenter.segment(t.crop_jpeg)
                 except SegmenterAllHostsDown as exc:
                     # Infrastructure failure (every secondary-segmenter
                     # host UNHEALTHY). Do NOT mark the crop terminal —
@@ -970,7 +970,7 @@ async def run(args: argparse.Namespace) -> int:
                 if ocr_pick is not None:
                     t.detection_trace.append(f'{region_profile().ocr_rec_model}:text_hint:hit')
                     sub_cand, _sub_box = await _resegment_from_text_hint(
-                        t.crop_jpeg, ocr_pick.bbox_norm, sam3
+                        t.crop_jpeg, ocr_pick.bbox_norm, segmenter
                     )
                     if sub_cand is not None:
                         t.candidate_source = CANDIDATE_SEGMENTER_TEXT_HINT
@@ -1551,7 +1551,7 @@ async def run(args: argparse.Namespace) -> int:
         with contextlib.suppress(Exception):
             await metrics_server_runner.cleanup()
     finally:
-        await sam3.aclose()
+        await segmenter.aclose()
         if vlm is not None:
             await vlm.aclose()
         await opensearch.close()

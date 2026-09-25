@@ -24,7 +24,7 @@ def test_prompt_pack_is_frozen_dataclass() -> None:
 
     assert dataclasses.is_dataclass(PromptPack)
     fields = {f.name for f in dataclasses.fields(PromptPack)}
-    # Mirrors the reference gemma_labeler.py's inline constant set (§3.4).
+    # Mirrors the reference VLM labeler's inline constant set (§3.4).
     assert fields == {
         'name',
         'class_system',

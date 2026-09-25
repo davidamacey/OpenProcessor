@@ -62,10 +62,10 @@ def test_bakeoff_harness_has_no_owner_private_absolute_path_defaults() -> None:
 
 @pytest.fixture
 def app_client() -> TestClient:
-    from src.routers.curation import router as legacy_router
+    from src.routers.curation import router as curation_router
 
     app = FastAPI()
-    app.include_router(legacy_router)
+    app.include_router(curation_router)
     return TestClient(app)
 
 

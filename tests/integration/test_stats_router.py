@@ -56,7 +56,7 @@ def _fake_dataset_search_response() -> dict[str, Any]:
                     {'key': '__none__', 'doc_count': 2},
                 ],
             },
-            'region_detectors': {'buckets': [{'key': 'lpr_detector_v1', 'doc_count': 3}]},
+            'region_detectors': {'buckets': [{'key': 'region_detector_v1', 'doc_count': 3}]},
             'region_verifiers': {'buckets': [{'key': 'human', 'doc_count': 2}]},
             'regions_validated_by_human': {'doc_count': 2},
             'region_status': {'buckets': [{'key': 'detected', 'doc_count': 3}]},

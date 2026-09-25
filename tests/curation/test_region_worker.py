@@ -92,14 +92,14 @@ def _vlm_mock(*, is_region: bool, confidence: str = 'high') -> MagicMock:
     return g
 
 
-def _sam3_mock(candidate: RegionCandidate | None) -> MagicMock:
+def _segmenter_mock(candidate: RegionCandidate | None) -> MagicMock:
     s = MagicMock()
     s.segment = AsyncMock(return_value=candidate)
     s.aclose = AsyncMock()
     return s
 
 
-def _lpr_mock(candidates: list[RegionCandidate | None]) -> MagicMock:
+def _detector_mock(candidates: list[RegionCandidate | None]) -> MagicMock:
     detector = MagicMock()
     detector.detect_batch = AsyncMock(return_value=candidates)
     return detector
@@ -117,7 +117,7 @@ def _ocr_recognizer_mock(regions: list[Any] | None = None, pick: Any = None) -> 
     return r
 
 
-def _sam3_mock_sequence(candidates: list[RegionCandidate | None]) -> MagicMock:
+def _segmenter_mock_sequence(candidates: list[RegionCandidate | None]) -> MagicMock:
     """SAM3 stub whose successive calls return successive candidates.
 
     Used by the text-hint sub-crop test: first call (global) misses, second
@@ -147,8 +147,8 @@ class TestRouting:
         )
         await worker._process_crop(
             task,
-            detector=_lpr_mock([]),
-            sam3=_sam3_mock(None),
+            detector=_detector_mock([]),
+            segmenter=_segmenter_mock(None),
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=_vlm_mock(is_region=True, confidence='high'),
         )
@@ -182,8 +182,8 @@ class TestRouting:
         )
         await worker._process_crop(
             task,
-            detector=_lpr_mock([]),
-            sam3=_sam3_mock(sam_cand),
+            detector=_detector_mock([]),
+            segmenter=_segmenter_mock(sam_cand),
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=vlm,
         )
@@ -194,7 +194,7 @@ class TestRouting:
         assert vlm.verify_region.await_count == 2
 
     @pytest.mark.asyncio
-    async def test_pending_secondary_shape_skips_lpr_calls_sam3(
+    async def test_pending_secondary_shape_skips_detector_calls_sam3(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Secondary-shape pending → the primary detector is NOT called, the secondary segmenter runs first."""
@@ -204,7 +204,7 @@ class TestRouting:
             worker_state.region_profile(), secondary_shape_groups=frozenset({'group_a'})
         )
         monkeypatch.setattr(worker_state, 'region_profile', lambda: shaped_profile)
-        detector = _lpr_mock([])  # would never produce a candidate
+        detector = _detector_mock([])  # would never produce a candidate
         sam_cand = RegionCandidate(bbox_norm=(0.4, 0.45, 0.5, 0.50), score=0.81, source='sam3')
         task = _make_task(
             status='pending',
@@ -214,7 +214,7 @@ class TestRouting:
         await worker._process_crop(
             task,
             detector=detector,
-            sam3=_sam3_mock(sam_cand),
+            segmenter=_segmenter_mock(sam_cand),
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=_vlm_mock(is_region=True),
         )
@@ -222,13 +222,13 @@ class TestRouting:
         assert task.update_doc[F.status] == 'detected'
 
     @pytest.mark.asyncio
-    async def test_pending_car_runs_lpr_first_and_succeeds(self) -> None:
+    async def test_pending_car_runs_detector_first_and_succeeds(self) -> None:
         """Non-secondary-shape pending → primary hit + VLM verify → done, no secondary segmenter call."""
         F = get_region_fields()
         detector_cand = RegionCandidate(
             bbox_norm=(0.3, 0.4, 0.5, 0.45), score=0.82, source='license_plate_detector'
         )
-        sam3 = _sam3_mock(None)
+        segmenter = _segmenter_mock(None)
         task = _make_task(
             status='pending',
             class_name='audi',
@@ -237,17 +237,17 @@ class TestRouting:
         )
         await worker._process_crop(
             task,
-            detector=_lpr_mock([detector_cand]),
-            sam3=sam3,
+            detector=_detector_mock([detector_cand]),
+            segmenter=segmenter,
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=_vlm_mock(is_region=True),
         )
-        sam3.segment.assert_not_awaited()
+        segmenter.segment.assert_not_awaited()
         assert task.update_doc[F.status] == 'detected'
         assert task.update_doc[F.bbox_norm] == list(detector_cand.bbox_norm)
 
     @pytest.mark.asyncio
-    async def test_pending_car_lpr_rejected_falls_through_to_sam3(self) -> None:
+    async def test_pending_car_detector_rejected_falls_through_to_sam3(self) -> None:
         F = get_region_fields()
         detector_cand = RegionCandidate(
             bbox_norm=(0.3, 0.4, 0.5, 0.45), score=0.82, source='license_plate_detector'
@@ -266,8 +266,8 @@ class TestRouting:
         )
         await worker._process_crop(
             task,
-            detector=_lpr_mock([detector_cand]),
-            sam3=_sam3_mock(sam_cand),
+            detector=_detector_mock([detector_cand]),
+            segmenter=_segmenter_mock(sam_cand),
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=vlm,
         )
@@ -281,8 +281,8 @@ class TestRouting:
             task = _make_task(status=status)
             await worker._process_crop(
                 task,
-                detector=_lpr_mock([]),
-                sam3=_sam3_mock(None),
+                detector=_detector_mock([]),
+                segmenter=_segmenter_mock(None),
                 ocr_recognizer=_ocr_recognizer_mock(),
                 vlm=_vlm_mock(is_region=True),
             )
@@ -294,14 +294,14 @@ class TestRouting:
         task = _make_task(status='pending', group='cars')
         await worker._process_crop(
             task,
-            detector=_lpr_mock([None]),
-            sam3=_sam3_mock(None),
+            detector=_detector_mock([None]),
+            segmenter=_segmenter_mock(None),
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=_vlm_mock(is_region=False),
         )
         # Phase A2: every write carries a detector_chain. Status remains
         # 'no_region_box' (queue for human review) and the chain captures
-        # which detectors were tried — used by the LPR-blind-spot
+        # which detectors were tried — used by the detector-blind-spot
         # training-set selector.
         assert task.update_doc[F.status] == 'no_region_box'
         chain = task.update_doc.get(F.detector_chain) or []
@@ -334,9 +334,9 @@ class TestRouting:
         task = _make_task(status='pending', group='cars', vehicle_bbox=(0.0, 0.0, 1.0, 1.0))
         await worker._process_crop(
             task,
-            detector=_lpr_mock([None]),
+            detector=_detector_mock([None]),
             # First SAM3 call (global) misses; second (sub-crop) hits.
-            sam3=_sam3_mock_sequence([None, sub_sam_cand]),
+            segmenter=_segmenter_mock_sequence([None, sub_sam_cand]),
             ocr_recognizer=_ocr_recognizer_mock(regions=[ocr_pick], pick=ocr_pick),
             vlm=vlm,
         )
@@ -365,7 +365,7 @@ class TestNoVerdictLeavesItemPending:
         vlm = MagicMock()
         vlm.verify_region = AsyncMock(return_value=None)
         vlm.aclose = AsyncMock()
-        sam3 = _sam3_mock(RegionCandidate(bbox_norm=(0.4, 0.5, 0.6, 0.55), score=0.77))
+        segmenter = _segmenter_mock(RegionCandidate(bbox_norm=(0.4, 0.5, 0.6, 0.55), score=0.77))
         task = _make_task(
             status='pending_verify',
             detector_region_in_source=(0.2, 0.2, 0.3, 0.22),
@@ -374,18 +374,18 @@ class TestNoVerdictLeavesItemPending:
         )
         await worker._process_crop(
             task,
-            detector=_lpr_mock([]),
-            sam3=sam3,
+            detector=_detector_mock([]),
+            segmenter=segmenter,
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=vlm,
         )
         assert task.update_doc == {}
         # The cascade bailed out immediately on the no-verdict -- it must
         # not have fallen through to try the secondary segmenter.
-        sam3.segment.assert_not_awaited()
+        segmenter.segment.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_pending_car_lpr_no_verdict_leaves_task_untouched(self) -> None:
+    async def test_pending_car_detector_no_verdict_leaves_task_untouched(self) -> None:
         F = get_region_fields()
         detector_cand = RegionCandidate(
             bbox_norm=(0.3, 0.4, 0.5, 0.45), score=0.82, source='license_plate_detector'
@@ -393,19 +393,19 @@ class TestNoVerdictLeavesItemPending:
         vlm = MagicMock()
         vlm.verify_region = AsyncMock(return_value=None)
         vlm.aclose = AsyncMock()
-        sam3 = _sam3_mock(RegionCandidate(bbox_norm=(0.6, 0.6, 0.7, 0.65), score=0.79))
+        segmenter = _segmenter_mock(RegionCandidate(bbox_norm=(0.6, 0.6, 0.7, 0.65), score=0.79))
         task = _make_task(
             status='pending', class_name='audi', group='cars', vehicle_bbox=(0.0, 0.0, 1.0, 1.0)
         )
         await worker._process_crop(
             task,
-            detector=_lpr_mock([detector_cand]),
-            sam3=sam3,
+            detector=_detector_mock([detector_cand]),
+            segmenter=segmenter,
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=vlm,
         )
         assert F.status not in task.update_doc
-        sam3.segment.assert_not_awaited()
+        segmenter.segment.assert_not_awaited()
 
 
 # =============================================================================
@@ -427,8 +427,8 @@ class TestReprojection:
         task = _make_task(status='pending', group='cars', vehicle_bbox=vehicle)
         await worker._process_crop(
             task,
-            detector=_lpr_mock([None]),
-            sam3=_sam3_mock(sam_cand),
+            detector=_detector_mock([None]),
+            segmenter=_segmenter_mock(sam_cand),
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=_vlm_mock(is_region=True),
         )
@@ -446,7 +446,7 @@ class TestReprojection:
 
 class TestProvenance:
     @pytest.mark.asyncio
-    async def test_lpr_write_carries_provenance(self) -> None:
+    async def test_detector_write_carries_provenance(self) -> None:
         """A successful primary-detector write must stamp detector + version + frame + ts."""
         F = get_region_fields()
         detector_cand = RegionCandidate(
@@ -459,8 +459,8 @@ class TestProvenance:
         )
         await worker._process_crop(
             task,
-            detector=_lpr_mock([detector_cand]),
-            sam3=_sam3_mock(None),
+            detector=_detector_mock([detector_cand]),
+            segmenter=_segmenter_mock(None),
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=_vlm_mock(is_region=True),
         )
@@ -486,8 +486,8 @@ class TestProvenance:
         )
         await worker._process_crop(
             task,
-            detector=_lpr_mock([None]),
-            sam3=_sam3_mock(sam_cand),
+            detector=_detector_mock([None]),
+            segmenter=_segmenter_mock(sam_cand),
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=_vlm_mock(is_region=True),
         )
@@ -500,7 +500,7 @@ class TestProvenance:
         assert any('sam3:hit' in s for s in chain)
 
     @pytest.mark.asyncio
-    async def test_large_lpr_bbox_no_longer_sanity_rejected(self) -> None:
+    async def test_large_detector_bbox_no_longer_sanity_rejected(self) -> None:
         # A square bbox covering ~64% of the crop. A naive shape-prior
         # gate would reject this on aspect/size heuristics; the
         # geometry-only gate lets a well-formed box flow to the VLM —
@@ -518,8 +518,8 @@ class TestProvenance:
         )
         await worker._process_crop(
             task,
-            detector=_lpr_mock([big_cand]),
-            sam3=_sam3_mock(None),
+            detector=_detector_mock([big_cand]),
+            segmenter=_segmenter_mock(None),
             ocr_recognizer=_ocr_recognizer_mock(),
             vlm=_vlm_mock(is_region=True),
         )
@@ -648,9 +648,9 @@ class TestSignalHandling:
         os_client.close = AsyncMock()
         monkeypatch.setattr(worker, 'AsyncOpenSearch', MagicMock(return_value=os_client))
 
-        sam3 = MagicMock()
-        sam3.aclose = AsyncMock()
-        monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=sam3))
+        segmenter = MagicMock()
+        segmenter.aclose = AsyncMock()
+        monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=segmenter))
 
         vlm = MagicMock()
         vlm.aclose = AsyncMock()
@@ -671,14 +671,14 @@ class TestSignalHandling:
         # Bind the metrics HTTP server to an ephemeral port so the test
         # doesn't collide with a worker container already holding the
         # default 4609 on this host.
-        monkeypatch.setenv('SAM_WORKER_METRICS_PORT', '0')
+        monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
 
         sentinel = tmp_path / 'pause.sentinel'  # absent
         args = worker.parse_args(
             [
                 '--opensearch=http://os.local:9200',
                 '--triton=triton:8001',
-                '--sam3-url=http://sam3.local:8000',
+                '--segmenter-url=http://segmenter.local:8000',
                 '--vlm-url=http://vlm.local:8000',
                 f'--pause-sentinel={sentinel}',
                 '--max-iterations=1',
@@ -691,7 +691,7 @@ class TestSignalHandling:
         # Cleanup happened.
         os_client.close.assert_awaited()
         pool.close.assert_awaited()
-        sam3.aclose.assert_awaited()
+        segmenter.aclose.assert_awaited()
         vlm.aclose.assert_awaited()
 
 
@@ -722,7 +722,7 @@ class TestIsSecondaryShape:
         # private-naming-convention fallback; a group-less item is simply
         # not routed to the secondary-shape path.
         monkeypatch.setattr(worker_state, '_class_group', lambda _name: None)
-        t = _make_task(class_name='cruiserbike')
+        t = _make_task(class_name='class_b')
         assert not worker._is_secondary_shape(t)
 
     def test_registry_group_takes_priority_over_class_name(
@@ -731,5 +731,5 @@ class TestIsSecondaryShape:
         """The registry's group answer is the only source of truth --
         the class name itself is never inspected."""
         monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'cars')
-        t = _make_task(class_name='cruiserbike')
+        t = _make_task(class_name='class_b')
         assert not worker._is_secondary_shape(t)

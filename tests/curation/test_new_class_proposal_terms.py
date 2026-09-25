@@ -32,7 +32,7 @@ ITEMS = get_curation_config().items_index
 def registry(tmp_path: Any) -> ClassRegistry:
     reg = ClassRegistry(path=tmp_path / 'class_registry.json')
     reg.add_class('sedan', group='cars')
-    reg.add_class('cruiserbike', group='cruisers-baggers')
+    reg.add_class('class_b', group='group_b')
     return reg
 
 

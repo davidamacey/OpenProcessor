@@ -62,7 +62,7 @@ async def _drive(
     text_reader: str | None = None,
 ) -> dict[str, Any]:
     handlers = _capture_signal_handler(monkeypatch)
-    monkeypatch.setenv('SAM_WORKER_METRICS_PORT', '0')
+    monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
     if text_reader is not None:
         profile = dataclasses.replace(_profile(), text_reader=text_reader)
         monkeypatch.setattr(runner_mod, 'get_active_region_profile', lambda: profile)
@@ -111,7 +111,7 @@ async def _drive(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
-            '--sam3-url=http://seg.invalid:8000',
+            '--segmenter-url=http://seg.invalid:8000',
             f'--vlm-url={vlm_url}',
             f'--pause-sentinel={tmp_path / "absent.sentinel"}',
             '--continuous',
