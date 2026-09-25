@@ -1084,6 +1084,9 @@
   // tabs. Edit mode resets to false on every cursor advance so the
   // operator always lands on the next item in scan-and-confirm mode.
   let editMode = $state<boolean>(false);
+  /** The crop an edit session belongs to. Enter in edit mode saves the
+   *  box to THIS id, never to whatever `current` has since become. */
+  let editingCropId = $state<string | null>(null);
   let slotSaving = $state<boolean>(false);
 
   // Inline editors for the slot metadata fields. Seeded from the
@@ -1248,27 +1251,35 @@
   // Reseed whenever the cursor changes (advancing to next crop) or the
   // tab/items reset. Also exit edit mode so the next item lands in
   // read-only scan mode regardless of where we left the previous one.
+  //
+  // The ONLY dependency is the current crop's id. Everything after that
+  // runs untracked: `_seedSlotFromCurrent` reads `editedSlotBox`
+  // (`seededSlotBox = editedSlotBox`), so running it tracked made every
+  // drag tick / arrow nudge re-run this effect, reseed the box from the
+  // server snapshot and drop edit mode — after which further arrows paged
+  // the queue and Enter confirmed a different crop.
   $effect(() => {
-    void current?.id;
+    const id = current?.id;
+    untrack(() => reseedForCrop(id ?? null));
+  });
+
+  function reseedForCrop(id: string | null): void {
     // DQ-M5: drop the previous crop's natural size immediately so its cap
     // never briefly applies to the next crop's <img> before it loads and
     // rebinds naturalWidth/naturalHeight.
     cropNaturalWidth = 0;
     cropNaturalHeight = 0;
     _seedSlotFromCurrent();
-    // Freeze the zoom viewport on the just-seeded bbox. Wrapped in
-    // untrack() so the read of `editedSlotBox` inside _seedViewBox
-    // does NOT make this effect re-run on every drag tick — that
-    // would re-fire _seedSlotFromCurrent and overwrite the user's
-    // in-progress resize with the server snapshot ("can't edit the
-    // bbox" bug).
-    untrack(() => _seedViewBox());
+    // Freeze the zoom viewport on the just-seeded bbox.
+    _seedViewBox();
     const seedData = current && activeSlot ? slotOf(current, activeSlot) : null;
     editedSlotText = seedData?.text?.value ?? '';
     editedSlotStatus = seedData?.lifecycle?.status ?? '';
     editedRejectionReason = seedData?.lifecycle?.rejectionReason ?? '';
     editMode = false;
-  });
+    editingCropId = null;
+    void id;
+  }
 
   // In-flight slot-meta saves, keyed by crop id so concurrent edits to
   // the same crop are aborted-then-replaced (the latest blur wins) and
@@ -1366,12 +1377,14 @@
       _seedSlotFromCurrent();
       _seedViewBox();
       editMode = false;
+      editingCropId = null;
       return;
     }
     // Re-center the zoom on whatever bbox we're about to edit (could
     // differ from the cursor-advance snapshot if the user already saved
     // once on this crop and is re-editing).
     _seedViewBox();
+    editingCropId = current.id;
     editMode = true;
   }
 
@@ -1393,7 +1406,16 @@
       toastStore.warn('No bbox to save — draw one or press Backspace to clear.');
       return;
     }
-    const id = current.id;
+    // Save to the crop the edit session started on. If the queue moved
+    // underneath the session, refuse rather than write a box onto (or
+    // confirm) a different crop.
+    const id = editingCropId ?? current.id;
+    if (id !== current.id) {
+      toastStore.warn('The crop changed while editing; the box was not saved.');
+      editMode = false;
+      editingCropId = null;
+      return;
+    }
     const tuple = _parentFrameTuple(editedSlotBox);
     slotSaving = true;
     try {
@@ -1401,6 +1423,7 @@
       const idx = queue.items.findIndex((x) => x.id === id);
       if (idx >= 0) queue.items[idx] = { ...queue.items[idx], ...item } as ReviewItem;
       editMode = false;
+      editingCropId = null;
       // M6: Z reverses a box edit the same way it reverses a confirm/
       // reject/FP below — see undo.svelte.ts's header comment for why
       // this shares the one undoStore stack (kind: 'region').
@@ -1604,8 +1627,12 @@
       reg('d', discard, 'Discard');
       reg('/', openPicker, 'Search all classes…');
     }
-    reg('n', skip, 'Skip');
-    reg('z', undoLast, 'Undo last');
+    if (!editMode) {
+      // In edit mode the queue never moves: N/Z (and the arrows, which the
+      // canvas owns below) only act once the edit is saved or cancelled.
+      reg('n', skip, 'Skip');
+      reg('z', undoLast, 'Undo last');
+    }
 
     let canvasKey: ((e: KeyboardEvent) => void) | null = null;
     if (activeSlot?.capabilities.subBox != null && editMode) {

@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Region bbox editor could not change a box** (data safety). The
+  `/review` region tab's reseed effect tracked `editedSlotBox`, so the
+  first drag tick or arrow nudge re-ran it, reset the box to the server
+  snapshot and left edit mode; further arrows then paged the queue and
+  Enter confirmed a different crop. The effect now depends only on the
+  crop id (body untracked); Enter in edit mode saves to the crop the
+  edit started on (and refuses if the queue moved); N/Z aren't bound
+  while editing.
+
 - **`/train` promote (F-64).** The promote modal showed only "API 422".
   It now renders the served gate `message`, every served failure (with
   its class) and the `override` hint, and offers "Promote anyway"
