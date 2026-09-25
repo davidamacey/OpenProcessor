@@ -235,6 +235,37 @@ Docker Compose profile, and is disabled by default:
 docker compose --profile curation up -d
 ```
 
+**Try it with a public sample.** No dataset ships in this repo (nothing
+proprietary is bundled anywhere) -- fetch a small, license-filtered COCO
+2017 subset instead:
+
+```bash
+make sample-coco-readme   # 200 images, 20 per class, ~1-2 min on a fast link
+```
+
+This writes `data/samples/coco_va_readme/` (images + `ATTRIBUTION.csv` +
+`coco_gt.json`), gitignored, from a pinned, deterministic selection
+(`scripts/datasets/manifests/coco_va_200.json`) filtered to Flickr
+licenses safe to redistribute crops of (Attribution,
+Attribution-ShareAlike, "No known copyright restrictions", "United
+States Government Work" -- explicitly not NonCommercial/NoDerivs). Then:
+
+```bash
+# 1. Create a few classes (see docs/CURATION.md "Create classes from zero")
+# 2. Set OP_INGEST_PRIMARY_DETECTOR_MODEL and point OP_SOURCE_ROOT/a volume
+#    mount at data/samples/coco_va_readme, then:
+docker compose exec yolo-api python scripts/curation/ingest_walker.py \
+  --root data/samples/coco_va_readme/images --api-base http://localhost:8000/curation
+```
+
+`make sample-coco` (the larger 800-image + 12-image upload + 24-image
+re-ingest side-set default) and `make sample-plates` (300-image Open
+Images V7 "Vehicle registration plate" region set) are the same tool at
+a bigger scale — see [docs/CURATION.md](docs/CURATION.md#seed--bootstrap-path-for-a-fresh-install)
+and `python scripts/datasets/fetch_coco_subset.py --help` /
+`python scripts/datasets/fetch_openimages_plates.py --help` for every
+flag. `make sample-clean` removes everything fetched.
+
 See **[docs/CURATION.md](docs/CURATION.md)** for the full user guide —
 what's required (you supply your own detector/VLM/trainer models), the
 class-registry schema with a non-vehicle worked example, the complete
