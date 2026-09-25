@@ -21,6 +21,13 @@ class ClassEntry(BaseModel):
     # so the operator's eyes match what they'll see when they click in.
     cluster_size: int = 0
     deprecated: bool = False
+    # Set when this class was merged into another via POST /classes/merge
+    # (RegistryClassEntry.merged_into) -- the target class_id, or None for
+    # an unmerged class. GET /classes never exposed this even though the
+    # registry has tracked it since the merge feature shipped; the
+    # frontend had no way to render "-> merged into X" without a second
+    # GET /classes/{class_id} round trip.
+    merged_into: int | None = None
     # Optional single-character keyboard shortcut. Persisted in the class
     # registry so user customizations survive across sessions and devices.
     # Validated server-side: must be one ASCII char, unique across active

@@ -447,12 +447,19 @@ the trainer container is up before letting a job queue forever with no
 error. `OP_GPU_ARBITER_TRAINER_CONTAINER` now defaults to
 `${COMPOSE_PROJECT_NAME:-openprocessor}-trainer` (the `curation-trainer`
 service's own `container_name`), so a deployment running the `training`
-profile gets a working probe with no extra env config. That probe still
-needs Docker socket access from `yolo-api` -- the same
-`docker-compose.gpu-arbiter.yml` overlay above -- so without it the
-preflight message changes from the old, misleading "no trainer
-container configured" to the accurate "docker SDK/socket unavailable in
-the API container", not to a passing probe.
+profile gets a working probe with no extra env config. The probe's
+primary signal is the trainer's own heartbeat file
+(`.trainer_capabilities.json` on the shared `/jobs` volume, refreshed
+every ~30s by the trainer's watch loop) -- that needs no Docker socket at
+all, so it works on a stock install with no
+`docker-compose.gpu-arbiter.yml` overlay. A fresh heartbeat reports `ok`;
+a missing or stale one (older trainer image, container mid-restart, or
+the `training` profile never started) reports `warn`, never `block` --
+"can't tell" must never gate `/train/start`. Docker socket access (the
+same `docker-compose.gpu-arbiter.yml` overlay above) is used only as an
+optional, confirming extra: when it's mounted *and* the heartbeat is
+missing/stale, a docker-confirmed "container does not exist" upgrades
+that warning to a definitive `block`.
 
 ## Wiring up Cropwright
 
@@ -632,7 +639,8 @@ sample-clean` removes everything fetched.
    (`dataset_export_dir` defaults to the current export -- F-73 -- so an
    empty preflight body works once step 8 has run at least once.)
    Without the `training` profile up, preflight's `trainer_reachable`
-   check reports the trainer unreachable instead of blocking silently.
+   check reports a `warn` (no heartbeat file yet) instead of blocking
+   silently or forever queuing the job.
 
 ## Environment variables
 

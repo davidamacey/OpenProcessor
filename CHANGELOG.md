@@ -8,6 +8,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Segmenter never became reachable on a stock install (F-75).** The
+  `segmenter` service's `env_file: .env` loaded the host-port variable
+  `SEGMENTER_PORT` (env.template default `4611`) straight into the
+  container, and `docker/segmenter/main.py` read that same name as its
+  uvicorn listen port -- so the container bound to `4611` while the port
+  mapping, healthcheck and `OP_SEGMENTER_URL` all still targeted `8000`.
+  The in-container variable is renamed `SEGMENTER_LISTEN_PORT` (default
+  `8000`, also set explicitly under `environment:` so it beats
+  `env_file`), and a new compose-contract test
+  (`test_no_service_reads_a_host_port_var_as_its_own_container_config`)
+  guards every other `env_file`-loading service against the same class of
+  bug. An audit of the remaining host-port vars (`API_PORT`,
+  `TRITON_*_PORT`, `PROMETHEUS_PORT`, `GRAFANA_PORT`, `LOKI_PORT`,
+  `DCGM_PORT`, `OPENSEARCH_PORT`, `OPENSEARCH_DASHBOARDS_PORT`,
+  `MLFLOW_PORT`, `VLM_PORT`) found no other container reading its own
+  host-port var name. **Requires rebuilding the segmenter image.**
+- **Region-dependency health check never saw a healthy segmenter (V-1
+  follow-up).** `check_region_dependencies` looked up the profile's
+  segmenter (e.g. `sam3`) in Triton's repository index, but SAM 3 runs as
+  the separate HTTP segmenter service (`OP_SEGMENTER_URL`), not in
+  Triton, so `stall_reason` never cleared even with a healthy segmenter.
+  Triton-served detectors still go through the Triton repository index;
+  the segmenter dependency now does a `GET {OP_SEGMENTER_URL}/health`
+  with a short timeout, requiring `loaded: true`.
+- **Training couldn't start on a stock install (F-72 regression).**
+  `OP_GPU_ARBITER_TRAINER_CONTAINER` defaulting to
+  `${COMPOSE_PROJECT_NAME}-trainer` (see the F-72 entry below) meant
+  `/train/preflight`'s trainer probe now always ran -- but the stock
+  `yolo-api` container has no docker socket/SDK, so the probe
+  unconditionally reported `block` ("docker SDK/socket unavailable"),
+  422ing `/train/start` even with a perfectly healthy trainer. The probe
+  (moved to `src/services/training/trainer_reachability.py`) now reads
+  the trainer's own heartbeat file (`.trainer_capabilities.json`, which
+  the trainer's watch loop refreshes every ~30s) as its primary signal --
+  no docker socket needed. A fresh heartbeat is `ok`; a missing or stale
+  one is `warn`, never `block`. The docker SDK/socket path (only present
+  behind the `docker-compose.gpu-arbiter.yml` overlay) is now a purely
+  optional, confirming extra: it's only consulted when the heartbeat
+  itself is missing/stale, and only then may it upgrade the warning to a
+  definitive `block`.
 - **API image builds again.** `perception_models` is installed with `--no-deps`
   at a pinned commit (its requirements exact-pin `timm==1.0.15`, which
   conflicts with `open-clip-torch>=3.2`'s `timm>=1.0.17`); the PE encoder's
@@ -191,6 +231,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   measurement.
 
 ### Added
+- **`GET /classes` exposes `merged_into`.** A class merged via `POST
+  /classes/merge` has always tracked its `merged_into` target internally
+  (`RegistryClassEntry.merged_into`), but the wire model never served it,
+  so the frontend had no way to render "-> merged into X" without a
+  second `GET /classes/{id}` round trip.
 - **Fresh-start gaps batch B: compose and install portability.**
   - `yolo-api` and `curation-detection-worker` both mount a source-image root
     at the same container path (`${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro`,

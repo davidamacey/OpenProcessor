@@ -282,6 +282,6 @@ if __name__ == '__main__':
     uvicorn.run(
         'main:app',
         host='0.0.0.0',  # nosec B104 — container-internal; compose maps the port
-        port=int(os.getenv('SEGMENTER_PORT', '8000')),
+        port=int(os.getenv('SEGMENTER_LISTEN_PORT', '8000')),
         log_level=os.getenv('SEGMENTER_LOG_LEVEL', 'info').lower(),
     )

@@ -220,8 +220,15 @@ def write_labels_and_data_yaml(out: Path, selected: list[dict[str, Any]]) -> Non
         (label_dir / f'{row["image_id"]}.txt').write_text(
             '\n'.join(yolo_label_lines(row['boxes'])) + '\n', encoding='utf-8'
         )
+    # F-76: train and val must point at different split directories -- a
+    # data.yaml that lists the same directory under both (as this used to,
+    # both images/validation) makes YOLO-dataset consumers like
+    # eval_regions_vs_gt.py double-count and double-score every image in
+    # that overlap. This is a 2-way sample (Open Images val+test only, no
+    # train pool of its own), so train takes the validation-sourced split
+    # and val takes the test-sourced split -- both real, disjoint splits.
     (out / 'data.yaml').write_text(
-        f'path: {out}\ntrain: images/validation\nval: images/validation\ntest: images/test\n'
+        f'path: {out}\ntrain: images/validation\nval: images/test\n'
         f'names:\n  0: {REGION_CLASS_NAME}\n',
         encoding='utf-8',
     )

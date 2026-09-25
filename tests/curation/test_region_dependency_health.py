@@ -59,10 +59,20 @@ class TestNoActiveProfile:
 class TestReadyDependencies:
     @pytest.mark.asyncio
     async def test_detector_and_segmenter_both_ready(self) -> None:
-        async def _idx() -> list[dict[str, str]]:
-            return await _index(('det_v1', 'READY'), ('sam3', 'READY'))
+        """The segmenter is checked via its own HTTP health endpoint, not
+        the Triton repository index -- SAM 3 (or whatever's configured)
+        never appears in that index, so it must not need to for this to
+        report ready (V-1 follow-up)."""
 
-        results = await rdh.check_region_dependencies(_idx, _profile(segmenter_name='sam3'))
+        async def _idx() -> list[dict[str, str]]:
+            return await _index(('det_v1', 'READY'))
+
+        async def _segmenter_ok() -> tuple[bool, str]:
+            return True, 'http://segmenter:8000/health loaded=true'
+
+        results = await rdh.check_region_dependencies(
+            _idx, _profile(segmenter_name='sam3'), check_segmenter_health=_segmenter_ok
+        )
 
         assert {r.model for r in results} == {'det_v1', 'sam3'}
         assert all(r.ready for r in results)
@@ -135,15 +145,101 @@ class TestUnavailableDependencies:
         assert later_down[0].unavailable_since == (t0 + timedelta(hours=1)).isoformat()
 
     @pytest.mark.asyncio
-    async def test_triton_itself_unreachable_reports_every_dependency_down(self) -> None:
+    async def test_triton_itself_unreachable_reports_detector_down(self) -> None:
+        """The segmenter dependency is independent of Triton -- a Triton
+        outage must only affect the detector's status, not fabricate a
+        segmenter failure via the wrong subsystem."""
+
         async def _boom() -> list[dict[str, str]]:
             msg = 'connection refused'
             raise ConnectionError(msg)
 
-        results = await rdh.check_region_dependencies(_boom, _profile(segmenter_name='sam3'))
-        assert len(results) == 2
-        assert all(not r.ready for r in results)
-        assert all('repository index unavailable' in r.detail for r in results)
+        async def _segmenter_ok() -> tuple[bool, str]:
+            return True, 'loaded=true'
+
+        results = await rdh.check_region_dependencies(
+            _boom, _profile(segmenter_name='sam3'), check_segmenter_health=_segmenter_ok
+        )
+        by_role = {r.role: r for r in results}
+        assert by_role['detector'].ready is False
+        assert 'repository index unavailable' in by_role['detector'].detail
+        assert by_role['segmenter'].ready is True
+
+    @pytest.mark.asyncio
+    async def test_segmenter_down_reports_unavailable_independent_of_triton(self) -> None:
+        """Segmenter health check failing must not need the Triton
+        repository index to say so (V-1 follow-up: this used to look the
+        segmenter up in Triton's index, which it never appears in)."""
+
+        async def _idx() -> list[dict[str, str]]:
+            return await _index(('det_v1', 'READY'))
+
+        async def _segmenter_down() -> tuple[bool, str]:
+            return False, 'http://segmenter:8000/health unreachable: connection refused'
+
+        results = await rdh.check_region_dependencies(
+            _idx, _profile(segmenter_name='sam3'), check_segmenter_health=_segmenter_down
+        )
+        by_role = {r.role: r for r in results}
+        assert by_role['detector'].ready is True
+        assert by_role['segmenter'].ready is False
+        assert by_role['segmenter'].unavailable_since is not None
+        assert 'unreachable' in by_role['segmenter'].detail
+
+    @pytest.mark.asyncio
+    async def test_segmenter_healthy_clears_stall_reason(self) -> None:
+        async def _idx() -> list[dict[str, str]]:
+            return await _index(('det_v1', 'READY'))
+
+        async def _segmenter_ok() -> tuple[bool, str]:
+            return True, 'loaded=true'
+
+        results = await rdh.check_region_dependencies(
+            _idx, _profile(segmenter_name='sam3'), check_segmenter_health=_segmenter_ok
+        )
+        assert rdh.stall_reason(results, pending_detection=42) is None
+
+    @pytest.mark.asyncio
+    async def test_segmenter_down_names_it_in_stall_reason(self) -> None:
+        async def _idx() -> list[dict[str, str]]:
+            return await _index(('det_v1', 'READY'))
+
+        async def _segmenter_down() -> tuple[bool, str]:
+            return False, 'not loaded'
+
+        results = await rdh.check_region_dependencies(
+            _idx, _profile(segmenter_name='sam3'), check_segmenter_health=_segmenter_down
+        )
+        reason = rdh.stall_reason(results, pending_detection=7)
+        assert reason is not None
+        assert 'segmenter (sam3)' in reason
+
+    @pytest.mark.asyncio
+    async def test_triton_detector_missing_is_named_in_stall_reason(self) -> None:
+        async def _idx() -> list[dict[str, str]]:
+            return []
+
+        results = await rdh.check_region_dependencies(_idx, _profile(segmenter_name=''))
+        reason = rdh.stall_reason(results, pending_detection=5)
+        assert reason is not None
+        assert 'detector (det_v1)' in reason
+
+    @pytest.mark.asyncio
+    async def test_default_segmenter_health_checker_reports_unconfigured(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No OP_SEGMENTER_URL/OP_SEGMENTER_URLS configured must be a clear,
+        specific unavailable detail, not an opaque connection error."""
+        monkeypatch.delenv('OP_SEGMENTER_URL', raising=False)
+        monkeypatch.delenv('OP_SEGMENTER_URLS', raising=False)
+
+        async def _idx() -> list[dict[str, str]]:
+            return await _index(('det_v1', 'READY'))
+
+        results = await rdh.check_region_dependencies(_idx, _profile(segmenter_name='sam3'))
+        by_role = {r.role: r for r in results}
+        assert by_role['segmenter'].ready is False
+        assert 'not configured' in by_role['segmenter'].detail
 
 
 class TestStallReason:

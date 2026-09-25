@@ -93,62 +93,92 @@ def _model_state_map(repo_index: list[dict[str, Any]]) -> dict[str, str]:
     }
 
 
+async def _default_check_segmenter_health() -> tuple[bool, str]:
+    """``GET {OP_SEGMENTER_URL}/health`` -- delegates to the same probe
+    ``GET /curation/models/status`` already uses for the segmenter roster
+    entry (:func:`src.routers.curation._models_segmenter._segmenter_health`),
+    rather than re-implementing an HTTP health check here. That probe
+    hits the segmenter's own HTTP service directly and requires
+    ``loaded: true`` -- unlike the Triton repository index, which SAM 3 (or
+    whatever's configured) never appears in, since it isn't a Triton-served
+    model (V-1 follow-up)."""
+    from src.routers.curation._models_segmenter import _segmenter_health
+
+    url = os.environ.get('OP_SEGMENTER_URL', '').strip()
+    if not url:
+        return False, 'OP_SEGMENTER_URL is not configured'
+    # OP_SEGMENTER_URLS may load-balance across several hosts; one healthy
+    # host is enough to characterize the dependency as reachable, same as
+    # the /models/status roster probe.
+    first_url = url.split(',')[0].strip().rstrip('/')
+    status, last_error = await _segmenter_health(first_url)
+    if status == 'ready':
+        return True, f'{first_url}/health loaded=true'
+    return False, last_error or f'{first_url}/health unavailable'
+
+
 async def check_region_dependencies(
     get_repository_index: Callable[[], Awaitable[list[dict[str, Any]]]],
     profile: DetectionProfile,
     *,
     now: datetime | None = None,
+    check_segmenter_health: Callable[[], Awaitable[tuple[bool, str]]] | None = None,
 ) -> list[RegionDependencyStatus]:
-    """Check the active profile's detector/segmenter Triton models.
+    """Check the active profile's detector/segmenter dependencies.
+
+    The detector is Triton-served, so it's checked against Triton's
+    repository index (``get_repository_index``). The segmenter (e.g.
+    SAM 3) runs as its own HTTP service, not in Triton -- it's checked via
+    ``check_segmenter_health`` (defaults to :func:`_default_check_segmenter_health`,
+    a ``GET {OP_SEGMENTER_URL}/health`` with a short timeout, requiring
+    ``loaded: true``). Looking the segmenter up in the Triton repository
+    index (the original implementation) meant ``stall_reason`` never
+    cleared even with a perfectly healthy segmenter, since it would never
+    appear in that index.
 
     Returns one :class:`RegionDependencyStatus` per configured (non-empty)
-    model name, in ``(role, model)`` stable order. Empty when the profile
-    has no ``detector_model`` at all (no active profile -- nothing to
-    check; the neutral/off case, not a stall).
+    dependency, in ``(role, model)`` stable order -- detector first, then
+    segmenter. Empty when the profile has no ``detector_model`` at all (no
+    active profile -- nothing to check; the neutral/off case, not a stall).
     """
     if not profile.detector_model:
         return []
 
-    candidates: list[tuple[str, str]] = [('detector', profile.detector_model)]
-    if profile.segmenter_name:
-        candidates.append(('segmenter', profile.segmenter_name))
-
-    try:
-        repo_index = await get_repository_index()
-    except Exception as exc:
-        # Triton itself unreachable from the API -- every configured
-        # dependency is unknown-unavailable, not silently "ready".
-        ts = now or datetime.now(UTC)
-        epoch = ts.timestamp()
-        state = _read_state()
-        results = []
-        for role, model in candidates:
-            since = state.setdefault(model, epoch)
-            results.append(
-                RegionDependencyStatus(
-                    role=role,
-                    model=model,
-                    ready=False,
-                    unavailable_since=datetime.fromtimestamp(since, tz=UTC).isoformat(),
-                    detail=f'Triton repository index unavailable: {exc}',
-                )
-            )
-        _atomic_write(state)
-        return results
-
-    states = _model_state_map(repo_index)
     ts = now or datetime.now(UTC)
     epoch = ts.timestamp()
     tracked = _read_state()
-    results = []
-    for role, model in candidates:
+    results: list[RegionDependencyStatus] = []
+
+    # ---- detector: Triton repository index ----
+    model = profile.detector_model
+    try:
+        repo_index = await get_repository_index()
+    except Exception as exc:
+        # Triton itself unreachable from the API -- unknown-unavailable,
+        # not silently "ready".
+        since = tracked.setdefault(model, epoch)
+        results.append(
+            RegionDependencyStatus(
+                role='detector',
+                model=model,
+                ready=False,
+                unavailable_since=datetime.fromtimestamp(since, tz=UTC).isoformat(),
+                detail=f'Triton repository index unavailable: {exc}',
+            )
+        )
+    else:
+        states = _model_state_map(repo_index)
         triton_state = states.get(model)
         ready = triton_state == 'READY'
         if ready:
             tracked.pop(model, None)
             results.append(
                 RegionDependencyStatus(
-                    role=role, model=model, ready=True, unavailable_since=None, detail='READY'
+                    role='detector',
+                    model=model,
+                    ready=True,
+                    unavailable_since=None,
+                    detail='READY',
                 )
             )
         else:
@@ -160,13 +190,45 @@ async def check_region_dependencies(
             )
             results.append(
                 RegionDependencyStatus(
-                    role=role,
+                    role='detector',
                     model=model,
                     ready=False,
                     unavailable_since=datetime.fromtimestamp(since, tz=UTC).isoformat(),
                     detail=detail,
                 )
             )
+
+    # ---- segmenter: its own HTTP service, never Triton ----
+    if profile.segmenter_name:
+        model = profile.segmenter_name
+        checker = check_segmenter_health or _default_check_segmenter_health
+        try:
+            ready, detail = await checker()
+        except Exception as exc:  # a broken checker must not 500 the caller
+            ready, detail = False, f'segmenter health check raised: {exc}'
+        if ready:
+            tracked.pop(model, None)
+            results.append(
+                RegionDependencyStatus(
+                    role='segmenter',
+                    model=model,
+                    ready=True,
+                    unavailable_since=None,
+                    detail=detail,
+                )
+            )
+        else:
+            since = tracked.setdefault(model, epoch)
+            results.append(
+                RegionDependencyStatus(
+                    role='segmenter',
+                    model=model,
+                    ready=False,
+                    unavailable_since=datetime.fromtimestamp(since, tz=UTC).isoformat(),
+                    detail=detail,
+                )
+            )
+
     _atomic_write(tracked)
     return results
 

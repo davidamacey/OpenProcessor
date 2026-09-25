@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from src.config import GpuArbiterConfig, get_curation_config, get_gpu_arbiter_config
-from src.services.training import gpu_arbiter
+from src.services.training import gpu_arbiter, trainer_reachability
 
 
 if TYPE_CHECKING:
@@ -64,9 +64,93 @@ def test_start_gpu_services_is_noop_with_no_configured_containers() -> None:
 
 
 def test_probe_trainer_reachable_skips_when_unconfigured() -> None:
-    reachable, detail = asyncio.run(gpu_arbiter.probe_trainer_reachable(container_name=None))
-    assert reachable is True
+    severity, detail = asyncio.run(gpu_arbiter.probe_trainer_reachable(container_name=None))
+    assert severity == 'ok'
     assert 'not configured' in detail or 'not applicable' in detail
+
+
+def _write_heartbeat(jobs_dir: Path, *, age_seconds: float) -> None:
+    import json
+    from datetime import UTC, datetime, timedelta
+
+    written_at = (datetime.now(UTC) - timedelta(seconds=age_seconds)).isoformat()
+    jobs_dir.mkdir(parents=True, exist_ok=True)
+    (jobs_dir / gpu_arbiter.TRAINER_CAPABILITIES_FILENAME).write_text(
+        json.dumps({'gpu_order': [], 'visible_count': 1, 'written_at': written_at})
+    )
+
+
+def test_probe_trainer_reachable_ok_on_a_stock_install_with_fresh_heartbeat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-72 regression: a stock install has no docker socket in the API
+    container. The heartbeat file the trainer's watch loop refreshes every
+    ~30s must be enough on its own -- no docker SDK/socket needed.
+
+    ``_docker_client`` is patched to ``None`` rather than left to whatever
+    the *host* running this test suite happens to have -- this asserts the
+    stock (no docker socket mounted) path specifically, and must not flake
+    depending on whether a real 'op-test-trainer'-named container happens
+    to exist on the machine running the tests.
+    """
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
+    monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: None)
+    _write_heartbeat(tmp_path, age_seconds=5.0)
+
+    severity, detail = asyncio.run(
+        gpu_arbiter.probe_trainer_reachable(container_name='op-test-trainer')
+    )
+    assert severity == 'ok'
+    assert 'heartbeat' in detail
+
+
+def test_probe_trainer_reachable_warns_on_stale_heartbeat_without_docker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stale heartbeat with no docker socket to confirm either way must
+    warn, never block -- "can't tell" is not the same as "definitely down"."""
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
+    monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: None)
+    _write_heartbeat(tmp_path, age_seconds=gpu_arbiter.TRAINER_HEARTBEAT_STALE_SECONDS + 60.0)
+
+    severity, detail = asyncio.run(
+        gpu_arbiter.probe_trainer_reachable(container_name='op-test-trainer')
+    )
+    assert severity == 'warn'
+    assert 'stale' in detail
+
+
+def test_probe_trainer_reachable_warns_when_heartbeat_file_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No heartbeat file at all (older trainer image, or the trainer profile
+    was never started) must warn, not block -- an unconfigured/uninstalled
+    trainer profile is not the same failure as a trainer that crashed."""
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
+    monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: None)
+
+    severity, detail = asyncio.run(
+        gpu_arbiter.probe_trainer_reachable(container_name='op-test-trainer')
+    )
+    assert severity == 'warn'
+    assert 'no heartbeat file' in detail
+
+
+def test_probe_trainer_reachable_blocks_when_docker_confirms_container_gone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The docker-SDK path stays a purely optional, confirming extra: it is
+    only consulted once the heartbeat is missing/stale, and only then may
+    it upgrade the warn to a definitive block."""
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
+    monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: object())
+    monkeypatch.setattr(trainer_reachability, '_container_status_sync', lambda _client, _name: None)
+
+    severity, detail = asyncio.run(
+        gpu_arbiter.probe_trainer_reachable(container_name='op-test-trainer')
+    )
+    assert severity == 'block'
+    assert 'does not exist' in detail
 
 
 def test_docker_client_unavailable_warns_once_not_per_call(

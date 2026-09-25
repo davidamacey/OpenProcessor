@@ -614,3 +614,73 @@ def test_yolo_api_default_trainer_container_matches_the_trainer_service_name() -
         f'OP_GPU_ARBITER_TRAINER_CONTAINER default {default_expr!r} does not match '
         f"curation-trainer's container_name {trainer_container_name!r}"
     )
+
+
+# =============================================================================
+# F-75: a container must never read a *host*-port env var (the left side of
+# a `ports:` mapping, e.g. SEGMENTER_PORT) as its own in-container config.
+# `env_file: .env` loads the whole file into the container, so a same-named
+# Dockerfile ENV default silently gets overridden by the host-port value --
+# the segmenter bound uvicorn to the host port number instead of 8000.
+# =============================================================================
+
+_HOST_PORT_LEADING_RE = re.compile(r'^(\$\{[A-Z0-9_]+(?::-[^}]*)?\}|[0-9]+)')
+_HOST_PORT_VAR_RE = re.compile(r'\$\{([A-Z0-9_]+)(?::-[^}]*)?\}')
+_DOCKERFILE_ENV_VAR_RE = re.compile(r'^\s*([A-Z0-9_]+)=', re.MULTILINE)
+
+
+def _host_port_vars(spec: dict[str, Any]) -> set[str]:
+    """Extract the env var name(s) backing the *host*-side of each
+    published port. Short syntax is ``HOST:CONTAINER[/proto]`` where HOST
+    is itself ``${VAR:-default}`` -- naive ``str.split(':')`` breaks
+    because that colon appears inside the ``${VAR:-default}`` expression
+    too, so the host part is matched as a leading anchor instead.
+    """
+    names: set[str] = set()
+    for entry in spec.get('ports') or []:
+        if isinstance(entry, dict):
+            published = str(entry.get('published') or '')
+        else:
+            text = str(entry)
+            match = _HOST_PORT_LEADING_RE.match(text)
+            published = match.group(1) if match else text
+        names.update(_HOST_PORT_VAR_RE.findall(published))
+    return names
+
+
+def _dockerfile_env_var_names(dockerfile_path: Path) -> set[str]:
+    if not dockerfile_path.is_file():
+        return set()
+    names: set[str] = set()
+    for block in re.findall(
+        r'^ENV\s+(.+?)(?=^\S|\Z)',
+        dockerfile_path.read_text(encoding='utf-8'),
+        re.MULTILINE | re.DOTALL,
+    ):
+        names.update(_DOCKERFILE_ENV_VAR_RE.findall(block))
+    return names
+
+
+def test_no_service_reads_a_host_port_var_as_its_own_container_config() -> None:
+    """Regression guard for F-75 (segmenter bound to the host port because
+    SEGMENTER_PORT named both the host mapping and the Dockerfile's default
+    listen-port ENV)."""
+    services = _services()
+    collisions: list[str] = []
+    for name, spec in services.items():
+        host_port_vars = _host_port_vars(spec)
+        if not host_port_vars:
+            continue
+        build = spec.get('build') or {}
+        context = Path(str(build.get('context', '.')))
+        dockerfile = build.get('dockerfile')
+        if not dockerfile:
+            continue
+        dockerfile_path = REPO_ROOT / context / dockerfile
+        env_names = _dockerfile_env_var_names(dockerfile_path)
+        shared = host_port_vars & env_names
+        if shared:
+            collisions.append(f'{name}: {sorted(shared)} (host-port var reused as container ENV)')
+    assert not collisions, (
+        'host-port env var name(s) reused as in-container ENV default(s):\n' + '\n'.join(collisions)
+    )
