@@ -706,6 +706,28 @@ async def reload_promoted_models(promoter: TritonPromoter | None = None) -> dict
     return {'status': 'ok', 'reloaded': reloaded, 'failed': failed}
 
 
+async def reload_promoted_models_best_effort(*, log_event: str) -> None:
+    """:func:`reload_promoted_models`, but never raises and logs for you.
+
+    Shared by ``src.main``'s lifespan startup, its periodic GPU-arbiter
+    reconcile tick, and (indirectly, via the plain
+    :func:`reload_promoted_models` call) ``POST
+    {api_prefix}/train/reload_promoted`` -- a scan failure or unreachable
+    Triton is logged and swallowed so it can run unattended on both
+    startup and every reconcile tick without ever taking the loop down.
+    """
+    try:
+        reload_result = await reload_promoted_models()
+        if reload_result.get('reloaded') or reload_result.get('failed'):
+            logger.info(
+                log_event,
+                reloaded=reload_result.get('reloaded'),
+                failed=reload_result.get('failed'),
+            )
+    except Exception as exc:
+        logger.warning('promoted_models_reload_skipped', error=str(exc))
+
+
 __all__ = [
     'DEFAULT_TRITON_HTTP_URL',
     'DEFAULT_TRITON_MODELS_DIR',
@@ -724,6 +746,7 @@ __all__ = [
     'build_class_id_to_name',
     'promote_yolo26_to_triton',
     'reload_promoted_models',
+    'reload_promoted_models_best_effort',
     'resolve_class_remap',
     'resolve_triton_http_url',
     'resolve_triton_models_dir',

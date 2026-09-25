@@ -1630,3 +1630,39 @@ def test_status_eval_never_carries_a_filesystem_path(app_client: TestClient, tmp
         body['eval']['confusion_matrix_url']
         == '/curation/train/artifacts/pathcheck/confusion_matrix.png'
     )
+
+
+# =============================================================================
+# /reload_promoted
+# =============================================================================
+
+
+def test_reload_promoted_route_returns_the_result_shape(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item 3 (fresh-start E2E findings, round 2): make reload-promoted
+    hits this route so an operator can force a reload right after
+    bouncing Triton, without a full API restart."""
+    fake_reload = AsyncMock(
+        return_value={'status': 'ok', 'reloaded': ['op_v2'], 'failed': ['op_v3']}
+    )
+    monkeypatch.setattr('src.services.training.triton_promote.reload_promoted_models', fake_reload)
+
+    r = app_client.post('/curation/train/reload_promoted')
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body == {'status': 'ok', 'reloaded': ['op_v2'], 'failed': ['op_v3']}
+    fake_reload.assert_awaited_once()
+
+
+def test_reload_promoted_route_defaults_to_empty_lists(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_reload = AsyncMock(return_value={'status': 'ok'})
+    monkeypatch.setattr('src.services.training.triton_promote.reload_promoted_models', fake_reload)
+
+    r = app_client.post('/curation/train/reload_promoted')
+
+    assert r.status_code == 200, r.text
+    assert r.json() == {'status': 'ok', 'reloaded': [], 'failed': []}

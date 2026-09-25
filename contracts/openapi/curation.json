@@ -6102,6 +6102,35 @@
         "title": "RejectionReasonEntry",
         "type": "object"
       },
+      "ReloadPromotedResponse": {
+        "properties": {
+          "failed": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Failed",
+            "type": "array"
+          },
+          "reloaded": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Reloaded",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ReloadPromotedResponse",
+        "type": "object"
+      },
       "ResolveConflict": {
         "properties": {
           "crop_id": {
@@ -15670,6 +15699,28 @@
           }
         },
         "summary": "Promote Run",
+        "tags": [
+          "Curation - Train"
+        ]
+      }
+    },
+    "/curation/train/reload_promoted": {
+      "post": {
+        "description": "Re-``/load`` every promoted model Triton doesn't report READY.\n\nTriton in explicit-control mode only loads its ``--load-model`` list\nat startup, so a bare Triton restart (``make restart-triton``, or any\n``docker compose restart``/recreate of the Triton service) silently\nstrands every previously-promoted model at UNAVAILABLE until someone\nPOSTs ``/load`` again. The API already runs this once at its own\nstartup and on its periodic reconcile tick (see ``src/main.py``); this\nroute lets an operator trigger it on demand right after bouncing\nTriton, without needing a full API restart. ``make reload-promoted``\ncalls this.\n\nA model that's been through ``DELETE {api_prefix}/models/{name}`` is\nnever resurrected here -- that route removes the whole model\ndirectory, ``promote.json`` included, which is exactly what this\nscan keys off.",
+        "operationId": "reload_promoted_curation_train_reload_promoted_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReloadPromotedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Reload Promoted",
         "tags": [
           "Curation - Train"
         ]

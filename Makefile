@@ -97,6 +97,13 @@ restart-triton: ## Restart only Triton server (after model changes)
 	@sleep 5
 	@echo "Triton restarted. Checking model status..."
 	@$(MAKE) status
+	@echo "Reloading any promoted models Triton's explicit --load-model list dropped..."
+	@$(MAKE) reload-promoted
+
+.PHONY: reload-promoted
+reload-promoted: ## Re-load promoted Triton models that dropped to UNAVAILABLE after a Triton restart
+	@curl -s -X POST "http://localhost:$(API_PORT)/curation/train/reload_promoted" | jq . 2>/dev/null || \
+		echo "API not reachable on port $(API_PORT) (it also runs this once at its own startup and every ~15s on its reconcile tick)"
 
 .PHONY: restart-api
 restart-api: ## Restart only API service
