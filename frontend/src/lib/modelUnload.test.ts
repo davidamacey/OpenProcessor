@@ -16,7 +16,7 @@ import {
 } from './modelUnload';
 
 describe('unloadButtonState', () => {
-  it('hides the button entirely for LPR models', () => {
+  it('hides the button entirely for region-protected models', () => {
     expect(
       unloadButtonState({
         kind: 'triton',
@@ -26,7 +26,7 @@ describe('unloadButtonState', () => {
     ).toBe('hidden');
   });
 
-  it('hides the button entirely for LPR models even if also flagged core/active (belt and suspenders)', () => {
+  it('hides the button entirely for region-protected models even if also flagged core/active (belt and suspenders)', () => {
     expect(
       unloadButtonState({
         kind: 'triton',
@@ -59,7 +59,7 @@ describe('unloadButtonState', () => {
     ).toBe('force-required');
   });
 
-  it('is a normal single-confirm action for an ordinary (non-LPR, non-core) Triton model', () => {
+  it('is a normal single-confirm action for an ordinary (unprotected, non-core) Triton model', () => {
     expect(
       unloadButtonState({
         kind: 'triton',

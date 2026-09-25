@@ -15,7 +15,7 @@ const GOOD: DatasetStats = {
   total_crops: 422,
   validated: 297,
   test_holdout: 12,
-  by_source: [{ key: 'lpr_frozen_test_sample', doc_count: 300 }],
+  by_source: [{ key: 'tag_holdout_sample', doc_count: 300 }],
   labeled: { by_human: 100, by_vlm: 50, by_classifier: 10, by_proposal: 5, other: 0 },
   regions: { total_detected: 0, by_detector: 0, by_segmenter: 0, by_human: 0 },
   unlabeled: { pending_detection: 0, pending_verification: 0, no_label_source: 0 },

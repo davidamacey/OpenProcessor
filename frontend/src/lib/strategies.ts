@@ -144,8 +144,8 @@ export interface ScoreInfo extends MethodInfoBase {
  * exactly one entry, `{id: 'yolo', axis: 'export', label: 'YOLO
  * detection dataset export', status: 'stable', default: true}`.
  *
- * **Absence is the signal, not a status.** OpenProcessor omits `lpr`
- * entirely rather than advertising it `disabled`, because a status
+ * **Absence is the signal, not a status.** OpenProcessor omits an export
+ * kind it cannot produce entirely rather than advertising it `disabled`, because a status
  * implies "not yet, but this deployment could serve it later" — untrue
  * for a proprietary overlay the repo does not contain
  * (`curation_api_contract.md`, the `export` axis section). So a consumer
@@ -441,7 +441,7 @@ export function isSemanticSearchAvailable(overlays: OverlayInfo[]): boolean {
 
 /**
  * Whether `{API_PREFIX}/methods` currently advertises the dataset-export
- * `kind` (`'yolo'`, `'lpr'`, …) as something this deployment can
+ * `kind` (`'yolo'`, `'single_class'`, …) as something this deployment can
  * actually produce. Mirrors `isDiverseOverlayAvailable` /
  * `isEmbeddingVizAvailable` / `isSemanticSearchAvailable` exactly: same
  * `stable`/`experimental`-only bar, same "absent / shadow / disabled

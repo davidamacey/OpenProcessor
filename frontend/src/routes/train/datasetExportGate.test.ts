@@ -35,8 +35,8 @@ describe('/train dataset-export capability gate', () => {
 
   // The single highest-value assertion in this file: refreshSingleClassExportStatus()
   // firing unconditionally on mount is the actual 404 this task removes
-  // (GET {API_PREFIX}/export/lpr/status is not a registered route on a
-  // backend that never advertises the lpr export kind). Scan the
+  // (a status route is not registered on a backend that never advertises
+  // that export kind). Scan the
   // onMount(async () => { … }) block specifically, not the whole file —
   // refreshSingleClassExportStatus is still defined and still called, just
   // from the gated $effect further down.
@@ -51,21 +51,11 @@ describe('/train dataset-export capability gate', () => {
     expect(src).toMatch(/\{#if datasetExportAvailable && datasetExportSpec\}/);
   });
 
-  // Narrower than a blanket `datasetKind === '\w+'` ban: the 'vehicles'
-  // fallback comparisons introduced by the force-reset effect (§3.6d) are
-  // legitimate and must survive. What must never come back is the
-  // hardcoded 'lpr' literal itself.
-  it("never hardcodes datasetKind === 'lpr' — routes through datasetExportSpec instead", () => {
-    expect(src).not.toMatch(/datasetKind === 'lpr'/);
-  });
-
   // bakeoff-train-genericization plan §3.2/§6 commit 2: spec.blurb was
   // declared, validated, and rendered nowhere — a hand-written copy sat
-  // right above it instead. Pin both sides: the spec field is actually
-  // rendered, and the old hardcoded button copy it used to sit next to
-  // is gone.
-  it('renders datasetExportSpec.blurb and no longer hardcodes "Build LPR export"', () => {
+  // right above it instead. (That no domain copy comes back is
+  // domainNeutral.scan.test.ts's job.)
+  it('renders datasetExportSpec.blurb', () => {
     expect(src).toMatch(/datasetExportSpec\.blurb/);
-    expect(src).not.toMatch(/Build LPR export/);
   });
 });

@@ -44,7 +44,7 @@ const DEFAULT_ITEM: Required<RawCrop> = {
   class_detector_version: '6.2.1',
   class_labeled_at: '2026-01-02T03:04:05Z',
   class_labeler: 'user@example.com',
-  source: 'lpr_frozen_test_sample',
+  source: 'tag_holdout_sample',
   test_holdout: true,
   crop_rank_in_image: 2,
   crop_area_norm: 0.19,

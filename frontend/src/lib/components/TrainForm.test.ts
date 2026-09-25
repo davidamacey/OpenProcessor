@@ -60,10 +60,9 @@ describe('TrainForm.svelte GPU picker', () => {
     expect(buildCampaignMatch).toMatch(/cuda_visible_devices:\s*cudaDevices/);
   });
 
-  // Absence-of-a-domain-specific-literal check (no mount can prove a
-  // string never appears anywhere in the source).
-  it('takes the generic singleClassExport prop, not the domain-specific lpr one', () => {
+  // A prop declaration a mount can't observe directly. (That no
+  // domain-specific prop comes back is domainNeutral.scan.test.ts's job.)
+  it('takes the generic singleClassExport prop', () => {
     expect(src).toMatch(/singleClassExport\?:\s*boolean/);
-    expect(src).not.toMatch(/\blpr\b/);
   });
 });

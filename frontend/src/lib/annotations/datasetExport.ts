@@ -61,7 +61,7 @@ function nonEmptyString(v: unknown): string | undefined {
  * one.
  *
  * `options[]` is deliberately NOT read here — `/train` still renders its
- * four LPR options as typed, bound controls. Turning that array into a
+ * four single-class export options as typed, bound controls. Turning that array into a
  * generic form builder is follow-up work, not part of the capability
  * gate (see the Phase C plan §3.7).
  */

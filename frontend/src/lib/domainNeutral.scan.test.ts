@@ -14,8 +14,8 @@
  * Mutation-check: add a `// plate` line to a scratch copy of any product
  * file under `src/` and this test goes red.
  *
- * Not yet scanned: the `LPR`/`lpr` abbreviation, which the audit's §8
- * sweep covers separately.
+ * Also scanned: the `LPR`/`lpr` abbreviation (audit §7.1 grep 1). The
+ * wider §8 sweep (vehicle / model names) is separate and not scanned yet.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -26,8 +26,9 @@ import { describe, expect, it } from 'vitest';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const srcRoot = path.resolve(here, '..');
 
-/** One domain's noun. The lookbehind skips `template`/`Template`. */
-const DOMAIN_PATTERN = /(?<!tem)plate/i;
+/** One domain's noun and its model abbreviation. The lookbehind skips
+ *  `template`/`Template`. */
+const DOMAIN_PATTERN = /(?<!tem)plate|\blpr\b|lpr_/i;
 /** The private origin: its name, and its live dataset numbers/crop ids. */
 const PRIVATE_PATTERN = /legacy|1,000|00000000/i;
 /** The private stack's retired `/curation` prefix and `op_` names. Case-

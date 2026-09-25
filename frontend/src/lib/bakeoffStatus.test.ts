@@ -7,14 +7,14 @@ describe('bakeoffFailureWhere', () => {
   });
 
   it('names a failed dataset x model cell', () => {
-    expect(bakeoffFailureWhere({ dataset: 'lpr', model: 'yolo11s', error: 'x' })).toBe(
-      'lpr · yolo11s',
+    expect(bakeoffFailureWhere({ dataset: 'tags', model: 'yolo11s', error: 'x' })).toBe(
+      'tags · yolo11s',
     );
   });
 
   it('names a dataset-level failure (frozen verify)', () => {
-    expect(bakeoffFailureWhere({ dataset: 'lpr', error: 'frozen verify failed' })).toBe(
-      'lpr',
+    expect(bakeoffFailureWhere({ dataset: 'tags', error: 'frozen verify failed' })).toBe(
+      'tags',
     );
   });
 

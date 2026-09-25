@@ -10,7 +10,7 @@
  * openprocessor's `models.py`) — this module only decides what the button
  * *looks like* from the `is_region_protected` / `requires_force_to_unload` flags the
  * server already computed and sent back on `{API_PREFIX}/models/status`. It must
- * never invent its own notion of "is this LPR / is this active" — that
+ * never invent its own notion of "is this protected / is this active" — that
  * would be a second, driftable copy of the real guard.
  */
 
@@ -19,12 +19,12 @@ import type { ModelInfo } from './types';
 export type UnloadButtonState = 'hidden' | 'normal' | 'force-required';
 
 /**
- * - `hidden`: never rendered — non-Triton models (Gemma) and any LPR
- *   model (the one guard with no override, per CLAUDE.md's "never touch
- *   any LPR model or LPR data" constraint).
+ * - `hidden`: never rendered — non-Triton models (the VLM) and any
+ *   region-protected model (`is_region_protected`, the one guard with no
+ *   override: region models and their data are never touched from here).
  * - `force-required`: rendered, but the action requires an explicit
  *   second, stronger confirmation and is sent with `force=true` — the
- *   active vehicle model or another core pipeline model currently
+ *   active item model or another core pipeline model currently
  *   serving live traffic.
  * - `normal`: rendered, single confirmation, `force=false`.
  */
