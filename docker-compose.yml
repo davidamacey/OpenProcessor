@@ -8,7 +8,7 @@ name: ${COMPOSE_PROJECT_NAME:-openprocessor}
 
 services:
   triton-server:
-    image: davidamacey/openprocessor-triton:latest
+    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor-triton:${OP_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile.triton
@@ -65,7 +65,7 @@ services:
       - triton_net
 
   yolo-api:
-    image: davidamacey/openprocessor:latest
+    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-latest}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-api
     restart: always
     build:
@@ -218,7 +218,7 @@ services:
   # ===================================================================
 
   curation-detection-worker:
-    image: davidamacey/openprocessor:latest
+    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-latest}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-detection-worker
     build:
       context: .
@@ -284,7 +284,7 @@ services:
       - triton_net
 
   curation-vlm-worker:
-    image: davidamacey/openprocessor:latest
+    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-latest}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-vlm-worker
     build:
       context: .
@@ -328,7 +328,7 @@ services:
       - triton_net
 
   curation-auto-label-worker:
-    image: davidamacey/openprocessor:latest
+    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-latest}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-auto-label-worker
     build:
       context: .
@@ -373,7 +373,7 @@ services:
       - triton_net
 
   curation-cluster-refresh:
-    image: davidamacey/openprocessor:latest
+    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-latest}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-cluster-refresh
     build:
       context: .
@@ -415,7 +415,7 @@ services:
   # On-demand only (no `restart:` — see docker/evaluator/Dockerfile):
   # `docker compose --profile curation run --rm curation-evaluator`.
   curation-evaluator:
-    image: davidamacey/openprocessor-evaluator:latest
+    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor-evaluator:${OP_IMAGE_TAG:-latest}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-evaluator
     build:
       context: .
@@ -454,7 +454,7 @@ services:
   #   OP_SEGMENTER_URL=http://segmenter:8000 \
   #     docker compose --profile curation --profile segmenter up -d
   segmenter:
-    image: davidamacey/openprocessor-segmenter:latest
+    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor-segmenter:${OP_IMAGE_TAG:-latest}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-segmenter
     build:
       context: docker/segmenter
@@ -475,7 +475,7 @@ services:
       - HF_TOKEN=${HF_TOKEN:-}
       - SEGMENTER_DEVICE=${SEGMENTER_DEVICE:-cuda:0}
       - SEGMENTER_INSTANCES=${SEGMENTER_INSTANCES:-2}
-      - SEGMENTER_SHARED_WEIGHTS=${SEGMENTER_SHARED_WEIGHTS:-0}
+      - SEGMENTER_SHARED_WEIGHTS=${SEGMENTER_SHARED_WEIGHTS:-1}
       - SEGMENTER_COMPILE=${SEGMENTER_COMPILE:-0}
       - SEGMENTER_ENABLE_MASKS=${SEGMENTER_ENABLE_MASKS:-1}
     healthcheck:
@@ -516,7 +516,7 @@ services:
   # ===================================================================
 
   curation-trainer:
-    image: davidamacey/openprocessor-trainer:latest
+    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor-trainer:${OP_IMAGE_TAG:-latest}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-trainer
     build:
       context: .
