@@ -185,6 +185,29 @@ def test_ignored_mode_hides_cluster_grid_controls(stub, page, app_url):
     _no_page_errors(stub)
 
 
+def test_models_updated_label_does_not_overlap_description(stub, page, app_url):
+    """M1: at 1600px "Updated just now" ran into the description line."""
+    page.set_viewport_size({"width": 1600, "height": 1000})
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
+    stub.on("GET", r"/models/status", {"models": []})
+
+    page.goto(f"{app_url}/models")
+    status = page.locator('[data-testid="models-status"]')
+    status.get_by_text("Updated", exact=False).wait_for(timeout=15000)
+
+    boxes = page.evaluate(
+        """() => {
+          const p = document.querySelector('header p');
+          const s = document.querySelector('[data-testid="models-status"] span');
+          const a = p.getBoundingClientRect(), b = s.getBoundingClientRect();
+          return {pRight: a.right, sLeft: b.left, sLines: Math.round(b.height / 16)};
+        }"""
+    )
+    assert boxes["sLeft"] >= boxes["pRight"], boxes
+    assert boxes["sLines"] <= 1, f"'Updated ...' wraps: {boxes}"
+    _no_page_errors(stub)
+
+
 DASHBOARD_STATS = {
     "as_of": "2026-09-24T00:00:00Z",
     "total_crops": 3,
