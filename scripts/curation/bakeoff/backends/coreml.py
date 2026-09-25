@@ -26,7 +26,7 @@ from .yolo_post import decode_yolo26_e2e, decode_yolo_v11, letterbox, nms
 
 
 class CoreMLDetector:
-    """Run a single-class YOLO ``.mlpackage`` (no embedded NMS) via CoreML."""
+    """Run a YOLO ``.mlpackage`` (no embedded NMS) via CoreML."""
 
     runtime = 'coreml'
 
@@ -55,6 +55,7 @@ class CoreMLDetector:
         self.conf = conf
         self.iou = iou
         self.coords_normalized = coords_normalized
+        self.class_names = _metadata_names(self._model)
 
     def detect(self, image_rgb: np.ndarray) -> list[Detection]:
         from PIL import Image
@@ -65,20 +66,23 @@ class CoreMLDetector:
         pil = Image.fromarray(lb)
         out = self._model.predict({self._input_name: pil})
         output = np.asarray(out[self._output_name], dtype=np.float32)
-        # YOLO26 NMS-free head [1, max_det, 6]; older YOLO raw [1, 5, N] grid.
+        # YOLO26 NMS-free head [1, max_det, 6]; older YOLO raw [1, 4+nc, N] grid.
         if output.ndim == 3 and output.shape[-1] == 6:
-            boxes, scores = decode_yolo26_e2e(output, scale=scale, pad=pad, conf_thresh=self.conf)
+            boxes, scores, class_ids = decode_yolo26_e2e(
+                output, scale=scale, pad=pad, conf_thresh=self.conf
+            )
             keep = list(range(len(scores)))
         else:
-            boxes, scores = decode_yolo_v11(
+            boxes, scores, class_ids = decode_yolo_v11(
                 output,
                 scale=scale,
                 pad=pad,
                 input_size=self.imgsz,
                 conf_thresh=self.conf,
                 coords_normalized=self.coords_normalized,
+                num_classes=len(self.class_names) if self.class_names else None,
             )
-            keep = nms(boxes, scores, self.iou)
+            keep = nms(boxes, scores, self.iou, class_ids)
         return [
             Detection(
                 float(boxes[i, 0]),
@@ -86,6 +90,21 @@ class CoreMLDetector:
                 float(boxes[i, 2]),
                 float(boxes[i, 3]),
                 float(scores[i]),
+                int(class_ids[i]),
             )
             for i in keep
         ]
+
+
+def _metadata_names(model: object) -> dict[int, str] | None:
+    """Class names from an Ultralytics CoreML export's ``names`` user metadata."""
+    import ast
+
+    try:
+        raw = model.user_defined_metadata.get('names')  # type: ignore[attr-defined]
+        names = ast.literal_eval(raw) if raw else None
+    except (AttributeError, SyntaxError, ValueError):
+        return None
+    if isinstance(names, dict):
+        return {int(k): str(v) for k, v in names.items()}
+    return None

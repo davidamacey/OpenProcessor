@@ -79,7 +79,7 @@ see [`docs/CURATION.md`](../docs/CURATION.md) for the full guide.
 | `cluster_raw_labels.py` | Clusters the VLM's free-text class labels (text embedding + average-linkage) into candidate sub-classes ranked by item volume, and writes the cluster fields `GET /curation/review/raw_label_clusters` reads. `--dry-run --report` to preview. |
 | `seed_class_registry.py` | Seeds / extends `class_registry.json` from a detector ONNX's embedded `names` (or a `data.yaml`), append-only; `--check` fails on model-vs-registry class-order drift. |
 | `seed_live_harness.py` | Seeds the throwaway `docker/test/compose.yml` live-verification stack with deterministic data — **never point this at a real deployment** (it refuses to run against an index without a `verify_` prefix). |
-| `bakeoff/` | Detector bake-off evaluation harness (`curation-evaluator` compose service runs this on demand). |
+| `bakeoff/` | Model-comparison (bake-off) harness: scores models per class on an eval dataset's test split (`run.py`), aggregates comparisons and the model x dataset matrix (`compare.py`), and runs API-written job specs in the `curation-evaluator` service (`bakeoff_runner.py`). Domain examples live under `examples/bakeoff/`, loaded by profile path. |
 
 ## Makefile Operations
 

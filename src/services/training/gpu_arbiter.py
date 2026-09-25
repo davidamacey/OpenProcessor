@@ -102,9 +102,9 @@ LOCK_GRACE_SECONDS = 90.0
 def bakeoff_active(*, jobs_dir: Path | None = None) -> bool:
     """True if a bake-off job is queued or running (job.json still present).
 
-    ``jobs_dir`` defaults to ``GpuArbiterConfig.bakeoff_jobs_dir``; when
-    that is unset (the generic-install default), there is no bake-off
-    harness wired up to watch, so this always reports ``False``.
+    ``jobs_dir`` defaults to ``GpuArbiterConfig.bakeoff_jobs_dir`` (always
+    set: ``OP_BAKEOFF_JOBS_DIR`` or ``<state_dir>/bakeoff_jobs``, the same
+    dir the bake-off router writes into). A missing dir means nothing queued.
     """
     configured = jobs_dir if jobs_dir is not None else get_gpu_arbiter_config().bakeoff_jobs_dir
     if not configured:

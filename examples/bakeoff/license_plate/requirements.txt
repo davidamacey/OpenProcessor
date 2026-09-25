@@ -1,0 +1,3 @@
+# Extra package for the license_plate example's open-image-models backend
+# (install into the evaluator image only if you score that baseline).
+open-image-models>=0.5    # open-image-models backend (license_plate example baseline)

@@ -1,6 +1,6 @@
 """Triton gRPC backend — scores the actually-deployed TRT engine.
 
-This measures the production path (any single-class YOLOv11 TensorRT
+This measures the production path (any YOLOv11 TensorRT
 model served by Triton), so its accuracy vs the same weights run through
 Ultralytics is a real "deployment parity" datapoint, and its latency
 reflects real serving. Decode follows the training export's coordinate
@@ -21,9 +21,12 @@ if TYPE_CHECKING:
 
 
 class TritonYoloDetector:
-    """Run a single-class YOLOv11-format detector served by Triton over gRPC."""
+    """Run a YOLOv11-format detector served by Triton over gRPC."""
 
     runtime = 'triton-trt'
+    # Triton model metadata carries no class names: a multi-class Triton model
+    # needs an explicit class map (see class_map.py, rule 5).
+    class_names: dict[int, str] | None = None
 
     def __init__(
         self,
@@ -59,7 +62,7 @@ class TritonYoloDetector:
         requested = self._grpc.InferRequestedOutput(self.output_name)
         resp = self._client.infer(self.model, [infer_input], outputs=[requested])
         output = resp.as_numpy(self.output_name)
-        boxes, scores = decode_yolo_v11(
+        boxes, scores, class_ids = decode_yolo_v11(
             output,
             scale=scale,
             pad=pad,
@@ -67,7 +70,7 @@ class TritonYoloDetector:
             conf_thresh=self.conf,
             coords_normalized=self.coords_normalized,
         )
-        keep = nms(boxes, scores, self.iou)
+        keep = nms(boxes, scores, self.iou, class_ids)
         return [
             Detection(
                 float(boxes[i, 0]),
@@ -75,6 +78,7 @@ class TritonYoloDetector:
                 float(boxes[i, 2]),
                 float(boxes[i, 3]),
                 float(scores[i]),
+                int(class_ids[i]),
             )
             for i in keep
         ]

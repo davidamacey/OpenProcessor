@@ -45,22 +45,33 @@ def decode_yolo_v11(
     input_size: int,
     conf_thresh: float,
     coords_normalized: bool,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Decode a single-class YOLOv11 head ``[1, 5, N]`` -> boxes + scores.
+    num_classes: int | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Decode a YOLOv8/v11 head ``[1, 4 + nc, N]`` -> boxes + scores + classes.
 
-    Output rows are ``(cx, cy, w, h, conf)``. ``coords_normalized`` selects
-    whether those are in [0,1] of the letterboxed input (the training export
+    Rows are ``(cx, cy, w, h, cls_0, ..., cls_{nc-1})``; the transposed
+    ``[1, N, 4 + nc]`` layout is accepted too. The channel axis is the one of
+    length ``4 + num_classes`` when given, else the shorter axis (anchor
+    counts are in the thousands). Each anchor's score is its max class
+    score and its class the argmax. ``coords_normalized`` selects whether
+    the box rows are in [0,1] of the letterboxed input (the training export
     convention) or in input pixels; either way boxes are mapped back to the
     ORIGINAL frame's pixel xyxy. NMS is applied by the caller.
 
-    Returns ``(boxes_xyxy[K,4], scores[K])`` before NMS.
+    Returns ``(boxes_xyxy[K,4], scores[K], class_ids[K])`` before NMS.
     """
-    pred = output[0]  # [5, N]
-    if pred.shape[0] != 5:
-        pred = pred.T if pred.shape[1] == 5 else pred
-    cx, cy, w, h, conf = pred[0], pred[1], pred[2], pred[3], pred[4]
+    pred = output[0]
+    if num_classes is not None:
+        if pred.shape[0] != 4 + num_classes and pred.shape[1] == 4 + num_classes:
+            pred = pred.T
+    elif pred.shape[0] > pred.shape[1]:
+        pred = pred.T
+    cls_scores = pred[4:]
+    conf = cls_scores.max(axis=0)
+    class_ids = cls_scores.argmax(axis=0).astype(np.int64)
     keep = conf >= conf_thresh
-    cx, cy, w, h, conf = cx[keep], cy[keep], w[keep], h[keep], conf[keep]
+    cx, cy, w, h = pred[0][keep], pred[1][keep], pred[2][keep], pred[3][keep]
+    conf, class_ids = conf[keep], class_ids[keep]
     if coords_normalized:
         cx, cy, w, h = cx * input_size, cy * input_size, w * input_size, h * input_size
     pad_x, pad_y = pad
@@ -68,36 +79,51 @@ def decode_yolo_v11(
     y1 = (cy - h / 2 - pad_y) / scale
     x2 = (cx + w / 2 - pad_x) / scale
     y2 = (cy + h / 2 - pad_y) / scale
-    return np.stack([x1, y1, x2, y2], axis=1), conf
+    return np.stack([x1, y1, x2, y2], axis=1), conf, class_ids
 
 
 def decode_yolo26_e2e(
     output: np.ndarray, *, scale: float, pad: tuple[int, int], conf_thresh: float
-) -> tuple[np.ndarray, np.ndarray]:
-    """Decode a YOLO26 NMS-free head ``[1, max_det, 6]`` -> boxes + scores.
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Decode a YOLO26 NMS-free head ``[1, max_det, 6]`` -> boxes + scores + classes.
 
     YOLO26 is NMS-free: the exported graph emits up to ``max_det`` already-decoded
     detections ``(x1, y1, x2, y2, score, class)`` in the letterboxed input's pixel
     space (zero-padded rows for the unused slots). We filter by score and map the
     boxes back to the ORIGINAL frame's pixel xyxy. No external NMS is needed.
 
-    Returns ``(boxes_xyxy[K,4], scores[K])``.
+    Returns ``(boxes_xyxy[K,4], scores[K], class_ids[K])``.
     """
     pred = output[0] if output.ndim == 3 else output  # [max_det, 6]
     boxes = pred[:, :4].astype(np.float32, copy=True)
     scores = pred[:, 4].astype(np.float32)
+    class_ids = np.rint(pred[:, 5]).astype(np.int64)
     keep = scores >= conf_thresh
-    boxes, scores = boxes[keep], scores[keep]
+    boxes, scores, class_ids = boxes[keep], scores[keep], class_ids[keep]
     pad_x, pad_y = pad
     boxes[:, [0, 2]] = (boxes[:, [0, 2]] - pad_x) / scale
     boxes[:, [1, 3]] = (boxes[:, [1, 3]] - pad_y) / scale
-    return boxes, scores
+    return boxes, scores, class_ids
 
 
-def nms(boxes_xyxy: np.ndarray, scores: np.ndarray, iou_thresh: float) -> list[int]:
-    """Greedy NMS; returns indices to keep (sorted by score desc)."""
+def nms(
+    boxes_xyxy: np.ndarray,
+    scores: np.ndarray,
+    iou_thresh: float,
+    class_ids: np.ndarray | None = None,
+) -> list[int]:
+    """Greedy NMS; returns indices to keep (sorted by score desc).
+
+    With ``class_ids`` the suppression is per class (boxes of different
+    classes never suppress each other), via the usual coordinate-offset
+    trick: each class is shifted into its own disjoint region.
+    """
     if len(boxes_xyxy) == 0:
         return []
+    if class_ids is not None:
+        span = float(np.abs(boxes_xyxy).max()) * 2 + 1
+        offset = np.asarray(class_ids, dtype=np.float64)[:, None] * span
+        boxes_xyxy = boxes_xyxy.astype(np.float64) + offset
     x1, y1, x2, y2 = boxes_xyxy.T
     areas = (x2 - x1).clip(min=0) * (y2 - y1).clip(min=0)
     order = scores.argsort()[::-1]

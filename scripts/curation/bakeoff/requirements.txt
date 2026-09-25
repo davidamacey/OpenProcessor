@@ -13,7 +13,6 @@
 # opencv-python-headless, mlflow, pydantic, opensearch-py.
 
 pycocotools>=2.0.7        # single shared detection metric across all models
-open-image-models>=0.5    # open-image-models backend (license_plate example baseline)
 onnxruntime-gpu           # ONNX backends + INT8 static quantization (quantize_static)
 onnx>=1.12.0,<2.0.0       # ultralytics ONNX export + QDQ graph inspection (export/quantize.py)
 onnxslim>=0.1.71          # ultralytics ONNX export simplify=True

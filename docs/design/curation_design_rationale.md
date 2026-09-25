@@ -385,74 +385,101 @@ end to end:**
 
 `scripts/curation/bakeoff/` scores any number of detectors on the same
 frozen YOLO test split with one shared metric (pycocotools COCOeval plus a
-fixed-threshold operating point), so an in-house model and public
-baselines are compared on identical ground.
-`src/routers/curation/bakeoff.py` only drops `<job_id>.job.json` specs into
-a shared directory; the evaluator container
+fixed-threshold operating point), so a new training run, earlier runs and
+external baselines are compared on identical ground, per class.
+`src/routers/curation/bakeoff.py` does not score anything: it resolves a
+request into a job spec (`src/services/curation/bakeoff_jobs.py`) and drops
+`<job_id>.job.json` into a shared directory; the evaluator container
 (`docker/evaluator/Dockerfile`, running `bakeoff_runner --watch`) does the
-scoring and writes `status.json` / `comparison.json` / `matrix.json`
-back. The harness lives under `scripts/` rather than `src/` because it
-needs a newer detection stack than the API image pins and never runs
-inside the API process.
+scoring and writes `status.json`, one `comparison.json` per dataset and a
+`matrix.json` back. The harness lives under `scripts/` rather than `src/`
+because it needs a newer detection stack than the API image pins and never
+runs inside the API process. Full design:
+`docs/design/generic_model_comparison_plan.md`.
+
+**The flow.** Eval datasets are the exports themselves: every export under
+`CurationConfig.export_root` with a labelled test split is listed by
+`GET {prefix}/bakeoff/eval_datasets` (id `export:<path>`), next to optional
+frozen third-party sets (`external:<group>/<name>`,
+`src/services/curation/eval_datasets.py`). Contenders are finished training
+runs (`GET {prefix}/bakeoff/trained_models`, no weight upload), external
+models from a baseline registry, or a custom model such as a deployed
+Triton model. `POST {prefix}/bakeoff/run` re-scores every selected model on
+every selected dataset in one job; two hashes pin the test split, identity
+(`frozen_test_sha`, which frames) and content (`test_label_sha`, which
+boxes), and the evaluator refuses a dataset whose content hash changed
+since enqueue. The trainer's opt-in auto-quantize posts the same request
+for a finished run, so its ONNX variants land in the same comparison.
+
+**Multi-class scoring and class mapping.** A model's class ids are mapped
+onto the eval dataset's ids per (model, dataset): by an explicit name map,
+by a run's `class_remap` or its training export's registry ids (resolved by
+the API at enqueue, the same way promote resolves them), else by normalized
+class names inside the evaluator. Eval classes a model does not cover are
+reported as not covered with null metrics, and predictions of unmapped
+model classes are counted; nothing is dropped silently. Each row carries
+`overall` metrics over the model's own covered classes and `common` metrics
+over the classes every model covers; ranking uses `common` (competition
+ranks, ties listed together), falling back to `overall` with a warning when
+no class is common. A run whose training split shares images with the eval
+test split gets a leakage warning, never a block. Results are
+informational: promote does not read them.
 
 **Why a profile.** The harness was ported from the same license-plate
 reference deployment as the rest of this subsystem (§1), and it carried
 that domain in code: a hardcoded single-class id, a YOLO writer that
 always emitted `license_plate`, the COCO vehicle classes baked in as the
-crop-mode coarse stage, and plate-benchmark converters as its only input
-formats. Following the `DetectionProfile` pattern (§2.3), everything that
-decides *what* is measured now lives on a frozen `BakeoffProfile`
-dataclass (`scripts/curation/bakeoff/profile.py`):
+crop-mode coarse stage, and plate-benchmark converters and backends as
+built-ins. Following the `DetectionProfile` pattern (§2.3), everything that
+decides *what* is measured lives on a frozen `BakeoffProfile` dataclass
+(`scripts/curation/bakeoff/profile.py`):
 
 | Field(s) | Replaces |
 |---|---|
-| `target_class_id`, `target_class_name`, `class_names` | the hardcoded class-id constant and the fixed single-class `data.yaml` |
+| `class_filter` | the hardcoded single target class (a profile now scores every class in the split, optionally narrowed by name) |
+| `class_names` | the fixed single-class `data.yaml` written by dataset converters |
 | `context_class_ids`, `context_weights/imgsz/conf` | the hardcoded COCO vehicle ids used as the crop-mode coarse stage |
-| `triton_model` (empty by design) | a default Triton model name — `--backend triton` now requires one from the profile or `--triton-model` |
-| `default_backend`, `imgsz` | CLI defaults |
+| `triton_model` (empty by design) | a default Triton model name — `--backend triton` now requires one from the profile or the request |
+| `default_backend`, `imgsz` | CLI defaults (a run's own imgsz still wins) |
 | `conf_floor`, `nms_iou`, `op_conf`, `op_iou`, `rank_metric` | metric thresholds and the comparison's hardcoded ranking metric |
-| `converter_modules`, `baselines_path` | plate-benchmark converters and baseline models shipped as built-ins |
+| `converter_modules`, `backend_modules`, `baselines_path` | plate-benchmark converters, plate-only backends and baseline models shipped as built-ins |
 
-Explicit CLI flags still win over the profile; the job spec's optional
-`profile` field (and `BakeoffRequest.profile` / per-model `profile` on
-`POST {prefix}/bakeoff/run`) selects one; `GET {prefix}/bakeoff/profiles`
-lists what is available. With no profile the neutral `generic` profile
-(class 0 `object`, no context classes, no Triton model) applies, overridable
-per field via `OP_BAKEOFF_PROFILE_*` env vars or wholesale via
-`OP_BAKEOFF_PROFILE`.
+A request's optional `profile` (a registered name or a `.json` path)
+selects one; `GET {prefix}/bakeoff/profiles` lists the registered profiles
+and flags the default (`default: true`, `kind: registered` or
+`configured` when `OP_BAKEOFF_PROFILE` names a `.json` path). With no
+profile the neutral `generic` profile (every class, no context classes, no
+Triton model) applies, overridable per field via `OP_BAKEOFF_PROFILE_*` env
+vars or wholesale via `OP_BAKEOFF_PROFILE`.
 
 **Datasets.** `datasets.py` is a converter registry around a generic
 `YoloWriter` whose `data.yaml` names come from the profile. Only
 domain-neutral formats are built in (`yolo` passthrough, Pascal `voc` with
 object-name → class-id mapping); a single-class profile collapses every
-source box onto its target class, a multi-class one keeps/maps ids and
-drops anything outside its label space. Domain formats register
-themselves from a profile's `converter_modules`.
+source box onto class 0, a multi-class one keeps/maps ids and drops
+anything outside its label space. Domain formats register themselves from
+a profile's `converter_modules`.
 
-**The license-plate example.** `scripts/curation/bakeoff/examples/license_plate/`
-keeps the original configuration as a clearly-named reference, not a
-default: its `profile.json` (COCO vehicle classes as context), the public
-plate-benchmark converters (CCPD, UFPR-ALPR, OpenALPR), and a
-`baselines.json` of public plate detectors that
-`GET {prefix}/bakeoff/baseline_models?profile=license_plate` serves. The
-default baseline registry lists only the quantized ONNX variants of your
-own model. Two backends (`lpdnet`, `open-image-models`) wrap public
-plate-only models; they stay in `backends/` because they are backend
-adapters, and are only meaningful under that example profile.
+**The license-plate example.** `examples/bakeoff/license_plate/` keeps the
+original configuration as an opt-in reference, never a default and never
+listed by the API: its `profile.json` (COCO vehicle classes as context), the
+public plate-benchmark converters (CCPD, UFPR-ALPR, OpenALPR), the
+`lpdnet` and `open-image-models` backends (registered from the profile's
+`backend_modules` through `scripts/curation/bakeoff/backends/registry.py`),
+and a `baselines.json` of public plate detectors, each with a `class_map`.
+It is loaded only by path (`profile: "<path>/profile.json"` or
+`OP_BAKEOFF_PROFILE`), so `examples/` must be mounted into the API and the
+evaluator to use it. Nothing in `src/` or `scripts/` imports it. The
+default baseline registry is empty: previous runs are the baselines.
 
-**Default profile and the quantize leg.** `GET {prefix}/bakeoff/profiles`
-flags the profile a job gets when it names none (`default: true` on that
-row, plus top-level `default_profile`); `kind` still says where the profile
-comes from, so an example selected via `OP_BAKEOFF_PROFILE` stays
-`kind: example`. A job's optional `quantize` block runs
-`scripts/curation/bakeoff/quantize.py` (Ultralytics FP32/FP16 ONNX export
-plus ONNX Runtime static QDQ INT8, calibrated on a dataset export's `train`
-split) and scores the variants in the same job; failures are recorded as
-`{stage, error}` entries in `status.json`'s `failed` list, and a job with
-nothing left to score ends `state: error`. The reference deployment's
-CoreML leg drove a macOS host through a private driver and is not shipped:
-`POST {prefix}/bakeoff/run` rejects `quantize.coreml` with 400, and a job
-file that asks for it anyway gets a `coreml` failed stage.
+**The quantize leg.** A job's optional `quantize` block (`{run_id, formats,
+n_calib, calib_split, throughput}`) runs `scripts/curation/bakeoff/quantize.py`
+(Ultralytics FP32/FP16 ONNX export plus ONNX Runtime static QDQ INT8,
+calibrated on the run's training export) and scores the variants in the
+same job as `run:<id>:<format>`; failures are recorded as failed stages in
+`status.json`, and a job with nothing left to score ends `state: error`.
+The reference deployment's CoreML leg drove a macOS host through a private
+driver and is not shipped: the request has no field for it.
 
 **What moved out.** Scripts that existed to produce one paper's tables and
 figures are not part of the harness and are not shipped in this tree: the

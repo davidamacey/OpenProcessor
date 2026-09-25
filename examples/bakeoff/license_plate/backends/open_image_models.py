@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .base import Detection
+from scripts.curation.bakeoff.backends.base import Detection
 
 
 if TYPE_CHECKING:
@@ -37,6 +37,7 @@ class OpenImageModelsDetector:
         from open_image_models import LicensePlateDetector
 
         self.name = name or model_name
+        self.class_names: dict[int, str] | None = {0: 'license_plate'}
         self.conf = conf
         # The library selects compute via onnxruntime providers (no `device`
         # arg). CUDA needs onnxruntime-gpu; otherwise it falls back to CPU.
@@ -57,5 +58,7 @@ class OpenImageModelsDetector:
             score = float(getattr(r, 'confidence', 1.0))
             if score < self.conf:
                 continue
-            out.append(Detection(float(bb.x1), float(bb.y1), float(bb.x2), float(bb.y2), score))
+            out.append(
+                Detection(float(bb.x1), float(bb.y1), float(bb.x2), float(bb.y2), score, class_id=0)
+            )
         return out

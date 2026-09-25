@@ -138,3 +138,20 @@ def test_every_op_env_var_in_env_template_is_read_by_code() -> None:
         f'env.template documents OP_* var(s) that nothing in {"/, ".join(_SCANNED_ROOTS)}/ '
         f'actually reads (stale/renamed?): {orphaned}'
     )
+
+
+def test_bakeoff_profile_env_examples_name_real_fields() -> None:
+    """``OP_BAKEOFF_PROFILE_<FIELD>`` examples in env.template must be real fields.
+
+    The prefix is pattern-documented, so the orphan check above skips it; this
+    keeps its examples honest when a BakeoffProfile field is removed.
+    """
+    fields_ = {f'OP_BAKEOFF_PROFILE_{f.name.upper()}' for f in fields(BakeoffProfile)}
+    examples = {
+        t
+        for t in _env_template_tokens()
+        if t.startswith('OP_BAKEOFF_PROFILE_') and t != 'OP_BAKEOFF_PROFILE_'
+    }
+    assert examples, 'env.template should show at least one OP_BAKEOFF_PROFILE_<FIELD> example'
+    assert examples <= fields_, sorted(examples - fields_)
+    assert 'OP_BAKEOFF_PROFILE_CLASS_FILTER' in examples

@@ -34,7 +34,7 @@ _EP_RUNTIME = {
 
 
 class OnnxRuntimeDetector:
-    """Run a single-class YOLO ONNX (no embedded NMS) via ONNX Runtime."""
+    """Run a YOLO ONNX (no embedded NMS) via ONNX Runtime."""
 
     def __init__(
         self,
@@ -73,6 +73,7 @@ class OnnxRuntimeDetector:
         self.output_name = output_name or self._sess.get_outputs()[0].name
         # FP16-weight exports take an FP16 input tensor; cast to match.
         self._in_dtype = np.float16 if 'float16' in sess_in.type else np.float32
+        self.class_names = _metadata_names(self._sess)
 
     def detect(self, image_rgb: np.ndarray) -> list[Detection]:
         lb, scale, pad = letterbox(image_rgb, self.imgsz)
@@ -82,20 +83,23 @@ class OnnxRuntimeDetector:
             dtype=self._np.float32,
         )
         # YOLO26 exports an NMS-free head [1, max_det, 6] = (x1,y1,x2,y2,score,cls);
-        # older YOLO (v8/v11) export the raw [1, 5, N] grid needing decode + NMS.
+        # older YOLO (v8/v11) export the raw [1, 4+nc, N] grid needing decode + NMS.
         if out.ndim == 3 and out.shape[-1] == 6:
-            boxes, scores = decode_yolo26_e2e(out, scale=scale, pad=pad, conf_thresh=self.conf)
+            boxes, scores, class_ids = decode_yolo26_e2e(
+                out, scale=scale, pad=pad, conf_thresh=self.conf
+            )
             keep = list(range(len(scores)))  # already NMS-free
         else:
-            boxes, scores = decode_yolo_v11(
+            boxes, scores, class_ids = decode_yolo_v11(
                 out,
                 scale=scale,
                 pad=pad,
                 input_size=self.imgsz,
                 conf_thresh=self.conf,
                 coords_normalized=self.coords_normalized,
+                num_classes=len(self.class_names) if self.class_names else None,
             )
-            keep = nms(boxes, scores, self.iou)
+            keep = nms(boxes, scores, self.iou, class_ids)
         return [
             Detection(
                 float(boxes[i, 0]),
@@ -103,6 +107,31 @@ class OnnxRuntimeDetector:
                 float(boxes[i, 2]),
                 float(boxes[i, 3]),
                 float(scores[i]),
+                int(class_ids[i]),
             )
             for i in keep
         ]
+
+
+def _metadata_names(sess: object) -> dict[int, str] | None:
+    """Class names from an Ultralytics ONNX export's ``names`` metadata.
+
+    Ultralytics writes a Python-literal dict (``"{0: 'a', 1: 'b'}"``). Any
+    other ONNX has no names: ``None`` (an explicit class map is then needed
+    unless the eval split scores a single class).
+    """
+    import ast
+
+    try:
+        raw = sess.get_modelmeta().custom_metadata_map.get('names')  # type: ignore[attr-defined]
+        names = ast.literal_eval(raw) if raw else None
+    except (AttributeError, SyntaxError, ValueError):
+        return None
+    if isinstance(names, dict):
+        try:
+            return {int(k): str(v) for k, v in names.items()}
+        except (TypeError, ValueError):
+            return None
+    if isinstance(names, list):
+        return {i: str(v) for i, v in enumerate(names)}
+    return None

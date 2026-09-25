@@ -6,8 +6,9 @@ silently ignored (that would look like a working config that quietly
 does nothing, e.g. a stale ``SAM3_URL`` turning the segmenter off with
 no error): :func:`reject_retired_env`, called at every process entry
 point (``src/main.py``'s lifespan, ``scripts/curation/worker/__main__.py``,
-``scripts/curation/vlm_worker.py``'s ``main()``), raises ``RuntimeError``
-naming the replacement for every retired name still set.
+``scripts/curation/vlm_worker.py``'s ``main()``, the bake-off evaluator's
+``scripts/curation/bakeoff/bakeoff_runner.py`` ``main()``), raises
+``RuntimeError`` naming the replacement for every retired name still set.
 
 This module necessarily spells the retired names, so it (and its test)
 are allowlisted from the W8 naming-leak scan.
@@ -19,7 +20,13 @@ import os
 
 
 # Old name -> new name. Every spelling from plan section 3 that a
-# previous wave (W1: the OP_VLM_* renames) did not already retire.
+# previous wave (W1: the OP_VLM_* renames) did not already retire. A value
+# starting with ``removed:`` marks a setting with no one-to-one replacement
+# and says what to use instead.
+_REMOVED = 'removed:'
+_BAKEOFF_TARGET_REMOVED = (
+    f'{_REMOVED} bake-offs score every class; restrict with OP_BAKEOFF_PROFILE_CLASS_FILTER'
+)
 RETIRED_ENV: dict[str, str] = {
     'VLM_URL': 'OP_VLM_URL',
     'GEMMA_URL': 'OP_VLM_URL',
@@ -45,6 +52,10 @@ RETIRED_ENV: dict[str, str] = {
     'SAM_WORKER_METRICS_PORT': 'OP_REGION_WORKER_METRICS_PORT',
     'OP_REGION_DETECTION_SAM_TEXT_PROMPT': 'OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT',
     'GEMMA_CROP_CACHE_DIR': 'OP_CROP_CACHE_DIR',
+    # docs/design/generic_model_comparison_plan.md (W3): profiles lost the
+    # single target class.
+    'OP_BAKEOFF_PROFILE_TARGET_CLASS_ID': _BAKEOFF_TARGET_REMOVED,
+    'OP_BAKEOFF_PROFILE_TARGET_CLASS_NAME': _BAKEOFF_TARGET_REMOVED,
 }
 
 
@@ -57,6 +68,11 @@ def reject_retired_env() -> None:
     stale = sorted(name for name in RETIRED_ENV if name in os.environ)
     if not stale:
         return
-    renames = '; '.join(f'{name} was renamed to {RETIRED_ENV[name]}' for name in stale)
+    renames = '; '.join(
+        f'{name} was {RETIRED_ENV[name]}'
+        if RETIRED_ENV[name].startswith(_REMOVED)
+        else f'{name} was renamed to {RETIRED_ENV[name]}'
+        for name in stale
+    )
     msg = f'retired env var(s) set: {renames}'
     raise RuntimeError(msg)

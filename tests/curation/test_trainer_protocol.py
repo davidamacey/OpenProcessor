@@ -564,6 +564,74 @@ def test_campaign_hook_is_a_no_op_for_a_standalone_job(jobs_dir: Path, export_di
     campaign.maybe_handle_campaign(spec, state)  # must not raise or write
 
 
+def test_auto_quantize_posts_the_bakeoff_run_request(
+    jobs_dir: Path, export_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The trainer hands a finished run to the bake-off through the API, not a job file.
+
+    The API resolves the run (checkpoint, imgsz, class map, eval dataset) and
+    claims the GPU; a job file dropped straight into the evaluator's queue
+    would bypass both.
+    """
+    import requests
+
+    bakeoff_jobs = tmp_path / 'bakeoff_jobs'
+    bakeoff_jobs.mkdir()
+    monkeypatch.setattr(campaign, 'BAKEOFF_JOBS_DIR', bakeoff_jobs, raising=False)
+    monkeypatch.setattr(campaign, 'API_BASE_URL', 'http://api.test:8000')
+    monkeypatch.setattr(campaign, 'API_PREFIX', '/curation')
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class _Resp:
+        def __init__(self, code: int) -> None:
+            self.status_code = code
+
+        def raise_for_status(self) -> None:
+            if self.status_code >= 400:
+                raise requests.HTTPError(f'{self.status_code} error')
+
+    status_code = 200
+
+    def _post(url: str, json: dict[str, Any], timeout: float) -> _Resp:
+        calls.append((url, json))
+        return _Resp(status_code)
+
+    monkeypatch.setattr(requests, 'post', _post)
+    job_id = _write_job(dataset_export_dir=str(export_dir), auto_quantize_bakeoff=True)
+    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    state = job_protocol.StatusState(job_id=job_id, state='finished')
+    state.checkpoint_path = str(tmp_path / 'best.pt')
+
+    campaign.write_quant_bakeoff_job(spec, state)
+
+    assert calls == [
+        (
+            'http://api.test:8000/curation/bakeoff/run',
+            {
+                'job_id': f'{job_id}_quant',
+                'datasets': [{'id': f'run:{job_id}'}],
+                'models': [{'source': 'run', 'run_id': job_id}],
+                'quantize': {
+                    'run_id': job_id,
+                    'formats': ['fp32_onnx', 'fp16_onnx', 'int8_onnx'],
+                    'n_calib': 1000,
+                    'throughput': True,
+                },
+            },
+        )
+    ]
+    assert list(bakeoff_jobs.iterdir()) == []
+    # The request body is accepted by the API's own request model.
+    from src.routers.curation._bakeoff_models import BakeoffRunRequest
+
+    BakeoffRunRequest.model_validate(calls[0][1])
+
+    # A rejected POST is logged, never raised into the trainer's finally block.
+    status_code = 409
+    campaign.write_quant_bakeoff_job(spec, state)
+    assert len(calls) == 2
+
+
 # =============================================================================
 # Incumbent comparison
 # =============================================================================

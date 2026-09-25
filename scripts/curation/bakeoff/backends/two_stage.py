@@ -44,6 +44,8 @@ class TwoStageDetector:
         self.pad_frac = pad_frac
         self.primary_conf = primary_conf
         self.nms_iou = nms_iou
+        # Boxes (and their class ids) come from the fine stage.
+        self.class_names = getattr(secondary, 'class_names', None)
 
     def detect(self, image_rgb: np.ndarray) -> list[Detection]:
         h, w = image_rgb.shape[:2]
@@ -56,7 +58,7 @@ class TwoStageDetector:
                 continue
             crop = image_rgb[cy1:cy2, cx1:cx2]
             dets.extend(
-                Detection(p.x1 + cx1, p.y1 + cy1, p.x2 + cx1, p.y2 + cy1, p.score)
+                Detection(p.x1 + cx1, p.y1 + cy1, p.x2 + cx1, p.y2 + cy1, p.score, p.class_id)
                 for p in self.secondary.detect(crop)
             )
         return self._nms(dets)
@@ -75,4 +77,5 @@ class TwoStageDetector:
             return []
         boxes = np.array([[d.x1, d.y1, d.x2, d.y2] for d in dets], dtype=float)
         scores = np.array([d.score for d in dets], dtype=float)
-        return [dets[i] for i in nms(boxes, scores, self.nms_iou)]
+        class_ids = np.array([d.class_id for d in dets], dtype=np.int64)
+        return [dets[i] for i in nms(boxes, scores, self.nms_iou, class_ids)]

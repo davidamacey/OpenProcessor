@@ -95,6 +95,13 @@ def _parse_container_gpus(raw: str) -> tuple[tuple[str, frozenset[int] | None], 
     return tuple(entries)
 
 
+def _default_bakeoff_jobs_dir() -> str:
+    """``<state_dir>/bakeoff_jobs``: the one default the router and arbiter share."""
+    from src.config.curation import get_curation_config
+
+    return str(get_curation_config().state_dir / 'bakeoff_jobs')
+
+
 def _parse_gpu_labels(raw: str) -> dict[int, str]:
     """Parse ``OP_GPU_LABELS`` (``id=label,id=label,...``) into ``{id: label}``."""
     labels: dict[int, str] = {}
@@ -144,7 +151,7 @@ class GpuArbiterConfig:
     containers: tuple[str, ...] = ()
     container_gpus: tuple[tuple[str, frozenset[int] | None], ...] = ()
     trainer_container: str | None = None
-    bakeoff_jobs_dir: str | None = None
+    bakeoff_jobs_dir: str = field(default_factory=_default_bakeoff_jobs_dir)
     gpu_labels: dict[int, str] = field(default_factory=dict)
     default_train_gpus: str | None = None
 
@@ -166,8 +173,11 @@ class GpuArbiterConfig:
         - ``OP_GPU_ARBITER_TRAINER_CONTAINER`` — trainer container name to
           probe for reachability. Unset/empty = skip the probe.
         - ``OP_BAKEOFF_JOBS_DIR`` — the bake-off job-queue directory the
-          reconcile loop watches; the same var the bake-off router writes
-          job files into, so the two cannot drift apart.
+          reconcile loop watches and the bake-off router writes job files
+          into (the router reads this field, so the two cannot drift
+          apart). Unset = ``<CurationConfig.state_dir>/bakeoff_jobs``,
+          never ``None``: a queued bake-off must keep GPU-resident
+          containers stopped on the default config too.
         - ``OP_GPU_LABELS`` — comma-separated ``id=label`` pairs (e.g.
           ``0=RTX A6000,2=RTX A6000``) used to build human-readable
           ``/train/gpus`` option labels. Unset/empty = no labels (options
@@ -203,7 +213,7 @@ class GpuArbiterConfig:
         container_gpus = _parse_container_gpus(os.environ.get('OP_GPU_ARBITER_CONTAINERS', ''))
         containers = tuple(name for name, _ in container_gpus)
         trainer = os.environ.get('OP_GPU_ARBITER_TRAINER_CONTAINER', '').strip() or None
-        jobs_dir = os.environ.get('OP_BAKEOFF_JOBS_DIR', '').strip() or None
+        jobs_dir = os.environ.get('OP_BAKEOFF_JOBS_DIR', '').strip() or _default_bakeoff_jobs_dir()
         gpu_labels = _parse_gpu_labels(os.environ.get('OP_GPU_LABELS', ''))
         default_train_gpus = os.environ.get('OP_TRAIN_DEFAULT_GPUS', '').strip() or None
         return cls(

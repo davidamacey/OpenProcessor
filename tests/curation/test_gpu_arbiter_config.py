@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from src.config import GpuArbiterConfig, get_gpu_arbiter_config
+from src.config import GpuArbiterConfig, get_curation_config, get_gpu_arbiter_config
 from src.services.training import gpu_arbiter
 
 
@@ -27,7 +27,9 @@ def test_defaults_are_empty_and_permissive() -> None:
     assert cfg.containers == ()
     assert cfg.container_gpus == ()
     assert cfg.trainer_container is None
-    assert cfg.bakeoff_jobs_dir is None
+    # Never None: the router and the reconcile loop must watch the same dir
+    # even when OP_BAKEOFF_JOBS_DIR is unset (plan section 5, bug 4).
+    assert cfg.bakeoff_jobs_dir == str(get_curation_config().state_dir / 'bakeoff_jobs')
     assert cfg.gpu_labels == {}
     assert cfg.default_train_gpus is None
 
@@ -187,4 +189,71 @@ def test_env_bakeoff_jobs_dir_reaches_reconcile_check(
     clean_arbiter_env.setenv('OP_BAKEOFF_JOBS_DIR', str(tmp_path))
     assert gpu_arbiter.bakeoff_active() is False
     (tmp_path / 'x.job.json').write_text('{}')
+    assert gpu_arbiter.bakeoff_active() is True
+
+
+def test_bakeoff_jobs_dir_default_is_shared_with_the_router(
+    clean_arbiter_env: pytest.MonkeyPatch,
+) -> None:
+    """With no env set, the router's JOBS_DIR is the arbiter's bakeoff_jobs_dir."""
+    from pathlib import Path
+
+    from src.routers.curation import bakeoff
+
+    cfg = GpuArbiterConfig.from_env()
+    assert cfg.bakeoff_jobs_dir == str(get_curation_config().state_dir / 'bakeoff_jobs')
+    assert Path(get_gpu_arbiter_config().bakeoff_jobs_dir) == bakeoff.JOBS_DIR
+
+
+def test_bakeoff_active_after_enqueue_with_no_env(
+    clean_arbiter_env: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An enqueued bake-off keeps GPU-resident containers down on the default config."""
+    import json
+    from pathlib import Path
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.config.curation as curation_config_module
+    from src.config import CurationConfig
+    from src.routers.curation import bakeoff, router as curation_router
+    from src.services.curation import eval_datasets
+
+    state = tmp_path / 'state'
+    cfg = CurationConfig(state_dir=state)
+    clean_arbiter_env.setattr(
+        curation_config_module, '_default_curation_config', cfg, raising=False
+    )
+    jobs_dir = Path(get_gpu_arbiter_config().bakeoff_jobs_dir)
+    assert jobs_dir == state / 'bakeoff_jobs'
+    clean_arbiter_env.setattr(bakeoff, 'JOBS_DIR', jobs_dir)
+    clean_arbiter_env.setattr(bakeoff, 'OUT_DIR', tmp_path / 'out')
+    exports = tmp_path / 'exports'
+    d = exports / 'e1'
+    (d / 'labels' / 'test').mkdir(parents=True)
+    (d / 'labels' / 'test' / 'a.txt').write_text('0 0.5 0.5 0.1 0.1\n')
+    (d / 'data.yaml').write_text('names:\n  0: a\n')
+    (d / 'manifest.json').write_text(json.dumps({}))
+    clean_arbiter_env.setattr(eval_datasets, 'EXPORT_ROOT', exports)
+    eval_datasets.clear_cache()
+
+    class _Action:
+        action = 'noop'
+
+    async def _stop(**_kw: object) -> _Action:
+        return _Action()
+
+    clean_arbiter_env.setattr(gpu_arbiter, 'stop_gpu_services', _stop)
+    assert gpu_arbiter.bakeoff_active() is False
+    app = FastAPI()
+    app.include_router(curation_router)
+    r = TestClient(app).post(
+        '/curation/bakeoff/run',
+        json={
+            'datasets': [{'id': 'export:e1'}],
+            'models': [{'source': 'custom', 'name': 'c', 'backend': 'ultralytics'}],
+        },
+    )
+    assert r.status_code == 200, r.text
     assert gpu_arbiter.bakeoff_active() is True

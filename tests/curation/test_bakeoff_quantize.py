@@ -15,7 +15,8 @@ import cv2
 import numpy as np
 import pytest
 
-from scripts.curation.bakeoff import bakeoff_runner, quantize
+from scripts.curation.bakeoff import bakeoff_runner, quant_stage, quantize
+from scripts.curation.bakeoff.freeze import test_sha as label_sha
 
 
 def _img(path: Path, w: int = 64, h: int = 48) -> Path:
@@ -154,45 +155,63 @@ def test_run_writes_artifacts_and_manifest(tmp_path: Path, monkeypatch) -> None:
 
 
 def _fake_scoring(monkeypatch) -> None:
-    def fake_task(ds_path, ds_out, model, gpu):
+    def fake_task(ds_path, ds_out, ds_id, model, gpu):
         ds_out.mkdir(parents=True, exist_ok=True)
-        return model['name'], True, None
+        return model['model'], True, None
 
     monkeypatch.setattr(bakeoff_runner, '_run_task', fake_task)
 
 
+def _v2_spec(tmp_path: Path, *, models: list, quant: dict) -> dict:
+    """A job spec v2 over one (empty) dataset whose test split hash is current."""
+    ds = tmp_path / 'ds'
+    ds.mkdir(exist_ok=True)
+    return {
+        'schema_version': 2,
+        'job_id': 'q',
+        'profile': 'generic',
+        'out_dir': str(tmp_path / 'out'),
+        'datasets': [
+            {
+                'id': 'export:ds',
+                'dir_name': 'export__ds',
+                'path': str(ds),
+                'test_label_sha': label_sha(ds)[0],
+                'frozen_test_sha': '',
+                'eval_class_ids': [],
+            }
+        ],
+        'models': models,
+        'quantize': quant,
+    }
+
+
+_MODEL = {'model': 'custom:m1', 'backend': 'ultralytics', 'class_map_by_dataset': {}}
+
+
 def test_runner_reports_coreml_as_failed_stage(tmp_path: Path, monkeypatch) -> None:
     _fake_scoring(monkeypatch)
-    ds = tmp_path / 'ds'
-    ds.mkdir()
-    monkeypatch.setattr(bakeoff_runner, '_quantize_and_variant_models', lambda *_a: [])
+    monkeypatch.setattr(quant_stage, '_quantize_and_variant_models', lambda *_a: [])
     status = bakeoff_runner.run_job(
-        {
-            'job_id': 'c1',
-            'verify_frozen': False,
-            'out_dir': str(tmp_path / 'out'),
-            'datasets': [str(ds)],
-            'models': [{'backend': 'ultralytics', 'name': 'm1'}],
-            'quantize': {'checkpoint': '/x.pt', 'coreml': True},
-        }
+        _v2_spec(tmp_path, models=[_MODEL], quant={'checkpoint': '/x.pt', 'coreml': True})
     )
     assert status['state'] == 'done'
-    assert {'stage': 'coreml', 'error': bakeoff_runner.COREML_UNAVAILABLE} in status['failed']
+    assert {
+        'stage': 'coreml',
+        'dataset': None,
+        'model': None,
+        'error': bakeoff_runner.COREML_UNAVAILABLE,
+    } in status['failed']
 
 
 def test_runner_quantize_failure_is_recorded(tmp_path: Path, monkeypatch) -> None:
     _fake_scoring(monkeypatch)
-    ds = tmp_path / 'ds'
-    ds.mkdir()
     status = bakeoff_runner.run_job(
-        {
-            'job_id': 'q1',
-            'verify_frozen': False,
-            'out_dir': str(tmp_path / 'out'),
-            'datasets': [str(ds)],
-            'models': [{'backend': 'ultralytics', 'name': 'm1'}],
-            'quantize': {'model_id': 'cand', 'checkpoint': str(tmp_path / 'missing.pt')},
-        }
+        _v2_spec(
+            tmp_path,
+            models=[_MODEL],
+            quant={'run_id': 'cand', 'checkpoint': str(tmp_path / 'missing.pt')},
+        )
     )
     assert status['state'] == 'done'  # the plain model was still scored
     [failure] = [f for f in status['failed'] if f.get('stage') == 'quantize']
@@ -200,17 +219,7 @@ def test_runner_quantize_failure_is_recorded(tmp_path: Path, monkeypatch) -> Non
 
 
 def test_runner_quantize_only_job_errors_when_export_fails(tmp_path: Path) -> None:
-    ds = tmp_path / 'ds'
-    ds.mkdir()
-    status = bakeoff_runner.run_job(
-        {
-            'job_id': 'q2',
-            'verify_frozen': False,
-            'out_dir': str(tmp_path / 'out'),
-            'datasets': [str(ds)],
-            'quantize': {'model_id': 'cand'},
-        }
-    )
+    status = bakeoff_runner.run_job(_v2_spec(tmp_path, models=[], quant={'run_id': 'cand'}))
     assert status['state'] == 'error'
     assert 'quantize: QuantizeError: a checkpoint is required' in status['error']
     on_disk = json.loads((tmp_path / 'out' / 'status.json').read_text())
@@ -226,12 +235,24 @@ def test_runner_quant_variants_default_under_job_out_dir(tmp_path: Path, monkeyp
         (out_root / model_id / 'fp16.onnx').write_bytes(b'x')
 
     monkeypatch.setattr(quantize, 'run', fake_run)
-    models = bakeoff_runner._quantize_and_variant_models(
-        {'model_id': 'cand', 'checkpoint': '/c.pt', 'formats': ['fp16_onnx'], 'imgsz': 320},
-        [{'name': 'd', 'path': '/data/d'}],
+    models = quant_stage._quantize_and_variant_models(
+        {
+            'run_id': 'cand',
+            'model_key_prefix': 'run:cand',
+            'checkpoint': '/c.pt',
+            'formats': ['fp16_onnx'],
+            'imgsz': 320,
+            'class_map_by_dataset': {'export:d': {'0': 3}},
+        },
+        [{'id': 'export:d', 'path': '/data/d'}],
         tmp_path / 'job',
     )
+    assert seen['model_id'] == 'cand'
     assert seen['out_root'] == tmp_path / 'job' / 'quant'
     assert seen['calib_override'] == Path('/data/d')
     assert seen['imgsz'] == 320
-    assert [m['name'] for m in models] == ['ours_fp16_onnx']
+    [variant] = models
+    assert variant['model'] == 'run:cand:fp16_onnx'
+    assert variant['backend'] == 'onnxruntime'
+    assert variant['class_map_by_dataset'] == {'export:d': {'0': 3}}
+    assert variant['backend_options']['coords_normalized'] is False

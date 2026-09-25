@@ -2,7 +2,7 @@
 
 Registered into ``scripts.curation.bakeoff.datasets`` on import (the example
 profile lists this module in ``converter_modules``). Every format here is
-single-class, so boxes go to the writer's ``target_class_id``.
+single-class, so boxes go to class 0 (``YoloWriter.write_abs``'s default).
 
 * ``ccpd``     --- CCPD encodes the plate bbox in the filename.
 * ``ufpr``     --- UFPR-ALPR: per-image ``.txt`` with ``position_plate: x y w h``.

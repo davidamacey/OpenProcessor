@@ -792,10 +792,11 @@ def run_job(spec: JobSpec) -> None:
         # and the manifest is the only copy of it that survives the rmtree
         # below other than the one in the checkpoint's weights/ dir.
         write_manifest(spec, state, class_remap=read_class_remap(spec))
+        # After the terminal status + manifest: the API resolves the run from them.
         if spec.auto_quantize_bakeoff and state.state == 'finished':
             try:
                 write_quant_bakeoff_job(spec, state)
-            except OSError as exc:
+            except Exception as exc:  # the hand-off must never fail a finished run
                 logger.warning('auto-quantize hook failed', job_id=spec.job_id, error=str(exc))
         if spec.tmp_root.exists():
             shutil.rmtree(spec.tmp_root, ignore_errors=True)

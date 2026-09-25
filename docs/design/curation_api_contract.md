@@ -89,7 +89,7 @@ by router module; every path is relative to the configured
 | `clusters.py` / `viz.py` | `GET /clusters`, `GET /clusters/representatives`, `POST /clusters/auto_promote`, `POST /clusters/refine/{cluster_id}`, `GET,POST /viz/projection*`, `POST /cluster/umap/rebuild` |
 | `review.py` / `scores.py` / `select.py` / `methods.py` / `settings.py` | `GET /review/{tab}`, `GET /review/{tab}/locate`, `GET /review/new_class_proposals/summary`, `POST /review/new_class_proposals/resolve`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods`, `GET,PUT /settings` |
 | `vlm.py` | `POST /vlm/label_batch`, `POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`, `POST /vlm/region_visible_batch` |
-| `bakeoff.py` | `GET,POST /bakeoff/*` |
+| `bakeoff.py` | `GET /bakeoff/{eval_datasets,trained_models,profiles,baseline_models,runs}`, `POST /bakeoff/run`, `GET /bakeoff/{status,results,matrix}/{job_id}` (typed, schema v2; see "Model comparison" below) |
 | `curation_images.py`, `curation_train.py`, `curation_umap.py` (outside the `curation` package, registered directly in `src/main.py`) | `GET /images/*`, `POST,GET /train/*`, `POST /cluster/umap/rebuild` |
 
 The exact, always-current list is produced by:
@@ -1036,12 +1036,12 @@ fields existed serves both as `null`; the retired `best_metric` /
 `last_metric` keys are dropped, never mapped onto the new fields, and
 `eval` is never copied into them (it may be test-split numbers).
 
-`/bakeoff/trained_models`'s `map50` column and the promote gate
+`/bakeoff/trained_models`'s `trainer_map50` column and the promote gate
 (`src/routers/curation_train.py::_evaluate_promote_gate`) read from
 `eval.map50` (the fresh test-split re-validation, `state.eval` /
 `populate_eval_block`), not from either of these two fields — they are
 diagnostic epoch-level metrics, not the run's scored comparison metric.
-`/bakeoff/trained_models` also serves `map50_split` (`eval.split`:
+`/bakeoff/trained_models` also serves `trainer_map50_split` (`eval.split`:
 `"test"`, or `"val"` when the test pass fell back).
 
 `GET /train/manifest/{job_id}`'s `results` block mirrors the same two
@@ -1165,6 +1165,86 @@ queried, so never indexed) — OpenSearch's partial-update `doc` merge
 still recursively merges into it regardless of `enabled`, which is what
 lets a partial `PUT` avoid clobbering other axes without a
 read-modify-write round trip in application code.
+
+### Model comparison (bake-off) — `/bakeoff/*` (BREAKING, schema v2)
+
+Models in `src/routers/curation/_bakeoff_models.py`; full shapes and
+semantics in `docs/design/generic_model_comparison_plan.md` §7. Every
+route has a `response_model`. Evaluator-written files (`status.json`,
+`comparison.json`, `matrix.json`) are validated on read; a file that is not
+schema v2 answers `409 "bake-off result <file> has an unsupported schema
+(schema_version != 2)"`. No compatibility fields for the v1 wire.
+
+- `GET /bakeoff/eval_datasets?source=export|external` -> `EvalDatasetList`
+  `{datasets: EvalDataset[], count}`. `EvalDataset`: `id`
+  (`export:<path under export_root>` | `external:<group>/<name>`), `source`,
+  `group`, `name`, `path`, `is_current`, `dataset_kind`
+  (`multi_class|single_class|external`), `nc`, `classes`
+  (`EvalDatasetClass`: `eval_class_id`, `name`, `registry_class_id`,
+  `n_objects`, `n_images`; only classes with objects in test), `n_images`,
+  `n_objects`, `n_background_images`, `frozen_test_sha` (identity),
+  `test_label_sha` (content), `sha_source` (`manifest|computed`),
+  `dataset_sha`, `exported_at`, `unlabeled_items_on_exported_images`,
+  `frozen_ok` (external only).
+- `GET /bakeoff/trained_models?dataset_id=&limit=` -> `TrainedModelList`
+  `{models: TrainedModel[], count}`. `TrainedModel`: `run_id`,
+  `display_name`, `model_family`, `model_size`, `imgsz`, `checkpoint_path`,
+  `finished_at`, `campaign_id`, `train_export_id`, `dataset_sha`,
+  `frozen_test_sha`, `class_names`, `single_cls`, `trainer_map50`,
+  `trainer_map50_split`, `for_dataset` (only with `?dataset_id`:
+  `dataset_id`, `same_export`, `same_frozen_test`, `n_classes_mapped`,
+  `train_test_overlap {n_images, fraction}`).
+- `GET /bakeoff/profiles` -> `BakeoffProfileList` `{profiles, count,
+  default_profile, default_error}`; rows (`BakeoffProfileRow`): `name`,
+  `description`, `kind` (`registered|configured`), `default`,
+  `class_filter`, `imgsz`, `conf_floor`, `nms_iou`, `op_conf`, `op_iou`,
+  `rank_metric`, `default_backend`, `triton_model`, `context_class_ids`,
+  `baselines_path`. Example profiles are not listed.
+- `GET /bakeoff/baseline_models?profile=` -> `BaselineModelList`
+  `{baselines: BaselineModel[], count}` (default registry empty).
+  `BaselineModel`: `name`, `backend`, `weights`, `imgsz`, `mode`,
+  `class_map` (`{"<model class id>": "<eval class name>"}` | null),
+  `backend_options`, `training_data`, `triton_model`.
+- `POST /bakeoff/run` body `BakeoffRunRequest` (`extra='forbid'`): `job_id?`,
+  `profile?`, `datasets: [{id}]` (`id` may be `run:<job_id>`), `models[]`
+  discriminated on `source`: `RunModelRef {source:"run", run_id,
+  display_name?, backend?: ultralytics|onnxruntime, mode?}`,
+  `BaselineModelRef {source:"baseline", name, display_name?}`,
+  `CustomModelRef {source:"custom", name, backend, weights?, triton_model?,
+  imgsz?, mode?, class_map?, backend_options?, display_name?}`;
+  `quantize?: {run_id, formats?, n_calib?, calib_split?, throughput?}`.
+  Answers `BakeoffRunAccepted` `{status:"enqueued", job_id, profile,
+  datasets: [{id, path, frozen_test_sha, test_label_sha, n_eval_classes}],
+  models: [{model, display_name, source, class_mapping: {<dataset id>:
+  ClassMapping}, train_test_overlap: {<dataset id>: {n_images, fraction} |
+  null}}], warnings}`. `ClassMapping`: `method`, `model_to_eval`,
+  `unmapped_model_classes`, `not_covered_eval_classes`, `warnings`. Errors:
+  400 (no models/quantize, no datasets, unknown/invalid dataset, run or
+  baseline id, duplicate model keys, unknown profile), 422
+  (`single_cls` run over several classes on a multi-class dataset; unknown
+  fields), 409 (job id exists; GPU-resident containers could not be
+  stopped — the job file is removed and the status set to `error`).
+- `GET /bakeoff/status/{job_id}` -> `BakeoffStatus` (`schema_version`,
+  `job_id`, `state` `queued|running|done|error`, `profile`, `datasets`,
+  `models`, `started_at`, `finished_at`, `progress {done,total}`,
+  `completed [{dataset, model}]`, `failed [{stage, dataset, model, error}]`,
+  `error`).
+- `GET /bakeoff/runs` -> `BakeoffRunList` `{runs: [{job_id, state, profile,
+  datasets, models, started_at, finished_at}]}`; non-v2 dirs skipped.
+- `GET /bakeoff/results/{job_id}?dataset_id=` -> `BakeoffComparison`
+  (default: the job's first dataset): `schema_version`, `job_id`, `profile`,
+  `thresholds`, `dataset`, `eval_classes`, `common_classes`, `rank_by`,
+  `rank_scope` (`common|overall`), `models: ComparisonRow[]` (`rank`,
+  `model`, `display_name`, `source`, `run_id`, `runtime`, `imgsz`,
+  `training_data`, `overall: MetricBlock`, `common: CommonMetricBlock`,
+  `per_class: PerClassRow[]`, `coverage`, `class_mapping {method,
+  warnings}`, `train_test_overlap`, `latency_ms {mean,p50,p90,p99}`, `fps`,
+  `size_mb`, `per_stratum`), `failed`, `warnings`, `n_models`.
+- `GET /bakeoff/matrix/{job_id}` -> `BakeoffMatrix`: `datasets[]` (`id`,
+  shas, `rank_scope`, `n_common_classes`), `models[]`, `metrics`,
+  `cells[model][dataset]` (`map_50`, `map_50_95`, `precision`, `recall`,
+  `f1`, `latency_ms`, `size_mb`, `coverage`, `rank`), `best[dataset][metric]`
+  = list of every tied winner.
 
 ### Internal / worker-facing
 
