@@ -63,18 +63,20 @@ afterEach(() => {
 });
 
 describe('SlotCard — reader disagreement flag', () => {
-  it('renders the ⚠ disagree chip when region_text_disagreement is true', () => {
+  it('renders the readers-disagree chip when region_text_disagreement is true', () => {
     const el = renderCard(fakeRegionItem({ region_text_disagreement: true } as never));
-    expect(el.textContent).toContain('⚠ disagree');
+    expect(el.textContent).toContain('readers disagree');
+    // C6 (visual audit 2026-09-24): plain text, no emoji warning glyph.
+    expect(el.textContent).not.toContain('⚠');
   });
 
   it('does not render the chip when region_text_disagreement is false', () => {
     const el = renderCard(fakeRegionItem({ region_text_disagreement: false } as never));
-    expect(el.textContent).not.toContain('⚠ disagree');
+    expect(el.textContent).not.toContain('readers disagree');
   });
 
   it('does not render the chip when region_text_disagreement is absent', () => {
     const el = renderCard(fakeRegionItem());
-    expect(el.textContent).not.toContain('⚠ disagree');
+    expect(el.textContent).not.toContain('readers disagree');
   });
 });

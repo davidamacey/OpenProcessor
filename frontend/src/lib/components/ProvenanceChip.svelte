@@ -78,18 +78,23 @@
      the chip's own border instead — the full string is still available
      via `title` on hover. Scoped to these two inner spans rather than
      the shared `.chip` class itself, which many short, never-overflowing
-     chips elsewhere (StrategyBar, filter chips) also use. -->
+     chips elsewhere (StrategyBar, filter chips) also use.
+     C3 (visual audit 2026-09-24): the chip itself is also capped at its
+     container's width (max-w-full + min-w-0 inner spans), so on a narrow
+     region card the two inner caps can't still add up past the card edge. -->
 <span
-  class="chip {palette.border} {palette.bg} {palette.text} {sizeCls} font-mono {muted
+  class="chip max-w-full min-w-0 overflow-hidden {palette.border} {palette.bg} {palette.text} {sizeCls} font-mono {muted
     ? 'opacity-60'
     : ''}"
   title={version ? `${parsed.detector ?? ''} v${version}` : (parsed.detector ?? '')}
 >
-  <span class="max-w-[140px] truncate"
+  <span class="max-w-[140px] min-w-0 truncate"
     >{regionVocabularyStore.labelFor(parsed.detector)}</span
   >
   {#if parsed.tag}
-    <span class="max-w-[140px] truncate text-[9px] uppercase tracking-wide opacity-80">
+    <span
+      class="max-w-[140px] min-w-0 shrink truncate text-[9px] uppercase tracking-wide opacity-80"
+    >
       {parsed.tag}
     </span>
   {/if}

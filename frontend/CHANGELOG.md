@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Visual audit 2026-09-24 page fixes (`/clusters`, `/clusters/[id]`,
+  `/dashboard`, `/export`, `/train`, `/models`, `/bakeoff`, `CropCard`)**
+  — see `docs/design/visual-audit-2026-09-24.md` for each finding's commit.
+  - `/clusters` card subtitle shows the served `label_purity` as
+    "N% of labeled"; the chip names geometry purity ("3% geometry"). The
+    class filter chip shows the class name. Region-gallery chips stay
+    inside their cards; region counts say "listed" and explain their
+    scope. Ignored mode hides the grid controls and counts the ignored
+    bucket in the footer.
+  - `/clusters/[id]` header labels the class registry's class-wide counts
+    and the cluster's own size separately; the footer says "listed".
+  - `CropCard`: the class name gets its own width; the source chip is a
+    short role code with the served label in its tooltip; a crop with no
+    class reads "Unlabeled" (no "Labeled by the VLM" chip); readable VLM
+    empty reasons. Crop grids use min-width auto-fill columns.
+  - Crop detail modal: close button and meta column stay inside the
+    panel; history rows name the resulting class and a labelled source;
+    timestamps are formatted.
+  - `/dashboard`: class balance shows trainable crops (served validated
+    minus served test holdout) with the test count, no bars for zero,
+    zero classes collapsed and overflow counted; the recluster card
+    stacks at narrow widths; last-run summary is a stage table; no
+    hardcoded model/vendor/HDD copy.
+  - `/export`: Trainable column and a gap measured against it; "N classes
+    with objects (M in registry)"; empty classes collapsed; "Source
+    distribution".
+  - `/train`: the MLflow link comes from the served runs'
+    `mlflow_run_url` origin (no hardcoded `:5000`; hidden when nothing is
+    served); the zero-cohort count says "so far" while loading; the
+    results panel names its run.
+  - `/models`: "Updated ..." no longer collides with the description.
+  - No gradients or emoji glyphs on these pages.
+
 ### Added
 
 - **`/train` visual/UX pass + live-tier full-page screenshots.**

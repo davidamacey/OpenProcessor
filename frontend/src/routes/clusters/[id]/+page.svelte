@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { trapFocus } from '$lib/actions/trapFocus';
+  import { geometryPurityText } from '$lib/clusters/clusterCardText';
   import { dndzone, SOURCES, TRIGGERS } from 'svelte-dnd-action';
   import {
     flagNeedsNewClass,
@@ -872,34 +873,37 @@
             ? `${(cluster.labelled_share * 100).toFixed(0)}%`
             : '—'}"
         >
-          · purity ({cluster.purity_basis ?? 'nearest-centroid'})
-          {(cluster.purity * 100).toFixed(0)}%
+          · {geometryPurityText(cluster)} purity
           {#if cluster.purity_n != null}· n={cluster.purity_n}{/if}
         </span>
       {/if}
     {/if}
-    {#if clsForCluster}
-      <!-- Triage progress: how much of this cluster bucket has been
-           touched and confirmed. Cluster total = FAISS bucket size
-           (what's visible on this page); labeled = crops with class_id
-           set; validated = label_validated=true. The sidebar chip
-           mirrors the "in cluster" number so the operator's eyes match. -->
+    {#if cluster}
+      <!-- K1 (visual audit 2026-09-24): this chip used to read "35
+           validated · 135 labeled · 134 in cluster" — the first two are
+           the class registry's CLASS-WIDE counts (every crop of the class,
+           test holdout included), the last this cluster's own size, so
+           "labeled" could exceed "in cluster". Each number now names its
+           scope; the class-wide pair stays on classesStore because it is
+           what re-fetches after a label write. -->
       <span
         class="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-[11px] text-zinc-300"
-        title="validated · labeled · cluster total"
+        title="validated · labeled · cluster total — class-wide counts are every crop of this class (test holdout included), from the class registry; 'in this cluster' is this cluster's own member count (test holdout included). The grid lists only reviewable members."
+        data-testid="cluster-header-counts"
       >
-        <span class="text-emerald-300"
-          >{(clsForCluster.validated_count ?? 0).toLocaleString()}</span
-        >
-        <span class="text-zinc-500">validated</span>
-        <span class="mx-1 text-zinc-600">·</span>
-        <span class="text-blue-300">{(clsForCluster.count ?? 0).toLocaleString()}</span>
-        <span class="text-zinc-500">labeled</span>
-        <span class="mx-1 text-zinc-600">·</span>
-        <span class="text-zinc-200"
-          >{(clsForCluster.cluster_size ?? 0).toLocaleString()}</span
-        >
-        <span class="text-zinc-500">in cluster</span>
+        {#if clsForCluster}
+          <span class="text-zinc-500">class-wide:</span>
+          <span class="text-emerald-300"
+            >{(clsForCluster.validated_count ?? 0).toLocaleString()}</span
+          >
+          <span class="text-zinc-500">validated</span>
+          <span class="mx-1 text-zinc-600">·</span>
+          <span class="text-blue-300">{(clsForCluster.count ?? 0).toLocaleString()}</span>
+          <span class="text-zinc-500">labeled</span>
+          <span class="mx-1 text-zinc-600">|</span>
+        {/if}
+        <span class="text-zinc-200">{cluster.size.toLocaleString()}</span>
+        <span class="text-zinc-500">in this cluster</span>
       </span>
     {/if}
 
@@ -1236,7 +1240,7 @@
             </div>
           {/if}
           <div
-            class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 {groupBySubcluster
+            class="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3 {groupBySubcluster
               ? 'mt-2'
               : ''}"
             use:dndzone={{
@@ -1312,7 +1316,10 @@
     class="flex items-center justify-between gap-2 border-t border-zinc-800 px-4 py-2 text-sm"
   >
     <span class="font-mono text-xs text-zinc-500">
-      {cropPager.items.length} / {cropPager.total}
+      <span
+        title="Loaded / reviewable members matching the current filters. Test-holdout and ignored crops are never listed, so this can be lower than the header's cluster size."
+        >{cropPager.items.length} / {cropPager.total} listed</span
+      >
       {#if sel.size > 0}<span class="ml-2 text-blue-300">· {sel.size} selected</span>{/if}
     </span>
     <span class="font-mono text-xs text-zinc-400">

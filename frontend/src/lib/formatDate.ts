@@ -23,3 +23,18 @@ export function formatDateOnly(value: string | null | undefined): string {
   const [, y, mo, d] = m;
   return `${Number(mo)}/${Number(d)}/${y}`;
 }
+
+/**
+ * K7 (visual audit 2026-09-24): served timestamps were rendered as raw ISO
+ * with microseconds ("2026-09-24T21:13:41.995236+00:00"), which wrapped
+ * mid-value. Renders a full instant as "YYYY-MM-DD HH:MM:SS" in UTC — stable
+ * across viewers' timezones and short enough not to wrap. Callers keep
+ * the raw value in a `title`. Unparseable input renders verbatim.
+ */
+export function formatTimestamp(value: string | null | undefined): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const iso = d.toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 19)} UTC`;
+}

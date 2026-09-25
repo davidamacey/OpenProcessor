@@ -46,10 +46,8 @@ describe('m6: the class-balance legend renders the served adequacy thresholds', 
     expect(src).not.toMatch(/≥500.*100–499.*<100/);
   });
 
-  it('reads legacyStats.thresholds.block_below/warn_below', () => {
-    const legend = src.match(/Class balance \(validated\)<\/h2>[\s\S]*?<\/span>/)?.[0];
-    expect(legend).toBeDefined();
-    expect(legend).toMatch(/legacyStats\.thresholds\s*\n?\s*\.?warn_below/);
-    expect(legend).toMatch(/legacyStats\s*\n?\s*\.thresholds\s*\n?\s*\.block_below/);
+  it('passes the served legacyStats.thresholds to the balance chart (D2 moved the legend into ClassBalanceChart)', () => {
+    // The legend itself is covered by ClassBalanceChart.test.ts's mount test.
+    expect(src).toMatch(/thresholds=\{legacyStats\.thresholds \?\? null\}/);
   });
 });

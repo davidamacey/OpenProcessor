@@ -1,5 +1,6 @@
 <script lang="ts">
   import { sourceBadge } from '$lib/sourceBadge';
+  import { sourceShortCode, vlmEmptyReasonText } from '$lib/cropCardText';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { getThumbUrl, getSourceImageWithBbox } from '$lib/api';
   import type { BBoxNorm, Crop } from '$lib/types';
@@ -154,6 +155,9 @@
     ),
   );
 
+  const sourceRole = $derived(classSourcesStore.roleFor(crop.label_source));
+  const hasClass = $derived(crop.class_id != null || !!crop.class_name);
+
   const conf = $derived(
     crop.label_confidence != null ? `${(crop.label_confidence * 100).toFixed(0)}%` : null,
   );
@@ -274,7 +278,7 @@
     {#if rankBlurLabel}
       <span
         class="absolute bottom-1 left-1 rounded-sm bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-zinc-200"
-        title="rank in photo (★1 = largest) · blur_lap_ratio (higher = clearer)"
+        title="★1 = largest subject in its photo (#2 = second largest) · b = clarity score (higher is sharper)"
       >
         {rankBlurLabel}
       </span>
@@ -293,19 +297,41 @@
     </button>
   </div>
 
-  <div class="flex items-center gap-1 px-2 py-1.5">
-    <span
-      class="truncate rounded-sm border px-1 py-0.5 text-[10px] font-medium {badge.cls}"
-      title={badge.unvalidated
-        ? `${crop.class_name ?? 'unlabeled'} — not yet validated`
-        : (crop.class_name ?? 'unlabeled')}
-    >
-      {badge.text}
-    </span>
-    <span class="grow truncate text-xs text-zinc-300" title={crop.class_name ?? ''}>
-      {crop.class_name ?? '—'}
-    </span>
-    {#if crop.class_confidence != null}
+  <!-- K2/K3 (visual audit 2026-09-24): the class name gets the row's
+       width — the source chip is a short role code with the served label
+       in its tooltip, instead of "Labeled by the VLM" squeezing the class
+       to "spor…". A crop with no class_id is shown as Unlabeled with no
+       "labeled by" chip at all: the backend can leave label_source set
+       (e.g. an unmatched VLM answer) on a crop that has no class. -->
+  <div class="flex min-w-0 items-center gap-1 px-2 py-1.5">
+    {#if hasClass}
+      <span
+        class="shrink-0 rounded-sm border px-1 py-0.5 font-mono text-[10px] font-medium {badge.cls}"
+        title="Label source: {badge.text.replace(/ ·$/, '')}{badge.unvalidated
+          ? ' — not yet validated'
+          : ''}"
+        data-testid="source-chip"
+      >
+        {sourceShortCode(sourceRole, badge.text.replace(/ ·$/, ''))}{badge.unvalidated
+          ? '·'
+          : ''}
+      </span>
+      <span
+        class="min-w-0 grow truncate text-xs text-zinc-200"
+        title={crop.class_name ?? ''}
+        data-testid="class-name"
+      >
+        {crop.class_name ?? `class #${crop.class_id}`}
+      </span>
+    {:else}
+      <span
+        class="min-w-0 grow truncate text-xs text-amber-300/90"
+        data-testid="class-name"
+      >
+        Unlabeled
+      </span>
+    {/if}
+    {#if hasClass && crop.class_confidence != null}
       <span
         class="shrink-0 font-mono text-[10px] text-zinc-500"
         title="{crop.class_confidence_source === 'vlm'
@@ -323,7 +349,7 @@
     <div
       class="border-t border-zinc-800 bg-orange-500/5 px-2 py-1 text-[10px] text-orange-300"
     >
-      VLM empty: {crop.vlm_class_empty_reason}
+      {vlmEmptyReasonText(crop.vlm_class_empty_reason)}
     </div>
   {:else if crop.vlm_raw_class && crop.vlm_raw_class !== crop.class_name}
     <div

@@ -110,6 +110,37 @@ describe('DatasetStats', () => {
     expect(rows).toContain('Made by last run 1');
   });
 
+  it('D4 (visual audit 2026-09-24): no hardcoded model/vendor names or HDD copy, verifier count named as such', () => {
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(DatasetStats, { target, props: {} });
+    flushSync();
+
+    capturedOpts?.onSnapshot?.(
+      {},
+      goodStats({
+        regions: {
+          total_detected: 30,
+          boxed: 30,
+          confirmed: 30,
+          by_detector: 20,
+          by_segmenter: 10,
+          by_human: 0,
+        },
+        in_progress: { region_drain_total_unfinished: 3 },
+      } as Partial<DatasetStatsType>) as unknown as Record<string, unknown>,
+    );
+    flushSync();
+
+    const text = target.textContent ?? '';
+    for (const stale of ['Gemma', 'SAM', 'HDD']) {
+      expect(text).not.toContain(stale);
+    }
+    expect(text).toContain('Distinct sources');
+    expect(text).toContain('Pending detection');
+    expect(text).toContain('verifier-confirmed');
+  });
+
   it('shows "Stats unavailable" on an {error} payload and keeps the last good values', () => {
     target = document.createElement('div');
     document.body.appendChild(target);

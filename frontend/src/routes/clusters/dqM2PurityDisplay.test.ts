@@ -46,7 +46,9 @@ describe('/clusters/[id] header shows purity with basis/n and label_purity/label
     const idx = detailSrc.indexOf('{#if cluster.purity != null}');
     expect(idx).toBeGreaterThan(-1);
     const block = detailSrc.slice(idx, idx + 700);
-    expect(block).toMatch(/cluster\.purity_basis/);
+    // Visual audit K4: the basis is rendered through geometryPurityText
+    // (which reads cluster.purity_basis), not as the raw id.
+    expect(block).toMatch(/geometryPurityText\(cluster\)/);
     expect(block).toMatch(/cluster\.purity_n/);
   });
 

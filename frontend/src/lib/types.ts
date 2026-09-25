@@ -512,7 +512,13 @@ export interface Cluster {
   validated_count: number;
   dominant_class_id: number | null;
   dominant_class_name: string | null;
+  /** Served `label_purity` — the dominant class's share of the
+   *  LABELLED members. Not the geometry `purity`. */
   dominant_pct: number | null;
+  /** Served member counts behind `dominant_pct` (cluster-scoped, include
+   *  any test-holdout members). Optional: absent on older responses. */
+  dominant_count?: number | null;
+  labelled_count?: number | null;
   /** DQ-M2 fix (dq-queues cutover, 2026-09-24): nearest-centroid geometry
    *  purity — the share of `purity_n` measured members whose nearest
    *  cluster centroid is this cluster's own. Independent of labels, so a
