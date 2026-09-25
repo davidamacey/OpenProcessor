@@ -37,12 +37,26 @@ describe('/ingest — absence', () => {
     expect(target.querySelector('button')).toBeNull();
   });
 
-  it('renders the upload section when available !== false', () => {
+  it('renders the upload section once available === true', () => {
     ingestAvailability.available = true;
     instance = mount(IngestPage, { target, props: {} });
     flushSync();
     expect(target.textContent).not.toContain('This backend does not provide ingest.');
     expect(target.querySelector('input[type=file]')).not.toBeNull();
+  });
+
+  it('renders neither the absence copy nor the upload UI while available is still null', () => {
+    // §A.7: visiting /ingest must fire no other requests while the
+    // availability probe is unresolved — rendering the upload section
+    // here (which mounts child components that fetch on mount) before
+    // a definitive answer would violate that the moment it turns out
+    // false. This is deliberately NOT the nav link's optimistic
+    // behavior.
+    ingestAvailability.available = null;
+    instance = mount(IngestPage, { target, props: {} });
+    flushSync();
+    expect(target.textContent).not.toContain('This backend does not provide ingest.');
+    expect(target.querySelector('input[type=file]')).toBeNull();
   });
 
   it('never renders a server-path panel (absent without served batch config)', () => {

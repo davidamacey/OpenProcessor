@@ -63,6 +63,14 @@
 
   {#if ingestAvailability.available === false}
     <p class="text-sm text-zinc-400">This backend does not provide ingest.</p>
+  {:else if ingestAvailability.available === null}
+    <!-- Deliberately not the nav link's optimistic render: §A.7 requires
+         that visiting /ingest directly when the backend lacks the
+         router fires NO other requests at all. Rendering the upload
+         section here (which mounts IngestStatusTable/RegionDrainPanel,
+         each firing its own GET on mount) before the probe resolves
+         would violate that the moment it later turns out `false`. -->
+    <p class="text-sm text-zinc-500">Loading…</p>
   {:else}
     {#if config.uploadPersistsBytes === false}
       <p
