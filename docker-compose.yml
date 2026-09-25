@@ -142,6 +142,15 @@ services:
     ulimits:
       memlock: -1
       stack: 67108864
+    healthcheck:
+      # S-7: curation workers gate startup on `condition: service_healthy`
+      # against this service; without a healthcheck here that condition
+      # can never resolve.
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
     deploy:
       resources:
         reservations:
@@ -204,19 +213,23 @@ services:
       - OP_VLM_URL=${OP_VLM_URL:-}
       - OP_VLM_MODEL=${OP_VLM_MODEL:-}
       - OP_VLM_API_KEY=${OP_VLM_API_KEY:-}
+      # S-3: lets the worker publish crop.region_verified events to every
+      # subscribed SSE client via POST {api_prefix}/events/publish, not
+      # just whichever uvicorn worker happened to handle a given POST.
+      - OP_EVENT_API_URL=http://yolo-api:8000
     command:
       - python
       - -m
       - scripts.curation.worker
       - --continuous
     healthcheck:
-      # No HTTP port is exposed by this worker; pgrep is the trivial
-      # process-alive check (procps is installed in the shared image —
-      # see Dockerfile).
-      test: ["CMD-SHELL", "pgrep -f 'scripts.curation.worker' || exit 1"]
+      # S-2: heartbeat file the worker touches every 15s on its main
+      # loop (including while idle) — pgrep can't see a deadlocked but
+      # still-running event loop.
+      test: ["CMD-SHELL", "python -m src.services.curation.worker_liveness check detection_worker --max-age 120"]
       interval: 30s
       timeout: 5s
-      start_period: 20s
+      start_period: 60s
       retries: 3
     depends_on:
       - triton-server
@@ -251,14 +264,16 @@ services:
       - scripts.curation.vlm_worker
       - --continuous
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'scripts.curation.vlm_worker' || exit 1"]
+      test: ["CMD-SHELL", "python -m src.services.curation.worker_liveness check vlm_worker --max-age 120"]
       interval: 30s
       timeout: 5s
-      start_period: 20s
+      start_period: 60s
       retries: 3
     depends_on:
-      - yolo-api
-      - opensearch
+      yolo-api:
+        condition: service_healthy
+      opensearch:
+        condition: service_started
     networks:
       - triton_net
 
@@ -296,11 +311,11 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pgrep -f 'scripts.curation.auto_label_worker' || exit 1",
+          "python -m src.services.curation.worker_liveness check auto_label_worker --max-age 120",
         ]
       interval: 30s
       timeout: 5s
-      start_period: 20s
+      start_period: 60s
       retries: 3
     depends_on:
       - opensearch
@@ -333,15 +348,17 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pgrep -f 'scripts/curation/cluster_refresh_daemon.py' || exit 1",
+          "python -m src.services.curation.worker_liveness check cluster_refresh --max-age 120",
         ]
       interval: 30s
       timeout: 5s
-      start_period: 20s
+      start_period: 60s
       retries: 3
     depends_on:
-      - yolo-api
-      - opensearch
+      yolo-api:
+        condition: service_healthy
+      opensearch:
+        condition: service_started
     networks:
       - triton_net
 

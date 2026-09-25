@@ -1593,6 +1593,15 @@ stale.
 is produced in-process (`publish_region_verified`) and by the SAM worker
 via `POST /events/publish`.
 
+S-3: the hub is cross-process by default (`OP_EVENT_BUS=file`) — every
+uvicorn worker process tails the same shared JSONL log
+(`{OP_STATE_DIR}/events/events.jsonl`, bounded and rotated at
+`OP_EVENT_LOG_MAX_BYTES`) so an SSE client connected to any one worker
+sees events published by any other, and by the out-of-process detection
+worker's `POST /events/publish` calls. `GET /events/stats` reports the
+active `bus` (`file`/`process`) and `log_path` alongside the existing
+`subscribers`/`events_published`/`events_dropped` counters.
+
 ### `GET /stats/dataset`
 
 - `labeled`: `by_human`, `by_vlm`, `by_classifier`, `by_proposal`, `other`
