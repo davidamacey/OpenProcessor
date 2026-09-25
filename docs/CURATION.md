@@ -436,6 +436,18 @@ but every stop/start call fails open (no-op) and the API logs one
 `arbiter_docker_unavailable` warning per outage (not per call) so the gap
 is visible instead of silent.
 
+**Trainer reachability (F-72).** `POST /train/preflight` probes whether
+the trainer container is up before letting a job queue forever with no
+error. `OP_GPU_ARBITER_TRAINER_CONTAINER` now defaults to
+`${COMPOSE_PROJECT_NAME:-openprocessor}-trainer` (the `curation-trainer`
+service's own `container_name`), so a deployment running the `training`
+profile gets a working probe with no extra env config. That probe still
+needs Docker socket access from `yolo-api` -- the same
+`docker-compose.gpu-arbiter.yml` overlay above -- so without it the
+preflight message changes from the old, misleading "no trainer
+container configured" to the accurate "docker SDK/socket unavailable in
+the API container", not to a passing probe.
+
 ## Wiring up Cropwright
 
 Cropwright (or any `/curation`-consuming frontend) needs three things to

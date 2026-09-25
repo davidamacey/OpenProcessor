@@ -137,6 +137,17 @@ services:
       # G-06: in-container path the API resolves source-relative item
       # paths against. Must match the bind target above.
       - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
+      # F-72: the trainer service's container_name below is always
+      # ${COMPOSE_PROJECT_NAME:-openprocessor}-trainer -- wire the same
+      # deterministic name here by default so /train/preflight's
+      # trainer-reachability probe (GpuArbiterConfig.trainer_container)
+      # finds it automatically on any deployment that starts the
+      # `training` profile, instead of reporting "no trainer container
+      # configured" (which reads as "not running") until an operator
+      # separately sets OP_GPU_ARBITER_TRAINER_CONTAINER by hand to a
+      # value that has to exactly match this name anyway. Still
+      # overridable via .env for a deployment that renames/moves it.
+      - OP_GPU_ARBITER_TRAINER_CONTAINER=${OP_GPU_ARBITER_TRAINER_CONTAINER:-${COMPOSE_PROJECT_NAME:-openprocessor}-trainer}
     # G-10: on Linux, host.docker.internal only resolves with this mapping
     # (Docker Desktop adds it automatically; the Linux engine does not).
     # Needed for the "point OP_VLM_URL at a VLM running on the host" example
