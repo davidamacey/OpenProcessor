@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- The 26 docs screenshots (`docs/screenshots/`, `docs/screenshots-new/`,
+  including the README demo GIF) showed non-public imagery and old
+  branding. They are deleted along with their `docs/FEATURES.md` embeds.
+  Replacements get captured from the public-data run.
 - **`StrategyBar` now says when a pinned review-sort default has no
   coverage yet** (visual-audit S1's last bullet, `docs/design/
 visual-audit-2026-09-24.md` — that doc's "deferred, BACKEND" status was
