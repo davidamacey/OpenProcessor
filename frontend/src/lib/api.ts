@@ -3722,6 +3722,67 @@ export function getTrainManifest(
   );
 }
 
+// -- Probe (#36 item 8) ---------------------------------------------------
+// Wraps POST {API_PREFIX}/probe/{run,cancel} / GET {API_PREFIX}/probe/status —
+// starts a probe pass from a finished training run's export, populating
+// probe_pred_* on items (the Uncertainty/Model-disagreements queues' one
+// prerequisite, per item 9's empty_state). Same idempotent job-poll shape
+// as scores/embedding-viz jobs: one job at a time, GET /probe/status is
+// the single source of truth for what's running.
+
+export interface ProbeRunRequest {
+  job_id: string;
+  architecture?: string;
+  gpu?: string | null;
+  resume?: boolean;
+}
+
+/** `ProbeStatusResponse` — served verbatim, including `error`, which is
+ *  the backend's own message (a GPU-arbiter claim failure, a training job
+ *  that isn't finished / has no exported checkpoint, etc.) and is always
+ *  rendered as-is, never reworded. */
+export interface ProbeStatusResponse {
+  status: string;
+  job_id?: string | null;
+  train_job_id?: string | null;
+  gpu?: string | null;
+  model_path?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  updated_count?: number | null;
+  error?: string | null;
+}
+
+/** Start a probe pass from `trainJobId`'s finished export. 409 when the
+ *  training job isn't finished / has no exported checkpoint, or a probe
+ *  is already running — surfaced via `ApiError.detail`, never guessed. */
+export function runProbe(
+  trainJobId: string,
+  opts: { architecture?: string; gpu?: string | null; resume?: boolean } = {},
+  signal?: AbortSignal,
+): Promise<ProbeStatusResponse> {
+  const body: ProbeRunRequest = { job_id: trainJobId, ...opts };
+  return apiFetch<ProbeStatusResponse>(
+    `${API_PREFIX}/probe/run`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** Poll the current/last probe job. */
+export function getProbeStatus(signal?: AbortSignal): Promise<ProbeStatusResponse> {
+  return apiFetch<ProbeStatusResponse>(`${API_PREFIX}/probe/status`, {}, signal);
+}
+
+/** Best-effort cancel of the active probe job. */
+export function cancelProbe(signal?: AbortSignal): Promise<ProbeStatusResponse> {
+  return apiFetch<ProbeStatusResponse>(
+    `${API_PREFIX}/probe/cancel`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
 // -- Auto-label (recluster) job ------------------------------------------
 // Wraps POST {API_PREFIX}/pipeline/auto_label/{start,status,cancel}. The pipeline
 // re-runs prototype assignment → cluster_id normalize → AHC residuals → auto-

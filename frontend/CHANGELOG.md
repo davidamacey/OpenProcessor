@@ -65,6 +65,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   mutated copy before being restored byte-for-byte. Full stubbed e2e
   suite (65 tests) green.
 
+- **Adopted OpenProcessor #36 item 8 — probe control on `/train`.**
+  `api.ts` gains `runProbe`/`getProbeStatus`/`cancelProbe`
+  (`POST {API_PREFIX}/probe/run`, `GET {API_PREFIX}/probe/status`,
+  `POST {API_PREFIX}/probe/cancel`) and `ProbeStatusResponse`. A new
+  `ProbeControl.svelte`, embedded in `RunResults.svelte` for a finished
+  run, offers "Run probe predictions" — confirm dialog, idempotent
+  job-poll (adopts an in-flight job on mount, same pattern as
+  `ScoresCard`/`EmbeddingPlot`), explicit Cancel, and the served
+  result/error rendered verbatim, never reworded. Client-side gating
+  (`$lib/probe.ts`'s `canRunProbe`) only hides the button for a run that
+  obviously can't qualify (not finished, or finished with no recorded
+  checkpoint) — every other 409 (a probe already running, a GPU-arbiter
+  claim failure) surfaces as the backend's own detail text. A probe
+  running for a _different_ training run is detected via the response's
+  `train_job_id` and shown as "already running for another run" rather
+  than a misleading disabled button with no explanation. This populates
+  `probe_pred_*`, the prerequisite item 9's `empty_state.
+has_probe_predictions` checks for.
+
 - **Adopted OpenProcessor #34 W1 (backend commit eb5c251) — training
   lineage, build identity, and last-epoch vs. best-checkpoint metrics.**
   - `TrainJobStatus`/`TrainManifest.results` drop `best_metric`/
