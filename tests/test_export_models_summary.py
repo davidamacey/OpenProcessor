@@ -1,4 +1,5 @@
-"""Tests for the F-08 crash in ``export/export_models.py``.
+"""Tests for the F-08 crash and F-12 fail-open exit code in
+``export/export_models.py``.
 
 A fresh clone has no ``make`` target that fetches ``yolo11s.pt`` before
 ``make export-models`` runs (only ``scripts/setup.sh`` does, which the
@@ -21,6 +22,7 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -73,3 +75,87 @@ class TestMissingPtFileSurfacesARealError:
         ]
         export_models.print_summary(results)
         assert 'yolov11_small' in caplog.text
+
+
+class TestAnyExportFailed:
+    """F-12(c): main() used to exit 0 no matter what results said -- a
+    total, silent failure looked identical to a clean run to CI/make/an
+    operator's shell."""
+
+    def test_a_top_level_error_result_is_a_failure(self) -> None:
+        results: list[dict[str, Any]] = [{'model': 'small', 'status': 'error', 'error': 'boom'}]
+        assert export_models._any_export_failed(results) is True
+
+    def test_a_per_format_error_is_a_failure(self) -> None:
+        """The realistic F-12 shape: export_model() succeeds overall but
+        an individual format (e.g. 'trt') reports its own error dict."""
+        results: list[dict[str, Any]] = [
+            {
+                'model': 'small',
+                'triton_name': 'yolov11_small',
+                'trt': {'status': 'error', 'error': 'Failed to build engine'},
+                'trt_end2end': {'status': 'error', 'error': 'Failed to build engine'},
+            }
+        ]
+        assert export_models._any_export_failed(results) is True
+
+    def test_all_successful_formats_is_not_a_failure(self) -> None:
+        results: list[dict[str, Any]] = [
+            {
+                'model': 'small',
+                'triton_name': 'yolov11_small',
+                'trt': {'status': 'success', 'host_path': '/app/models/yolov11_small_trt'},
+            }
+        ]
+        assert export_models._any_export_failed(results) is False
+
+    def test_empty_results_is_not_a_failure(self) -> None:
+        assert export_models._any_export_failed([]) is False
+
+
+class TestCudaVisibleDevicesRepairBeforeTrtBuild:
+    """F-09/F-12(a): /opt/venv-y11's CPU-only torch means the ONNX-export
+    step always runs Ultralytics with device='cpu', which sets
+    CUDA_VISIBLE_DEVICES=-1 as a side effect -- in the same process, this
+    then blinds the TensorRT builder created right after it
+    ("CUDA initialization failure with error: 100"), even though the
+    engine build doesn't use torch's CUDA at all.
+
+    ``setup_trt_builder`` still constructs a real ``trt.Builder`` (a real
+    CUDA context) after the env-var repair, which needs an actual GPU --
+    not something a unit test should require. ``export_models.trt`` is
+    patched with a bare stand-in so only the repair logic itself is
+    under test here.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _fake_trt(self, monkeypatch: pytest.MonkeyPatch):
+        from unittest.mock import MagicMock
+
+        fake_trt = MagicMock()
+        fake_trt.Logger.INFO = 0
+        fake_config = MagicMock()
+        fake_trt.Builder.return_value.create_builder_config.return_value = fake_config
+        monkeypatch.setattr(export_models, 'trt', fake_trt)
+        return fake_trt
+
+    def test_poisoned_cuda_visible_devices_is_cleared_before_building(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '-1')
+        export_models.setup_trt_builder()
+        assert 'CUDA_VISIBLE_DEVICES' not in export_models.os.environ
+
+    def test_an_unset_cuda_visible_devices_is_left_alone(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv('CUDA_VISIBLE_DEVICES', raising=False)
+        export_models.setup_trt_builder()
+        assert 'CUDA_VISIBLE_DEVICES' not in export_models.os.environ
+
+    def test_a_legitimate_gpu_pin_is_left_alone(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Only the exact '-1' (Ultralytics' CPU-mode sentinel) is
+        cleared -- an operator's own GPU selection must survive."""
+        monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '0')
+        export_models.setup_trt_builder()
+        assert export_models.os.environ['CUDA_VISIBLE_DEVICES'] == '0'
