@@ -252,10 +252,20 @@ States Government Work" -- explicitly not NonCommercial/NoDerivs). Then:
 
 ```bash
 # 1. Create a few classes (see docs/CURATION.md "Create classes from zero")
-# 2. Set OP_INGEST_PRIMARY_DETECTOR_MODEL and point OP_SOURCE_ROOT/a volume
-#    mount at data/samples/coco_va_readme, then:
+# 2. Set OP_INGEST_PRIMARY_DETECTOR_MODEL, and narrow ingest to the classes
+#    you just created with OP_INGEST_PRIMARY_CLASS_IDS (otherwise a stock
+#    detector's full label space -- all 80 COCO classes -- becomes item
+#    proposals; e.g. 2,3,5,7 for car/motorcycle/bus/truck).
+# 3. Point OP_SOURCE_ROOT_HOST at data/samples in .env (the compose mount
+#    target is fixed at /data/source -- data/samples/coco_va_readme/images
+#    is NOT under the default ./data/source, so a walker --root pointed
+#    straight at the samples dir 404s every image as unservable_path):
+echo 'OP_SOURCE_ROOT_HOST=./data/samples' >> .env
+docker compose up -d --force-recreate yolo-api
+# 4. --root is a container path under the /data/source mount, not a
+#    host-relative one:
 docker compose exec yolo-api python scripts/curation/ingest_walker.py \
-  --root data/samples/coco_va_readme/images --api-base http://localhost:8000/curation
+  --root /data/source/coco_va_readme/images --api-base http://localhost:8000/curation
 ```
 
 `make sample-coco` (the larger 800-image + 12-image upload + 24-image
@@ -630,12 +640,15 @@ ls test_results/*.jpg
 .venv/bin/python -m pytest tests/ -q
 ```
 
-**Docker-only path** — no host `.venv` required, since `yolo-api` already has
-every test dependency installed:
+**Docker-only path** (F-21/F-31) — the production `yolo-api` image installs
+only `requirements.txt` (no `pytest`, no `requirements-test.txt`), so a bare
+`docker compose exec yolo-api pytest ...` fails with `executable file not
+found`. Install the test deps into the running container first (not
+persisted across a recreate):
 
 ```bash
-# Full offline pytest suite, from inside the running container
-docker compose exec yolo-api pytest tests/ -q --ignore=tests/live
+docker compose exec yolo-api pip install -r requirements-test.txt
+docker compose exec yolo-api python -m pytest tests/ -q --ignore=tests/live
 ```
 
 **Test Coverage:**

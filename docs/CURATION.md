@@ -521,6 +521,12 @@ sample-clean` removes everything fetched.
    search / near-dup / clustering then have nothing to operate on.
 4. Configure at least an ingest detector model
    (`OP_INGEST_PRIMARY_DETECTOR_MODEL`) — ingest 503s until one is set.
+   **A stock YOLO checkpoint's full label space becomes item proposals
+   by default** (all 80 COCO classes for a stock YOLO11/YOLO26 model,
+   step 2's `seed_class_registry.py` warning above) — set
+   `OP_INGEST_PRIMARY_CLASS_IDS` to a comma-separated allowlist (e.g.
+   `2,3,5,7` for car/motorcycle/bus/truck) to narrow ingest to only the
+   classes you created in step 2, instead of proposing all of them.
 5. Ingest images: `POST /curation/ingest/image` for one image at a
    time, or `scripts/curation/ingest_walker.py` for a bulk directory
    walk with a resumable progress file. If the images are not on storage
@@ -610,6 +616,23 @@ sample-clean` removes everything fetched.
    val). `POST /curation/train/preflight` blocks an export with no train
    or no val images, or with a trained class missing from train or val
    — see the "Export" section of the API contract for the exact rules.
+9. **Train.** `curation-trainer` is a separate compose service, opt-in
+   behind the `training` profile (F-21/F-72) -- it isn't started by
+   `--profile curation` or the base `docker compose up`:
+
+   ```bash
+   docker compose --profile training up -d curation-trainer
+   curl -s -X POST "$API/curation/train/preflight" -H 'content-type: application/json' -d '{}'
+   curl -s -X POST "$API/curation/train/start" -H 'content-type: application/json' -d '{
+     "model_family": "yolo26", "model_size": "s", "profile": "small",
+     "hyperparameters": {"epochs": 70, "imgsz": 640, "batch": 16, "optimizer": "MuSGD"}
+   }'
+   ```
+
+   (`dataset_export_dir` defaults to the current export -- F-73 -- so an
+   empty preflight body works once step 8 has run at least once.)
+   Without the `training` profile up, preflight's `trainer_reachable`
+   check reports the trainer unreachable instead of blocking silently.
 
 ## Environment variables
 
