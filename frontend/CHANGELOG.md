@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Adopted OpenProcessor a8a34aa..37b077f wire changes** (vendored
+  contract synced to `37b077f`). `/stats/dataset`: `labeled.by_proposal`
+  (always 0) is gone from `DatasetStats` and the dashboard, no shim;
+  `unlabeled.by_proposal` renders as "Detector proposal, no class" and
+  `in_progress.region_stall_reason` renders verbatim ("Stalled: …") in
+  the In-flight pipeline panel (V-1). `/ingest/region_drain`'s
+  `stall_reason` and not-ready `region_dependencies` render in the
+  `/ingest` region-drain panel. Upload and server-path ingest results
+  show `secondary_detector_error` per file and the served
+  `secondary_detector_failures` count.
+- **Strict request bodies.** `/ingest/batch`, `/crops/{label,region}/undo_batch`
+  and `/crops/discard_batch` now refuse an empty id/item list client-side
+  (`assertNonEmptyBatch`, `api.ts`) instead of sending a guaranteed 422;
+  Z with an empty undo entry is a no-op. `contract/strictBodies.test.ts`
+  pins `POST /export/yolo`, `/test_holdout/freeze` and `/ingest/batch` to
+  the keys their `additionalProperties: false` schemas declare.
+- **F-69:** the dashboard "Unlabeled" header summed overlapping buckets
+  (pending detection + no class), so it could exceed the total crop
+  count (4,055 of 3,516). It now shows the served class-less count only.
+- **F-59:** re-uploading files the backend already has showed nothing.
+  The run now toasts and states "Nothing uploaded: N already indexed"
+  and opens the Skipped tab.
+
 - The 26 docs screenshots (`docs/screenshots/`, `docs/screenshots-new/`,
   including the README demo GIF) showed non-public imagery and old
   branding. They are deleted along with their `docs/FEATURES.md` embeds.

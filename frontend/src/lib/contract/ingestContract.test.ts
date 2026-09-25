@@ -14,6 +14,8 @@ import type {
   BatchIngestSummary,
   IngestImageResult,
   IngestItemStatus,
+  RegionDependencyStatus,
+  RegionDrain,
 } from '$lib/types';
 
 type Schemas = Record<string, { properties?: Record<string, unknown> }>;
@@ -43,6 +45,7 @@ describe('ingest contract', () => {
       'imohash',
       'n_crops',
       'n_regions',
+      'secondary_detector_error',
       'source_identifier',
       'status',
     ] satisfies (keyof IngestImageResult)[];
@@ -59,6 +62,7 @@ describe('ingest contract', () => {
       'unmatched_detections',
       'labels_imported',
       'crops_indexed',
+      'secondary_detector_failures',
     ] satisfies (keyof BatchIngestSummary)[];
     expect([...SUMMARY_KEYS].sort()).toEqual(keysOf('BatchIngestSummaryResponse'));
   });
@@ -79,6 +83,17 @@ describe('ingest contract', () => {
     expect([...RESPONSE_KEYS].sort()).toEqual(
       keysOf('src__routers__curation___common_models__BatchIngestResponse'),
     );
+  });
+
+  it('RegionDependencyStatus (types.ts) has exactly the served properties', () => {
+    const KEYS = [
+      'role',
+      'model',
+      'ready',
+      'detail',
+      'unavailable_since',
+    ] satisfies (keyof RegionDependencyStatus)[];
+    expect([...KEYS].sort()).toEqual(keysOf('RegionDependencyStatusResponse'));
   });
 
   it('IngestImageResponse.status enum equals IngestItemStatus', () => {
@@ -126,7 +141,9 @@ describe('ingest contract', () => {
       'drained',
       'stable_for_s',
       'observed_at',
-    ];
+      'region_dependencies',
+      'stall_reason',
+    ] satisfies (keyof RegionDrain)[];
     expect([...DRAIN_KEYS].sort()).toEqual(keysOf('IngestRegionDrainResponse'));
   });
 });

@@ -1024,7 +1024,6 @@ export interface DatasetStats {
     by_human: number;
     by_vlm: number;
     by_classifier: number;
-    by_proposal: number;
     other: number;
   };
   regions: {
@@ -1065,9 +1064,19 @@ export interface DatasetStats {
      *  didn't) resolve to a class (#36 item 2). Served alongside
      *  `no_label_source`; absent on a backend that predates it. */
     vlm_no_class?: number;
+    /** F-23 (OpenProcessor a8a34aa): crops a detector proposed but
+     *  nothing has classified yet — a subset of `no_label_source`, like
+     *  `vlm_no_class`. Moved here from the always-0 `labeled.by_proposal`
+     *  (removed). Absent on a backend that predates it. */
+    by_proposal?: number;
   };
   in_progress: {
     region_drain_total_unfinished: number;
+    /** V-1 (OpenProcessor a8a34aa): a served, human-readable line naming
+     *  why the region drain can't progress (a region-profile dependency
+     *  is down, and since when). Null when nothing is pending or every
+     *  dependency is ready; absent on an older backend. Rendered verbatim. */
+    region_stall_reason?: string | null;
   };
   clusters: {
     last_run_at: string | null;
@@ -1847,6 +1856,19 @@ export async function undoCropLabel(cropId: string, signal?: AbortSignal): Promi
 }
 
 /**
+ * OpenProcessor a8a34aa: the batch write bodies (`/ingest/batch`,
+ * `/crops/{label,region}/undo_batch`, `/crops/discard_batch`, the VLM
+ * batch routes) are `extra='forbid'` with a required non-empty list, so
+ * an empty list is a guaranteed 422. Refuse it here, before any request
+ * goes out — callers disable the action instead of sending it.
+ */
+export function assertNonEmptyBatch(what: string, ids: readonly unknown[]): void {
+  if (ids.length === 0) {
+    throw new Error(`${what}: nothing selected — no request sent`);
+  }
+}
+
+/**
  * `POST {API_PREFIX}/crops/label/undo_batch` — batch form of
  * `undoCropLabel`: each crop is restored independently to its own state
  * before its most recent human class write, so undoing a `bulkLabel` or
@@ -1858,6 +1880,7 @@ export async function undoLabelBatch(
   cropIds: string[],
   signal?: AbortSignal,
 ): Promise<CropUndoBatchResult> {
+  assertNonEmptyBatch('undo', cropIds);
   type Raw = {
     items?: RawCrop[];
     undone?: number;
@@ -1919,6 +1942,7 @@ export async function discardCropsBatch(
   opts: DiscardOptions = {},
   signal?: AbortSignal,
 ): Promise<DiscardBatchResult> {
+  assertNonEmptyBatch('discard', cropIds);
   const raw = await apiFetch<{
     items: RawCrop[];
     discarded: number;
@@ -2027,6 +2051,7 @@ export async function undoCropRegionBatch(
   cropIds: string[],
   signal?: AbortSignal,
 ): Promise<CropRegionUndoBatchResult> {
+  assertNonEmptyBatch('undo', cropIds);
   type Raw = {
     items?: RawCrop[];
     undone?: number;
@@ -4049,10 +4074,11 @@ export function ingestUpload(
   );
 }
 
-export function ingestBatch(
+export async function ingestBatch(
   req: IngestBatchRequest,
   signal?: AbortSignal,
 ): Promise<BatchIngestResponse> {
+  assertNonEmptyBatch('ingest', req.items);
   return apiFetch<BatchIngestResponse>(
     `${API_PREFIX}/ingest/batch`,
     { method: 'POST', body: JSON.stringify(req) },

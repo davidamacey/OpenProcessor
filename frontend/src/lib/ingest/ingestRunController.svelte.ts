@@ -57,6 +57,8 @@ export interface IngestTotals {
   duplicates: number;
   failed: number;
   crops_indexed: number;
+  /** a8a34aa: sum of the served `summary.secondary_detector_failures`. */
+  secondary_detector_failures: number;
 }
 
 export interface IngestRunStartOpts {
@@ -104,6 +106,7 @@ function emptyTotals(): IngestTotals {
     duplicates: 0,
     failed: 0,
     crops_indexed: 0,
+    secondary_detector_failures: 0,
   };
 }
 
@@ -207,6 +210,7 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
     const byIdentifier = new Map(
       res.results.map((r) => [r.source_identifier ?? r.image_path, r]),
     );
+    totals.secondary_detector_failures += res.summary?.secondary_detector_failures ?? 0;
     for (const f of chunk) {
       const id = identifierFor(f);
       const r = byIdentifier.get(id);
@@ -226,6 +230,7 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
           kind: 'ingested',
           image_id: r.image_id,
           n_crops: r.n_crops,
+          secondary_detector_error: r.secondary_detector_error ?? null,
         });
         totals.successful++;
         totals.crops_indexed += r.n_crops;
@@ -393,7 +398,15 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
       queue = planUploadChunks(remaining);
       cursor = 0;
       totals.queued = queue.reduce((n, c) => n + c.length, 0);
-      toastStore.info(`Upload started (${totals.queued} images queued)`);
+      if (totals.queued === 0 && totals.skipped_known > 0 && totals.failed === 0) {
+        // F-59: a re-upload of already-indexed files used to toast
+        // "Upload started (0 images queued)" and then show nothing.
+        toastStore.info(
+          `Nothing to upload: ${totals.skipped_known} already indexed (see the Skipped tab)`,
+        );
+      } else {
+        toastStore.info(`Upload started (${totals.queued} images queued)`);
+      }
       await dispatch();
     },
 

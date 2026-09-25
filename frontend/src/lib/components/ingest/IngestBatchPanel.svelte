@@ -49,6 +49,9 @@
   const failedResults = $derived(
     result ? result.results.filter((r) => r.status === 'failed') : [],
   );
+  const secondaryFailures = $derived(
+    result ? result.results.filter((r) => r.secondary_detector_error) : [],
+  );
   const errorKindCounts = $derived.by(() => {
     const counts = new Map<string, number>();
     for (const r of failedResults) {
@@ -176,7 +179,28 @@
       {#if result.summary.labels_imported > 0}
         <span class="chip">labels imported {result.summary.labels_imported}</span>
       {/if}
+      {#if (result.summary.secondary_detector_failures ?? 0) > 0}
+        <span
+          class="chip border-amber-700 text-amber-200"
+          data-testid="batch-secondary-failures"
+          >secondary detector failed {result.summary.secondary_detector_failures}</span
+        >
+      {/if}
     </div>
+
+    {#if secondaryFailures.length > 0}
+      <!-- a8a34aa: these images ingested with primary-detector crops only. -->
+      <ul class="max-h-32 overflow-y-auto text-xs" data-testid="batch-secondary-list">
+        {#each secondaryFailures as r (r.image_path)}
+          <li class="border-b border-zinc-900 py-1 font-mono">
+            {r.image_path}
+            <span class="text-amber-300">
+              — secondary detector: {r.secondary_detector_error}</span
+            >
+          </li>
+        {/each}
+      </ul>
+    {/if}
 
     {#if errorKindCounts.length > 0}
       <div class="flex flex-wrap gap-1 text-xs">

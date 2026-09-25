@@ -25,6 +25,8 @@ export interface IngestFileResult {
   error_kind?: string | null;
   image_id?: string | null;
   n_crops?: number | null;
+  /** a8a34aa: the served secondary-detector failure on an ingested file. */
+  secondary_detector_error?: string | null;
 }
 
 export interface IngestResults {

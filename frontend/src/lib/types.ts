@@ -1141,6 +1141,12 @@ export interface IngestImageResult {
    * identifier).
    */
   source_identifier: string | null;
+  /**
+   * OpenProcessor a8a34aa: set when the image itself ingested but the
+   * optional secondary detector failed on it (so it carries only the
+   * primary detector's crops). Null otherwise; absent on an older backend.
+   */
+  secondary_detector_error?: string | null;
 }
 
 export interface BatchIngestSummary {
@@ -1152,6 +1158,8 @@ export interface BatchIngestSummary {
   unmatched_detections: number;
   labels_imported: number;
   crops_indexed: number;
+  /** a8a34aa: how many results carry a `secondary_detector_error`. */
+  secondary_detector_failures?: number;
 }
 
 export interface BatchIngestResponse {
@@ -1187,6 +1195,24 @@ export interface RegionDrain {
   stable_for_s: number;
   /** ISO timestamp of this poll. */
   observed_at: string;
+  /**
+   * V-1 (OpenProcessor a8a34aa): the active region profile's Triton
+   * dependencies and whether each is ready now; empty with no profile.
+   */
+  region_dependencies?: RegionDependencyStatus[];
+  /**
+   * V-1: a served, human-readable line when items are pending AND a
+   * dependency is down; null otherwise. Rendered verbatim.
+   */
+  stall_reason?: string | null;
+}
+
+export interface RegionDependencyStatus {
+  role: string;
+  model: string;
+  ready: boolean;
+  detail: string;
+  unavailable_since: string | null;
 }
 
 export interface IngestPathLookupResponse {

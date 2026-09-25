@@ -43,7 +43,7 @@ function goodStats(overrides: Partial<DatasetStatsType> = {}): DatasetStatsType 
     validated: 500,
     test_holdout: 50,
     by_source: [{ key: 'nas1', doc_count: 1000 }],
-    labeled: { by_human: 100, by_vlm: 200, by_classifier: 50, by_proposal: 10, other: 5 },
+    labeled: { by_human: 100, by_vlm: 200, by_classifier: 50, other: 5 },
     regions: { total_detected: 0, by_detector: 0, by_segmenter: 0, by_human: 0 },
     unlabeled: { pending_detection: 10, pending_verification: 5, no_label_source: 2 },
     in_progress: { region_drain_total_unfinished: 0 },
@@ -81,9 +81,9 @@ describe('DatasetStats', () => {
     capturedOpts?.onSnapshot?.({}, goodStats() as unknown as Record<string, unknown>);
     flushSync();
 
-    // 100 + 200 + 50 + 10 + 5 = 365
+    // 100 + 200 + 50 + 5 = 355
     const totalLabel = Array.from(target.querySelectorAll('span')).find((s) =>
-      s.textContent?.includes('365 total'),
+      s.textContent?.includes('355 total'),
     );
     expect(totalLabel).toBeTruthy();
   });
@@ -139,6 +139,85 @@ describe('DatasetStats', () => {
       d.textContent?.replace(/\s+/g, ' ').trim(),
     );
     expect(rows).toContain('VLM, no class 1,252');
+  });
+
+  it('F-69: the Unlabeled header shows the served class-less count, never a sum of overlapping buckets', () => {
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(DatasetStats, { target, props: {} });
+    flushSync();
+
+    // Pending detection overlaps the class-less bucket: a sum (3,516 +
+    // 539) would exceed total_crops (3,516).
+    capturedOpts?.onSnapshot?.(
+      {},
+      goodStats({
+        total_crops: 3516,
+        unlabeled: {
+          pending_detection: 3516,
+          pending_verification: 0,
+          no_label_source: 539,
+        },
+      }) as unknown as Record<string, unknown>,
+    );
+    flushSync();
+
+    const header = target.querySelector('[data-testid="unlabeled-header-count"]');
+    expect(header?.textContent?.trim()).toBe('539 without a class');
+    expect(target.textContent).not.toContain('4,055');
+  });
+
+  it('F-23: renders unlabeled.by_proposal, and no labeled "Proposal" row', () => {
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(DatasetStats, { target, props: {} });
+    flushSync();
+
+    capturedOpts?.onSnapshot?.(
+      {},
+      goodStats({
+        unlabeled: {
+          pending_detection: 0,
+          pending_verification: 0,
+          no_label_source: 40,
+          by_proposal: 17,
+        },
+      }) as unknown as Record<string, unknown>,
+    );
+    flushSync();
+
+    const rows = Array.from(target.querySelectorAll('dl div')).map((d) =>
+      d.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(rows).toContain('Detector proposal, no class 17');
+    expect(target.textContent).not.toContain('Proposal (unclassified)');
+  });
+
+  it('V-1: renders the served region_stall_reason verbatim, and nothing when null', () => {
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(DatasetStats, { target, props: {} });
+    flushSync();
+
+    const reason = 'segmenter unavailable since 2026-09-25T10:00:00Z (model not ready)';
+    capturedOpts?.onSnapshot?.(
+      {},
+      goodStats({
+        in_progress: { region_drain_total_unfinished: 12, region_stall_reason: reason },
+      }) as unknown as Record<string, unknown>,
+    );
+    flushSync();
+    expect(
+      target.querySelector('[data-testid="region-stall-reason"]')?.textContent,
+    ).toContain(reason);
+
+    capturedOpts?.onStats?.(
+      goodStats({
+        in_progress: { region_drain_total_unfinished: 12, region_stall_reason: null },
+      }) as unknown as Record<string, unknown>,
+    );
+    flushSync();
+    expect(target.querySelector('[data-testid="region-stall-reason"]')).toBeNull();
   });
 
   it('#36 item 2: omits the VLM-no-class row on a backend that predates the field', () => {

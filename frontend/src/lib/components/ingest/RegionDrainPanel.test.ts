@@ -42,6 +42,63 @@ describe('RegionDrainPanel', () => {
     expect(target.textContent).toContain('2');
   });
 
+  it('V-1: renders the served stall_reason verbatim and the not-ready dependencies', async () => {
+    vi.mocked(getRegionDrain).mockResolvedValue({
+      pending_detection: 3516,
+      pending_verification: 0,
+      total_unfinished: 3516,
+      drained: false,
+      stable_for_s: 0,
+      observed_at: '2026-09-25T00:00:00Z',
+      stall_reason: 'segmenter unavailable since 2026-09-25T09:57:00Z',
+      region_dependencies: [
+        {
+          role: 'detector',
+          model: 'det_a',
+          ready: true,
+          detail: 'ready',
+          unavailable_since: null,
+        },
+        {
+          role: 'segmenter',
+          model: 'seg_b',
+          ready: false,
+          detail: 'not loaded',
+          unavailable_since: '2026-09-25T09:57:00Z',
+        },
+      ],
+    });
+    instance = mount(RegionDrainPanel, { target, props: {} });
+    await vi.waitFor(() => {
+      flushSync();
+      expect(
+        target.querySelector('[data-testid="region-drain-stall-reason"]')?.textContent,
+      ).toContain('segmenter unavailable since 2026-09-25T09:57:00Z');
+    });
+    const deps = target.querySelector('[data-testid="region-drain-dependencies"]');
+    expect(deps?.textContent).toContain('seg_b');
+    expect(deps?.textContent).not.toContain('det_a');
+  });
+
+  it('renders no stall line when stall_reason is null', async () => {
+    vi.mocked(getRegionDrain).mockResolvedValue({
+      pending_detection: 0,
+      pending_verification: 0,
+      total_unfinished: 0,
+      drained: true,
+      stable_for_s: 5,
+      observed_at: '2026-09-25T00:00:00Z',
+      stall_reason: null,
+      region_dependencies: [],
+    });
+    instance = mount(RegionDrainPanel, { target, props: {} });
+    await vi.waitFor(() => {
+      flushSync();
+      expect(target.textContent).toContain('Drained');
+    });
+    expect(target.querySelector('[data-testid="region-drain-stall-reason"]')).toBeNull();
+  });
+
   it('renders the BA-3 drained verdict and stable_for_s, not a client heuristic', async () => {
     vi.mocked(getRegionDrain).mockResolvedValue({
       pending_detection: 0,
