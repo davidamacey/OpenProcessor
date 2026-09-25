@@ -69,6 +69,47 @@ def test_probe_trainer_reachable_skips_when_unconfigured() -> None:
     assert 'not configured' in detail or 'not applicable' in detail
 
 
+def test_docker_client_unavailable_warns_once_not_per_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """G-15: without docker-compose.gpu-arbiter.yml's socket mount, every
+    claim/release/reconcile probe calls ``_docker_client()`` and gets
+    ``None`` (fail-open). That must log exactly one warning per outage,
+    not one per call -- otherwise a busy reconcile loop drowns the log."""
+
+    class _Boom:
+        def from_env(self) -> None:
+            raise RuntimeError('no such file or directory: /var/run/docker.sock')
+
+    monkeypatch.setattr(gpu_arbiter, '_docker_unavailable_logged', [False])
+    monkeypatch.setattr('docker.from_env', _Boom().from_env)
+
+    warnings: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        gpu_arbiter.logger,
+        'warning',
+        lambda event, **kw: warnings.append((event, kw)),
+    )
+
+    for _ in range(3):
+        assert gpu_arbiter._docker_client() is None
+
+    assert len(warnings) == 1
+    assert warnings[0][0] == 'arbiter_docker_unavailable'
+
+    # Recovery clears the dedup flag so a later outage warns again.
+    class _Ok:
+        def ping(self) -> None:
+            return None
+
+    monkeypatch.setattr('docker.from_env', lambda: _Ok())
+    assert gpu_arbiter._docker_client() is not None
+
+    monkeypatch.setattr('docker.from_env', _Boom().from_env)
+    assert gpu_arbiter._docker_client() is None
+    assert len(warnings) == 2
+
+
 # =============================================================================
 # GpuArbiterConfig.from_env (GPU policy as config, not code)
 # =============================================================================

@@ -27,15 +27,13 @@ Every public function takes them as config-derived-default parameters,
 so an unconfigured install degrades to a no-op
 (``tests/curation/test_gpu_arbiter_config.py``).
 
-Implementation note: container control uses the docker SDK over the
-mounted host socket (``/var/run/docker.sock``), by name, so restart
-preserves each container's config (GPU pins included). A claim
-that must stop a configured container and can't (SDK/socket
-unavailable, or the stop fails) raises
-:class:`GpuArbiterStopFailedError` rather than falling back to a
-sentinel-only pause, which pauses a paired worker but leaves a sibling
-container running on the shared GPU. Release/resume keeps a logged
-best-effort fallback.
+Implementation note: container control uses the docker SDK over the mounted host socket
+(``/var/run/docker.sock``, opt-in via ``docker-compose.gpu-arbiter.yml`` -- see G-15), by name, so
+restart preserves each container's config (GPU pins included). A claim that must stop a configured
+container and can't (SDK/socket unavailable, or the stop fails) raises
+:class:`GpuArbiterStopFailedError` rather than falling back to a sentinel-only pause, which pauses
+a paired worker but leaves a sibling container running on the shared GPU. Release/resume keeps a
+logged best-effort fallback.
 """
 
 from __future__ import annotations
@@ -52,6 +50,7 @@ from src.core.logging import get_logger
 
 
 logger = get_logger(__name__)
+_docker_unavailable_logged = [False]  # G-15: warn once per outage, not per call
 
 
 # =============================================================================
@@ -302,20 +301,20 @@ async def resume_gpu_worker(
 
 
 def _docker_client() -> Any:
-    """Return a docker SDK client over the mounted socket, or ``None``.
-
-    Imported lazily so the module stays importable without the
-    ``docker`` package or socket (unit tests, no sibling containers).
-    Any failure (no package, no socket, no permission) returns ``None``.
-    """
+    """Return a docker SDK client over the mounted socket, or ``None`` (warns once
+    per outage, not per call -- G-15). Imported lazily so the module stays
+    importable without the ``docker`` package or socket (unit tests)."""
     try:
         import docker  # type: ignore[import-untyped]
 
         client = docker.from_env()  # type: ignore[attr-defined]
         client.ping()
+        _docker_unavailable_logged[0] = False
         return client
     except Exception as exc:
-        logger.warning('arbiter_docker_unavailable', error=str(exc))
+        if not _docker_unavailable_logged[0]:  # G-15: warn once per outage
+            logger.warning('arbiter_docker_unavailable', error=str(exc))
+            _docker_unavailable_logged[0] = True
         return None
 
 
