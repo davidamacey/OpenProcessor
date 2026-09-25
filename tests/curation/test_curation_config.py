@@ -107,6 +107,26 @@ def test_from_env_prompt_pack_path_unset_stays_none(monkeypatch: pytest.MonkeyPa
 
 
 # =============================================================================
+# OP_MLFLOW_PUBLIC_URL (browser-reachable MLflow base for the served
+# train/status + train/manifest mlflow_run_url)
+# =============================================================================
+
+
+def test_mlflow_public_url_defaults_to_none() -> None:
+    assert CurationConfig().mlflow_public_url is None
+
+
+def test_from_env_overrides_mlflow_public_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_MLFLOW_PUBLIC_URL', 'https://mlflow.example.com')
+    assert CurationConfig.from_env().mlflow_public_url == 'https://mlflow.example.com'
+
+
+def test_from_env_mlflow_public_url_unset_stays_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv('OP_MLFLOW_PUBLIC_URL', raising=False)
+    assert CurationConfig.from_env().mlflow_public_url is None
+
+
+# =============================================================================
 # OP_SOURCE_PATH_ALIASES (named source roots served at /images/root/{alias})
 # =============================================================================
 

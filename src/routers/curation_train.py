@@ -20,6 +20,9 @@ Endpoints (per design table §7):
     GET    {api_prefix}/train/presets            → class-subset presets
     GET    {api_prefix}/train/augmentation_presets → augmentation preset catalog
     GET    {api_prefix}/train/gpus               → TrainGpuOptionsResponse
+    GET    {api_prefix}/train/manifest/{job_id}   → run lineage manifest
+    GET    {api_prefix}/train/artifacts/{job_id}/{name}
+        → whitelisted run artifact (confusion_matrix.png, results.csv, ...)
 
 Pre-flight contract (design §15.1): ``/start`` calls ``/preflight``
 internally and refuses to write ``job.json`` if any check has severity
@@ -36,7 +39,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Path as PathParam, Query, status
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import FileResponse, ORJSONResponse
 from pydantic import BaseModel, Field
 
 from src.config import (
@@ -1825,3 +1828,40 @@ async def get_manifest(
     if manifest is None:
         raise HTTPException(status_code=404, detail=f'no manifest for job {job_id!r}')
     return ORJSONResponse(content=manifest)
+
+
+# =============================================================================
+# /artifacts/{job_id}/{name}
+# =============================================================================
+
+
+@router.get('/artifacts/{job_id}/{name}', response_class=FileResponse)
+async def get_run_artifact(
+    job_id: Annotated[str, PathParam(description='Training job_id from {api_prefix}/train/runs')],
+    name: Annotated[
+        str,
+        PathParam(
+            description=(
+                'Whitelisted artifact filename '
+                '(see src.services.training.jobs.RUN_ARTIFACT_WHITELIST), '
+                'e.g. confusion_matrix.png'
+            )
+        ),
+    ],
+) -> FileResponse:
+    """Serve one whitelisted metrics/plot artifact from a run's directory.
+
+    This is the only sanctioned way to reach these files -- the server
+    filesystem path itself never appears on the wire (``eval.
+    confusion_matrix_url`` on ``{api_prefix}/train/status*``/``manifest``
+    points here instead). 404 alike for an unwhitelisted name, an unknown
+    job, or a file that hasn't been written yet — nothing here
+    distinguishes those cases to a caller.
+    """
+    try:
+        path = await train_jobs.read_artifact(job_id, name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if path is None:
+        raise HTTPException(status_code=404, detail=f'no artifact {name!r} for job {job_id!r}')
+    return FileResponse(path, media_type=train_jobs.artifact_media_type(name))
