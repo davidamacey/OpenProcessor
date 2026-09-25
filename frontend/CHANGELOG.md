@@ -8,6 +8,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **`/bakeoff` rebuilt on OpenProcessor #34's generic multi-class
+  comparison wire (v2, backend f5f6ae5; F6).** Clean break, no v1 shim
+  (`docs/design/bakeoff-v2-ui-plan-2026-09-25.md`).
+  - Datasets: export test splits first (the current export flagged and
+    preselected), then external frozen sets grouped by served `group`,
+    each with served image/object/class counts, unlabeled-items note and
+    frozen-check flag (`GET {API_PREFIX}/bakeoff/eval_datasets`).
+  - Models: finished training runs (`GET {API_PREFIX}/bakeoff/trained_models`),
+    with, for every selected dataset, the served `for_dataset` facts
+    (same export / same frozen test / classes mapped) and a red
+    train/test overlap warning when the served overlap is non-null and
+    > 0; the profile's baselines; an optional collapsed custom-model form.
+    > `trainer_map50`/`trainer_map50_split` replace `map50`/`map50_split`
+    > and are labelled as the trainer's own number.
+  - Profile select lists what `GET {API_PREFIX}/bakeoff/profiles` serves,
+    preselects `default_profile` and shows `default_error`; no profile
+    or domain is hardcoded.
+  - Run: a confirm dialog summarizes datasets × models, then
+    `POST {API_PREFIX}/bakeoff/run` with typed refs
+    (`{source: 'run'|'baseline'|'custom', ...}`); a 400/409/422 shows the
+    served detail verbatim. The job panel polls `GET /bakeoff/status/{id}`
+    (queued/running/done/error) with progress and every failed piece, and
+    shows the enqueue-time class mapping (not-covered eval classes,
+    unmapped model classes, warnings, overlap).
+  - Results: the model × dataset matrix bolds every served tied winner
+    (`best[ds][metric]` is a list); the per-dataset comparison
+    (`GET /bakeoff/results/{id}?dataset_id=`) shows served ranks (null ⇒
+    "—"), the `rank_scope` block's metrics, coverage, and a per-class
+    table where a class a model does not cover reads "not covered", plus
+    each model's unmapped classes. A 409 (result predates v2) shows a
+    note, not an error. Previous runs (`GET /bakeoff/runs`) stay
+    selectable.
+  - Removed: `BakeoffModelSpec`, the v1 profile/row/matrix types,
+    `bakeoffStatus.ts` (now `failureWhere` in `src/lib/bakeoff/view.ts`)
+    and `QuantizationPanel.svelte` (keyed on v1 `ours_*` row names and
+    computed ΔmAP client-side; quantized variants now appear as ordinary
+    matrix rows).
+  - Types in `src/lib/types_bakeoff.ts`, pinned to the vendored OpenAPI
+    by `src/lib/contract/bakeoffContract.test.ts`.
+- Vendored contract snapshot re-synced to OpenProcessor f5f6ae5. The
+  unrelated served-shape changes in that range are adopted type-only:
+  `ServedRegionProfile.display_name_singular` (carried, not yet used in
+  copy), `IngestImageResult.error_kind`/`source_identifier` (not yet
+  rendered).
+
 - **Adopted OpenProcessor #34 W1 (backend commit eb5c251) — training
   lineage, build identity, and last-epoch vs. best-checkpoint metrics.**
   - `TrainJobStatus`/`TrainManifest.results` drop `best_metric`/
@@ -39,7 +84,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     lazy lineage block shows all of the new fields, served values only.
   - `BakeoffTrainedModel.map50` now comes from `eval.map50` instead of
     the old training-time metric; gains `map50_split` — the bake-off
-    model picker on `/bakeoff` shows both.
+    model picker on `/bakeoff` shows both. (Superseded by the v2
+    `/bakeoff` rebuild above: `trainer_map50`/`trainer_map50_split`.)
   - Vendored contract snapshot re-synced to eb5c251
     (`contracts/openprocessor/`).
 
