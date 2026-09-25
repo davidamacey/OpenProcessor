@@ -8,6 +8,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Started adopting OpenProcessor #36 (backend commit c676d2b) — visual-audit
+  backend fixes, ingest hardening, probe job API, review empty reasons, K6
+  clean-image contract.** Contract snapshot synced to c676d2b.
+  - Item 10: `ServedRegionProfile` gains `display_name_singular`
+    ("Plate"); `regionSlotFromServedProfile` uses it for the
+    singular-context slot label (`label.title`/`label.singular`), which
+    drives every generic "Confirm `<Region>`" / "`<Region>` score" string
+    — falls back to the generic "Region"/"region" when empty or the
+    backend predates the field.
+  - Item 1: `RegistryClass`/`StatsSummary.per_class` gain the served
+    `kind` (`'item'` | `'region'`) and `trainable`/`trainable_gap`.
+    `classVisibility.ts`'s `isSlotBoundClass` now reads the served `kind`
+    first (falling back to the slot registry only when a backend
+    predates the field) — the visual-audit R1 fix (the class picker/
+    quick-assign pre-highlighting the region class) is now backed by the
+    server's own item/region classification, not a client heuristic.
+    `/export`'s per-class table (`exportDatasetRows.ts`'s `trainable`/
+    `trainableGap`) prefers the served numbers over the client-side
+    validated-minus-holdout math, kept only as the older-backend
+    fallback.
+  - Item 6: `ExportStatus`/`ExportDataset` gain the served
+    `classes_with_objects`; `/export`'s class-count chip and `/train`'s
+    current-export dataset card now render it directly instead of
+    recomputing "classes with objects" from `class_split_counts`
+    client-side (kept only as the older-backend fallback).
+  - Item 2 (D1): `DatasetStats.unlabeled` gains the served
+    `vlm_no_class` count; `DatasetStats.svelte`'s Unlabeled block renders
+    it as its own row ("VLM, no class") when served, absent on a
+    backend that predates it. `labeled.*` itself needed no frontend
+    change — it already just sums the server's own counters.
+  - Item 5 verified already fully adopted as of c676d2b with no frontend
+    code change needed: `/models` already renders every entry
+    `GET {API_PREFIX}/models/status` serves generically (by
+    `friendly_name`/`role`), no hardcoded roster.
+
 - **Adopted OpenProcessor #34 W1 (backend commit eb5c251) — training
   lineage, build identity, and last-epoch vs. best-checkpoint metrics.**
   - `TrainJobStatus`/`TrainManifest.results` drop `best_metric`/

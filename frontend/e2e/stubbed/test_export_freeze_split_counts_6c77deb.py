@@ -261,3 +261,53 @@ def test_export_shows_trainable_vs_held_out_and_classes_with_objects(stub, page,
     assert "1 class with no objects" in details.inner_text()
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, errors[:3]
+
+
+def test_export_class_count_chip_prefers_served_classes_with_objects(
+    stub, page, app_url
+):
+    """OpenProcessor #36 item 6: `classes_with_objects` is now served
+    directly on `GET {API_PREFIX}/export/status` — the chip must render
+    that number, not recompute it from `class_split_counts`. Deliberately
+    served a DIFFERENT value than what `class_split_counts` alone would
+    produce (which would read "1 classes with objects" per the test
+    above) to prove the served field, not client math, drives the chip."""
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
+    stub.on(
+        "GET",
+        r"/stats/classes(\?|$)",
+        {
+            "classes": [
+                {"class_id": 1, "class_name": "bmw", "count": 108, "validated_count": 35,
+                 "adequacy": "warn", "aug_target": 500, "aug_gap": 465},
+                {"class_id": 2, "class_name": "audi", "count": 10, "validated_count": 0,
+                 "adequacy": "block", "aug_target": 500, "aug_gap": 500},
+            ],
+            "thresholds": {"block_below": 20, "warn_below": 500, "min_test": 5},
+        },
+    )
+    stub.on("GET", r"/stats/dataset(\?|$)", STATS_DATASET)
+    stub.on(
+        "GET",
+        r"/test_holdout/stats(\?|$)",
+        {"total": 5, "by_class": [{"key": 1, "doc_count": 5, "deficient": False}],
+         "min_test_per_class": 5},
+    )
+    status = dict(EXPORT_STATUS_SUCCESS)
+    status["class_split_counts"] = [
+        {"class_id": 1, "export_id": 0, "class_name": "bmw", "train": 24, "val": 6, "test": 5},
+        {"class_id": 2, "export_id": 1, "class_name": "audi", "train": 0, "val": 0, "test": 0},
+    ]
+    status["classes_with_objects"] = 2
+    stub.on("GET", r"/export/status(\?|$)", status)
+    stub.on("GET", r"/export/datasets(\?|$)", {"datasets": []})
+
+    page.goto(f"{app_url}/export")
+    bmw = page.locator("table tr", has_text="bmw").first
+    bmw.wait_for(timeout=15000)
+
+    chip = " ".join(page.locator('[data-testid="export-class-count"]').inner_text().split())
+    assert chip == "2 classes with objects (2 in registry)", chip
+
+    errors = [c for c in stub.console_errors if c.startswith("pageerror")]
+    assert not errors, errors[:3]

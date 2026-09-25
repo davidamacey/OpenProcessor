@@ -1043,7 +1043,15 @@ export interface DatasetStats {
   unlabeled: {
     pending_detection: number;
     pending_verification: number;
+    /** Crops with no `class_id` at all, whatever their `label_source`
+     *  (was miscounted as "labeled" — D1, visual audit 2026-09-24, before
+     *  OpenProcessor #36 restricted `labeled.*` to docs with a real
+     *  `class_id`). */
     no_label_source: number;
+    /** Subset of `no_label_source` the VLM looked at but couldn't (or
+     *  didn't) resolve to a class (#36 item 2). Served alongside
+     *  `no_label_source`; absent on a backend that predates it. */
+    vlm_no_class?: number;
   };
   in_progress: {
     region_drain_total_unfinished: number;
@@ -1087,6 +1095,8 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
       adequacy?: string;
       aug_target?: number;
       aug_gap?: number;
+      trainable?: number;
+      trainable_gap?: number;
     }>;
     thresholds?: ClassThresholds;
   };
@@ -1125,6 +1135,8 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
       adequacy: c.adequacy,
       aug_target: c.aug_target,
       aug_gap: c.aug_gap,
+      trainable: c.trainable,
+      trainable_gap: c.trainable_gap,
     })),
     thresholds: cls.thresholds,
   };
@@ -1152,6 +1164,9 @@ export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse>
     added_at?: string;
     hotkey_letter?: string | null;
     adequacy?: string;
+    kind?: 'item' | 'region';
+    trainable?: number;
+    trainable_gap?: number;
   };
   const res = await apiFetch<{
     classes: RawClass[];
@@ -1171,6 +1186,9 @@ export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse>
     deprecated: !!c.deprecated,
     hotkey_letter: c.hotkey_letter ?? null,
     adequacy: c.adequacy,
+    kind: c.kind,
+    trainable: c.trainable,
+    trainable_gap: c.trainable_gap,
   }));
   // Old-shape (bare array) or pre-cutover backend responses omit these —
   // an empty threshold/reserved set just means the adequacy chip and the

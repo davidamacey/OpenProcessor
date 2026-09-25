@@ -47,6 +47,20 @@ export interface RegistryClass {
    *  (`block` | `warn` | `ok`, against the served `thresholds`). Never
    *  recomputed client-side from `validated_count`. */
   adequacy?: string;
+  /** `'item'` (an ordinary item class) or `'region'` (a slot-bound
+   *  region class, e.g. the license-plate class) — served on
+   *  `GET {API_PREFIX}/classes`/`/stats/classes` (OpenProcessor #36 item 1,
+   *  X2/R1). The single source of truth for excluding a region class from
+   *  an item-class picker; `isSlotBoundClass`/`isItemClassTarget`
+   *  (`$lib/classVisibility`) read this first, falling back to the slot
+   *  registry only for a class an older backend doesn't tag. */
+  kind?: 'item' | 'region';
+  /** Validated crops usable for training — `sample_count`/`validated_count`
+   *  no longer include region counts as of #36 (X2), so this is the
+   *  server's own trainable count for the class, not client math. */
+  trainable?: number;
+  /** `aug_target - trainable`, served directly. */
+  trainable_gap?: number;
 }
 
 /** `thresholds` served on `GET {API_PREFIX}/classes`, `GET {API_PREFIX}/stats/classes`
@@ -165,6 +179,10 @@ export interface ExportStatus {
   /** Exported objects (label lines) across all images. */
   object_count?: number | null;
   class_count?: number | null;
+  /** Of `class_count` registry classes, how many have >=1 object (#36
+   *  item 6). `null` for an export written before it was recorded, or a
+   *  backend that predates the field entirely. */
+  classes_with_objects?: number | null;
   /** Images per split. */
   split_counts?: ExportSplitCounts | null;
   /** Objects (label lines) per split. */
@@ -298,6 +316,9 @@ export interface ExportDataset {
   max_positive_images?: number | null;
   max_images?: number | null;
   class_count?: number | null;
+  /** Of `class_count` registry classes, how many have >=1 object (#36
+   *  item 6). */
+  classes_with_objects?: number | null;
   is_current: boolean;
 }
 
@@ -597,6 +618,11 @@ export interface StatsSummary {
     aug_target?: number;
     /** `aug_target - validated_count`, served directly. */
     aug_gap?: number;
+    /** Validated crops usable for training (region counts excluded, #36
+     *  X2) — the server's own trainable count, not client math. */
+    trainable?: number;
+    /** `aug_target - trainable`, served directly (#36 item 1). */
+    trainable_gap?: number;
   }>;
   /** Served alongside `per_class` on `/stats/classes` — same shape as
    *  `ClassesResponse.thresholds`. */
@@ -627,8 +653,8 @@ export interface ServedRegionProfile {
    *  empty when the profile doesn't set one. */
   display_name: string;
   /** The singular form of the region noun, for a singular-context label
-   *  ("Confirm Plate", "Plate score"). May be empty — falls back to the
-   *  generic "Region" (OpenProcessor #36 item 10, 2026-09-25). */
+   *  ("Confirm <Region>", "<Region> score"). May be empty — falls back
+   *  to the generic "Region" (OpenProcessor #36 item 10, 2026-09-25). */
   display_name_singular: string;
   /** The class whose items ARE regions (e.g. the class a region export
    *  writes). May be empty. */

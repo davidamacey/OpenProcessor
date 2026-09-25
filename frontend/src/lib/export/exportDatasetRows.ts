@@ -55,6 +55,13 @@ export function buildExportRows(
     const target = c.aug_target ?? 0;
     const test = testMap.get(c.class_id);
     const testCount = test?.count ?? 0;
+    // #36 item 1: prefer the server's own trainable/trainable_gap (region
+    // counts already excluded from validated_count, X2) over the
+    // client-side validated-minus-holdout math, which is kept only as the
+    // fallback for a backend/export that predates the served fields.
+    const trainable = c.trainable ?? trainableCount(validated, testCount);
+    const trainableGap =
+      c.trainable_gap ?? (c.aug_gap == null ? null : c.aug_gap + testCount);
     return {
       class_id: c.class_id,
       class_name: c.class_name,
@@ -63,8 +70,8 @@ export function buildExportRows(
       aug_target: target,
       gap: c.aug_gap ?? null,
       test_count: testCount,
-      trainable: trainableCount(validated, testCount),
-      trainableGap: c.aug_gap == null ? null : c.aug_gap + testCount,
+      trainable,
+      trainableGap,
       testDeficient: test
         ? (test.deficient ?? (minTest != null && test.count < minTest))
         : false,

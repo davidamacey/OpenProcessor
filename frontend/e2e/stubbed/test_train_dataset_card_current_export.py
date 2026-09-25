@@ -23,6 +23,7 @@ EXPORT_STATUS = {
     "image_count": 174,
     "object_count": 174,
     "class_count": 84,
+    "classes_with_objects": 5,
     "split_counts": {"train": 134, "val": 15, "test": 25},
     "split_object_counts": {"train": 134, "val": 15, "test": 25},
     "class_split_counts": [
@@ -54,6 +55,9 @@ def test_card_shows_current_export_contents_for_explicit_pick(stub, page, app_ur
         "an explicit pick of the current export must still show its own split counts"
     )
     assert page.get_by_text("global pool", exact=False).count() == 0
+    # #36 item 6: the served classes_with_objects (5 of 84), not just the
+    # registry size, renders on the dataset card.
+    assert page.get_by_text("5 of 84 classes with objects", exact=False).count() > 0
 
     select.select_option(PAST)
     page.wait_for_timeout(300)

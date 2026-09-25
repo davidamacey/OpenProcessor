@@ -226,9 +226,11 @@ describe('CropCard — region sub-box editing follows the served region profile 
     expect(el.textContent).not.toContain('✎');
   });
 
-  it('a served region profile: the ✎ button edits that region', () => {
+  it('a served region profile: the ✎ button edits that region, labelled by the served singular noun (#36 item 10)', () => {
     installServedRegionProfile(WIDGET_TAG_PROFILE);
     const el = renderCard({ crop: baseCrop() });
-    expect(editButton(el)?.getAttribute('aria-label')).toBe('Edit region');
+    expect(editButton(el)?.getAttribute('aria-label')).toBe(
+      `Edit ${WIDGET_TAG_PROFILE.display_name_singular.toLowerCase()}`,
+    );
   });
 });

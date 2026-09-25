@@ -1050,7 +1050,12 @@
         <div class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
           {#if vehiclesExportState.class_count != null}
             <span class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5">
-              {vehiclesExportState.class_count} classes
+              {#if vehiclesExportState.classes_with_objects != null}
+                {vehiclesExportState.classes_with_objects} of {vehiclesExportState.class_count}
+                classes with objects
+              {:else}
+                {vehiclesExportState.class_count} classes
+              {/if}
             </span>
           {/if}
           {#if vehiclesExportState.image_count != null || vehiclesExportState.object_count != null}

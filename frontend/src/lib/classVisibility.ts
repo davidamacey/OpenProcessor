@@ -42,14 +42,21 @@ export function isAssignableClass(cls: { name: string; deprecated?: boolean }): 
 
 /**
  * True if `cls` is bound to a registered annotation slot (its regions are
- * sub-boxes on other items, not items of their own) — resolved through the
- * slot registry, never a hardcoded class name.
+ * sub-boxes on other items, not items of their own).
  *
- * TODO(served class kind): the backend is being asked to serve a class
- * `kind` (item vs region) on `GET {API_PREFIX}/classes` (visual audit
- * 2026-09-24, R1/X2). Once it does, read that instead of the slot registry.
+ * OpenProcessor #36 item 1 (visual audit R1/X2): `GET {API_PREFIX}/classes`
+ * now serves a `kind` (`'item'` | `'region'`) directly — the server's own
+ * verdict, read first. The slot registry is kept only as the fallback for
+ * a class an older backend doesn't tag (`kind` absent/undefined), so a
+ * tier-2 deployment against a pre-#36 backend still excludes its region
+ * class correctly.
  */
-export function isSlotBoundClass(cls: { name: string }): boolean {
+export function isSlotBoundClass(cls: {
+  name: string;
+  kind?: 'item' | 'region';
+}): boolean {
+  if (cls.kind === 'item') return false;
+  if (cls.kind === 'region') return true;
   return slotForClassName(cls.name) != null;
 }
 
@@ -60,6 +67,10 @@ export function isSlotBoundClass(cls: { name: string }): boolean {
  * so offering it there only invites `/` + Enter mislabeling an item as a
  * region (visual audit 2026-09-24, R1).
  */
-export function isItemClassTarget(cls: { name: string; deprecated?: boolean }): boolean {
+export function isItemClassTarget(cls: {
+  name: string;
+  deprecated?: boolean;
+  kind?: 'item' | 'region';
+}): boolean {
   return isAssignableClass(cls) && !isSlotBoundClass(cls);
 }
