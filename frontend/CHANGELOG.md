@@ -53,6 +53,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`/settings` "Curation scores" card (G10).** Review queues (Uncertainty,
+  Model Disagreements) and the uniqueness/mistakenness StrategyBar sorts
+  were empty not because there was nothing to review but because no
+  curation score had ever been computed — `POST/GET {API_PREFIX}/scores/*`
+  had no frontend caller at all. New card on `/settings` shows per-scorer
+  coverage from `GET {API_PREFIX}/scores/coverage` (`n_scored`/`total`/`pct`,
+  "—" for a missing row), a confirm-gated "Compute all" or per-scorer
+  "Compute selected" action (`POST {API_PREFIX}/scores/compute
+{scorers}` — scorer ids always come from the served coverage keys,
+  never hardcoded), a progress poll of `GET {API_PREFIX}/scores/status`
+  (follows `EmbeddingPlot`'s rebuild-job pattern: adopt an in-flight run
+  on mount, poll every 3s, stop on a terminal state), and "Cancel"
+  (`POST {API_PREFIX}/scores/cancel`). A failed compute — e.g.
+  mistakenness lacking probe predictions — shows the backend's own error
+  text verbatim, never reworded. The card is entirely absent (not
+  broken) on a backend that 404s `/scores/coverage`, and only polls
+  `/scores/status` once coverage has confirmed the feature exists. On a
+  successful compute, coverage reloads and `strategiesStore` is reset so
+  any mounted `StrategyBar` picks up the newly-nonzero sort/score
+  coverage without a full page reload. New `api.ts` wrappers
+  (`getScoresCoverage`/`computeScores`/`getScoresStatus`/`cancelScores`)
+  next to `selectDiverse`; new pure helpers in `src/lib/scores.ts`
+  (`formatCoverageCounts`/`formatCoveragePct`/`classifyScoresPoll`).
 - **`/train` visual/UX pass + live-tier full-page screenshots.**
   - Confusion matrix (`RunResults.svelte`) was rendering at full panel
     width (~1094×821 at 1600px), dwarfing the past-runs table. Now a
