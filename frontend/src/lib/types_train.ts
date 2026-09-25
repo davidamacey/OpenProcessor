@@ -152,12 +152,16 @@ export interface TrainEval {
   map50_95?: number | null;
   precision?: number | null;
   recall?: number | null;
-  /** TODO(train-eval cutover): absent on today's backend — see doc comment above. */
+  /** Absent on runs from before OpenProcessor e9aac68 — see doc comment above. */
   split?: TrainEvalSplit | null;
+  /** The last validation epoch's numbers, served separately from the
+   *  overall figures since e9aac68. */
+  val_last?: { map50?: number | null; map50_95?: number | null } | null;
   per_class?: TrainEvalPerClass[] | null;
   /** Server filesystem path — text only, never an `<img src>`. */
   confusion_matrix_path?: string | null;
-  /** TODO(train-eval cutover): servable URL once the backend ships it. */
+  /** Servable URL (`GET {API_PREFIX}/train/artifacts/{job_id}/{name}`),
+   *  API-prefix-relative; resolve with `resolveApiUrl`. */
   confusion_matrix_url?: string | null;
   [extra: string]: unknown;
 }

@@ -1345,6 +1345,11 @@ class`) so an operator can see where a crop lives before relabeling
 
 ### Fixed
 
+- `/train` run results adopt OpenProcessor e9aac68. The overall eval figures
+  are labelled by the served `eval.split`, with the last validation epoch
+  shown separately from `eval.val_last`. The confusion matrix renders from
+  the served artifact URL through `resolveApiUrl`, so it also works when the
+  API is on another origin.
 - `/train`'s dataset card fell back to the global pool ("84 classes") when
   the current export was picked explicitly in the version dropdown. It
   now shows the export's own split counts for the `current` symlink or an

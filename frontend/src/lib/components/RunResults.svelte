@@ -13,7 +13,7 @@
    * false 0.
    */
   import { untrack } from 'svelte';
-  import { getTrainManifest } from '$lib/api';
+  import { getTrainManifest, resolveApiUrl } from '$lib/api';
   import {
     evalOverallLabel,
     evalPerClassLabel,
@@ -174,6 +174,17 @@
               >
             {/if}
           </p>
+          {#if evalData.val_last}
+            <p class="mb-2 text-zinc-400" data-testid="eval-val-last">
+              validation (last epoch):
+              <span class="ml-1 font-mono text-zinc-100"
+                >mAP50 {formatMetric(evalData.val_last.map50)}</span
+              >
+              <span class="ml-2 font-mono text-zinc-100"
+                >mAP50-95 {formatMetric(evalData.val_last.map50_95)}</span
+              >
+            </p>
+          {/if}
           {#if perClass.length > 0}
             <p class="mb-1 text-zinc-400">
               per-class: <span class="text-zinc-200">{evalPerClassLabel(evalData)}</span>
@@ -223,7 +234,7 @@
           <div class="mt-2">
             {#if evalData.confusion_matrix_url}
               <img
-                src={evalData.confusion_matrix_url}
+                src={resolveApiUrl(evalData.confusion_matrix_url)}
                 alt="Confusion matrix"
                 class="max-w-full rounded border border-zinc-800"
               />
@@ -234,9 +245,6 @@
                   >{evalData.confusion_matrix_path}</span
                 >
               </p>
-              <!-- TODO: backend to serve eval.confusion_matrix_url (GET
-                   /train/artifacts/{job_id}/{name}); render an <img> from
-                   that only, drop this text-only fallback once it lands. -->
             {:else}
               <p class="text-zinc-500">confusion matrix: —</p>
             {/if}

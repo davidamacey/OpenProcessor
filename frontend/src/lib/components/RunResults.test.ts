@@ -15,6 +15,8 @@ const getTrainManifestMock = vi.fn();
 
 vi.mock('$lib/api', () => ({
   getTrainManifest: (...args: unknown[]) => getTrainManifestMock(...args),
+  // A distinct origin proves artifact URLs go through the resolver.
+  resolveApiUrl: (u: string) => `https://api.test${u}`,
 }));
 
 const { default: RunResults } = await import('./RunResults.svelte');
@@ -203,8 +205,28 @@ describe('RunResults — confusion matrix', () => {
     const el = renderRunResults(status);
     const img = el.querySelector('img');
     expect(img?.getAttribute('src')).toBe(
-      '/curation/train/artifacts/job1/confusion_matrix.png',
+      'https://api.test/curation/train/artifacts/job1/confusion_matrix.png',
     );
+  });
+
+  it('shows the served val_last numbers separately from a test-split overall (OpenProcessor e9aac68)', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const status: TrainJobStatus = {
+      ...trainStatusFixture,
+      eval: {
+        ...trainStatusFixture.eval,
+        split: 'test',
+        map50: 0.812,
+        val_last: { map50: 0.9191, map50_95: 0.846 },
+      },
+    };
+    const el = renderRunResults(status);
+    const row = el
+      .querySelector('[data-testid="eval-val-last"]')
+      ?.textContent?.replace(/\s+/g, ' ');
+    expect(row).toContain('mAP50 0.919');
+    expect(row).toContain('mAP50-95 0.846');
+    expect(el.textContent).toContain('mAP50 0.812');
   });
 });
 

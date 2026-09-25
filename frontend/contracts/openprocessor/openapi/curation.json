@@ -4508,6 +4508,17 @@
             ],
             "title": "Last Metric"
           },
+          "mlflow_experiment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Experiment Id"
+          },
           "mlflow_run_id": {
             "anyOf": [
               {
@@ -11781,6 +11792,55 @@
         "summary": "Test Holdout Stats",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/train/artifacts/{job_id}/{name}": {
+      "get": {
+        "description": "Serve one whitelisted metrics/plot artifact from a run's directory.\n\nThis is the only sanctioned way to reach these files -- the server\nfilesystem path itself never appears on the wire (``eval.\nconfusion_matrix_url`` on ``{api_prefix}/train/status*``/``manifest``\npoints here instead). 404 alike for an unwhitelisted name, an unknown\njob, or a file that hasn't been written yet — nothing here\ndistinguishes those cases to a caller.",
+        "operationId": "get_run_artifact_curation_train_artifacts__job_id___name__get",
+        "parameters": [
+          {
+            "description": "Training job_id from {api_prefix}/train/runs",
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "description": "Training job_id from {api_prefix}/train/runs",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Whitelisted artifact filename (see src.services.training.jobs.RUN_ARTIFACT_WHITELIST), e.g. confusion_matrix.png",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Whitelisted artifact filename (see src.services.training.jobs.RUN_ARTIFACT_WHITELIST), e.g. confusion_matrix.png",
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Run Artifact",
+        "tags": [
+          "Curation - Train"
         ]
       }
     },
