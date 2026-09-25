@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **OSS install prep: independent second instance + public-ready README**
+  (F10 groundwork). `docker-compose.yml`'s `container_name` is now
+  `${CROPWRIGHT_CONTAINER_NAME:-cropwright}` (default unchanged), and
+  every Docker-path env var (`CROPWRIGHT_PORT`, `OP_DOCKER_NETWORK`,
+  `API_UPSTREAM`, `PUBLIC_API_PREFIX`, `PUBLIC_TRITON_API_URL`,
+  `CROPWRIGHT_INGEST_MAX_REQUEST_MB`, `CROPWRIGHT_CONTAINER_NAME`) is
+  documented in `.env.example` — a second instance can now run
+  side-by-side via `docker compose -p <project> up -d --build` with its
+  own container name/port/network. `README.md` rewritten stand-alone for
+  a new user/developer with no prior context: what Cropwright is and
+  that it requires a running OpenProcessor backend, a Docker quick
+  start with a verified second-instance example, a per-feature backend
+  requirements table, the end-to-end workflow, domain configuration,
+  development/test commands, a configuration table and troubleshooting.
+
 ### Added
 
 - **`/classes` Deprecate and Restore actions** (OpenProcessor 698d1da,
