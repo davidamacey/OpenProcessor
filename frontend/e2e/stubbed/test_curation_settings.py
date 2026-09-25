@@ -56,6 +56,11 @@ def register(stub, methods_body, settings_get_status, settings_get_body, put_res
     put_calls: list[tuple[str, str]] = []
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
     stub.on("GET", r"/methods(\?|$)", methods_body)
+    # G10 "Curation scores" card: this suite doesn't exercise it (see
+    # test_scores_card.py), so a plain 404 keeps it absent and out of the
+    # way of every assertion here — same "backend predates the feature"
+    # path the card itself degrades to.
+    stub.on("GET", r"/scores/coverage(\?|$)", (404, {"detail": "not found"}))
 
     def settings_get(_request, _match):
         if settings_get_status != 200:

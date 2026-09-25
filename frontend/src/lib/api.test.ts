@@ -10,7 +10,9 @@ import {
   apiBase,
   API_PREFIX,
   ApiError,
+  cancelScores,
   cancelSelect,
+  computeScores,
   getAutoLabelJobStatus,
   getCluster,
   getClusters,
@@ -21,6 +23,8 @@ import {
   getMethods,
   getNewClassProposalsSummary,
   getReviewQueue,
+  getScoresCoverage,
+  getScoresStatus,
   getSelectStatus,
   getVizProjection,
   locateInReviewQueue,
@@ -2269,5 +2273,226 @@ describe('getCurationSettings / putCurationDefaults', () => {
     // Contrast: getMethods() on the identical 404 response resolves rather
     // than rejecting. Same fetch mock, different endpoint contract.
     await expect(getMethods()).resolves.toEqual(FALLBACK_METHODS);
+  });
+});
+
+/**
+ * `/scores/*` wrappers (docs/design/frontend-coverage-audit-2026-09-24.md
+ * §G10). Wire shapes confirmed against openprocessor `main`'s
+ * `crop_scores/job.py::compute_coverage`/`_JobState` — `coverage` is
+ * `{scorer_id: {field, n_scored, total, pct}}`, and every job snapshot
+ * is `{job_id, status, scorers, processed, total, started_at,
+ * finished_at, error, results}`.
+ */
+describe('getScoresCoverage / computeScores / getScoresStatus / cancelScores', () => {
+  const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      ...init,
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('getScoresCoverage composes ${API_PREFIX}/scores/coverage and parses the coverage map', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        coverage: {
+          uniqueness: { field: 'uniqueness_score', n_scored: 0, total: 7961, pct: 0 },
+          near_dup: { field: 'dup_group_id', n_scored: 12, total: 7961, pct: 0.15 },
+          mistakenness: {
+            field: 'mistakenness_score',
+            n_scored: 3200,
+            total: 7961,
+            pct: 40.2,
+          },
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getScoresCoverage();
+
+    const calledUrl = (fetchMock.mock.calls[0]?.[0] as string) ?? '';
+    expect(calledUrl).toContain(`${API_PREFIX}/scores/coverage`);
+    expect(Object.keys(result)).toEqual(['uniqueness', 'near_dup', 'mistakenness']);
+    expect(result.mistakenness).toEqual({
+      field: 'mistakenness_score',
+      n_scored: 3200,
+      total: 7961,
+      pct: 40.2,
+    });
+  });
+
+  it('getScoresCoverage drops a malformed entry instead of crashing the whole parse', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        coverage: {
+          uniqueness: { field: 'uniqueness_score', n_scored: 5, total: 10, pct: 50 },
+          broken: { field: 'x' }, // missing n_scored/total/pct
+          alsoBroken: null,
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getScoresCoverage();
+    expect(Object.keys(result)).toEqual(['uniqueness']);
+  });
+
+  it('getScoresCoverage THROWS on 404 — the caller (ScoresCard) uses this to hide the card, not to fall back', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ detail: 'not found' }), { status: 404 }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getScoresCoverage()).rejects.toBeInstanceOf(ApiError);
+    await expect(getScoresCoverage()).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('computeScores POSTs {scorers: null} verbatim for "compute all"', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        job_id: 'abc',
+        status: 'running',
+        scorers: ['uniqueness', 'near_dup', 'mistakenness'],
+        processed: 0,
+        total: 7961,
+        started_at: 1000,
+        finished_at: 0,
+        error: null,
+        results: {},
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const job = await computeScores(null);
+
+    const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toContain(`${API_PREFIX}/scores/compute`);
+    expect(calledInit.method).toBe('POST');
+    expect(calledInit.body).toBe(JSON.stringify({ scorers: null }));
+    expect(job.status).toBe('running');
+    expect(job.scorers).toEqual(['uniqueness', 'near_dup', 'mistakenness']);
+    expect(job.total).toBe(7961);
+  });
+
+  it('computeScores POSTs the exact selected scorer ids, not a re-derived list', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        job_id: 'abc',
+        status: 'running',
+        scorers: ['near_dup'],
+        processed: 0,
+        total: 100,
+        started_at: 1000,
+        finished_at: 0,
+        error: null,
+        results: {},
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await computeScores(['near_dup']);
+
+    const [, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(calledInit.body).toBe(JSON.stringify({ scorers: ['near_dup'] }));
+  });
+
+  it('computeScores rejects with the server detail verbatim (e.g. a scorer lacking its inputs)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail:
+            "unknown scorer(s): ['bogus']; valid: ['mistakenness', 'near_dup', 'uniqueness']",
+        }),
+        { status: 400 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(computeScores(['bogus'])).rejects.toMatchObject({
+      status: 400,
+      detail:
+        "unknown scorer(s): ['bogus']; valid: ['mistakenness', 'near_dup', 'uniqueness']",
+    });
+  });
+
+  it('getScoresStatus parses a failed job, keeping the server error string verbatim', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        job_id: 'abc',
+        status: 'failed',
+        scorers: ['mistakenness'],
+        processed: 0,
+        total: 7961,
+        started_at: 1000,
+        finished_at: 1010,
+        error: 'mistakenness requires probe_pred_confidence — none scored yet',
+        results: {},
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const job = await getScoresStatus();
+    const calledUrl = (fetchMock.mock.calls[0]?.[0] as string) ?? '';
+    expect(calledUrl).toContain(`${API_PREFIX}/scores/status`);
+    expect(job.status).toBe('failed');
+    expect(job.error).toBe(
+      'mistakenness requires probe_pred_confidence — none scored yet',
+    );
+  });
+
+  it('getScoresStatus resolves to an idle snapshot on a malformed body rather than throwing', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('not json', {
+        status: 200,
+        headers: { 'content-type': 'text/plain' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const job = await getScoresStatus();
+    expect(job.status).toBe('idle');
+    expect(job.scorers).toEqual([]);
+  });
+
+  it('cancelScores POSTs to /scores/cancel and reports the served cancelled flag', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        cancelled: true,
+        job_id: 'abc',
+        status: 'cancelled',
+        scorers: ['uniqueness'],
+        processed: 3,
+        total: 7961,
+        started_at: 1000,
+        finished_at: 1005,
+        error: null,
+        results: {},
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await cancelScores();
+    const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toContain(`${API_PREFIX}/scores/cancel`);
+    expect(calledInit.method).toBe('POST');
+    expect(result.cancelled).toBe(true);
+    expect(result.status).toBe('cancelled');
+  });
+
+  it('cancelScores reports cancelled:false when nothing was running', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ cancelled: false, status: 'idle' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await cancelScores();
+    expect(result.cancelled).toBe(false);
   });
 });

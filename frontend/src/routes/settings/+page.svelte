@@ -29,6 +29,7 @@
   import { curationSettingsStore } from '$stores/curationSettings.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
   import { hasFieldCoverage, type MethodInfoBase } from '$lib/strategies';
+  import ScoresCard from '$lib/components/ScoresCard.svelte';
 
   // `axisOptions()` returns the shared `MethodInfoBase[]` (it serves every
   // axis, not just review_sorts), which doesn't itself declare
@@ -313,6 +314,8 @@
       </section>
     {/if}
   {/if}
+
+  <ScoresCard />
 </div>
 
 {#if confirmSpec}
