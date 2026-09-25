@@ -324,3 +324,59 @@ def test_raw_preds_accepts_arbitrary_attributes() -> None:
     setattr(preds, 'save_dir', '/tmp/whatever')  # noqa: B010
     assert getattr(preds, 'save_dir') == '/tmp/whatever'  # noqa: B009
     assert preds.tensor.shape == (9, 1)
+
+
+# =============================================================================
+# The event loop stays responsive while the probe runs
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_probe_inference_does_not_block_the_event_loop(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, tiny_image: Path
+) -> None:
+    """The probe runs inside an API worker; blocking inference starves that
+    worker's other requests and its job heartbeat."""
+    import asyncio
+    import time
+
+    from src.services.curation import probe_predictions as pp
+
+    def slow_predict(_crop: Any) -> tuple[str, float, float, float]:
+        time.sleep(0.05)
+        return ('sedan', 0.8, 1.0, 0.4)
+
+    def build_predictor(_model_path: Path, _architecture: str) -> tuple[Any, str]:
+        return slow_predict, 'v'
+
+    def resolve_image(_image_path: str, *, config: Any) -> Path:
+        return tiny_image
+
+    monkeypatch.setattr(pp, '_build_predictor', build_predictor)
+    monkeypatch.setattr(pp, '_resolve_image', resolve_image)
+    docs = [
+        {'crop_id': f'c{i}', 'image_path': 'x.jpg', 'bbox_norm': [0.0, 0.0, 1.0, 1.0]}
+        for i in range(5)
+    ]
+
+    ticks = 0
+    done = asyncio.Event()
+
+    async def ticker() -> None:
+        nonlocal ticks
+        while not done.is_set():
+            await asyncio.sleep(0.01)
+            ticks += 1
+
+    tick_task = asyncio.create_task(ticker())
+    await pp.run_probe_inference(
+        tmp_path / 'ckpt.pt',
+        _FakeOpenSearch(docs),  # type: ignore[arg-type]
+        model_version=None,
+        architecture='yolo11',
+    )
+    done.set()
+    await tick_task
+
+    # 5 x 50 ms of inference: a free loop ticks ~20 times at 10 ms.
+    assert ticks >= 10
