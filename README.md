@@ -335,9 +335,9 @@ with open('image.jpg', 'rb') as f:
     resp = requests.post('http://localhost:4603/embed/image', files={'image': f})
 embedding = resp.json()['embedding']  # 512-dim vector
 
-# Text-to-Image Search
+# Text-to-Image Search (query params, not a JSON body -- `text`, not `query`)
 resp = requests.post('http://localhost:4603/search/text',
-                    json={'query': 'a red sports car', 'top_k': 10})
+                    params={'text': 'a red sports car', 'top_k': 10})
 results = resp.json()['results']
 
 # Image Ingestion (auto-indexes everything)
@@ -370,10 +370,8 @@ curl -X POST http://localhost:4603/detect -F "image=@photo.jpg"
 # Face Recognition
 curl -X POST http://localhost:4603/faces/recognize -F "image=@face.jpg"
 
-# Text Search
-curl -X POST http://localhost:4603/search/text \
-    -H "Content-Type: application/json" \
-    -d '{"query": "sunset beach", "top_k": 10}'
+# Text Search (query params, not a JSON body -- `text`, not `query`)
+curl -X POST "http://localhost:4603/search/text?text=sunset+beach&top_k=10"
 
 # Ingestion
 curl -X POST http://localhost:4603/ingest \
@@ -413,7 +411,7 @@ curl -X POST http://localhost:4603/ingest \
     {
       "box": {"x1": 0.30, "y1": 0.10, "x2": 0.50, "y2": 0.40},
       "confidence": 0.98,
-      "landmarks": [[0.35, 0.20], [0.45, 0.20], [0.40, 0.28], [0.36, 0.35], [0.44, 0.35]]
+      "landmarks": [0.35, 0.20, 0.45, 0.20, 0.40, 0.28, 0.36, 0.35, 0.44, 0.35]
     }
   ],
   "embeddings": [[...512 floats...]],
