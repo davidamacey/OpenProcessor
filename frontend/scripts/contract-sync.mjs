@@ -5,7 +5,7 @@
  * (`src/lib/contract/*.test.ts`) can assert against the backend's real
  * wire format instead of a hand-copied fact.
  *
- * The backend (openprocessor / OpenProcessor) generates these under
+ * The backend (OpenProcessor) generates these under
  * `contracts/` on its own repo and gates them with a pre-commit `--check`
  * hook (see `contracts/README.md` there) — this script is the frontend
  * half of that pattern: vendor at a known revision, and fail loudly when
@@ -16,9 +16,12 @@
  *   node scripts/contract-sync.mjs --check  # exit 1 if the vendored copies differ
  *
  * Env:
- *   OPENPROCESSOR_REPO   path to the OpenProcessor checkout (default: ../openprocessor,
- *                        relative to this repo's root)
+ *   OPENPROCESSOR_REPO   path to a local OpenProcessor checkout (default:
+ *                        ../OpenProcessor, relative to this repo's root)
  *   OPENPROCESSOR_REF    git ref to read from (default: main)
+ *   OPENPROCESSOR_URL    public repo URL recorded in SOURCE.md (default:
+ *                        https://github.com/davidamacey/OpenProcessor). Only
+ *                        the URL and the sha are recorded, never a local path.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -30,8 +33,13 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..');
 const vendorRoot = path.join(repoRoot, 'contracts', 'openprocessor');
 
-const OP_REPO = path.resolve(repoRoot, process.env.OPENPROCESSOR_REPO || '../openprocessor');
+const OP_REPO = path.resolve(
+  repoRoot,
+  process.env.OPENPROCESSOR_REPO || '../OpenProcessor',
+);
 const OP_REF = process.env.OPENPROCESSOR_REF || 'main';
+const OP_URL =
+  process.env.OPENPROCESSOR_URL || 'https://github.com/davidamacey/OpenProcessor';
 
 /** [backend-relative path (under contracts/), vendored-relative path]. Same
  *  subpath on both sides — only the `contracts/` vs `contracts/openprocessor/`
@@ -84,9 +92,9 @@ function backendSha() {
 function sourceMd(sha) {
   return `# Contract source
 
-Vendored from OpenProcessor (openprocessor) via \`git -C <repo> show <ref>:contracts/...\`.
+Vendored from OpenProcessor via \`git -C <repo> show <ref>:contracts/...\`.
 
-- repo: \`${OP_REPO.replace(/\\/g, '/')}\`
+- repo: \`${OP_URL}\`
 - ref: \`${OP_REF}\`
 - sha: \`${sha}\`
 - synced_at: \`${new Date().toISOString()}\`
