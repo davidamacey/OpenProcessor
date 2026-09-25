@@ -116,9 +116,17 @@ class CurationConfig:
     prompt_pack_paths: tuple[Path, ...] = ()
     source_root: Path = Path('./data/images')
     export_root: Path = Path('./data/exports')
+    # ST-4: keep-last retention for auto-named (timestamped) export dirs
+    # under export_root. 0 = keep all. Never touches custom-named exports,
+    # the `current` symlink target, or any dir pinned by a job/run/bake-off.
+    export_keep_last: int = 5
     source_path_aliases: Mapping[str, Path] = field(default_factory=dict)
     state_dir: Path = Path('/var/lib/openprocessor')
     crop_cache_dir: Path = Path('/dev/shm/openprocessor_crops')  # nosec B108 — intentional tmpfs cache
+    # ST-1: crop-cache prune threshold. write_crop_cache had no cap, so a
+    # tmpfs mount without an OS-level size limit grows unbounded. 0 disables
+    # pruning (source_image_cache.maybe_prune_crop_cache becomes a no-op).
+    crop_cache_max_bytes: int = 3 * 1024**3
     # BA-1: server-managed, content-addressed root for uploaded image
     # bytes (POST /ingest/upload). Added to _configured_roots() (see
     # image_serving.py) so the path guards accept it. Default lives
@@ -247,11 +255,13 @@ class CurationConfig:
             or defaults.prompt_pack_paths,
             source_root=_path('SOURCE_ROOT', defaults.source_root),
             export_root=_path('EXPORT_ROOT', defaults.export_root),
+            export_keep_last=_int('EXPORT_KEEP_LAST', defaults.export_keep_last),
             source_path_aliases=_parse_source_path_aliases(
                 _str('SOURCE_PATH_ALIASES', ''), defaults.source_path_aliases
             ),
             state_dir=_path('STATE_DIR', defaults.state_dir),
             crop_cache_dir=_path('CROP_CACHE_DIR', defaults.crop_cache_dir),
+            crop_cache_max_bytes=_int('CROP_CACHE_MAX_BYTES', defaults.crop_cache_max_bytes),
             upload_root=_path('UPLOAD_ROOT', defaults.upload_root),
             upload_max_images_per_request=_int(
                 'UPLOAD_MAX_IMAGES_PER_REQUEST', defaults.upload_max_images_per_request

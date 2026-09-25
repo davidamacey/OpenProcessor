@@ -499,6 +499,21 @@ def _items_body() -> dict[str, Any]:
     }
 
 
+# Fields written by label_import.py (mismatch provenance, :449-458) and by
+# the class-merge relabel script (classes.py, :506-518). Previously absent
+# from the mapping, so the index picked them up dynamically on first write
+# instead of with a deliberate type. Additive-only; see
+# `ensure_labels_confirmed_fields`.
+LABELS_CONFIRMED_EXTRA_MAPPING: dict[str, dict[str, Any]] = {
+    'class_mismatch': {'type': 'boolean'},
+    'detector_class_id': {'type': 'integer'},
+    'detector_class_name': {'type': 'keyword'},
+    'detector_confidence': {'type': 'float'},
+    'class_source': {'type': 'keyword'},
+    'updated_at': {'type': 'date'},
+}
+
+
 def _labels_confirmed_body() -> dict[str, Any]:
     return {
         'settings': _plain_settings(),
@@ -512,6 +527,7 @@ def _labels_confirmed_body() -> dict[str, Any]:
                 'label_source': {'type': 'keyword'},
                 'confirmed_at': {'type': 'date'},
                 'crop_id': {'type': 'keyword'},
+                **LABELS_CONFIRMED_EXTRA_MAPPING,
             }
         },
     }
@@ -1147,6 +1163,26 @@ async def ensure_items_cluster_geometry_fields(
     index = config.items_index
     added: list[str] = []
     for field, spec in CLUSTER_GEOMETRY_MAPPING.items():
+        try:
+            await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
+            added.append(field)
+        except Exception as exc:
+            msg = str(exc)
+            if not _is_recoverable_mapping_conflict(msg):
+                logger.error('curation_mapping_migration_failed', index=index, error=msg)
+                return {'acknowledged': False, 'index': index, 'fields_added': added, 'error': msg}
+    logger.info('curation_mapping_migration', index=index, fields=added)
+    return {'acknowledged': True, 'index': index, 'fields_added': added}
+
+
+async def ensure_labels_confirmed_fields(
+    client: AsyncOpenSearch,
+) -> dict[str, Any]:
+    """PUT :data:`LABELS_CONFIRMED_EXTRA_MAPPING` onto the labels_confirmed
+    mapping — one ``PUT _mapping`` per field, additive and idempotent."""
+    index = config.labels_confirmed_index
+    added: list[str] = []
+    for field, spec in LABELS_CONFIRMED_EXTRA_MAPPING.items():
         try:
             await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
             added.append(field)
@@ -2043,6 +2079,7 @@ __all__ = [
     'CLUSTER_GEOMETRY_MAPPING',
     'CURATION_SETTINGS_DOC_ID',
     'INDEX_BODIES',
+    'LABELS_CONFIRMED_EXTRA_MAPPING',
     'ClassRegistry',
     'ClassRegistryError',
     'ClassRegistryFile',
@@ -2064,6 +2101,7 @@ __all__ = [
     'ensure_items_validation_split_fields',
     'ensure_items_viz_fields',
     'ensure_items_vlm_raw_label_fields',
+    'ensure_labels_confirmed_fields',
     'get_class_registry',
     'get_curation_index_settings',
     'get_curation_settings',

@@ -122,11 +122,14 @@ class IVFMethod:
             logger.info(
                 'curation_ivf_too_few_vectors_single_bucket', n=n, threshold=IVF_MIN_TRAIN_VECTORS
             )
-            labels = np.zeros(n, dtype=np.int64)
+            labels, distances, backend = await _asyncio.to_thread(
+                self._fit_single_bucket, embeddings
+            )
             return ClusterResult(
                 labels=labels,
+                distances=distances,
                 method=self.name,
-                backend='faiss_cpu',
+                backend=backend,
                 params=self._params(actual_n_clusters=1, dim=d),
                 extra={
                     'n_clusters': 1,
@@ -167,6 +170,51 @@ class IVFMethod:
             'embedding_dim': dim,
             'max_train_sample': self.max_train_sample,
         }
+
+    def _fit_single_bucket(
+        self,
+        embeddings: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray, str]:
+        """Pool too small for real k-means (CM-4): persist a single
+        normalized-mean centroid instead of leaving the store untrained.
+
+        Without this, ``IVFCentroidStore.is_trained()`` stays False forever
+        on a fresh install with a small residual pool, so
+        ``should_retrain_centroids`` reports ``no_centroids_yet`` on every
+        poll (every ``ORCHESTRATOR_POLL_INTERVAL_S``, 1800s) instead of
+        applying the growth/cooldown gates.
+        """
+        from src.services.curation.clustering.methods.ivf_store import IVFCentroidStore
+
+        x = np.ascontiguousarray(embeddings, dtype=np.float32)
+        n = x.shape[0]
+        mean = x.mean(axis=0, keepdims=True)
+        norm = np.linalg.norm(mean, axis=1, keepdims=True)
+        centroid = mean / np.where(norm == 0, 1.0, norm)
+        centroid = np.ascontiguousarray(centroid, dtype=np.float32)
+
+        store = IVFCentroidStore()
+        distances = np.zeros(n, dtype=np.float32)
+        if self.persist:
+            try:
+                store.save(
+                    centroid,
+                    metadata={
+                        'sample_size': int(n),
+                        'n_trained_on': int(n),
+                        'niter': 0,
+                        'nredo': 0,
+                        'kmeans_obj': None,
+                        'backend': 'faiss_cpu',
+                        'trained_mode': 'single_bucket',
+                    },
+                )
+                _, distances = store.assign_batch_with_distances(x)
+            except Exception as exc:
+                logger.warning('curation_ivf_single_bucket_persist_failed', error=str(exc))
+
+        labels = np.zeros(n, dtype=np.int64)
+        return labels, distances, 'faiss_cpu'
 
     def _fit(
         self,

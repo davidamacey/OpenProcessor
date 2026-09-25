@@ -78,6 +78,7 @@ from src.services.curation.export_readiness import (
     NothingToExportError,
     items_index_generation,
 )
+from src.services.curation.export_retention import prune_exports_after_write
 from src.services.curation.export_support import (
     DEFAULT_SPLIT_GROUP_KEY,
     _build_export_id_map,
@@ -646,6 +647,14 @@ class GenericYoloExportService:
 
         current_symlink = self.config.export_root / 'current'
         atomic_symlink_flip(current_symlink, resolved_export_dir)
+
+        # ST-4: best-effort keep-last prune of auto-named export dirs.
+        # Never raises -- a prune failure must never fail an otherwise
+        # successful export.
+        try:
+            await asyncio.to_thread(prune_exports_after_write, self.config)
+        except Exception as exc:
+            logger.warning('export_retention_failed', error=str(exc))
 
         return ExportResult(
             export_dir=str(resolved_export_dir),

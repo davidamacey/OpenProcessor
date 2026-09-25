@@ -33,6 +33,7 @@ from src.clients.curation_opensearch import (
     ensure_items_validation_split_fields,
     ensure_items_viz_fields,
     ensure_items_vlm_raw_label_fields,
+    ensure_labels_confirmed_fields,
 )
 from src.config import IndexRole, get_curation_config, index_name
 from src.core.dependencies import get_opensearch
@@ -276,6 +277,10 @@ async def _ensure_indexes_locked(opensearch: Any) -> None:
             await ensure_items_embedding_fields(opensearch)
         except Exception as exc:
             logger.warning('curation_embedding_fields_migration_failed', error=str(exc))
+        try:
+            await ensure_labels_confirmed_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_labels_confirmed_fields_migration_failed', error=str(exc))
         # Self-heal the classes index: if a clean OS wipe left it empty,
         # repopulate from the on-disk class registry so labeling works
         # out of the box. Without this, labeler PUTs fail with

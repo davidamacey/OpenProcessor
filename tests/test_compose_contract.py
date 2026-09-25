@@ -202,3 +202,47 @@ def test_evaluator_sees_exports_at_the_api_path() -> None:
     evaluator_mounts = services['curation-evaluator'].get('volumes') or []
     assert any(str(v).startswith('./data:/app/data') for v in api_mounts)
     assert './data:/app/data:ro' in evaluator_mounts
+
+
+def test_auto_label_worker_caps_blas_threads() -> None:
+    """LG-3: AHC/UMAP on the residual pool otherwise spawns one BLAS thread
+    per host core (48 on the reference host) with nothing else configured.
+    Cap them on curation-auto-label-worker so a big recluster doesn't starve
+    the rest of a shared host."""
+    env = _services()['curation-auto-label-worker'].get('environment') or []
+    env_str = '\n'.join(str(e) for e in env)
+    assert 'OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}' in env_str
+    assert 'OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-4}' in env_str
+    assert 'MKL_NUM_THREADS=${MKL_NUM_THREADS:-4}' in env_str
+
+
+def test_api_and_detection_worker_share_crop_cache() -> None:
+    """ST-1: yolo-api and curation-detection-worker must mount the SAME
+    named crop-cache volume at the SAME target, with OP_CROP_CACHE_DIR set
+    to that target in both -- otherwise the worker's cache reads never see
+    what the API's ingest path wrote."""
+    services = _services()
+    target = '/var/cache/openprocessor/crops'
+    for name in ('yolo-api', 'curation-detection-worker'):
+        mounts = [str(v) for v in (services[name].get('volumes') or [])]
+        matching = [m for m in mounts if m.endswith(f':{target}')]
+        assert matching, f'{name} has no crop-cache mount at {target}: {mounts}'
+        volume_name = matching[0].split(':', 1)[0]
+        assert volume_name == 'openprocessor-crop-cache', (name, matching[0])
+
+        env = [str(e) for e in (services[name].get('environment') or [])]
+        assert f'OP_CROP_CACHE_DIR={target}' in env, (name, env)
+
+    top_level_volumes = _load_compose()['volumes']
+    assert 'openprocessor-crop-cache' in top_level_volumes
+
+
+def test_segmenter_hf_cache_mounted_at_appuser_home() -> None:
+    """ST-2: the segmenter container runs as uid 1000 (``appuser``) with
+    ``HF_HOME=/home/appuser/.cache/huggingface``. A cache bind at
+    ``/root/.cache/huggingface`` silently misses (wrong user), so the ~3.3G
+    of gated SAM3 weights land in the writable container layer and
+    re-download on every recreate instead of hitting the nvme bind."""
+    mounts = [str(v) for v in (_services()['segmenter'].get('volumes') or [])]
+    assert any(m.endswith(':/home/appuser/.cache/huggingface') for m in mounts), mounts
+    assert not any(m.endswith(':/root/.cache/huggingface') for m in mounts), mounts
