@@ -54,11 +54,27 @@ backend_args=(capture --api "$API" --out "$WORK/backend")
 [[ -n "${OP_DOCS_OSD:-}" ]] && backend_args+=(--osd "$OP_DOCS_OSD")
 "$PYTHON" "$SCRIPT_DIR/capture_backend_screens.py" "${backend_args[@]}"
 
+# ---------------------------------------------------------------------------
+# Per-frame display time, in centiseconds (100 = 1 s), by frame kind.
+# Dense UI frames get time to be read; terminal frames scroll by quickly.
+# Tune here; keep the GIF under ~1.5 MB (GIF_COLORS also trades size).
+declare -A DELAY=(
+  [terminal]=170           # REST calls in a terminal, one frame per step
+  [swagger]=400            # Swagger UI: groups, one endpoint, its response
+  [models]=400             # Triton model status (GET /models/)
+  [grafana]=500            # each Grafana dashboard
+  [prometheus]=400         # Prometheus scrape targets
+  [mlflow]=450             # MLflow runs and the run comparison
+  [opensearch]=450         # OpenSearch Dashboards index list
+  [cropwright]=350         # closing frames from the labeling UI
+)
+# ---------------------------------------------------------------------------
+
 mkdir -p "$WORK/seq"
 n=0
-# add_frame <png> <caption> <delay-centiseconds>
+# add_frame <png> <caption> <kind>  (kind is a key of DELAY)
 add_frame() {
-  local src="$1" caption="$2" delay="$3"
+  local src="$1" caption="$2" delay="${DELAY[$3]}"
   [[ -f "$src" ]] || return 0
   n=$((n + 1))
   local dst
@@ -71,12 +87,12 @@ add_frame() {
 }
 
 for f in "$WORK"/hero/*-terminal.png; do
-  add_frame "$f" 'REST API: detect, embed and curation status (read-only calls)' 180
+  add_frame "$f" 'REST API: detect, embed and curation status (read-only calls)' terminal
 done
-add_frame "$WORK/backend/swagger.png" 'Swagger UI: every endpoint group at /docs' 220
-add_frame "$WORK/hero/"*-swagger-endpoint.png 'Swagger UI: try any endpoint in the browser' 200
-add_frame "$WORK/hero/"*-swagger-response.png 'Swagger UI: the live response' 200
-add_frame "$WORK/backend/models.png" 'Model status: every Triton model behind the API' 260
+add_frame "$WORK/backend/swagger.png" 'Swagger UI: every endpoint group at /docs' swagger
+add_frame "$WORK/hero/"*-swagger-endpoint.png 'Swagger UI: try any endpoint in the browser' swagger
+add_frame "$WORK/hero/"*-swagger-response.png 'Swagger UI: the live response' swagger
+add_frame "$WORK/backend/models.png" 'Model status: every Triton model behind the API' models
 for f in "$WORK"/backend/grafana-*.png; do
   [[ "$f" == *-focus.png ]] && continue
   focus="${f%.png}-focus.png"
@@ -85,16 +101,16 @@ for f in "$WORK"/backend/grafana-*.png; do
     *gpu-metrics*) caption='Grafana: per-GPU utilization, memory, power and temperature' ;;
     *) caption='Grafana: live Triton throughput and latency, per model' ;;
   esac
-  add_frame "$f" "$caption" 300
+  add_frame "$f" "$caption" grafana
 done
-add_frame "$WORK/backend/prometheus-targets.png" 'Prometheus: Triton, API, node, GPU and Loki targets' 240
-add_frame "$WORK/backend/mlflow-experiments.png" 'MLflow: training runs logged by the trainer' 240
-add_frame "$WORK/backend/mlflow-compare.png" 'MLflow: two runs compared, differences only' 260
-add_frame "$WORK/backend/opensearch-indices.png" 'OpenSearch Dashboards: the curation indexes' 240
+add_frame "$WORK/backend/prometheus-targets.png" 'Prometheus: Triton, API, node, GPU and Loki targets' prometheus
+add_frame "$WORK/backend/mlflow-experiments.png" 'MLflow: training runs logged by the trainer' mlflow
+add_frame "$WORK/backend/mlflow-compare.png" 'MLflow: two runs compared, differences only' mlflow
+add_frame "$WORK/backend/opensearch-indices.png" 'OpenSearch Dashboards: the curation indexes' opensearch
 for name in clusters review; do
   src="$SHOTS/${name}-1600.png"
   [[ -f "$src" ]] || { echo "error: missing $src" >&2; exit 1; }
-  add_frame "$src" 'Cropwright: the labeling UI for this API' 280
+  add_frame "$src" 'Cropwright: the labeling UI for this API' cropwright
 done
 
 args=()

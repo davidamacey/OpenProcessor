@@ -33,5 +33,10 @@
     "title": "TensorRT on Triton",
     "icon": "cpu",
     "desc": "Every core model is exported to TensorRT FP16 with dynamic batching; Triton runs in explicit model-control mode so models load, unload and promote at runtime."
+  },
+  {
+    "title": "Monitoring and MLOps",
+    "icon": "chart",
+    "desc": "An opt-in monitoring profile: Prometheus scraping Triton, the API, host and DCGM GPU metrics, with alert rules; provisioned Grafana dashboards; Loki for container logs. MLflow tracks every training run's parameters, per-epoch metrics, lineage and artifacts."
   }
 ]

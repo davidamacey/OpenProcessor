@@ -96,7 +96,9 @@ dashboards, Prometheus targets, MLflow runs and a run comparison,
 OpenSearch Dashboards, and two closing frames from the Cropwright
 screenshots above. Each tool's frames are skipped when its URL is unset
 (Grafana's also without a login). Every request the capture makes is
-read-only. `KEEP_FRAMES=<dir>` keeps the captioned frames for review, and
+read-only. Per-frame display times are the `DELAY` table at the top of
+the script (dense UI frames 4-5 s, terminal frames under 2 s).
+`KEEP_FRAMES=<dir>` keeps the captioned frames for review, and
 `GIF_COLORS` (default 96) trades palette size against file size; keep the
 GIF under about 1.5 MB. Set `heroDemo` to `null` in
 `docs-site/site.config.ts` to hide it.
