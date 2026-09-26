@@ -18,6 +18,7 @@ import {
 } from './strategies';
 import { parseCurationSettings, type CurationSettings } from '$lib/curationSettings';
 import { mapCropSlots } from './annotations/cropSlots';
+import type { KeymapDocument, KeymapValidationIssue } from './keymapFallback';
 import type { XYXY, SlotKey, SlotData, SlotSpec, SlotFrame } from './annotations/types';
 import type { DatasetExportSpec } from './annotations/datasetExport';
 import {
@@ -542,6 +543,225 @@ export async function putCurationDefaults(
     signal,
   );
   return parseCurationSettings(raw);
+}
+
+// -- configurable keyboard shortcuts (K2, docs/design/
+//    configurable-keyboard-shortcuts-plan-2026-09-26.md §0/§4) ----------
+//
+// The keymap is per-project (owner decision §0.1): every route below is
+// scoped through `scoped()`, and there is no separate global route. A
+// backend that predates OpenProcessor W2b 404s/501s `GET {prefix}/keymap`
+// — `keymapAvailability`/`loadKeymap()` treat that as "stay on
+// FALLBACK_KEYMAP", not an error.
+
+export interface KeymapValidateRequest {
+  overrides: Record<string, string[]>;
+}
+
+export interface KeymapClassConflict {
+  project: string;
+  class_id: number;
+  class_name: string;
+  combo: string;
+  action_id: string;
+}
+
+export interface KeymapValidationReport {
+  ok: boolean;
+  errors: KeymapValidationIssue[];
+  warnings: KeymapValidationIssue[];
+  force_allowed: boolean;
+  resolved?: Record<string, string[]>;
+  reserved_hotkeys?: string[];
+  class_conflicts?: KeymapClassConflict[];
+}
+
+export interface KeymapPutRequest {
+  expected_revision: number;
+  overrides: Record<string, string[]>;
+  unbind_conflicting_class_hotkeys?: boolean;
+}
+
+export interface KeymapPutResponse extends KeymapDocument {
+  unbound_class_hotkeys?: Array<{
+    project: string;
+    class_id: number;
+    class_name: string;
+    was: string;
+  }>;
+}
+
+export interface KeymapResetRequest {
+  expected_revision: number;
+  /** `null`/omitted = reset every action. */
+  action_ids?: string[] | null;
+  unbind_conflicting_class_hotkeys?: boolean;
+}
+
+/** `GET {prefix}/keymap` — the effective document for the active project. */
+export async function getKeymap(signal?: AbortSignal): Promise<KeymapDocument> {
+  return apiFetch<KeymapDocument>(`${scoped()}/keymap`, {}, signal);
+}
+
+/** `POST {prefix}/keymap/validate` — always 200, a dry-run report. Never
+ *  throws on `ok: false`; the caller renders `errors`/`warnings` verbatim. */
+export async function validateKeymap(
+  body: KeymapValidateRequest,
+  signal?: AbortSignal,
+): Promise<KeymapValidationReport> {
+  return apiFetch<KeymapValidationReport>(
+    `${scoped()}/keymap/validate`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/**
+ * `PUT {prefix}/keymap` — replace the whole override map (OCC via
+ * `expected_revision`).
+ *
+ * Throws `ApiError` on:
+ *   409 `revision_conflict`      — `keymapRevisionConflictDetail(e)`
+ *   409 `class_hotkey_conflict`  — `keymapClassConflictDetail(e)`
+ *   422 `validation_failed`      — `keymapValidationFailedDetail(e)`
+ */
+export async function putKeymap(
+  body: KeymapPutRequest,
+  signal?: AbortSignal,
+): Promise<KeymapPutResponse> {
+  return apiFetch<KeymapPutResponse>(
+    `${scoped()}/keymap`,
+    { method: 'PUT', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** `POST {prefix}/keymap/reset` — same error shapes as `putKeymap`. */
+export async function resetKeymap(
+  body: KeymapResetRequest,
+  signal?: AbortSignal,
+): Promise<KeymapPutResponse> {
+  return apiFetch<KeymapPutResponse>(
+    `${scoped()}/keymap/reset`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+export interface KeymapRevisionConflictDetail {
+  message: string;
+  current_revision: number;
+}
+
+export function keymapRevisionConflictDetail(
+  e: unknown,
+): KeymapRevisionConflictDetail | null {
+  if (!(e instanceof ApiError) || e.status !== 409) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const d = detail as Record<string, unknown>;
+  if (d.error !== 'revision_conflict') return null;
+  if (typeof d.current_revision !== 'number') return null;
+  return {
+    message: typeof d.message === 'string' ? d.message : 'The keymap changed elsewhere.',
+    current_revision: d.current_revision,
+  };
+}
+
+export interface KeymapClassConflictDetail {
+  message: string;
+  current_revision: number;
+  report: KeymapValidationReport;
+  class_conflicts: KeymapClassConflict[];
+}
+
+export function keymapClassConflictDetail(e: unknown): KeymapClassConflictDetail | null {
+  if (!(e instanceof ApiError) || e.status !== 409) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const d = detail as Record<string, unknown>;
+  if (d.error !== 'class_hotkey_conflict') return null;
+  return {
+    message: typeof d.message === 'string' ? d.message : 'That key is bound to a class.',
+    current_revision: typeof d.current_revision === 'number' ? d.current_revision : 0,
+    report: (d.report as KeymapValidationReport) ?? {
+      ok: false,
+      errors: [],
+      warnings: [],
+      force_allowed: false,
+    },
+    class_conflicts: Array.isArray(d.class_conflicts)
+      ? (d.class_conflicts as KeymapClassConflict[])
+      : [],
+  };
+}
+
+export interface KeymapValidationFailedDetail {
+  message: string;
+  current_revision: number;
+  report: KeymapValidationReport;
+}
+
+export function keymapValidationFailedDetail(
+  e: unknown,
+): KeymapValidationFailedDetail | null {
+  if (!(e instanceof ApiError) || e.status !== 422) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const d = detail as Record<string, unknown>;
+  if (d.error !== 'validation_failed') return null;
+  return {
+    message: typeof d.message === 'string' ? d.message : 'The keymap has an error.',
+    current_revision: typeof d.current_revision === 'number' ? d.current_revision : 0,
+    report: (d.report as KeymapValidationReport) ?? {
+      ok: false,
+      errors: [],
+      warnings: [],
+      force_allowed: false,
+    },
+  };
+}
+
+/** `PUT /classes/{id}` 422 `hotkey_reserved` (plan §4.5). */
+export interface HotkeyReservedDetail {
+  message: string;
+  actions: Array<{ action_id: string; context: string; label: string }>;
+}
+
+export function hotkeyReservedDetail(e: unknown): HotkeyReservedDetail | null {
+  if (!(e instanceof ApiError) || e.status !== 422) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const d = detail as Record<string, unknown>;
+  if (d.error !== 'hotkey_reserved') return null;
+  return {
+    message: typeof d.message === 'string' ? d.message : 'That letter is reserved.',
+    actions: Array.isArray(d.actions)
+      ? (d.actions as HotkeyReservedDetail['actions'])
+      : [],
+  };
+}
+
+/** `PUT /classes/{id}` 409 `hotkey_taken` (plan §4.5). */
+export interface HotkeyTakenDetail {
+  message: string;
+  class_id: number;
+  class_name: string;
+}
+
+export function hotkeyTakenDetail(e: unknown): HotkeyTakenDetail | null {
+  if (!(e instanceof ApiError) || e.status !== 409) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const d = detail as Record<string, unknown>;
+  if (d.error !== 'hotkey_taken') return null;
+  if (typeof d.class_id !== 'number' || typeof d.class_name !== 'string') return null;
+  return {
+    message:
+      typeof d.message === 'string' ? d.message : `Already bound to ${d.class_name}.`,
+    class_id: d.class_id,
+    class_name: d.class_name,
+  };
 }
 
 // -- embedding projection (2-d visualization overlay, Phase 5) -----------

@@ -312,6 +312,14 @@ class Stub:
                 "region_drain": {"poll_interval_s": 10, "stable_polls": 3},
             },
         )
+        # K2 (docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md
+        # §5.1): the root layout's `loadKeymap()` fires `GET {prefix}/keymap`
+        # on EVERY route now, same "every existing test needs a default"
+        # rationale as `/bakeoff/runs`/`/ingest/status` above. Defaults to a
+        # 404 — the pre-W2b behaviour every test was written against — so
+        # every existing test stays green without editing each one;
+        # `test_keymap.py` overrides this per-test with a served document.
+        self.on("GET", r"/keymap(\?|$)", (404, {"detail": "not found"}))
 
         page.route(f"**{api_prefix}/**", self._dispatch)
 

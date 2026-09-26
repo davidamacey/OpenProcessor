@@ -126,4 +126,56 @@ describe('setClassHotkey — server 400/409/422 detail surfaces verbatim in the 
     const last = toastStore.toasts.at(-1);
     expect(last?.text).toContain('reserved for a labeling action');
   });
+
+  // K2 (plan §4.5): a server-side reserved-hotkey race (the client-side
+  // check above missed it, e.g. a keymap rebind landed between page load
+  // and this write) names which action(s) actually own the key, rather
+  // than a generic string.
+  it('names the owning actions for a structured 422 hotkey_reserved detail', async () => {
+    classesStore.reservedHotkeys = []; // client-side check must not catch this first
+    vi.mocked(renameClass).mockRejectedValue(
+      new ApiError(422, '/curation/classes/8', {
+        detail: {
+          error: 'hotkey_reserved',
+          message: "'q' is Discard on Review and Cluster.",
+          actions: [
+            {
+              action_id: 'review.queue.discard',
+              context: 'review.queue',
+              label: 'Discard',
+            },
+            {
+              action_id: 'cluster.discard',
+              context: 'cluster',
+              label: 'Discard selected',
+            },
+          ],
+        },
+      }),
+    );
+    const target = cls({ id: 8, name: 'widget_a' });
+    await setClassHotkey(target, 'q');
+    const last = toastStore.toasts.at(-1);
+    expect(last?.kind).toBe('error');
+    expect(last?.text).toContain('Discard');
+    expect(last?.text).toContain('Discard selected');
+  });
+
+  it('names the owning class for a structured 409 hotkey_taken detail', async () => {
+    vi.mocked(renameClass).mockRejectedValue(
+      new ApiError(409, '/curation/classes/8', {
+        detail: {
+          error: 'hotkey_taken',
+          message: "'k' is already bound to 'kart'.",
+          class_id: 9,
+          class_name: 'kart',
+        },
+      }),
+    );
+    const target = cls({ id: 8, name: 'widget_a' });
+    await setClassHotkey(target, 'k');
+    const last = toastStore.toasts.at(-1);
+    expect(last?.kind).toBe('error');
+    expect(last?.text).toContain("bound to 'kart'");
+  });
 });
