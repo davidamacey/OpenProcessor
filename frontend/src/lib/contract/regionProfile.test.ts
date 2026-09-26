@@ -19,6 +19,8 @@ const FRONTEND_KEYS = {
   display_name_singular: true,
   region_class_name: true,
   text_reader: true,
+  reads_text: true,
+  text_hint_enabled: true,
 } satisfies Record<keyof ServedRegionProfile, true>;
 
 describe('RegionProfileSummary', () => {

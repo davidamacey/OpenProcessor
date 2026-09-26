@@ -219,9 +219,15 @@
          width; the disagree badge wraps under it instead of squeezing the
          value to "6…" on a narrow card. C6: plain text, no emoji glyph. -->
     <div class="flex min-w-0 flex-wrap items-center justify-between gap-1 font-mono">
-      <span class="min-w-0 truncate text-zinc-300" data-testid="slot-text-value"
-        >{data.text?.value ?? '—'}</span
-      >
+      <!-- OpenProcessor W1 (text-free regions): a slot with no text
+           capability at all never renders a text value/row, not even a
+           "—" placeholder — showing one implied the profile reads text
+           when it structurally doesn't. -->
+      {#if slot.capabilities.text}
+        <span class="min-w-0 truncate text-zinc-300" data-testid="slot-text-value"
+          >{data.text?.value ?? '—'}</span
+        >
+      {/if}
       <span class="shrink-0 text-zinc-500">
         {data.subBox?.score != null ? `${(data.subBox.score * 100).toFixed(0)}%` : '—'}
       </span>

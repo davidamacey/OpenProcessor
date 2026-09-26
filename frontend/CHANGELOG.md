@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Text-free region profiles** (OpenProcessor W1 cutover,
+  5cbd7ee4). `RegionProfileSummary` (served on `GET {API_PREFIX}/health`
+  and `/regions/vocabulary`) gains `reads_text`/`text_hint_enabled`, and
+  `text_reader` may now be the sentinel `'none'`. Whether a region slot
+  gets a text capability (the review-panel text row, `SlotCard`'s text
+  value, `CropMetaPanel`'s text section, the text review filter) is now
+  gated on the served `reads_text` (`profileReadsText()`,
+  `servedRegionSlot.ts`) instead of a truthy `text_reader` string, which
+  used to treat `'none'` as "reads text". A pre-W1 backend that doesn't
+  serve `reads_text` falls back to the old `text_reader`-non-empty check
+  (now also excluding the literal `'none'`). Fixed two real bugs found
+  while verifying this: `SlotCard`'s text-value span and the `/review`
+  slot panel's text input row both rendered unconditionally regardless
+  of the slot's text capability — a text-free slot showed an empty "—"
+  value / an editable (but always-422ing) text field. Both now render
+  nothing when `slot.capabilities.text` is absent.
+
 - **Local, multi-arch release pipeline** (`./scripts/release.sh` +
   `scripts/release/NN-*.sh`), replacing the earlier
   `.github/workflows/release.yml` (removed; releases are cut locally so

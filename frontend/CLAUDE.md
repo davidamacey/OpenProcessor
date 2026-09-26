@@ -1235,12 +1235,32 @@ never depended on the burn-in).
 The backend serves at most one region profile, on
 `GET {API_PREFIX}/health` (and `GET {API_PREFIX}/regions/vocabulary`) as
 `region_profile: {name, display_name, display_name_singular,
-region_class_name, text_reader} | null` (`display_name_singular` added
-2026-09-25, OpenProcessor #36 item 10 — see below). **It is the only
+region_class_name, text_reader, reads_text, text_hint_enabled} | null`
+(`display_name_singular` added 2026-09-25, OpenProcessor #36 item 10;
+`reads_text`/`text_hint_enabled` added 2026-09-26, OpenProcessor W1
+"text-free region mode", 5cbd7ee4 — see below). **It is the only
 gate for region features.** With `null`, every
 region route (`/regions`, `/crops/{id}/region*`, region undo, the VLM
 verify routes, `/regions/clusters`) answers 409, so the UI renders no
 region surface at all and calls none of them.
+
+- **Text-free profiles (OpenProcessor W1, 2026-09-26).** A profile can
+  detect/segment a region without ever reading text off it —
+  `text_reader: 'none'`, `reads_text: false`. Whether the synthesized
+  region slot gets a text capability (`SlotCard`'s text value,
+  `/review`'s inline text row/edit, `CropMetaPanel`'s text section, the
+  region browse text filter) is gated on `profileReadsText()`
+  (`servedRegionSlot.ts`): prefers the served `reads_text`; a backend
+  that predates the field (`undefined`) falls back to `text_reader`
+  being non-empty and not the literal `'none'`. On a text-free profile,
+  `/regions/vocabulary` also serves `text_rules: null`/
+  `text_choices: []` and drops the `ocr` actor and (when the profile is
+  segmenter-only) the `detector` entry — `regionVocabularyStore` already
+  renders both as empty/absent cleanly. A `region_meta` PATCH carrying
+  `region_text` against a text-free profile 422s
+  `{"detail":{"error":"region_text_disabled"}}`, surfaced through the
+  existing generic `ApiError`/toast path (no special-casing needed — the
+  detail's `error` string already becomes the toast text).
 
 - `regionProfileStore` / `loadRegionProfile()`
   (`src/lib/stores/regionProfile.svelte.ts`) reads the prefixed
