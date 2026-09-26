@@ -404,10 +404,13 @@ def test_class_remap_copy_reports_failure_loudly_for_a_subset_run(
     assert (save_dir / 'weights' / 'class_remap.json').is_file()
 
 
-def test_class_remap_copy_is_a_no_op_for_a_whole_export_run(
+def test_class_remap_copy_is_a_no_op_for_a_whole_export_run_missing_the_remap(
     jobs_dir: Path, export_dir: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """A full-class run legitimately has no remap -- that is not a failure."""
+    """Without ``write_full_class_remap`` having run (this test parses the
+    spec directly, skipping ``prepare_dataset``), a full-class run has no
+    ``full_class_remap_path`` file yet -- that alone is not a failure; an
+    export that predates the dense-id remap hits this same path for real."""
     monkeypatch.setattr(job_protocol, 'TMP_ROOT', tmp_path / 'tmp')
     job_id = _write_job(dataset_export_dir=str(export_dir))
     spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
@@ -416,6 +419,51 @@ def test_class_remap_copy_is_a_no_op_for_a_whole_export_run(
 
     assert dataset_prep.copy_class_remap_to_weights_dir(spec, save_dir) is True
     assert not (save_dir / 'weights' / 'class_remap.json').exists()
+
+
+def test_write_full_class_remap_for_a_whole_export_run_with_a_registry_gap(
+    jobs_dir: Path, export_dir: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The root-cause fix: a whole-export run's dense export ids (0/1/2) do
+    NOT equal its registry ids (5/9/12, the ``export_dir`` fixture's
+    deliberately-gapped registry) -- promote's ``labels.txt`` must be built
+    from this remap, never straight from the registry.
+
+    Before the fix, ``write_full_class_remap`` did not exist and a
+    whole-export run left promote with only the (registry-id-keyed) live
+    registry -- ``build_class_id_to_name`` for ``remap.source == 'none'``
+    then wrote ``labels.txt`` line 0 as registry class 0's name (nothing,
+    here) instead of dense id 0's real class (``widget``, registry id 5).
+    """
+    monkeypatch.setattr(job_protocol, 'TMP_ROOT', tmp_path / 'tmp')
+    job_id = _write_job(dataset_export_dir=str(export_dir))
+    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+
+    written = dataset_prep.write_full_class_remap(spec)
+    assert written == spec.full_class_remap_path
+    payload = json.loads(written.read_text())
+    assert payload['original_to_new'] == {'5': 0, '9': 1, '12': 2}
+    assert payload['names'] == ['widget', 'serial_plate', 'gadget']
+    assert payload['single_cls'] is False
+    assert payload['include_classes'] is None
+
+    save_dir = tmp_path / 'run'
+    save_dir.mkdir()
+    assert dataset_prep.copy_class_remap_to_weights_dir(spec, save_dir) is True
+    weights_remap = save_dir / 'weights' / 'class_remap.json'
+    assert weights_remap.is_file()
+
+    remap = resolve_class_remap(job_id=job_id, checkpoint_path=weights_remap, manifest=None)
+    assert remap.source == 'weights_dir'
+
+    # The bug, made concrete: registry ids are NOT 0/1/2, so an identity
+    # map (what the pre-fix code effectively used) would mislabel every
+    # class after the first. This must fail on today's (pre-fix) code.
+    full_registry = {5: 'widget', 9: 'serial_plate', 12: 'gadget'}
+    labels = build_class_id_to_name(remap=remap, full_registry=full_registry)
+    assert labels == {0: 'widget', 1: 'serial_plate', 2: 'gadget'}
+    identity_guess = {i: full_registry.get(i, f'unknown_{i}') for i in range(3)}
+    assert labels != identity_guess
 
 
 # =============================================================================
@@ -1142,20 +1190,32 @@ def test_run_job_drives_a_whole_export_run_to_finished(
     # own claim), so it stays None.
     assert manifest['lineage']['dataset_sha'] is None
     assert manifest['lineage']['frozen_test_sha'] == 'sha-frozen-test'
-    assert manifest['lineage']['class_remap'] is None  # whole-export run
+    # Whole-export runs now carry a class_remap too (the promote-labels
+    # fix): the export fixture's class_registry.json maps registry ids
+    # 5/9/12 -> dense ids 0/1/2, so a full-class run's manifest must
+    # capture that translation, not None.
+    assert manifest['lineage']['class_remap'] is not None
+    assert manifest['lineage']['class_remap']['original_to_new'] == {'5': 0, '9': 1, '12': 2}
+    assert manifest['lineage']['class_remap']['names'] == ['widget', 'serial_plate', 'gadget']
     assert manifest['lineage']['training_seed'] == 7
     assert manifest['lineage']['deterministic'] is True
     assert manifest['results']['final_state'] == 'finished'
     assert manifest['results']['checkpoint_sha256']
     assert manifest['promoted_to'] is None
 
-    # A full-class run must not leave a remap for promote to trip over.
-    assert (
-        resolve_class_remap(
-            job_id=job_id, checkpoint_path=Path(status.checkpoint_path), manifest=manifest
-        ).source
-        == 'none'
+    # A full-class run's remap resolves from the manifest, and labels.txt
+    # for the promoted model must be keyed by the registry id each dense
+    # id actually maps to -- not identity.
+    remap = resolve_class_remap(
+        job_id=job_id, checkpoint_path=Path(status.checkpoint_path), manifest=manifest
     )
+    assert remap.source == 'manifest'
+    full_registry = {5: 'widget', 9: 'serial_plate', 12: 'gadget'}
+    assert build_class_id_to_name(remap=remap, full_registry=full_registry) == {
+        0: 'widget',
+        1: 'serial_plate',
+        2: 'gadget',
+    }
     # tmp scratch is always cleaned.
     assert not spec.tmp_root.exists()
 

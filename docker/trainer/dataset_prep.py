@@ -145,6 +145,7 @@ def prepare_dataset(spec: JobSpec) -> tuple[Path, set[int]]:
         if not data_yaml_path.is_file():
             msg = f'export missing data.yaml at {data_yaml_path}'
             raise FileNotFoundError(msg)
+        write_full_class_remap(spec)
 
     text_classes = resolve_text_classes(spec, data_yaml_path)
     if text_classes:
@@ -195,15 +196,93 @@ def _build_augmented_view(spec: JobSpec, data_yaml_path: Path, text_classes: set
 # ---------------------------------------------------------------------------
 
 
-def read_class_remap(spec: JobSpec) -> dict[str, Any] | None:
-    """Recover ``class_remap.json`` for a subset-trained run.
+def _class_remap_source_path(spec: JobSpec) -> Path:
+    """Where this run's ``class_remap.json`` lives, subset or whole-export."""
+    return (
+        spec.subset_dir / 'class_remap.json' if spec.is_subset_run else spec.full_class_remap_path
+    )
 
-    :func:`subset_dataset.build_subset_view` writes it under the per-job tmp
-    dir, which ``run_job``'s ``finally`` block rmtree's -- so the manifest
-    writer (which runs BEFORE cleanup) is the only window to capture it into
-    ``manifest.lineage.class_remap``.
+
+def write_full_class_remap(spec: JobSpec) -> Path | None:
+    """Synthesize ``class_remap.json`` for a whole-export (non-subset) run.
+
+    Promote used to trust the **live** class registry for a full-class run's
+    ``labels.txt`` (registry ``class_id`` -> name), which is only correct
+    when the registry's non-deprecated ids happen to be exactly ``0..N-1``.
+    The exporter (``src/services/curation/export.py``) always renumbers to a
+    dense, gap-free id space and snapshots the translation it used into this
+    export's own ``class_registry.json`` as ``export_id_map`` -- that
+    snapshot, not the live (or even the submit-time-pinned) registry, is the
+    ground truth for what a model trained on this export actually predicts.
+    Writing the same ``class_remap.json`` shape a subset run already
+    produces means promote's remap resolution (``resolve_class_remap`` /
+    ``build_class_id_to_name``) needs no full-class special case at all.
+
+    Returns the written path, or ``None`` on any failure -- logged loudly,
+    never silent, since promote falling back to the (potentially wrong)
+    live-registry path for a run missing this file is exactly the bug this
+    function exists to close.
     """
-    candidate = spec.subset_dir / 'class_remap.json'
+    registry_path = spec.dataset_export_dir / 'class_registry.json'
+    try:
+        payload = json.loads(registry_path.read_text(encoding='utf-8'))
+    except (OSError, ValueError) as exc:
+        logger.error(
+            'full_class_remap_registry_unreadable',
+            job_id=spec.job_id,
+            registry_path=str(registry_path),
+            error=str(exc),
+        )
+        return None
+    export_id_map_raw = payload.get('export_id_map')
+    if not isinstance(export_id_map_raw, dict) or not export_id_map_raw:
+        logger.warning(
+            'full_class_remap_no_export_id_map',
+            job_id=spec.job_id,
+            note='export predates the dense-id remap; promote falls back to its legacy path',
+        )
+        return None
+    try:
+        export_id_map = {int(k): int(v) for k, v in export_id_map_raw.items()}
+    except (TypeError, ValueError) as exc:
+        logger.error('full_class_remap_export_id_map_malformed', job_id=spec.job_id, error=str(exc))
+        return None
+    name_by_registry_id = {
+        int(c['class_id']): str(c['class_name'])
+        for c in payload.get('classes') or []
+        if 'class_id' in c and 'class_name' in c
+    }
+    names_by_dense_id: dict[int, str] = {}
+    for registry_id, dense_id in export_id_map.items():
+        names_by_dense_id[dense_id] = name_by_registry_id.get(registry_id, f'class_{registry_id}')
+    names = [names_by_dense_id[i] for i in sorted(names_by_dense_id)]
+    remap_payload = {
+        'original_to_new': {str(k): v for k, v in export_id_map.items()},
+        'new_to_original': {str(v): k for k, v in export_id_map.items()},
+        'single_cls': False,
+        'names': names,
+        'include_classes': None,
+    }
+    dest = spec.full_class_remap_path
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(json.dumps(remap_payload, indent=2), encoding='utf-8')
+    except OSError as exc:
+        logger.error('full_class_remap_write_failed', job_id=spec.job_id, error=str(exc))
+        return None
+    return dest
+
+
+def read_class_remap(spec: JobSpec) -> dict[str, Any] | None:
+    """Recover ``class_remap.json`` for this run, subset or whole-export.
+
+    :func:`subset_dataset.build_subset_view` (subset runs) and
+    :func:`write_full_class_remap` (whole-export runs) both write under the
+    per-job tmp dir, which ``run_job``'s ``finally`` block rmtree's -- so the
+    manifest writer (which runs BEFORE cleanup) is the only window to
+    capture it into ``manifest.lineage.class_remap``.
+    """
+    candidate = _class_remap_source_path(spec)
     if not candidate.is_file():
         return None
     try:
@@ -215,7 +294,7 @@ def read_class_remap(spec: JobSpec) -> dict[str, Any] | None:
 
 
 def copy_class_remap_to_weights_dir(spec: JobSpec, save_dir: Path) -> bool:
-    """Copy ``class_remap.json`` from the tmp subset dir next to ``best.pt``.
+    """Copy ``class_remap.json`` from the tmp dir next to ``best.pt``.
 
     Without this the file only ever lives under the per-job tmp dir, which is
     rmtree'd at job end -- leaving promote with a single source (the manifest's
@@ -226,13 +305,17 @@ def copy_class_remap_to_weights_dir(spec: JobSpec, save_dir: Path) -> bool:
 
     Atomic tmp-file-then-rename. Returns ``True`` on success. A failure here is
     reported loudly (``status.class_remap_copy_failed``), never a silent skip:
-    a missing remap for a subset run makes promote serve the full registry's
-    ``labels.txt`` against a subset-trained model.
+    a missing remap makes promote fall back to its legacy (registry-id-keyed)
+    path, which is exactly the serving-correctness bug this whole mechanism
+    exists to close -- for a subset run as much as a whole-export one.
 
-    A whole-export run never writes this file; that is not an error, so the
-    return value is ``True`` only when the run genuinely isn't a subset run.
+    A whole-export run whose ``write_full_class_remap`` call already logged
+    a soft failure (an export that predates the dense-id remap) legitimately
+    has no file to copy -- promote's own legacy fallback handles that case
+    explicitly, so that is not an error here either. A subset run missing
+    its file IS an error: ``build_subset_view`` always writes one.
     """
-    src = spec.subset_dir / 'class_remap.json'
+    src = _class_remap_source_path(spec)
     if not src.is_file():
         return not spec.is_subset_run
     try:
