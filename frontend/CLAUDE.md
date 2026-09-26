@@ -569,7 +569,11 @@ Past-runs table actions:
 message, class_name?}], force_allowed, override?, thresholds?}`
   (`promoteGateDetail`); the modal renders the message, each failure and
   the override hint, and offers a "Promote anyway" checkbox (sends
-  `force: true`) only when the server says `force_allowed` (F-64).
+  `force: true`) only when the server says `force_allowed` (F-64). The
+  success toast adds "the first prediction will be slow while its engine
+  builds" only when the response serves
+  `cold_start_expected_on_first_inference: true` (OpenProcessor ffb88b8;
+  `promoteSuccessMessage`, `$lib/promote.ts`).
 - **Reproduce** — fetches `{API_PREFIX}/train/manifest/{job_id}` and submits a
   fresh job with the same `spec`/`lineage`. Phase 6 polish — design §15.4.
 

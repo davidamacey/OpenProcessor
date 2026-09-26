@@ -439,4 +439,7 @@ export interface PromoteResponse {
   config_path: string;
   labels_path: string;
   triton_loaded: boolean;
+  /** OpenProcessor ffb88b8: the first inference after a promote builds the
+   *  TensorRT engine and is slow. Absent on older backends. */
+  cold_start_expected_on_first_inference?: boolean;
 }

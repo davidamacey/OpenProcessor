@@ -123,6 +123,11 @@ compose pull && docker compose up -d` — no `git clone` needed.
 
 ### Changed
 
+- **Promote warns about the slow first prediction.** OpenProcessor ffb88b8
+  serves `cold_start_expected_on_first_inference` on
+  `POST /train/promote/{job_id}` (the first inference builds the TensorRT
+  engine, ~85 s); when true, the success toast says the first prediction
+  will be slow. Vendored contracts pinned to OpenProcessor `main` ffb88b8.
 - **New tagline: "From raw images to a trained detector, without labeling
   one box at a time."** Used in the README, the docs landing hero (with a
   supporting line), the docs introduction, `package.json` and the image's

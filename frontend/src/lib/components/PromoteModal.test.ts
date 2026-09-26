@@ -8,6 +8,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import PromoteModal from './PromoteModal.svelte';
 import { ApiError, promoteTrainJob } from '$lib/api';
 import { defaultTritonName } from '$lib/promote';
+import { toastStore } from '$stores/toast.svelte';
 
 vi.mock('$lib/api', async () => {
   const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
@@ -116,5 +117,46 @@ describe('defaultTritonName', () => {
     expect(defaultTritonName('a:b.c')).toBe('a_b_c');
     expect(defaultTritonName('x'.repeat(80))).toHaveLength(64);
     expect(defaultTritonName('2026-09-25T17-01-25_yolo26s')).not.toMatch(/_v\d+$/);
+  });
+});
+
+describe('PromoteModal success toast', () => {
+  const RES = {
+    job_id: 'run-1',
+    triton_name: 'run_1',
+    onnx_path: '/m/model.onnx',
+    config_path: '/m/config.pbtxt',
+    labels_path: '/m/labels.txt',
+    triton_loaded: true,
+  };
+
+  async function promoteWith(extra: Record<string, unknown>): Promise<string> {
+    const success = vi.spyOn(toastStore, 'success');
+    vi.mocked(promoteTrainJob).mockResolvedValue({ ...RES, ...extra });
+    instance = mount(PromoteModal, {
+      target,
+      props: { open: true, jobId: 'run-1', defaultName: 'run_1', onclose: () => {} },
+    });
+    flushSync();
+    submitButton().click();
+    await vi.waitFor(() => expect(success).toHaveBeenCalled());
+    const msg = String(success.mock.calls[0][0]);
+    success.mockRestore();
+    return msg;
+  }
+
+  it('warns the first prediction is slow when the server expects a cold start', async () => {
+    const msg = await promoteWith({ cold_start_expected_on_first_inference: true });
+    expect(msg).toContain('Promoted run_1');
+    expect(msg).toMatch(/first prediction will be slow/i);
+  });
+
+  it('says nothing about a cold start when the server says none, or omits the field', async () => {
+    expect(await promoteWith({ cold_start_expected_on_first_inference: false })).toBe(
+      'Promoted run_1 → Triton',
+    );
+    if (instance) unmount(instance);
+    instance = undefined;
+    expect(await promoteWith({})).toBe('Promoted run_1 → Triton');
   });
 });

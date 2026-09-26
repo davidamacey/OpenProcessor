@@ -10,7 +10,11 @@
    * `force_allowed`.
    */
   import { promoteTrainJob } from '$lib/api';
-  import { promoteGateDetail, type PromoteGateDetail } from '$lib/promote';
+  import {
+    promoteGateDetail,
+    promoteSuccessMessage,
+    type PromoteGateDetail,
+  } from '$lib/promote';
   import { toastStore } from '$stores/toast.svelte';
   import type { PromoteRequest, PromoteResponse } from '$lib/types_train';
 
@@ -59,7 +63,7 @@
       };
       if (force && gate?.force_allowed) body.force = true;
       const res = await promoteTrainJob(jobId, body);
-      toastStore.success(`Promoted ${res.triton_name} → Triton`);
+      toastStore.success(promoteSuccessMessage(res));
       onpromoted?.(res);
       onclose();
     } catch (e) {

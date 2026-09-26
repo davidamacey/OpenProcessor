@@ -9,6 +9,7 @@
  * guess.
  */
 import { ApiError } from '$lib/api';
+import type { PromoteResponse } from '$lib/types_train';
 
 export interface PromoteGateFailure {
   code: string;
@@ -68,4 +69,15 @@ export function defaultTritonName(jobId: string): string {
     .replace(/_+/g, '_')
     .replace(/^_|_$/g, '');
   return safe.slice(0, TRITON_NAME_MAX) || 'model';
+}
+
+/** Success toast after a promote. Adds the slow-first-prediction note only
+ *  when the server says a cold start is expected (OpenProcessor ffb88b8). */
+export function promoteSuccessMessage(
+  res: Pick<PromoteResponse, 'triton_name' | 'cold_start_expected_on_first_inference'>,
+): string {
+  const base = `Promoted ${res.triton_name} → Triton`;
+  return res.cold_start_expected_on_first_inference === true
+    ? `${base}. The first prediction will be slow while its engine builds.`
+    : base;
 }
