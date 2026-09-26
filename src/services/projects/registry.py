@@ -173,6 +173,20 @@ class ProjectRegistry:
             return default_project_record(self._by_slug.get(DEFAULT_SLUG))
         return self._by_slug.get(slug)
 
+    def active_projects(self) -> list[ProjectRecord]:
+        """Every ``active`` project (``default`` included), for workers
+        that must discover the whole fleet instead of binding one slug.
+        Archived/deleting/building/failed projects are excluded -- a
+        worker skips them entirely, the same way a request to their
+        indexes would 404/409 at the route layer."""
+        return [record for record in self.snapshot().values() if record.status == 'active']
+
+    def archived_projects(self) -> list[ProjectRecord]:
+        """Every ``archived`` project, for maintenance scripts
+        (``prune_exports.py``, ``prune_training_runs.py``) that must still
+        clean up a project's own files after it stops taking traffic."""
+        return [record for record in self.snapshot().values() if record.status == 'archived']
+
     async def ensure_fresh(self) -> None:
         """One GET of the revision counter; a ``_search`` over every
         project doc only when the counter moved.
