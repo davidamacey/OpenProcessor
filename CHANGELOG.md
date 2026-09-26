@@ -8,33 +8,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Projects foundation (P1, partial — commits 1-4 of 5).**
+- **Projects foundation (P1).**
   `src/config/projects.py` (`ProjectRecord`/`ProjectResources`,
   `resources_for_default`/`resources_for_new`, slug validation),
   `src/config/project_context.py` (`ContextVar`-based `BoundProject`,
   `current_project()`/`bind_project()`/`set_bound_project()`,
-  `run_in_executor_bound()`, `project_env()`), and
+  `bind_process_project()` for script entry points,
+  `run_in_executor_bound()`, `project_jobs_dir()`, `project_env()`), and
   `src/services/projects/` (`registry.py`: the `op_projects` index
-  snapshot, revision-gated `ensure_fresh()`/`poll_loop()`;
-  `bootstrap.py`: idempotent `default` project upsert, no data
-  migration; `guard.py`: transport-level OpenSearch project guard —
-  `CrossProjectAccess`/`ProjectNotBound`/`ProjectReadOnly`,
-  `make_curation_opensearch()` as the one factory; `capacity.py`:
-  read-only shard/heap capacity check, no fixed project cap).
-  `src/config/curation.py`'s `get_curation_config()` now returns a
-  `CurationConfigView` resolving `PROJECT_SCOPED_FIELDS` from the
-  bound project. New `GET /curation/projects` and
-  `GET /curation/projects/{project}` on a `global_router`
-  (`src/routers/curation/projects.py` + `_project_models.py` +
-  `_project_deps.py` + `_config_common_models.py`), mounted in
-  `src/main.py`, which also bootstraps the `default` project and runs
-  the registry poll loop at startup.
-  **Not yet done:** the existing `/curation/*` surface is not mounted
-  under `/projects/{project}` with a default alias, and the
-  index-constant/state-dir/served-URL codemod (commit 5) has not
-  landed — every existing curation route still behaves exactly as
-  before this change. See the PR/handback notes for exact deviations
-  from the plan.
+  snapshot, revision-gated `ensure_fresh()`/`poll_loop()`, `default`
+  always resolved from the env; `bootstrap.py`: idempotent `default`
+  project upsert, no data migration; `guard.py`: transport-level
+  OpenSearch project guard — `CrossProjectAccess`/`ProjectNotBound`/
+  `ProjectReadOnly`, `make_curation_opensearch()` and
+  `make_script_opensearch()` as the only client factories;
+  `capacity.py`: read-only shard/heap capacity check, no fixed project
+  cap; `script_binding.py`: `--project` for scripts).
+- **Every curation route is scoped under
+  `/curation/projects/{project}/...`** (`src/routers/curation/_mounting.py`),
+  binding the project for the request. The unscoped `/curation/...` paths
+  stay as a hidden alias (`include_in_schema=False`, `OP_UNSCOPED_ALIAS`)
+  bound to `default`, which resolves to today's env-configured index names
+  and paths — no migration. The OpenAPI contract documents only the scoped
+  paths plus the global ones. Served URLs (thumbnails, region thumbnails,
+  training artifacts) are always the canonical scoped form.
+- **Global `GET /curation/health` and `GET /curation/events`** for
+  project-less screens: deployment facts only, and only `project: null`
+  events (`project.*`, VLM-registry `config.changed`, `combine.*` with
+  `target`). They win over the alias at those two paths. The scoped
+  `{prefix}/health` keeps its shape plus `project`.
+- `GET /curation/projects` serves `labels.status` and
+  `limits.retired_slugs`; `GET /curation/projects/{project}` serves the
+  project's counts and a typed `error`; `ProjectLifecycleResponse`
+  (`{project, warnings}`) is the envelope P3's lifecycle routes answer.
+- Isolation errors map to structured responses: `CrossProjectAccess` /
+  `ProjectNotBound` → 500 `internal_isolation_error`, `ProjectReadOnly` →
+  409 `project_read_only`.
+
+### Changed
+- **Unbound project-scoped config fails closed.** Reading a project-scoped
+  `CurationConfig` field with no project bound raises `ProjectNotBound`
+  instead of silently using `default`. Requests bind through their route;
+  the API lifespan binds `default` for startup work and its background
+  loops; every `scripts/curation` entry point binds `--project` (default
+  `$OP_PROJECT`, else `default`) for its whole process.
+- Index names, the class registry, the index bootstrap flag, the UMAP
+  reducer/projection state files, the eval-dataset roots, and the scores /
+  probe / selection / projection job dirs resolve per bound project
+  (`items_index()` and friends replace the frozen `CURATION_*_INDEX` /
+  `ITEMS_INDEX` constants). `default` keeps today's names and paths.
+- The event hub stamps every event with its `project`; a scoped stream
+  delivers its own project's events plus global ones.
 
 ### Added
 - **Text-free region mode.** A region profile with `text_reader: "none"`
