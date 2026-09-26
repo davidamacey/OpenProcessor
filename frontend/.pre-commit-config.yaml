@@ -1,9 +1,9 @@
-# Pre-commit hooks for legacy-labeler.
+# Pre-commit hooks for Cropwright.
 # See https://pre-commit.com for more information.
 #
 # Kept deliberately lean: this is a pure SvelteKit/TS frontend with no
 # Python, no Docker builds beyond a single production Dockerfile, and no
-# backend of its own — see openprocessor's much larger .pre-commit-config.yaml
+# backend of its own — see OpenProcessor's much larger .pre-commit-config.yaml
 # for the pattern this is scoped down from.
 
 repos:
@@ -67,7 +67,7 @@ repos:
 
   # Contract drift — only when a commit could plausibly introduce drift
   # (the vendored snapshot itself, or the one file that composes every
-  # backend URL). Skips harmlessly when ../openprocessor isn't checked out
+  # backend URL). Skips harmlessly when no OpenProcessor checkout is found
   # (see scripts/contract-sync.mjs); a real backend rename that the
   # snapshot wasn't refreshed for fails loudly instead.
   - repo: local

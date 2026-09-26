@@ -21,8 +21,8 @@ Deliberately does NOT touch those existing scripts — they are verification
 tools with assertions; this is a capture tool with none.
 
 Usage:
-    source /data/repos/openprocessor/.venv/bin/activate
-    python3 scripts/capture_docs_screenshots.py [--url URL] [--out DIR]
+    npm run test:e2e   # once, to provision e2e/.venv with Playwright
+    e2e/.venv/bin/python scripts/capture_docs_screenshots.py [--url URL] [--out DIR]
 
 Safety (§3.7.5): the app's default `PUBLIC_TRITON_API_URL` is the empty
 string, so `src/lib/api.ts` composes every request as a same-origin
@@ -58,8 +58,8 @@ from playwright.sync_api import Page, Route, sync_playwright
 # Fixtures — deliberately the same warehouse/pallet vocabulary the existing
 # stubbed scripts use (playwright_assist_scope.py, static/annotation-
 # profiles.example.json). Demonstrates the app is domain-agnostic instead
-# of showing the vehicle dataset this deployment happens to be configured
-# for, and guarantees no `class_e`-shaped class can ever appear — the
+# of showing any one deployment's dataset, and guarantees no real class
+# name or count can ever appear — the
 # fixture set defines the classes.
 # --------------------------------------------------------------------------
 

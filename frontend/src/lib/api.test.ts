@@ -739,7 +739,7 @@ describe('searchCrops', () => {
     expect(res.items[0]?.id).toBe('c1');
   });
 
-  it('maps the live backend field `semantic_score` through onto each item (openprocessor _hydrate_item)', async () => {
+  it('maps the live backend field `semantic_score` through onto each item (OpenProcessor _hydrate_item)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         total: 1,
@@ -997,7 +997,7 @@ describe('getCluster k param', () => {
  * getVizProjection() — curation-strategy plan Phase 5
  * (docs/curation-strategy-plan-2026-09.md §2.7/§5.6). Never rejects
  * (same contract as getMethods): `{API_PREFIX}/viz/projection` may not exist yet
- * (the openprocessor Phase 5 branch lands independently) and the UMAP
+ * (the OpenProcessor Phase 5 branch lands independently) and the UMAP
  * purity gate may mean the capability never ships at all — a fetch
  * failure here must degrade `EmbeddingPlot` to its pending/empty state,
  * never crash the page it replaced the grid on.
@@ -2322,7 +2322,7 @@ describe('getCurationSettings / putCurationDefaults', () => {
 
 /**
  * `/scores/*` wrappers (docs/design/frontend-coverage-audit-2026-09-24.md
- * §G10). Wire shapes confirmed against openprocessor `main`'s
+ * §G10). Wire shapes confirmed against OpenProcessor `main`'s
  * `crop_scores/job.py::compute_coverage`/`_JobState` — `coverage` is
  * `{scorer_id: {field, n_scored, total, pct}}`, and every job snapshot
  * is `{job_id, status, scorers, processed, total, started_at,

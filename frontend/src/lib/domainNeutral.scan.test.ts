@@ -2,9 +2,9 @@
  * CI ratchet for the domain-neutral directive
  * (docs/design/domain-neutral-audit-2026-09-24.md §7.2, §8): Cropwright must
  * work for any data domain, so nothing under `src/` — code, UI strings,
- * comments — names one domain (license plates, vehicles) or the private
- * deployment it came from. Comments count too: the scan reads raw source
- * text.
+ * comments — names one domain (license plates, vehicles). Comments count
+ * too: the scan reads raw source text. (Deployment-specific names and
+ * numbers are caught by a separate, repo-wide leak gate, not here.)
  *
  * `ALLOWED` is exact and per-file, each entry with the reason it is
  * allowed. Domain profiles live under `examples/` (outside `src/`, never
@@ -49,11 +49,6 @@ const DOMAIN_PATTERN = /(?<!tem)plate|\blpr\b|lpr_/i;
  *  compound identifiers, not standalone words. */
 const VEHICLE_DOMAIN_PATTERN =
   /\b(vehicle|sedan|suvs?|motorcycle|bmw|audi|brand_b|porsche|subaru|pickup|coupe|sidecar|car)\b|classic_car|sports_car|dumptruck/i;
-/** The private origin: its name, and its live dataset numbers/crop ids. */
-const PRIVATE_PATTERN = /legacy|1,000|00000000|class_c|class_d|class_a|class_bs/i;
-/** The private stack's retired `/curation` prefix and `op_` names. Case-
- *  sensitive: an uppercase `KB` is a size unit. */
-const PRIVATE_OP_PATTERN = /\bkb\b/;
 
 /** `src/`-relative path -> why it may still match. */
 const ALLOWED: Record<string, string> = {
@@ -81,13 +76,7 @@ function offendingLines(file: string): string[] {
   return readFileSync(file, 'utf-8')
     .split('\n')
     .map((line, i) => ({ line, n: i + 1 }))
-    .filter(
-      ({ line }) =>
-        DOMAIN_PATTERN.test(line) ||
-        VEHICLE_DOMAIN_PATTERN.test(line) ||
-        PRIVATE_PATTERN.test(line) ||
-        PRIVATE_OP_PATTERN.test(line),
-    )
+    .filter(({ line }) => DOMAIN_PATTERN.test(line) || VEHICLE_DOMAIN_PATTERN.test(line))
     .map(({ line, n }) => `${rel(file)}:${n}: ${line.trim()}`);
 }
 
@@ -100,7 +89,7 @@ describe('domain-neutral source (audit §7.2)', () => {
     expect(scanned.length).toBeGreaterThan(100);
   });
 
-  it('names no single data domain and no private origin outside the allow-list', () => {
+  it('names no single data domain outside the allow-list', () => {
     const offenders = scanned
       .filter((f) => !(rel(f) in ALLOWED))
       .flatMap((f) => offendingLines(f));

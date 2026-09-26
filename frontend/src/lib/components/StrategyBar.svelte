@@ -394,7 +394,7 @@
     {#if currentIsBeta}
       <span
         class="rounded border border-amber-500/60 bg-amber-500/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-200"
-        title="Experimental — not yet fully validated (openprocessor/docs/design/curation_scores.md)"
+        title="Experimental — not yet fully validated (OpenProcessor docs/design/curation_scores.md)"
       >
         beta
       </span>

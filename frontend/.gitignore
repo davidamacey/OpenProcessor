@@ -23,17 +23,6 @@ e2e/.venv/
 e2e/.pytest_cache/
 test-results/
 
-# Diagnostic image dumps from /diagnostics scripts (generated per run,
-# not part of the source tree). Keep the scripts and any READMEs.
-diagnostics/**/audit_out/
-diagnostics/**/post_quarantine/
-diagnostics/**/compare/
-diagnostics/**/single/
-diagnostics/**/*.jpg
-diagnostics/**/*.png
-diagnostics/**/sample_docs.json
-lpr-error-disaply-review.png
-
 # Deployment-local annotation-slot configuration (tier 2). The real file
 # is supplied per-deployment; only the .example.json is tracked, exactly
 # like .env / .env.example above.

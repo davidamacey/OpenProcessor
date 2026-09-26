@@ -25,8 +25,8 @@ something renders unreadable/broken.
 **Environment**
 
 - Browser + version:
-- `legacy-labeler` commit/version:
-- Backend (openprocessor) commit/version, if known:
+- Cropwright commit/version:
+- Backend (OpenProcessor) commit/version, if known:
 
 **Additional context**
 Anything else relevant (console errors, network tab, etc.).

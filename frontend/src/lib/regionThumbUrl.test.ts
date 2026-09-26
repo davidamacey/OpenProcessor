@@ -4,7 +4,7 @@
  * host, several call sites built region-thumbnail `<img src>` values as
  * bare relative region-thumbnail paths instead of
  * going through `apiBase`, so the browser resolved them against the
- * frontend's OWN origin instead of the configured remote openprocessor.
+ * frontend's OWN origin instead of the configured remote OpenProcessor.
  *
  * `apiBase` (and therefore `getThumbUrl`/`getRegionThumbUrl`/
  * `resolveApiUrl`) is computed once at module load from

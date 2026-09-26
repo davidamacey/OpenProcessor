@@ -1,10 +1,8 @@
 # Contributing
 
-Thanks for considering a contribution. This repo is currently private
-(part of an internal pipeline); if you're reading this from outside
-example-org LLC, you likely have access as part of an early collaboration —
-reach out to the maintainers before opening a large PR so scope is
-agreed up front.
+Thanks for considering a contribution. For anything larger than a small
+fix, open an issue first so the scope is agreed before you write the
+code.
 
 ## Getting started
 
@@ -27,8 +25,16 @@ npm test         # vitest
 npm run build    # production build must succeed
 ```
 
-All four must pass — CI runs the same checks and will block merge
-otherwise.
+All four must pass — CI runs the same checks, plus the stubbed
+Playwright suite (`npm run test:e2e`) and a gitleaks secret scan, and
+will block merge otherwise.
+
+## Screenshots and sample data
+
+Screenshots and sample data must come from public datasets only (for
+example COCO val2017). Never commit an image from a private dataset, a
+photograph of a person or vehicle you don't have the rights to, or a
+screenshot showing a real deployment's host names, paths or class counts.
 
 ## Conventions
 

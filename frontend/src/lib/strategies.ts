@@ -1,5 +1,5 @@
 /**
- * TypeScript types mirroring the openprocessor `GET {API_PREFIX}/methods` capability-
+ * TypeScript types mirroring the OpenProcessor `GET {API_PREFIX}/methods` capability-
  * discovery response (curation-strategy plan, Phase 0 —
  * docs/curation-strategy-plan-2026-09.md §3, §5.3, §7).
  *
@@ -118,7 +118,7 @@ export interface OverlayInfo extends MethodInfoBase {
    */
   requires_banner?: boolean;
   /** The measured 2-d neighborhood-purity value backing `requires_banner`
-   *  (see `docs/design/curation_scores.md` in openprocessor for the full
+   *  (see `docs/design/curation_scores.md` in OpenProcessor for the full
    *  measurement writeup). Informational — nothing in this file
    *  re-derives a ship-tier decision from it; that's the backend's job. */
   purity?: number | null;
@@ -390,7 +390,7 @@ export function isDiverseOverlayAvailable(overlays: OverlayInfo[]): boolean {
  * `'viz_projection'` is the real id (confirmed live 2026-09-10 against
  * `strategy_registry.py`'s `_viz_projection_strategy` — an earlier
  * placeholder id, `'umap_viz'`, was a guess made while the sibling
- * openprocessor validation pass was still running and has been corrected
+ * OpenProcessor validation pass was still running and has been corrected
  * here and in every test fixture that used it).
  */
 export function isEmbeddingVizAvailable(overlays: OverlayInfo[]): boolean {

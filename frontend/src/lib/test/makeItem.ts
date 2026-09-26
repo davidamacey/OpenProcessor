@@ -43,7 +43,7 @@ const DEFAULT_ITEM: Required<RawCrop> = {
   class_detector: 'v6_model',
   class_detector_version: '6.2.1',
   class_labeled_at: '2026-01-02T03:04:05Z',
-  class_labeler: 'user@example.com',
+  class_labeler: 'labeler@example.com',
   source: 'tag_holdout_sample',
   test_holdout: true,
   crop_rank_in_image: 2,

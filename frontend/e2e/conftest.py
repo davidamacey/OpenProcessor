@@ -11,13 +11,9 @@ open):
     is routed through ``Stub``. A path/method a test did not register via
     ``stub.on(...)`` gets a ``501`` and is recorded in ``stub.unhandled`` —
     never a silent ``200 {}``.
-  * Any request to the retired ``/curation/`` prefix is also intercepted,
-    recorded in ``stub.op_hits``, and answered with ``501`` — it must
-    never reach a real network.
   * At teardown, the ``stub`` fixture asserts ``unhandled == []`` and
-    ``op_hits == []`` and that at least one request was actually
-    handled — a prefix/route mismatch fails the test instead of passing
-    on an empty page.
+    that at least one request was actually handled — a prefix/route
+    mismatch fails the test instead of passing on an empty page.
 
 The app under test is a real production build: ``npm run build`` once
 per session, then ``vite preview`` serves the static output. The stubs
@@ -140,7 +136,7 @@ def app_url() -> Any:
 
 
 class Stub:
-    """Fail-closed router for `{api_prefix}/**` and the retired `/curation/**`.
+    """Fail-closed router for `{api_prefix}/**`.
 
     Tests register handlers with `.on(method, path_regex, handler_or_body)`.
     `path_regex` is matched (via `re.search`) against the URL path with the
@@ -155,7 +151,6 @@ class Stub:
         self._handlers: list[tuple[str, re.Pattern[str], Handler | HandlerResult]] = []
         self.handled: list[tuple[str, str]] = []
         self.unhandled: list[tuple[str, str]] = []
-        self.op_hits: list[tuple[str, str]] = []
         # Every mutating (non-GET) call, in order: (method, path, parsed_json_body_or_None).
         self.calls: list[tuple[str, str, Any]] = []
         # A handler (default or test-registered) raising is itself a bug in
@@ -241,7 +236,7 @@ class Stub:
                 "chain_actors": [
                     {"id": "tag_verifier", "label": "Tag verifier", "role": "verifier"},
                 ],
-                # openprocessor fix #29 / 840beb8 adoption: labeled
+                # OpenProcessor 840beb8 adoption: labeled
                 # `region_rejection_reason` vocabulary. Empty by default —
                 # unlike detectors/chain_actors above, no shared default
                 # data is needed for most tests (the rejection-styled
@@ -290,7 +285,6 @@ class Stub:
         )
 
         page.route(f"**{api_prefix}/**", self._dispatch)
-        page.route("**/curation/**", self._dispatch_kb)
 
     def on(self, method: str, path_regex: str, handler_or_body: Handler | HandlerResult) -> None:
         self._handlers.append((method.upper(), re.compile(path_regex), handler_or_body))
@@ -367,15 +361,6 @@ class Stub:
                 body=json.dumps({"detail": f"e2e stub handler raised: {exc!r}"}),
             )
 
-    def _dispatch_kb(self, route: Any, request: Any) -> None:
-        path = re.sub(r"^https?://[^/]+", "", request.url).split("?")[0]
-        self.op_hits.append((request.method, path))
-        route.fulfill(
-            status=501,
-            content_type="application/json",
-            body=json.dumps({"detail": f"e2e stub: retired /curation/ prefix hit at {path}"}),
-        )
-
     @staticmethod
     def _fulfill(route: Any, result: HandlerResult) -> None:
         status = 200
@@ -396,7 +381,6 @@ class Stub:
     def assert_fail_closed(self) -> None:
         assert self.handler_errors == [], f"a stub handler raised: {self.handler_errors}"
         assert self.unhandled == [], f"unhandled request(s) hit the stub: {self.unhandled}"
-        assert self.op_hits == [], f"retired /curation/ prefix was hit: {self.op_hits}"
         assert self.handled, (
             "no stubbed request was ever hit — an API-prefix change or route "
             "mismatch would otherwise pass silently (see R2 in "

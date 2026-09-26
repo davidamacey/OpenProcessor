@@ -2,7 +2,12 @@ node_modules
 build
 .svelte-kit
 .git
+.claude
 .env
 .env.*
 !.env.example
-docs/screenshots-new
+docs
+e2e
+artifacts_local
+reports
+test-results

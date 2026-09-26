@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Public-release preparation (F9/F10 Phase A-C,
+  `docs/design/cropwright-oss-export-plan-2026-09-25.md`).**
+  - **License is now MIT** (Copyright (c) 2026 example-org LLC), replacing
+    AGPL-3.0-or-later in `LICENSE`, `package.json` and the About dialog.
+    `package.json` points at `davidamacey/OpenProcessor`.
+  - **The Docker image runs nginx as non-root** (uid 101) on
+    `nginxinc/nginx-unprivileged:1.30-alpine`, listening on container
+    port **8080**. Compose maps `${CROPWRIGHT_PORT:-5184}:8080`, so the
+    host port is unchanged; the healthcheck moved to `127.0.0.1:8080`.
+    The deployed container picks this up on its next rebuild. OCI labels
+    added; Trivy reports 0 fixable HIGH/CRITICAL.
+  - `npm run contract:sync` records the public OpenProcessor URL in
+    `contracts/openprocessor/SOURCE.md` instead of the local checkout
+    path; `OPENPROCESSOR_REPO` now defaults to `../OpenProcessor`.
+  - Comments, fixtures and meta files no longer name private checkouts,
+    host paths, private dataset counts or a personal email (fixtures use
+    `labeler@example.com` and `/data/...` roots). The stubbed e2e suite's
+    retired-prefix intercept is gone; the fail-closed 501 remains the
+    guard.
+  - CI runs on `main` as well as `master`, adds a gitleaks `secrets` job
+    and a private-only `export-leak-gate` job, and Dependabot (npm,
+    actions, docker) is configured.
+  - README, SECURITY (GitHub private vulnerability reporting, the no-auth
+    API rule), CONTRIBUTING and `docs/FEATURES.md` describe what ships.
+- **Private export tool** `scripts/oss-export/` (`export.sh`,
+  `leak-scan.sh`, `exclude.txt`, `leak-patterns.txt`, `overlay/`)
+  replaces `scripts/debrand-export.sh`, which is deleted.
+
 ### Fixed
 
 - **Class merge carries validations over; merged classes say where they
