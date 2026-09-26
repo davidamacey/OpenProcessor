@@ -8,7 +8,8 @@
     unloadForceConfirmMessage,
   } from '$lib/modelUnload';
   import { toastStore } from '$stores/toast.svelte';
-  import type { ModelInfo, ModelStatus } from '$lib/types';
+  import { isInstalled, modelStatusPill } from '$lib/modelStatus';
+  import type { ModelInfo } from '$lib/types';
 
   const REFRESH_MS = 15_000;
 
@@ -47,20 +48,6 @@
     abortCtrl?.abort();
     if (timer) clearInterval(timer);
   });
-
-  function statusPillClass(s: ModelStatus): string {
-    if (s === 'ready') return 'bg-green-500/20 text-green-200 border-green-500/40';
-    if (s === 'not_ready') return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
-    if (s === 'not_configured') return 'bg-zinc-700/40 text-zinc-400 border-zinc-600';
-    return 'bg-red-500/20 text-red-200 border-red-500/40';
-  }
-
-  function statusLabel(s: ModelStatus): string {
-    if (s === 'ready') return 'ready';
-    if (s === 'not_ready') return 'not ready';
-    if (s === 'not_configured') return 'not configured';
-    return 'unavailable';
-  }
 
   function fmtCount(n: number | null): string {
     if (n === null || n === undefined) return '—';
@@ -177,11 +164,13 @@
                   {m.friendly_name}
                 </h2>
                 <span
-                  class="rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide {statusPillClass(
-                    m.status,
-                  )}"
+                  class="shrink-0 whitespace-nowrap rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide {modelStatusPill(
+                    m,
+                  ).className}"
+                  title={modelStatusPill(m).title}
+                  data-testid="model-status-pill"
                 >
-                  {statusLabel(m.status)}
+                  {modelStatusPill(m).label}
                 </span>
               </div>
               <p class="mt-1 truncate font-mono text-xs text-zinc-500" title={m.name}>
@@ -285,7 +274,7 @@
                     : 'Unload'}
               </button>
             </div>
-          {:else if showsProtectedChip(m)}
+          {:else if showsProtectedChip(m) && isInstalled(m)}
             <!-- 2026-09-25 follow-up to #36 item 5: is_region_protected now
                  also covers the ingest primary/secondary and OCR det/rec
                  models, not just the region detector — every one of them

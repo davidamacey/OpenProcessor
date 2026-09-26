@@ -956,6 +956,15 @@ fields — rendered "—" by the existing `fmtCount`/`fmtMs`, never `0`.
 Live, this leaves only the CLIP/PE image-encoder models with an Unload
 button.
 
+Since OpenProcessor ba88751 each entry also serves `optional` (true only
+for the region profile's detector when a segmenter covers the same job)
+and a `not_installed` status (optional and absent from the Triton
+repository entirely). `$lib/modelStatus.ts`'s `modelStatusPill` renders
+it as a neutral "optional · not installed" pill rather than a warning,
+and the protected chip is dropped for a model that isn't installed
+(`isInstalled`). An installed-but-unloaded optional model still reads
+"not ready". Covered by `src/routes/models/modelStatus.test.ts`.
+
 ## Plate provenance + OCR (Wave 1 + Wave 2b, 2026-05-11)
 
 Every plate-bearing crop now carries detector provenance — which

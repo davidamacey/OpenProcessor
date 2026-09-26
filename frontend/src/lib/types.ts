@@ -1054,7 +1054,12 @@ export interface KeyboardShortcut {
   description: string;
 }
 
-export type ModelStatus = 'ready' | 'not_ready' | 'unavailable' | 'not_configured';
+export type ModelStatus =
+  | 'ready'
+  | 'not_ready'
+  | 'unavailable'
+  | 'not_configured'
+  | 'not_installed';
 export type ModelKind = 'triton' | 'external';
 
 export interface ModelInfo {
@@ -1090,6 +1095,10 @@ export interface ModelInfo {
    *  reads this FIRST, ahead of `kind`/`is_region_protected` — the
    *  server's own verdict, never re-derived from the other flags. */
   unloadable?: boolean;
+  /** Served (OpenProcessor ba88751): true only for a model the pipeline
+   *  can run without — the region profile's detector when a segmenter is
+   *  configured. Pairs with status `not_installed`. Absent on older backends. */
+  optional?: boolean;
   /** Present (with job_id/version) only for models promoted through this pipeline. */
   job_id?: string | null;
   promoted_at?: string | null;

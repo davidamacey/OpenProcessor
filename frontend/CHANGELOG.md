@@ -61,6 +61,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **`/models`: an optional model that isn't installed reads "optional ·
+  not installed", not "not ready".** OpenProcessor ba88751 serves
+  `optional` and a `not_installed` status for a region profile's detector
+  when a segmenter covers the same job and the detector isn't in the
+  Triton repository. The pill is neutral instead of a yellow warning, and
+  the "protected: in use by the pipeline" chip no longer shows for a
+  model that isn't installed. Vendored contracts are pinned to
+  OpenProcessor `main` ba88751.
 - **OpenProcessor commit references follow its published history.** The
   backend's pre-publication history rewrite changed every commit id; every
   OpenProcessor sha cited in code comments, tests, test file names and this
