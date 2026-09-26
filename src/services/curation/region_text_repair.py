@@ -76,7 +76,11 @@ def rederive(
     doc: dict[str, Any], *, profile: DetectionProfile, rules: RegionTextRules
 ) -> dict[str, Any] | None:
     """Target values (storage keys) of :data:`MANAGED_ATTRS` for ``doc``, or
-    ``None`` when the row holds human text or no stored reading at all."""
+    ``None`` when the row holds human text or no stored reading at all, or
+    the profile does not read text (a text-free profile has no chooser to
+    re-run, and stored text is left as it is)."""
+    if not profile.reads_text:
+        return None
     F = get_region_fields()
     stored_source = doc.get(F.text_source)
     if stored_source == HUMAN_TEXT_SOURCE:
@@ -163,9 +167,11 @@ async def plan_region_text_repair(
     max_examples: int = 5,
 ) -> RegionTextRepairPlan:
     """Scan ``index`` (read-only) and plan every row whose chosen text
-    fields would change."""
+    fields would change. A text-free profile plans nothing."""
     F = get_region_fields()
     plan = RegionTextRepairPlan()
+    if not profile.reads_text:
+        return plan
     cursor: list[Any] | None = None
     while True:
         body: dict[str, Any] = {

@@ -16,6 +16,9 @@ Two OCR jobs ride on the region cascade:
 
 Also the no-VLM path: a deployment without an image LLM accepts detector
 regions unverified and fills their text via OCR.
+
+A text-free profile (``text_reader='none'``) stores no region text: the
+region-text helpers here strip any text fields from the write instead.
 """
 
 from __future__ import annotations
@@ -134,6 +137,12 @@ _TEXT_ATTRS = (
 )
 
 
+def _drop_region_text(doc: dict[str, Any]) -> None:
+    F = get_region_fields()
+    for attr in _TEXT_ATTRS:
+        doc.pop(getattr(F, attr), None)
+
+
 async def apply_region_text(
     doc: dict[str, Any],
     *,
@@ -153,8 +162,12 @@ async def apply_region_text(
     ``rules`` (default: the profile's, with the resolved prompt pack's
     examples) decide which readings are text at all; a VLM reading they
     reject counts as no reading, so the OCR reader runs in
-    ``vlm_then_ocr`` mode too.
+    ``vlm_then_ocr`` mode too. A text-free profile reads nothing and
+    leaves ``doc`` with no region text fields.
     """
+    if not profile.reads_text:
+        _drop_region_text(doc)
+        return
     rules = rules or region_text_rules(profile)
     vlm_usable = vlm_text if vlm_text and rules.invalid_reason(vlm_text) is None else None
     reading = None
@@ -172,9 +185,8 @@ async def apply_region_text(
         normalizer=DominantTextConfig.from_profile(profile).normalizer,
         rules=rules,
     )
+    _drop_region_text(doc)
     F = get_region_fields()
-    for attr in _TEXT_ATTRS:
-        doc.pop(getattr(F, attr), None)
     for attr, value in fields.items():
         doc[getattr(F, attr)] = value
 
@@ -190,7 +202,8 @@ async def accept_without_vlm(
 
     The box passes the same geometry gate the verified path uses; the
     region lands ``detected`` with ``verified=False`` / ``validated=False``
-    (so human review still sees it) and its text comes from OCR.
+    (so human review still sees it) and its text comes from OCR (none on a
+    text-free profile).
     """
     if t.candidate_in_crop is None or t.candidate_in_source is None or t.crop_jpeg is None:
         msg = f'accept_without_vlm needs a candidate box and crop bytes (crop {t.crop_id})'
@@ -245,6 +258,9 @@ def apply_text_hint_fallback(
 ) -> None:
     """Forward the item-crop OCR text that seeded a text-hint box when the
     region itself got no text -- if that text passes ``rules``."""
+    if not profile.reads_text:
+        _drop_region_text(doc)
+        return
     F = get_region_fields()
     if doc.get(F.text) or not text or rules.invalid_reason(text) is not None:
         return

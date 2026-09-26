@@ -316,16 +316,17 @@ def test_prompt_pack_axis_advertises_the_resolved_pack(app_client: TestClient) -
     """With no ``OP_PROMPT_PACK_PATH``
     configured, the axis must advertise the built-in generic pack by its
     own ``name`` field."""
-    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, GENERIC_REGION_PACK
 
     r = app_client.get('/curation/methods')
     assert r.status_code == 200
     body = r.json()
     pack_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'prompt_pack'}
-    assert set(pack_entries) == {GENERIC_ITEM_PACK.name}
+    assert set(pack_entries) == {GENERIC_ITEM_PACK.name, GENERIC_REGION_PACK.name}
     entry = pack_entries[GENERIC_ITEM_PACK.name]
     assert entry['status'] == 'stable'
     assert entry['default'] is True
+    assert pack_entries[GENERIC_REGION_PACK.name]['default'] is False
 
 
 def test_prompt_pack_axis_advertises_a_deployment_supplied_pack(
@@ -337,7 +338,7 @@ def test_prompt_pack_axis_advertises_a_deployment_supplied_pack(
     import json
 
     from src.config.curation import CurationConfig
-    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, GENERIC_REGION_PACK
 
     custom = GENERIC_ITEM_PACK.to_dict()
     custom['name'] = 'pallet_v1'
@@ -351,7 +352,7 @@ def test_prompt_pack_axis_advertises_a_deployment_supplied_pack(
     assert r.status_code == 200
     body = r.json()
     pack_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'prompt_pack'}
-    assert set(pack_entries) == {'pallet_v1', GENERIC_ITEM_PACK.name}
+    assert set(pack_entries) == {'pallet_v1', GENERIC_ITEM_PACK.name, GENERIC_REGION_PACK.name}
     assert pack_entries['pallet_v1']['default'] is True
     assert pack_entries[GENERIC_ITEM_PACK.name]['default'] is False
 
@@ -366,7 +367,7 @@ def test_prompt_pack_axis_advertises_every_configured_pack(
     import json
 
     from src.config.curation import CurationConfig
-    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, GENERIC_REGION_PACK
 
     paths = {}
     for name in ('pallet_v1', 'food_v2', 'tools_v1'):
@@ -386,7 +387,13 @@ def test_prompt_pack_axis_advertises_every_configured_pack(
     r = app_client.get('/curation/methods')
     assert r.status_code == 200
     pack_entries = {s['id']: s for s in r.json()['strategies'] if s['axis'] == 'prompt_pack'}
-    assert set(pack_entries) == {'pallet_v1', 'food_v2', 'tools_v1', GENERIC_ITEM_PACK.name}
+    assert set(pack_entries) == {
+        'pallet_v1',
+        'food_v2',
+        'tools_v1',
+        GENERIC_ITEM_PACK.name,
+        GENERIC_REGION_PACK.name,
+    }
     assert [k for k, e in pack_entries.items() if e['default']] == ['pallet_v1']
 
 

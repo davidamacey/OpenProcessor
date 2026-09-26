@@ -130,8 +130,19 @@ FILTER_SPECS: dict[str, dict[str, Any]] = {
 
 
 def tab_filters(tab: str) -> tuple[str, ...]:
-    """Query filters ``tab`` applies, in a stable order."""
-    return (*COMMON_FILTERS, *TAB_EXTRA_FILTERS.get(tab, ()))
+    """Query filters ``tab`` applies, in a stable order. The ``regions``
+    tab's ``text`` filter only exists on a text-reading region profile."""
+    extra = TAB_EXTRA_FILTERS.get(tab, ())
+    if 'text' in extra and not _region_text_enabled():
+        extra = tuple(name for name in extra if name != 'text')
+    return (*COMMON_FILTERS, *extra)
+
+
+def _region_text_enabled() -> bool:
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    profile = get_active_region_profile()
+    return profile is None or profile.reads_text
 
 
 def review_tab_catalog() -> list[dict[str, Any]]:

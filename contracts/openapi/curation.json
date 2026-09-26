@@ -6141,11 +6141,22 @@
             "title": "Name",
             "type": "string"
           },
+          "reads_text": {
+            "description": "False for a text-free profile: no region text is read, stored or editable.",
+            "title": "Reads Text",
+            "type": "boolean"
+          },
           "region_class_name": {
             "title": "Region Class Name",
             "type": "string"
           },
+          "text_hint_enabled": {
+            "description": "Whether the OCR text-hint re-pass is enabled after a segmenter miss.",
+            "title": "Text Hint Enabled",
+            "type": "boolean"
+          },
           "text_reader": {
+            "description": "The profile's text reader; 'none' for a text-free profile.",
             "title": "Text Reader",
             "type": "string"
           }
@@ -6155,7 +6166,9 @@
           "display_name",
           "display_name_singular",
           "region_class_name",
-          "text_reader"
+          "text_reader",
+          "reads_text",
+          "text_hint_enabled"
         ],
         "title": "RegionProfileSummary",
         "type": "object"
@@ -6218,7 +6231,7 @@
                 "type": "null"
               }
             ],
-            "description": "Which readings count as region text; null without a region profile.",
+            "description": "Which readings count as region text; null without a region profile or for a text-free one.",
             "title": "Text Rules"
           }
         },
@@ -11170,7 +11183,7 @@
     },
     "/curation/crops/{crop_id}/region_meta": {
       "patch": {
-        "description": "Patch region metadata (text / status / rejection reason).\n\nBbox edits go through ``PUT /crops/{crop_id}/region``. Only the fields\npresent in the payload are written; a status write applies the\nlifecycle invariants (see :mod:`src.services.curation.region_writes`).\nReturns ``updated_fields`` (wire names) and ``item`` (post-write).",
+        "description": "Patch region metadata (text / status / rejection reason).\n\nBbox edits go through ``PUT /crops/{crop_id}/region``. Only the fields\npresent in the payload are written; a status write applies the\nlifecycle invariants (see :mod:`src.services.curation.region_writes`).\nReturns ``updated_fields`` (wire names) and ``item`` (post-write).\n``region_text`` is accepted on a text-reading profile only; a\ntext-free profile answers 422 ``region_text_disabled`` and writes\nnothing.",
         "operationId": "patch_crop_region_meta_curation_crops__crop_id__region_meta_patch",
         "parameters": [
           {

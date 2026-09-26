@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import os
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 
 if TYPE_CHECKING:
@@ -68,40 +68,37 @@ def register_profile(profile: DetectionProfile, *, default: bool = False) -> Non
         _DEFAULT_NAME = profile.name
 
 
-def region_profile_from_file(path: str) -> DetectionProfile:
-    """Load a :class:`DetectionProfile` from a JSON file.
+def region_profile_from_dict(data: dict[str, Any], *, source: str = 'file') -> DetectionProfile:
+    """Build a :class:`DetectionProfile` from a flat ``{field_name: value}``
+    mapping (the decoded JSON of a profile file).
 
-    The file is a flat object of ``{field_name: value}`` pairs (unknown
-    keys, and an underscore-prefixed ``_comment``, are rejected /
-    ignored respectively); ``name`` is required. Tuple fields
+    Underscore-prefixed keys (``_comment`` etc.) are ignored; any other
+    unknown key is rejected, and ``name`` is required. Tuple fields
     (``letterbox_fill``, ``auto_confirm_aspect``, ``auto_confirm_area_frac``)
     and frozenset fields (``secondary_shape_groups``, ``class_ids``,
-    ``text_stopwords``, ``text_placeholders``) are given as JSON lists.
-    See ``examples/region_profiles/license_plate.json`` for a worked
-    example. Raises on a malformed file or an unknown field name — a
-    typo must fail loudly, not silently fall back to a default.
+    ``parent_classes``, ``text_stopwords``, ``text_placeholders``) are given
+    as JSON lists. ``source`` names the input in error messages. Raises on
+    anything malformed -- a typo must fail loudly, not silently fall back
+    to a default.
     """
-    import json
     from dataclasses import fields as dc_fields
-    from pathlib import Path
 
     from src.config import DetectionProfile
 
-    raw = json.loads(Path(path).read_text(encoding='utf-8'))
-    if not isinstance(raw, dict):
-        msg = f'region profile file {path!r} must contain a JSON object'
+    if not isinstance(data, dict):
+        msg = f'region profile {source!r} must be a JSON object'
         raise ValueError(msg)
-    data = {k: v for k, v in raw.items() if not k.startswith('_')}
-    if 'name' not in data:
-        msg = f'region profile file {path!r} is missing the required "name" field'
+    values = {k: v for k, v in data.items() if not k.startswith('_')}
+    if 'name' not in values:
+        msg = f'region profile {source!r} is missing the required "name" field'
         raise ValueError(msg)
 
     field_by_name = {f.name: f for f in dc_fields(DetectionProfile)}
     kwargs: dict[str, object] = {}
-    for key, value in data.items():
+    for key, value in values.items():
         f = field_by_name.get(key)
         if f is None:
-            msg = f'region profile file {path!r}: unknown field {key!r}'
+            msg = f'region profile {source!r}: unknown field {key!r}'
             raise ValueError(msg)
         annotation = str(f.type)
         if annotation.startswith('tuple'):
@@ -111,6 +108,22 @@ def region_profile_from_file(path: str) -> DetectionProfile:
         else:
             kwargs[key] = value
     return DetectionProfile(**kwargs)  # type: ignore[arg-type]
+
+
+def region_profile_from_file(path: str) -> DetectionProfile:
+    """Load a :class:`DetectionProfile` from a JSON file.
+
+    The file is a flat object of ``{field_name: value}`` pairs, decoded by
+    :func:`region_profile_from_dict`. See
+    ``examples/region_profiles/license_plate.json`` (text-reading) and
+    ``examples/region_profiles/vehicle_wheel.json`` (text-free,
+    segmenter-only) for worked examples.
+    """
+    import json
+    from pathlib import Path
+
+    raw = json.loads(Path(path).read_text(encoding='utf-8'))
+    return region_profile_from_dict(raw, source=path)
 
 
 def region_profile_from_env() -> DetectionProfile | None:
@@ -211,6 +224,7 @@ __all__ = [
     'get_default_profile_name',
     'get_profile',
     'get_profiles',
+    'region_profile_from_dict',
     'region_profile_from_env',
     'region_profile_from_file',
     'region_profile_or_neutral',
