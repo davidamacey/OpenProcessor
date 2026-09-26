@@ -8,19 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Projects foundation (P1, partial — registry + bound-project context only).**
+- **Projects foundation (P1, partial — commits 1-4 of 5).**
   `src/config/projects.py` (`ProjectRecord`/`ProjectResources`,
-  `resources_for_default`/`resources_for_new`, slug validation) and
+  `resources_for_default`/`resources_for_new`, slug validation),
   `src/config/project_context.py` (`ContextVar`-based `BoundProject`,
   `current_project()`/`bind_project()`/`set_bound_project()`,
-  `run_in_executor_bound()`, `project_env()`). New
-  `src/services/projects/` package: `registry.py` (the `op_projects`
-  index snapshot, revision-gated `ensure_fresh()`, `poll_loop()`) and
-  `bootstrap.py` (idempotent `default` project record upsert — no data
-  migration). `src/config/curation.py` gained `base_curation_config()`.
-  This lands only commit 1 of the P1 plan's 5; the config view, the
-  OpenSearch guard, the `/projects/{project}` route mounting and the
-  index/state-dir codemod are not yet done (see PR notes).
+  `run_in_executor_bound()`, `project_env()`), and
+  `src/services/projects/` (`registry.py`: the `op_projects` index
+  snapshot, revision-gated `ensure_fresh()`/`poll_loop()`;
+  `bootstrap.py`: idempotent `default` project upsert, no data
+  migration; `guard.py`: transport-level OpenSearch project guard —
+  `CrossProjectAccess`/`ProjectNotBound`/`ProjectReadOnly`,
+  `make_curation_opensearch()` as the one factory; `capacity.py`:
+  read-only shard/heap capacity check, no fixed project cap).
+  `src/config/curation.py`'s `get_curation_config()` now returns a
+  `CurationConfigView` resolving `PROJECT_SCOPED_FIELDS` from the
+  bound project. New `GET /curation/projects` and
+  `GET /curation/projects/{project}` on a `global_router`
+  (`src/routers/curation/projects.py` + `_project_models.py` +
+  `_project_deps.py` + `_config_common_models.py`), mounted in
+  `src/main.py`, which also bootstraps the `default` project and runs
+  the registry poll loop at startup.
+  **Not yet done:** the existing `/curation/*` surface is not mounted
+  under `/projects/{project}` with a default alias, and the
+  index-constant/state-dir/served-URL codemod (commit 5) has not
+  landed — every existing curation route still behaves exactly as
+  before this change. See the PR/handback notes for exact deviations
+  from the plan.
 
 ### Added
 - **Text-free region mode.** A region profile with `text_reader: "none"`
