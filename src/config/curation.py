@@ -407,3 +407,14 @@ def get_curation_config() -> CurationConfig:
     if _default_curation_config is None:
         _default_curation_config = CurationConfig.from_env()
     return _default_curation_config
+
+
+def base_curation_config() -> CurationConfig:
+    """The env-built instance, for global-field use (e.g. ``api_prefix``,
+    ``state_dir``'s global uses). Currently an alias for
+    :func:`get_curation_config` -- P1's foundation module (project
+    registry/bootstrap) needs a name that will keep meaning "the global
+    base config" once :func:`get_curation_config` switches to returning
+    a per-project ``CurationConfigView`` (tracked separately; not yet
+    landed in this pass -- see PR notes)."""
+    return get_curation_config()

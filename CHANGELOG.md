@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Projects foundation (P1, partial — registry + bound-project context only).**
+  `src/config/projects.py` (`ProjectRecord`/`ProjectResources`,
+  `resources_for_default`/`resources_for_new`, slug validation) and
+  `src/config/project_context.py` (`ContextVar`-based `BoundProject`,
+  `current_project()`/`bind_project()`/`set_bound_project()`,
+  `run_in_executor_bound()`, `project_env()`). New
+  `src/services/projects/` package: `registry.py` (the `op_projects`
+  index snapshot, revision-gated `ensure_fresh()`, `poll_loop()`) and
+  `bootstrap.py` (idempotent `default` project record upsert — no data
+  migration). `src/config/curation.py` gained `base_curation_config()`.
+  This lands only commit 1 of the P1 plan's 5; the config view, the
+  OpenSearch guard, the `/projects/{project}` route mounting and the
+  index/state-dir codemod are not yet done (see PR notes).
+
+### Added
 - **Text-free region mode.** A region profile with `text_reader: "none"`
   stores region boxes and no region text: the region OCR reader never
   runs, a VLM reading is dropped, and `PATCH /crops/{id}/region_meta`
