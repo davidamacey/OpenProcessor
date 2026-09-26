@@ -16,9 +16,22 @@
 #     docker compose -p cw-second up -d --build
 services:
   cropwright:
+    # `image:` lets a pull-based deploy grab the published tag without a
+    # local build; `build:` is kept so `docker compose up --build` still
+    # works from source.
+    image: davidamacey/cropwright:${CROPWRIGHT_TAG:-latest}
     build: .
     container_name: ${CROPWRIGHT_CONTAINER_NAME:-cropwright}
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     environment:
       - PUBLIC_API_PREFIX=${PUBLIC_API_PREFIX:-/curation}
       - API_UPSTREAM=${API_UPSTREAM:-http://op-api:8000}
