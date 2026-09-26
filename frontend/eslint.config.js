@@ -23,6 +23,11 @@ export default ts.config(
       'diagnostics/',
       'static/',
       'scripts/',
+      // The stubbed e2e suite's own gitignored per-project venv
+      // (scripts/run-e2e.mjs) — vendors Playwright's driver JS. Once it
+      // exists on disk (after running `npm run test:e2e` once), `npm run
+      // lint` would otherwise scan thousands of unrelated vendored files.
+      'e2e/.venv/',
       // Vendored, generated verbatim from OpenProcessor's contracts/ — see
       // contracts/openprocessor/SOURCE.md. Not ours to lint or format.
       'contracts/openprocessor/',
