@@ -81,6 +81,16 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     # findings 2026-09-25).
     'OP_IMAGE_REPO',
     'OP_IMAGE_TAG',
+    # Installer plan §3.2/§7 (Wave 0): compose-only vars -- each
+    # per-service image override and the bind-address prefix are read by
+    # docker-compose.yml's own ${VAR:-default} interpolation, not Python
+    # code.
+    'OP_API_IMAGE',
+    'OP_TRITON_IMAGE',
+    'OP_EVALUATOR_IMAGE',
+    'OP_SEGMENTER_IMAGE',
+    'OP_TRAINER_IMAGE',
+    'OP_BIND_ADDRESS',
 }
 
 

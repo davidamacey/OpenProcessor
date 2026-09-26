@@ -1,0 +1,118 @@
+# =============================================================================
+# Dev overlay — build-from-source + hot-reload mounts.
+# =============================================================================
+# Installer plan §1: docker-compose.yml is deploy-safe on its own (no
+# `build:` blocks, no source-code bind mounts) so an installer can drop it
+# into a directory with no git checkout and `docker compose pull && up -d`
+# without Docker silently shadowing the image's /app/src, /app/export etc.
+# with empty host directories.
+#
+# This file restores today's checkout developer workflow: every `build:`
+# block (so `docker compose build`/`up --build` rebuilds from the local
+# Dockerfiles instead of only ever pulling) and every source-code bind
+# mount (so edits under ./src, ./scripts, ./export, ./tests, ./benchmarks,
+# ./test_images, ./VERSION and ./examples are picked up without a rebuild).
+#
+# Compose merges list-valued keys (like `volumes:`) across `-f` files by
+# concatenation, so these mounts are added on top of the base file's data
+# mounts, not a replacement for them.
+#
+# Usage (a checkout only — never in an installed deploy dir):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# The Makefile's $(COMPOSE) variable, scripts/setup.sh and
+# scripts/openprocessor.sh all add this overlay automatically whenever
+# they detect a checkout (src/main.py next to the compose file) — you do
+# not need to pass -f docker-compose.dev.yml by hand when using `make`,
+# `./scripts/setup.sh` or `./scripts/openprocessor.sh`.
+# =============================================================================
+
+services:
+  triton-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.triton
+
+  yolo-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    volumes:
+      - ./src:/app/src
+      - ./export:/app/export
+      - ./scripts:/app/scripts
+      - ./tests:/app/tests
+      - ./benchmarks:/app/benchmarks
+      - ./test_images:/app/test_images
+      - ./VERSION:/app/VERSION:ro
+      - ./examples:/app/examples:ro
+
+  curation-detection-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      - ./examples:/app/examples:ro
+
+  curation-vlm-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+
+  curation-auto-label-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      - ./examples:/app/examples:ro
+
+  curation-cluster-refresh:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+
+  curation-evaluator:
+    build:
+      context: .
+      dockerfile: docker/evaluator/Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./src:/app/src:ro
+
+  segmenter:
+    build:
+      context: docker/segmenter
+      dockerfile: Dockerfile
+
+  curation-trainer:
+    build:
+      context: .
+      dockerfile: docker/trainer/Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+
+  triton-sdk:
+    volumes:
+      - ./benchmarks:/workspace/benchmarks

@@ -52,9 +52,13 @@ _MONITORING_SERVICES = (
 )
 
 
-def _load_compose() -> dict[str, Any]:
-    with COMPOSE_PATH.open() as fh:
+def _load_yaml(path: Path) -> dict[str, Any]:
+    with path.open() as fh:
         return yaml.safe_load(fh)
+
+
+def _load_compose() -> dict[str, Any]:
+    return _load_yaml(COMPOSE_PATH)
 
 
 def _services() -> dict[str, dict[str, Any]]:
@@ -171,14 +175,27 @@ def test_no_duplicate_container_names() -> None:
 
 
 def _published_ports(spec: dict[str, Any]) -> list[str]:
+    """The host-side port identity for each published port.
+
+    Installer plan §7: every entry now also carries a leading
+    ``${OP_BIND_ADDRESS:-127.0.0.1}`` publish-address segment (short
+    syntax becomes ``ADDR:HOST:CONTAINER``), so a naive
+    ``str.split(':')[0]`` collapses every service's host port to the same
+    ``${OP_BIND_ADDRESS`` string and hides real duplicates. Extract the
+    actual host-port var(s) the same way ``_host_port_vars`` does instead.
+    """
     published: list[str] = []
     for entry in spec.get('ports') or []:
         if isinstance(entry, dict):
             published.append(str(entry.get('published')))
             continue
-        # Short syntax: "HOST:CONTAINER" or "HOST:CONTAINER/proto" or a bare port.
-        host_part = str(entry).split(':')[0] if ':' in str(entry) else str(entry)
-        published.append(host_part)
+        text = str(entry)
+        host_vars = _HOST_PORT_VAR_RE.findall(text) if '${' in text else None
+        if host_vars:
+            published.append(','.join(v for v in host_vars if v not in _NON_HOST_PORT_VARS))
+        else:
+            # Short syntax with no vars at all: "HOST:CONTAINER" or a bare port.
+            published.append(text.split(':')[0] if ':' in text else text)
     return published
 
 
@@ -213,11 +230,16 @@ _BUILD_SHA_DOCKERFILES = (
 
 
 def test_build_sha_passed_as_a_build_arg_on_core_services() -> None:
+    """Installer plan §1: every `build:` block (and its `args:`) moved from
+    docker-compose.yml to docker-compose.dev.yml -- the deploy-safe base
+    file carries no `build:` at all, so this reads the overlay instead."""
     services = _services()
+    dev_services = _load_yaml(REPO_ROOT / 'docker-compose.dev.yml')['services']
     missing: list[str] = []
     for name in _BUILD_SHA_SERVICES:
         assert name in services, f'expected service {name!r} in docker-compose.yml'
-        args = (services[name].get('build') or {}).get('args') or {}
+        assert name in dev_services, f'expected service {name!r} in docker-compose.dev.yml'
+        args = (dev_services[name].get('build') or {}).get('args') or {}
         if 'OP_BUILD_SHA' not in args:
             missing.append(name)
     assert not missing, f'services missing build.args.OP_BUILD_SHA: {missing}'
@@ -449,6 +471,133 @@ def test_no_hardcoded_published_host_ports() -> None:
     assert not bad, 'published host ports not driven by an env var:\n' + '\n'.join(bad)
 
 
+# =============================================================================
+# Installer plan §1/§3.2/§7 -- deploy-safe base compose contract.
+# =============================================================================
+
+# Source-code mounts that must never appear in the deploy-safe base file
+# (docker-compose.yml). Every one of these lives only in
+# docker-compose.dev.yml, which restores today's checkout hot-reload
+# workflow (see the file's own header comment).
+_FORBIDDEN_BASE_MOUNT_PREFIXES = (
+    './src',
+    './scripts',
+    './export',
+    './tests',
+    './benchmarks',
+    './test_images',
+    './VERSION',
+    './examples',
+)
+
+# Every custom (davidamacey/openprocessor*) image, and the per-service
+# override var docker-compose.yml pins it through.
+_CUSTOM_IMAGE_OVERRIDE_VARS = {
+    'triton-server': 'OP_TRITON_IMAGE',
+    'yolo-api': 'OP_API_IMAGE',
+    'curation-detection-worker': 'OP_API_IMAGE',
+    'curation-vlm-worker': 'OP_API_IMAGE',
+    'curation-auto-label-worker': 'OP_API_IMAGE',
+    'curation-cluster-refresh': 'OP_API_IMAGE',
+    'curation-evaluator': 'OP_EVALUATOR_IMAGE',
+    'segmenter': 'OP_SEGMENTER_IMAGE',
+    'curation-trainer': 'OP_TRAINER_IMAGE',
+}
+
+
+def _version() -> str:
+    return (REPO_ROOT / 'VERSION').read_text().strip()
+
+
+def test_base_compose_has_no_build_blocks() -> None:
+    """docker-compose.yml must be pull-only -- every `build:` block lives in
+    docker-compose.dev.yml instead (installer plan §1)."""
+    services = _services()
+    with_build = [name for name, spec in services.items() if 'build' in spec]
+    assert not with_build, f'docker-compose.yml still has build: blocks: {with_build}'
+
+
+def test_base_compose_has_no_source_mounts() -> None:
+    """docker-compose.yml must not bind-mount source code -- an installer
+    dropping only this file into an empty dir would otherwise get Docker
+    silently creating empty host dirs that shadow the image's /app/src,
+    /app/export, etc. (installer plan §1)."""
+    services = _services()
+    bad: list[str] = []
+    for name, spec in services.items():
+        for v in spec.get('volumes') or []:
+            source = v.get('source', '') if isinstance(v, dict) else str(v).split(':', 1)[0]
+            if str(source).startswith(_FORBIDDEN_BASE_MOUNT_PREFIXES):
+                bad.append(f'{name}: {v!r}')
+    assert not bad, 'docker-compose.yml has forbidden source-code mounts:\n' + '\n'.join(bad)
+
+
+def test_dev_overlay_carries_every_build_block_and_source_mount() -> None:
+    """docker-compose.dev.yml must restore exactly what the base file gave
+    up: a `build:` for every service that used to have one, and every
+    forbidden source mount, so the checkout dev workflow is unchanged."""
+    dev_services = _load_yaml(REPO_ROOT / 'docker-compose.dev.yml')['services']
+    for name in _CUSTOM_IMAGE_OVERRIDE_VARS:
+        assert name in dev_services, f'{name} missing from docker-compose.dev.yml'
+        assert 'build' in dev_services[name], f'{name} missing build: in docker-compose.dev.yml'
+    yolo_api_mounts = [str(v) for v in dev_services['yolo-api'].get('volumes') or []]
+    for prefix in _FORBIDDEN_BASE_MOUNT_PREFIXES:
+        assert any(m.startswith(prefix + ':') for m in yolo_api_mounts), (
+            f'docker-compose.dev.yml/yolo-api missing a mount for {prefix}'
+        )
+
+
+def test_every_published_port_uses_op_bind_address() -> None:
+    """installer plan §7: the API has no auth and OpenSearch security is
+    disabled, so every published port must default to loopback-only via
+    ${OP_BIND_ADDRESS:-127.0.0.1} -- a bare ${SOME_PORT:-1234}:container
+    entry would silently publish on 0.0.0.0."""
+    services = _services()
+    bad: list[str] = []
+    for name, spec in services.items():
+        for entry in spec.get('ports') or []:
+            if isinstance(entry, dict):
+                continue
+            text = str(entry)
+            if not text.startswith('${OP_BIND_ADDRESS'):
+                bad.append(f'{name}: {text!r}')
+    assert not bad, 'published ports missing ${OP_BIND_ADDRESS prefix:\n' + '\n'.join(bad)
+
+
+def test_every_custom_image_has_a_per_service_override_and_no_latest_fallback() -> None:
+    """installer plan §3.2: every custom image is overridable through its
+    own OP_*_IMAGE var, and its fallback tag equals VERSION -- never
+    `latest` (the reference implementation's staleness bug class)."""
+    services = _services()
+    version = _version()
+    for name, override_var in _CUSTOM_IMAGE_OVERRIDE_VARS.items():
+        image = str(services[name]['image'])
+        assert image.startswith(f'${{{override_var}:-'), (
+            f'{name} image not driven by ${{{override_var}:-...}}: {image!r}'
+        )
+        assert 'latest' not in image, f'{name} image fallback still uses latest: {image!r}'
+        assert f':-{version}}}' in image or f':-{version}}}}}' in image, (
+            f'{name} image fallback tag does not match VERSION ({version}): {image!r}'
+        )
+
+
+def test_compose_default_tag_matches_version() -> None:
+    """Regression guard: VERSION, the compose fallback tag and the release
+    process must move together (installer plan §3.4 release checklist)."""
+    version = _version()
+    for name in _CUSTOM_IMAGE_OVERRIDE_VARS:
+        image = str(_services()[name]['image'])
+        assert f'OP_IMAGE_TAG:-{version}' in image, (
+            f'{name} image fallback tag does not match VERSION ({version}): {image!r}'
+        )
+
+
+def test_no_latest_in_any_custom_image_fallback() -> None:
+    services = _services()
+    for name in _CUSTOM_IMAGE_OVERRIDE_VARS:
+        assert 'latest' not in str(services[name]['image'])
+
+
 def test_source_root_mounted_at_the_same_path_on_api_and_detection_worker() -> None:
     """G-06: ingest resolves item paths against OP_SOURCE_ROOT on yolo-api;
     the detection worker re-reads the same items later. Without the same
@@ -462,16 +611,35 @@ def test_source_root_mounted_at_the_same_path_on_api_and_detection_worker() -> N
         assert matching, f'{name} has no source-root mount at {target}: {mounts}'
 
 
-def test_examples_mounted_on_api_and_detection_worker() -> None:
+def test_examples_reachable_on_api_and_detection_worker() -> None:
     """G-08: OP_REGION_PROFILE_PATH's worked example
-    (examples/region_profiles/license_plate.json) only resolves inside the
-    container if ./examples is actually mounted."""
-    services = _services()
+    (examples/region_profiles/license_plate.json) must resolve inside the
+    container at /app/examples.
+
+    Installer plan §1: docker-compose.yml is now deploy-safe (no bind
+    mount of ./examples, so an installed, non-checkout deployment doesn't
+    get an empty host dir shadowing the image). The intent this test
+    originally covered -- examples reachable at /app/examples -- is now
+    met two ways instead of one base-compose mount:
+    (a) the Dockerfile bakes examples/ into the image itself, so a plain
+        `docker compose pull && up -d` deploy has it without any mount;
+    (b) docker-compose.dev.yml (checkout hot-reload only) still bind-mounts
+        ./examples read-only on top, so local edits are picked up without
+        a rebuild.
+    """
+    dockerfile = (REPO_ROOT / 'Dockerfile').read_text()
+    assert re.search(r'^COPY\s+--chown=\S+\s+examples/\s+\./examples/', dockerfile, re.MULTILINE), (
+        'Dockerfile must COPY examples/ into the image -- '
+        'docker-compose.yml no longer bind-mounts it'
+    )
+
+    dev_compose = _load_yaml(REPO_ROOT / 'docker-compose.dev.yml')
+    dev_services = dev_compose['services']
     target = '/app/examples'
     for name in ('yolo-api', 'curation-detection-worker', 'curation-auto-label-worker'):
-        mounts = [str(v) for v in (services[name].get('volumes') or [])]
+        mounts = [str(v) for v in (dev_services.get(name, {}).get('volumes') or [])]
         assert any(m.endswith(f':{target}:ro') for m in mounts), (
-            f'{name} has no ./examples mount at {target}: {mounts}'
+            f'{name} has no ./examples mount at {target} in docker-compose.dev.yml: {mounts}'
         )
 
 
@@ -628,24 +796,31 @@ _HOST_PORT_LEADING_RE = re.compile(r'^(\$\{[A-Z0-9_]+(?::-[^}]*)?\}|[0-9]+)')
 _HOST_PORT_VAR_RE = re.compile(r'\$\{([A-Z0-9_]+)(?::-[^}]*)?\}')
 _DOCKERFILE_ENV_VAR_RE = re.compile(r'^\s*([A-Z0-9_]+)=', re.MULTILINE)
 
+# installer plan §7: every published port now also carries a leading
+# ${OP_BIND_ADDRESS:-127.0.0.1} publish-address segment (`ADDR:HOST:CONTAINER`
+# short syntax), which is never the F-75 host-port-var-reused-as-container-ENV
+# case this check guards against -- exclude it explicitly rather than
+# reworking the leading-anchor match for a 3-segment string.
+_NON_HOST_PORT_VARS = frozenset({'OP_BIND_ADDRESS'})
+
 
 def _host_port_vars(spec: dict[str, Any]) -> set[str]:
     """Extract the env var name(s) backing the *host*-side of each
-    published port. Short syntax is ``HOST:CONTAINER[/proto]`` where HOST
-    is itself ``${VAR:-default}`` -- naive ``str.split(':')`` breaks
-    because that colon appears inside the ``${VAR:-default}`` expression
-    too, so the host part is matched as a leading anchor instead.
+    published port. Short syntax is ``[ADDR:]HOST:CONTAINER[/proto]``,
+    where ADDR/HOST are themselves ``${VAR:-default}`` -- naive
+    ``str.split(':')`` breaks because that colon appears inside the
+    ``${VAR:-default}`` expression too. The container-side port in this
+    repo's compose file is always a literal integer, never a var, so
+    every ``${VAR}`` reference found in the whole entry is host-side.
     """
     names: set[str] = set()
     for entry in spec.get('ports') or []:
         if isinstance(entry, dict):
             published = str(entry.get('published') or '')
         else:
-            text = str(entry)
-            match = _HOST_PORT_LEADING_RE.match(text)
-            published = match.group(1) if match else text
+            published = str(entry)
         names.update(_HOST_PORT_VAR_RE.findall(published))
-    return names
+    return names - _NON_HOST_PORT_VARS
 
 
 def _dockerfile_env_var_names(dockerfile_path: Path) -> set[str]:
@@ -664,14 +839,21 @@ def _dockerfile_env_var_names(dockerfile_path: Path) -> set[str]:
 def test_no_service_reads_a_host_port_var_as_its_own_container_config() -> None:
     """Regression guard for F-75 (segmenter bound to the host port because
     SEGMENTER_PORT named both the host mapping and the Dockerfile's default
-    listen-port ENV)."""
+    listen-port ENV).
+
+    Installer plan §1: every `build:` block moved from docker-compose.yml to
+    docker-compose.dev.yml (the deploy-safe base carries no `build:` at
+    all), so the Dockerfile lookup below reads from the dev overlay by
+    service name instead of the base spec.
+    """
     services = _services()
+    dev_services = _load_yaml(REPO_ROOT / 'docker-compose.dev.yml')['services']
     collisions: list[str] = []
     for name, spec in services.items():
         host_port_vars = _host_port_vars(spec)
         if not host_port_vars:
             continue
-        build = spec.get('build') or {}
+        build = dev_services.get(name, {}).get('build') or {}
         context = Path(str(build.get('context', '.')))
         dockerfile = build.get('dockerfile')
         if not dockerfile:

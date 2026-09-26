@@ -7,7 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`docker-compose.yml` is now pull-only and deploy-safe** (one-line
+  installer plan, Wave 0). It no longer has any `build:` block or any
+  bind mount of `./src`, `./scripts`, `./export`, `./tests`,
+  `./benchmarks`, `./test_images`, `./VERSION` or `./examples` — dropping
+  it into an empty directory with no git checkout and running
+  `docker compose pull && up -d` no longer gets Docker silently creating
+  empty host directories that shadow the image's `/app/src`,
+  `/app/export`, etc. Every `build:` block and every one of those source
+  mounts moved to a new opt-in overlay, **`docker-compose.dev.yml`**,
+  which restores today's checkout hot-reload workflow unchanged. `make`
+  (via the `COMPOSE` variable), `scripts/setup.sh` and
+  `scripts/openprocessor.sh` all detect a checkout (`src/main.py` next to
+  the compose file) and add the dev overlay automatically — **no action
+  needed for existing checkout users of `make`/`./scripts/setup.sh`.** A
+  bare `docker compose` invocation now needs
+  `-f docker-compose.yml -f docker-compose.dev.yml` explicitly to build
+  from source or hot-reload; `docker compose up -d` alone now only pulls.
+- **`Dockerfile` bakes in `export/`, `examples/` and a model-repo seed**
+  (`/opt/openprocessor/model_repo_seed`, from the tracked `models/`
+  config tree) so the deploy-safe compose file above doesn't need to
+  bind-mount any of them. `docker/evaluator/Dockerfile` gains the same
+  `examples/` copy (read by the opt-in bake-off baseline path).
+- **Published ports default to loopback-only.** Every `ports:` entry in
+  `docker-compose.yml` is now
+  `"${OP_BIND_ADDRESS:-127.0.0.1}:<host-port>:<container-port>"`. The API
+  has no auth and OpenSearch security is off by default, so this is a
+  behavior change for anyone who was relying on the old bare
+  `${PORT}:<container-port>` binding on `0.0.0.0` — set
+  `OP_BIND_ADDRESS=0.0.0.0` (and put a reverse proxy with auth in front;
+  see `SECURITY.md`) to restore the old exposure.
+- **Custom images are pinned per-service and never fall back to `latest`.**
+  `triton-server`, `yolo-api` (and its curation workers), the evaluator,
+  segmenter and trainer images each gained their own override var
+  (`OP_TRITON_IMAGE`, `OP_API_IMAGE`, `OP_EVALUATOR_IMAGE`,
+  `OP_SEGMENTER_IMAGE`, `OP_TRAINER_IMAGE`), falling back to
+  `${OP_IMAGE_REPO:-davidamacey}/<image>:${OP_IMAGE_TAG:-<VERSION>}` — the
+  fallback tag now tracks the `VERSION` file instead of `latest`
+  (`test_compose_default_tag_matches_version` pins this).
+- **`env.template` gained a consolidated "Curation quick-config" block**
+  (the handful of vars every curation tier actually needs to get
+  running) plus `OP_BIND_ADDRESS` and the new per-service `OP_*_IMAGE`
+  vars. `docs/CURATION.md`'s environment-variables section now links to
+  that block instead of repeating scattered paragraphs.
+
 ### Fixed
+- **Three Grafana/Prometheus monitoring panels/alerts queried metrics
+  this Triton version never exports, so they were always empty and could
+  never fire.** `monitoring/dashboards/triton-unified-dashboard.json`'s
+  "Model Ready" panel and `monitoring/alerts/triton-alerts.yml`'s
+  `ModelNotReady` alert both queried `nv_model_ready_state`, which
+  Triton's `/metrics` doesn't export (confirmed against a live server's
+  actual exposition) — removed; there is no honest Triton or
+  DCGM/nvidia-exporter equivalent for per-model readiness (it's a
+  Triton-internal concept, not a GPU one), so use `GET
+  /v2/repository/index` or `/curation/health` instead. The "GPU
+  Temperature" panel queried `nv_gpu_temperature` (also never exported)
+  — switched to `DCGM_FI_DEV_GPU_TEMP` from the already-scraped
+  `dcgm-exporter` service. Also found and fixed while auditing this: the
+  "Model Track Latency Comparison" panel's P95/P99 lines used
+  `histogram_quantile(...,
+  nv_inference_request_duration_us_bucket)`, but
+  `nv_inference_request_duration_us` is a plain counter, not a histogram
+  (Triton exposes no `_bucket` series for it) — dropped, keeping only the
+  Avg line. New `tests/test_monitoring_metrics.py` pins every
+  dashboard/alert metric name against a fixture of metrics actually
+  exported by this stack's pinned Triton/dcgm-exporter/node-exporter
+  images (confirmed red against the old queries, green against the fix).
+- **Alloy's log-collection filters never matched this compose's own
+  containers.** `container_name` in `docker-compose.yml` has always been
+  `${COMPOSE_PROJECT_NAME:-openprocessor}-triton` /
+  `${COMPOSE_PROJECT_NAME:-openprocessor}-api`, never a bare
+  `triton-server` or `yolo-api`/`pytorch-api` container, so
+  `monitoring/alloy-config.alloy`'s old `/triton-server.*` and
+  `/(yolo-api|pytorch-api).*` `discovery.relabel` regexes never matched
+  under any `COMPOSE_PROJECT_NAME` — Loki only ever received a different
+  stack's logs (or nothing) from the monitoring profile. Both regexes now
+  match on the `-triton` / `-api` container-name suffix instead, which is
+  independent of the project name. New `tests/test_monitoring_config.py`
+  pins the fix (and confirms it fails red against the old patterns).
 - **Segmenter never became reachable on a stock install (F-75).** The
   `segmenter` service's `env_file: .env` loaded the host-port variable
   `SEGMENTER_PORT` (env.template default `4611`) straight into the

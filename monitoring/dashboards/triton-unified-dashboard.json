@@ -10,76 +10,6 @@
   "panels": [
     {
       "datasource": "Prometheus",
-      "description": "Shows whether all models are loaded and ready to serve requests",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "text": "NOT READY",
-                  "color": "red"
-                },
-                "1": {
-                  "text": "READY",
-                  "color": "green"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "none"
-        }
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 4,
-        "x": 0,
-        "y": 0
-      },
-      "id": 1,
-      "options": {
-        "orientation": "auto",
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "text": {}
-      },
-      "pluginVersion": "9.0.0",
-      "targets": [
-        {
-          "expr": "min(nv_model_ready_state)",
-          "legendFormat": "All Models",
-          "refId": "A"
-        }
-      ],
-      "title": "Model Ready",
-      "type": "gauge"
-    },
-    {
-      "datasource": "Prometheus",
       "description": "Total inference requests per second across all models",
       "fieldConfig": {
         "defaults": {
@@ -222,7 +152,7 @@
               }
             ]
           },
-          "unit": "µs"
+          "unit": "\u00b5s"
         }
       },
       "gridPos": {
@@ -693,7 +623,7 @@
     },
     {
       "datasource": "Prometheus",
-      "description": "Latency comparison across model tracks - shows Avg, P95, and P99 percentiles",
+      "description": "Latency comparison across model tracks - shows Avg, P95, and P99 percentiles P95/P99 removed: Triton does not export a histogram for request duration (nv_inference_request_duration_us is a plain counter, no _bucket series), so histogram_quantile over it always returned no data.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -779,19 +709,9 @@
           "expr": "rate(nv_inference_compute_infer_duration_us{model=~\".*\"}[1m]) / rate(nv_inference_request_success{model=~\".*\"}[1m]) / 1000",
           "legendFormat": "{{model}} - Avg",
           "refId": "A"
-        },
-        {
-          "expr": "histogram_quantile(0.95, rate(nv_inference_request_duration_us_bucket{model=~\".*\"}[1m])) / 1000",
-          "legendFormat": "{{model}} - P95",
-          "refId": "B"
-        },
-        {
-          "expr": "histogram_quantile(0.99, rate(nv_inference_request_duration_us_bucket{model=~\".*\"}[1m])) / 1000",
-          "legendFormat": "{{model}} - P99",
-          "refId": "C"
         }
       ],
-      "title": "Model Track Latency Comparison (Avg, P95, P99)",
+      "title": "Model Track Latency Comparison (Avg)",
       "type": "timeseries"
     },
     {
@@ -1031,7 +951,7 @@
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Time (µs)",
+            "axisLabel": "Time (\u00b5s)",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
@@ -1061,7 +981,7 @@
               }
             ]
           },
-          "unit": "µs"
+          "unit": "\u00b5s"
         }
       },
       "gridPos": {
@@ -1563,8 +1483,8 @@
       },
       "targets": [
         {
-          "expr": "nv_gpu_temperature",
-          "legendFormat": "GPU {{gpu_uuid}}",
+          "expr": "DCGM_FI_DEV_GPU_TEMP",
+          "legendFormat": "GPU {{gpu}} ({{modelName}})",
           "refId": "A"
         }
       ],
