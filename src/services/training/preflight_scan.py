@@ -13,7 +13,7 @@ exports are immutable once written) and compute:
   translated through ``export_id_map`` before comparing, matching the
   trainer's own subsetting logic.
 * how many region-of-interest boxes (the active region profile's
-  ``region_class_name``, e.g. a license plate) have no matching parent
+  ``region_class_name``, e.g. a wheel on a car) have no matching parent
   item box in the same image (a pairing/parity signal). With no active
   region profile, or one whose ``region_class_name`` is empty, this
   check is not applicable: ``region_boxes`` / ``unpaired_region_boxes``

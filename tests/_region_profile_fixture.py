@@ -25,6 +25,11 @@ EXAMPLE_LICENSE_PLATE_PROFILE_PATH = str(
 EXAMPLE_LICENSE_PLATE_PROFILE: DetectionProfile = region_profile_from_file(
     EXAMPLE_LICENSE_PLATE_PROFILE_PATH
 )
+# The example profile runs segmenter-only (empty detector_model); tests that
+# drive the detector leg on it configure this model on top via
+# OP_REGION_DETECTION_DETECTOR_MODEL, as a deployment with its own detector
+# would (the ``reference_region_profile`` fixture does).
+REFERENCE_REGION_DETECTOR_MODEL = 'license_plate_detector'
 
 NEUTRAL_REGION_PROFILE = DetectionProfile(
     name='region',

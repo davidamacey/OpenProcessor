@@ -9,8 +9,8 @@ rescue path and text-hint source.
 
 Every heuristic (detector identity, confidence floors, aspect bands, OCR
 wiring) lives on a :class:`~src.config.DetectionProfile` instance, so a
-deployment can describe any region type (a printed label, a box, an
-ID plate, …) without forking this module. **No profile ships
+deployment can describe any region type (a printed label, a box, a
+wheel, …) without forking this module. **No profile ships
 built in.** ``RegionDetector`` / ``PaddleOcrRegionDetector`` /
 ``PaddleOcrTextRecognizer`` all require a profile explicitly — the
 caller resolves it from :mod:`src.services.detection.profile_registry`
@@ -144,9 +144,9 @@ def is_plausible_region_bbox(
             vw = float(vx2) - float(vx1)
             vh = float(vy2) - float(vy1)
         except (TypeError, ValueError):
-            return False, 'vehicle_bbox_unpack_failed'
+            return False, 'parent_bbox_unpack_failed'
         if vw <= 0.0 or vh <= 0.0:
-            return False, 'vehicle_bbox_degenerate'
+            return False, 'parent_bbox_degenerate'
     return True, 'ok'
 
 
@@ -406,8 +406,11 @@ class RegionDetector:
         Returns:
             The highest-scoring region in the crop's normalized frame,
             or ``None`` if the model returned nothing above the
-            confidence floor (or if the crop could not be decoded).
+            confidence floor (or if the crop could not be decoded), or
+            when no detector model is configured (no Triton call).
         """
+        if not self.model_name:
+            return None
         try:
             img = _decode_jpeg(crop_jpeg)
         except ValueError as exc:
@@ -471,12 +474,15 @@ class RegionDetector:
 
         Returns:
             A list aligned 1:1 with ``crops_jpeg``. Failed crops yield
-            ``None``.
+            ``None``; with no detector model configured every entry is
+            ``None`` and Triton is never called.
         """
         import asyncio
 
         if not crops_jpeg:
             return []
+        if not self.model_name:
+            return [None] * len(crops_jpeg)
 
         results: list[RegionCandidate | None] = [None] * len(crops_jpeg)
 
@@ -563,8 +569,8 @@ class PaddleOcrRegionDetector:
     Routing fallback: when both the primary detector and the secondary
     segmenter came up empty, we run PaddleOCR's text detector on the
     crop and treat the bounding box of its strongest text region as a
-    region candidate. Text-bearing regions (plates, labels, placards)
-    are by construction text-rich rectangles, so this is a cheap
+    region candidate. Text-bearing regions (labels, placards, printed
+    tags) are by construction text-rich rectangles, so this is a cheap
     high-recall rescue for crops the dedicated detectors missed.
 
     The detector returns the **single bounding box** that encloses the
@@ -779,28 +785,18 @@ class OcrRegion:
         return self.profile.aspect_min <= ar <= self.profile.aspect_max
 
     @property
-    def looks_like_region_text(self) -> bool:
-        """Surface check: characters are region-text-valid + length plausible."""
-        pattern = re.compile(self.profile.text_pattern)
-        return bool(pattern.fullmatch(self.text)) and 4 <= len(self.text) <= 10
-
-    @property
     def is_region_text_candidate(self) -> bool:
         """Stricter test for text-hint detection promotion.
 
-        Real plate-like text regions almost always contain BOTH letters
-        and digits, sit in a tighter aspect range than the broad sanity
-        gate, and read with high OCR confidence. Bumper stickers like
-        ``"FORD"`` or ``"COOLBUMPER"`` fail the letter+digit test;
-        ``"DEALER"`` fails it too. Vanity plates ``"LUV2DRV"`` and
-        standard plates ``"ABC1234"`` pass.
+        The text must sit in the profile's tighter text-hint aspect range,
+        read at or above ``text_hint_rec_floor``, match ``text_pattern`` and
+        have a length within ``text_hint_len_min..text_hint_len_max``.
 
-        Edge cases this intentionally rejects (acceptable false-
-        negatives — the segmenter / OCR-det path should have caught
-        them):
-          * all-digit plates (e.g. some EU mopeds)
-          * all-letter custom plates (rare)
-          * short custom plates (below ``profile.text_hint_len_min``)
+        With ``text_hint_require_letters_and_digits`` on, it must also mix
+        letters and digits -- for a region whose text always does, this
+        rejects lettering-only or number-only text elsewhere on the item
+        (and, as accepted false negatives, a region text that happens to be
+        all letters or all digits). Off by default.
         """
         x1, y1, x2, y2 = self.bbox_norm
         w = max(0.0, x2 - x1)
@@ -819,6 +815,8 @@ class OcrRegion:
         compact = self.text.replace(' ', '').replace('-', '')
         if not (p.text_hint_len_min <= len(compact) <= p.text_hint_len_max):
             return False
+        if not p.text_hint_require_letters_and_digits:
+            return True
         has_letter = any(c.isalpha() for c in compact)
         has_digit = any(c.isdigit() for c in compact)
         return has_letter and has_digit
@@ -1109,11 +1107,11 @@ class PaddleOcrTextRecognizer:
         """Pick a region good enough to promote as a text-hint candidate.
 
         Uses ``OcrRegion.is_region_text_candidate`` (tighter than the
-        general sanity gate): both letters AND digits in the canonical
-        text, tightened aspect range, OCR confidence floor. Drops
-        bumper-sticker / window-decal / dealer-frame matches that would
-        otherwise sneak through the loose region-text regex. The
-        text-hint path also only fires for crops the VLM already said
+        general sanity gate): tightened aspect range, length window, OCR
+        confidence floor and, when the profile asks for it, a
+        letters-and-digits mix. Drops unrelated text elsewhere on the item
+        that would otherwise sneak through the loose region-text regex.
+        The text-hint path also only fires for crops the VLM already said
         contain the region of interest, so the filter need only reject
         obvious-non-region text — borderline cases route to the VLM
         verify anyway, which is the final gate.

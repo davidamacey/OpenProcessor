@@ -47,6 +47,16 @@ class DetectionProfile:
     text_hint_rec_floor: float = 0.70
     text_hint_len_min: int = 4
     text_hint_len_max: int = 10
+    # OCR text-hint re-pass after a segmenter miss: locate text on the item
+    # crop and re-prompt the segmenter on a sub-crop around it. Runs only
+    # when this is on, ``ocr_pipeline_model`` is set and the segmenter leg
+    # is enabled (see ``text_hint_active``). Independent of ``text_reader``:
+    # the hint can locate a text-bearing region without storing its text.
+    text_hint_enabled: bool = True
+    # Require both a letter and a digit in a text-hint candidate's text.
+    # Off by default; a profile whose region text always mixes the two
+    # turns it on to reject lettering-only / number-only matches.
+    text_hint_require_letters_and_digits: bool = False
     auto_confirm_aspect: tuple[float, float] = (0.5, 7.0)
     auto_confirm_area_frac: tuple[float, float] = (0.001, 0.40)
     text_pattern: str = r'[A-Z0-9 -]{2,}'
@@ -69,7 +79,9 @@ class DetectionProfile:
     # reader fills ``region_text``: 'vlm' (the verify call's reading),
     # 'ocr' (the OCR pipeline on the region crop), 'vlm_then_ocr' (OCR
     # when the VLM read nothing), 'both' (store both readings and flag a
-    # disagreement). With no VLM configured every mode reads via OCR.
+    # disagreement), 'none' (a text-free region: no reader runs and no
+    # region text is stored). With no VLM configured every text-reading
+    # mode reads via OCR.
     text_reader: str = 'vlm_then_ocr'
     # Region crop fed to the OCR reader: the region box grown by this
     # fraction of its width/height on each side, clipped to the item crop.
@@ -115,6 +127,10 @@ class DetectionProfile:
     # become items. Empty = every class. Lets a generic proposer (e.g. an
     # 80-class COCO model) be narrowed to the classes a deployment curates.
     class_ids: frozenset[int] = field(default_factory=frozenset)
+    # Region profiles only: the item class names (matched against an item's
+    # ``class_name`` or ``proposal_name``, case-insensitively) that get the
+    # region stage. Empty = every item.
+    parent_classes: frozenset[str] = field(default_factory=frozenset)
     # Ingest primary only: does this model's class space *be* the class
     # registry? False (the default) = it is a generic proposer (e.g. COCO)
     # whose class ids mean nothing in the registry, so its detections are
@@ -139,6 +155,15 @@ class DetectionProfile:
     # The same label for one region (e.g. "Plate" for "Confirm Plate").
     # '' (default) means the caller falls back to "Region".
     display_name_singular: str = ''
+
+    @property
+    def reads_text(self) -> bool:
+        """``False`` for a text-free profile (``text_reader='none'``)."""
+        return self.text_reader != 'none'
+
+    def text_hint_active(self, segmenter_enabled: bool) -> bool:
+        """Whether the OCR text-hint re-pass runs for this profile."""
+        return self.text_hint_enabled and bool(self.ocr_pipeline_model) and segmenter_enabled
 
     @classmethod
     def from_env(

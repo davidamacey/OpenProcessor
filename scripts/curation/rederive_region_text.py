@@ -57,6 +57,9 @@ async def run(args: argparse.Namespace, client: object) -> int:
     if profile is None:
         print('No region profile configured (OP_REGION_PROFILE / OP_REGION_DETECTION_*).')
         return 2
+    if not profile.reads_text:
+        print(f'profile={profile.name} does not read text (text_reader=none); nothing to do.')
+        return 0
     if args.placeholder:
         profile = dataclasses.replace(
             profile, text_placeholders=profile.text_placeholders | frozenset(args.placeholder)

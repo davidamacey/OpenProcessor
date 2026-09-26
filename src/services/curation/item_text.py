@@ -1,10 +1,11 @@
 """Searchable per-item text: every OCR line read on an item crop.
 
-The region worker already runs the OCR pipeline over the item crop for
-its text-hint step; the same lines are stored on the item as
-``item_text_lines`` (for display) plus ``item_text_tokens`` (normalized
-keyword tokens) so ``GET {prefix}/crops?item_text=<q>`` can find items
-by any text printed on them. Matching is backend-owned: the query is
+When an OCR pipeline is configured the region worker reads the item crop
+once per pass (the same lines feed its optional text-hint step); they are
+stored on the item as ``item_text_lines`` (for display) plus
+``item_text_tokens`` (normalized keyword tokens) so
+``GET {prefix}/crops?item_text=<q>`` can find items by any text printed on
+them. Matching is backend-owned: the query is
 normalized here with the same rule the tokens were written with.
 """
 
@@ -75,7 +76,7 @@ def item_text_tokens(lines: Iterable[dict[str, Any]]) -> list[str]:
     """Sorted, de-duplicated search tokens for stored ``item_text_lines``.
 
     Each word of each line, plus the line with separators removed when it
-    has more than one word (so ``ABC-123`` is findable as ``ABC123`` too).
+    has more than one word (so ``PART-42`` is findable as ``PART42`` too).
     """
     tokens: set[str] = set()
     for ln in lines:

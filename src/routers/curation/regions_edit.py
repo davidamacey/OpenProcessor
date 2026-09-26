@@ -154,7 +154,7 @@ async def patch_crop_region_meta(
     crop_id: str,
     payload: ItemRegionMetaRequest,
     opensearch: OpenSearchDep,
-    _profile: RegionProfileDep,
+    profile: RegionProfileDep,
 ) -> dict[str, Any]:
     """Patch region metadata (text / status / rejection reason).
 
@@ -162,9 +162,14 @@ async def patch_crop_region_meta(
     present in the payload are written; a status write applies the
     lifecycle invariants (see :mod:`src.services.curation.region_writes`).
     Returns ``updated_fields`` (wire names) and ``item`` (post-write).
+    ``region_text`` is accepted on a text-reading profile only; a
+    text-free profile answers 422 ``region_text_disabled`` and writes
+    nothing.
     """
     F = get_region_fields()
     fields_set = payload.model_fields_set
+    if 'region_text' in fields_set and not profile.reads_text:
+        raise HTTPException(status_code=422, detail={'error': 'region_text_disabled'})
     if not (fields_set - {'region_label_source'}):
         raise HTTPException(
             status_code=400,
@@ -180,7 +185,7 @@ async def patch_crop_region_meta(
     wire_fields: list[str] = []
     if 'region_text' in fields_set:
         # Human-typed text is the ground truth; mark the source so the
-        # OCR pipeline knows not to overwrite it. Human OCR is 1.0
+        # text readers know not to overwrite it. Human-typed text is 1.0
         # confidence — null would read as "unknown".
         base[F.text] = payload.region_text
         base[F.text_source] = 'human'

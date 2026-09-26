@@ -117,6 +117,7 @@ class SegmenterClient:
         timeout_s: float = 30.0,
         max_candidates: int = 4,
         text_prompt: str = '',
+        source_name: str = 'sam3',
     ) -> None:
         urls = [u.strip().rstrip('/') for u in (base_url or '').split(',') if u.strip()]
         # No segmenter configured is a supported deployment shape, not
@@ -129,6 +130,8 @@ class SegmenterClient:
         self.timeout_s = timeout_s
         self.max_candidates = max_candidates
         self.text_prompt = text_prompt
+        # Stamped on every candidate's ``source``: the profile's segmenter_name.
+        self.source_name = source_name
         _max_conn = int(os.environ.get('OP_SEGMENTER_HTTPX_MAX_CONNECTIONS', '512'))
         _keepalive = int(os.environ.get('OP_SEGMENTER_HTTPX_KEEPALIVE', '128'))
         _limits = httpx.Limits(
@@ -402,7 +405,7 @@ class SegmenterClient:
                 float(bbox[3]),
             ),
             score=float(top.get('score') or 0.0),
-            source='sam3',
+            source=self.source_name,
             rectangularity=(float(top['mask_iou']) if top.get('mask_iou') is not None else None),
         )
 

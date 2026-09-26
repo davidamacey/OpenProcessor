@@ -125,7 +125,7 @@ def test_strip_markdown_fences_passes_through_plain_text():
 # ---------------------------------------------------------------------------
 
 
-def test_label_vehicle_batch_chunks_more_than_four_crops_into_multiple_calls():
+def test_label_item_batch_chunks_more_than_four_crops_into_multiple_calls():
     """5 crops + max 4 per call should produce exactly 2 upstream calls."""
 
     def handler(request: httpx.Request, call_idx: int) -> httpx.Response:
@@ -149,7 +149,7 @@ def test_label_vehicle_batch_chunks_more_than_four_crops_into_multiple_calls():
             client=client,
         ) as labeler:
             crops = [_ItemCrop(img_id=f'crop-{i}', jpeg_bytes=_make_jpeg()) for i in range(5)]
-            return await labeler.label_vehicle_batch(crops, class_names=['alpha', 'beta'])
+            return await labeler.label_item_batch(crops, class_names=['alpha', 'beta'])
 
     results = _run(_go())
 
@@ -188,7 +188,7 @@ def test_construction_with_no_url_and_no_model_does_not_raise():
     _run(labeler.aclose())
 
 
-def test_label_vehicle_batch_clamps_max_images_per_call_above_hard_cap():
+def test_label_item_batch_clamps_max_images_per_call_above_hard_cap():
     """Constructor clamps anything above the hard cap (8) down to it."""
 
     client, _ = _fake_client(lambda *_a: httpx.Response(200, json=_make_chat_response('[]')))
@@ -207,7 +207,7 @@ def test_label_vehicle_batch_clamps_max_images_per_call_above_hard_cap():
 # ---------------------------------------------------------------------------
 
 
-def test_label_vehicle_batch_parses_markdown_fenced_response():
+def test_label_item_batch_parses_markdown_fenced_response():
     """A VLM sometimes wraps output in ```json ... ``` despite the system prompt."""
 
     fenced = '```json\n[{"img":1,"class":"gamma","confidence":"medium"}]\n```'
@@ -223,7 +223,7 @@ def test_label_vehicle_batch_parses_markdown_fenced_response():
             client=client,
             requests_per_second=1000.0,
         ) as labeler:
-            return await labeler.label_vehicle_batch(
+            return await labeler.label_item_batch(
                 [_ItemCrop(img_id='only', jpeg_bytes=_make_jpeg())],
                 class_names=['gamma'],
             )
@@ -234,7 +234,7 @@ def test_label_vehicle_batch_parses_markdown_fenced_response():
     assert result.confidence == 'medium'
 
 
-def test_label_vehicle_batch_returns_low_confidence_fallback_on_garbage():
+def test_label_item_batch_returns_low_confidence_fallback_on_garbage():
     def handler(_request: httpx.Request, _call_idx: int) -> httpx.Response:
         return httpx.Response(200, json=_make_chat_response('this is not json'))
 
@@ -246,7 +246,7 @@ def test_label_vehicle_batch_returns_low_confidence_fallback_on_garbage():
             client=client,
             requests_per_second=1000.0,
         ) as labeler:
-            return await labeler.label_vehicle_batch(
+            return await labeler.label_item_batch(
                 [
                     _ItemCrop(img_id='a', jpeg_bytes=_make_jpeg()),
                     _ItemCrop(img_id='b', jpeg_bytes=_make_jpeg()),
@@ -299,7 +299,7 @@ def test_retry_triggers_on_503_then_succeeds():
             client=client,
             requests_per_second=1000.0,
         ) as labeler:
-            return await labeler.label_vehicle_batch(
+            return await labeler.label_item_batch(
                 [_ItemCrop(img_id='x', jpeg_bytes=_make_jpeg())],
                 class_names=['beta'],
             )
@@ -325,7 +325,7 @@ def test_retry_gives_up_after_max_attempts_and_returns_fallback():
             client=client,
             requests_per_second=1000.0,
         ) as labeler:
-            return await labeler.label_vehicle_batch(
+            return await labeler.label_item_batch(
                 [_ItemCrop(img_id='x', jpeg_bytes=_make_jpeg())],
                 class_names=['beta'],
             )

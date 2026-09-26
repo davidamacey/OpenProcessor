@@ -42,8 +42,16 @@ TEXT_READER_VLM = 'vlm'
 TEXT_READER_OCR = 'ocr'
 TEXT_READER_VLM_THEN_OCR = 'vlm_then_ocr'
 TEXT_READER_BOTH = 'both'
+# The region carries no text: no reader runs and no region text is stored.
+TEXT_READER_NONE = 'none'
 TEXT_READER_MODES = frozenset(
-    {TEXT_READER_VLM, TEXT_READER_OCR, TEXT_READER_VLM_THEN_OCR, TEXT_READER_BOTH}
+    {
+        TEXT_READER_VLM,
+        TEXT_READER_OCR,
+        TEXT_READER_VLM_THEN_OCR,
+        TEXT_READER_BOTH,
+        TEXT_READER_NONE,
+    }
 )
 
 # Why the chosen reading won (``RegionFields.text_choice``).
@@ -79,12 +87,20 @@ def validate_text_reader(mode: str) -> str:
     return mode
 
 
+def reads_text(mode: str) -> bool:
+    """Whether a profile with this ``text_reader`` stores region text at all."""
+    return mode != TEXT_READER_NONE
+
+
 def ocr_needed(mode: str, *, vlm_text: str | None, vlm_available: bool) -> bool:
     """Whether the region-text OCR reader must run for this region.
 
-    With no VLM configured every mode falls back to OCR -- otherwise a
-    deployment without an image LLM would never store region text.
+    With no VLM configured every text-reading mode falls back to OCR --
+    otherwise a deployment without an image LLM would never store region
+    text. ``none`` never reads.
     """
+    if not reads_text(mode):
+        return False
     if not vlm_available:
         return True
     if mode in (TEXT_READER_OCR, TEXT_READER_BOTH):
@@ -319,9 +335,12 @@ def resolve_region_text(
     valid readings (normalized). ``text_raw`` is the full unfiltered OCR
     reading whenever OCR ran and found text, else the VLM's verbatim
     reading. Keys with no value are omitted so a write never clears a
-    field it has nothing to say about.
+    field it has nothing to say about. ``none`` (a text-free profile)
+    resolves to ``{}`` whatever the readers said.
     """
     validate_text_reader(mode)
+    if not reads_text(mode):
+        return {}
     vlm_text = (vlm_text or '').strip() or None
     ocr_text = ocr.text if ocr is not None else None
     vlm_invalid = rules.invalid_reason(vlm_text) if rules is not None and vlm_text else None
@@ -415,6 +434,7 @@ __all__ = [
     'TEXT_CHOICE_VLM_PREFERRED',
     'TEXT_READER_BOTH',
     'TEXT_READER_MODES',
+    'TEXT_READER_NONE',
     'TEXT_READER_OCR',
     'TEXT_READER_VLM',
     'TEXT_READER_VLM_THEN_OCR',
@@ -429,6 +449,7 @@ __all__ = [
     'ocr_needed',
     'read_dominant_text',
     'reading_order',
+    'reads_text',
     'resolve_region_text',
     'texts_disagree',
     'validate_text_reader',

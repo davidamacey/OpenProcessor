@@ -596,7 +596,7 @@ class TestOnePassPerItem:
         task = worker._ItemTask(
             crop_id='c1',
             image_path='',
-            vehicle_bbox_norm=(0.1, 0.1, 0.9, 0.9),
+            item_bbox_norm=(0.1, 0.1, 0.9, 0.9),
             region_status='pending_detection',
             class_name='sedan',
             group='cars',

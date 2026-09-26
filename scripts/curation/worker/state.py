@@ -100,7 +100,7 @@ class _ItemTask:
 
     crop_id: str
     image_path: str
-    vehicle_bbox_norm: tuple[float, float, float, float]
+    item_bbox_norm: tuple[float, float, float, float]
     region_status: str | None
     class_name: str
     # Dead field -- nothing writes or maps a ``group`` item field, so

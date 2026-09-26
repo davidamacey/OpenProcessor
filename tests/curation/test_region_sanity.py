@@ -83,13 +83,13 @@ class TestIsPlausibleRegionBbox:
         ok2, _ = is_plausible_region_bbox((0.1, 0.5, 0.7, 0.6))
         assert ok2
 
-    def test_degenerate_vehicle_bbox_rejects(self) -> None:
+    def test_degenerate_parent_bbox_rejects(self) -> None:
         ok, reason = is_plausible_region_bbox(
             (0.4, 0.6, 0.5, 0.65),
             parent_in_source=(0.3, 0.3, 0.3, 0.3),
         )
         assert not ok
-        assert reason == 'vehicle_bbox_degenerate'
+        assert reason == 'parent_bbox_degenerate'
 
 
 class TestRegionProvenance:
