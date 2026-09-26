@@ -780,6 +780,57 @@ scheme — it was removed; one binding scheme means no "what does this key do
 here?" friction. On `/clusters/[id]` a class letter labels the current
 selection (or the just-dragged set); on `/review` it labels the current item.
 
+### Action-id keymap (`keymapStore`, K1 of `docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md`)
+
+Every other shortcut is a named **action**, not a hardcoded key:
+`<context>.<verb>` ids such as `review.queue.discard`, `review.region.back`,
+`box_edit.nudge_up`, `cluster.undo` (46 ids, contexts `global` / `review` /
+`review.queue` / `review.region` / `box_edit` / `cluster` /
+`clusters_search` / `region_gallery`). They are declared once, with their
+default keys and overlay labels, in `src/lib/keymapFallback.ts`
+(`FALLBACK_KEYMAP`, the same shape the backend's `GET {prefix}/keymap` will
+serve) and read through `keymapStore` (`src/lib/stores/keymap.svelte.ts`):
+`keysFor(id)`, `label(id, {region})`, `glyph(id)` / `compactGlyph(id)`
+(`⇧N`, `↵`, `⌫`), `actionFor(context, combo)` (walks the context's
+`includes`), `actionsForContext(context)`.
+
+- **Registration by id.** Pages call
+  `keyboardStore.registerAction(id, handler, scope)`. The registration
+  stores the id; dispatch resolves its keys through `keymapStore` at
+  keypress time, so a rebind applies with no re-registration. The legacy
+  `register(combo, …)` form remains for combo-level callers and tests. The
+  overlay toggle/close are the `global.shortcuts_overlay` /
+  `global.close_overlay` actions (the old backtick layout aliases, including
+  `e.code === 'Backquote'`, still match while the toggle is bound to
+  backtick).
+- **Slot keys.** `buildSlotKeymap` entries carry their `actionId`. Confirm
+  and next (scan) and save and cancel (edit) come from the store. The
+  slot's own verbs come from its `queue.keymap`, which for the served
+  region slot is derived from the store's `review.region.*` keys
+  (`servedRegionSlot.ts`), and which a tier-2 slot may still declare
+  itself.
+- **One box-edit handler.** `/review`'s edit mode (`BboxCanvas.handleKey`,
+  via the page's single forwarded window listener) and the `SlotBboxEditor`
+  modal both resolve keys through `runBoxEditKey` (`src/lib/boxEditKeys.ts`).
+- **Printed keys.** Every hint strip, toast, button badge/title and
+  overlay row prints `keymapStore.glyph(id)`, never a literal.
+  `src/lib/keymap.literals.scan.test.ts` fails on a literal `<kbd>`,
+  "Press X" or "(X)" outside the keymap's own files (the class picker's
+  fixed listbox hint is the one allow-listed exception).
+- **Locked keys.** Esc, Enter and the four arrows: an action whose default
+  has one keeps it, and no other action may take one. Esc-only actions
+  are not modifiable. The store enforces this on every document.
+  Fixed form, modal and a11y keys (Enter submits, Esc cancels, ↑↓ in a
+  listbox, Tab) are not actions and are not routed through the keymap.
+- **W8 per-box actions** (`review.region.accept_box` / `reject_box`,
+  `box_edit.next_box`) are declared `available: false`, so
+  `registerAction` and `actionFor` ignore them until W8 lands.
+- **Today (K1) the document is always the fallback.** No request is made.
+  K2 adds a loader that reads the scoped `GET {prefix}/keymap` (via
+  `scoped()`), hands the served document to
+  `keymapStore.setDocument(doc, 'served')` and adds the `/settings`
+  editor. The resolution API doesn't change shape for that.
+
 Reserved single-char action keys (`g n d z x u a m /`, plus `b f e` from the
 region slot's keymap — server-served today as `/abdefgmnuxz`)
 cannot be bound to a class — `setClassHotkey` (`src/lib/classHotkey.ts`)
@@ -787,7 +838,9 @@ rejects them, validating against `reservedHotkeyLetters()`. As of the
 2026-09-24 OpenProcessor `logic-moves` cutover, the base set is no longer a
 hand-maintained frontend constant: `GET {API_PREFIX}/classes` serves its own
 `reserved_hotkeys` field (`classesStore.reservedHotkeys`), and
-`reservedHotkeyLetters(registry)` is that served set **∪ every
+`reservedHotkeyLetters(registry)` is that served set (or, once K2 serves a
+keymap, `keymapStore.reserved`; it's `null` until then, so the classes
+field stays authoritative) **∪ every
 single-character combo any registered queue-capable slot's
 `QueueCapability.keymap` declares** (P2.8c, closing Finding C.2
 structurally). The registry union is redundant against the server's set
@@ -804,6 +857,9 @@ a fix for a live collision — it's what keeps a bound letter from firing two
 handlers on the same keypress. `/classes` shows a banner for any class whose
 bound hotkey predates its reservation — live example: `bmw` is bound to `b`,
 which is now reserved; the binding is kept, not auto-cleared.
+
+The tables below are the **default** keys (`FALLBACK_KEYMAP`), which is
+what every deployment runs today.
 
 Global:
 
