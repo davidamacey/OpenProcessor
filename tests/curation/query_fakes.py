@@ -61,6 +61,16 @@ def _wildcard_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
     return any(re.fullmatch(pattern, str(v), flags) is not None for v in _values(doc, field))
 
 
+def _term_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
+    ((field, value),) = clause.items()
+    if isinstance(value, dict) and value.get('case_insensitive'):
+        wanted = str(value['value']).casefold()
+        return any(str(v).casefold() == wanted for v in _values(doc, field))
+    if isinstance(value, dict):
+        value = value['value']
+    return value in _values(doc, field)
+
+
 _LEAF_MATCHERS = {
     'exists': lambda doc, clause: bool(_values(doc, clause['field'])),
     'wildcard': _wildcard_matches,
@@ -74,10 +84,7 @@ def matches(doc: dict[str, Any], query: dict[str, Any] | None) -> bool:
     if leaf is not None:
         return _LEAF_MATCHERS[leaf](doc, query[leaf])
     if 'term' in query:
-        ((field, value),) = query['term'].items()
-        if isinstance(value, dict):
-            value = value['value']
-        return value in _values(doc, field)
+        return _term_matches(doc, query['term'])
     if 'terms' in query:
         ((field, values),) = query['terms'].items()
         return any(v in values for v in _values(doc, field))

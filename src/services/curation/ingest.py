@@ -315,7 +315,10 @@ class CurationIngestService:
             result['crops_preserved_human'] = upsert['preserved_human']
             result['crops_final_conflicts'] = upsert['final_conflicts']
             if self.region_seed_status is not None:
-                result['region_queued'] = upsert['created'] + upsert['filled_absent']
+                status_field = get_region_fields().status
+                seeded = {d['crop_id'] for d in crop_docs if d.get(status_field) is not None}
+                created_seeded = len([cid for cid in created_ids or () if cid in seeded])
+                result['region_queued'] = created_seeded + upsert['filled_absent']
 
         return result
 
@@ -551,7 +554,9 @@ class CurationIngestService:
                     blur_full_var=full_var,
                     blur_lap_var=box_var,
                     blur_lap_ratio=ratio,
-                    region_status=self.region_seed_status,
+                    region_status=(
+                        region_seed_status(item) if self.region_seed_status is not None else None
+                    ),
                 )
             )
 

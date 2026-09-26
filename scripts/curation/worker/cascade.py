@@ -17,6 +17,7 @@ from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, class_state_token
+from src.services.curation.region_scope import parent_classes_clause
 from src.services.detection.cascade_detect import (
     PaddleOcrTextRecognizer,
     RegionCandidate,
@@ -24,6 +25,7 @@ from src.services.detection.cascade_detect import (
     crop_norm_to_source_norm,
     is_plausible_region_bbox,
 )
+from src.services.detection.profile_registry import get_active_region_profile
 
 
 logger = get_logger('curation_worker')
@@ -85,7 +87,8 @@ def _build_pending_query(exclude_ids: list[str] | None = None) -> dict[str, Any]
     (cacheable, no scoring pass) rather than ``must``. ``exclude_ids`` —
     the caller's in-flight set — is pushed server-side via
     ``must_not: {ids: ...}`` instead of being filtered out in Python
-    after over-fetching ``batch_size + len(in_flight)`` docs.
+    after over-fetching ``batch_size + len(in_flight)`` docs. Items outside
+    the profile's ``parent_classes`` are skipped even if seeded pending.
     """
     F = get_region_fields()
     query: dict[str, Any] = {
@@ -110,6 +113,10 @@ def _build_pending_query(exclude_ids: list[str] | None = None) -> dict[str, Any]
             ],
         },
     }
+    profile = get_active_region_profile()
+    scope = parent_classes_clause(profile.parent_classes) if profile is not None else None
+    if scope is not None:
+        query['bool']['filter'].append(scope)
     if exclude_ids:
         query['bool']['must_not'] = [{'ids': {'values': exclude_ids}}]
     return query
