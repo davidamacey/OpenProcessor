@@ -11,3 +11,6 @@ e2e
 artifacts_local
 reports
 test-results
+.stryker-tmp
+coverage
+.vscode

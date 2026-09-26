@@ -1626,7 +1626,7 @@ CI's scheduled run goes red, to see the exact surviving mutants
 (`reports/mutation/index.html`).
 
 The production build runs in a non-root
-`nginxinc/nginx-unprivileged:1.30-alpine` container (uid 101, nginx on
+`nginxinc/nginx-unprivileged:1.31.2-alpine3.23` container (uid 101, nginx on
 container port 8080; F10 D13) defined by this repo's `docker-compose.yml`
 (`docker compose up -d --build`), host port 5184 (`CROPWRIGHT_PORT`,
 mapped to 8080). The deployed `cropwright` container only picks this up

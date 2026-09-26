@@ -32,7 +32,7 @@ trusted LAN/VPN, or put it behind an authenticating reverse proxy
 
 ## Requirements
 
-- Docker with Compose v2 (the supported path), **or** Node 20+ for a
+- Docker with Compose v2 (the supported path), **or** Node 26+ (see `.nvmrc`) for a
   source build.
 - A reachable **OpenProcessor** backend, started with `OP_API_PREFIX=/curation`
   (the default) and its own docker network — note that network's name,
@@ -216,6 +216,16 @@ pull the wire-format snapshot from a local OpenProcessor checkout
 (`OPENPROCESSOR_REPO`, default `../OpenProcessor`; `OPENPROCESSOR_REF`,
 default `main`) and diff it against what's checked in, so a backend
 rename fails a frontend test instead of silently rendering blanks.
+
+## Releasing
+
+Pushing a `vX.Y.Z` tag (or a manual `workflow_dispatch`) runs
+`.github/workflows/release.yml`: builds a `linux/amd64`-only image (no
+QEMU multi-arch, kept fast), scans it with Trivy (fails on CRITICAL/HIGH
+with an available fix), then pushes `davidamacey/cropwright:X.Y.Z`,
+`:X.Y` and `:latest` to Docker Hub and creates a GitHub release from the
+matching `CHANGELOG.md` section. Requires the `DOCKERHUB_USERNAME` /
+`DOCKERHUB_TOKEN` repo secrets.
 
 ## Troubleshooting
 
