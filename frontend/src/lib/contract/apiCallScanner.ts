@@ -3,12 +3,12 @@
  * backend call the frontend makes directly out of the source, for
  * `endpointCatalog.test.ts` to check against the vendored OpenAPI
  * contract. Deliberately mechanical rather than hand-maintained: a new
- * `${API_PREFIX}/...` call site is picked up automatically, and the
+ * `${scoped()}/...` call site is picked up automatically, and the
  * test's completeness guard fails loudly when this scanner can't make
  * sense of one instead of silently skipping it.
  *
  * Scope: understands template-literal URL composition
- * (`` `${API_PREFIX}/foo/${id}` ``), the `qs({...})` query-string
+ * (`` `${scoped()}/foo/${id}` ``), the `qs({...})` query-string
  * helper (literal keys and `...spread` of a typed parameter), the
  * `.searchParams.set('key', ...)` pattern (`sse.ts`), and an
  * `options: { method: 'POST' }` object passed as the call's second
@@ -140,7 +140,7 @@ function maskNonCode(src: string): string {
 }
 
 /** Every backtick template literal in `src` whose text contains the
- *  literal `${API_PREFIX}` marker, skipping comments and ordinary
+ *  literal `${scoped()}` marker, skipping comments and ordinary
  *  string literals so JSDoc examples don't count. */
 export function findApiPrefixTemplates(
   src: string,
@@ -167,7 +167,7 @@ export function findApiPrefixTemplates(
       const start = i;
       const end = skipTemplateLiteral(src, i);
       const text = src.slice(start, end);
-      if (text.includes('${API_PREFIX}')) {
+      if (text.includes('${scoped()}')) {
         results.push({ start, end, text });
       }
       i = end;
@@ -342,7 +342,7 @@ function extractQsKeys(
 }
 
 /**
- * Parses every `${API_PREFIX}`-containing template in `src` into a call
+ * Parses every `${scoped()}`-containing template in `src` into a call
  * site: path template, method, and query params. `filePath` is only used
  * in error messages via `raw`.
  */
@@ -373,10 +373,10 @@ export function scanApiCallSites(src: string): ApiCallSite[] {
     for (const [name, value] of consts) {
       normInner = normInner.split(`\${${name}}`).join(value);
     }
-    const markerIdx = inner.indexOf('${API_PREFIX}');
-    let afterPrefix = inner.slice(markerIdx + '${API_PREFIX}'.length);
+    const markerIdx = inner.indexOf('${scoped()}');
+    let afterPrefix = inner.slice(markerIdx + '${scoped()}'.length);
     let normAfterPrefix = normInner.slice(
-      normInner.indexOf('${API_PREFIX}') + '${API_PREFIX}'.length,
+      normInner.indexOf('${scoped()}') + '${scoped()}'.length,
     );
 
     // Cut the path off at the query-string composition, if any.
@@ -385,7 +385,7 @@ export function scanApiCallSites(src: string): ApiCallSite[] {
     let queryParams: string[] | null = [];
     if (qsIdx !== -1) {
       const openParen =
-        t.start + 1 + markerIdx + '${API_PREFIX}'.length + qsIdx + qsMarker.length - 1;
+        t.start + 1 + markerIdx + '${scoped()}'.length + qsIdx + qsMarker.length - 1;
       const closeParen = skipBalanced(src, openParen, '(', ')');
       const argText = src.slice(openParen + 1, closeParen - 1);
       queryParams = extractQsKeys(src, argText, t.start);

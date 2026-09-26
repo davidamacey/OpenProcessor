@@ -145,6 +145,65 @@ export function normalizeApiPrefix(raw: string): string {
 
 export const API_PREFIX: string = normalizeApiPrefix(RAW_API_PREFIX);
 
+/**
+ * Groundwork for multi-project support (`docs/design/
+ * any-domain-rev3-and-projects-contract-review-2026-09-26.md` §7). The
+ * backend is moving every scoped route under `{API_PREFIX}/projects/
+ * {project}/...`, with a project's served `prefix` coming from a future
+ * `GET {API_PREFIX}/projects`; the unscoped routes stay as an alias bound
+ * to the `default` project. Every existing call site already builds its
+ * URL from this one module-level holder via `scoped()` — flipping the
+ * holder later (when a project switcher lands) changes every request
+ * with no call-site edits. Today it's pinned to `API_PREFIX` itself, so
+ * every built URL is byte-identical to before this groundwork landed.
+ */
+const scopeHolder: { prefix: string } = { prefix: API_PREFIX };
+
+/**
+ * Sets the active project's scoped prefix (e.g. `/curation/projects/
+ * acme`). Not called anywhere yet — reserved for the future project
+ * switcher. Never persisted (no localStorage): the active project is
+ * always live UI state, seeded fresh from the served project list.
+ */
+export function setScopedPrefix(prefix: string): void {
+  scopeHolder.prefix = prefix;
+}
+
+/**
+ * The one function every scoped backend call builds its URL through,
+ * e.g. `` `${scoped()}/health` ``. Returns the active project's prefix —
+ * today always `API_PREFIX`, so every URL is unchanged. Distinct from
+ * `globalApi()` below for the (today nonexistent) handful of endpoints
+ * that will stay global once projects land.
+ */
+export function scoped(): string {
+  return scopeHolder.prefix;
+}
+
+/**
+ * Key for client-side caches that must never bleed data across
+ * projects (crop-id-keyed caches, the undo ring buffer) — crop ids are
+ * content-derived, so the same image gets the same `crop_id` in every
+ * project. Always mirrors `scoped()`'s current value: the prefix
+ * already uniquely identifies the active project, so there's no reason
+ * for a second, independently-settable holder.
+ */
+export function activeProjectKey(): string {
+  return scopeHolder.prefix;
+}
+
+/**
+ * Builder for endpoints that will stay global (not project-scoped) once
+ * projects land — e.g. the future `/projects` list itself. No call site
+ * uses this yet: the backend hasn't shipped the split, and guessing
+ * which endpoints are global ahead of that would be wrong more often
+ * than not. Kept separate from `scoped()` purely so a future call
+ * site's intent reads directly off which builder it uses.
+ */
+export function globalApi(): string {
+  return API_PREFIX;
+}
+
 const DETAIL_MAX_CHARS = 200;
 
 /**
@@ -382,7 +441,7 @@ function qs(params: Record<string, unknown>): string {
 // -- endpoints -----------------------------------------------------------
 
 export function getHealth(signal?: AbortSignal): Promise<ApiHealth> {
-  return apiFetch<ApiHealth>(`${API_PREFIX}/health`, {}, signal);
+  return apiFetch<ApiHealth>(`${scoped()}/health`, {}, signal);
 }
 
 /**
@@ -403,7 +462,7 @@ export function getHealth(signal?: AbortSignal): Promise<ApiHealth> {
  */
 export async function getMethods(signal?: AbortSignal): Promise<MethodsResponse> {
   try {
-    const raw = await apiFetch<unknown>(`${API_PREFIX}/methods`, {}, signal);
+    const raw = await apiFetch<unknown>(`${scoped()}/methods`, {}, signal);
     return parseMethodsResponse(raw);
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
@@ -441,7 +500,7 @@ export async function getMethods(signal?: AbortSignal): Promise<MethodsResponse>
 export async function getCurationSettings(
   signal?: AbortSignal,
 ): Promise<CurationSettings> {
-  const raw = await apiFetch<unknown>(`${API_PREFIX}/settings`, {}, signal);
+  const raw = await apiFetch<unknown>(`${scoped()}/settings`, {}, signal);
   return parseCurationSettings(raw);
 }
 
@@ -478,7 +537,7 @@ export async function putCurationDefaults(
   signal?: AbortSignal,
 ): Promise<CurationSettings> {
   const raw = await apiFetch<unknown>(
-    `${API_PREFIX}/settings`,
+    `${scoped()}/settings`,
     { method: 'PUT', body: JSON.stringify({ defaults }) },
     signal,
   );
@@ -598,7 +657,7 @@ export async function getVizProjection(
 ): Promise<VizProjectionResponse> {
   try {
     const raw = await apiFetch<unknown>(
-      `${API_PREFIX}/viz/projection${qs({
+      `${scoped()}/viz/projection${qs({
         cluster_id: params.cluster_id ?? undefined,
         class_id: params.class_id ?? undefined,
         max_points: params.max_points ?? undefined,
@@ -658,7 +717,7 @@ export interface VizProjectionJob {
  */
 export function rebuildVizProjection(signal?: AbortSignal): Promise<VizProjectionJob> {
   return apiFetch<VizProjectionJob>(
-    `${API_PREFIX}/viz/projection/rebuild`,
+    `${scoped()}/viz/projection/rebuild`,
     { method: 'POST' },
     signal,
   );
@@ -666,7 +725,7 @@ export function rebuildVizProjection(signal?: AbortSignal): Promise<VizProjectio
 
 /** Current rebuild-job snapshot — poll this after `rebuildVizProjection()`. */
 export function getVizProjectionStatus(signal?: AbortSignal): Promise<VizProjectionJob> {
-  return apiFetch<VizProjectionJob>(`${API_PREFIX}/viz/projection/status`, {}, signal);
+  return apiFetch<VizProjectionJob>(`${scoped()}/viz/projection/status`, {}, signal);
 }
 
 /** Cancel a running rebuild. `cancelled` is false when nothing was running. */
@@ -674,7 +733,7 @@ export function cancelVizProjection(
   signal?: AbortSignal,
 ): Promise<VizProjectionJob & { cancelled: boolean }> {
   return apiFetch<VizProjectionJob & { cancelled: boolean }>(
-    `${API_PREFIX}/viz/projection/cancel`,
+    `${scoped()}/viz/projection/cancel`,
     { method: 'POST' },
     signal,
   );
@@ -777,7 +836,7 @@ export async function getRegions(
   signal?: AbortSignal,
 ): Promise<RegionsPage> {
   const page = await apiFetch<RegionsPage>(
-    `${API_PREFIX}${browsePath}${qs(params as Record<string, unknown>)}`,
+    `${scoped()}${browsePath}${qs(params as Record<string, unknown>)}`,
     {},
     signal,
   );
@@ -822,7 +881,7 @@ export function clusterRegions(
   signal?: AbortSignal,
 ): Promise<RegionClusterJob> {
   return apiFetch(
-    `${API_PREFIX}${REGION_BASE}/cluster${qs({
+    `${scoped()}${REGION_BASE}/cluster${qs({
       max_rank: maxRank,
       force_repartition: opts.forceRepartition,
       auto_fp_threshold: opts.autoFpThreshold,
@@ -834,7 +893,7 @@ export function clusterRegions(
 
 /** Poll the background region-clustering job. */
 export function getRegionClusterStatus(signal?: AbortSignal): Promise<RegionClusterJob> {
-  return apiFetch(`${API_PREFIX}${REGION_BASE}/cluster/status`, {}, signal);
+  return apiFetch(`${scoped()}${REGION_BASE}/cluster/status`, {}, signal);
 }
 
 /** Per-bucket AHC refine over the region embeddings; writes region_cluster_subid. */
@@ -848,7 +907,7 @@ export function refineRegionCluster(
   action: string;
 }> {
   return apiFetch(
-    `${API_PREFIX}${REGION_BASE}/clusters/refine/${clusterId}`,
+    `${scoped()}${REGION_BASE}/clusters/refine/${clusterId}`,
     { method: 'POST' },
     signal,
   );
@@ -860,7 +919,7 @@ export function getRegionClusters(
   signal?: AbortSignal,
 ): Promise<{ clusters: Cluster[]; count: number }> {
   return apiFetch(
-    `${API_PREFIX}${REGION_BASE}/clusters${qs({
+    `${scoped()}${REGION_BASE}/clusters${qs({
       max_clusters: opts.maxClusters,
       per_cluster: opts.perCluster,
       max_rank: opts.maxRank,
@@ -889,7 +948,7 @@ export function buildRegionFpCentroids(
   signal?: AbortSignal,
 ): Promise<RegionFpCentroidJob> {
   return apiFetch(
-    `${API_PREFIX}${REGION_BASE}/fp_centroids/build`,
+    `${scoped()}${REGION_BASE}/fp_centroids/build`,
     { method: 'POST' },
     signal,
   );
@@ -899,7 +958,7 @@ export function buildRegionFpCentroids(
 export function getRegionFpCentroidStatus(
   signal?: AbortSignal,
 ): Promise<RegionFpCentroidJob> {
-  return apiFetch(`${API_PREFIX}${REGION_BASE}/fp_centroids/status`, {}, signal);
+  return apiFetch(`${scoped()}${REGION_BASE}/fp_centroids/status`, {}, signal);
 }
 
 export interface SuspectedFpItem extends RegionBrowseItem {
@@ -924,7 +983,7 @@ export function getSuspectedFalsePositives(
   signal?: AbortSignal,
 ): Promise<SuspectedFpPage> {
   return apiFetch(
-    `${API_PREFIX}${REGION_BASE}/suspected_false_positives${qs({
+    `${scoped()}${REGION_BASE}/suspected_false_positives${qs({
       threshold: opts.threshold,
       page: opts.page,
       page_size: opts.pageSize,
@@ -945,7 +1004,7 @@ export function getTrainingCandidates(
   signal?: AbortSignal,
 ): Promise<RegionsPage> {
   return apiFetch<RegionsPage>(
-    `${API_PREFIX}${REGION_BASE}/training_candidates${qs({ mode, ...params })}`,
+    `${scoped()}${REGION_BASE}/training_candidates${qs({ mode, ...params })}`,
     {},
     signal,
   );
@@ -977,14 +1036,14 @@ export function getTrainingCohorts(
   signal?: AbortSignal,
 ): Promise<{ cohorts: ServedTrainingCohort[] }> {
   return apiFetch<{ cohorts: ServedTrainingCohort[] }>(
-    `${API_PREFIX}/training_cohorts${qs({ class_id: classId ?? undefined })}`,
+    `${scoped()}/training_cohorts${qs({ class_id: classId ?? undefined })}`,
     {},
     signal,
   );
 }
 
 export function getModelsStatus(signal?: AbortSignal): Promise<ModelsStatus> {
-  return apiFetch<ModelsStatus>(`${API_PREFIX}/models/status`, {}, signal);
+  return apiFetch<ModelsStatus>(`${scoped()}/models/status`, {}, signal);
 }
 
 /**
@@ -1001,7 +1060,7 @@ export function unloadModel(
   signal?: AbortSignal,
 ): Promise<UnloadModelResponse> {
   return apiFetch<UnloadModelResponse>(
-    `${API_PREFIX}/models/${encodeURIComponent(modelName)}${qs({ force })}`,
+    `${scoped()}/models/${encodeURIComponent(modelName)}${qs({ force })}`,
     { method: 'DELETE' },
     signal,
   );
@@ -1091,7 +1150,7 @@ export interface DatasetStats {
 }
 
 export function getDatasetStats(signal?: AbortSignal): Promise<DatasetStats> {
-  return apiFetch<DatasetStats>(`${API_PREFIX}/stats/dataset`, {}, signal);
+  return apiFetch<DatasetStats>(`${scoped()}/stats/dataset`, {}, signal);
 }
 
 export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
@@ -1128,8 +1187,8 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
   // /export render its class table from per_class, so a rejection here
   // falls back to an empty RawDataset rather than sinking both calls.
   const [dsResult, clsResult] = await Promise.allSettled([
-    apiFetch<RawDataset>(`${API_PREFIX}/stats/dataset`, {}, signal),
-    apiFetch<RawClasses>(`${API_PREFIX}/stats/classes`, {}, signal),
+    apiFetch<RawDataset>(`${scoped()}/stats/dataset`, {}, signal),
+    apiFetch<RawClasses>(`${scoped()}/stats/classes`, {}, signal),
   ]);
   const ds: RawDataset = dsResult.status === 'fulfilled' ? dsResult.value : {};
   const cls: RawClasses =
@@ -1195,7 +1254,7 @@ export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse>
     classes: RawClass[];
     thresholds?: ClassThresholds;
     reserved_hotkeys?: string[];
-  }>(`${API_PREFIX}/classes`, {}, signal);
+  }>(`${scoped()}/classes`, {}, signal);
   const raw = res.classes ?? [];
   const classes = raw.map((c) => ({
     id: c.class_id ?? c.id ?? -1,
@@ -1365,7 +1424,7 @@ export async function getClusters(
   // scrolling past the first screenful doesn't re-run the aggregation's
   // representative lookup for clusters nobody has scrolled to yet.
   const raw = await apiFetch<RawClustersResp>(
-    `${API_PREFIX}/clusters${qs({
+    `${scoped()}/clusters${qs({
       per_cluster: filter.per_cluster ?? 4,
       class_id: filter.class_id ?? undefined,
       // DQ-M4: lets the caller fetch one card's representatives directly
@@ -1717,7 +1776,7 @@ export async function getCluster(
   if (opts.order) cropQuery.order = opts.order;
   if (opts.k != null) cropQuery.k = opts.k;
   const [cropPage, clustersResp] = await Promise.all([
-    apiFetch<CropPage>(`${API_PREFIX}/crops${qs(cropQuery)}`, {}, signal),
+    apiFetch<CropPage>(`${scoped()}/crops${qs(cropQuery)}`, {}, signal),
     apiFetch<RawClustersResp>(
       // cluster_id (not class_id!) is the correct filter for "fetch this
       // one cluster's card by its own identity" — cluster_id == class_id
@@ -1727,7 +1786,7 @@ export async function getCluster(
       // which fell back to the null-identity stub below and showed no
       // human-readable name in the header even though {API_PREFIX}/clusters'
       // list view has dominant_class_name for the same cluster.
-      `${API_PREFIX}/clusters${qs({ per_cluster: 4, max_clusters: 1, cluster_id: id })}`,
+      `${scoped()}/clusters${qs({ per_cluster: 4, max_clusters: 1, cluster_id: id })}`,
       {},
       signal,
     ).catch(() => null),
@@ -1775,7 +1834,7 @@ export async function getCrops(
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<Crop>> {
   type Raw = { total: number; page: number; page_size: number; crops: RawCrop[] };
-  const raw = await apiFetch<Raw>(`${API_PREFIX}/crops${qs({ ...filter })}`, {}, signal);
+  const raw = await apiFetch<Raw>(`${scoped()}/crops${qs({ ...filter })}`, {}, signal);
   return {
     items: raw.crops.map(mapRawCrop),
     total: raw.total,
@@ -1796,7 +1855,7 @@ export function getCropHistory(
   signal?: AbortSignal,
 ): Promise<CropHistoryResponse> {
   return apiFetch<CropHistoryResponse>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/history`,
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/history`,
     {},
     signal,
   );
@@ -1819,7 +1878,7 @@ export async function getCropContext(
     items: RawCrop[];
   };
   const raw = await apiFetch<Raw>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/context`,
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/context`,
     {},
     signal,
   );
@@ -1832,7 +1891,7 @@ export function putCropLabel(
   signal?: AbortSignal,
 ): Promise<Crop> {
   return apiFetch<Crop>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/label`,
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/label`,
     {
       method: 'PUT',
       body: JSON.stringify({ class_id: classId, validated: true }),
@@ -1848,7 +1907,7 @@ export function bulkLabel(
 ): Promise<BulkLabelResult> {
   // Backend route is PUT (matches the single-crop /label PUT shape).
   return apiFetch<BulkLabelResult>(
-    `${API_PREFIX}/crops/batch_label`,
+    `${scoped()}/crops/batch_label`,
     {
       method: 'PUT',
       body: JSON.stringify({ crop_ids: cropIds, class_id: classId, validated: true }),
@@ -1865,7 +1924,7 @@ export function bulkLabel(
  */
 export async function undoCropLabel(cropId: string, signal?: AbortSignal): Promise<Crop> {
   const raw = await apiFetch<RawCrop>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/label/undo`,
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/label/undo`,
     { method: 'POST' },
     signal,
   );
@@ -1906,7 +1965,7 @@ export async function undoLabelBatch(
     not_found?: string[];
   };
   const raw = await apiFetch<Raw>(
-    `${API_PREFIX}/crops/label/undo_batch`,
+    `${scoped()}/crops/label/undo_batch`,
     { method: 'POST', body: JSON.stringify({ crop_ids: cropIds }) },
     signal,
   );
@@ -1938,7 +1997,7 @@ export async function discardCrop(
   signal?: AbortSignal,
 ): Promise<Crop> {
   const raw = await apiFetch<RawCrop>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/discard`,
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/discard`,
     { method: 'POST', body: JSON.stringify(opts) },
     signal,
   );
@@ -1966,7 +2025,7 @@ export async function discardCropsBatch(
     conflicts: BulkLabelConflict[];
     not_found: string[];
   }>(
-    `${API_PREFIX}/crops/discard_batch`,
+    `${scoped()}/crops/discard_batch`,
     { method: 'POST', body: JSON.stringify({ crop_ids: cropIds, ...opts }) },
     signal,
   );
@@ -1984,7 +2043,7 @@ export async function discardCropsBatch(
  */
 export function reviewDismissCrop(cropId: string, signal?: AbortSignal): Promise<void> {
   return apiFetch<void>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/review_dismiss`,
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/review_dismiss`,
     { method: 'POST' },
     signal,
   );
@@ -1996,7 +2055,7 @@ export async function reviewUndismissCrop(
   signal?: AbortSignal,
 ): Promise<Crop> {
   const raw = await apiFetch<RawCrop>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/review_undismiss`,
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/review_undismiss`,
     { method: 'POST' },
     signal,
   );
@@ -2013,7 +2072,7 @@ export async function vlmDismissCrop(
   signal?: AbortSignal,
 ): Promise<Crop> {
   const raw = await apiFetch<RawCrop>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/vlm_dismiss`,
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/vlm_dismiss`,
     { method: 'POST' },
     signal,
   );
@@ -2031,7 +2090,7 @@ export async function undoVlmDismiss(
   signal?: AbortSignal,
 ): Promise<Crop> {
   const raw = await apiFetch<RawCrop>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/vlm_dismiss/undo`,
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/vlm_dismiss/undo`,
     { method: 'POST' },
     signal,
   );
@@ -2050,7 +2109,7 @@ export async function undoCropRegion(
   signal?: AbortSignal,
 ): Promise<Crop> {
   const raw = await apiFetch<RawCrop>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/region/undo`,
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/region/undo`,
     { method: 'POST' },
     signal,
   );
@@ -2077,7 +2136,7 @@ export async function undoCropRegionBatch(
     not_found?: string[];
   };
   const raw = await apiFetch<Raw>(
-    `${API_PREFIX}/crops/region/undo_batch`,
+    `${scoped()}/crops/region/undo_batch`,
     { method: 'POST', body: JSON.stringify({ crop_ids: cropIds }) },
     signal,
   );
@@ -2111,7 +2170,7 @@ export interface RegionStatusesResponse {
  *  meant to be loaded once by a store — see `$stores/regionStatuses.svelte`. */
 export function getRegionStatuses(signal?: AbortSignal): Promise<RegionStatusesResponse> {
   return apiFetch<RegionStatusesResponse>(
-    `${API_PREFIX}${REGION_BASE}/statuses`,
+    `${scoped()}${REGION_BASE}/statuses`,
     {},
     signal,
   );
@@ -2208,7 +2267,7 @@ export async function getRegionVocabulary(
   signal?: AbortSignal,
 ): Promise<RegionVocabularyResponse> {
   const res = await apiFetch<Partial<RegionVocabularyResponse>>(
-    `${API_PREFIX}${REGION_BASE}/vocabulary`,
+    `${scoped()}${REGION_BASE}/vocabulary`,
     {},
     signal,
   );
@@ -2272,7 +2331,7 @@ export async function getReviewTabsVocabulary(
   signal?: AbortSignal,
 ): Promise<ReviewTabVocabularyEntry[]> {
   const res = await apiFetch<{ tabs?: ReviewTabVocabularyEntry[] }>(
-    `${API_PREFIX}/review/tabs`,
+    `${scoped()}/review/tabs`,
     {},
     signal,
   );
@@ -2335,7 +2394,7 @@ export async function getReviewEmptyState(
   signal?: AbortSignal,
 ): Promise<ReviewEmptyState | null> {
   const res = await apiFetch<{ empty_state?: Partial<ReviewEmptyState> | null }>(
-    `${API_PREFIX}/review/tabs`,
+    `${scoped()}/review/tabs`,
     {},
     signal,
   );
@@ -2374,7 +2433,7 @@ export async function getReviewEmptyState(
  */
 export async function getCrop(cropId: string, signal?: AbortSignal): Promise<Crop> {
   const raw = await apiFetch<RawCrop>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}`,
+    `${scoped()}/crops/${encodeURIComponent(cropId)}`,
     {},
     signal,
   );
@@ -2417,7 +2476,7 @@ export async function setSlotBox(
     );
   }
   const res = await apiFetch<{ item: RawCrop }>(
-    `${API_PREFIX}${path}`,
+    `${scoped()}${path}`,
     { method: 'PUT', body: JSON.stringify({ [bboxField]: xyxy, frame }) },
     signal,
   );
@@ -2462,7 +2521,7 @@ export async function patchSlotMeta(
     crop_id: string;
     updated_fields: string[];
     item: RawCrop;
-  }>(`${API_PREFIX}${path}`, { method: 'PATCH', body: JSON.stringify(body) }, signal);
+  }>(`${scoped()}${path}`, { method: 'PATCH', body: JSON.stringify(body) }, signal);
   return { ...res, item: mapRawCrop(res.item) };
 }
 
@@ -2514,7 +2573,7 @@ export async function batchRegionStatus(
   }
   if (lc.labelSourceField) body[lc.labelSourceField] = opts.labelSource ?? 'human';
   return apiFetch(
-    `${API_PREFIX}${path}`,
+    `${scoped()}${path}`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
@@ -2538,7 +2597,7 @@ export function runVlmOnCluster(
   signal?: AbortSignal,
 ): Promise<AutoLabelJobState> {
   return apiFetch<AutoLabelJobState>(
-    `${API_PREFIX}/vlm/label_cluster/${clusterId}${qs({ prompt_pack: promptPack ?? undefined })}`,
+    `${scoped()}/vlm/label_cluster/${clusterId}${qs({ prompt_pack: promptPack ?? undefined })}`,
     { method: 'POST' },
     signal,
   );
@@ -2610,7 +2669,7 @@ export function refineCluster(
   signal?: AbortSignal,
 ): Promise<RefineClusterResponse> {
   return apiFetch<RefineClusterResponse>(
-    `${API_PREFIX}/clusters/refine/${clusterId}`,
+    `${scoped()}/clusters/refine/${clusterId}`,
     { method: 'POST' },
     signal,
   );
@@ -2654,7 +2713,7 @@ export async function getReviewQueue(
     empty_reason?: string | null;
   };
   const raw = await apiFetch<RawPage>(
-    `${API_PREFIX}/review/${tab}${qs({ page, page_size: pageSize, ...filter })}`,
+    `${scoped()}/review/${tab}${qs({ page, page_size: pageSize, ...filter })}`,
     {},
     signal,
   );
@@ -2710,7 +2769,7 @@ export async function locateInReviewQueue(
   signal?: AbortSignal,
 ): Promise<ReviewLocateResult> {
   const raw = await apiFetch<Partial<ReviewLocateResult>>(
-    `${API_PREFIX}/review/${tab}/locate${qs({ crop_id: cropId, page_size: pageSize, ...filter })}`,
+    `${scoped()}/review/${tab}/locate${qs({ crop_id: cropId, page_size: pageSize, ...filter })}`,
     {},
     signal,
   );
@@ -2801,7 +2860,7 @@ export async function getNewClassProposalsSummary(
   signal?: AbortSignal,
 ): Promise<NewClassProposalsSummary> {
   const raw = await apiFetch<Record<string, unknown>>(
-    `${API_PREFIX}/review/new_class_proposals/summary`,
+    `${scoped()}/review/new_class_proposals/summary`,
     {},
     signal,
   );
@@ -2839,7 +2898,7 @@ export function resolveNewClassProposal(
   signal?: AbortSignal,
 ): Promise<ResolveNewClassResponse> {
   return apiFetch<ResolveNewClassResponse>(
-    `${API_PREFIX}/review/new_class_proposals/resolve${qs({ dry_run: opts.dryRun || undefined })}`,
+    `${scoped()}/review/new_class_proposals/resolve${qs({ dry_run: opts.dryRun || undefined })}`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
@@ -2895,7 +2954,7 @@ export async function selectDiverse(
 ): Promise<SelectDiverseResult> {
   try {
     const raw = await apiFetch<unknown>(
-      `${API_PREFIX}/select/diverse`,
+      `${scoped()}/select/diverse`,
       {
         method: 'POST',
         body: JSON.stringify({
@@ -2943,7 +3002,7 @@ function parseSelectJobStatus(raw: unknown): SelectJobStatus {
  *  cadence/cleanup (see `/review`'s `+page.svelte` — mirrors the
  *  `bakeoff` page's setInterval/clearInterval pattern). */
 export async function getSelectStatus(signal?: AbortSignal): Promise<SelectJobStatus> {
-  const raw = await apiFetch<unknown>(`${API_PREFIX}/select/status`, {}, signal);
+  const raw = await apiFetch<unknown>(`${scoped()}/select/status`, {}, signal);
   return parseSelectJobStatus(raw);
 }
 
@@ -2952,7 +3011,7 @@ export async function getSelectStatus(signal?: AbortSignal): Promise<SelectJobSt
  *  `select_cancel`), not a bare 204 — the caller only needs to know
  *  polling can stop, so the body is discarded. */
 export async function cancelSelect(signal?: AbortSignal): Promise<void> {
-  await apiFetch<unknown>(`${API_PREFIX}/select/cancel`, { method: 'POST' }, signal);
+  await apiFetch<unknown>(`${scoped()}/select/cancel`, { method: 'POST' }, signal);
 }
 
 // -- curation scores (`/settings` "Curation scores" card, G10) -----------
@@ -3017,7 +3076,7 @@ function parseScoresCoverage(raw: unknown): ScoresCoverage {
  * `curationSettingsStore` already draws for the same reason.
  */
 export async function getScoresCoverage(signal?: AbortSignal): Promise<ScoresCoverage> {
-  const raw = await apiFetch<unknown>(`${API_PREFIX}/scores/coverage`, {}, signal);
+  const raw = await apiFetch<unknown>(`${scoped()}/scores/coverage`, {}, signal);
   return parseScoresCoverage(raw);
 }
 
@@ -3095,7 +3154,7 @@ export function computeScores(
   signal?: AbortSignal,
 ): Promise<ScoresJob> {
   return apiFetch<unknown>(
-    `${API_PREFIX}/scores/compute`,
+    `${scoped()}/scores/compute`,
     { method: 'POST', body: JSON.stringify({ scorers }) },
     signal,
   ).then(parseScoresJob);
@@ -3103,9 +3162,7 @@ export function computeScores(
 
 /** Current/last scoring-job snapshot — poll this after `computeScores()`. */
 export function getScoresStatus(signal?: AbortSignal): Promise<ScoresJob> {
-  return apiFetch<unknown>(`${API_PREFIX}/scores/status`, {}, signal).then(
-    parseScoresJob,
-  );
+  return apiFetch<unknown>(`${scoped()}/scores/status`, {}, signal).then(parseScoresJob);
 }
 
 /** Cancel a running scoring job. Real backend returns `{cancelled, ...job
@@ -3115,7 +3172,7 @@ export async function cancelScores(
   signal?: AbortSignal,
 ): Promise<ScoresJob & { cancelled: boolean }> {
   const raw = await apiFetch<unknown>(
-    `${API_PREFIX}/scores/cancel`,
+    `${scoped()}/scores/cancel`,
     { method: 'POST' },
     signal,
   );
@@ -3161,7 +3218,7 @@ export async function searchCrops(
     items: RawSearchItem[];
   };
   const raw = await apiFetch<RawPage>(
-    `${API_PREFIX}/search/text${qs({ q, page, page_size: pageSize, ...filter })}`,
+    `${scoped()}/search/text${qs({ q, page, page_size: pageSize, ...filter })}`,
     {},
     signal,
   );
@@ -3201,7 +3258,7 @@ export function exportYolo(
     body.require_fully_labeled_images = true;
   }
   return apiFetch<ExportResult>(
-    `${API_PREFIX}/export/yolo`,
+    `${scoped()}/export/yolo`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
@@ -3209,7 +3266,7 @@ export function exportYolo(
 
 /** Poll current export state. */
 export function exportStatus(signal?: AbortSignal): Promise<ExportStatus> {
-  return apiFetch<ExportStatus>(`${API_PREFIX}/export/status`, {}, signal);
+  return apiFetch<ExportStatus>(`${scoped()}/export/status`, {}, signal);
 }
 
 /** Options an operator picks per single-class export build. */
@@ -3244,7 +3301,7 @@ export function exportSingleClass(
     if (v !== undefined) body[k] = v;
   }
   return apiFetch<SingleClassExportResult>(
-    `${API_PREFIX}${spec.buildPath}`,
+    `${scoped()}${spec.buildPath}`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
@@ -3256,7 +3313,7 @@ export function exportSingleClassStatus(
   signal?: AbortSignal,
 ): Promise<SingleClassExportStatus> {
   return apiFetch<SingleClassExportStatus>(
-    `${API_PREFIX}${spec.statusPath}${qs({ profile_name: spec.profileName })}`,
+    `${scoped()}${spec.statusPath}${qs({ profile_name: spec.profileName })}`,
     {},
     signal,
   );
@@ -3272,7 +3329,7 @@ export function listDatasets(
   signal?: AbortSignal,
 ): Promise<ExportDatasetList> {
   return apiFetch<ExportDatasetList>(
-    `${API_PREFIX}/export/datasets${qs(filter)}`,
+    `${scoped()}/export/datasets${qs(filter)}`,
     {},
     signal,
   );
@@ -3281,7 +3338,7 @@ export function listDatasets(
 // -- classes mutators ----------------------------------------------------
 
 export function getClass(classId: number, signal?: AbortSignal): Promise<RegistryClass> {
-  return apiFetch<RegistryClass>(`${API_PREFIX}/classes/${classId}`, {}, signal);
+  return apiFetch<RegistryClass>(`${scoped()}/classes/${classId}`, {}, signal);
 }
 
 export function addClass(
@@ -3289,7 +3346,7 @@ export function addClass(
   signal?: AbortSignal,
 ): Promise<{ class_id: number; class_name: string; group: string }> {
   return apiFetch<{ class_id: number; class_name: string; group: string }>(
-    `${API_PREFIX}/classes`,
+    `${scoped()}/classes`,
     { method: 'POST', body: JSON.stringify(payload) },
     signal,
   );
@@ -3301,7 +3358,7 @@ export function renameClass(
   signal?: AbortSignal,
 ): Promise<unknown> {
   return apiFetch<unknown>(
-    `${API_PREFIX}/classes/${classId}`,
+    `${scoped()}/classes/${classId}`,
     { method: 'PUT', body: JSON.stringify(payload) },
     signal,
   );
@@ -3400,7 +3457,7 @@ export function classMergedRestoreText(d: ClassMergedDetail): string {
  */
 export function deprecateClass(classId: number, signal?: AbortSignal): Promise<unknown> {
   return apiFetch<unknown>(
-    `${API_PREFIX}/classes/${classId}/deprecate`,
+    `${scoped()}/classes/${classId}/deprecate`,
     { method: 'POST' },
     signal,
   );
@@ -3413,7 +3470,7 @@ export function deprecateClass(classId: number, signal?: AbortSignal): Promise<u
  */
 export function restoreClass(classId: number, signal?: AbortSignal): Promise<unknown> {
   return apiFetch<unknown>(
-    `${API_PREFIX}/classes/${classId}/restore`,
+    `${scoped()}/classes/${classId}/restore`,
     { method: 'POST' },
     signal,
   );
@@ -3437,7 +3494,7 @@ export function mergeClasses(
     source_name: string;
     target_name: string;
   }>(
-    `${API_PREFIX}/classes/merge`,
+    `${scoped()}/classes/merge`,
     { method: 'POST', body: JSON.stringify(payload) },
     signal,
   );
@@ -3454,7 +3511,7 @@ export function previewClassMerge(
   signal?: AbortSignal,
 ): Promise<ClassMergeDryRun> {
   return apiFetch<ClassMergeDryRun>(
-    `${API_PREFIX}/classes/merge${qs({ dry_run: true })}`,
+    `${scoped()}/classes/merge${qs({ dry_run: true })}`,
     { method: 'POST', body: JSON.stringify(payload) },
     signal,
   );
@@ -3487,7 +3544,7 @@ export interface ClassSource {
  *  ones (`{primary}_proposal`, …). */
 export async function getClassSources(signal?: AbortSignal): Promise<ClassSource[]> {
   const res = await apiFetch<{ class_sources?: ClassSource[] }>(
-    `${API_PREFIX}/class_sources`,
+    `${scoped()}/class_sources`,
     {},
     signal,
   );
@@ -3500,7 +3557,7 @@ export function syncClassesToOpensearch(
   signal?: AbortSignal,
 ): Promise<{ upserted: number; n_classes: number }> {
   return apiFetch<{ upserted: number; n_classes: number }>(
-    `${API_PREFIX}/classes/sync_to_opensearch`,
+    `${scoped()}/classes/sync_to_opensearch`,
     { method: 'POST' },
     signal,
   );
@@ -3517,7 +3574,7 @@ export function moveCropsToCluster(
   // {API_PREFIX}/crops/batch_label. Reuse the type so both call sites share the
   // conflict-handling code path.
   return apiFetch<BulkLabelResult>(
-    `${API_PREFIX}/crops/move`,
+    `${scoped()}/crops/move`,
     {
       method: 'POST',
       body: JSON.stringify({ crop_ids: cropIds, cluster_id: targetClusterId }),
@@ -3539,7 +3596,7 @@ export function excludeCrops(
   signal?: AbortSignal,
 ): Promise<{ excluded: number; errors: number }> {
   return apiFetch<{ excluded: number; errors: number }>(
-    `${API_PREFIX}/crops/batch_exclude`,
+    `${scoped()}/crops/batch_exclude`,
     {
       method: 'POST',
       body: JSON.stringify({ crop_ids: cropIds, reason }),
@@ -3553,7 +3610,7 @@ export function unexcludeCrops(
   signal?: AbortSignal,
 ): Promise<{ unexcluded: number; errors: number }> {
   return apiFetch<{ unexcluded: number; errors: number }>(
-    `${API_PREFIX}/crops/batch_unexclude`,
+    `${scoped()}/crops/batch_unexclude`,
     {
       method: 'POST',
       body: JSON.stringify({ crop_ids: cropIds }),
@@ -3570,7 +3627,7 @@ export function flagNeedsNewClass(
   signal?: AbortSignal,
 ): Promise<{ flagged: number; errors: number }> {
   return apiFetch<{ flagged: number; errors: number }>(
-    `${API_PREFIX}/crops/flag_new_class`,
+    `${scoped()}/crops/flag_new_class`,
     {
       method: 'POST',
       body: JSON.stringify({ crop_ids: cropIds, note }),
@@ -3593,28 +3650,28 @@ export function freezeTestHoldout(
   signal?: AbortSignal,
 ): Promise<TestHoldoutFreezeResult> {
   return apiFetch<TestHoldoutFreezeResult>(
-    `${API_PREFIX}/test_holdout/freeze${qs({ force: payload.force ? true : undefined })}`,
+    `${scoped()}/test_holdout/freeze${qs({ force: payload.force ? true : undefined })}`,
     { method: 'POST', body: JSON.stringify({ percent: payload.percent }) },
     signal,
   );
 }
 
 export function getTestHoldoutStats(signal?: AbortSignal): Promise<TestHoldoutStats> {
-  return apiFetch<TestHoldoutStats>(`${API_PREFIX}/test_holdout/stats`, {}, signal);
+  return apiFetch<TestHoldoutStats>(`${scoped()}/test_holdout/stats`, {}, signal);
 }
 
 // -- registry/manifest downloads (used as anchor `download` URLs) --------
 
 export function getClassRegistryUrl(): string {
-  return `${apiBase}${API_PREFIX}/export/registry/class_registry.json`;
+  return `${apiBase}${scoped()}/export/registry/class_registry.json`;
 }
 
 export function getDataYamlUrl(): string {
-  return `${apiBase}${API_PREFIX}/export/registry/data.yaml`;
+  return `${apiBase}${scoped()}/export/registry/data.yaml`;
 }
 
 export function getManifestUrl(): string {
-  return `${apiBase}${API_PREFIX}/export/registry/manifest.json`;
+  return `${apiBase}${scoped()}/export/registry/manifest.json`;
 }
 
 // -- image URL helpers (no fetch — used directly in <img src=...>) -------
@@ -3629,7 +3686,7 @@ export function getManifestUrl(): string {
  * where rendering quality matters more than transfer speed.
  */
 export function getThumbUrl(cropId: string, size: number = 160): string {
-  return `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/thumbnail?size=${size}`;
+  return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/thumbnail?size=${size}`;
 }
 
 /**
@@ -3654,12 +3711,12 @@ export function getRegionThumbUrl(
   size: number = 160,
   cacheBustKey?: string | number | null,
 ): string {
-  const base = `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/region_thumbnail?size=${size}`;
+  const base = `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/region_thumbnail?size=${size}`;
   return cacheBustKey != null ? `${base}&v=${encodeURIComponent(cacheBustKey)}` : base;
 }
 
 export function getSourceImageUrl(cropId: string): string {
-  return `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/image`;
+  return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/image`;
 }
 
 /**
@@ -3674,12 +3731,12 @@ export function getSourceImageUrl(cropId: string): string {
  * ``getSourceImageFull`` instead.
  */
 export function getSourceImageScaled(cropId: string, maxDim: number = 1280): string {
-  return `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/image?max_dim=${maxDim}`;
+  return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/image?max_dim=${maxDim}`;
 }
 
 /** Full-resolution source image; used by SlotBboxEditor where pixel accuracy matters. */
 export function getSourceImageFull(cropId: string): string {
-  return `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/image`;
+  return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/image`;
 }
 
 // -- training endpoints --------------------------------------------------
@@ -3700,7 +3757,7 @@ export function trainPreflight(
   signal?: AbortSignal,
 ): Promise<PreflightReport> {
   return apiFetch<PreflightReport>(
-    `${API_PREFIX}/train/preflight`,
+    `${scoped()}/train/preflight`,
     { method: 'POST', body: JSON.stringify(spec) },
     signal,
   );
@@ -3717,7 +3774,7 @@ export function trainStart(
   signal?: AbortSignal,
 ): Promise<StartTrainResponse> {
   return apiFetch<StartTrainResponse>(
-    `${API_PREFIX}/train/start${qs({ force: force ? true : undefined })}`,
+    `${scoped()}/train/start${qs({ force: force ? true : undefined })}`,
     { method: 'POST', body: JSON.stringify(spec) },
     signal,
   );
@@ -3730,7 +3787,7 @@ export function trainStartCampaign(
   signal?: AbortSignal,
 ): Promise<StartCampaignResponse> {
   return apiFetch<StartCampaignResponse>(
-    `${API_PREFIX}/train/start_campaign${qs({ force: force ? true : undefined })}`,
+    `${scoped()}/train/start_campaign${qs({ force: force ? true : undefined })}`,
     { method: 'POST', body: JSON.stringify(spec) },
     signal,
   );
@@ -3747,8 +3804,8 @@ export async function getTrainStatus(
   signal?: AbortSignal,
 ): Promise<TrainJobStatus | null> {
   const path = jobId
-    ? `${API_PREFIX}/train/status/${encodeURIComponent(jobId)}`
-    : `${API_PREFIX}/train/status`;
+    ? `${scoped()}/train/status/${encodeURIComponent(jobId)}`
+    : `${scoped()}/train/status`;
   try {
     return await apiFetch<TrainJobStatus | null>(path, {}, signal);
   } catch (e) {
@@ -3763,7 +3820,7 @@ export function getTrainRuns(
   signal?: AbortSignal,
 ): Promise<RunsListResponse> {
   return apiFetch<RunsListResponse>(
-    `${API_PREFIX}/train/runs${qs({ limit, offset })}`,
+    `${scoped()}/train/runs${qs({ limit, offset })}`,
     {},
     signal,
   );
@@ -3775,7 +3832,7 @@ export function tailTrainLog(
   signal?: AbortSignal,
 ): Promise<LogTailResponse> {
   return apiFetch<LogTailResponse>(
-    `${API_PREFIX}/train/log/tail/${encodeURIComponent(jobId)}${qs({ lines })}`,
+    `${scoped()}/train/log/tail/${encodeURIComponent(jobId)}${qs({ lines })}`,
     {},
     signal,
   );
@@ -3786,7 +3843,7 @@ export function cancelTrainJob(
   signal?: AbortSignal,
 ): Promise<CancelResponse> {
   return apiFetch<CancelResponse>(
-    `${API_PREFIX}/train/cancel/${encodeURIComponent(jobId)}`,
+    `${scoped()}/train/cancel/${encodeURIComponent(jobId)}`,
     { method: 'POST' },
     signal,
   );
@@ -3797,14 +3854,14 @@ export function cancelTrainCampaign(
   signal?: AbortSignal,
 ): Promise<CancelResponse> {
   return apiFetch<CancelResponse>(
-    `${API_PREFIX}/train/cancel_campaign/${encodeURIComponent(campaignId)}`,
+    `${scoped()}/train/cancel_campaign/${encodeURIComponent(campaignId)}`,
     { method: 'POST' },
     signal,
   );
 }
 
 export function getTrainProfiles(signal?: AbortSignal): Promise<ProfilesResponse> {
-  return apiFetch<ProfilesResponse>(`${API_PREFIX}/train/profiles`, {}, signal);
+  return apiFetch<ProfilesResponse>(`${scoped()}/train/profiles`, {}, signal);
 }
 
 /** One GPU claim the backend allows for a training run. */
@@ -3828,7 +3885,7 @@ export interface TrainGpuOptionsResponse {
 }
 
 export function getTrainGpus(signal?: AbortSignal): Promise<TrainGpuOptionsResponse> {
-  return apiFetch<TrainGpuOptionsResponse>(`${API_PREFIX}/train/gpus`, {}, signal);
+  return apiFetch<TrainGpuOptionsResponse>(`${scoped()}/train/gpus`, {}, signal);
 }
 
 /** The served default claim, or '' when none is marked (the backend then
@@ -3838,7 +3895,7 @@ export function defaultGpuValue(res: TrainGpuOptionsResponse): string {
 }
 
 export function getTrainPresets(signal?: AbortSignal): Promise<PresetsResponse> {
-  return apiFetch<PresetsResponse>(`${API_PREFIX}/train/presets`, {}, signal);
+  return apiFetch<PresetsResponse>(`${scoped()}/train/presets`, {}, signal);
 }
 
 /**
@@ -3851,7 +3908,7 @@ export function getAugmentationPresets(
   signal?: AbortSignal,
 ): Promise<AugmentationPresetsResponse> {
   return apiFetch<AugmentationPresetsResponse>(
-    `${API_PREFIX}/train/augmentation_presets`,
+    `${scoped()}/train/augmentation_presets`,
     {},
     signal,
   );
@@ -3863,7 +3920,7 @@ export function promoteTrainJob(
   signal?: AbortSignal,
 ): Promise<PromoteResponse> {
   return apiFetch<PromoteResponse>(
-    `${API_PREFIX}/train/promote/${encodeURIComponent(jobId)}`,
+    `${scoped()}/train/promote/${encodeURIComponent(jobId)}`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
@@ -3879,7 +3936,7 @@ export function getTrainManifest(
   signal?: AbortSignal,
 ): Promise<TrainManifest> {
   return apiFetch<TrainManifest>(
-    `${API_PREFIX}/train/manifest/${encodeURIComponent(jobId)}`,
+    `${scoped()}/train/manifest/${encodeURIComponent(jobId)}`,
     {},
     signal,
   );
@@ -3932,7 +3989,7 @@ export function runProbe(
 ): Promise<ProbeStatusResponse> {
   const body: ProbeRunRequest = { job_id: trainJobId, ...opts };
   return apiFetch<ProbeStatusResponse>(
-    `${API_PREFIX}/probe/run`,
+    `${scoped()}/probe/run`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
@@ -3940,13 +3997,13 @@ export function runProbe(
 
 /** Poll the current/last probe job. */
 export function getProbeStatus(signal?: AbortSignal): Promise<ProbeStatusResponse> {
-  return apiFetch<ProbeStatusResponse>(`${API_PREFIX}/probe/status`, {}, signal);
+  return apiFetch<ProbeStatusResponse>(`${scoped()}/probe/status`, {}, signal);
 }
 
 /** Best-effort cancel of the active probe job. */
 export function cancelProbe(signal?: AbortSignal): Promise<ProbeStatusResponse> {
   return apiFetch<ProbeStatusResponse>(
-    `${API_PREFIX}/probe/cancel`,
+    `${scoped()}/probe/cancel`,
     { method: 'POST' },
     signal,
   );
@@ -4046,7 +4103,7 @@ export function startAutoLabel(
   signal?: AbortSignal,
 ): Promise<AutoLabelJobState> {
   return apiFetch<AutoLabelJobState>(
-    `${API_PREFIX}/pipeline/auto_label/start${qs(params as Record<string, unknown>)}`,
+    `${scoped()}/pipeline/auto_label/start${qs(params as Record<string, unknown>)}`,
     { method: 'POST' },
     signal,
   );
@@ -4054,7 +4111,7 @@ export function startAutoLabel(
 
 export function getAutoLabelStatus(signal?: AbortSignal): Promise<AutoLabelJobState> {
   return apiFetch<AutoLabelJobState>(
-    `${API_PREFIX}/pipeline/auto_label/status`,
+    `${scoped()}/pipeline/auto_label/status`,
     {},
     signal,
   );
@@ -4075,7 +4132,7 @@ export async function getAutoLabelJobStatus(
 ): Promise<AutoLabelJobState | null> {
   try {
     return await apiFetch<AutoLabelJobState>(
-      `${API_PREFIX}/pipeline/auto_label/status/${encodeURIComponent(jobId)}`,
+      `${scoped()}/pipeline/auto_label/status/${encodeURIComponent(jobId)}`,
       {},
       signal,
     );
@@ -4089,7 +4146,7 @@ export function cancelAutoLabel(
   signal?: AbortSignal,
 ): Promise<AutoLabelJobState & { cancelled: boolean }> {
   return apiFetch<AutoLabelJobState & { cancelled: boolean }>(
-    `${API_PREFIX}/pipeline/auto_label/cancel`,
+    `${scoped()}/pipeline/auto_label/cancel`,
     { method: 'POST' },
     signal,
   );
@@ -4100,11 +4157,11 @@ export function cancelAutoLabel(
 // docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.2.
 
 export function getIngestStatus(signal?: AbortSignal): Promise<IngestStatus> {
-  return apiFetch<IngestStatus>(`${API_PREFIX}/ingest/status`, {}, signal);
+  return apiFetch<IngestStatus>(`${scoped()}/ingest/status`, {}, signal);
 }
 
 export function getRegionDrain(signal?: AbortSignal): Promise<RegionDrain> {
-  return apiFetch<RegionDrain>(`${API_PREFIX}/ingest/region_drain`, {}, signal);
+  return apiFetch<RegionDrain>(`${scoped()}/ingest/region_drain`, {}, signal);
 }
 
 export function ingestPathLookup(
@@ -4112,7 +4169,7 @@ export function ingestPathLookup(
   signal?: AbortSignal,
 ): Promise<IngestPathLookupResponse> {
   return apiFetch<IngestPathLookupResponse>(
-    `${API_PREFIX}/ingest/path_lookup`,
+    `${scoped()}/ingest/path_lookup`,
     { method: 'POST', body: JSON.stringify({ image_paths: ids }) },
     signal,
   );
@@ -4131,7 +4188,7 @@ export function ingestUpload(
   fd.append('image_paths', JSON.stringify(req.identifiers));
   fd.append('source', req.source);
   return apiFetch<BatchIngestResponse>(
-    `${API_PREFIX}/ingest/upload`,
+    `${scoped()}/ingest/upload`,
     { method: 'POST', body: fd },
     signal,
   );
@@ -4143,7 +4200,7 @@ export async function ingestBatch(
 ): Promise<BatchIngestResponse> {
   assertNonEmptyBatch('ingest', req.items);
   return apiFetch<BatchIngestResponse>(
-    `${API_PREFIX}/ingest/batch`,
+    `${scoped()}/ingest/batch`,
     { method: 'POST', body: JSON.stringify(req) },
     signal,
   );
@@ -4160,7 +4217,7 @@ export async function getIngestConfig(
   signal?: AbortSignal,
 ): Promise<IngestConfig | null> {
   try {
-    return await apiFetch<IngestConfig>(`${API_PREFIX}/ingest/config`, {}, signal);
+    return await apiFetch<IngestConfig>(`${scoped()}/ingest/config`, {}, signal);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) return null;
     throw e;
@@ -4173,7 +4230,7 @@ export async function getIngestConfig(
 // ===========================================================================
 
 export function bakeoffProfiles(signal?: AbortSignal): Promise<BakeoffProfileList> {
-  return apiFetch(`${API_PREFIX}/bakeoff/profiles`, {}, signal);
+  return apiFetch(`${scoped()}/bakeoff/profiles`, {}, signal);
 }
 
 /** The given profile's baseline registry (empty by default). */
@@ -4181,7 +4238,7 @@ export function bakeoffBaselineModels(
   profile?: string,
   signal?: AbortSignal,
 ): Promise<BaselineModelList> {
-  return apiFetch(`${API_PREFIX}/bakeoff/baseline_models${qs({ profile })}`, {}, signal);
+  return apiFetch(`${scoped()}/bakeoff/baseline_models${qs({ profile })}`, {}, signal);
 }
 
 /** Export test splits and external frozen sets, in served order. */
@@ -4189,7 +4246,7 @@ export function bakeoffEvalDatasets(
   source?: 'export' | 'external',
   signal?: AbortSignal,
 ): Promise<EvalDatasetList> {
-  return apiFetch(`${API_PREFIX}/bakeoff/eval_datasets${qs({ source })}`, {}, signal);
+  return apiFetch(`${scoped()}/bakeoff/eval_datasets${qs({ source })}`, {}, signal);
 }
 
 /** Finished training runs; with `datasetId`, each carries `for_dataset`. */
@@ -4198,7 +4255,7 @@ export function bakeoffTrainedModels(
   signal?: AbortSignal,
 ): Promise<TrainedModelList> {
   return apiFetch(
-    `${API_PREFIX}/bakeoff/trained_models${qs({ dataset_id: params.datasetId, limit: params.limit })}`,
+    `${scoped()}/bakeoff/trained_models${qs({ dataset_id: params.datasetId, limit: params.limit })}`,
     {},
     signal,
   );
@@ -4209,7 +4266,7 @@ export function bakeoffRun(
   signal?: AbortSignal,
 ): Promise<BakeoffRunAccepted> {
   return apiFetch(
-    `${API_PREFIX}/bakeoff/run`,
+    `${scoped()}/bakeoff/run`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
@@ -4219,15 +4276,11 @@ export function bakeoffStatus(
   jobId: string,
   signal?: AbortSignal,
 ): Promise<BakeoffStatus> {
-  return apiFetch(
-    `${API_PREFIX}/bakeoff/status/${encodeURIComponent(jobId)}`,
-    {},
-    signal,
-  );
+  return apiFetch(`${scoped()}/bakeoff/status/${encodeURIComponent(jobId)}`, {}, signal);
 }
 
 export function bakeoffRuns(signal?: AbortSignal): Promise<BakeoffRunList> {
-  return apiFetch(`${API_PREFIX}/bakeoff/runs`, {}, signal);
+  return apiFetch(`${scoped()}/bakeoff/runs`, {}, signal);
 }
 
 /** One dataset's comparison (default: the job's first dataset). A 409
@@ -4238,7 +4291,7 @@ export function bakeoffResults(
   signal?: AbortSignal,
 ): Promise<BakeoffComparison> {
   return apiFetch(
-    `${API_PREFIX}/bakeoff/results/${encodeURIComponent(jobId)}${qs({ dataset_id: datasetId })}`,
+    `${scoped()}/bakeoff/results/${encodeURIComponent(jobId)}${qs({ dataset_id: datasetId })}`,
     {},
     signal,
   );
@@ -4248,9 +4301,5 @@ export function bakeoffMatrix(
   jobId: string,
   signal?: AbortSignal,
 ): Promise<BakeoffMatrix> {
-  return apiFetch(
-    `${API_PREFIX}/bakeoff/matrix/${encodeURIComponent(jobId)}`,
-    {},
-    signal,
-  );
+  return apiFetch(`${scoped()}/bakeoff/matrix/${encodeURIComponent(jobId)}`, {}, signal);
 }

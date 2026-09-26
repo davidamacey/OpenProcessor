@@ -7,10 +7,15 @@
  * backend, or a query param the backend stops declaring, fails here.
  *
  * The call sites are extracted mechanically by
- * `apiCallScanner.ts::scanApiCallSites` — every `${API_PREFIX}/...`
- * template in the scanned files — not hand-copied. New files are added
+ * `apiCallScanner.ts::scanApiCallSites` — every `${scoped()}/...`
+ * template in the scanned files — not hand-copied. `scoped()` is the
+ * one function every scoped call builds its URL through (`api.ts`,
+ * groundwork for multi-project support); `globalApi()` is a separate,
+ * currently-unused builder for endpoints that will stay global once
+ * projects land — no call site uses it yet, so there is nothing for
+ * this catalog to scan there. New files are added
  * to `SCANNED_FILES` deliberately; the "no other file references
- * API_PREFIX" guard below fails the build if a future call site lands
+ * scoped()" guard below fails the build if a future call site lands
  * somewhere this test doesn't look, so that omission can't happen
  * silently.
  */
@@ -25,7 +30,7 @@ import { scanApiCallSites, type ApiCallSite } from './apiCallScanner';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const srcRoot = path.resolve(here, '..', '..');
 
-/** Every file that composes a backend URL through `${API_PREFIX}`. */
+/** Every file that composes a backend URL through `${scoped()}`. */
 const SCANNED_FILES = [
   'lib/api.ts',
   'lib/sse.ts',
@@ -49,7 +54,7 @@ function read(rel: string): string {
  * the scanned file — and resolves to the nearest scanned call site
  * *after* that marker. `setSlotBox`/`patchSlotMeta`/`batchRegionStatus`
  * all happen to share the identical raw template text
- * (`` `${API_PREFIX}${path}` ``), so matching by raw text alone would
+ * (`` `${scoped()}${path}` ``), so matching by raw text alone would
  * be ambiguous; matching by (marker, nearest-following-site) is not.
  *
  * `path`/`method`/`queryParams` are optional: an omitted field keeps
@@ -175,13 +180,13 @@ describe('endpoint catalog: completeness', () => {
     expect(total).toBeGreaterThan(50);
   });
 
-  it('no other src/ file references ${API_PREFIX} outside SCANNED_FILES', () => {
+  it('no other src/ file references ${scoped()} outside SCANNED_FILES', () => {
     // Mechanical completeness guard (§3.3's "endpoint catalog" design):
     // a new fetch call site in a file this test doesn't scan must fail
     // the build, not silently go unchecked.
     const out = execFileSync(
       'grep',
-      ['-rl', '--include=*.ts', '--include=*.svelte', '${API_PREFIX}', srcRoot],
+      ['-rl', '--include=*.ts', '--include=*.svelte', '${scoped()}', srcRoot],
       { encoding: 'utf-8' },
     );
     const hits = out
@@ -208,10 +213,9 @@ const doc = openapi as unknown as OpenApiDoc;
 
 /** OpenAPI paths are absolute under the backend's own prefix
  *  (`/curation/...`, the default `OP_API_PREFIX`). The frontend composes
- *  `${API_PREFIX}/...` where `API_PREFIX` defaults to the same
- *  `/curation` — mapping `${API_PREFIX}` -> `/curation` is exactly that
- *  default-prefix identification, matching this project's plan
- *  instructions. */
+ *  `${scoped()}/...` where `scoped()` returns `API_PREFIX` by default —
+ *  mapping `${scoped()}` -> `/curation` is exactly that default-prefix
+ *  identification, matching this project's plan instructions. */
 const OPENAPI_PREFIX = '/curation';
 
 function normalizeSegments(p: string): string[] {

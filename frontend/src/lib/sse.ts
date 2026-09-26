@@ -14,7 +14,7 @@
  * `onEvent` callback so the page can switch on `event.type`.
  */
 
-import { apiBase, API_PREFIX } from './api';
+import { apiBase, scoped } from './api';
 import { slotRegistry } from './annotations/registeredSlots';
 
 // All event payloads share these fields; specific types add more.
@@ -167,10 +167,10 @@ export function subscribePipelineEvents(
   const url = (() => {
     const base =
       apiBase && /^https?:\/\//i.test(apiBase)
-        ? `${apiBase}${API_PREFIX}/pipeline/events`
+        ? `${apiBase}${scoped()}/pipeline/events`
         : `${
             typeof window !== 'undefined' ? window.location.origin : ''
-          }${apiBase}${API_PREFIX}/pipeline/events`;
+          }${apiBase}${scoped()}/pipeline/events`;
     return new URL(base).toString();
   })();
 
@@ -251,8 +251,8 @@ export function subscribeCurationEvents(
     // hits the labeler's nginx proxy.
     const base =
       apiBase && /^https?:\/\//i.test(apiBase)
-        ? `${apiBase}${API_PREFIX}/events`
-        : `${typeof window !== 'undefined' ? window.location.origin : ''}${apiBase}${API_PREFIX}/events`;
+        ? `${apiBase}${scoped()}/events`
+        : `${typeof window !== 'undefined' ? window.location.origin : ''}${apiBase}${scoped()}/events`;
     const u = new URL(base);
     if (opts.topic) u.searchParams.set('topic', opts.topic);
     if (opts.class_id != null) u.searchParams.set('class_id', String(opts.class_id));

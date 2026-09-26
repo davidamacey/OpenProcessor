@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     apiBase,
-    API_PREFIX,
+    scoped,
     exportStatus,
     exportYolo,
     freezeTestHoldout,
@@ -341,7 +341,7 @@
   $effect(() => {
     void (async () => {
       try {
-        const res = await fetch(`${apiBase}${API_PREFIX}/stats/dataset`, {
+        const res = await fetch(`${apiBase}${scoped()}/stats/dataset`, {
           method: 'GET',
         });
         if (!res.ok) {
@@ -534,7 +534,7 @@
             <th
               class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
               onclick={() => setSort('total')}
-              title="Crops with this class_id (GET {API_PREFIX}/stats/classes) — not the same as the class-cluster bucket size shown in the sidebar and on /classes."
+              title="Crops with this class_id (GET {scoped()}/stats/classes) — not the same as the class-cluster bucket size shown in the sidebar and on /classes."
               >Total (labelled)</th
             >
             <!-- E1 (visual audit 2026-09-24): Validated counts the frozen
@@ -548,7 +548,7 @@
             <th
               class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
               onclick={() => setSort('trainable')}
-              title="Validated minus the frozen test holdout (GET {API_PREFIX}/test_holdout/stats) — what training can actually use"
+              title="Validated minus the frozen test holdout (GET {scoped()}/test_holdout/stats) — what training can actually use"
               >Trainable</th
             >
             <th

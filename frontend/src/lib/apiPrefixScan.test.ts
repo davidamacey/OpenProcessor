@@ -138,7 +138,7 @@ describe('no bare /curation literal composes a URL outside api.ts', () => {
 const apiSrc = readFileSync(path.resolve(libRoot, 'api.ts'), 'utf-8');
 const sseSrc = readFileSync(path.resolve(libRoot, 'sse.ts'), 'utf-8');
 
-describe('api.ts composition ratchet — every apiFetch path starts with ${API_PREFIX}', () => {
+describe('api.ts composition ratchet — every apiFetch path starts with ${scoped()}', () => {
   /**
    * Call sites are written across several lines and sometimes carry an
    * interleaved `//` comment before the path argument (e.g. api.ts's
@@ -159,13 +159,13 @@ describe('api.ts composition ratchet — every apiFetch path starts with ${API_P
     expect(calls.length).toBeGreaterThanOrEqual(70);
   });
 
-  it('every call composes its path from API_PREFIX', () => {
-    const bad = calls.filter((h) => !h.startsWith('`${API_PREFIX}'));
+  it('every call composes its path from ${scoped()}', () => {
+    const bad = calls.filter((h) => !h.startsWith('`${scoped()}'));
     expect(bad).toEqual([]);
   });
 });
 
-describe('${apiBase} is always followed by ${API_PREFIX}', () => {
+describe('${apiBase} is always followed by ${scoped()}', () => {
   /**
    * The eight `${apiBase}…` template builders in api.ts bypass
    * `apiFetch` entirely (thumbnail/image/registry URL helpers), as do
@@ -176,6 +176,14 @@ describe('${apiBase} is always followed by ${API_PREFIX}', () => {
    * `resolveApiUrl` is the one legitimate exception: it prepends
    * `apiBase` to a path the SERVER already emitted complete with its
    * own prefix (see api.ts's doc comment above it).
+   *
+   * `${API_PREFIX}` itself became `${scoped()}` (groundwork for
+   * multi-project support, `docs/design/
+   * any-domain-rev3-and-projects-contract-review-2026-09-26.md` §7):
+   * `scoped()` is the one function every scoped call builds its URL
+   * through, and it returns `API_PREFIX` by default, so this ratchet's
+   * intent — "every URL is prefix-composed, never hand-assembled" —
+   * is unchanged.
    */
   const files: [string, string][] = [
     ['lib/api.ts', apiSrc],
@@ -191,15 +199,15 @@ describe('${apiBase} is always followed by ${API_PREFIX}', () => {
     for (const [rel, src] of files) {
       const stripped = stripComments(src);
       for (const m of stripped.matchAll(/\$\{apiBase\}(.{0,16})/g)) {
-        if (!m[1].startsWith('${API_PREFIX}')) bad.push(`${rel}  \${apiBase}${m[1]}`);
+        if (!m[1].startsWith('${scoped()}')) bad.push(`${rel}  \${apiBase}${m[1]}`);
       }
     }
     expect(bad).toEqual(['lib/api.ts  ${apiBase}${url}`;']);
   });
 
-  it('sse.ts builds both EventSource URLs from API_PREFIX', () => {
+  it('sse.ts builds both EventSource URLs from ${scoped()}', () => {
     expect([
-      ...sseSrc.matchAll(/\$\{apiBase\}\$\{API_PREFIX\}\/(pipeline\/events|events)/g),
+      ...sseSrc.matchAll(/\$\{apiBase\}\$\{scoped\(\)\}\/(pipeline\/events|events)/g),
     ]).toHaveLength(4);
   });
 });

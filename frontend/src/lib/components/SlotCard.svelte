@@ -23,9 +23,9 @@
    */
   import ProvenanceChip from './ProvenanceChip.svelte';
   import {
-    API_PREFIX,
     getRegionThumbUrl,
     resolveApiUrl,
+    scoped,
     type RegionBrowseItem,
   } from '$lib/api';
   import { readSlot } from '$lib/annotations/readSlot';
@@ -94,9 +94,7 @@
     crop.region_thumbnail_url
       ? resolveApiUrl(crop.region_thumbnail_url)
       : thumbCap
-        ? resolveApiUrl(
-            `${API_PREFIX}${thumbCap.path(crop.crop_id, thumbCap.defaultSize)}`,
-          )
+        ? resolveApiUrl(`${scoped()}${thumbCap.path(crop.crop_id, thumbCap.defaultSize)}`)
         : getRegionThumbUrl(crop.crop_id),
   );
   const thumbAspect = $derived(thumbCap?.aspect ?? '2 / 1');
