@@ -1,15 +1,60 @@
 version: 2
+# Grouped so this stays low-noise: one weekly npm PR (minor+patch), one
+# weekly npm PR for majors, one monthly github-actions PR, one monthly
+# docker base-image PR. `applies-to` is declared twice per group
+# (version-updates and security-updates) because a bare `groups:` block
+# only covers version-updates by default — without the second entry, a
+# security advisory bypasses grouping and opens its own one-off PR.
 updates:
-  - package-ecosystem: npm
-    directory: /
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: weekly
+      interval: 'weekly'
     open-pull-requests-limit: 5
-  - package-ecosystem: github-actions
-    directory: /
+    groups:
+      npm-minor-patch:
+        applies-to: version-updates
+        update-types: ['minor', 'patch']
+      npm-minor-patch-security:
+        applies-to: security-updates
+        patterns: ['*']
+      npm-major:
+        applies-to: version-updates
+        update-types: ['major']
+    ignore:
+      # eslint 10 / @eslint/js 10 require an eslint 10 engine; typescript-eslint
+      # still pins eslint ^9, so a major bump here breaks both the lint job and
+      # pre-commit with an ERESOLVE. Mirrors transcribe-app's own ignore for the
+      # same pair. Bump eslint, @eslint/js and typescript-eslint together once
+      # typescript-eslint supports eslint 10.
+      - dependency-name: 'eslint'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@eslint/js'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript-eslint'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: weekly
-  - package-ecosystem: docker
-    directory: /
+      interval: 'monthly'
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns: ['*']
+      github-actions-security:
+        applies-to: security-updates
+        patterns: ['*']
+
+  - package-ecosystem: 'docker'
+    directory: '/'
     schedule:
-      interval: weekly
+      interval: 'monthly'
+    open-pull-requests-limit: 3
+    groups:
+      docker:
+        applies-to: version-updates
+        patterns: ['*']
+      docker-security:
+        applies-to: security-updates
+        patterns: ['*']
