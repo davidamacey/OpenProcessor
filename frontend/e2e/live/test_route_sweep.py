@@ -51,6 +51,21 @@ from fixtures.wire import REGION_TAB_URL_ID
 # length (full_page=True still captures anything below the fold).
 SCREENSHOT_VIEWPORTS: list[tuple[int, int]] = [(1600, 1000), (800, 1000)]
 
+# True once every image intersecting the viewport has finished (loaded or
+# failed); an offscreen lazy image never blocks.
+_IN_VIEWPORT_IMAGES_SETTLED = """
+() => {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const imgs = Array.from(document.querySelectorAll('img'));
+  const inViewport = imgs.filter((img) => {
+    const r = img.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0
+      && r.top < vh && r.left < vw;
+  });
+  return inViewport.every((img) => img.complete);
+}
+"""
+
 
 def _route_slug(path: str) -> str:
     """`/review?tab=model_disagreements` -> `review-tab-model_disagreements`."""
@@ -138,6 +153,9 @@ def test_route_mounts_cleanly(
     for width, height in SCREENSHOT_VIEWPORTS:
         page.set_viewport_size({"width": width, "height": height})
         page.wait_for_timeout(150)
+        # Lazy thumbnails (the region gallery) otherwise land in the review
+        # screenshot as blank tiles, which reads as a broken page.
+        page.wait_for_function(_IN_VIEWPORT_IMAGES_SETTLED, timeout=15_000)
         page.screenshot(
             path=str(screenshot_run_dir / f"{slug}-{width}.png"),
             full_page=True,
@@ -160,21 +178,7 @@ def test_route_mounts_cleanly(
     # `wait_until="load"` — wait for the concrete condition we actually
     # care about (every in-viewport image either loaded or still
     # legitimately pending offscreen never blocks us).
-    page.wait_for_function(
-        """
-        () => {
-          const vw = window.innerWidth, vh = window.innerHeight;
-          const imgs = Array.from(document.querySelectorAll('img'));
-          const inViewport = imgs.filter((img) => {
-            const r = img.getBoundingClientRect();
-            return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0
-              && r.top < vh && r.left < vw;
-          });
-          return inViewport.every((img) => img.complete);
-        }
-        """,
-        timeout=15_000,
-    )
+    page.wait_for_function(_IN_VIEWPORT_IMAGES_SETTLED, timeout=15_000)
 
     broken = page.evaluate(
         """
