@@ -365,6 +365,74 @@ describe('createIngestRun — response handling', () => {
     });
   });
 
+  it('falls back to request order for an in-batch byte-identical duplicate served with source_identifier: null', async () => {
+    // A live backend bug: the second copy of a byte-identical pair
+    // uploaded in the same chunk comes back with source_identifier: null
+    // (and no rewritten image_path either, since it's a duplicate — the
+    // server never persisted new bytes for it). Without the request-order
+    // fallback this row can't be matched to either file by identifier and
+    // both would misreport as "no result returned" for the second file.
+    const upload = vi.fn(
+      async (req: IngestUploadRequest): Promise<BatchIngestResponse> => ({
+        status: 'partial',
+        summary: {
+          successful: 1,
+          duplicates: 1,
+          failed: 0,
+          mismatches: 0,
+          missed_labels: 0,
+          unmatched_detections: 0,
+          labels_imported: 0,
+          crops_indexed: 1,
+        },
+        results: [
+          {
+            status: 'success',
+            image_id: 'img-a',
+            image_path: '/data/uploads/ab/ab120.jpg',
+            imohash: 'dupe-hash',
+            n_crops: 3,
+            n_regions: 0,
+            error: null,
+            error_kind: null,
+            source_identifier: req.identifiers[0]!,
+          },
+          {
+            status: 'duplicate',
+            image_id: 'img-a',
+            image_path: '/data/uploads/ab/ab120.jpg',
+            imohash: 'dupe-hash',
+            n_crops: 0,
+            n_regions: 0,
+            error: null,
+            error_kind: null,
+            // The live-backend bug this fallback defends against.
+            source_identifier: null,
+          },
+        ],
+        disagreements: [],
+      }),
+    );
+    const run = createIngestRun(
+      baseDeps({
+        lookup: vi.fn(async () => ({ known_paths: {} })),
+        upload,
+        concurrency: 1,
+      }),
+    );
+    await run.start([mkFile('a.jpg'), mkFile('b.jpg')], {
+      source: 'src',
+      identifierPrefix: 'src/',
+      skipLookup: true,
+    });
+    expect(run.results.get('a.jpg')).toMatchObject({ kind: 'ingested', n_crops: 3 });
+    expect(run.results.get('b.jpg')).toMatchObject({
+      kind: 'duplicate',
+      image_id: 'img-a',
+    });
+    expect(run.totals).toMatchObject({ successful: 1, duplicates: 1, failed: 0 });
+  });
+
   it('auto-pauses on a served 503 and shows the served detail', async () => {
     let calls = 0;
     const upload = vi.fn(async (req) => {

@@ -1487,6 +1487,9 @@ export type RawCrop = {
   probe_disagreement?: boolean | null;
   probe_in_scope?: boolean | null;
   probe_model_version?: string | null;
+  // OpenProcessor main 9e217f0: server-computed actionability, folding
+  // in scope + disagreement + the server's own confidence threshold.
+  probe_actionable?: boolean | null;
   thumbnail_url?: string;
   updated_at?: string;
   class_excluded?: boolean;
@@ -1548,6 +1551,7 @@ export const RAW_CROP_KEYS = [
   'probe_disagreement',
   'probe_in_scope',
   'probe_model_version',
+  'probe_actionable',
   'thumbnail_url',
   'updated_at',
   'class_excluded',
@@ -1632,6 +1636,7 @@ function mapRawCrop(c: RawCrop): Crop {
     probe_disagreement: c.probe_disagreement ?? null,
     probe_in_scope: c.probe_in_scope ?? null,
     probe_model_version: c.probe_model_version ?? null,
+    probe_actionable: c.probe_actionable ?? null,
     class_excluded: !!c.class_excluded,
     excluded_reason: c.excluded_reason ?? null,
     excluded_at: c.excluded_at ?? null,
@@ -3913,6 +3918,12 @@ export interface ProbeStatusResponse {
   finished_at?: string | null;
   updated_count?: number | null;
   error?: string | null;
+  /** Read-only echo of `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE` (default 0.5)
+   *  — the threshold the server applies to compute the item wire's
+   *  `probe_actionable`. No client code recomputes actionability against
+   *  this; it exists purely to render "threshold: NN%" where a probe
+   *  status is already in hand. */
+  actionable_min_confidence?: number | null;
 }
 
 /** Start a probe pass from `trainJobId`'s finished export. 409 when the

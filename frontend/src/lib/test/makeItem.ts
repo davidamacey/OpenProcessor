@@ -62,6 +62,7 @@ const DEFAULT_ITEM: Required<RawCrop> = {
   mistakenness_scored_at: '2026-02-03T04:05:06Z',
   probe_disagreement: true,
   probe_in_scope: true,
+  probe_actionable: true,
   probe_model_version: 'probe-v1',
   thumbnail_url: '/thumb/crop-fixture-001.jpg',
   updated_at: '2026-03-04T05:06:07Z',

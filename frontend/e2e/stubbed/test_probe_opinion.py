@@ -1,6 +1,11 @@
 """F8 D1 (OpenProcessor d817605): an item outside the probe's classes
 (`probe_in_scope: false`, `probe_disagreement: null`) reads "no opinion"
-and never offers "Accept model's class"; a served disagreement does."""
+and never offers "Accept model's class"; a served disagreement does.
+
+OpenProcessor main 9e217f0 adds `probe_actionable` — Accept requires
+`probe_actionable === true`, not just a served disagreement. A
+disagreement the server didn't mark actionable (below its own confidence
+threshold) renders as a muted "model unsure: <predicted class>" instead."""
 
 from __future__ import annotations
 
@@ -14,7 +19,7 @@ CLASSES = [
 ]
 
 
-def _item(crop_id: str, in_scope, disagreement) -> dict:
+def _item(crop_id: str, in_scope, disagreement, actionable=None) -> dict:
     item = make_item(
         crop_id=crop_id,
         image_id=f"img-{crop_id}",
@@ -28,6 +33,7 @@ def _item(crop_id: str, in_scope, disagreement) -> dict:
         probe_pred_class_id=2,
         probe_in_scope=in_scope,
         probe_disagreement=disagreement,
+        probe_actionable=actionable,
     )
     return item
 
@@ -45,7 +51,7 @@ def _open(stub, page, app_url, item) -> None:
 
 
 def test_out_of_scope_item_shows_no_opinion_and_no_accept(stub, page, app_url):
-    _open(stub, page, app_url, _item("c-out", False, None))
+    _open(stub, page, app_url, _item("c-out", False, None, None))
     assert "no opinion (outside the probe's classes)" in page.get_by_test_id(
         "probe-no-opinion"
     ).inner_text()
@@ -53,10 +59,16 @@ def test_out_of_scope_item_shows_no_opinion_and_no_accept(stub, page, app_url):
 
 
 def test_null_disagreement_never_offers_accept(stub, page, app_url):
-    _open(stub, page, app_url, _item("c-null", None, None))
+    _open(stub, page, app_url, _item("c-null", None, None, None))
     assert page.get_by_role("button", name="Accept model's class").count() == 0
 
 
-def test_served_disagreement_offers_accept(stub, page, app_url):
-    _open(stub, page, app_url, _item("c-dis", True, True))
+def test_actionable_disagreement_offers_accept(stub, page, app_url):
+    _open(stub, page, app_url, _item("c-dis", True, True, True))
     assert page.get_by_role("button", name="Accept model's class").count() == 1
+
+
+def test_disagreement_not_actionable_shows_unsure_and_no_accept(stub, page, app_url):
+    _open(stub, page, app_url, _item("c-unsure", True, True, False))
+    assert "model unsure: widget_b" in page.get_by_test_id("probe-unsure").inner_text()
+    assert page.get_by_role("button", name="Accept model's class").count() == 0
