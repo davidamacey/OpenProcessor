@@ -720,7 +720,7 @@ load-face-models: ## Load face models into Triton (SCRFD + ArcFace)
 	@echo "Face models loaded."
 
 .PHONY: setup-face-pipeline
-setup-face-pipeline: download-face-models export-face-recognition export-scrfd ## Complete face pipeline setup (SCRFD + ArcFace)
+setup-face-pipeline: download-face-models export-face-recognition export-scrfd restart-triton load-face-models ## Complete face pipeline setup (SCRFD + ArcFace)
 	@echo "Face pipeline setup complete!"
 	@echo ""
 	@echo "Loaded models:"
