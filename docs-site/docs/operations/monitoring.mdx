@@ -92,9 +92,30 @@ alongside. Use it when Triton shares a host with other GPU work (the
 segmenter, the VLM, training), because DCGM sees every process on each
 card while Triton's metrics see only Triton.
 
+<Screenshot
+  name="backend-grafana-triton.png"
+  alt="Grafana OpenProcessor Triton Dashboard: per-model throughput, average/p95/p99 latency and a latency leaderboard under read-only inference load"
+  caption="OpenProcessor Triton Dashboard under read-only COCO traffic on a public-sample-data stack: per-model throughput, latency and leaderboard (last 5 minutes)"
+/>
+
+<Screenshot
+  name="backend-grafana-gpu.png"
+  alt="Grafana GPU Metrics dashboard: per-card GPU utilization, memory, power and temperature plus host CPU and memory"
+  caption="GPU Metrics dashboard: every card on the host, from DCGM (last 5 minutes)"
+/>
+
 Panels only move while the API is serving requests; an idle stack shows
 flat lines. To add a dashboard, drop its JSON into
 `monitoring/dashboards/` and restart Grafana.
+
+:::caution[Two panels and one alert have no data]
+The Triton dashboard's **Model Ready** and **GPU Temperature** panels
+query `nv_model_ready_state` and `nv_gpu_temperature`, which the shipped
+Triton version does not export, so both show "No data". The
+`ModelNotReady` alert uses the same metric and can never fire. Use
+`GET /models/` (below) for model readiness and the GPU Metrics dashboard
+(DCGM) for temperature.
+:::
 
 ## Logs with Loki
 

@@ -16,7 +16,7 @@ Two subcommands, both against a stack holding public sample data only:
     * ``swagger.png``: the Swagger UI endpoint groups at ``/docs``;
     * ``prometheus-targets.png``: Prometheus scrape targets;
     * ``grafana-<uid>.png``: each provisioned Grafana dashboard (dark theme,
-      kiosk mode, last 15 minutes);
+      kiosk mode, last 5 minutes by default);
     * ``mlflow-experiments.png``, ``mlflow-run.png``, ``mlflow-compare.png``;
     * ``opensearch-indices.png``: the ``op_*`` indexes in OpenSearch
       Dashboards' index management.
@@ -194,6 +194,28 @@ def capture_prometheus(page, prom: str, out: Path) -> None:
     _shot(page, out / 'prometheus-targets.png')
 
 
+# Anything Grafana shows while a panel is still querying or drawing.
+GRAFANA_LOADING = (
+    '.panel-loading, [aria-label="Panel loading bar"], '
+    '[data-testid="data-testid panel-loading-bar"], [data-testid="Spinner"]'
+)
+
+
+# Per dashboard, the panel title where a 1600x1000 "focus" crop starts:
+# the most informative region for the docs and the hero GIF.
+GRAFANA_FOCUS = {'yolo-triton-unified': 'Model Track Throughput Comparison'}
+
+
+def _wait_for_panels(page, timeout_s: float = 90.0, settle_ms: int = 4000) -> None:
+    """Wait until no panel has shown a loading indicator for ~3 s, then settle."""
+    deadline = time.monotonic() + timeout_s
+    quiet = 0
+    while time.monotonic() < deadline and quiet < 6:
+        quiet = quiet + 1 if page.locator(GRAFANA_LOADING).count() == 0 else 0
+        page.wait_for_timeout(500)
+    page.wait_for_timeout(settle_ms)
+
+
 def capture_grafana(browser, grafana: str, out: Path, minutes: int) -> None:
     auth = _grafana_auth()
     if auth is None:
@@ -207,9 +229,31 @@ def capture_grafana(browser, grafana: str, out: Path, minutes: int) -> None:
             f'{grafana}/d/{dash["uid"]}?orgId=1&theme=dark&kiosk'
             f'&from=now-{minutes}m&to=now&refresh=off'
         )
+        page.set_viewport_size({'width': WIDTH, 'height': 1000})
         page.goto(url, wait_until='load')
-        page.wait_for_timeout(8000)
-        _shot(page, out / f'grafana-{dash["uid"]}.png', full_page=True)
+        _wait_for_panels(page)
+        # Grafana only queries panels inside the viewport: grow the viewport
+        # to the whole dashboard so every panel renders, then wait again.
+        height = page.evaluate(
+            """() => Math.max(...[...document.querySelectorAll('*')]
+                 .filter(el => el.scrollHeight > el.clientHeight + 10)
+                 .map(el => el.scrollHeight), document.body.scrollHeight)"""
+        )
+        page.set_viewport_size({'width': WIDTH, 'height': min(max(height, 1000), 6000)})
+        _wait_for_panels(page)
+        empty = page.get_by_text('No data', exact=True).count()
+        if empty:
+            print(f'warning: {dash["uid"]} has {empty} panel(s) showing "No data"')
+        _shot(page, out / f'grafana-{dash["uid"]}.png')
+        title = GRAFANA_FOCUS.get(dash['uid'])
+        box = page.get_by_text(title, exact=True).first.bounding_box() if title else None
+        if box:
+            top = max(0, box['y'] - 24)
+            page.screenshot(
+                path=str(out / f'grafana-{dash["uid"]}-focus.png'),
+                clip={'x': 0, 'y': top, 'width': WIDTH, 'height': 1000},
+            )
+            print(f'wrote {out / f"grafana-{dash['uid']}-focus.png"}')
     ctx.close()
 
 
@@ -320,7 +364,7 @@ def main() -> int:
     c.add_argument('--grafana')
     c.add_argument('--mlflow')
     c.add_argument('--osd', help='OpenSearch Dashboards URL')
-    c.add_argument('--minutes', type=int, default=15, help='Grafana time range')
+    c.add_argument('--minutes', type=int, default=5, help='Grafana time range, in minutes')
     c.add_argument('--out', type=Path, required=True)
     args = ap.parse_args()
 

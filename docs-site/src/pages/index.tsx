@@ -25,7 +25,7 @@ export default function Home(): React.JSX.Element {
             <>
               Captured from a stack holding only public sample data (
               <a href="https://cocodataset.org">COCO</a> val2017). The tools shown are Swagger UI,
-              Prometheus, MLflow and OpenSearch Dashboards, each under its own license.{' '}
+              Grafana, Prometheus, MLflow and OpenSearch Dashboards, each under its own license.{' '}
               <a href="docs/developer-guide/screenshots#backend-screenshots">Credits</a>
             </>
           }

@@ -78,7 +78,14 @@ add_frame "$WORK/hero/"*-swagger-endpoint.png 'Swagger UI: try any endpoint in t
 add_frame "$WORK/hero/"*-swagger-response.png 'Swagger UI: the live response' 200
 add_frame "$WORK/backend/models.png" 'Model status: every Triton model behind the API' 260
 for f in "$WORK"/backend/grafana-*.png; do
-  add_frame "$f" 'Grafana: live Triton, GPU and host dashboards' 300
+  [[ "$f" == *-focus.png ]] && continue
+  focus="${f%.png}-focus.png"
+  [[ -f "$focus" ]] && f="$focus"
+  case "$f" in
+    *gpu-metrics*) caption='Grafana: per-GPU utilization, memory, power and temperature' ;;
+    *) caption='Grafana: live Triton throughput and latency, per model' ;;
+  esac
+  add_frame "$f" "$caption" 300
 done
 add_frame "$WORK/backend/prometheus-targets.png" 'Prometheus: Triton, API, node, GPU and Loki targets' 240
 add_frame "$WORK/backend/mlflow-experiments.png" 'MLflow: training runs logged by the trainer' 240

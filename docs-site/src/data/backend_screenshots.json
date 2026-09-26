@@ -10,6 +10,16 @@
     "caption": "Swagger UI at /docs: every endpoint group, try-it-out included"
   },
   {
+    "name": "backend-grafana-triton.png",
+    "alt": "Grafana OpenProcessor Triton Dashboard: per-model throughput, average/p95/p99 latency and a latency leaderboard under read-only inference load",
+    "caption": "Grafana: per-model Triton throughput, latency and leaderboard, live"
+  },
+  {
+    "name": "backend-grafana-gpu.png",
+    "alt": "Grafana GPU Metrics dashboard: per-card GPU utilization, memory, power and temperature plus host CPU and memory",
+    "caption": "Grafana: per-GPU utilization, memory, power and temperature (DCGM)"
+  },
+  {
     "name": "backend-prometheus-targets.png",
     "alt": "Prometheus target health page with the triton, yolo-api, node, dcgm and loki scrape targets all up",
     "caption": "Prometheus: Triton, API, node, GPU (DCGM) and Loki targets, all up"
