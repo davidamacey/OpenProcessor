@@ -6,6 +6,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **`docs-site/`: Docusaurus 3 documentation site for Cropwright**,
+  modelled on a sister project's own `docs-site/` (config style, dark
+  theme, GitHub Pages deploy). Covers getting started, a user-guide page
+  per route, configuration (env vars, backend feature flags, annotation
+  profiles), operations (deployment, security, upgrading,
+  troubleshooting), a developer guide (setup, testing, API contract,
+  screenshots, contributing, releasing) and an FAQ, all derived from the
+  existing README/FEATURES/CLAUDE.md — no invented features.
+  - A single site-identity module (`docs-site/site.config.ts`) holds
+    every project-specific value (title, repo, URLs, nav/footer,
+    sibling cross-links); `docusaurus.config.ts` and every landing-page/
+    roadmap/architecture component read from it or from
+    `src/data/*.json` — no copy is hardcoded in a component, so the
+    whole directory can be cloned for a sibling project (see
+    `docs-site/TEMPLATE.md`) by editing only `site.config.ts`, the data
+    JSONs, `docs/**` and `static/img/**`.
+  - `/architecture` renders three Mermaid diagrams (system context,
+    labeling workflow, frontend internals) from
+    `src/data/architecture.json`.
+  - `/roadmap` renders a hand-maintained `src/data/roadmap.json` (v0.1.0
+    shipped scope, plus tracked-but-not-built follow-ups: optional API
+    auth, hidden-proposal persistence, served model-status reasons, a
+    confusion-matrix image URL, a public MLflow link, a served
+    `cluster_kind`, a `run_id`-scoped ingest view, multi-region
+    profiles).
+  - A data-driven landing page (`src/pages/index.tsx`): hero, feature
+    grid, "how it works" workflow steps, a screenshot showcase, and a
+    quick-start snippet. Eleven 1600px screenshots of every page,
+    captured from a public-sample-data deployment (COCO val2017 and Open
+    Images, credited on the screenshots page); a slot with no file
+    renders a "pending" placeholder.
+  - `scripts/capture_docs_screenshots.py` rewritten to drive a real
+    Cropwright instance pointed at a **public-sample-data-only**
+    OpenProcessor backend. `--base-url` (or `CROPWRIGHT_URL`) is
+    required, the route list comes from
+    `docs-site/src/data/screenshot_routes.json`, and every request other
+    than GET/HEAD and `/train/preflight` is aborted, so a capture can't
+    write. Replaces the old stub-backed synthetic-tile version.
+  - `docs-site/Dockerfile` serves the build under `/cropwright/`, the
+    GitHub Pages base path, from a non-root nginx image.
+  - `.github/workflows/docs.yml` — a GitHub Pages deploy workflow
+    (build-only on PRs, deploy on push to `main`/`master`), modelled on
+    a sister project's own docs deploy workflow.
+  - Root `.gitignore`/`.prettierignore`/`eslint.config.js` updated so
+    `docs-site/` is excluded from this project's own lint/format
+    surface (it has its own tooling), and the root README links to the
+    published docs site.
+
 ### Changed
 
 - **OpenProcessor commit references follow its published history.** The

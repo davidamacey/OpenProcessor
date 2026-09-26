@@ -1382,6 +1382,51 @@ audit are done; its status section records the deviations.
   in place of the files it replaces) — CI's `export-leak-gate` job. See
   "Public export" below.
 
+## Documentation site (`docs-site/`)
+
+A standalone Docusaurus 3 site, not part of the SvelteKit app — its own
+`package.json`/`node_modules`/build, excluded from this project's root
+`npm run lint`/`check`/`test` (see `.prettierignore`, `eslint.config.js`).
+Build/serve it from inside that directory:
+
+```bash
+cd docs-site
+npm install
+npm start      # http://localhost:3000/cropwright/
+npm run build  # -> build/, fails on any broken link/anchor
+```
+
+- **`docs-site/site.config.ts`** is the single place every
+  project-specific value lives (title, repo, URLs, nav/footer links,
+  sibling cross-links) — `docusaurus.config.ts` and every landing-page/
+  roadmap/architecture component read from it, never hardcode copy, so
+  the whole directory is designed to be cloned for a sibling project
+  (see `docs-site/TEMPLATE.md` for the exact clone checklist and
+  build-time assumptions table).
+- Content lives in `docs-site/docs/**` (getting-started, user-guide,
+  configuration, operations, developer-guide, faq) and
+  `docs-site/src/data/*.json` (`features.json`, `workflow.json`,
+  `screenshots.json`, `roadmap.json`, `architecture.json` — Mermaid
+  diagram sources for `/architecture`).
+- **Screenshots are never captured from the shared dev stack** — only
+  from a Cropwright instance pointed at a public-sample-data
+  OpenProcessor backend (COCO val2017 / Open Images plates). The 1600px
+  captures are committed under `docs-site/static/img/screenshots/`
+  (image credits on the screenshots page); a `<Screenshot>` slot with no
+  file renders a "pending" placeholder. `scripts/capture_docs_screenshots.py`
+  requires an explicit `--base-url`, reads its routes from
+  `docs-site/src/data/screenshot_routes.json`, and aborts every request
+  except GET/HEAD and the side-effect-free `/train/preflight`. See
+  `docs-site/docs/developer-guide/screenshots.md`.
+- Hosted locally as the `cropwright-docs` container on :5185
+  (`docker build -t cropwright-docs:local docs-site && docker run -d
+--name cropwright-docs -p 5185:8080 cropwright-docs:local`), served
+  under the same `/cropwright/` base path GitHub Pages uses.
+- Deploys to GitHub Pages via `.github/workflows/docs.yml` (build on
+  every PR touching `docs-site/**`, deploy on push to `main`/`master`) —
+  won't actually publish until Pages/Actions are enabled on the public
+  repo.
+
 ## Development
 
 ```bash
@@ -1744,7 +1789,7 @@ ships:
   tolerance, no allow-list), email/IPv4 sweeps, excluded-path presence,
   lockfile registries and gitleaks (container image).
 - Public screenshots come only from the fresh-start public-data run
-  (COCO val2017, Open Images plates); none are tracked today.
+  (COCO val2017, Open Images plates) — the docs-site captures above.
 
 ## Documentation & changelog discipline
 

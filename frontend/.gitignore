@@ -28,5 +28,11 @@ test-results/
 # like .env / .env.example above.
 static/annotation-profiles.json
 
+# Docusaurus docs site (docs-site/node_modules and docs-site/build are
+# already covered by the generic node_modules/ and build/ patterns above;
+# .docusaurus is Docusaurus-specific and needs its own entry).
+docs-site/.docusaurus/
+docs-site/.cache-loader/
+
 # Validated local artifacts kept out of /tmp (evidence, exports); never committed.
 artifacts_local/

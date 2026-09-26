@@ -1,0 +1,37 @@
+{
+  "repo": "davidamacey/OpenProcessor",
+  "note": "What has shipped and what is planned next. Planned items are tracked as GitHub issues; order is not a commitment.",
+  "releases": [
+    {
+      "version": "v0.1.0",
+      "headline": "Full pipeline cockpit, generalized to any domain",
+      "stage": "shipped",
+      "summary": "Every page end to end: ingest, cluster-assisted labeling, a keyboard-first review queue, class management, export, training, model comparison, and a settings page for deployment-wide curation defaults — with no domain hardcoded anywhere.",
+      "items": [
+        "Dashboard, Ingest, Clusters + cluster detail, Review (6 tabs + presets), Classes, Export, Train, Bake-off, Models, Settings",
+        "Region features driven entirely by the backend's served region profile — no region UI without one",
+        "Deployment annotation profiles (annotation-profiles.json) for an additional annotation slot",
+        "Client-drawn source-image overlay: boxes and labels drawn from served coordinates",
+        "Curation-strategy bar: review sorts, score chips, diverse selection, embedding-plot lasso",
+        "Stubbed Playwright end-to-end suite, a live read-only tier, and mutation testing",
+        "API contract vendored from the backend and checked by tests"
+      ]
+    },
+    {
+      "version": "Next",
+      "headline": "Planned follow-ups",
+      "stage": "next",
+      "summary": "Identified in the frontend or the OpenProcessor backend, not yet built.",
+      "items": [
+        "Optional API authentication — the curation API has none today; see Security",
+        "Remember hidden new-class-proposal terms across sessions (hiding is per session today)",
+        "Served reasons for a model's status on the Models page, e.g. an optional model that isn't installed",
+        "Confusion-matrix images for finished training runs (a file path only today)",
+        "A browser-reachable MLflow link for each training run",
+        "A served cluster kind for region clusters, replacing a client-side constant",
+        "Per-run ingest status that survives a page reload",
+        "More than one region profile per backend"
+      ]
+    }
+  ]
+}
