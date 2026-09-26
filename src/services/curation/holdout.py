@@ -217,10 +217,12 @@ async def fetch_cohort_strata(
 
 
 def _default_state_dir() -> Path:
-    """Read the configured curation state dir at call time (not import
-    time) so tests can ``monkeypatch.setenv`` (via ``CurationConfig.from_env``)
-    around a single call without import-order fragility."""
-    return Path(get_curation_config().state_dir) / 'test_holdout'
+    """The bound project's holdout dir (the frozen test split is project
+    data; ``default``'s is today's ``state_dir/test_holdout``), read at
+    call time (not import time) so tests can ``monkeypatch.setenv`` (via
+    ``CurationConfig.from_env``) around a single call without
+    import-order fragility."""
+    return Path(get_curation_config().project_state_dir) / 'test_holdout'
 
 
 def select_test_holdout(

@@ -72,6 +72,11 @@ class IndexRole(str, Enum):
     UMAP_VIZ_STATE = 'umap_viz_state'
 
 
+# Identity sentinel: "derive this path from ``state_dir``" (compared with
+# ``is`` in ``CurationConfig.__post_init__``, never by value).
+_FOLLOWS_STATE_DIR = Path('<follows state_dir>')
+
+
 @dataclass(frozen=True)
 class CurationConfig:
     """Index names, filesystem roots and API-surface config for curation.
@@ -204,14 +209,23 @@ class CurationConfig:
     # docs/design/openprocessor_internal/projects_plan.md §2.2/§3.3).
     # Defaults here are the ``default`` project's values so a bare
     # ``CurationConfig()``/``CurationConfig.from_env()`` instance (no
-    # project bound) keeps behaving exactly as before.
+    # project bound) keeps behaving exactly as before. The two state
+    # paths follow ``state_dir`` unless set explicitly (see __post_init__),
+    # so a config built with ``state_dir=tmp`` never points at the real
+    # default location.
     project_slug: str = 'default'
-    project_state_dir: Path = Path('/var/lib/openprocessor')
+    project_state_dir: Path = _FOLLOWS_STATE_DIR
     train_jobs_dir: Path = Path('/jobs')
     autolabel_dir: Path = Path('/jobs/auto_label')
-    bakeoff_jobs_dir: Path = Path('/var/lib/openprocessor/bakeoff_jobs')
+    bakeoff_jobs_dir: Path = _FOLLOWS_STATE_DIR
     mlflow_experiment: str = 'openprocessor'
     model_prefix: str = ''
+
+    def __post_init__(self) -> None:
+        if self.project_state_dir is _FOLLOWS_STATE_DIR:
+            object.__setattr__(self, 'project_state_dir', self.state_dir)
+        if self.bakeoff_jobs_dir is _FOLLOWS_STATE_DIR:
+            object.__setattr__(self, 'bakeoff_jobs_dir', self.state_dir / 'bakeoff_jobs')
 
     @property
     def pause_sentinel_path(self) -> Path:
