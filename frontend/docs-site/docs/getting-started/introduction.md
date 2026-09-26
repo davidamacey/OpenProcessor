@@ -5,9 +5,12 @@ title: Introduction
 
 # Introduction
 
-Cropwright is a **keyboard-first, cluster-assisted web app for labeling image
-crops at scale** — the human-in-the-loop frontend for
-[OpenProcessor](https://github.com/example-org/OpenProcessor).
+Cropwright takes you **from raw images to a trained detector, without
+labeling one box at a time.** Clusters and a vision-language model do the
+bulk labeling; you confirm at keyboard speed. Then export, train, compare
+and promote models in the same app, for any domain. It is the
+human-in-the-loop labeling frontend for
+[OpenProcessor](https://github.com/davidamacey/OpenProcessor).
 
 It is a **pure frontend**: no database of its own, no offline or mock mode.
 Every piece of data it shows — clusters, crops, classes, training runs — comes

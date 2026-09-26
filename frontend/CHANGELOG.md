@@ -119,6 +119,11 @@ compose pull && docker compose up -d` — no `git clone` needed.
 
 ### Changed
 
+- **New tagline: "From raw images to a trained detector, without labeling
+  one box at a time."** Used in the README, the docs landing hero (with a
+  supporting line), the docs introduction, `package.json` and the image's
+  OCI description. The docs site's OpenProcessor links now point at
+  `github.com/davidamacey/OpenProcessor`, where the repo lives today.
 - **`/models`: an optional model that isn't installed reads "optional ·
   not installed", not "not ready".** OpenProcessor ba88751 serves
   `optional` and a `not_installed` status for a region profile's detector

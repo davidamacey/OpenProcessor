@@ -7,7 +7,7 @@ title: Quick start
 
 ## 1. Have an OpenProcessor backend running
 
-Cropwright needs a reachable [OpenProcessor](https://github.com/example-org/OpenProcessor)
+Cropwright needs a reachable [OpenProcessor](https://github.com/davidamacey/OpenProcessor)
 instance, started with `OP_API_PREFIX=/curation` (the default), on its own
 Docker network. Note that network's name — you'll need it below. See that
 project's own README for bringing it up.

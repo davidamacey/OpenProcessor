@@ -100,8 +100,8 @@ one at the location named — never by patching `docusaurus.config.ts`,
 | --- | --- | --- |
 | Site `url` / `baseUrl` | `site.config.ts`: `url`, `baseUrl` | e.g. `https://davidamacey.github.io` / `/OpenProcessor/` |
 | Org/repo name (GitHub Pages project settings) | `site.config.ts`: `organizationName`, `projectName` | e.g. `example-org` / `OpenProcessor` |
-| Docs "Edit this page" target | `site.config.ts`: `editUrlBase` | e.g. `https://github.com/example-org/OpenProcessor/tree/main/docs-site/` |
-| GitHub repo link (navbar/footer/hero) | `site.config.ts`: `githubRepo` | e.g. `https://github.com/example-org/OpenProcessor` |
+| Docs "Edit this page" target | `site.config.ts`: `editUrlBase` | e.g. `https://github.com/davidamacey/OpenProcessor/tree/main/docs-site/` |
+| GitHub repo link (navbar/footer/hero) | `site.config.ts`: `githubRepo` | e.g. `https://github.com/davidamacey/OpenProcessor` |
 | Pages deploy workflow's repo/branch | `.github/workflows/docs.yml` (repo root) — triggers off `push` to the *checked-out* repo's default branch via `github.ref`; no hardcoded repo name in the workflow itself, but confirm the sibling repo's default branch is actually `main` (the workflow's `if:` gate names it explicitly) | Edit the `if: github.ref == 'refs/heads/main'` line only if the sibling uses a different default branch |
 | Node version | `docs-site/.nvmrc` (`20`) and the workflow's `node-version-file: docs-site/.nvmrc` | Bump both together if the sibling wants a newer Node; keep them equal — nothing enforces that automatically here (Cropwright has no cross-repo version-consistency test) |
 | Architecture diagrams | `architecture-diagrams/specs/*.json` (Archify specs) + `scripts/generate-architecture-diagrams.sh` (repo root) + `src/data/architecture-diagrams.json` (page tab metadata) | Re-author the specs against the sibling's own routes/controllers/wire contract — never copy Cropwright's specs verbatim; regenerate `static/architecture/*.html` before shipping |

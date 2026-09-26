@@ -2,7 +2,7 @@
   "name": "cropwright",
   "private": true,
   "version": "0.1.0",
-  "description": "Domain-agnostic, cluster-based, keyboard-first web app for labeling image crops at scale. Frontend for OpenProcessor.",
+  "description": "From raw images to a trained detector, without labeling one box at a time. Labeling frontend for OpenProcessor.",
   "license": "MIT",
   "author": "example-org LLC",
   "repository": {

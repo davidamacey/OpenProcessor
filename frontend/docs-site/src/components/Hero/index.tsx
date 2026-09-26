@@ -17,6 +17,7 @@ export default function Hero(): React.JSX.Element {
         </div>
         <h1 className={styles.title}>{docusaurusConfig.title}</h1>
         <p className={styles.tagline}>{docusaurusConfig.tagline}</p>
+        {siteConfig.heroSubtitle && <p className={styles.subtitle}>{siteConfig.heroSubtitle}</p>}
         {siteConfig.heroDemo && (
           <div className={styles.heroDemo}>
             <img

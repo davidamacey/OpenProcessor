@@ -18,7 +18,10 @@ export type SiteLinkGroup = {title: string; items: SiteLink[]};
 
 export const siteConfig = {
   title: 'Cropwright',
-  tagline: 'Keyboard-first, cluster-assisted image-crop labeling for OpenProcessor',
+  tagline: 'From raw images to a trained detector, without labeling one box at a time',
+  // Supporting line under the hero tagline.
+  heroSubtitle:
+    'Clusters and a vision-language model do the bulk labeling; you confirm at keyboard speed. Then export, train, compare and promote models in the same app, for any domain. The labeling frontend for OpenProcessor.',
   favicon: 'img/favicon.svg',
   logo: 'img/favicon.svg',
 
@@ -45,7 +48,7 @@ export const siteConfig = {
   siblingProjects: [
     {
       label: 'OpenProcessor',
-      href: 'https://github.com/example-org/OpenProcessor',
+      href: 'https://github.com/davidamacey/OpenProcessor',
       description: 'The data, clustering, VLM and training backend Cropwright is a frontend for.',
     },
   ],
@@ -90,7 +93,7 @@ export const siteConfig = {
     },
     {
       title: 'Related projects',
-      items: [{label: 'OpenProcessor (backend)', href: 'https://github.com/example-org/OpenProcessor'}],
+      items: [{label: 'OpenProcessor (backend)', href: 'https://github.com/davidamacey/OpenProcessor'}],
     },
   ] satisfies SiteLinkGroup[],
 };

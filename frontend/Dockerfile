@@ -18,7 +18,7 @@ FROM nginxinc/nginx-unprivileged:1.31.2-alpine3.23
 ARG VERSION=0.1.0
 ARG REVISION=unknown
 LABEL org.opencontainers.image.title="Cropwright" \
-      org.opencontainers.image.description="Keyboard-first, cluster-assisted web app for labeling image crops at scale. Frontend for OpenProcessor." \
+      org.opencontainers.image.description="From raw images to a trained detector, without labeling one box at a time. Labeling frontend for OpenProcessor." \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${VERSION}" \
