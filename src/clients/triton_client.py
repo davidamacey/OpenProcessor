@@ -491,18 +491,7 @@ class TritonClient:
             InferRequestedOutput('rec_scores'),
         ]
 
-        try:
-            response = self._infer_with_retry('ocr_pipeline', inputs, outputs)
-        except Exception as e:
-            logger.error(f'OCR inference failed: {e}')
-            return {
-                'num_texts': 0,
-                'texts': [],
-                'text_boxes': np.array([]),
-                'text_boxes_normalized': np.array([]),
-                'text_scores': np.array([]),
-                'rec_scores': np.array([]),
-            }
+        response = self._infer_with_retry('ocr_pipeline', inputs, outputs)
 
         num_texts_raw = response.as_numpy('num_texts')
         logger.info(
@@ -512,7 +501,7 @@ class TritonClient:
         text_boxes = response.as_numpy('text_boxes')[:num_texts]
         text_boxes_norm = response.as_numpy('text_boxes_normalized')[:num_texts]
         text_scores = response.as_numpy('text_scores')[:num_texts]
-        rec_scores = response.as_numpy('rec_scores')[:num_texts]
+        rec_scores_raw = response.as_numpy('rec_scores')[:num_texts]
 
         texts_raw = response.as_numpy('texts')[:num_texts]
         texts = []
@@ -524,6 +513,21 @@ class TritonClient:
             else:
                 texts.append(str(t))
 
+        # The BLS (models/ocr_pipeline/1/model.py) emits -1.0 for a crop
+        # whose recognition inference itself failed -- distinguishable from
+        # a real CTC confidence, which is always in [0, 1]. -1.0 must never
+        # leave this method: every caller gets None + an explicit reason
+        # instead, so a served field can never read as a fake low score.
+        rec_scores: list[float | None] = []
+        rec_errors: list[str | None] = []
+        for s in rec_scores_raw:
+            if float(s) < 0.0:
+                rec_scores.append(None)
+                rec_errors.append('recognition_failed')
+            else:
+                rec_scores.append(float(s))
+                rec_errors.append(None)
+
         return {
             'num_texts': num_texts,
             'texts': texts,
@@ -531,6 +535,7 @@ class TritonClient:
             'text_boxes_normalized': text_boxes_norm,
             'text_scores': text_scores,
             'rec_scores': rec_scores,
+            'rec_errors': rec_errors,
             'image_width': orig_w,
             'image_height': orig_h,
         }

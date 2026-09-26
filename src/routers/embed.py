@@ -20,6 +20,7 @@ from PIL import Image
 from pydantic import BaseModel, Field
 
 from src.services.inference import InferenceService
+from src.utils.retry import RetryExhaustedError
 
 
 logger = logging.getLogger(__name__)
@@ -159,6 +160,8 @@ def embed_image(
 
     except HTTPException:
         raise
+    except RetryExhaustedError:
+        raise
     except Exception as e:
         logger.error(f'Image embedding failed: {e}')
         raise HTTPException(status_code=500, detail=f'Embedding generation failed: {e!s}') from e
@@ -197,6 +200,8 @@ def embed_text(
             status='success',
         )
 
+    except RetryExhaustedError:
+        raise
     except Exception as e:
         logger.error(f'Text embedding failed: {e}')
         raise HTTPException(status_code=500, detail=f'Embedding generation failed: {e!s}') from e
@@ -392,6 +397,8 @@ def embed_boxes(
         )
 
     except HTTPException:
+        raise
+    except RetryExhaustedError:
         raise
     except Exception as e:
         logger.error(f'Box embeddings failed: {e}')

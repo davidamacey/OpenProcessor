@@ -1969,7 +1969,10 @@ class OpenSearchClient:
                     'box': box,
                     'box_normalized': box_norm,
                     'det_score': float(det_score),
-                    'rec_score': float(rec_score),
+                    # None (never a negative sentinel) when recognition
+                    # failed for this line -- text is already '' and
+                    # skipped above in that case, but stay defensive.
+                    'rec_score': None if rec_score is None else float(rec_score),
                     'metadata': metadata or {},
                     'indexed_at': indexed_at,
                 },
