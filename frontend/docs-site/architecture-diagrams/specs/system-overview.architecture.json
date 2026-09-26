@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Cropwright — System Overview",
+    "quality_profile": "showcase",
+    "viewBox": [1180, 700],
+    "views": [
+      { "id": "browser-path", "label": "Browser to API", "focus": ["browser", "nginx", "api"], "note": "One nginx origin proxies exactly one API prefix by container name — the browser never makes a cross-origin request." },
+      { "id": "api-services", "label": "Behind the API", "focus": ["api", "opensearch", "triton", "vlm", "trainer", "segmenter"], "note": "Cropwright is a pure consumer — OpenSearch, Triton, the VLM, the trainer/evaluator and the segmenter are reached only through the API." },
+      { "id": "contract", "label": "Wire contract", "focus": ["api", "contract"], "note": "The frontend's wire format is vendored from the backend's generated contract and checked by tests, not hand-copied." }
+    ]
+  },
+  "components": [
+    { "id": "browser", "type": "frontend", "label": "Browser", "sublabel": "SvelteKit static bundle", "pos": [60, 300], "size": [150, 64] },
+    { "id": "nginx", "type": "frontend", "label": "Cropwright nginx", "sublabel": "non-root, :8080", "pos": [300, 300], "size": [160, 70] },
+    { "id": "api", "type": "backend", "label": "OpenProcessor API", "sublabel": "curation service, no own DB", "pos": [580, 300], "size": [170, 70] },
+    { "id": "opensearch", "type": "database", "label": "OpenSearch", "sublabel": "crops / clusters / classes index", "pos": [900, 120], "size": [170, 64] },
+    { "id": "triton", "type": "backend", "label": "Triton", "sublabel": "model registry + inference", "pos": [900, 220], "size": [170, 64] },
+    { "id": "vlm", "type": "external", "label": "VLM", "sublabel": "suggestions + verification", "pos": [900, 320], "size": [170, 64] },
+    { "id": "trainer", "type": "backend", "label": "Trainer / evaluator", "sublabel": "train jobs, bake-off, probe", "pos": [900, 420], "size": [170, 64] },
+    { "id": "segmenter", "type": "external", "label": "Segmenter", "sublabel": "region candidates (SAM3)", "pos": [900, 520], "size": [170, 64] },
+    { "id": "contract", "type": "backend", "label": "Vendored contract", "sublabel": "contracts/openprocessor/*", "pos": [580, 460], "size": [170, 64] }
+  ],
+  "connections": [
+    { "id": "browser-nginx", "from": "browser", "to": "nginx", "label": "same-origin HTTPS", "variant": "emphasis" },
+    { "id": "nginx-api", "from": "nginx", "to": "api", "label": "docker network, prefix proxy", "variant": "emphasis", "labelDy": -29 },
+    { "id": "api-opensearch", "from": "api", "to": "opensearch", "variant": "default" },
+    { "id": "api-triton", "from": "api", "to": "triton", "variant": "default" },
+    { "id": "api-vlm", "from": "api", "to": "vlm", "variant": "default" },
+    { "id": "api-trainer", "from": "api", "to": "trainer", "variant": "default" },
+    { "id": "api-segmenter", "from": "api", "to": "segmenter", "variant": "default" },
+    { "id": "api-contract", "from": "api", "to": "contract", "label": "generates", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "labelDy": 24 }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Cropwright owns no database", "items": ["Every read/write goes through the OpenProcessor API's one prefix (default /curation)", "nginx re-resolves the upstream via Docker's embedded DNS every 10s so a backend restart never pins a stale IP"] },
+    { "dot": "rose", "title": "One prefix, substituted at container start", "items": ["PUBLIC_API_PREFIX must equal the API's own OP_API_PREFIX — the API builds some URLs (region thumbnails) from its own prefix", "API_UPSTREAM (default http://op-api:8000) is a Docker container name on the shared network, not a public host"] },
+    { "dot": "emerald", "title": "No request authentication (owner decision)", "items": ["Every write — label, discard, export, train, ingest — is reachable by anyone who can reach the nginx origin", "Deploy on a trusted LAN/VPN only, never the public internet, until the backend adds opt-in auth"] }
+  ]
+}

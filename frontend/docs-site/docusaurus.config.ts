@@ -20,13 +20,6 @@ const config: Config = {
     v4: true,
   },
 
-  // Mermaid diagrams: enabled for both markdown code fences and the
-  // dedicated /architecture page (via the `<Mermaid>` theme component).
-  markdown: {
-    mermaid: true,
-  },
-  themes: ['@docusaurus/theme-mermaid'],
-
   url: siteConfig.url,
   baseUrl: siteConfig.baseUrl,
 

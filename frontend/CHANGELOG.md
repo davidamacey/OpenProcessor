@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **`docs-site/`: replaced the Mermaid-based `/architecture` page with
+  Archify-rendered diagrams**, matching the pattern used by a sister
+  project's docs site. `docs-site/architecture-diagrams/specs/*.json` are
+  5 hand-authored Archify specs (`system-overview`, `frontend-modules`,
+  `labeling-loop`, `ingest-upload`, `review-assign-undo`) built from real
+  repo evidence (`src/routes/`, `src/lib/api.ts`, the controllers, the
+  slot registry, `nginx.conf`, `docker-compose.yml`), validated and
+  rendered by the new `scripts/generate-architecture-diagrams.sh` into
+  `docs-site/static/architecture/*.html`. `src/pages/architecture.tsx` is
+  now a tabbed page (System / Workflows / Sequences) embedding each
+  rendered diagram as an iframe, with group/diagram metadata in the new
+  `src/data/architecture-diagrams.json` instead of hardcoded in the page.
+  Removed: `src/data/architecture.json`, the `DiagramSection` component,
+  and the `@docusaurus/theme-mermaid` dependency/config (no other page
+  used Mermaid). `docs-site/TEMPLATE.md`, `docs-site/README.md`, and this
+  file's "Documentation site" section are updated to describe the new
+  mechanism.
+
 ### Added
 
 - **`docs-site/`: Docusaurus 3 documentation site for Cropwright**,

@@ -22,8 +22,10 @@ npm run serve   # serve the production build locally
 - `docs/` — the doc pages themselves (getting-started, user-guide,
   configuration, operations, developer-guide, faq), ordered by `sidebars.ts`.
 - `src/pages/index.tsx` — the marketing/landing homepage.
-- `src/pages/architecture.tsx` — Mermaid architecture diagrams (system
-  context, labeling workflow, frontend internals).
+- `src/pages/architecture.tsx` — tabbed, Archify-rendered architecture
+  diagrams (system, workflows, sequences). Specs live in
+  `architecture-diagrams/specs/`; see that directory's `README.md` and
+  `scripts/generate-architecture-diagrams.sh`.
 - `src/pages/roadmap.tsx` + `src/data/roadmap.json` — the hand-maintained
   public roadmap. Update the JSON when scope changes; don't hand-edit the
   page for content.

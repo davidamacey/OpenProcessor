@@ -1406,8 +1406,22 @@ npm run build  # -> build/, fails on any broken link/anchor
 - Content lives in `docs-site/docs/**` (getting-started, user-guide,
   configuration, operations, developer-guide, faq) and
   `docs-site/src/data/*.json` (`features.json`, `workflow.json`,
-  `screenshots.json`, `roadmap.json`, `architecture.json` — Mermaid
-  diagram sources for `/architecture`).
+  `screenshots.json`, `roadmap.json`, `architecture-diagrams.json` — the
+  `/architecture` page's tab/group metadata, not diagram content).
+- **Architecture diagrams** are hand-authored [Archify](https://github.com/tt-a1i/archify)
+  specs under `docs-site/architecture-diagrams/specs/*.json`
+  (architecture/workflow/sequence types), built from real repo evidence
+  (`src/routes/`, `src/lib/api.ts`, the controllers, the slot registry,
+  `nginx.conf`, `docker-compose.yml`) — not Mermaid, and not app code.
+  `scripts/generate-architecture-diagrams.sh` validates each spec at
+  showcase quality and renders it to `docs-site/static/architecture/
+<name>.html`, embedded as an iframe by `docs-site/src/pages/
+architecture.tsx` (tabbed: System / Workflows / Sequences, per
+  `docs-site/src/data/architecture-diagrams.json`). See
+  `docs-site/architecture-diagrams/README.md` for the diagram list and
+  regeneration instructions. Treat a stale diagram like any other doc:
+  edit the spec and re-run the generator when the code it describes
+  changes — never hand-edit the rendered HTML.
 - **Screenshots are never captured from the shared dev stack** — only
   from a Cropwright instance pointed at a public-sample-data
   OpenProcessor backend (COCO val2017 / Open Images plates). The 1600px
