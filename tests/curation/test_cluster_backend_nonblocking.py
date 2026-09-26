@@ -39,7 +39,7 @@ def _synchronous_call_lines(module) -> list[int]:
     ]
 
 
-def test_legacy_embedding_reduce_never_calls_detect_cluster_backend_synchronously():
+def test_embedding_reduce_never_calls_detect_cluster_backend_synchronously():
     offending = _synchronous_call_lines(embedding_reduce)
     assert offending == [], (
         f'detect_cluster_backend() called synchronously (blocks the event '
@@ -48,7 +48,7 @@ def test_legacy_embedding_reduce_never_calls_detect_cluster_backend_synchronousl
     )
 
 
-def test_legacy_clustering_never_calls_detect_cluster_backend_synchronously():
+def test_clustering_orchestrator_never_calls_detect_cluster_backend_synchronously():
     offending = _synchronous_call_lines(orchestrator)
     assert offending == [], (
         f'detect_cluster_backend() called synchronously (blocks the event '

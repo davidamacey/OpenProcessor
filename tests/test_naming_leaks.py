@@ -15,6 +15,7 @@ Two kinds of coverage:
 
 from __future__ import annotations
 
+import codecs
 import subprocess
 import sys
 from pathlib import Path
@@ -27,6 +28,10 @@ import check_naming_leaks as leaks
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+# Synthetic scan-A leak prefix, ROT13-encoded for the same reason the guard's
+# own pattern is: the public tree must not spell the private initials.
+LEAK = codecs.decode('xo_', 'rot13')
 
 
 def test_real_repo_passes_the_guard() -> None:
@@ -59,15 +64,25 @@ def _allowlist(repo: Path, content: str) -> Path:
 
 def test_scan_a_catches_a_bare_leak(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
-    _write_and_track(repo, 'src/thing.py', "NAME = 'legacy_stuff'\n")
+    _write_and_track(repo, 'src/thing.py', f"NAME = '{LEAK}stuff'\n")
     allowlist = _allowlist(repo, '')
     hits, _ = leaks.run_scans(repo, allowlist, scans={'A': leaks.SCAN_A})
-    assert any('legacy_stuff' in h for h in hits['A'])
+    assert any(f'{LEAK}stuff' in h for h in hits['A'])
+
+
+def test_scan_a_catches_initials_after_an_underscore(tmp_path: Path) -> None:
+    """``\\b`` does not fire between ``_`` and a letter, so a word-boundary
+    pattern alone misses identifiers like ``test_<initials>_thing``."""
+    repo = _init_repo(tmp_path)
+    _write_and_track(repo, 'tests/test_thing.py', f'def test_{LEAK}thing():\n    pass\n')
+    allowlist = _allowlist(repo, '')
+    hits, _ = leaks.run_scans(repo, allowlist, scans={'A': leaks.SCAN_A})
+    assert any(f'test_{LEAK}thing' in h for h in hits['A'])
 
 
 def test_whole_path_allowlist_entry_exempts_every_hit_in_that_file(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
-    _write_and_track(repo, 'src/thing.py', "NAME = 'legacy_stuff'\nOTHER = 'legacy_other'\n")
+    _write_and_track(repo, 'src/thing.py', f"NAME = '{LEAK}stuff'\nOTHER = '{LEAK}other'\n")
     allowlist = _allowlist(repo, 'src/thing.py # deliberate test fixture\n')
     hits, entries = leaks.run_scans(repo, allowlist, scans={'A': leaks.SCAN_A})
     assert hits['A'] == []
@@ -76,7 +91,7 @@ def test_whole_path_allowlist_entry_exempts_every_hit_in_that_file(tmp_path: Pat
 
 def test_directory_prefix_allowlist_entry_exempts_files_under_it(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
-    _write_and_track(repo, 'examples/thing.py', "NAME = 'legacy_stuff'\n")
+    _write_and_track(repo, 'examples/thing.py', f"NAME = '{LEAK}stuff'\n")
     allowlist = _allowlist(repo, 'examples/ # domain examples directory\n')
     hits, entries = leaks.run_scans(repo, allowlist, scans={'A': leaks.SCAN_A})
     assert hits['A'] == []
@@ -92,15 +107,15 @@ def test_path_regex_entry_exempts_only_matching_lines(tmp_path: Path) -> None:
     _write_and_track(
         repo,
         'tests/test_thing.py',
-        "assert 'legacy_retired' not in x\nNEW_LEAK = 'legacy_new_and_unreviewed'\n",
+        f"assert '{LEAK}retired' not in x\nNEW_LEAK = '{LEAK}new_and_unreviewed'\n",
     )
     allowlist = _allowlist(
-        repo, 'tests/test_thing.py:legacy_retired # negative test for a retired name\n'
+        repo, f'tests/test_thing.py:{LEAK}retired # negative test for a retired name\n'
     )
     hits, entries = leaks.run_scans(repo, allowlist, scans={'A': leaks.SCAN_A})
     assert len(hits['A']) == 1
-    assert 'legacy_new_and_unreviewed' in hits['A'][0]
-    assert 'legacy_retired' not in hits['A'][0]
+    assert f'{LEAK}new_and_unreviewed' in hits['A'][0]
+    assert f'{LEAK}retired' not in hits['A'][0]
     assert entries[0].used is True
 
 
@@ -115,7 +130,7 @@ def test_unused_allowlist_entry_is_reported(tmp_path: Path) -> None:
 
 def test_excluded_path_is_never_scanned_even_without_an_allowlist_entry(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
-    _write_and_track(repo, 'docs/design/naming_sweep_plan.md', 'mentions legacy_stuff on purpose\n')
+    _write_and_track(repo, 'docs/design/naming_sweep_plan.md', f'mentions {LEAK}stuff on purpose\n')
     allowlist = _allowlist(repo, '')
     hits, _ = leaks.run_scans(
         repo,
@@ -149,9 +164,9 @@ def test_allowlist_entry_with_empty_reason_raises(tmp_path: Path) -> None:
 
 def test_missing_allowlist_file_means_no_exemptions(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
-    _write_and_track(repo, 'src/thing.py', "NAME = 'legacy_stuff'\n")
+    _write_and_track(repo, 'src/thing.py', f"NAME = '{LEAK}stuff'\n")
     hits, entries = leaks.run_scans(
         repo, tmp_path / 'does_not_exist.txt', scans={'A': leaks.SCAN_A}
     )
     assert entries == []
-    assert any('legacy_stuff' in h for h in hits['A'])
+    assert any(f'{LEAK}stuff' in h for h in hits['A'])
