@@ -459,7 +459,7 @@
   // ignored elsewhere server-side.
   let slotTextQuery = $state<string>('');
 
-  // Generic served-enum filter bar (840beb8 adoption) — one entry per
+  // Generic served-enum filter bar (3f1a11e adoption) — one entry per
   // `ReviewFilterSpec.param` the active tab declares (e.g. `region_status`
   // on the Regions tab). No param-specific code here or in `_filter()`
   // below: a future spec on any tab just works. Reset whenever the tab
@@ -535,7 +535,7 @@
     // which were never gated. Always available now, like those.
     if (subjectScope !== 0) f.max_rank = subjectScope;
     if (minBlurRatio != null) f.min_blur_ratio = minBlurRatio;
-    // Generic served-enum filters (840beb8 adoption) — sent whenever the
+    // Generic served-enum filters (3f1a11e adoption) — sent whenever the
     // operator picked a value; the backend applies its own
     // `filter_defaults` when a param is omitted, so an unset control
     // never needs a client-side default to fall back to. Only params the
@@ -796,7 +796,7 @@
   onMount(() => stopDiversePolling);
 
   const current = $derived<ReviewItem | null>(queue.items[cursor] ?? null);
-  // 840beb8 adoption: a slot-tab item's own `region_rejection_reason`
+  // 3f1a11e adoption: a slot-tab item's own `region_rejection_reason`
   // (when present) is the authoritative, kind-styled explanation — the
   // generic per-item `reason` string (see the "Reason" row below) always
   // says "verifier rejected this candidate (…)", wrong wording for a
@@ -1947,7 +1947,7 @@
       </label>
     {/if}
 
-    <!-- Generic served-enum filter bar (840beb8 adoption) — one <select>
+    <!-- Generic served-enum filter bar (3f1a11e adoption) — one <select>
          per ReviewFilterSpec the active tab's GET {API_PREFIX}/review/tabs entry
          declares (e.g. Regions' region_status: all / detected only /
          verifier-rejected candidates only). No param-specific markup —
@@ -2330,7 +2330,7 @@
                 {NO_OPINION_TEXT}
               </dd>
             {:else if opinion.kind === 'unsure'}
-              <!-- OpenProcessor 9e217f0: a served disagreement below the
+              <!-- OpenProcessor 8990ede: a served disagreement below the
                    server's own confidence threshold (`probe_actionable`
                    false) — shown, but never offered as an Accept action. -->
               <dt class="text-zinc-500">Model predicts</dt>
@@ -2520,7 +2520,7 @@
                     auto-confirmed
                   </span>
                 {/if}
-                <!-- 840beb8 adoption: region_bbox_correct is the
+                <!-- 3f1a11e adoption: region_bbox_correct is the
                      verifier's own box-correctness verdict — folded into
                      this row rather than a new one. -->
                 {#if slotData?.lifecycle?.boxCorrect === false}
@@ -2556,7 +2556,7 @@
                   {@const candidateKind = regionVocabularyStore.rejectionReasonKind(
                     slotData?.lifecycle?.rejectionReason,
                   )}
-                  <!-- dq-region / 840beb8 adoption: a verifier-rejected
+                  <!-- dq-region / 3f1a11e adoption: a verifier-rejected
                        candidate box exists (no region box yet). Confirm
                        (or F) promotes it. Styled/worded by the served
                        kind — needs_human (verifier_no_verdict) must never

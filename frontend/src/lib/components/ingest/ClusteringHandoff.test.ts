@@ -1,5 +1,5 @@
 /**
- * BA-3 (OpenProcessor #36, c676d2b): the clustering gate reads the
+ * BA-3 (OpenProcessor #36, c5c606f): the clustering gate reads the
  * server-computed `drained` verdict, not `total_unfinished === 0`.
  * `AutoLabelPanel` (the thing `ClusteringHandoff` wraps) makes its own
  * network calls on mount, so these tests only assert on the gate it's

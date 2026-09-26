@@ -20,11 +20,11 @@
   let { value, setValue }: Props = $props();
 
   // Served from `GET {API_PREFIX}/train/augmentation_presets`
-  // (OpenProcessor 6c77deb) — the trainer's own catalog
+  // (OpenProcessor df01309) — the trainer's own catalog
   // (`docker/trainer/augment.py` builds its `PRESETS` from the same
   // ids), so the picker can never offer an id the trainer will reject.
   // `null` while loading; `presetsUnavailable` when the endpoint 404s
-  // (a pre-6c77deb backend) — degrade to a read-only display of the
+  // (a pre-df01309 backend) — degrade to a read-only display of the
   // current value rather than a hardcoded id list.
   let presetsResponse = $state<AugmentationPresetsResponse | null>(null);
   let presetsUnavailable = $state<boolean>(false);

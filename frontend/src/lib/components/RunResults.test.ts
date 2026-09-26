@@ -286,7 +286,7 @@ describe('RunResults — confusion matrix', () => {
     );
   });
 
-  it('shows the served val_last numbers separately from a test-split overall (OpenProcessor e9aac68)', () => {
+  it('shows the served val_last numbers separately from a test-split overall (OpenProcessor 5595474)', () => {
     getTrainManifestMock.mockResolvedValue(trainManifestFixture);
     const status: TrainJobStatus = {
       ...trainStatusFixture,

@@ -94,7 +94,7 @@ describe('dq-region (2026-09-24): validated/auto-confirmed split, candidate box,
     expect(src).toMatch(/auto-confirmed \(unreviewed\)/);
   });
 
-  it('840beb8 adoption: folds region_bbox_correct===false into the Validation row as a "model: box wrong" chip', () => {
+  it('3f1a11e adoption: folds region_bbox_correct===false into the Validation row as a "model: box wrong" chip', () => {
     expect(src).toMatch(/\{#if data\.lifecycle\.boxCorrect === false\}/);
     expect(src).toMatch(/model: box wrong/);
   });
@@ -124,7 +124,7 @@ describe('dq-region (2026-09-24): validated/auto-confirmed split, candidate box,
     );
   });
 
-  it('840beb8 adoption: styles the rejection row by the served kind — never worded as a rejection for needs_human', () => {
+  it('3f1a11e adoption: styles the rejection row by the served kind — never worded as a rejection for needs_human', () => {
     expect(src).toMatch(
       /regionVocabularyStore\.rejectionReasonKind\(\s*data\.lifecycle\.rejectionReason,?\s*\)/,
     );

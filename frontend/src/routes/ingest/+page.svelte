@@ -9,7 +9,7 @@
    * §A.7 "absent, not disabled": `ingestAvailability.available === false`
    * renders the absence copy with no other requests fired at all.
    *
-   * BA-2 (landed, OpenProcessor c676d2b): `GET {API_PREFIX}/ingest/config`
+   * BA-2 (landed, OpenProcessor c5c606f): `GET {API_PREFIX}/ingest/config`
    * is now real. Once `ingestAvailability` confirms the router is
    * mounted, the page fetches it once and resolves every limit/caveat
    * from the served `IngestConfig` — `resolveIngestConfig(null)` (the

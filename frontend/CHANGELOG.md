@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **OpenProcessor commit references follow its published history.** The
+  backend's pre-publication history rewrite changed every commit id; every
+  OpenProcessor sha cited in code comments, tests, test file names and this
+  file now names the published commit, and the vendored contracts are
+  pinned to published `main` 344f1d3 (tree-identical, contents unchanged).
+
 - **Public-release preparation (F9/F10 Phase A-C,
   `docs/design/cropwright-oss-export-plan-2026-09-25.md`).**
   - **License is now MIT** (Copyright (c) 2026 example-org LLC), replacing
@@ -38,7 +44,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Probe actionability, server-computed (OpenProcessor main 9e217f0).**
+- **Probe actionability, server-computed (OpenProcessor main 8990ede).**
   Items now carry a served `probe_actionable` (true only when the probe
   disagrees AND the item is in scope AND `probe_pred_confidence` cleared
   the backend's own `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE` threshold, echoed
@@ -47,7 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   not just a served disagreement; a disagreement the server didn't mark
   actionable reads as a muted "model unsure: `<predicted class>`" instead,
   with no Accept button. No client-side confidence threshold anywhere.
-  Vendored contract synced to `9e217f0`.
+  Vendored contract synced to `8990ede`.
 - **Ingest: in-batch byte-identical duplicate no longer misreports as
   "no result returned".** A live backend bug returns the second copy of
   a byte-identical pair uploaded in the same chunk with
@@ -59,7 +65,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   "a result didn't come back" case.
 
 - **Class merge carries validations over; merged classes say where they
-  went (OpenProcessor d817605).** The merge dry-run's
+  went (OpenProcessor 51b05d7).** The merge dry-run's
   `validations_carried_over` (it replaces `would_unvalidate`, with no shim) now
   reads "N human validations will carry over" in the merge dialog. A
   deprecated class with a served `merged_into` shows "merged into
@@ -69,7 +75,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   duplicate in the ingest results, and the served `stall_reason` still
   renders verbatim, so neither needed a change.
 
-- **Probe opinion on review items (F8 D1, OpenProcessor d817605).** Items
+- **Probe opinion on review items (F8 D1, OpenProcessor 51b05d7).** Items
   carry the served `probe_disagreement`, `probe_in_scope` and
   `probe_model_version`. An item outside the probe's classes reads "Model
   predicts: no opinion (outside the probe's classes)" instead of the
@@ -78,7 +84,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   when `probe_disagreement` is null. The uniqueness sort appears in the
   sort dropdown now that `/methods` serves it `experimental` (F8 D2; no
   gating change needed, pinned by a test). Vendored contract synced to
-  `d817605`.
+  `51b05d7`.
 
 - **Setup, export, clusters (F-48, F-49, F-55, F-61, F-68).**
   `.env.example` no longer ships `PUBLIC_TRITON_API_URL` active (a verbatim
@@ -172,8 +178,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `<class>`; un-merge isn't supported." with the server's message and
   hint instead of a bare `class_merged`.
 
-- **Adopted OpenProcessor a8a34aa..37b077f wire changes** (vendored
-  contract synced to `37b077f`). `/stats/dataset`: `labeled.by_proposal`
+- **Adopted OpenProcessor d72cc63..f4eb2db wire changes** (vendored
+  contract synced to `f4eb2db`). `/stats/dataset`: `labeled.by_proposal`
   (always 0) is gone from `DatasetStats` and the dashboard, no shim;
   `unlabeled.by_proposal` renders as "Detector proposal, no class" and
   `in_progress.region_stall_reason` renders verbatim ("Stalled: …") in
@@ -235,8 +241,8 @@ visual-audit-2026-09-24.md` — that doc's "deferred, BACKEND" status was
 
 ### Added
 
-- **`/classes` Deprecate and Restore actions** (OpenProcessor 698d1da,
-  cf3c87a — "deprecate/restore empty classes without a merge target").
+- **`/classes` Deprecate and Restore actions** (OpenProcessor 01324cb,
+  243f7f2 — "deprecate/restore empty classes without a merge target").
   Every active class row now has a **Deprecate** button (confirm dialog
   naming the class), calling `POST {API_PREFIX}/classes/{id}/deprecate`
   and refreshing `classesStore` on success so pickers/hotkeys/exports
@@ -254,9 +260,9 @@ confirmed_label_count}`) offers the existing merge dialog instead,
 
 ### Changed
 
-- **Started adopting OpenProcessor #36 (backend commit c676d2b) — visual-audit
+- **Started adopting OpenProcessor #36 (backend commit c5c606f) — visual-audit
   backend fixes, ingest hardening, probe job API, review empty reasons, K6
-  clean-image contract.** Contract snapshot synced to c676d2b.
+  clean-image contract.** Contract snapshot synced to c5c606f.
   - Item 10: `ServedRegionProfile` gains `display_name_singular`
     ("Plate"); `regionSlotFromServedProfile` uses it for the
     singular-context slot label (`label.title`/`label.singular`), which
@@ -284,11 +290,11 @@ confirmed_label_count}`) offers the existing merge dialog instead,
     it as its own row ("VLM, no class") when served, absent on a
     backend that predates it. `labeled.*` itself needed no frontend
     change — it already just sums the server's own counters.
-  - Item 5 verified already fully adopted as of c676d2b with no frontend
+  - Item 5 verified already fully adopted as of c5c606f with no frontend
     code change needed: `/models` already renders every entry
     `GET {API_PREFIX}/models/status` serves generically (by
     `friendly_name`/`role`), no hardcoded roster.
-  - Items 3, 4, 7 verified already served/correct as of c676d2b with no
+  - Items 3, 4, 7 verified already served/correct as of c5c606f with no
     frontend change needed: `new_class_proposals` excludes no-answer/
     already-classed items; `region_rejection_reason` vocabulary/
     resolution unchanged; `GET {API_PREFIX}/crops/{id}/image` still only
@@ -312,15 +318,15 @@ confirmed_label_count}`) offers the existing merge dialog instead,
   suite (65 tests) green.
 
 - **2026-09-25 follow-up to OpenProcessor #36 item 5 (`/models`, backend
-  698d1da) — served `unloadable` and widened `is_region_protected`.**
-  Contract snapshot synced to 698d1da (superset of c676d2b).
+  01324cb) — served `unloadable` and widened `is_region_protected`.**
+  Contract snapshot synced to 01324cb (superset of c5c606f).
   `ModelInfo` gains `unloadable`; `ModelStatus` gains `'not_configured'`
   (the segmenter, `sam3`, is now `kind: 'external'` with a possible
   `not_configured` status and null inference/exec/latency fields,
   already rendered "—" by the existing `fmtCount`/`fmtMs`).
   `unloadButtonState` (`$lib/modelUnload.ts`) now reads the served
   `unloadable` FIRST: `unloadable === false` hides the button outright
-  (every external entry); `is_region_protected` — which as of 698d1da
+  (every external entry); `is_region_protected` — which as of 01324cb
   also hard-blocks the ingest primary proposer/secondary classifier and
   the OCR det/rec pair, not just the region detector — still hides it
   too, but `/models` now renders a "protected: in use by the pipeline"
@@ -349,7 +355,7 @@ confirmed_label_count}`) offers the existing merge dialog instead,
   `probe_pred_*`, the prerequisite item 9's `empty_state.
 has_probe_predictions` checks for.
 - **Adopted OpenProcessor #36 ingest hardening BA-1..BA-7 (backend commit
-  c676d2b) — persisted uploads, served ingest config/limits, a
+  c5c606f) — persisted uploads, served ingest config/limits, a
   server-computed drain-stability verdict, and stable per-item error
   codes.** Pieces 11-13 of `docs/design/
 ingest-ui-and-acceptance-plan-2026-09-24.md` land; pieces 1-10 were
@@ -404,7 +410,7 @@ ingest-ui-and-acceptance-plan-2026-09-24.md` land; pieces 1-10 were
     `RegionDrain` against the vendored OpenAPI.
 
 - **`/bakeoff` rebuilt on OpenProcessor #34's generic multi-class
-  comparison wire (v2, backend f5f6ae5; F6).** Clean break, no v1 shim
+  comparison wire (v2, backend 1793633; F6).** Clean break, no v1 shim
   (`docs/design/bakeoff-v2-ui-plan-2026-09-25.md`).
   - Datasets: export test splits first (the current export flagged and
     preselected), then external frozen sets grouped by served `group`,
@@ -442,13 +448,13 @@ ingest-ui-and-acceptance-plan-2026-09-24.md` land; pieces 1-10 were
     matrix rows).
   - Types in `src/lib/types_bakeoff.ts`, pinned to the vendored OpenAPI
     by `src/lib/contract/bakeoffContract.test.ts`.
-- Vendored contract snapshot re-synced to OpenProcessor f5f6ae5. The
+- Vendored contract snapshot re-synced to OpenProcessor 1793633. The
   unrelated served-shape changes in that range are adopted type-only:
   `ServedRegionProfile.display_name_singular` (carried, not yet used in
   copy), `IngestImageResult.error_kind`/`source_identifier` (not yet
   rendered).
 
-- **Adopted OpenProcessor #34 W1 (backend commit eb5c251) — training
+- **Adopted OpenProcessor #34 W1 (backend commit efac347) — training
   lineage, build identity, and last-epoch vs. best-checkpoint metrics.**
   - `TrainJobStatus`/`TrainManifest.results` drop `best_metric`/
     `last_metric` entirely (no fallback shim) in favor of
@@ -481,7 +487,7 @@ ingest-ui-and-acceptance-plan-2026-09-24.md` land; pieces 1-10 were
     the old training-time metric; gains `map50_split` — the bake-off
     model picker on `/bakeoff` shows both. (Superseded by the v2
     `/bakeoff` rebuild above: `trainer_map50`/`trainer_map50_split`.)
-  - Vendored contract snapshot re-synced to eb5c251
+  - Vendored contract snapshot re-synced to efac347
     (`contracts/openprocessor/`).
 
 ### Fixed
@@ -582,7 +588,7 @@ ingest-ui-and-acceptance-plan-2026-09-24.md` land; pieces 1-10 were
   - Review tab `coco_blind_spots` is now `classifier_blind_spots` (tab
     id, bookmark id and endpoint), matching OpenProcessor naming-w2 F7.
     Stats fixtures read `in_progress.region_drain_total_unfinished`.
-  - Vendored contracts synced to OpenProcessor `main` 8f58b01.
+  - Vendored contracts synced to OpenProcessor `main` 2802f9b.
   - `domainNeutral.scan.test.ts` now also fails on `LPR`/`lpr_`, and its
     allow-list is down to itself and the one test that exercises
     `examples/`. The remaining plate/LPR literals in `src/`, `scripts/`
@@ -871,7 +877,7 @@ null` prop; every existing caller (the dashboard) is unaffected.
     commit, never shipped) and `CROPWRIGHT_LIVE_URL=http://localhost:5184
 npm run test:live` (still green, read-only).
 
-- Adopted OpenProcessor `main` d5343cb ("export one image + one label
+- Adopted OpenProcessor `main` 4c9499a ("export one image + one label
   file per source image (standard YOLO layout), partial-frame policy and
   counts"; contracts synced via `npm run contract:sync`). Landed live
   during this pass — verified against the newly-deployed backend, not
@@ -910,26 +916,26 @@ npm run test:live` (still green, read-only).
   - New preflight check `export_unlabeled_objects` (warn; "unknown" for
     an older export with no recorded count) needed no frontend change —
     `TrainForm`'s generic name/severity/message/detail preflight renderer
-    already covers it, same as the three checks added by 6c77deb below.
+    already covers it, same as the three checks added by df01309 below.
   - Tests: extended `exportStatusContract.test.ts` (object counts, the
     `require_fully_labeled_images` checkbox sending/omitting the flag, a
     `null`-field-renders-"—" case) and `formatCount.test.ts`; extended
-    `e2e/stubbed/test_export_freeze_split_counts_6c77deb.py` with an
+    `e2e/stubbed/test_export_freeze_split_counts_df01309.py` with an
     object-count assertion and a new require-fully-labeled-images test.
     Verified live via `CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run
-test:live` against the real, newly-deployed d5343cb backend (21/21).
-- Adopted OpenProcessor `main` 6c77deb ("export splits by source image,
+test:live` against the real, newly-deployed 4c9499a backend (21/21).
+- Adopted OpenProcessor `main` df01309 ("export splits by source image,
   split-coverage preflight checks, honest holdout freeze, validated
   augmentation presets"; contracts synced via `npm run contract:sync`).
-  **6c77deb is merged upstream but not deployed yet** — every change
-  below degrades gracefully against the currently-deployed (pre-6c77deb)
+  **df01309 is merged upstream but not deployed yet** — every change
+  below degrades gracefully against the currently-deployed (pre-df01309)
   backend, verified live via `CROPWRIGHT_LIVE_URL=http://localhost:5184
 npm run test:live`:
   - **`/export` split counts.** `GET {API_PREFIX}/export/status`
     (`ExportStatus` in `types.ts`) gained `image_count`/`class_count`/
     `group_key`/`split_counts`/`class_split_counts` (new
     `ExportSplitCounts`/`ExportClassSplitCounts` types) — all
-    optional/nullable, so a pre-6c77deb response (missing every one)
+    optional/nullable, so a pre-df01309 response (missing every one)
     renders exactly as before. `/export` now shows the served
     train/val/test totals and a collapsible per-class table, with any
     class at 0 train or 0 val highlighted using the served numbers only
@@ -947,7 +953,7 @@ npm run test:live`:
     now renders the served `{id, label, description,
 orientation_sensitive}` list, defaults to the served `default`, and
     shows the selected preset's description (tooltip) and an
-    orientation-sensitive note. A pre-6c77deb backend 404s this endpoint;
+    orientation-sensitive note. A pre-df01309 backend 404s this endpoint;
     the panel falls back to a read-only display of the current preset
     value instead of guessing at a list. `src/lib/contract/
 augmentPresets.test.ts` (the old local-checkout diff against the
@@ -971,13 +977,13 @@ augmentPresets.test.ts` (the old local-checkout diff against the
     total, which double-counted `test_holdout` crops and had no relation
     to what the selected export actually contains. The old global total
     survives as a clearly-labelled "(global pool)" fallback for a
-    pre-6c77deb backend or a specific past export version this endpoint
+    pre-df01309 backend or a specific past export version this endpoint
     can't describe.
   - Tests: `AugmentationPanel.test.ts`, `exportStatusContract.test.ts`
     (mount-based, `/export` split display + freeze-modal-no-seed),
     `augmentationPreset422.test.ts`, an extra `TrainForm.preflightChecks.test.ts`
     case for per-class `detail` rendering, and a new stubbed e2e module
-    `e2e/stubbed/test_export_freeze_split_counts_6c77deb.py`. Every new
+    `e2e/stubbed/test_export_freeze_split_counts_df01309.py`. Every new
     assertion was verified to fail against a hand-mutated copy of the
     code it covers before being trusted (byte-for-byte restored after).
 - **Live read-only e2e tier** (`e2e/live/`, `npm run test:live`) — drives
@@ -1002,7 +1008,7 @@ augmentPresets.test.ts` (the old local-checkout diff against the
   `data-testid="dataset-cluster-count"` to `DatasetStats.svelte` for
   this (falls back to a dt/dd label selector against the currently
   deployed build, which predates the testid).
-- Adopted OpenProcessor `main` 840beb8 (rejection-reason vocabulary +
+- Adopted OpenProcessor `main` 3f1a11e (rejection-reason vocabulary +
   review `filter_specs`, contracts synced from 1bea18b):
   - **Labeled rejection reasons.** `GET {API_PREFIX}/regions/vocabulary`
     gained `rejection_reasons` (`{id, label, kind, match, label_template}`)
@@ -1044,7 +1050,7 @@ augmentPresets.test.ts` (the old local-checkout diff against the
     which is wrong wording for that case. The generic `reason` still
     renders as before on core tabs (e.g. the Mismatches preset) that
     don't carry a `region_rejection_reason` at all.
-- Adopted OpenProcessor `main` f7171cc (cutover/dq-region — region verdict
+- Adopted OpenProcessor `main` 22a3e65 (cutover/dq-region — region verdict
   integrity: null≠reject, rejected candidates kept + reviewable,
   auto-confirm split from human validation, region-text rules):
   - **Rejected candidate boxes.** `verify_rejected` items no longer carry
@@ -1090,7 +1096,7 @@ augmentPresets.test.ts` (the old local-checkout diff against the
     `verify_rejected` alone (`verifier_no_verdict` means "needs human",
     not a model rejection — `region_bbox_correct === false` is the
     actual "model said wrong box" signal).
-- Adopted OpenProcessor `main` 7254ec4 (cutover/dq-queues):
+- Adopted OpenProcessor `main` 63d57d8 (cutover/dq-queues):
   - **Item confidence fields.** `class_confidence`/`class_confidence_source`
     (VLM high/medium/low mapped to 0.92/0.70/0.40 server-side, or the
     classifier's own score; null for a human label), `vlm_raw_class`,
@@ -1156,7 +1162,7 @@ description}`. `/review`'s tab bar and preset chips render the
     e2e test (`test_plate_gallery_detector_filter.py`) proving the
     real browser-rendered plate-gallery detector filter reflects a
     served vocabulary rather than a hardcoded list.
-- Adopted the OpenProcessor `main` findings pass (07cc061 — B2/M6/M8/V1
+- Adopted the OpenProcessor `main` findings pass (b654da5 — B2/M6/M8/V1
   region+VLM write integrity and undo), per
   docs/design/interactive-pass-2026-09-24.md §6:
   - **D-4** (`docs/design/curation_query_performance_audit.md`):
@@ -1200,14 +1206,14 @@ description}`. `/review`'s tab bar and preset chips render the
     locally; Z undoes the server write.
   - **m21**: verified live that `cluster_distance` is mid-rollout on this
     deployment's index — `GET /clusters`' `representatives` now carry it
-    for some cards (background residual runs since 07cc061 landed) but
+    for some cards (background residual runs since b654da5 landed) but
     `GET /crops` still returns `null` for other clusters' members not yet
     re-run. `/clusters/[id]`'s cut-line (`cutLineIndex`) already degrades
     correctly either way (stops at index 0 when `cluster_is_core` is
     `null`), so no frontend change was needed — it renders correctly for
     a cluster as soon as that cluster's own residual run backfills the
     field.
-  - Contracts re-synced to OpenProcessor main 07cc061 (from f934f32).
+  - Contracts re-synced to OpenProcessor main b654da5 (from 4f511f3).
 - Component-mount vitest support: `vite.config.ts` sets
   `resolve.conditions: ['browser']` under `VITEST` so Svelte 5's
   `mount`/`unmount`/`flushSync` work under jsdom (no new dependency).
@@ -1277,7 +1283,7 @@ description}`. `/review`'s tab bar and preset chips render the
   shipped silently.
 - `/classes`'s Proposals section now bulk-resolves a VLM new-class term
   against OpenProcessor's `POST {API_PREFIX}/review/new_class_proposals/
-resolve` (backend `main` `af3a580`): "Create class & assign" / "Map to
+resolve` (backend `main` `2f5cda2`): "Create class & assign" / "Map to
   existing" resolve **every** pending item proposing the term, not just
   the summary's capped `sample_crop_ids` sample. Each action dry-runs
   first (`?dry_run=true`) and shows the real served `matched` count in a
@@ -1469,7 +1475,7 @@ exclusion set', ...)` block (6 source-scan tests regexing
     picks from its allowlist.
 
 - Label writes, undo and discard now match OpenProcessor `main`
-  (`d037be8`, see `docs/design/logic-moves-adoption-plan-2026-09-24.md`
+  (`d32d3fa`, see `docs/design/logic-moves-adoption-plan-2026-09-24.md`
   W1):
   - `bulkLabel`/`moveCropsToCluster` results carry `updated_ids`;
     `undoStore.recordWrites()` takes that served list directly instead
@@ -1505,7 +1511,7 @@ string[]; at: number }`; `recordWrites(updatedIds)` pushes ONE entry
     (`GET {API_PREFIX}/crops?review_dismissed=true` +
     `POST {API_PREFIX}/crops/{id}/review_undismiss`) so a permanent
     dismiss (**D**) can be reversed.
-- Region writes and statuses now match OpenProcessor `main` (`d037be8`,
+- Region writes and statuses now match OpenProcessor `main` (`d32d3fa`,
   see `docs/design/logic-moves-adoption-plan-2026-09-24.md` W2):
   - `setSlotBox`/`patchSlotMeta`/`batchPlateStatus` render the item(s)
     the server actually wrote (`{..., item}` / `{..., items}`) instead
@@ -1534,7 +1540,7 @@ string[]; at: number }`; `recordWrites(updatedIds)` pushes ONE entry
     `statusWantsRejectionReason`. `licensePlateSlot`'s own
     `capabilities.lifecycle.states` is kept as the fallback for when the
     endpoint is unavailable.
-- Item detail and OCR display now match OpenProcessor `main` (`d037be8`,
+- Item detail and OCR display now match OpenProcessor `main` (`d32d3fa`,
   see `docs/design/logic-moves-adoption-plan-2026-09-24.md` W7/W8):
   - `Crop.source` replaces the dead `hdd_source` field (`mapRawCrop`
     never populated it — the backend only ever emitted `source`).
@@ -1566,7 +1572,7 @@ string[]; at: number }`; `recordWrites(updatedIds)` pushes ONE entry
     `accepted_unverified`, so that chain step renders like a
     miss/reject rather than a confirmed one.
 
-- The cluster-scoped VLM run now matches OpenProcessor `main` (`d037be8`,
+- The cluster-scoped VLM run now matches OpenProcessor `main` (`d32d3fa`,
   see `docs/design/logic-moves-adoption-plan-2026-09-24.md` W3):
   `runVlmOnCluster` (dashboard's "Run VLM on cluster" modal and
   `/clusters/[id]`'s "Run VLM" button) is a single
@@ -1579,7 +1585,7 @@ string[]; at: number }`; `recordWrites(updatedIds)` pushes ONE entry
   until the job leaves `running`; both pages show the live stage inline
   and the final toast reads `result.stages.vlm.predicted`/`.updated`.
 - Cluster cards and the cluster-detail cut line now match OpenProcessor
-  `main` (`d037be8`, see
+  `main` (`d32d3fa`, see
   `docs/design/logic-moves-adoption-plan-2026-09-24.md` W6):
   - `Cluster` carries the served `purity_tier`/`promotable` and
     `core_similarity_min`; `/clusters`' `borderColor`/`purityBadge` branch
@@ -1752,10 +1758,10 @@ registry}` payload.
     hidden route constant.
 
 - **BREAKING (backend-contract):** adopted OpenProcessor's (openprocessor)
-  region wire-vocabulary rename, merged to its `main` at `b3f928d`
+  region wire-vocabulary rename, merged to its `main` at `1127321`
   (Wave 2, C12-C14 of
   `docs/design/slot-generic-crop-mapping-plan-2026-09-21.md`). This app
-  will 404 against any backend older than `b3f928d`.
+  will 404 against any backend older than `1127321`.
   - Routes: `/plates` and its 9 sub-routes (`cluster`,
     `cluster/status`, `clusters`, `clusters/refine/{id}`,
     `fp_centroids/build`, `fp_centroids/status`,
@@ -2042,7 +2048,7 @@ check`/`test`/`lint`/`build` all green.
 
 - Class adequacy, thresholds and hotkeys now come entirely from the
   backend (`docs/design/logic-moves-adoption-plan-2026-09-24.md` W4,
-  OpenProcessor `main` @ `d037be8`):
+  OpenProcessor `main` @ `d32d3fa`):
   - `adequacy.ts` renders whichever tier (`block`/`warn`/`ok`) the
     server puts on each class (`GET /classes`, `GET /stats/classes`),
     instead of recomputing it from `validated_count` against hardcoded
@@ -2178,7 +2184,7 @@ class`) so an operator can see where a crop lives before relabeling
     way to resolve it (Create stays limited to un-flagged terms);
     Validated shows "incl. N test"; ID/Added hide below 1024px.
 
-- `/train` run results adopt OpenProcessor e9aac68. The overall eval figures
+- `/train` run results adopt OpenProcessor 5595474. The overall eval figures
   are labelled by the served `eval.split`, with the last validation epoch
   shown separately from `eval.val_last`. The confusion matrix renders from
   the served artifact URL through `resolveApiUrl`, so it also works when the
@@ -2190,7 +2196,7 @@ class`) so an operator can see where a crop lives before relabeling
   version.
 - `/export` shows the served `skipped_items` counts (validated items the
   export couldn't write: no source image id, or no usable box/class),
-  adopting OpenProcessor ad9f8d3. Older exports carry none and show no chip.
+  adopting OpenProcessor 536e000. Older exports carry none and show no chip.
 - `CropCard`'s region ring and edit button: the card looked up its slot
   by the crop's own class, which is never the region's class, so the
   ring never drew on a region-bearing item and the always-visible ✎
@@ -2212,7 +2218,7 @@ class`) so an operator can see where a crop lives before relabeling
   `plates_aggressive`, `custom`). Picking one failed the run with
   "unknown augmentation preset", but only after it had started and
   stopped the VLM. It now lists the trainer's own ids. (Superseded by
-  the OpenProcessor 6c77deb adoption below, which replaces the pinned
+  the OpenProcessor df01309 adoption below, which replaces the pinned
   id list with the served `GET {API_PREFIX}/train/augmentation_presets`
   catalog.)
 - Four bugs found by the `train-smoke` live UI smoke test
@@ -2255,7 +2261,7 @@ stats` bucket at all (i.e. never validated/sampled into the
     header reflects the server's own count without a reload.
 
 - The dashboard's "Last clustering" card showed `clusters.cluster_count`
-  as "Clusters", but until OpenProcessor b7231e6 that was the last
+  as "Clusters", but until OpenProcessor b55872b that was the last
   auto-label run's own count (1), not the index total (106). It now reads
   "Clusters (total now)", plus a separate "Made by last run" row from the
   new `last_run_cluster_count`.

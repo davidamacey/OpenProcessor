@@ -1,4 +1,4 @@
-"""OpenProcessor main 840beb8 adoption: `GET {API_PREFIX}/review/tabs`
+"""OpenProcessor main 3f1a11e adoption: `GET {API_PREFIX}/review/tabs`
 gains `filter_specs` — a self-describing enum filter per tab (e.g. the
 region tab's `region_status`: all / detected only / verifier-rejected
 candidates only). `/review`'s filter bar renders one generic `<select>`
@@ -59,7 +59,7 @@ REVIEW_TABS = {
     ]
 }
 
-# OpenProcessor 840beb8: labeled region_rejection_reason vocabulary.
+# OpenProcessor 3f1a11e: labeled region_rejection_reason vocabulary.
 REJECTION_REASONS = [
     {
         "id": "region_visible_elsewhere",

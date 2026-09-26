@@ -193,7 +193,7 @@
       {@const rejectionKind = regionVocabularyStore.rejectionReasonKind(
         data.lifecycle?.rejectionReason,
       )}
-      <!-- 840beb8 adoption: badge color follows the served kind —
+      <!-- 3f1a11e adoption: badge color follows the served kind —
            model_verdict (verifier rejected) reads red, needs_human (no
            verdict) reads neutral zinc rather than a rejection color,
            automatic (geometry gate) keeps the original amber. Tooltip is

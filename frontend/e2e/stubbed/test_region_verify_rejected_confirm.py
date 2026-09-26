@@ -1,4 +1,4 @@
-"""dq-region (backend OpenProcessor f7171cc, frontend adoption 2026-09-24):
+"""dq-region (backend OpenProcessor 22a3e65, frontend adoption 2026-09-24):
 a verify_rejected item carries no region_bbox_norm at all — the box
 lives in region_candidate_bbox_norm/_score/_detector/... until a human
 accepts it. /review's slot panel must seed its edit box from the
@@ -10,7 +10,7 @@ confirm" and doing nothing.
 
 Server-side this status-only PATCH promotes the candidate into the
 region box (region_writes.candidate_promotion / human_status_fields,
-read directly from OpenProcessor f7171cc) — the frontend never computes
+read directly from OpenProcessor 22a3e65) — the frontend never computes
 that promotion itself, it only has to send the write and render
 whatever the server returns.
 """

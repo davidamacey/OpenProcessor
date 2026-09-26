@@ -1,11 +1,11 @@
 /**
- * Mount-based coverage for the OpenProcessor 6c77deb + d5343cb `/export`
+ * Mount-based coverage for the OpenProcessor df01309 + 4c9499a `/export`
  * adoption:
  *
  *   1. `GET {API_PREFIX}/export/status` serves `image_count`/`class_count`/
- *      `split_counts`/`class_split_counts` (6c77deb) plus `object_count`/
+ *      `split_counts`/`class_split_counts` (df01309) plus `object_count`/
  *      `split_object_counts`/`require_fully_labeled_images`/partial-frame
- *      counts (d5343cb — one image + one label file per source image) —
+ *      counts (4c9499a — one image + one label file per source image) —
  *      the page must render them, with a 0-train/0-val class row
  *      highlighted, using the served numbers only (no client threshold),
  *      and render a `null` count (an export written before it was
@@ -66,8 +66,8 @@ const EXPORT_STATUS_SUCCESS = {
   ],
 };
 
-// An export written before d5343cb recorded object/partial-frame counts
-// — every d5343cb field is null. Must render "—", never 0.
+// An export written before 4c9499a recorded object/partial-frame counts
+// — every 4c9499a field is null. Must render "—", never 0.
 const EXPORT_STATUS_PRE_D5343CB = {
   status: 'success',
   last_run: '2026-09-20T12:00:00Z',
@@ -178,7 +178,7 @@ afterEach(() => {
   toastStore.toasts = [];
 });
 
-describe('/export — served split counts (OpenProcessor 6c77deb)', () => {
+describe('/export — served split counts (OpenProcessor df01309)', () => {
   it('renders image/class totals, split totals, and a per-class table highlighting 0-train/0-val classes', async () => {
     const freezeCalls: Array<{ url: string; body: unknown }> = [];
     vi.stubGlobal('fetch', makeFetchMock(freezeCalls));
@@ -219,7 +219,7 @@ describe('/export — served split counts (OpenProcessor 6c77deb)', () => {
     expect(bmwRow?.className ?? '').not.toContain('bg-red-500/10');
   });
 
-  it('renders a null d5343cb field as "—", never 0, for an export written before it was recorded', async () => {
+  it('renders a null 4c9499a field as "—", never 0, for an export written before it was recorded', async () => {
     const freezeCalls: Array<{ url: string; body: unknown }> = [];
     vi.stubGlobal('fetch', makeFetchMock(freezeCalls, EXPORT_STATUS_PRE_D5343CB));
 
@@ -247,7 +247,7 @@ describe('/export — served split counts (OpenProcessor 6c77deb)', () => {
     expect(target.querySelector('[data-testid="export-skipped-items"]')).toBeNull();
   });
 
-  it('renders the served skipped_items counts (OpenProcessor ad9f8d3)', async () => {
+  it('renders the served skipped_items counts (OpenProcessor 536e000)', async () => {
     const freezeCalls: Array<{ url: string; body: unknown }> = [];
     vi.stubGlobal(
       'fetch',
@@ -271,7 +271,7 @@ describe('/export — served split counts (OpenProcessor 6c77deb)', () => {
   });
 });
 
-describe('/export — require_fully_labeled_images opt-in (OpenProcessor d5343cb)', () => {
+describe('/export — require_fully_labeled_images opt-in (OpenProcessor 4c9499a)', () => {
   it('checking "Only images whose every object is labeled" sends require_fully_labeled_images: true', async () => {
     const freezeCalls: Array<{ url: string; body: unknown }> = [];
     const exportYoloCalls: Array<{ url: string; body: unknown }> = [];
@@ -340,7 +340,7 @@ describe('/export — require_fully_labeled_images opt-in (OpenProcessor d5343cb
   });
 });
 
-describe('/export — freeze modal (OpenProcessor 6c77deb: no seed)', () => {
+describe('/export — freeze modal (OpenProcessor df01309: no seed)', () => {
   it('has no Seed field and POSTs a body of exactly {percent}', async () => {
     const freezeCalls: Array<{ url: string; body: unknown }> = [];
     vi.stubGlobal('fetch', makeFetchMock(freezeCalls));

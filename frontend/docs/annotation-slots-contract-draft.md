@@ -802,7 +802,7 @@ docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §8.3):** the
 frontend deleted `src/lib/plateStatus.ts` outright rather than
 renaming its `NO_PLATE_*` members to `NO_REGION_*` in step with
 OpenProcessor's `no_plate_box`/`no_plate_visible` ->
-`no_region_box`/`no_region_visible` rename (merged at `b3f928d`) —
+`no_region_box`/`no_region_visible` rename (merged at `1127321`) —
 renaming a still-zero-importer generated file just produces a
 generated file that is still imported by nothing. The frontend's
 single source of truth for these values remains

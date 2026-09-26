@@ -76,11 +76,11 @@ describe('mapRawCrop full field mapping', () => {
     expect(crop.mistakenness_method).toBe(raw.mistakenness_method);
     expect(crop.mistakenness_version).toBe(raw.mistakenness_version);
     expect(crop.mistakenness_scored_at).toBe(raw.mistakenness_scored_at);
-    // F8 D1 (d817605): the probe's opinion is carried through.
+    // F8 D1 (51b05d7): the probe's opinion is carried through.
     expect(crop.probe_disagreement).toBe(raw.probe_disagreement);
     expect(crop.probe_in_scope).toBe(raw.probe_in_scope);
     expect(crop.probe_model_version).toBe(raw.probe_model_version);
-    // OpenProcessor main 9e217f0: server-computed actionability.
+    // OpenProcessor main 8990ede: server-computed actionability.
     expect(crop.probe_actionable).toBe(raw.probe_actionable);
     expect(crop.updated_at).toBe(raw.updated_at);
     // 2026-09-24 logic-moves W7: source (replaces the dead hdd_source),

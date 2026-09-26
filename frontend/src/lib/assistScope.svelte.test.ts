@@ -64,7 +64,7 @@ describe('createAssistScope', () => {
     expect(scope.toStartParams()).toEqual({});
   });
 
-  // Pinned wire names, confirmed against OpenProcessor main (80dd097).
+  // Pinned wire names, confirmed against OpenProcessor main (f4551bf).
   // detection_profile must never be emitted: main rejects it with a 422
   // because region detection is startup config, not a per-run choice.
   it('pins the exact emitted key names, and never emits detection_profile', () => {

@@ -5,7 +5,7 @@
    * blocked while the upload run is active, or while the served region
    * drain isn't `drained`, or while the drain fetch itself is failing.
    *
-   * BA-3 (landed, OpenProcessor c676d2b): the gate reads the server's own
+   * BA-3 (landed, OpenProcessor c5c606f): the gate reads the server's own
    * `drained` verdict (`total_unfinished` read 0 for
    * `IngestConfig.region_drain.stable_polls` consecutive polls) instead
    * of a raw `total_unfinished === 0` reading — no client-side stability

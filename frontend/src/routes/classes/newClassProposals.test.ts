@@ -1,6 +1,6 @@
 /**
  * W5 (docs/design/logic-moves-adoption-plan-2026-09-24.md) plus the
- * 2026-09-24 bulk-resolve adoption (OpenProcessor af3a580) — the
+ * 2026-09-24 bulk-resolve adoption (OpenProcessor 2f5cda2) — the
  * `/classes` Proposals section: GET {API_PREFIX}/review/new_class_proposals/
  * summary, and "Create class & assign" / "Map to existing", both now
  * dry-running `POST {API_PREFIX}/review/new_class_proposals/resolve`

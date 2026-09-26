@@ -27,7 +27,7 @@ import {
 /** Titlecases a `snake_case` id as a display-label placeholder for a
  *  vocabulary the backend doesn't serve labels for yet (dq-region
  *  `text_choices`/`invalid_reasons` — `region_rejection_reason` got its
- *  own labeled vocabulary in OpenProcessor 840beb8, see
+ *  own labeled vocabulary in OpenProcessor 3f1a11e, see
  *  `rejectionReasonLabel` below, so this no longer covers it). Replace
  *  the call site with the served label the moment the backend adds one
  *  — this is a stand-in, not a hand-maintained label table. */
@@ -43,8 +43,8 @@ class RegionVocabularyStore {
   textChoices = $state<string[]>([]);
   /** The active profile's region-text validity rules, or `null`. */
   textRules = $state<RegionTextRules | null>(null);
-  /** Labeled `region_rejection_reason` vocabulary (OpenProcessor 840beb8,
-   *  840beb8 adoption). */
+  /** Labeled `region_rejection_reason` vocabulary (OpenProcessor 3f1a11e,
+   *  3f1a11e adoption). */
   rejectionReasons = $state<RejectionReasonEntry[]>([]);
   loaded = $state<boolean>(false);
   #inflight: Promise<void> | null = null;
@@ -138,7 +138,7 @@ class RegionVocabularyStore {
 
   /**
    * Human label for a `region_rejection_reason` id (dq-region 2026-09-24,
-   * labeled by OpenProcessor 840beb8) — `sanity_reject:<gate>`,
+   * labeled by OpenProcessor 3f1a11e) — `sanity_reject:<gate>`,
    * `region_visible_elsewhere`, `verifier_no_verdict`, or an older
    * free-text reason. Resolves an exact match first, then a prefix match
    * (`label_template`'s `{detail}` filled from whatever follows the

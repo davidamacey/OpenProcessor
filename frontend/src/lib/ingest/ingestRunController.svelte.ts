@@ -57,7 +57,7 @@ export interface IngestTotals {
   duplicates: number;
   failed: number;
   crops_indexed: number;
-  /** a8a34aa: sum of the served `summary.secondary_detector_failures`. */
+  /** d72cc63: sum of the served `summary.secondary_detector_failures`. */
   secondary_detector_failures: number;
 }
 

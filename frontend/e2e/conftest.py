@@ -236,7 +236,7 @@ class Stub:
                 "chain_actors": [
                     {"id": "tag_verifier", "label": "Tag verifier", "role": "verifier"},
                 ],
-                # OpenProcessor 840beb8 adoption: labeled
+                # OpenProcessor 3f1a11e adoption: labeled
                 # `region_rejection_reason` vocabulary. Empty by default —
                 # unlike detectors/chain_actors above, no shared default
                 # data is needed for most tests (the rejection-styled
@@ -264,7 +264,7 @@ class Stub:
         # (same pattern as bakeoff/runs above) — every existing test needs
         # this default so the /ingest nav link's probe doesn't 501.
         self.on("GET", r"/ingest/status(\?|$)", {"total": 0, "by_source": [], "by_day": []})
-        # BA-2 (OpenProcessor #36, c676d2b): once the probe above confirms
+        # BA-2 (OpenProcessor #36, c5c606f): once the probe above confirms
         # the ingest router is mounted, /ingest's own page fetches
         # `GET /ingest/config` on mount — every existing test needs this
         # default too, same reasoning as /ingest/status above.

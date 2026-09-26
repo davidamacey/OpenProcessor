@@ -336,7 +336,7 @@
   }
 
   // -- New-class proposals (2026-09-24 logic-moves W5; bulk resolve added
-  //    2026-09-24 for OpenProcessor af3a580) --------------------------------
+  //    2026-09-24 for OpenProcessor 2f5cda2) --------------------------------
   //
   // Aggregate view of the same cohort the `/review` "New Class Proposals"
   // tab pages through one crop at a time — top VLM-proposed-but-unmatched
@@ -770,7 +770,7 @@
                   <td class="px-3 py-1.5">{cls.group ?? '—'}</td>
                   <td class="px-3 py-1.5 text-right">
                     {#if cls.merged_into != null}
-                      <!-- d817605: a merged class can't be restored (its
+                      <!-- 51b05d7: a merged class can't be restored (its
                            crops live on the target); say where they went. -->
                       <span
                         class="text-xs text-zinc-500"
@@ -1030,7 +1030,7 @@
             Will relabel <strong>{mergePreview.would_relabel}</strong> crops from
             <strong>{mergeSource.name}</strong> to <strong>{mergeTarget.name}</strong>
             {#if mergePreview.validations_carried_over > 0}
-              <!-- d817605: a merge keeps human validations. -->
+              <!-- 51b05d7: a merge keeps human validations. -->
               &middot; <strong>{mergePreview.validations_carried_over}</strong> human
               validation{mergePreview.validations_carried_over === 1 ? '' : 's'} will carry
               over

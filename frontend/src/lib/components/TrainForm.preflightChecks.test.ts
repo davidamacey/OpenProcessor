@@ -47,7 +47,7 @@ afterEach(() => {
 });
 
 describe('TrainForm — preflight panel renders new check ids generically', () => {
-  it('renders the export_class_split_coverage check with its served per-class detail (OpenProcessor 6c77deb)', () => {
+  it('renders the export_class_split_coverage check with its served per-class detail (OpenProcessor df01309)', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(jsonResponse({ options: [], default: null })),

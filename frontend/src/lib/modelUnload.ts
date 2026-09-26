@@ -24,7 +24,7 @@ export type UnloadButtonState = 'hidden' | 'normal' | 'force-required';
  *   external segmenter/VLM entries, 2026-09-25 follow-up to #36 item 5),
  *   or it's region-protected (`is_region_protected`, the one guard with
  *   no override: region models and their data are never touched from
- *   here — as of 698d1da this also covers the ingest primary proposer/
+ *   here — as of 01324cb this also covers the ingest primary proposer/
  *   secondary classifier and the OCR det/rec pair, not just the region
  *   detector).
  * - `force-required`: rendered, but the action requires an explicit

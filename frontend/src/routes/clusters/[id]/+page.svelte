@@ -243,7 +243,7 @@
       maxRank,
       minBlurRatio,
       // DQ-M3 (docs/design/data-quality-pass-2026-09-24.md): backend main
-      // 7254ec4 now serves `order=core_first` on `GET {API_PREFIX}/crops`
+      // 63d57d8 now serves `order=core_first` on `GET {API_PREFIX}/crops`
       // (nearest-to-centroid first, with cluster_distance/
       // cluster_similarity/cluster_is_core recomputed against the live
       // centroid) — exactly what the cut line needs and previously had

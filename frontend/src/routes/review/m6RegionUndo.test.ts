@@ -1,6 +1,6 @@
 /**
  * Regression tests for M6's frontend half (docs/design/interactive-pass-2026-09-24.md
- * §6 FRONTEND item 5): once the backend ships region undo (07cc061,
+ * §6 FRONTEND item 5): once the backend ships region undo (b654da5,
  * `POST {API_PREFIX}/crops/{id}/region/undo`), the regions/slot review tab
  * must record an undo entry on every confirm/reject/FP/box-edit write so Z
  * reverses it server-side — and the misleading "← to go back" copy (which

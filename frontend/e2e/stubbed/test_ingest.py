@@ -40,7 +40,7 @@ def _base_ingest_stubs(
     stall_reason=None,
     region_dependencies=None,
 ) -> None:
-    """BA-1..BA-7 (OpenProcessor #36, c676d2b) baseline: `/ingest/config` is
+    """BA-1..BA-7 (OpenProcessor #36, c5c606f) baseline: `/ingest/config` is
     now real and always stubbed here (the page fetches it once
     `ingestAvailability` confirms the router is mounted), and the drain
     response always carries the BA-3 `drained` verdict.
@@ -87,7 +87,7 @@ def _base_ingest_stubs(
             "drained": drained,
             "stable_for_s": 30 if drained else 0,
             "observed_at": "2026-09-25T00:00:00Z",
-            # OpenProcessor a8a34aa (V-1): always served.
+            # OpenProcessor d72cc63 (V-1): always served.
             "region_dependencies": region_dependencies or [],
             "stall_reason": stall_reason,
         },
@@ -369,7 +369,7 @@ def test_ingest_absent(stub, page, app_url):
 
 
 def test_region_drain_shows_served_stall_reason(stub, page, app_url):
-    """V-1 (a8a34aa): a stalled drain renders the served reason verbatim."""
+    """V-1 (d72cc63): a stalled drain renders the served reason verbatim."""
     reason = "segmenter seg_b unavailable since 2026-09-25T09:57:00Z"
     _base_ingest_stubs(
         stub,

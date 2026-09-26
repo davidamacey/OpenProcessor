@@ -43,7 +43,7 @@ export interface RegistryClass {
   color?: string | null;
   /** True when the class has been merged into another and should be hidden by default. */
   deprecated?: boolean;
-  /** OpenProcessor d817605: the class this one was merged into (its crops
+  /** OpenProcessor 51b05d7: the class this one was merged into (its crops
    *  now carry that class). Null/absent for a class never merged. A merged
    *  class can't be restored (restore 409s `class_merged`). */
   merged_into?: number | null;
@@ -117,7 +117,7 @@ export interface ClassMergeDryRun {
   source_id: number;
   target_id: number;
   would_relabel: number;
-  /** OpenProcessor d817605: human validations KEPT on the relabeled crops
+  /** OpenProcessor 51b05d7: human validations KEPT on the relabeled crops
    *  (a merge now carries validations over; was `would_unvalidate`). */
   validations_carried_over: number;
   holdout_blocking: number;
@@ -125,7 +125,7 @@ export interface ClassMergeDryRun {
 }
 
 /** Instance counts per split — `GET {API_PREFIX}/export/status`'s
- *  `split_counts` (OpenProcessor `ExportSplitCounts`, 6c77deb). */
+ *  `split_counts` (OpenProcessor `ExportSplitCounts`, df01309). */
 export interface ExportSplitCounts {
   train: number;
   val: number;
@@ -133,7 +133,7 @@ export interface ExportSplitCounts {
 }
 
 /** One class's instance counts per split, as recorded in the export
- *  manifest (OpenProcessor `ExportClassSplitCounts`, 6c77deb). */
+ *  manifest (OpenProcessor `ExportClassSplitCounts`, df01309). */
 export interface ExportClassSplitCounts {
   /** Registry class id. */
   class_id: number;
@@ -147,8 +147,8 @@ export interface ExportClassSplitCounts {
 
 /**
  * Server response from `GET {API_PREFIX}/export/status` (OpenProcessor
- * `ExportStatusResponse`, 6c77deb). `status` is `'idle' | 'unknown' |
- * 'success'` on the vendored 6c77deb backend — the GET endpoint now only
+ * `ExportStatusResponse`, df01309). `status` is `'idle' | 'unknown' |
+ * 'success'` on the vendored df01309 backend — the GET endpoint now only
  * ever describes the *last completed* export (`idle` = none yet, every
  * other field null; `unknown` = the `current` manifest is missing/
  * unreadable). The `progress`/`job_id`/`error` fields below are NOT part
@@ -157,7 +157,7 @@ export interface ExportClassSplitCounts {
  * synchronous `ExportResult` response (a different endpoint, still
  * `running`/`failed`/`success`-capable) and assigns it to the same
  * `exportState` variable. Every field below `status` is optional/nullable
- * so a pre-6c77deb backend's GET response (missing all of them) renders
+ * so a pre-df01309 backend's GET response (missing all of them) renders
  * exactly as it did before — no page break on a missing field.
  */
 export interface ExportStatus {
@@ -181,7 +181,7 @@ export interface ExportStatus {
   seed?: number | null;
   /** Row attribute the split grouped on (`'image_id'`). */
   group_key?: string | null;
-  /** Exported images (OpenProcessor d5343cb: one image + one label file
+  /** Exported images (OpenProcessor 4c9499a: one image + one label file
    *  per source image, one line per object). */
   image_count?: number | null;
   /** Exported objects (label lines) across all images. */
@@ -209,11 +209,11 @@ export interface ExportStatus {
    *  off). */
   images_dropped_not_fully_labeled?: number | null;
   /** Validated items the export couldn't write, by reason. Null for an
-   *  export made before OpenProcessor ad9f8d3. */
+   *  export made before OpenProcessor 536e000. */
   skipped_items?: ExportSkippedItems | null;
 }
 
-/** `ExportSkippedItems` (OpenProcessor ad9f8d3). */
+/** `ExportSkippedItems` (OpenProcessor 536e000). */
 export interface ExportSkippedItems {
   no_image_id: number;
   no_usable_box_or_class: number;
@@ -338,11 +338,11 @@ export interface ExportDatasetList {
 
 /**
  * Server response from `POST {API_PREFIX}/test_holdout/freeze`. As of
- * OpenProcessor 6c77deb the request body is `{percent}` only — no
+ * OpenProcessor df01309 the request body is `{percent}` only — no
  * `seed` (selection is deterministic, SHA1-of-`crop_id` per class; an
  * unknown field like `seed` is now a 422, not silently ignored) — and
  * the response gained `selection`/`min_per_class` (both required on
- * 6c77deb; optional here so a pre-6c77deb backend's response, which
+ * df01309; optional here so a pre-df01309 backend's response, which
  * doesn't serve them, still type-checks and renders without them).
  */
 export interface TestHoldoutFreezeResult {
@@ -350,7 +350,7 @@ export interface TestHoldoutFreezeResult {
   n_classes_covered: number;
   test_holdout_sha: string;
   per_class_counts: Record<string, number>;
-  /** Selection method name — `'sha1_per_class'` on 6c77deb. */
+  /** Selection method name — `'sha1_per_class'` on df01309. */
   selection?: string;
   /** Target holdout percent per class, echoed from the request. */
   percent?: number;
@@ -520,7 +520,7 @@ export interface Crop {
   mistakenness_version?: string | null;
   mistakenness_scored_at?: string | null;
   /**
-   * F8 D1 (OpenProcessor d817605): the probe's opinion on this item.
+   * F8 D1 (OpenProcessor 51b05d7): the probe's opinion on this item.
    * `probe_in_scope`: null = not scored yet, true = the item's class is
    * one the probe knows (a real opinion), false = outside the probe's
    * classes (no opinion; `probe_disagreement` is then null).
@@ -530,7 +530,7 @@ export interface Crop {
   probe_in_scope?: boolean | null;
   probe_model_version?: string | null;
   /**
-   * OpenProcessor main 9e217f0: `true` only when the probe disagrees AND
+   * OpenProcessor main 8990ede: `true` only when the probe disagrees AND
    * the item is in scope AND `probe_pred_confidence` cleared the
    * backend's own threshold (`OP_PROBE_ACTIONABLE_MIN_CONFIDENCE`,
    * echoed read-only as `ProbeStatusResponse.actionable_min_confidence`
@@ -1135,7 +1135,7 @@ export interface UndoEntry {
 // docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.1. Wire
 // shapes for OpenProcessor's `{API_PREFIX}/ingest/*` router
 // (`src/routers/curation/ingest.py`, `_common_models.py` on the
-// backend). BA-1..BA-7 (OpenProcessor #36, c676d2b) landed: upload bytes
+// backend). BA-1..BA-7 (OpenProcessor #36, c5c606f) landed: upload bytes
 // are persisted (`source_identifier` alongside `image_path`), `error_kind`
 // is a stable code on every failed result, `GET {API_PREFIX}/ingest/config`
 // is real and typed, and `GET {API_PREFIX}/ingest/region_drain` serves a
@@ -1174,7 +1174,7 @@ export interface IngestImageResult {
    */
   source_identifier: string | null;
   /**
-   * OpenProcessor a8a34aa: set when the image itself ingested but the
+   * OpenProcessor d72cc63: set when the image itself ingested but the
    * optional secondary detector failed on it (so it carries only the
    * primary detector's crops). Null otherwise; absent on an older backend.
    */
@@ -1190,7 +1190,7 @@ export interface BatchIngestSummary {
   unmatched_detections: number;
   labels_imported: number;
   crops_indexed: number;
-  /** a8a34aa: how many results carry a `secondary_detector_error`. */
+  /** d72cc63: how many results carry a `secondary_detector_error`. */
   secondary_detector_failures?: number;
 }
 
@@ -1218,7 +1218,7 @@ export interface RegionDrain {
   pending_verification: number;
   total_unfinished: number;
   /**
-   * BA-3 (landed, c676d2b): true once `total_unfinished` has read 0 for
+   * BA-3 (landed, c5c606f): true once `total_unfinished` has read 0 for
    * `IngestConfig.region_drain.stable_polls` consecutive polls of this
    * endpoint — computed server-side, not a client-invented window.
    */
@@ -1228,7 +1228,7 @@ export interface RegionDrain {
   /** ISO timestamp of this poll. */
   observed_at: string;
   /**
-   * V-1 (OpenProcessor a8a34aa): the active region profile's Triton
+   * V-1 (OpenProcessor d72cc63): the active region profile's Triton
    * dependencies and whether each is ready now; empty with no profile.
    */
   region_dependencies?: RegionDependencyStatus[];
@@ -1270,7 +1270,7 @@ export interface IngestUploadRequest {
 }
 
 /**
- * BA-2 (landed, c676d2b): `GET {API_PREFIX}/ingest/config`'s served
+ * BA-2 (landed, c5c606f): `GET {API_PREFIX}/ingest/config`'s served
  * shape — real, enforced limits, not client-guessed constants. Field
  * names/nesting match `IngestConfigResponse` in
  * `src/routers/curation/_common_models.py` on the backend exactly.

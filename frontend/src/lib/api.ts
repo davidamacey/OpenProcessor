@@ -1064,7 +1064,7 @@ export interface DatasetStats {
      *  didn't) resolve to a class (#36 item 2). Served alongside
      *  `no_label_source`; absent on a backend that predates it. */
     vlm_no_class?: number;
-    /** F-23 (OpenProcessor a8a34aa): crops a detector proposed but
+    /** F-23 (OpenProcessor d72cc63): crops a detector proposed but
      *  nothing has classified yet — a subset of `no_label_source`, like
      *  `vlm_no_class`. Moved here from the always-0 `labeled.by_proposal`
      *  (removed). Absent on a backend that predates it. */
@@ -1072,7 +1072,7 @@ export interface DatasetStats {
   };
   in_progress: {
     region_drain_total_unfinished: number;
-    /** V-1 (OpenProcessor a8a34aa): a served, human-readable line naming
+    /** V-1 (OpenProcessor d72cc63): a served, human-readable line naming
      *  why the region drain can't progress (a region-profile dependency
      *  is down, and since when). Null when nothing is pending or every
      *  dependency is ready; absent on an older backend. Rendered verbatim. */
@@ -1483,11 +1483,11 @@ export type RawCrop = {
   mistakenness_method?: string | null;
   mistakenness_version?: string | null;
   mistakenness_scored_at?: string | null;
-  // F8 D1 (OpenProcessor d817605): the probe's opinion on this item.
+  // F8 D1 (OpenProcessor 51b05d7): the probe's opinion on this item.
   probe_disagreement?: boolean | null;
   probe_in_scope?: boolean | null;
   probe_model_version?: string | null;
-  // OpenProcessor main 9e217f0: server-computed actionability, folding
+  // OpenProcessor main 8990ede: server-computed actionability, folding
   // in scope + disagreement + the server's own confidence threshold.
   probe_actionable?: boolean | null;
   thumbnail_url?: string;
@@ -1873,7 +1873,7 @@ export async function undoCropLabel(cropId: string, signal?: AbortSignal): Promi
 }
 
 /**
- * OpenProcessor a8a34aa: the batch write bodies (`/ingest/batch`,
+ * OpenProcessor d72cc63: the batch write bodies (`/ingest/batch`,
  * `/crops/{label,region}/undo_batch`, `/crops/discard_batch`, the VLM
  * batch routes) are `extra='forbid'` with a required non-empty list, so
  * an empty list is a guaranteed 422. Refuse it here, before any request
@@ -2021,7 +2021,7 @@ export async function vlmDismissCrop(
 }
 
 /**
- * `POST {API_PREFIX}/crops/{id}/vlm_dismiss/undo` (M6, backend 07cc061):
+ * `POST {API_PREFIX}/crops/{id}/vlm_dismiss/undo` (M6, backend b654da5):
  * put `vlm_dismissed_*` back to its state before the latest
  * `vlm_dismiss`, so the dismissed suggestion is live again. `409` means
  * there was no dismissal to undo.
@@ -2039,7 +2039,7 @@ export async function undoVlmDismiss(
 }
 
 /**
- * `POST {API_PREFIX}/crops/{id}/region/undo` (M6, backend 07cc061):
+ * `POST {API_PREFIX}/crops/{id}/region/undo` (M6, backend b654da5):
  * restore the region to its state before the most recent not-yet-undone
  * human region write (confirm, reject, false positive, box edit, status
  * or text change) — repeated calls step back further. Class fields are
@@ -2158,7 +2158,7 @@ export interface RegionTextRules {
   invalid_reasons: string[];
 }
 
-/** What kind of thing rejected a region candidate (OpenProcessor 840beb8,
+/** What kind of thing rejected a region candidate (OpenProcessor 3f1a11e,
  *  2026-09-24) — drives both the label lookup and the styling: a
  *  `model_verdict` is the verifier judging the box wrong, `automatic` is
  *  a geometry sanity gate, and `needs_human` means no verdict was given
@@ -2166,7 +2166,7 @@ export interface RegionTextRules {
 export type RejectionReasonKind = 'model_verdict' | 'automatic' | 'needs_human';
 
 /** One pipeline-written `region_rejection_reason` value
- *  (`GET {API_PREFIX}/regions/vocabulary`, OpenProcessor 840beb8). `match: 'exact'`
+ *  (`GET {API_PREFIX}/regions/vocabulary`, OpenProcessor 3f1a11e). `match: 'exact'`
  *  entries match the stored value verbatim; `match: 'prefix'` entries
  *  match a stored-value prefix (e.g. `sanity_reject:`) with
  *  `label_template`'s `{detail}` filled from whatever follows the
@@ -2193,7 +2193,7 @@ export interface RegionVocabularyResponse {
   /** The active profile's region-text validity rules, or `null` without
    *  a region profile. */
   text_rules: RegionTextRules | null;
-  /** Labeled `region_rejection_reason` vocabulary (OpenProcessor 840beb8). */
+  /** Labeled `region_rejection_reason` vocabulary (OpenProcessor 3f1a11e). */
   rejection_reasons: RejectionReasonEntry[];
   /** The active region profile (same value `/health` serves), or `null`
    *  when none is configured, in which case every list above is empty. */
@@ -2223,14 +2223,14 @@ export async function getRegionVocabulary(
   };
 }
 
-/** One `value`/`label` option of a `ReviewFilterSpec` (840beb8 adoption). */
+/** One `value`/`label` option of a `ReviewFilterSpec` (3f1a11e adoption). */
 export interface ReviewFilterOption {
   value: string;
   label: string;
 }
 
 /** Self-describing spec for one of a review tab's filters with a fixed
- *  value set (`GET {API_PREFIX}/review/tabs`, 840beb8 adoption) — e.g. the
+ *  value set (`GET {API_PREFIX}/review/tabs`, 3f1a11e adoption) — e.g. the
  *  region tab's `region_status` (all / detected only / verifier-rejected
  *  candidates only). `param` is the query parameter to send on both
  *  `GET {API_PREFIX}/review/{tab}` and its `/locate` route; an unknown value 400s.
@@ -2258,7 +2258,7 @@ export interface ReviewTabVocabularyEntry {
   /** Values the tab applies when a filter is omitted, e.g.
    *  `{max_rank: 2}` for the two primary-subject tabs. */
   filter_defaults?: Record<string, unknown>;
-  /** Self-describing enum filters this tab honours (840beb8 adoption) —
+  /** Self-describing enum filters this tab honours (3f1a11e adoption) —
    *  empty for a tab with none, or on an older backend that doesn't
    *  serve the field yet. */
   filter_specs: ReviewFilterSpec[];
@@ -2556,7 +2556,7 @@ export function runVlmOnCluster(
  * `expectedJobId` (M7, docs/design/interactive-pass-2026-09-24.md): when
  * given, polls `GET {API_PREFIX}/pipeline/auto_label/status/{job_id}`
  * (`getAutoLabelJobStatus`) for that exact job — the backend now serves
- * this per-job (07cc061), so there's no more race against
+ * this per-job (b654da5), so there's no more race against
  * `{API_PREFIX}/pipeline/auto_label/status`'s single "current/most
  * recent job" slot answering with the *previous* job's already-terminal
  * status in the same tick a caller that just started a new one polls (a
@@ -3345,7 +3345,7 @@ export function classStillReferencedDetail(
 }
 
 /** `POST /classes/{id}/restore`'s structured 409 for a class that was
- *  merged into another (OpenProcessor 70663c0, F-56). */
+ *  merged into another (OpenProcessor 4c125ec, F-56). */
 export interface ClassMergedDetail {
   error: 'class_merged';
   message: string;
@@ -3588,7 +3588,7 @@ export function flagNeedsNewClass(
 /**
  * `POST {API_PREFIX}/test_holdout/freeze` — deterministic (SHA1-of-
  * `crop_id` per class), so the body is `{percent}` only as of
- * OpenProcessor 6c77deb; an extra field such as `seed` is a 422
+ * OpenProcessor df01309; an extra field such as `seed` is a 422
  * (`additionalProperties: false`). `force` re-runs an existing freeze
  * and is a query param, not a body field.
  */
@@ -3846,9 +3846,9 @@ export function getTrainPresets(signal?: AbortSignal): Promise<PresetsResponse> 
 }
 
 /**
- * `GET {API_PREFIX}/train/augmentation_presets` (OpenProcessor 6c77deb) —
+ * `GET {API_PREFIX}/train/augmentation_presets` (OpenProcessor df01309) —
  * the trainer's real preset catalog, for `AugmentationPanel`'s picker.
- * 404s on a pre-6c77deb backend; callers must catch and degrade to a
+ * 404s on a pre-df01309 backend; callers must catch and degrade to a
  * read-only display rather than a hardcoded id list.
  */
 export function getAugmentationPresets(
@@ -4154,7 +4154,7 @@ export async function ingestBatch(
 }
 
 /**
- * BA-2 (landed, OpenProcessor c676d2b): typed ingest capability + limits,
+ * BA-2 (landed, OpenProcessor c5c606f): typed ingest capability + limits,
  * actually enforced by `/ingest/upload`/`/ingest/batch`/`/ingest/region_drain`
  * — replaces every interim client constant in `ingestConfig.ts`. A 404
  * (pre-BA-2 backend) resolves to `null`; `resolveIngestConfig(null)` falls

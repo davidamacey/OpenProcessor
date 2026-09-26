@@ -1,5 +1,5 @@
 /**
- * BA-7 (OpenProcessor #36, c676d2b): every failed ingest result now
+ * BA-7 (OpenProcessor #36, c5c606f): every failed ingest result now
  * carries a stable `error_kind`. These cover the grouping/filtering
  * surface the Failed tab (`IngestRunPanel.svelte`) reads.
  */

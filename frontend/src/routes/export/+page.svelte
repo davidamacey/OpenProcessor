@@ -51,7 +51,7 @@
 
   // Export
   let versionTag = $state<string>('');
-  // OpenProcessor d5343cb: opt-in — drop any exported image that still
+  // OpenProcessor 4c9499a: opt-in — drop any exported image that still
   // has an unlabeled object on it, rather than teaching the detector to
   // treat that object as background.
   let requireFullyLabeled = $state<boolean>(false);
@@ -699,12 +699,12 @@
         </p>
       {/if}
 
-      <!-- Image/object counts + per-class table (OpenProcessor d5343cb's
+      <!-- Image/object counts + per-class table (OpenProcessor 4c9499a's
            `GET {API_PREFIX}/export/status`, ExportStatusResponse — one
            image + one label file per source image, one line per object).
            `image_count`/`object_count` null on an export written before
-           6c77deb/d5343cb render "—", never 0 (formatCount). Absent on a
-           pre-6c77deb backend entirely, so this whole block just doesn't
+           df01309/4c9499a render "—", never 0 (formatCount). Absent on a
+           pre-df01309 backend entirely, so this whole block just doesn't
            render rather than showing blanks. -->
       {#if exportState.image_count != null || exportState.object_count != null || exportState.class_count != null || exportState.split_counts}
         <div class="mt-3 flex flex-wrap gap-2 text-xs">
@@ -781,7 +781,7 @@
         </div>
       {/if}
 
-      <!-- Partial-frame policy + counts (d5343cb) — null on an older
+      <!-- Partial-frame policy + counts (4c9499a) — null on an older
            export (formatCount renders "—"); the whole block hides when
            nothing here was ever recorded. -->
       {#if exportState.require_fully_labeled_images != null || exportState.unlabeled_items_on_exported_images != null || exportState.images_with_unlabeled_items != null || exportState.images_dropped_not_fully_labeled != null || exportState.skipped_items != null}

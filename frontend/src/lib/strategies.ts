@@ -140,7 +140,7 @@ export interface ScoreInfo extends MethodInfoBase {
  * `strategy_registry.py`'s `_export_strategies()`, `axis: 'export'`,
  * added by T-C2 of `cropwright_backend_integration_plan.md` §4.3).
  *
- * CONFIRMED against the backend @ `d8cb9dc`: today the axis holds
+ * CONFIRMED against the backend @ `4a30e36`: today the axis holds
  * exactly one entry, `{id: 'yolo', axis: 'export', label: 'YOLO
  * detection dataset export', status: 'stable', default: true}`.
  *

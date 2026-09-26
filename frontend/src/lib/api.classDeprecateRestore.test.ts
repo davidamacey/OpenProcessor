@@ -1,5 +1,5 @@
 /**
- * `/classes` Deprecate/Restore (OpenProcessor 698d1da, cf3c87a):
+ * `/classes` Deprecate/Restore (OpenProcessor 01324cb, 243f7f2):
  * `POST {API_PREFIX}/classes/{id}/deprecate` and `.../restore` — the
  * `/classes` "Restore" button used to be permanently disabled (no
  * backend support). deprecateClass()/restoreClass() are thin POST
@@ -109,7 +109,7 @@ describe('classStillReferencedDetail', () => {
   });
 });
 
-describe('classMergedDetail (F-56, OpenProcessor 70663c0)', () => {
+describe('classMergedDetail (F-56, OpenProcessor 4c125ec)', () => {
   const body = {
     detail: {
       error: 'class_merged',

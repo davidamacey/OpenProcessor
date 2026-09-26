@@ -267,7 +267,7 @@ describe('parseMethodsResponse', () => {
   });
 
   it("routes axis:'export' entries into dataset_exports (real T-C2 wire shape)", () => {
-    // Verbatim from strategy_registry.py's _export_strategies() @ d8cb9dc.
+    // Verbatim from strategy_registry.py's _export_strategies() @ 4a30e36.
     const parsed = parseMethodsResponse({
       strategies: [
         {

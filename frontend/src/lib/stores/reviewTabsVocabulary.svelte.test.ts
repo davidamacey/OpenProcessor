@@ -202,7 +202,7 @@ describe('reviewTabsVocabularyStore.filterSupported / filtersFor / filterDefault
   });
 });
 
-// 840beb8 adoption: GET {API_PREFIX}/review/tabs now also serves each tab's
+// 3f1a11e adoption: GET {API_PREFIX}/review/tabs now also serves each tab's
 // self-describing enum filter_specs (e.g. Regions' region_status) — the
 // generic served-enum filter bar renders one <select> per entry with zero
 // param-specific code.

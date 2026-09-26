@@ -1,5 +1,5 @@
 /**
- * OpenProcessor a8a34aa made several request bodies `extra='forbid'`
+ * OpenProcessor d72cc63 made several request bodies `extra='forbid'`
  * (`additionalProperties: false` in the vendored OpenAPI): an unknown key
  * is a 422. Drive each wrapper with every option it accepts and check the
  * JSON it actually sends only uses keys the served schema declares.

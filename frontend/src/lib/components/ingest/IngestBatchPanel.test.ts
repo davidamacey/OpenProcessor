@@ -175,7 +175,7 @@ describe('IngestBatchPanel', () => {
     expect(submitBtn?.disabled).toBe(true);
   });
 
-  it('a8a34aa: lists served secondary-detector failures', async () => {
+  it('d72cc63: lists served secondary-detector failures', async () => {
     const base = servedResponse();
     vi.mocked(ingestBatch).mockResolvedValue({
       ...base,

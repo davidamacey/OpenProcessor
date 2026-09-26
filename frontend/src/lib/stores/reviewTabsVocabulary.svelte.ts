@@ -89,7 +89,7 @@ class ReviewTabsVocabularyStore {
     return v === undefined ? null : v;
   }
 
-  /** This tab's served self-describing enum filters (840beb8 adoption) —
+  /** This tab's served self-describing enum filters (3f1a11e adoption) —
    *  empty array when the endpoint is absent, not yet loaded, or the tab
    *  declares none. Drives the generic served-enum filter bar: a future
    *  spec on any tab renders with zero page-specific code, since the

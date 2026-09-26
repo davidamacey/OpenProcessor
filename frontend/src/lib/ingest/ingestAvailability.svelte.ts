@@ -11,7 +11,7 @@
  * write route would produce.
  *
  * BA-2 (`GET {API_PREFIX}/ingest/config`) has since landed
- * (OpenProcessor c676d2b), but this store still probes `/ingest/status`
+ * (OpenProcessor c5c606f), but this store still probes `/ingest/status`
  * deliberately — it stays the single, minimal availability signal;
  * `/routes/ingest/+page.svelte` fetches the richer `IngestConfig` itself
  * once `available` is confirmed `true`, so a config fetch never fires

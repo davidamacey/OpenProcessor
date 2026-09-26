@@ -189,7 +189,7 @@
     </div>
 
     {#if secondaryFailures.length > 0}
-      <!-- a8a34aa: these images ingested with primary-detector crops only. -->
+      <!-- d72cc63: these images ingested with primary-detector crops only. -->
       <ul class="max-h-32 overflow-y-auto text-xs" data-testid="batch-secondary-list">
         {#each secondaryFailures as r (r.image_path)}
           <li class="border-b border-zinc-900 py-1 font-mono">

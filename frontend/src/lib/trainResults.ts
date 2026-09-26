@@ -24,7 +24,7 @@ export function isTerminalTrainState(state: TrainState | string): boolean {
 /**
  * Label for `TrainEval`'s overall figures (`map50`/`map50_95`/
  * `precision`/`recall`) — this is the run's headline number, labelled
- * by the backend's own `eval.split` (OpenProcessor e9aac68). A run
+ * by the backend's own `eval.split` (OpenProcessor 5595474). A run
  * whose `eval` predates that field (no `split` served) falls back to
  * the pre-cutover guess: the overall figures are the last VAL epoch's
  * numbers on that shape.

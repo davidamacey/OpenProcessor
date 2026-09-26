@@ -159,7 +159,7 @@ describe('IngestRunPanel', () => {
     expect(target.textContent).toContain('upload/a.jpg');
   });
 
-  it('a8a34aa: shows the served secondary-detector failures on ingested files', async () => {
+  it('d72cc63: shows the served secondary-detector failures on ingested files', async () => {
     vi.mocked(ingestPathLookup).mockResolvedValue({ known_paths: {} });
     vi.mocked(ingestUpload).mockResolvedValue({
       status: 'success',

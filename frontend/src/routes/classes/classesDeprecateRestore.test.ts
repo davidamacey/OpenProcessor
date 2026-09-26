@@ -1,5 +1,5 @@
 /**
- * Deprecate/Restore (OpenProcessor 698d1da, cf3c87a) — the `/classes`
+ * Deprecate/Restore (OpenProcessor 01324cb, 243f7f2) — the `/classes`
  * Restore button used to be permanently `disabled` ("no backend support
  * exists"); that's now obsolete. `deprecateClassAction` must handle the
  * structured `class_still_referenced` 409 by offering the existing merge

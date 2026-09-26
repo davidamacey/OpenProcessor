@@ -1,5 +1,5 @@
 /**
- * OpenProcessor d5343cb: several export-status fields (`object_count`,
+ * OpenProcessor 4c9499a: several export-status fields (`object_count`,
  * `split_object_counts`, `images_with_unlabeled_items`, …) are `null` on
  * an export written before the backend recorded them — genuinely
  * "unknown", not zero. Rendering `0` there would claim something false

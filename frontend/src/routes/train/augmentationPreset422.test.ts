@@ -1,5 +1,5 @@
 /**
- * OpenProcessor 6c77deb: `POST {API_PREFIX}/train/start` and
+ * OpenProcessor df01309: `POST {API_PREFIX}/train/start` and
  * `/train/start_campaign` 422 on an unknown `augmentation.preset` with
  * `{detail: {message, field: 'augmentation.preset', valid_presets}}`.
  * `maybeRenderPreflight` (`/train/+page.svelte`) already read

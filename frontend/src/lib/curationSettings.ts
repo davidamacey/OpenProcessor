@@ -126,7 +126,7 @@ export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
     axis: 'prompt_pack',
     label: 'VLM prompt pack',
     bucket: 'prompt_packs',
-    // Verified 2026-09-23 on OpenProcessor main 80dd097: both auto_label's
+    // Verified 2026-09-23 on OpenProcessor main f4551bf: both auto_label's
     // resolve_run_selection and POST /vlm/label_batch (what the always-on
     // vlm_worker calls) resolve this default.
     blurb:

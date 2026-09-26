@@ -1,12 +1,12 @@
-"""OpenProcessor 6c77deb + d5343cb adoption ("export splits by source
+"""OpenProcessor df01309 + 4c9499a adoption ("export splits by source
 image, split-coverage preflight checks, honest holdout freeze, validated
 augmentation presets" + "export one image + one label file per source
 image, partial-frame policy and counts"):
 
 1. `GET {API_PREFIX}/export/status` now serves `image_count`/
-   `class_count`/`split_counts`/`class_split_counts` (6c77deb) and
+   `class_count`/`split_counts`/`class_split_counts` (df01309) and
    `object_count`/`split_object_counts`/`require_fully_labeled_images`/
-   partial-frame counts (d5343cb) on a successful export — the page must
+   partial-frame counts (4c9499a) on a successful export — the page must
    render them, with a 0-train/0-val class row highlighted using the
    served numbers only.
 2. `POST {API_PREFIX}/test_holdout/freeze`'s request body is `{percent}`

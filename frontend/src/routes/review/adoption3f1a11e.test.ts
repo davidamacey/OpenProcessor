@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * OpenProcessor main 840beb8 adoption: rejection_reasons vocabulary,
+ * OpenProcessor main 3f1a11e adoption: rejection_reasons vocabulary,
  * region_bbox_correct, and the generic served-enum review filter bar
  * (`ReviewFilterSpec`, e.g. Regions' `region_status`). Static source-scan
  * (no @testing-library/svelte in this repo — see reviewFilterConsistency
@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(path.resolve(here, './+page.svelte'), 'utf-8');
 
-describe('840beb8: generic served-enum filter bar (no tab/param-specific code)', () => {
+describe('3f1a11e: generic served-enum filter bar (no tab/param-specific code)', () => {
   it('renders one <select> per activeFilterSpecs entry, keyed by spec.param', () => {
     expect(src).toMatch(/\{#each activeFilterSpecs as spec \(spec\.param\)\}/);
     expect(src).toMatch(
@@ -71,14 +71,14 @@ describe('840beb8: generic served-enum filter bar (no tab/param-specific code)',
   });
 });
 
-describe('840beb8: region_bbox_correct folded into the existing Validation row', () => {
+describe('3f1a11e: region_bbox_correct folded into the existing Validation row', () => {
   it('the inline slot panel renders a "model: box wrong" chip gated on boxCorrect === false', () => {
     expect(src).toMatch(/slotData\?\.lifecycle\?\.boxCorrect === false/);
     expect(src).toMatch(/model: box wrong/);
   });
 });
 
-describe('840beb8: per-item reason wording — region_rejection_reason wins over the generic reason string', () => {
+describe('3f1a11e: per-item reason wording — region_rejection_reason wins over the generic reason string', () => {
   it('currentSlotRejectionReason is derived off slotOf(current, activeSlot).lifecycle.rejectionReason', () => {
     expect(src).toMatch(/const currentSlotRejectionReason = \$derived<string \| null>\(/);
     expect(src).toMatch(
@@ -107,7 +107,7 @@ describe('840beb8: per-item reason wording — region_rejection_reason wins over
   });
 });
 
-describe('840beb8: candidate badges style by the served rejection kind (never "rejected" for needs_human)', () => {
+describe('3f1a11e: candidate badges style by the served rejection kind (never "rejected" for needs_human)', () => {
   it('the inline slot-panel candidate badge branches on rejectionReasonKind, not just presence of a reason', () => {
     expect(src).toMatch(
       /\{@const candidateKind = regionVocabularyStore\.rejectionReasonKind\(\s*slotData\?\.lifecycle\?\.rejectionReason,?\s*\)\}/,

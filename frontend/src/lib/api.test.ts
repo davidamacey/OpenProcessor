@@ -1749,7 +1749,7 @@ describe('pollAutoLabelJob', () => {
   /**
    * M7 (docs/design/interactive-pass-2026-09-24.md): with `expectedJobId`,
    * polls `GET {API_PREFIX}/pipeline/auto_label/status/{job_id}` — the
-   * per-job endpoint the backend now serves (07cc061) — not the
+   * per-job endpoint the backend now serves (b654da5) — not the
    * "current/most recent job" `.../status` slot, and no longer needs to
    * skip a mismatched `job_id` client-side.
    */

@@ -1,7 +1,7 @@
 """M6 (docs/design/interactive-pass-2026-09-24.md §6, BOTH — now FIXED):
 once a region-tab write lands (confirm/reject/false-positive/box-edit),
 Z must reverse it server-side via `POST {API_PREFIX}/crops/{id}/region/undo`
-(backend: OpenProcessor main `07cc061`) — distinct from the pre-existing
+(backend: OpenProcessor main `b654da5`) — distinct from the pre-existing
 "← step back" action, which only re-queues the crop locally without
 touching what the server saved.
 

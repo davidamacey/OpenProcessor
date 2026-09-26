@@ -146,7 +146,7 @@ describe('reviewUndismissCrop', () => {
   });
 });
 
-describe('strict batch bodies (OpenProcessor a8a34aa): an empty list is never sent', () => {
+describe('strict batch bodies (OpenProcessor d72cc63): an empty list is never sent', () => {
   it('discardCropsBatch / undo batches / ingestBatch reject [] without calling fetch', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

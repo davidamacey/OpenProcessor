@@ -1,6 +1,6 @@
 /**
  * `resolveNewClassProposal` / `undoLabelBatch` (2026-09-24, OpenProcessor
- * af3a580) — bulk resolve for VLM new-class proposals plus the batch
+ * 2f5cda2) — bulk resolve for VLM new-class proposals plus the batch
  * undo it's paired with. Verifies the exact wire shapes: method, query
  * string (`dry_run` only sent when true), body (`class_id` XOR
  * `create`), and that the response is passed through / mapped

@@ -155,7 +155,7 @@ export interface TrainEvalPerClass {
  * which is a per-epoch training-time figure, not this holdout pass.
  *
  * `split` is absent only on a run whose `eval` predates the eval-split
- * cutover (OpenProcessor e9aac68) — `evalOverallLabel`/
+ * cutover (OpenProcessor 5595474) — `evalOverallLabel`/
  * `evalPerClassLabel` fall back to the pre-cutover guess for that case
  * (val for the overall figures, test for per-class, since per-class has
  * always been test-split-only).
@@ -175,10 +175,10 @@ export interface TrainEval {
   map50_95?: number | null;
   precision?: number | null;
   recall?: number | null;
-  /** Absent on runs from before OpenProcessor e9aac68 — see doc comment above. */
+  /** Absent on runs from before OpenProcessor 5595474 — see doc comment above. */
   split?: TrainEvalSplit | null;
   /** The last validation epoch's numbers, served separately from the
-   *  overall figures since e9aac68. */
+   *  overall figures since 5595474. */
   val_last?: { map50?: number | null; map50_95?: number | null } | null;
   per_class?: TrainEvalPerClass[] | null;
   /** Detection head this eval pass scored (OpenProcessor #34 W1),
@@ -401,7 +401,7 @@ export interface PresetsResponse {
 
 /**
  * One selectable `augmentation.preset` — `GET
- * {API_PREFIX}/train/augmentation_presets` (OpenProcessor 6c77deb).
+ * {API_PREFIX}/train/augmentation_presets` (OpenProcessor df01309).
  */
 export interface AugmentationPresetOption {
   id: string;
@@ -412,7 +412,7 @@ export interface AugmentationPresetOption {
 }
 
 /** `GET {API_PREFIX}/train/augmentation_presets` response. Absent on a
- *  pre-6c77deb backend (404) — `AugmentationPanel` falls back to a
+ *  pre-df01309 backend (404) — `AugmentationPanel` falls back to a
  *  read-only display of the current value when this fails to load. */
 export interface AugmentationPresetsResponse {
   presets: AugmentationPresetOption[];

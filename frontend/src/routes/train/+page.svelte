@@ -162,7 +162,7 @@
   // `image_count`/`class_count` drive the dataset card's "current
   // export" numbers below, in place of the classesStore-wide validated
   // total (which double-counted holdout crops). `null`/missing fields
-  // on a pre-6c77deb backend fall back to the labelled global-pool
+  // on a pre-df01309 backend fall back to the labelled global-pool
   // numbers — see the card markup.
   let multiClassExportState = $state<ExportStatus | null>(null);
   let singleClassExportDir = $state<string>('');
@@ -475,7 +475,7 @@
         detail?: {
           preflight?: PreflightReport;
           message?: string;
-          // 6c77deb: an unknown `augmentation.preset` 422s with
+          // df01309: an unknown `augmentation.preset` 422s with
           // `{message, field: 'augmentation.preset', valid_presets}`
           // instead of/alongside a preflight report.
           field?: string;
@@ -1039,7 +1039,7 @@
           {datasetExportSpec.blurb}
         </p>
       {:else if showsCurrentExport && multiClassExportState?.class_split_counts}
-        <!-- Current export's own contents (OpenProcessor 6c77deb's
+        <!-- Current export's own contents (OpenProcessor df01309's
              GET {API_PREFIX}/export/status) — only valid for the current
              export, so this branch renders for the `current` symlink or an
              explicit pick of that same directory, never a past version. m-train-card (2026-09-24): this used to show the

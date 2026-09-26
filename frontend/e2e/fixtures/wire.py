@@ -81,11 +81,11 @@ _EXPLICIT: dict[str, Any] = {
     "class_labeled_at": "2026-01-02T03:04:05Z",
     "class_labeler": "labeler@example.com",
     "vlm_confidence": "high",
-    # Backend main 6a1f350 (VLM class-answer fix): when did the VLM last
+    # Backend main c011721 (VLM class-answer fix): when did the VLM last
     # attempt a class answer, and why it came back empty if it did.
     "vlm_class_attempted_at": "2026-01-02T03:03:00Z",
     "vlm_class_empty_reason": "no_visible_vehicle",
-    # Backend main 7254ec4 (dq-queues): a class confidence that matches
+    # Backend main 63d57d8 (dq-queues): a class confidence that matches
     # class_source (DQ-M8's served-side half) and the VLM's raw,
     # pre-registry-match class string. Not adopted by any UI in this
     # batch (per instructions, a separate pass wires these up) -- just
@@ -170,7 +170,7 @@ _EXPLICIT: dict[str, Any] = {
     "region_pairing": "paired",
     "region_skip_verify": False,
     "item_text_lines": [],
-    # Backend main f7171cc (dq-region), adopted on the frontend by
+    # Backend main 22a3e65 (dq-region), adopted on the frontend by
     # readSlot (SlotData.text.choice/invalidReason,
     # SlotData.subBox.candidate, SlotData.lifecycle.validated/
     # autoConfirmed) and /review's candidate-box confirm flow. See

@@ -229,7 +229,7 @@ export interface LifecycleCapability {
    *  Regions: `region_auto_confirmed`. */
   autoConfirmedField?: WireField;
   rejectionReasonField?: WireField;
-  /** Boolean "the verifier judged this box correct" (840beb8 adoption)
+  /** Boolean "the verifier judged this box correct" (3f1a11e adoption)
    *  — `false` is the actual "model said wrong box" signal distinct from
    *  a rejection reason's `kind`. `null`/absent means no verdict was
    *  given. Regions: `region_bbox_correct`. */

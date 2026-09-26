@@ -1,7 +1,7 @@
 /**
  * `AugmentationPanel` used to hardcode a `PRESETS` id list matching the
  * trainer's own table by hand (`src/lib/contract/augmentPresets.test.ts`
- * diffed it against a local OpenProcessor checkout). OpenProcessor 6c77deb
+ * diffed it against a local OpenProcessor checkout). OpenProcessor df01309
  * added `GET {API_PREFIX}/train/augmentation_presets`, so the panel now
  * renders whatever the backend serves — this proves the mount actually
  * does that, and that it degrades to a read-only display when the

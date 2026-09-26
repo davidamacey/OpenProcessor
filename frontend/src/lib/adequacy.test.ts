@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { adequacyChipClass, adequacyTooltip } from './adequacy';
 
 // Server-served tiers (`GET {API_PREFIX}/classes` / `/stats/classes`,
-// verified live on d037be8: every sample class in this deployment reports
+// verified live on d32d3fa: every sample class in this deployment reports
 // `adequacy: "block"` against `thresholds.block_below: 20`). This module
 // must render exactly the level it's handed — no recomputation from a
 // validated_count.

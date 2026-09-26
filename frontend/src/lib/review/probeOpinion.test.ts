@@ -1,9 +1,9 @@
 /**
- * F8 D1 (OpenProcessor d817605): "Accept model's class" is offered only
+ * F8 D1 (OpenProcessor 51b05d7): "Accept model's class" is offered only
  * when the served `probe_disagreement` is true; an out-of-scope item reads
  * "no opinion", never a prediction or agreement.
  *
- * OpenProcessor main 9e217f0 adds `probe_actionable` — Accept requires
+ * OpenProcessor main 8990ede adds `probe_actionable` — Accept requires
  * `probe_actionable === true`, not just `probe_disagreement === true`. A
  * disagreement that isn't (yet) actionable renders as "unsure", no Accept.
  */

@@ -33,7 +33,7 @@ describe('resolveIngestConfig', () => {
     expect(resolved.regionDrainStablePolls).toBeNull();
   });
 
-  it('prefers every served field over its interim constant (BA-2, c676d2b)', () => {
+  it('prefers every served field over its interim constant (BA-2, c5c606f)', () => {
     const resolved = resolveIngestConfig(
       servedConfig({
         upload: {

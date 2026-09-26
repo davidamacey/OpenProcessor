@@ -54,7 +54,7 @@ describe('getRegionVocabulary', () => {
         no_reading_words: ['NULL'],
         invalid_reasons: ['placeholder', 'sequence'],
       },
-      // OpenProcessor 840beb8 adoption.
+      // OpenProcessor 3f1a11e adoption.
       rejection_reasons: [
         {
           id: 'region_visible_elsewhere',

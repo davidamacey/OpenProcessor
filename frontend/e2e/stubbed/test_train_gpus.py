@@ -29,7 +29,7 @@ def register_train_mount(stub):
     stub.on("GET", r"/train/presets(\?|$)", {"class_subset_presets": []})
     stub.on("GET", r"/train/runs(\?|$)", {"items": [], "total": 0})
     stub.on("GET", r"/train/gpus(\?|$)", GPU_OPTIONS)
-    # OpenProcessor 6c77deb: AugmentationPanel now fetches its preset list
+    # OpenProcessor df01309: AugmentationPanel now fetches its preset list
     # from the backend instead of a hardcoded id table.
     stub.on(
         "GET",

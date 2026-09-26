@@ -307,7 +307,7 @@
             {:else if data.lifecycle.validated != null || data.lifecycle.autoConfirmed != null}
               <span class="text-zinc-500">not yet reviewed</span>
             {/if}
-            <!-- 840beb8 adoption: region_bbox_correct is the verifier's
+            <!-- 3f1a11e adoption: region_bbox_correct is the verifier's
                  own box-correctness verdict — false is the actual "model
                  said wrong box" signal, distinct from a rejection
                  reason's kind (which can be an automatic geometry gate
@@ -451,7 +451,7 @@
           {@const rejectionKind = regionVocabularyStore.rejectionReasonKind(
             data.lifecycle.rejectionReason,
           )}
-          <!-- 840beb8 adoption: style/label by the served kind —
+          <!-- 3f1a11e adoption: style/label by the served kind —
                model_verdict (the verifier judged the box wrong) reads as
                a rejection, automatic (a geometry gate) is neutral/amber,
                needs_human (no verdict given) must never be worded as a

@@ -1,11 +1,11 @@
 /**
- * F8 D1 (OpenProcessor d817605): how `/review` presents the probe's
+ * F8 D1 (OpenProcessor 51b05d7): how `/review` presents the probe's
  * opinion on an item, from the served `probe_in_scope` / `probe_disagreement`.
  *
  * - `probe_in_scope === false`: the item's class is outside the probe's
  *   classes. The probe has no opinion, so its out-of-vocabulary top-1 is
  *   not shown as a prediction, and never as agreement.
- * - OpenProcessor main 9e217f0 adds `probe_actionable` — server-computed
+ * - OpenProcessor main 8990ede adds `probe_actionable` — server-computed
  *   from in-scope + disagreement + the server's own confidence threshold
  *   (`OP_PROBE_ACTIONABLE_MIN_CONFIDENCE`). "Accept model's class" is
  *   offered ONLY when `probe_actionable === true`. A served disagreement

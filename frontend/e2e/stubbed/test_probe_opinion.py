@@ -1,8 +1,8 @@
-"""F8 D1 (OpenProcessor d817605): an item outside the probe's classes
+"""F8 D1 (OpenProcessor 51b05d7): an item outside the probe's classes
 (`probe_in_scope: false`, `probe_disagreement: null`) reads "no opinion"
 and never offers "Accept model's class"; a served disagreement does.
 
-OpenProcessor main 9e217f0 adds `probe_actionable` — Accept requires
+OpenProcessor main 8990ede adds `probe_actionable` — Accept requires
 `probe_actionable === true`, not just a served disagreement. A
 disagreement the server didn't mark actionable (below its own confidence
 threshold) renders as a muted "model unsure: <predicted class>" instead."""

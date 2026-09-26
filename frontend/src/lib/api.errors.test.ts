@@ -39,7 +39,7 @@ describe('structured API errors', () => {
 });
 
 describe('Pydantic validation-error arrays (W4, 2026-09-24)', () => {
-  // Live on d037be8: `POST {API_PREFIX}/classes` with a name that fails
+  // Live on d32d3fa: `POST {API_PREFIX}/classes` with a name that fails
   // `^[a-z0-9_]+$` returns `{detail: [{type, loc, msg, input, ctx}]}`, not a
   // plain string. `/classes` and `AddClassModal` dropped their own regex
   // and now depend on this text reaching the toast.

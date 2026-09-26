@@ -3,7 +3,7 @@
  * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.2).
  *
  * BA-2 (`GET {API_PREFIX}/ingest/config`) landed on OpenProcessor
- * c676d2b — every real limit below now comes from the served
+ * c5c606f — every real limit below now comes from the served
  * `IngestConfig` when present. The constants that remain are the
  * documented fallback for a pre-BA-2 backend only (`served ?? interim`),
  * so `resolveIngestConfig(null)` still behaves exactly as it did before
