@@ -64,6 +64,7 @@
     "probe_disagreement",
     "probe_in_scope",
     "probe_model_version",
+    "probe_actionable",
     "mistakenness_score",
     "mistakenness_method",
     "mistakenness_version",
@@ -601,6 +602,18 @@
         ],
         "default": null,
         "title": "Needs New Class Note"
+      },
+      "probe_actionable": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Probe Actionable"
       },
       "probe_disagreement": {
         "anyOf": [

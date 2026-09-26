@@ -116,6 +116,14 @@ class ItemDoc(BaseModel):
     # Probe checkpoint version tag -- the closest thing to a "probe run
     # id" today (see src.services.curation.probe_predictions).
     probe_model_version: str | None = None
+    # Backend's own accept/no-accept decision (D1 follow-up): null mirrors
+    # probe_in_scope/probe_disagreement (not scored yet); true only when
+    # in-scope + disagreeing + the probe is confident enough
+    # (CurationConfig.probe_actionable_min_confidence); false otherwise,
+    # including disagreeing-but-unsure. Only true offers "accept model's
+    # class"; disagreeing-but-not-actionable shows "model unsure: <class>"
+    # with no accept action. See src.services.curation.wire.probe_actionable.
+    probe_actionable: bool | None = None
     mistakenness_score: float | None = None
     mistakenness_method: str | None = None
     mistakenness_version: str | None = None

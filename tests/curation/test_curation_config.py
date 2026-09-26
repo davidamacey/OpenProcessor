@@ -126,6 +126,31 @@ def test_from_env_mlflow_public_url_unset_stays_none(monkeypatch: pytest.MonkeyP
 
 
 # =============================================================================
+# OP_PROBE_ACTIONABLE_MIN_CONFIDENCE (the floor probe_pred_confidence must
+# clear, alongside in-scope + disagreeing, for the item wire's
+# probe_actionable to be true -- see src.services.curation.wire.probe_actionable)
+# =============================================================================
+
+
+def test_probe_actionable_min_confidence_default_is_half() -> None:
+    assert CurationConfig().probe_actionable_min_confidence == 0.5
+
+
+def test_from_env_overrides_probe_actionable_min_confidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('OP_PROBE_ACTIONABLE_MIN_CONFIDENCE', '0.8')
+    assert CurationConfig.from_env().probe_actionable_min_confidence == 0.8
+
+
+def test_from_env_probe_actionable_min_confidence_unset_stays_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv('OP_PROBE_ACTIONABLE_MIN_CONFIDENCE', raising=False)
+    assert CurationConfig.from_env().probe_actionable_min_confidence == 0.5
+
+
+# =============================================================================
 # OP_SOURCE_PATH_ALIASES (named source roots served at /images/root/{alias})
 # =============================================================================
 

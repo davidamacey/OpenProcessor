@@ -167,6 +167,47 @@ def _api_prefix() -> str:
     return get_curation_config().api_prefix
 
 
+def _probe_actionable_min_confidence() -> float:
+    from src.config import get_curation_config
+
+    return get_curation_config().probe_actionable_min_confidence
+
+
+def probe_actionable(
+    *,
+    probe_pred_class: Any,
+    probe_in_scope: bool | None,
+    probe_disagreement: bool | None,
+    probe_pred_confidence: float | None,
+    min_confidence: float | None = None,
+) -> bool | None:
+    """Whether a client should offer "accept model's class" for this item.
+
+    ``None`` when the probe hasn't scored the item at all (mirrors
+    ``probe_in_scope``/``probe_disagreement``'s own null). Once scored,
+    ``True`` only when all three hold: the item's class is one the probe
+    was trained on (``probe_in_scope``), the probe's top-1 differs from it
+    (``probe_disagreement``), and the probe is confident enough in its
+    own top-1 (``probe_pred_confidence >= min_confidence``) -- a
+    disagreeing-but-unsure probe (e.g. near-uniform posterior) must not
+    be offered as a one-click accept. ``False`` for every other case:
+    in-scope + agreeing, out-of-scope, or disagreeing-but-unsure.
+
+    Confidence, not entropy, gates this -- see
+    ``CurationConfig.probe_actionable_min_confidence``'s docstring for why
+    ``probe_pred_entropy`` isn't a reliable normalized signal here.
+    """
+    if probe_pred_class is None:
+        return None
+    threshold = _probe_actionable_min_confidence() if min_confidence is None else min_confidence
+    return bool(
+        probe_in_scope
+        and probe_disagreement is True
+        and probe_pred_confidence is not None
+        and probe_pred_confidence >= threshold
+    )
+
+
 def serialize_item(
     src: dict[str, Any],
     fallback_id: str = '',
@@ -188,6 +229,9 @@ def serialize_item(
     distance = current_cluster_distance(src)
     similarity = cluster_similarity(distance)
     label_conf, label_conf_source = class_confidence(src)
+    probe_pred_class = src.get('probe_pred_class')
+    probe_disagreement = src.get('probe_disagreement')
+    probe_in_scope = None if probe_pred_class is None else probe_disagreement is not None
     item: dict[str, Any] = {
         'id': crop_id,
         'crop_id': crop_id,
@@ -260,7 +304,7 @@ def serialize_item(
         'crop_area_norm': src.get('crop_area_norm'),
         'blur_lap_ratio': src.get('blur_lap_ratio'),
         'proposal_name': src.get('proposal_name'),
-        'probe_pred_class': src.get('probe_pred_class'),
+        'probe_pred_class': probe_pred_class,
         'probe_pred_class_id': src.get('probe_pred_class_id'),
         'probe_pred_entropy': src.get('probe_pred_entropy'),
         # D1: null means the probe has no opinion (either it hasn't scored
@@ -270,7 +314,7 @@ def serialize_item(
         # offer an "accept model's class" action for it; only a real
         # True/False value is an actual probe opinion. See
         # src.services.curation.probe_predictions for how this is computed.
-        'probe_disagreement': src.get('probe_disagreement'),
+        'probe_disagreement': probe_disagreement,
         # Explicit, so a client never has to infer scope from
         # probe_disagreement being null: None when the probe hasn't scored
         # this item at all; once scored, True iff the item's class was one
@@ -278,16 +322,24 @@ def serialize_item(
         # True/False), False when the probe scored the item but the item's
         # class is outside the probe's class set (probe_disagreement is
         # then null — structurally no opinion, not an agreement).
-        'probe_in_scope': (
-            None
-            if src.get('probe_pred_class') is None
-            else src.get('probe_disagreement') is not None
-        ),
+        'probe_in_scope': probe_in_scope,
         # The probe checkpoint's version tag (see probe_predictions.py's
         # probe_model_version) -- the closest thing this system has to a
         # "probe run id" today; null before the probe has ever scored this
         # item.
         'probe_model_version': src.get('probe_model_version'),
+        # D1 follow-up: the backend's own accept/no-accept decision, so the
+        # frontend never re-derives a threshold. Null mirrors
+        # probe_in_scope/probe_disagreement (probe hasn't scored this item);
+        # true only when in-scope + disagreeing + confident enough (see
+        # CurationConfig.probe_actionable_min_confidence); false for every
+        # other case, including disagreeing-but-unsure.
+        'probe_actionable': probe_actionable(
+            probe_pred_class=probe_pred_class,
+            probe_in_scope=probe_in_scope,
+            probe_disagreement=probe_disagreement,
+            probe_pred_confidence=src.get('probe_pred_confidence'),
+        ),
         'mistakenness_score': src.get('mistakenness_score'),
         'mistakenness_method': src.get('mistakenness_method'),
         'mistakenness_version': src.get('mistakenness_version'),

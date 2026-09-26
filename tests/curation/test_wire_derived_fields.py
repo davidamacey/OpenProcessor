@@ -119,6 +119,105 @@ def test_pass_through_defaults() -> None:
     assert item['probe_pred_class_id'] is None
 
 
+# ---------------------------------------------------------- probe_actionable
+
+
+def test_probe_actionable_null_when_probe_has_not_scored() -> None:
+    item = _item()
+    assert item['probe_actionable'] is None
+    assert item['probe_in_scope'] is None
+
+
+def test_probe_actionable_true_when_in_scope_disagreeing_and_confident() -> None:
+    item = _item(
+        class_name='sedan',
+        probe_pred_class='suv',
+        probe_disagreement=True,
+        probe_pred_confidence=0.9,
+    )
+    assert item['probe_actionable'] is True
+
+
+def test_probe_actionable_false_when_disagreeing_but_unsure() -> None:
+    """The probe disagrees, but its top-1 confidence is below the floor --
+    offering "accept model's class" here would be misleading."""
+    item = _item(
+        class_name='sedan',
+        probe_pred_class='suv',
+        probe_disagreement=True,
+        probe_pred_confidence=0.2,
+    )
+    assert item['probe_actionable'] is False
+
+
+def test_probe_actionable_false_when_in_scope_and_agreeing() -> None:
+    item = _item(
+        class_name='sedan',
+        probe_pred_class='sedan',
+        probe_disagreement=False,
+        probe_pred_confidence=0.95,
+    )
+    assert item['probe_actionable'] is False
+
+
+def test_probe_actionable_false_when_out_of_scope() -> None:
+    """probe_in_scope is False (probe_disagreement is null): structurally
+    no opinion, never actionable regardless of confidence."""
+    item = _item(
+        class_name='motorcycle',
+        probe_pred_class='sedan',
+        probe_disagreement=None,
+        probe_pred_confidence=0.95,
+    )
+    assert item['probe_in_scope'] is False
+    assert item['probe_actionable'] is False
+
+
+def test_probe_actionable_false_when_confidence_exactly_missing() -> None:
+    """Defensive: disagreeing + in scope but no confidence recorded (should
+    not happen in production -- probe_pred_confidence is always written
+    alongside probe_pred_class -- but the gate must not silently pass)."""
+    item = _item(
+        class_name='sedan',
+        probe_pred_class='suv',
+        probe_disagreement=True,
+        probe_pred_confidence=None,
+    )
+    assert item['probe_actionable'] is False
+
+
+def test_probe_actionable_respects_configured_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.config import curation as curation_config_mod
+
+    monkeypatch.setenv('OP_PROBE_ACTIONABLE_MIN_CONFIDENCE', '0.95')
+    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
+    item = _item(
+        class_name='sedan',
+        probe_pred_class='suv',
+        probe_disagreement=True,
+        probe_pred_confidence=0.9,
+    )
+    # 0.9 clears the 0.5 default but not an overridden 0.95 floor.
+    assert item['probe_actionable'] is False
+
+
+def test_probe_actionable_exactly_at_threshold_is_actionable() -> None:
+    from src.services.curation.wire import probe_actionable
+
+    assert (
+        probe_actionable(
+            probe_pred_class='suv',
+            probe_in_scope=True,
+            probe_disagreement=True,
+            probe_pred_confidence=0.5,
+            min_confidence=0.5,
+        )
+        is True
+    )
+
+
 # ------------------------------------------------------------- GET /crops?ids=
 
 

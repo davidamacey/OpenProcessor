@@ -67,6 +67,7 @@ export interface ItemWire {
   probe_disagreement: boolean | null;
   probe_in_scope: boolean | null;
   probe_model_version: string | null;
+  probe_actionable: boolean | null;
   mistakenness_score: number | null;
   mistakenness_method: string | null;
   mistakenness_version: string | null;
@@ -180,6 +181,7 @@ export const ITEM_WIRE_KEYS = [
   'probe_disagreement',
   'probe_in_scope',
   'probe_model_version',
+  'probe_actionable',
   'mistakenness_score',
   'mistakenness_method',
   'mistakenness_version',
