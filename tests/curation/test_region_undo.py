@@ -17,7 +17,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.curation import base_curation_config
 
 
 # No-profile gating contract: this file exercises region routes, which
@@ -26,7 +27,7 @@ pytestmark = pytest.mark.usefixtures('reference_region_profile')
 
 
 F = get_region_fields()
-INDEX = get_curation_config().items_index
+INDEX = base_curation_config().items_index
 BOX = [0.2, 0.2, 0.4, 0.4]
 
 

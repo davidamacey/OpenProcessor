@@ -19,7 +19,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.curation import base_curation_config
 from src.services.detection.profile_registry import region_profile_or_neutral
 
 
@@ -29,7 +30,7 @@ pytestmark = pytest.mark.usefixtures('reference_region_profile')
 
 
 F = get_region_fields()
-INDEX = get_curation_config().items_index
+INDEX = base_curation_config().items_index
 BOX = [0.6430511474609375, 0.5797716302772215, 0.6966705322265625, 0.6243825534416916]
 PARENT = [0.2421875, 0.38985655737704916, 0.7890625, 0.8000585480093677]
 HUMAN = region_profile_or_neutral().human_detector_name

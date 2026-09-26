@@ -18,7 +18,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config import get_curation_config
+from src.config.curation import base_curation_config
 from src.services.curation.wire import serialize_item
 
 
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     import pytest
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 
 
 def _client(fake: Any) -> TestClient:

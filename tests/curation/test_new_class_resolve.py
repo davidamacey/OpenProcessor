@@ -19,10 +19,10 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
-from src.config import get_curation_config
+from src.config.curation import base_curation_config
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 
 CLASS_STATE_FIELDS = (
     'class_id',

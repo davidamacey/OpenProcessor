@@ -1672,7 +1672,7 @@ def test_status_eval_never_carries_a_filesystem_path(app_client: TestClient, tmp
     assert str(tmp_path) not in json.dumps(body)
     assert (
         body['eval']['confusion_matrix_url']
-        == '/curation/train/artifacts/pathcheck/confusion_matrix.png'
+        == '/curation/projects/default/train/artifacts/pathcheck/confusion_matrix.png'
     )
 
 

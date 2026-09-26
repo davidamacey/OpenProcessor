@@ -9,7 +9,8 @@ import pytest
 from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.curation import base_curation_config
 from src.services.curation.region_text_repair import (
     apply_region_text_repair,
     plan_region_text_repair,
@@ -19,7 +20,7 @@ from src.services.detection.region_text_rules import RegionTextRules
 
 
 F = get_region_fields()
-INDEX = get_curation_config().items_index
+INDEX = base_curation_config().items_index
 PROFILE = NEUTRAL_REGION_PROFILE
 RULES = RegionTextRules.from_profile(PROFILE, prompt_examples=('ABC1234',))
 

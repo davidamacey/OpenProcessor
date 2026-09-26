@@ -162,9 +162,11 @@ def current_cluster_distance(src: dict[str, Any]) -> Any:
 
 
 def _api_prefix() -> str:
-    from src.config import get_curation_config
+    """The bound project's canonical base (``{api_prefix}/projects/{slug}``):
+    served URLs are always scoped, even through the unscoped alias."""
+    from src.config.project_context import project_api_base
 
-    return get_curation_config().api_prefix
+    return project_api_base()
 
 
 def _probe_actionable_min_confidence() -> float:

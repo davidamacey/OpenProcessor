@@ -15,9 +15,9 @@ from src.routers.curation import _common
 
 @pytest.fixture(autouse=True)
 def _reset_bootstrapped_flag():
-    _common._INDEXES_BOOTSTRAPPED = False
+    _common._INDEXES_BOOTSTRAPPED = set()
     yield
-    _common._INDEXES_BOOTSTRAPPED = False
+    _common._INDEXES_BOOTSTRAPPED = set()
 
 
 class _SlowFakeOpenSearch:
@@ -72,17 +72,17 @@ async def test_concurrent_callers_run_the_bootstrap_sequence_exactly_once(
     await asyncio.gather(*(_common._ensure_indexes(os_client) for _ in range(8)))
 
     assert calls == 1, f'create_curation_indexes ran {calls} times, expected exactly 1'
-    assert _common._INDEXES_BOOTSTRAPPED is True
+    assert {'default'} == _common._INDEXES_BOOTSTRAPPED
 
 
 @pytest.mark.asyncio
 async def test_already_bootstrapped_skips_the_lock_entirely(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The fast path (flag already true) must not even try to acquire the
-    lock -- a locked-out lock (e.g. held by a hung bootstrap) would
-    otherwise stall every request forever."""
-    _common._INDEXES_BOOTSTRAPPED = True
+    """The fast path (project already bootstrapped) must not even try to
+    acquire the lock -- a locked-out lock (e.g. held by a hung bootstrap)
+    would otherwise stall every request forever."""
+    _common._INDEXES_BOOTSTRAPPED = {'default'}
     await _common._ensure_indexes_lock.acquire()  # simulate a stuck holder
     try:
         await asyncio.wait_for(_common._ensure_indexes(object()), timeout=1.0)

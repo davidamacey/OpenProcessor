@@ -26,9 +26,10 @@ def test_viz_state_paths_are_distinct_from_retired_clustering_reducer() -> None:
     from src.services.curation import embedding_viz
     from src.services.curation.clustering import embedding_reduce
 
-    assert embedding_viz.VIZ_STATE_JOBLIB_PATH != embedding_reduce.UMAP_STATE_JOBLIB_PATH
-    assert embedding_viz.VIZ_STATE_JOBLIB_PATH != embedding_reduce.UMAP_STATE_JOBLIB_PATH_CUML
-    assert embedding_viz.UMAP_VIZ_STATE_INDEX != embedding_reduce.UMAP_STATE_INDEX
+    viz_path = embedding_viz.viz_state_joblib_path()
+    assert viz_path != embedding_reduce.umap_state_joblib_path()
+    assert viz_path != embedding_reduce.umap_state_joblib_path_cuml()
+    assert embedding_viz.umap_viz_state_index() != embedding_reduce.umap_state_index()
 
 
 # =============================================================================
@@ -91,11 +92,11 @@ async def _await_active_task() -> None:
     """``start_job`` schedules a real ``asyncio.create_task`` -- await it
     directly instead of racing the event loop (these tests don't go
     through a ``TestClient``, so there's no separate loop iteration to
-    lean on). A local variable narrows the ``Task[None] | None`` type for
-    mypy in a way a bare module-attribute assert doesn't."""
+    lean on). The task is kept per project; these tests run bound to
+    ``default``."""
     from src.services.curation import embedding_viz
 
-    task = embedding_viz._active_task
+    task = embedding_viz._active_tasks.get('default')
     assert task is not None
     await task
 
@@ -154,7 +155,7 @@ async def test_run_projection_job_writes_only_viz_fields_and_metadata(
     # Metadata was saved to embedding_viz's OWN index, never op_umap_state.
     fake_os.index.assert_awaited_once()
     _, index_kwargs = fake_os.index.call_args
-    assert index_kwargs['index'] == embedding_viz.UMAP_VIZ_STATE_INDEX
+    assert index_kwargs['index'] == embedding_viz.umap_viz_state_index()
     assert index_kwargs['index'] != 'op_umap_state'
 
     # Every bulk doc body writes ONLY viz_x/viz_y/viz_projection_version --

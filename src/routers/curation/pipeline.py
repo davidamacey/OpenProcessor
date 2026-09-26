@@ -10,10 +10,10 @@ from src.clients.curation_opensearch import mget_crops
 from src.config import get_region_fields
 from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
     OpenSearchDep,
     _now_iso,
     get_class_registry,
+    items_index,
     logger,
     router,
 )
@@ -268,7 +268,7 @@ async def pipeline_auto_label(
         summary['stages']['auto_promote'] = dict(CLUSTER_SCOPED_SKIP)
     else:
         try:
-            await opensearch.indices.refresh(index=CURATION_ITEMS_INDEX)
+            await opensearch.indices.refresh(index=items_index())
         except Exception as exc:
             logger.warning('pipeline_pre_promote_refresh_failed', error=str(exc))
         promote = await with_elapsed_tick(
@@ -306,7 +306,7 @@ async def pipeline_auto_label(
             progress.start_stage('finalize')
         try:
             body = {'query': unvalidated_count_query(class_id=class_id, cluster_id=cluster_id)}
-            cnt = await opensearch.count(index=CURATION_ITEMS_INDEX, body=body)
+            cnt = await opensearch.count(index=items_index(), body=body)
             summary['unvalidated_remaining'] = int(cnt.get('count', 0))
         except Exception:
             summary['unvalidated_remaining'] = -1
@@ -334,9 +334,7 @@ async def pipeline_auto_label(
     guard = ClassWriteGuard('vlm_pipeline')
     scroll_id: str | None = None
     try:
-        resp = await opensearch.search(
-            index=CURATION_ITEMS_INDEX, body=initial_body, scroll=SCROLL_TTL
-        )
+        resp = await opensearch.search(index=items_index(), body=initial_body, scroll=SCROLL_TTL)
         while True:
             scroll_id = resp.get('_scroll_id')
             hits = (resp.get('hits') or {}).get('hits') or []
@@ -509,7 +507,7 @@ async def pipeline_auto_label(
                     opensearch,
                     doc_ids=list(updates_by_id.keys()),
                     merger=_merge_pipeline,
-                    index=CURATION_ITEMS_INDEX,
+                    index=items_index(),
                     refresh=False,
                     writer_id='vlm_pipeline',
                 )
@@ -562,7 +560,7 @@ async def pipeline_auto_label(
 
     # Force a refresh so subsequent reads see the updates.
     try:
-        await opensearch.indices.refresh(index=CURATION_ITEMS_INDEX)
+        await opensearch.indices.refresh(index=items_index())
     except Exception as exc:
         logger.warning('pipeline_refresh_failed', error=str(exc))
 
@@ -589,7 +587,7 @@ async def pipeline_auto_label(
     # Re-count what's still unvalidated for the dashboard.
     try:
         cnt_resp = await opensearch.count(
-            index=CURATION_ITEMS_INDEX,
+            index=items_index(),
             body={'query': unvalidated_count_query(class_id=class_id, cluster_id=cluster_id)},
         )
         remaining = int(cnt_resp.get('count', 0))

@@ -23,6 +23,7 @@ import asyncio
 from typing import Any
 
 from src.config import CurationConfig, get_curation_config
+from src.config.project_context import project_api_base, run_in_executor_bound
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation import review_queries
@@ -210,7 +211,7 @@ async def semantic_text_search(
     region_fields = fields or get_region_fields()
 
     loop = asyncio.get_running_loop()
-    vectors = await loop.run_in_executor(executor, pe_encoder.encode_text, [query])
+    vectors = await run_in_executor_bound(loop, executor, pe_encoder.encode_text, [query])
     vector = vectors[0].tolist()
 
     filter_clause = _build_filter(
@@ -253,7 +254,7 @@ async def semantic_text_search(
     hits = (resp.get('hits') or {}).get('hits') or []
     total = int(((resp.get('hits') or {}).get('total') or {}).get('value', len(hits)))
 
-    items = [_hydrate_item(h, region_fields, cfg.api_prefix) for h in hits]
+    items = [_hydrate_item(h, region_fields, project_api_base()) for h in hits]
 
     return {'items': items, 'total': total, 'page': page, 'page_size': page_size}
 

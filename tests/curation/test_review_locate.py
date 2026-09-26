@@ -22,10 +22,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.curation import base_curation_config
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 F = get_region_fields()
 
 

@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config import get_curation_config
+from src.config.curation import base_curation_config
 from src.services.curation.class_sources import (
     VLM_CATEGORY_SCORE,
     class_confidence,
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 MODEL_SOURCE = 'secondary_model'
 
 

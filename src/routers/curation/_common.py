@@ -35,7 +35,13 @@ from src.clients.curation_opensearch import (
     ensure_items_vlm_raw_label_fields,
     ensure_labels_confirmed_fields,
 )
-from src.config import IndexRole, get_curation_config, index_name
+from src.config import get_curation_config
+from src.config.curation import (  # noqa: F401 - re-exported for the router modules
+    classes_index,
+    images_index,
+    items_index,
+    labels_confirmed_index,
+)
 from src.core.logging import get_logger
 from src.routers.curation._item_models import CropsPageResponse, ItemDoc  # noqa: F401 - re-export
 
@@ -64,13 +70,15 @@ router = APIRouter(
 )
 
 
-CURATION_IMAGES_INDEX = index_name(config, IndexRole.IMAGES)
-CURATION_ITEMS_INDEX = index_name(config, IndexRole.ITEMS)
-CURATION_LABELS_CONFIRMED_INDEX = index_name(config, IndexRole.LABELS_CONFIRMED)
-CURATION_CLASSES_INDEX = index_name(config, IndexRole.CLASSES)
+# Index names are resolved per bound project at call time -- see
+# src.config.curation.items_index() and friends (re-exported here).
 
 
-_INDEXES_BOOTSTRAPPED = False
+# Slugs of the projects whose curation indexes this process has
+# bootstrapped (created + migrated). Per project: binding a second
+# project must bootstrap its own index set, not skip because another
+# project already ran.
+_INDEXES_BOOTSTRAPPED: set[str] = set()
 
 # OpenSearch's index.max_result_window default. from+size past this 500s
 # ("Result window is too large") instead of paging -- reject it explicitly
@@ -157,7 +165,7 @@ async def warm_knn_indexes(opensearch: Any) -> None:
     """
     import time as _time
 
-    indexes = f'{CURATION_ITEMS_INDEX},{CURATION_IMAGES_INDEX}'
+    indexes = f'{items_index()},{images_index()}'
     started = _time.monotonic()
     try:
         await opensearch.transport.perform_request('GET', f'/_plugins/_knn/warmup/{indexes}')
@@ -178,24 +186,26 @@ async def warm_knn_indexes(opensearch: Any) -> None:
 
 # Guards the whole ~5-exists + N-put_mapping bootstrap sequence
 # below. Without this, concurrent requests that all arrive before the
-# first one flips _INDEXES_BOOTSTRAPPED each independently race through
+# first one records their project in _INDEXES_BOOTSTRAPPED each independently race through
 # the full migration sequence against OpenSearch (redundant `exists` +
 # `put_mapping` calls, all discarded but the first to finish).
 _ensure_indexes_lock = asyncio.Lock()
 
 
 async def _ensure_indexes(opensearch: Any) -> None:
-    """Create curation indexes on first request (idempotent).
+    """Create the bound project's curation indexes on its first request
+    in this process (idempotent).
 
     Cheap fast path (no lock) once bootstrapped; the lock only guards the
-    (at most once) cold-start race.
+    (at most once per project) cold-start race.
     """
-    if _INDEXES_BOOTSTRAPPED:
+    slug = config.project_slug
+    if slug in _INDEXES_BOOTSTRAPPED:
         return
     async with _ensure_indexes_lock:
         # Re-check inside the lock: another request may have completed
         # the whole bootstrap sequence while we were waiting to acquire.
-        if _INDEXES_BOOTSTRAPPED:
+        if slug in _INDEXES_BOOTSTRAPPED:
             return
         await _ensure_indexes_locked(opensearch)
 
@@ -204,7 +214,6 @@ async def _ensure_indexes_locked(opensearch: Any) -> None:
     """The actual bootstrap sequence — only ever called while holding
     :data:`_ensure_indexes_lock`. Split out so :func:`_ensure_indexes`'s
     fast path / lock / re-check logic stays readable."""
-    global _INDEXES_BOOTSTRAPPED  # noqa: PLW0603 - one-time boot flag
     try:
         await create_curation_indexes(opensearch, force_recreate=False)
         try:
@@ -288,13 +297,13 @@ async def _ensure_indexes_locked(opensearch: Any) -> None:
         # "unknown class_id <id>" until an operator manually calls
         # the classes sync endpoint.
         try:
-            count_resp = await opensearch.count(index=CURATION_CLASSES_INDEX)
+            count_resp = await opensearch.count(index=classes_index())
             if (count_resp.get('count') or 0) == 0:
                 synced = await get_class_registry().sync_to_opensearch(opensearch)
                 logger.info('curation_classes_autosynced', upserted=synced.get('upserted'))
         except Exception as exc:
             logger.warning('curation_classes_autosync_failed', error=str(exc))
-        _INDEXES_BOOTSTRAPPED = True
+        _INDEXES_BOOTSTRAPPED.add(config.project_slug)
     except Exception as exc:
         logger.warning('curation_index_bootstrap_failed', error=str(exc))
 

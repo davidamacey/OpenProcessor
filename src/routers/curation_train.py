@@ -43,13 +43,8 @@ from fastapi import APIRouter, HTTPException, Path as PathParam, Query, status
 from fastapi.responses import FileResponse, ORJSONResponse
 from pydantic import BaseModel, Field
 
-from src.config import (
-    IndexRole,
-    get_curation_config,
-    get_gpu_arbiter_config,
-    get_region_fields,
-    index_name,
-)
+from src.config import get_curation_config, get_gpu_arbiter_config, get_region_fields
+from src.config.curation import items_index
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.routers.curation import get_class_registry
@@ -103,7 +98,6 @@ logger = get_logger(__name__)
 
 config = get_curation_config()
 F = get_region_fields()
-CURATION_ITEMS_INDEX = index_name(config, IndexRole.ITEMS)
 
 router = APIRouter(
     prefix=f'{config.api_prefix}/train',
@@ -195,7 +189,7 @@ async def _count_validated_and_test_per_class(
     }
     empty = dict.fromkeys(class_ids, 0)
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         logger.warning('train_class_count_failed', error=str(exc))
         return dict(empty), dict(empty)
@@ -234,7 +228,7 @@ async def _count_pending_ingest(opensearch: Any) -> int:
         }
     }
     try:
-        resp = await opensearch.count(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.count(index=items_index(), body=body)
     except Exception as exc:
         logger.warning('train_pending_count_failed', error=str(exc))
         return 0
@@ -1087,7 +1081,7 @@ async def _run_preflight(
             'export_generation',
             export_generation_check(
                 export_manifest,
-                await items_index_generation(opensearch, CURATION_ITEMS_INDEX),
+                await items_index_generation(opensearch, items_index()),
             ),
         ),
     ):

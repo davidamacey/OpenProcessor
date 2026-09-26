@@ -14,7 +14,8 @@ import asyncio
 import random
 from typing import TYPE_CHECKING, Any
 
-from src.clients.occ import ITEMS_INDEX, OCC_BULK_MGET_SOURCE_EXCLUDES, OCC_BULK_PAGE_SIZE
+from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES, OCC_BULK_PAGE_SIZE
+from src.config.curation import items_index
 from src.core.logging import get_logger
 
 
@@ -29,7 +30,7 @@ logger = get_logger(__name__)
 async def occ_update_bulk(
     client: AsyncOpenSearch,
     *,
-    index: str = ITEMS_INDEX,
+    index: str | None = None,
     ids: list[str],
     merge_fn: Callable[[str, dict[str, Any]], dict[str, Any]],
     max_retries: int = 3,
@@ -70,6 +71,8 @@ async def occ_update_bulk(
         Per-id status: ``'updated'``, ``'not-found'``, or
         ``'conflict-exhausted'``.
     """
+    if index is None:
+        index = items_index()
     from src.clients.curation_opensearch import mget_crops
 
     status: dict[str, str] = {}

@@ -28,13 +28,13 @@ from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_
 from src.config.settings import TritonModelConfig
 from src.core.dependencies import AsyncTritonDep  # noqa: TC001
 from src.routers.curation._common import (
-    CURATION_CLASSES_INDEX,
-    CURATION_IMAGES_INDEX,
-    CURATION_ITEMS_INDEX,
-    CURATION_LABELS_CONFIRMED_INDEX,
     HealthResponse,
     OpenSearchDep,
+    classes_index,
     get_class_registry,
+    images_index,
+    items_index,
+    labels_confirmed_index,
     logger,
     router,
 )
@@ -83,10 +83,10 @@ async def curation_health(
     os_status: dict[str, Any] = {'reachable': False, 'indexes': {}}
     try:
         for idx_name in (
-            CURATION_IMAGES_INDEX,
-            CURATION_ITEMS_INDEX,
-            CURATION_LABELS_CONFIRMED_INDEX,
-            CURATION_CLASSES_INDEX,
+            images_index(),
+            items_index(),
+            labels_confirmed_index(),
+            classes_index(),
         ):
             os_status['indexes'][idx_name] = bool(await raw_os.indices.exists(index=idx_name))
         os_status['reachable'] = True

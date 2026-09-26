@@ -19,6 +19,10 @@ from src.services.projects.guard import (
 )
 
 
+# These tests are about binding itself: no autouse `default` binding.
+pytestmark = pytest.mark.unbound
+
+
 def _record(slug: str) -> ProjectRecord:
     now = datetime.now(UTC).isoformat()
     return ProjectRecord(

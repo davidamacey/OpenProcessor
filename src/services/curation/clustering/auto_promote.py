@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import occ_skip_on_conflict_bulk
+from src.config.curation import items_index
 from src.core.logging import get_logger
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
@@ -38,7 +39,6 @@ from src.services.curation.cluster_purity import (
 # circular import: importing this module first (in isolation) fails, but
 # the app always imports orchestrator first, so this resolves fine in
 # practice. Do not "fix" this cycle.
-from src.services.curation.clustering.orchestrator import ITEMS_INDEX
 from src.services.curation.history import record_class_history
 from src.services.curation.ingest_class_sources import (
     CLUSTER_MAJORITY_CLASS_SOURCE,
@@ -194,7 +194,7 @@ async def auto_promote_clusters(
     # Exclude class_excluded items from the aggregation too, so an
     # excluded item's class can't skew a cluster's purity/top-class call
     # for the *other* members that do get promoted.
-    cluster_buckets = await _scroll_cluster_buckets(client, index=ITEMS_INDEX)
+    cluster_buckets = await _scroll_cluster_buckets(client, index=items_index())
 
     summaries: list[dict[str, Any]] = []
     total_promoted = 0
@@ -291,12 +291,12 @@ async def auto_promote_clusters(
             # member of the cluster, not the set this query actually
             # touches (which is also gated on class_source and
             # class_validated=false). Count the real query instead.
-            count_resp = await client.count(index=ITEMS_INDEX, body={'query': promote_query})
+            count_resp = await client.count(index=items_index(), body={'query': promote_query})
             total_promoted += int(count_resp.get('count', 0))
             continue
 
         try:
-            read = await _scroll_hits(client, index=ITEMS_INDEX, query=promote_query)
+            read = await _scroll_hits(client, index=items_index(), query=promote_query)
         except Exception as exc:
             logger.warning(
                 'curation_auto_promote_cluster_failed', cluster_id=cluster_id, error=str(exc)
@@ -341,7 +341,7 @@ async def auto_promote_clusters(
                 client,
                 doc_ids=list(read),
                 merger=_merge_promote,
-                index=ITEMS_INDEX,
+                index=items_index(),
                 # Refresh once at the end of the whole promote
                 # operation instead of forcing a refresh on every
                 # per-cluster (and, within that, every per-page) bulk call.
@@ -365,7 +365,7 @@ async def auto_promote_clusters(
 
     if not dry_run and total_promoted:
         try:
-            await client.indices.refresh(index=ITEMS_INDEX)
+            await client.indices.refresh(index=items_index())
         except Exception as exc:  # nosec B110 - advisory; next scheduled refresh covers it
             logger.info('curation_auto_promote_final_refresh_failed', error=str(exc))
 

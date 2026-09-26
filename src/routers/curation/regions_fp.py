@@ -24,13 +24,14 @@ from typing import Any
 from fastapi import HTTPException, Query
 
 from src.config import get_region_fields
+from src.config.project_context import project_api_base
 from src.config.region_state import RegionStatus
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
     OpenSearchDep,
     RegionProfileDep,
     _ensure_indexes,
     config,
+    items_index,
     logger,
     router,
 )
@@ -188,7 +189,7 @@ async def list_region_clusters(
         },
     }
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
 
@@ -214,7 +215,7 @@ async def list_region_clusters(
                 'is_unlabeled': True,
                 'representative_crop_ids': rep_ids,
                 'representative_thumb_urls': [
-                    f'{config.api_prefix}/crops/{cid}/region_thumbnail' for cid in rep_ids
+                    f'{project_api_base()}/crops/{cid}/region_thumbnail' for cid in rep_ids
                 ],
                 'has_subclusters': n_sub > 0,
                 'n_subclusters': n_sub,
@@ -319,7 +320,7 @@ async def suspected_false_positives(
             'sort': ['_doc'],
         }
         try:
-            resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body, scroll='5m')
+            resp = await opensearch.search(index=items_index(), body=body, scroll='5m')
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
         scroll_id = resp.get('_scroll_id')
@@ -354,7 +355,7 @@ async def suspected_false_positives(
     ids = [cid for _d, cid, _s in page_slice]
     if ids:
         docs = await opensearch.mget(
-            index=CURATION_ITEMS_INDEX,
+            index=items_index(),
             body={'ids': ids},
             _source_excludes=_REGION_SOURCE_EXCLUDES,
         )

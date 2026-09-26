@@ -26,8 +26,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.config import DetectionProfile, RegionStatus, get_region_fields
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.routers.curation._common import (
-    CURATION_IMAGES_INDEX,
-    CURATION_ITEMS_INDEX,
     BatchIngestResponse as _BatchIngestResponse,
     BatchIngestSummaryResponse as _BatchIngestSummaryResponse,
     ImportLabelsBatchRequest,
@@ -46,6 +44,8 @@ from src.routers.curation._common import (
     _ensure_indexes,
     _PathLookupRequest,
     _PathLookupResponse,
+    images_index,
+    items_index,
     router,
 )
 from src.services.curation.image_serving import UNSERVABLE_PATH_ERROR, is_servable_image_path
@@ -403,7 +403,7 @@ async def ingest_status(
         },
     }
     try:
-        resp = await opensearch.search(index=CURATION_IMAGES_INDEX, body=body)
+        resp = await opensearch.search(index=images_index(), body=body)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
@@ -507,7 +507,7 @@ async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainRes
         },
     }
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         # Never answer zeros on an outage: total_unfinished == 0 is the
         # "worker caught up" signal a walker proceeds on.
@@ -576,7 +576,7 @@ async def curation_ingest_path_lookup(
     for i in range(0, len(body.image_paths), chunk_size):
         chunk = body.image_paths[i : i + chunk_size]
         resp = await opensearch.search(
-            index=CURATION_IMAGES_INDEX,
+            index=images_index(),
             body={
                 'size': len(chunk),
                 '_source': ['image_id', 'image_path', 'source_identifier'],

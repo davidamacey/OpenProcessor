@@ -54,8 +54,8 @@ if str(_REPO_ROOT) not in sys.path:
 from opensearchpy import AsyncOpenSearch
 
 from src.clients.occ import is_human_owned_class, occ_skip_on_conflict_bulk
+from src.config.curation import items_index
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
-from src.services.curation.clustering.orchestrator import ITEMS_INDEX
 from src.services.curation.ingest_class_sources import CLUSTER_MAJORITY_CLASS_SOURCE
 
 
@@ -133,7 +133,7 @@ async def _scroll_candidates(client: AsyncOpenSearch, index: str) -> list[dict[s
 async def _run(opensearch_url: str, *, apply: bool) -> int:
     client = AsyncOpenSearch(hosts=[opensearch_url], use_ssl=False, timeout=300)
     try:
-        hits = await _scroll_candidates(client, ITEMS_INDEX)
+        hits = await _scroll_candidates(client, items_index())
         eligible: dict[str, dict[str, Any]] = {}
         for h in hits:
             source = h.get('_source') or {}
@@ -182,7 +182,7 @@ async def _run(opensearch_url: str, *, apply: bool) -> int:
             client,
             doc_ids=list(eligible.keys()),
             merger=_merge_revert,
-            index=ITEMS_INDEX,
+            index=items_index(),
             refresh=True,
             writer_id='revert_class_cluster_promotions',
         )

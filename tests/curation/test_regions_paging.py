@@ -11,11 +11,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config import IndexRole, get_curation_config, get_region_fields, index_name
+from src.config import IndexRole, get_region_fields, index_name
+from src.config.curation import base_curation_config
 
 
 F = get_region_fields()
-CFG = get_curation_config()
+CFG = base_curation_config()
 ITEMS = index_name(CFG, IndexRole.ITEMS)
 
 # GET /regions requires an active region profile (no-profile gating contract).

@@ -15,12 +15,12 @@ from src.routers.curation._class_models import (
     ClassUpdateRequest,
 )
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
-    CURATION_LABELS_CONFIRMED_INDEX,
     CropsPageResponse,
     OpenSearchDep,
     _now_iso,
     get_class_registry,
+    items_index,
+    labels_confirmed_index,
     logger,
     router,
 )
@@ -147,7 +147,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                 },
             },
         }
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
         aggs = resp.get('aggregations') or {}
         for bucket in aggs.get('by_class', {}).get('buckets', []):
             cid = int(bucket['key'])
@@ -327,7 +327,7 @@ async def _count_class_item_references(opensearch: Any, class_id: int) -> int:
     """Items index docs whose ``class_id`` == this class. Same one-term
     ``count`` shape ``merge_class`` already uses for its holdout guard."""
     resp = await opensearch.count(
-        index=CURATION_ITEMS_INDEX, body={'query': {'term': {'class_id': class_id}}}
+        index=items_index(), body={'query': {'term': {'class_id': class_id}}}
     )
     return int(resp.get('count', 0))
 
@@ -336,7 +336,7 @@ async def _count_class_confirmed_label_references(opensearch: Any, class_id: int
     """Confirmed-labels index docs whose ``class_id`` == this class (the
     index ``merge_class`` bulk-relabels via ``update_by_query``)."""
     resp = await opensearch.count(
-        index=CURATION_LABELS_CONFIRMED_INDEX, body={'query': {'term': {'class_id': class_id}}}
+        index=labels_confirmed_index(), body={'query': {'term': {'class_id': class_id}}}
     )
     return int(resp.get('count', 0))
 
@@ -441,7 +441,7 @@ async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[st
     not_holdout = {'term': {'test_holdout': True}}
 
     async def _count(query: dict[str, Any]) -> int:
-        resp = await opensearch.count(index=CURATION_ITEMS_INDEX, body={'query': query})
+        resp = await opensearch.count(index=items_index(), body={'query': query})
         return int(resp.get('count', 0))
 
     holdout = await _count({'bool': {'filter': [of_source, not_holdout]}})
@@ -492,7 +492,7 @@ async def merge_class(
     # per-class_id) stale. Refuse with 409 naming the affected count rather
     # than silently remapping. Checked before any registry mutation below.
     holdout_count_resp = await opensearch.count(
-        index=CURATION_ITEMS_INDEX,
+        index=items_index(),
         body={
             'query': {
                 'bool': {
@@ -544,7 +544,7 @@ async def merge_class(
     # both writes rather than add a mapping for dead fields.
     try:
         await opensearch.update_by_query(
-            index=CURATION_LABELS_CONFIRMED_INDEX,
+            index=labels_confirmed_index(),
             body={
                 'script': {
                     'source': (
@@ -561,9 +561,7 @@ async def merge_class(
             refresh=True,
         )
     except Exception as exc:
-        logger.warning(
-            'merge_relabel_failed', index=CURATION_LABELS_CONFIRMED_INDEX, error=str(exc)
-        )
+        logger.warning('merge_relabel_failed', index=labels_confirmed_index(), error=str(exc))
 
     # Items index: a per-doc OCC bulk pass (rather than a bare
     # update_by_query painless script) so class_id_history gets appended
@@ -577,7 +575,7 @@ async def merge_class(
     async def _scroll_merge_ids() -> list[str]:
         ids: list[str] = []
         body = {'size': 500, 'query': merge_query, '_source': False}
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body, scroll='2m')
+        resp = await opensearch.search(index=items_index(), body=body, scroll='2m')
         scroll_id = resp.get('_scroll_id')
         hits = resp['hits']['hits']
         while hits:
@@ -617,22 +615,22 @@ async def merge_class(
                 opensearch,
                 doc_ids=crop_ids,
                 merger=_merge_crop,
-                index=CURATION_ITEMS_INDEX,
+                index=items_index(),
                 refresh=False,
                 writer_id='class_merge',
             )
             if bulk_result.get('errors'):
                 logger.warning(
                     'merge_relabel_partial_errors',
-                    index=CURATION_ITEMS_INDEX,
+                    index=items_index(),
                     errors=len(bulk_result['errors']),
                 )
             try:
-                await opensearch.indices.refresh(index=CURATION_ITEMS_INDEX)
+                await opensearch.indices.refresh(index=items_index())
             except Exception as exc:
                 logger.debug('merge_relabel_final_refresh_failed', error=str(exc))
     except Exception as exc:
-        logger.warning('merge_relabel_failed', index=CURATION_ITEMS_INDEX, error=str(exc))
+        logger.warning('merge_relabel_failed', index=items_index(), error=str(exc))
     return result
 
 

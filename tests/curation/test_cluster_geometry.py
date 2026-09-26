@@ -26,7 +26,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch, matches
-from src.config import get_curation_config
+from src.config.curation import base_curation_config
 from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN
 from src.services.curation.clustering.cluster_geometry import (
     DISTANCE_REF_FIELD,
@@ -36,7 +36,7 @@ from src.services.curation.clustering.cluster_geometry import (
 from src.services.curation.wire import serialize_item
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 DIM = 8
 
 

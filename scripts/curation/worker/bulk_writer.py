@@ -25,7 +25,7 @@ from src.services.curation.wire import region_event_payload
 logger = get_logger('curation_worker')
 
 
-from scripts.curation.worker.state import CURATION_ITEMS_INDEX, _ItemTask
+from scripts.curation.worker.state import _ItemTask, items_index
 
 
 if TYPE_CHECKING:
@@ -126,7 +126,7 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
         opensearch,
         doc_ids=[t.crop_id for t in eligible],
         merger=_merge,
-        index=CURATION_ITEMS_INDEX,
+        index=items_index(),
         # The runner releases a crop from its in-flight set once this
         # returns; ``wait_for`` makes the write visible to the next
         # pending search first, so a refresh-lagged search can't hand the

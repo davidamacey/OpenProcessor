@@ -20,6 +20,10 @@ from src.config.project_context import (
 from src.config.projects import ProjectRecord, resources_for_default
 
 
+# These tests are about binding itself: no autouse `default` binding.
+pytestmark = pytest.mark.unbound
+
+
 def _record(slug: str) -> ProjectRecord:
     now = datetime.now(UTC).isoformat()
     return ProjectRecord(

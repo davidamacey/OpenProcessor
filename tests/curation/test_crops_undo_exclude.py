@@ -20,7 +20,7 @@ import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
-from src.config import get_curation_config
+from src.config.curation import base_curation_config
 from src.routers.curation import label_undo
 from src.services.curation.item_doc import DetectedItem, build_item_doc
 
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 
 # The class / label / provenance / cluster state an undo must restore.
 CLASS_STATE_FIELDS = (

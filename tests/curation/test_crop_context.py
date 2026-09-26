@@ -22,11 +22,12 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     import pytest
-from src.config import IndexRole, get_curation_config, index_name
+from src.config import IndexRole, index_name
+from src.config.curation import base_curation_config
 from src.services.curation.wire import ITEM_WIRE_KEYS
 
 
-CFG = get_curation_config()
+CFG = base_curation_config()
 ITEMS = CFG.items_index
 IMAGES = index_name(CFG, IndexRole.IMAGES)
 

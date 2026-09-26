@@ -17,7 +17,7 @@ from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
-from src.config import get_curation_config
+from src.config.curation import base_curation_config
 from src.services.labeling.vlm_labeler import VlmClassPrediction
 
 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 
 
 def _item(crop_id: str, **extra: Any) -> dict[str, Any]:

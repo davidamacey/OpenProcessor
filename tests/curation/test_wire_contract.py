@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.config import region_fields as region_fields_mod
+from src.config.project_context import project_api_base
 from src.config.region_fields import RegionFields
 from src.routers.curation import _common
 from src.routers.curation._common import ItemDoc
@@ -105,7 +106,7 @@ class _FakeItemsOS:
 
 def _client(monkeypatch: pytest.MonkeyPatch, storage: RegionFields) -> TestClient:
     monkeypatch.setattr(region_fields_mod, '_default_region_fields', storage)
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', True)
+    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     fake = _FakeItemsOS(_stored_doc(storage))
@@ -172,7 +173,8 @@ def test_every_endpoint_emits_the_same_item_keys(monkeypatch: pytest.MonkeyPatch
 def test_semantic_search_item_matches(monkeypatch: pytest.MonkeyPatch) -> None:
     storage = RegionFields()
     hit = {'_id': 'crop-1', '_source': _stored_doc(storage), '_score': 0.77}
-    item = semantic_search._hydrate_item(hit, storage, _common.config.api_prefix)
+    # Served URLs are canonical and scoped (the bound project's base).
+    item = semantic_search._hydrate_item(hit, storage, project_api_base())
     assert set(item) == ITEM_WIRE_KEYS | SEARCH_EXTRA_KEYS
     assert item['semantic_score'] == 0.77
     with _client(monkeypatch, storage) as client:
@@ -211,7 +213,7 @@ def test_vlm_suggestion_reaches_every_endpoint(monkeypatch: pytest.MonkeyPatch) 
 
 
 def _review_item(monkeypatch: pytest.MonkeyPatch, **overrides: Any) -> dict[str, Any]:
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', True)
+    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     fake = _FakeItemsOS({**_stored_doc(RegionFields()), **overrides})
@@ -274,7 +276,7 @@ def test_region_write_responses_use_wire_names(monkeypatch: pytest.MonkeyPatch) 
             return {'result': 'updated'}
 
     monkeypatch.setattr(region_fields_mod, '_default_region_fields', _OVERRIDE_STORAGE)
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', True)
+    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     fake = _WritableOS(_stored_doc(_OVERRIDE_STORAGE))
@@ -410,7 +412,7 @@ async def test_worker_region_events_reach_subscribers_with_status(
     hub = _RecordingHub()
     monkeypatch.setattr(events, 'get_event_hub', lambda: hub)
     monkeypatch.setattr(region_fields_mod, '_default_region_fields', _OVERRIDE_STORAGE)
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', True)
+    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
     from src.routers.curation import router as curation_router
 
     app = FastAPI()

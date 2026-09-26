@@ -150,8 +150,8 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Path]:
     }
     for key in ('exports', 'external', 'train_jobs', 'runs'):
         dirs[key].mkdir()
-    monkeypatch.setattr(eval_datasets, 'EXPORT_ROOT', dirs['exports'])
-    monkeypatch.setattr(eval_datasets, 'EXTERNAL_ROOT', dirs['external'])
+    monkeypatch.setattr(eval_datasets, 'export_root', lambda: dirs['exports'])
+    monkeypatch.setattr(eval_datasets, 'external_root', lambda: dirs['external'])
     monkeypatch.setattr(bakeoff_jobs, 'RUNS_HOST_ROOT', dirs['runs'])
     monkeypatch.setattr(bakeoff, 'JOBS_DIR', dirs['jobs'])
     monkeypatch.setattr(bakeoff, 'OUT_DIR', dirs['out'])

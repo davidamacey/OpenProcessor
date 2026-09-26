@@ -10,7 +10,6 @@ silently falling back to ``default``.
 from __future__ import annotations
 
 import contextvars
-import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -18,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
+    from pathlib import Path
 
     from src.config.projects import ProjectRecord
 
@@ -45,35 +45,38 @@ _BOUND: contextvars.ContextVar[BoundProject | None] = contextvars.ContextVar(
 )
 
 
+# A whole-process binding, set once by a script / worker entry point from
+# its ``--project`` flag (see :func:`bind_process_project`). ContextVars do
+# not cross into threads a script starts itself, so a script binds the
+# process instead of a context. The API process never sets this: every
+# request binds through its route dependency.
+_PROCESS_BOUND: BoundProject | None = None
+
+
 def current_project() -> BoundProject:
-    """The bound project for this context. Raises :class:`ProjectNotBound`
-    when nothing has bound one -- there is deliberately no default
-    fallback."""
-    bound = _BOUND.get()
+    """The bound project for this context (or, in a script process, the
+    project its entry point bound). Raises :class:`ProjectNotBound` when
+    nothing has bound one -- there is deliberately no default fallback."""
+    bound = _BOUND.get() or _PROCESS_BOUND
     if bound is None:
         raise ProjectNotBound
     return bound
 
 
 def try_current_project() -> BoundProject | None:
-    """Non-raising variant of :func:`current_project`, for call sites that
-    need a graceful default rather than a hard failure -- currently only
-    :class:`~src.config.curation.CurationConfigView`, whose project-scoped
-    fields fall back to the base (env-derived) value when nothing is
-    bound. This is a deliberate, temporary relaxation of the plan's "no
-    unbound fallback" principle: until every route binds a project
-    (commit 4 of this wave), an unconditional raise here would break
-    every existing curation code path. Once the mounting/dependency wiring
-    lands, this fallback should be removed so an unbound access is a hard
-    error again, per §3.3."""
-    return _BOUND.get()
+    """Non-raising variant of :func:`current_project`, for the few call
+    sites where "nothing bound" is a legitimate state rather than a bug --
+    the event hub, which publishes an unbound event as a global
+    (``project: null``) one. Project-scoped config never uses this: an
+    unbound read there raises :class:`ProjectNotBound`."""
+    return _BOUND.get() or _PROCESS_BOUND
 
 
 def is_project_bound() -> bool:
     """Non-raising check, for call sites that need to branch on bound vs
     unbound *state itself* (for example a static test) rather than treat
     unbound as an error."""
-    return _BOUND.get() is not None
+    return (_BOUND.get() or _PROCESS_BOUND) is not None
 
 
 @contextmanager
@@ -102,6 +105,30 @@ def set_bound_project(record: ProjectRecord, *, read_only: bool = False) -> None
     _BOUND.set(BoundProject(record=record, read_only=read_only))
 
 
+def bind_process_project(record: ProjectRecord | None, *, read_only: bool = False) -> None:
+    """Bind ``record`` for the whole process (every thread and task), or
+    clear the binding with ``None``.
+
+    Only for script / worker entry points (``main()`` after parsing
+    ``--project``); never called in the API process, where an unbound
+    request must still fail closed."""
+    global _PROCESS_BOUND  # noqa: PLW0603 - one binding per script process
+    _PROCESS_BOUND = None if record is None else BoundProject(record=record, read_only=read_only)
+
+
+def project_jobs_dir(base: Path) -> Path:
+    """A job/state dir configured by one env var for the whole deployment
+    (``base``): that path itself for ``default`` (today's location, no
+    migration), ``<base>/projects/<slug>`` for any other project -- the
+    same nesting §2.2 uses for the train and auto-label dirs. Every
+    scanner of these dirs reads fixed file names, never recursively, so a
+    nested project dir is invisible to ``default``'s job."""
+    from src.config.projects import DEFAULT_SLUG
+
+    slug = current_project().record.slug
+    return base if slug == DEFAULT_SLUG else base / 'projects' / slug
+
+
 def project_api_base() -> str:
     """``{api_prefix}/projects/{bound slug}`` -- the base every served URL
     (and forward-looking route) is built from."""
@@ -120,10 +147,17 @@ async def run_in_executor_bound[T](
     """``loop.run_in_executor`` does not copy the current ``contextvars``
     context into the worker thread, so a plain ``run_in_executor`` call
     silently loses the bound project (the callee then raises
-    ``ProjectNotBound`` -- or worse, if it captured a stale global config
-    at import time, silently touches the wrong project's data). Wrap the
-    callable with the calling context so the binding survives the thread
-    hop."""
+    ``ProjectNotBound``). Wrap the callable with the calling context so
+    the binding survives the thread hop.
+
+    A ``ProcessPoolExecutor`` cannot carry a context (nor pickle the
+    wrapper), so ``fn`` is submitted as-is there: a process-pool callee
+    must take everything project-scoped as arguments, never read it from
+    config."""
+    from concurrent.futures import ProcessPoolExecutor
+
+    if isinstance(executor, ProcessPoolExecutor):
+        return await loop.run_in_executor(executor, fn, *args)
     ctx = contextvars.copy_context()
 
     def _run_with_context() -> T:
@@ -136,12 +170,3 @@ def project_env() -> dict[str, str]:
     """Env additions for a subprocess launch (``Popen(env=...)``) so a
     worker/trainer child process binds the same project as its parent."""
     return {'OP_PROJECT': current_project().record.slug}
-
-
-def project_env_or_default() -> dict[str, str]:
-    """Like :func:`project_env`, but falls back to ``OP_PROJECT``/``default``
-    when nothing is bound -- for launch sites that run outside a request
-    (for example a startup-time subprocess)."""
-    if is_project_bound():
-        return project_env()
-    return {'OP_PROJECT': os.environ.get('OP_PROJECT', 'default')}

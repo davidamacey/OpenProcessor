@@ -122,7 +122,7 @@ def resources_for_default(base: CurationConfig) -> ProjectResources:
         bakeoff_eval_root=base.bakeoff_eval_root,
         project_state_dir=base.state_dir,
         train_jobs_dir=Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs')),
-        autolabel_dir=Path('/jobs/auto_label'),
+        autolabel_dir=Path(os.environ.get('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label')),
         bakeoff_jobs_dir=Path(
             os.environ.get('OP_BAKEOFF_JOBS_DIR', str(base.state_dir / 'bakeoff_jobs'))
         ),
@@ -148,7 +148,9 @@ def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
         bakeoff_eval_root=data_root / 'bakeoff_eval',
         project_state_dir=base.state_dir / 'projects' / slug,
         train_jobs_dir=Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs')) / 'projects' / slug,
-        autolabel_dir=Path('/jobs/auto_label/projects') / slug,
+        autolabel_dir=Path(os.environ.get('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label'))
+        / 'projects'
+        / slug,
         bakeoff_jobs_dir=base.state_dir / 'projects' / slug / 'bakeoff_jobs',
         mlflow_experiment=f'openprocessor-{slug}',
         model_prefix=f'{slug}__',

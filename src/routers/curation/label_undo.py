@@ -20,13 +20,13 @@ from fastapi import HTTPException
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
     CropDiscardBatchRequest,
     CropDiscardRequest,
     CropUndoBatchRequest,
     OpenSearchDep,
     _now_iso,
     is_not_found,
+    items_index,
     logger,
     router,
 )
@@ -86,7 +86,7 @@ async def _items_by_ids(opensearch: Any, ids: list[str]) -> list[dict[str, Any]]
     if not ids:
         return []
     resp = await opensearch.mget(
-        index=CURATION_ITEMS_INDEX,
+        index=items_index(),
         body={'ids': ids},
         _source_excludes=item_source_excludes(),
     )
@@ -353,7 +353,7 @@ async def crop_history(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any
     """
     try:
         resp = await opensearch.get(
-            index=CURATION_ITEMS_INDEX, id=crop_id, _source_includes=['class_id_history']
+            index=items_index(), id=crop_id, _source_includes=['class_id_history']
         )
     except Exception as exc:
         if is_not_found(exc):

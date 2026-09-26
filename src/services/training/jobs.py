@@ -490,8 +490,9 @@ def artifact_media_type(name: str) -> str:
 
 
 def _artifact_url(job_id: str, artifact_name: str) -> str:
-    api_prefix = get_curation_config().api_prefix
-    return f'{api_prefix}/train/artifacts/{job_id}/{artifact_name}'
+    from src.config.project_context import project_api_base
+
+    return f'{project_api_base()}/train/artifacts/{job_id}/{artifact_name}'
 
 
 def _rewrite_eval_for_wire(eval_block: Any, job_id: str) -> Any:

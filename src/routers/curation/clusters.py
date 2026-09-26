@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from fastapi import HTTPException, Query
 
-from src.routers.curation._common import CURATION_ITEMS_INDEX, OpenSearchDep, router
+from src.routers.curation._common import OpenSearchDep, items_index, router
 from src.services.curation.cluster_ids import (
     CORE_SIMILARITY_MIN,
     RESIDUAL_CLUSTER_ID_OFFSET,
@@ -137,7 +137,7 @@ async def _fill_page_representatives(
         return
     body_lines: list[dict[str, Any]] = []
     for item in page_items:
-        body_lines.append({'index': CURATION_ITEMS_INDEX})
+        body_lines.append({'index': items_index()})
         body_lines.append(_rep_msearch_body(item['cluster_id'], per_cluster))
     try:
         resp = await opensearch.msearch(body=body_lines)
@@ -299,7 +299,7 @@ async def list_clusters(
     }
     body = {'size': 0, 'query': outer_query, 'aggs': {'clusters': cluster_terms_agg}}
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f'clusters query failed: {exc}') from exc
 
@@ -437,7 +437,7 @@ async def cluster_representatives(
         },
     }
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f'representatives query failed: {exc}') from exc
 

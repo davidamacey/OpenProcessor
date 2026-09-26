@@ -8,12 +8,13 @@ See ``docs/design/openprocessor_internal/projects_plan.md`` §4.
 from __future__ import annotations
 
 import asyncio
-import contextlib
+import dataclasses
 import os
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from src.config.projects import ProjectRecord, ProjectResources
+from src.config.projects import DEFAULT_SLUG, ProjectRecord, ProjectResources
 from src.core.logging import get_logger
 
 
@@ -95,11 +96,61 @@ def doc_to_record(doc: Mapping[str, Any]) -> ProjectRecord:
     )
 
 
+def default_project_record(stored: ProjectRecord | None = None) -> ProjectRecord:
+    """The ``default`` record with its resources derived from the env *now*.
+
+    ``default``'s resources are never read from the stored doc: they are
+    today's env-configured index names and paths, recomputed on every
+    read, so ``OP_ITEMS_INDEX`` and friends keep working exactly as they
+    did before projects existed (no migration, no remap on env change).
+    The stored doc only contributes lifecycle fields (status, revision,
+    timestamps). With no stored doc (first boot, or OpenSearch unreachable
+    when the bootstrap ran) an ``active`` record is synthesized.
+    """
+    from src.config.curation import base_curation_config
+    from src.config.projects import resources_for_default
+
+    resources = resources_for_default(base_curation_config())
+    if stored is not None:
+        return dataclasses.replace(stored, resources=resources)
+    return ProjectRecord(
+        slug=DEFAULT_SLUG,
+        display_name='Default',
+        description='The original, unscoped dataset workspace.',
+        status='active',
+        revision=0,
+        created_at='',
+        updated_at='',
+        origin=None,
+        resources=resources,
+    )
+
+
+async def _read_revision(client: Any) -> int:
+    """The ``meta:projects_revision`` counter; 0 when the doc (or the whole
+    index) does not exist yet. Any other failure propagates."""
+    try:
+        counter_doc = await client.get(index=projects_index(), id=REVISION_DOC_ID)
+    except Exception as exc:
+        if getattr(exc, 'status_code', None) == 404 or 'NotFound' in type(exc).__name__:
+            return 0
+        raise
+    return int((counter_doc.get('_source') or {}).get('revision', 0))
+
+
+# After a failed refresh, request-path callers skip OpenSearch for this
+# long instead of paying a connection error on every bind.
+_REFRESH_FAILURE_BACKOFF_SECONDS = 5.0
+
+
 class ProjectRegistry:
     """In-process snapshot of every project record, kept fresh by
     :meth:`ensure_fresh` (called from the ``bind_path_project`` dependency,
     so a bind is never more than ~1s stale) and by :meth:`poll_loop` (a
-    background task started at API startup)."""
+    background task started at API startup).
+
+    ``default`` is always present in :meth:`snapshot` / :meth:`get`, with
+    env-derived resources (see :func:`default_project_record`)."""
 
     def __init__(self, client_factory: Any) -> None:
         """``client_factory`` is a zero-arg callable (sync or async)
@@ -108,32 +159,47 @@ class ProjectRegistry:
         self._by_slug: dict[str, ProjectRecord] = {}
         self._revision: int = -1
         self._lock = asyncio.Lock()
+        self._failed_at: float | None = None
 
     def snapshot(self) -> Mapping[str, ProjectRecord]:
         """The last-refreshed view. Cheap, sync, no I/O -- callers that
         need at-most-1s staleness should call :meth:`ensure_fresh` first."""
-        return dict(self._by_slug)
+        view = dict(self._by_slug)
+        view[DEFAULT_SLUG] = default_project_record(self._by_slug.get(DEFAULT_SLUG))
+        return view
 
     def get(self, slug: str) -> ProjectRecord | None:
+        if slug == DEFAULT_SLUG:
+            return default_project_record(self._by_slug.get(DEFAULT_SLUG))
         return self._by_slug.get(slug)
 
     async def ensure_fresh(self) -> None:
         """One GET of the revision counter; a ``_search`` over every
-        project doc only when the counter moved."""
-        client = self._client_factory()
-        if asyncio.iscoroutine(client):
-            client = await client
-        try:
-            counter_doc = await client.get(index=projects_index(), id=REVISION_DOC_ID)
-            current_revision = int((counter_doc.get('_source') or {}).get('revision', 0))
-        except Exception:
-            current_revision = 0
-        if current_revision == self._revision:
+        project doc only when the counter moved.
+
+        An unreachable registry keeps the last snapshot (logged, then
+        retried after a short backoff): ``default`` still resolves from
+        the env, and an unknown slug still 404s, so nothing fails open."""
+        if (
+            self._failed_at is not None
+            and time.monotonic() - self._failed_at < _REFRESH_FAILURE_BACKOFF_SECONDS
+        ):
             return
-        async with self._lock:
+        try:
+            client = self._client_factory()
+            if asyncio.iscoroutine(client):
+                client = await client
+            current_revision = await _read_revision(client)
             if current_revision == self._revision:
+                self._failed_at = None
                 return
-            await self._refresh(client, current_revision)
+            async with self._lock:
+                if current_revision != self._revision:
+                    await self._refresh(client, current_revision)
+            self._failed_at = None
+        except Exception as exc:
+            self._failed_at = time.monotonic()
+            logger.warning('project_registry_refresh_failed', error=str(exc))
 
     async def _refresh(self, client: Any, current_revision: int) -> None:
         resp = await client.search(
@@ -146,15 +212,10 @@ class ProjectRegistry:
 
     async def poll_loop(self, *, interval_seconds: float = 1.0) -> None:
         """Background refresh loop; started at API startup and cancelled at
-        shutdown. Errors are logged and swallowed -- a transient
-        OpenSearch hiccup must not crash the process; the next
-        request-time ``ensure_fresh`` call still runs."""
+        shutdown. :meth:`ensure_fresh` never raises, so a transient
+        OpenSearch hiccup cannot end the loop."""
         while True:
-            with contextlib.suppress(asyncio.CancelledError):
-                try:
-                    await self.ensure_fresh()
-                except Exception:
-                    logger.exception('project registry poll failed')
+            await self.ensure_fresh()
             await asyncio.sleep(interval_seconds)
 
 

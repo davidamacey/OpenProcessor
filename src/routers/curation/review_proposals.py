@@ -13,10 +13,10 @@ from typing import Annotated, Any
 from fastapi import HTTPException, Query
 
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
     OpenSearchDep,
     _ensure_indexes,
     get_class_registry,
+    items_index,
     router,
 )
 from src.services.curation.new_class_terms import (
@@ -68,7 +68,7 @@ async def review_new_class_summary(
         'track_total_hits': True,
     }
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
     rules = load_term_rules(get_class_registry())

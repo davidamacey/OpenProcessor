@@ -21,7 +21,7 @@ import pytest
 from curation.query_fakes import QueryFakeOpenSearch
 from curation.test_auto_label_selection import client, job_dir, packs  # noqa: F401 - fixtures
 from curation.test_pipeline import _FakeClassEntry, _FakeRegistry
-from src.config import get_curation_config
+from src.config.curation import base_curation_config
 
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from fastapi.testclient import TestClient
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 CLUSTER = 10005
 
 

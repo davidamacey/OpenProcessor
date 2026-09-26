@@ -41,10 +41,10 @@ from scripts.curation.worker.state import (
     _PENDING_DETECTION_ALIASES,
     _PENDING_VERIFICATION_ALIASES,
     _TERMINAL_STATUSES,
-    CURATION_ITEMS_INDEX,
     JPEG_QUALITY,
     _is_secondary_shape,
     _ItemTask,
+    items_index,
     region_profile,
 )
 from scripts.curation.worker.verify import (
@@ -158,7 +158,7 @@ async def _fetch_pending(
         'query': _build_pending_query(exclude_ids=exclude_ids),
         'sort': [{'created_at': {'order': 'asc', 'unmapped_type': 'date'}}, {'crop_id': 'asc'}],
     }
-    resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+    resp = await opensearch.search(index=items_index(), body=body)
     hits = (resp.get('hits') or {}).get('hits') or []
     tasks: list[_ItemTask] = []
     for h in hits:

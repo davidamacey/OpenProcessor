@@ -94,12 +94,7 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
-    OpenSearchDep,
-    _ensure_indexes,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, _ensure_indexes, items_index, router
 from src.services.curation import review_queries
 from src.services.curation.selection import k_center_greedy
 from src.services.curation.selection.pool_fetch import (
@@ -314,7 +309,7 @@ async def select_diverse(
     # safe direction — worst case we start an unnecessary job, never block
     # the request on an OpenSearch outage.
     try:
-        count_resp = await opensearch.count(index=CURATION_ITEMS_INDEX, body={'query': query})
+        count_resp = await opensearch.count(index=items_index(), body={'query': query})
         n_estimate = int(count_resp.get('count', 0))
     except Exception:
         n_estimate = _job_max_n() + 1  # force the job path
@@ -326,7 +321,7 @@ async def select_diverse(
 
     if fits_sync_fetch and fits_sync_ops:
         ids, embeddings, truncated = await fetch_pool_embeddings(
-            opensearch, CURATION_ITEMS_INDEX, query, cap=max_n
+            opensearch, items_index(), query, cap=max_n
         )
         if truncated:
             # The count-based estimate underestimated (race with concurrent
@@ -353,7 +348,7 @@ async def select_diverse(
     try:
         state = select_job.start_job(
             opensearch,
-            index=CURATION_ITEMS_INDEX,
+            index=items_index(),
             query=query,
             k=payload.k,
             seed_crop_id=payload.seed_crop_id,

@@ -238,10 +238,22 @@ async def test_semantic_text_search_actually_offloads_to_the_given_executor():
     real event loop's ``run_in_executor`` call and asserts it was handed
     the caller-supplied executor and ``encode_text`` itself, proving the
     call genuinely went through the offload path rather than being
-    invoked directly on the event loop."""
+    invoked directly on the event loop. The callable handed over is the
+    bound-context wrapper (``run_in_executor_bound``), so it is proven by
+    running it on the executor thread, not by identity."""
+    import threading
+
     encoder = _fake_encoder()
+    encode_threads: list[str] = []
+    real_encode = encoder.encode_text.return_value
+
+    def _encode(texts):
+        encode_threads.append(threading.current_thread().name)
+        return real_encode
+
+    encoder.encode_text.side_effect = _encode
     fake_os = _fake_os([])
-    real_executor = ThreadPoolExecutor(max_workers=1)
+    real_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='offload-')
     loop = asyncio.get_running_loop()
     captured: list[tuple[object, object, tuple]] = []
     original_run_in_executor = loop.run_in_executor
@@ -265,10 +277,11 @@ async def test_semantic_text_search_actually_offloads_to_the_given_executor():
         real_executor.shutdown(wait=True)
 
     assert len(captured) == 1
-    executor_arg, fn_arg, call_args = captured[0]
+    executor_arg, _fn_arg, _call_args = captured[0]
     assert executor_arg is real_executor
-    assert fn_arg is encoder.encode_text
-    assert call_args == (['blue sedan'],)
+    encoder.encode_text.assert_called_once_with(['blue sedan'])
+    assert len(encode_threads) == 1
+    assert encode_threads[0].startswith('offload-')
 
 
 @pytest.mark.asyncio

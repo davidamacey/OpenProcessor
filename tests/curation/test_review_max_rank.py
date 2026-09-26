@@ -16,7 +16,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.curation import base_curation_config
 from src.services.curation.ingest_class_sources import unlabeled_proposal_class_sources
 from src.services.curation.review_queries import KNOWN_TABS, review_tab_catalog, tab_filters
 
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 F = get_region_fields()
 
 # One doc body per tab that qualifies for that tab's queue.

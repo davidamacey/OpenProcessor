@@ -51,7 +51,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.curation import items_index
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.clustering import ClusterIndex
@@ -81,7 +82,6 @@ reference deployment, tracked as a documented gap in
 ``docs/design/curation_design_rationale.md`` §6.
 """
 
-ITEMS_INDEX = get_curation_config().items_index
 
 # Refinement thresholds.
 # > this — refinement is skipped. The refine path runs sklearn AHC with NO
@@ -273,7 +273,7 @@ async def _fetch_cluster_members(
     cluster_id: int,
     *,
     page_size: int = 1000,
-    index: str = ITEMS_INDEX,
+    index: str | None = None,
     cluster_id_field: str = 'cluster_id',
     embedding_field: str | None = None,
 ) -> list[dict[str, Any]]:
@@ -286,6 +286,8 @@ async def _fetch_cluster_members(
     embedding is normalized to the ``'embedding'`` key so ``refine_cluster``
     stays field-name-agnostic.
     """
+    if index is None:
+        index = items_index()
     if embedding_field is None:
         from src.services.curation.clustering.embedding_reduce import RESIDUAL_EMBEDDING_FIELD
 
@@ -332,7 +334,7 @@ async def _bulk_update_subids(
     client: AsyncOpenSearch,
     updates: list[tuple[str, str]],
     *,
-    index: str = ITEMS_INDEX,
+    index: str | None = None,
     subid_field: str = 'cluster_subid',
     cluster_id_field: str = 'cluster_id',
     expected_cluster_id: int | None = None,
@@ -354,6 +356,8 @@ async def _bulk_update_subids(
     the end -- avoids refreshing the index once per chunk on a large
     refine.
     """
+    if index is None:
+        index = items_index()
     if not updates:
         return 0
     now = datetime.now(UTC).isoformat()
@@ -404,7 +408,7 @@ async def refine_cluster(
     cluster_id: int,
     *,
     distance_threshold: float = AHC_DISTANCE_THRESHOLD,
-    index: str = ITEMS_INDEX,
+    index: str | None = None,
     cluster_id_field: str = 'cluster_id',
     embedding_field: str | None = None,
     subid_field: str = 'cluster_subid',
@@ -432,6 +436,8 @@ async def refine_cluster(
     Returns:
         ``{cluster_id, n_members, n_subclusters, purity, action, ...}``.
     """
+    if index is None:
+        index = items_index()
     log = logger.bind(cluster_id=cluster_id, index=index, cluster_id_field=cluster_id_field)
     log.info('curation_refine_cluster_start')
 
@@ -669,7 +675,7 @@ async def _count_residual_pool(client: AsyncOpenSearch, *, strict: bool = False)
             ],
         }
     }
-    resp = await client.count(index=ITEMS_INDEX, body={'query': query})
+    resp = await client.count(index=items_index(), body={'query': query})
     return int(resp.get('count', 0))
 
 
@@ -812,7 +818,7 @@ async def residual_gate_coverage(
     block the gated run until the backfill completes.
     """
     base = _residual_pool_filter()
-    total_resp = await client.count(index=ITEMS_INDEX, body={'query': {'bool': base}})
+    total_resp = await client.count(index=items_index(), body={'query': {'bool': base}})
     total = int(total_resp.get('count', 0))
     field_filter: list[dict[str, Any]] = list(base['filter'])
     if max_rank is not None:
@@ -820,7 +826,7 @@ async def residual_gate_coverage(
     if min_blur_ratio is not None:
         field_filter.append({'exists': {'field': 'blur_lap_ratio'}})
     cov_resp = await client.count(
-        index=ITEMS_INDEX,
+        index=items_index(),
         body={'query': {'bool': {'filter': field_filter, 'must_not': base['must_not']}}},
     )
     with_fields = int(cov_resp.get('count', 0))
@@ -881,7 +887,7 @@ async def _park_gated_residuals(
         # silently retry the whole multi-minute operation from scratch.
         resp = await run_update_by_query_polled(
             client,
-            index=ITEMS_INDEX,
+            index=items_index(),
             body=body,
             conflicts='proceed',
             refresh=True,
@@ -1075,7 +1081,7 @@ async def cluster_residuals(
             new_cid = int(label)
             if new_cid >= 0:
                 new_cid += RESIDUAL_CLUSTER_ID_OFFSET
-            bulk_body.append({'update': {'_index': ITEMS_INDEX, '_id': crop_id}})
+            bulk_body.append({'update': {'_index': items_index(), '_id': crop_id}})
             # Guarded script, not a blind 'doc' update -- clear
             # cluster_subid (stale refine groupings from the doc's previous
             # cluster have no meaning in the new candidate) and set
@@ -1095,7 +1101,7 @@ async def cluster_residuals(
             progress.raise_if_cancelled()
     if pairs:
         try:
-            await client.indices.refresh(index=ITEMS_INDEX)
+            await client.indices.refresh(index=items_index())
         except Exception as exc:
             logger.debug('curation_cluster_refresh_failed', error=str(exc))
 
@@ -1186,14 +1192,14 @@ async def assign_only_residuals(
     total_estimate = 0
     if progress is not None:
         try:
-            cnt = await client.count(index=ITEMS_INDEX, body={'query': query})
+            cnt = await client.count(index=items_index(), body={'query': query})
             total_estimate = int(cnt.get('count', 0))
             progress.update(processed=0, total=total_estimate)
         except Exception as exc:
             logger.debug('curation_ivf_assign_count_failed', error=str(exc))
 
     body: dict[str, Any] = {'size': chunk_size, '_source': [field], 'query': query}
-    resp = await client.search(index=ITEMS_INDEX, body=body, scroll='2m')
+    resp = await client.search(index=items_index(), body=body, scroll='2m')
     scroll_id = resp.get('_scroll_id')
     n_written = 0
     try:
@@ -1219,7 +1225,7 @@ async def assign_only_residuals(
                     chunk_ids, labels.tolist(), dists.tolist(), strict=True
                 ):
                     new_cid = int(label) + RESIDUAL_CLUSTER_ID_OFFSET
-                    bulk_body.append({'update': {'_index': ITEMS_INDEX, '_id': crop_id}})
+                    bulk_body.append({'update': {'_index': items_index(), '_id': crop_id}})
                     # Guarded script — see cluster_residuals above.
                     bulk_body.append(_guarded_class_cluster_write(new_cid, float(dist)))
                 br = await client.bulk(body=bulk_body, refresh=False)
@@ -1242,7 +1248,7 @@ async def assign_only_residuals(
 
     if n_written:
         try:
-            await client.indices.refresh(index=ITEMS_INDEX)
+            await client.indices.refresh(index=items_index())
         except Exception as exc:
             logger.debug('curation_ivf_assign_refresh_failed', error=str(exc))
 
@@ -1328,7 +1334,7 @@ async def cluster_region_residuals(
     ids: list[str] = []
     vecs: list[list[float]] = []
     body = {'size': page_size, 'query': query, '_source': [F.embedding]}
-    resp = await client.search(index=ITEMS_INDEX, body=body, scroll='5m')
+    resp = await client.search(index=items_index(), body=body, scroll='5m')
     scroll_id = resp.get('_scroll_id')
     hits = resp['hits']['hits']
     while hits:
@@ -1377,7 +1383,7 @@ async def cluster_region_residuals(
     bulk: list[dict[str, Any]] = []
     n_written = 0
     for doc_id, lab, dist in zip(ids, labels, dists, strict=True):
-        bulk.append({'update': {'_index': ITEMS_INDEX, '_id': doc_id}})
+        bulk.append({'update': {'_index': items_index(), '_id': doc_id}})
         # Guarded script — noop instead of overwriting a
         # human-verified/validated region; a fresh coarse partition
         # invalidates any prior refine, so cluster_subid is removed.
@@ -1404,7 +1410,7 @@ async def cluster_region_residuals(
             _log_bulk_write_errors('cluster_region_residuals', br)
         n_written += len(bulk) // 2
     try:
-        await client.indices.refresh(index=ITEMS_INDEX)
+        await client.indices.refresh(index=items_index())
     except Exception as exc:
         logger.debug('curation_region_cluster_refresh_failed', error=str(exc))
 
@@ -1437,7 +1443,7 @@ async def refine_region_cluster(
         client,
         region_cluster_id,
         distance_threshold=distance_threshold,
-        index=ITEMS_INDEX,
+        index=items_index(),
         cluster_id_field=F.cluster_id,
         embedding_field=F.embedding,
         subid_field=F.cluster_subid,
@@ -1562,7 +1568,7 @@ async def _count_false_positives(client: AsyncOpenSearch) -> int:
     """Current count of false-positive region crops (the FP bucket population)."""
     try:
         resp = await client.count(
-            index=ITEMS_INDEX,
+            index=items_index(),
             body={'query': {'term': {F.status: RegionStatus.FALSE_POSITIVE}}},
         )
         return int(resp.get('count', 0))
@@ -1708,7 +1714,7 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
     ids: list[str] = []
     vecs: list[list[float]] = []
     body = {'size': 2000, 'query': query, '_source': [F.embedding]}
-    resp = await client.search(index=ITEMS_INDEX, body=body, scroll='5m')
+    resp = await client.search(index=items_index(), body=body, scroll='5m')
     scroll_id = resp.get('_scroll_id')
     hits = resp['hits']['hits']
     while hits:
@@ -1760,7 +1766,7 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
     bulk: list[dict[str, Any]] = []
     for doc_id, lab, dist in zip(ids, labels, dists, strict=True):
         subid = f'{FALSE_POSITIVE_REGION_CLUSTER_ID}{_subcluster_label(int(lab))}'
-        bulk.append({'update': {'_index': ITEMS_INDEX, '_id': doc_id}})
+        bulk.append({'update': {'_index': items_index(), '_id': doc_id}})
         bulk.append(
             {
                 'doc': {
@@ -1777,7 +1783,7 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
     if bulk:
         await client.bulk(body=bulk, refresh=False)
     try:
-        await client.indices.refresh(index=ITEMS_INDEX)
+        await client.indices.refresh(index=items_index())
     except Exception as exc:
         logger.debug('curation_fp_centroid_refresh_failed', error=str(exc))
 
@@ -1847,7 +1853,7 @@ async def auto_assign_fp_from_centroids(
     n_scanned = 0
     moved: list[tuple[str, str | None, float]] = []
     body = {'size': 2000, 'query': query, '_source': [F.embedding]}
-    resp = await client.search(index=ITEMS_INDEX, body=body, scroll='5m')
+    resp = await client.search(index=items_index(), body=body, scroll='5m')
     scroll_id = resp.get('_scroll_id')
     hits = resp['hits']['hits']
     while hits:
@@ -1873,7 +1879,7 @@ async def auto_assign_fp_from_centroids(
 
     bulk: list[dict[str, Any]] = []
     for doc_id, sub, d in moved:
-        bulk.append({'update': {'_index': ITEMS_INDEX, '_id': doc_id}})
+        bulk.append({'update': {'_index': items_index(), '_id': doc_id}})
         # Guarded script — the query above already excludes
         # human-verified regions via fp_candidate_must_not() at scroll
         # time, but a human write between the scroll and this write
@@ -1903,7 +1909,7 @@ async def auto_assign_fp_from_centroids(
             _log_bulk_write_errors('auto_assign_fp_from_centroids', br)
     if moved:
         try:
-            await client.indices.refresh(index=ITEMS_INDEX)
+            await client.indices.refresh(index=items_index())
         except Exception as exc:
             logger.debug('curation_auto_fp_refresh_failed', error=str(exc))
 
@@ -2013,7 +2019,6 @@ __all__ = [
     'AHC_METRIC',
     'FALSE_POSITIVE_REGION_CLUSTER_ID',
     'ITEMS_CLUSTER_INDEX',
-    'ITEMS_INDEX',
     'MAX_REFINE_MEMBERS',
     'MIN_REFINE_MEMBERS',
     'MIN_REGIONS_FOR_CLUSTERING',

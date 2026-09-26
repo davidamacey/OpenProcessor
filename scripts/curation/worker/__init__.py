@@ -39,7 +39,6 @@ from opensearchpy import AsyncOpenSearch  # noqa: F401
 from scripts.curation.worker.cascade import SegmenterClient  # noqa: F401
 from scripts.curation.worker.runner import run  # noqa: F401
 from scripts.curation.worker.state import (  # noqa: F401
-    CURATION_ITEMS_INDEX,
     DEFAULT_OPENSEARCH,
     DEFAULT_PAUSE_SENTINEL,
     DEFAULT_SEGMENTER_URL,
@@ -49,6 +48,7 @@ from scripts.curation.worker.state import (  # noqa: F401
     JPEG_QUALITY,
     STATUS_PENDING_DETECTION,
     STATUS_PENDING_VERIFICATION,
+    items_index,
 )
 from src.clients.triton_pool import AsyncTritonPool  # noqa: F401
 from src.services.labeling.vlm_labeler import VlmLabeler  # noqa: F401

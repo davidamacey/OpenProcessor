@@ -766,7 +766,7 @@ async def test_read_status_rewrites_mlflow_url_and_confusion_matrix(
     assert 'confusion_matrix_path' not in status.eval  # the fs path never reaches the wire
     assert (
         status.eval['confusion_matrix_url']
-        == '/curation/train/artifacts/realmlf/confusion_matrix.png'
+        == '/curation/projects/default/train/artifacts/realmlf/confusion_matrix.png'
     )
     assert status.eval['map50'] == 0.62  # untouched
 
@@ -854,7 +854,7 @@ async def test_read_manifest_rewrites_eval_and_mlflow_url(
     assert 'confusion_matrix_path' not in results['eval']
     assert (
         results['eval']['confusion_matrix_url']
-        == '/curation/train/artifacts/manifjob/confusion_matrix.png'
+        == '/curation/projects/default/train/artifacts/manifjob/confusion_matrix.png'
     )
 
 

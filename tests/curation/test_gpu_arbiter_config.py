@@ -360,7 +360,7 @@ def test_bakeoff_active_after_enqueue_with_no_env(
     (d / 'labels' / 'test' / 'a.txt').write_text('0 0.5 0.5 0.1 0.1\n')
     (d / 'data.yaml').write_text('names:\n  0: a\n')
     (d / 'manifest.json').write_text(json.dumps({}))
-    clean_arbiter_env.setattr(eval_datasets, 'EXPORT_ROOT', exports)
+    clean_arbiter_env.setattr(eval_datasets, 'export_root', lambda: exports)
     eval_datasets.clear_cache()
 
     class _Action:

@@ -471,17 +471,9 @@ class CurationConfigView:
     edits: a later ``bind_project`` call is picked up by the very next
     attribute access on that same captured object.
 
-    **Deviation from §3.3 for this partial landing:** the plan specifies
-    that an unbound access to a project-scoped field must raise
-    ``ProjectNotBound`` unconditionally. Until commit 4 wires a bind into
-    every request path (route dependencies, the worker loops, script
-    entry points), that would break every existing curation code path
-    the moment this view is returned from ``get_curation_config()``. So
-    for now, an unbound access falls back to the base instance's own
-    (``default``-shaped) field value via
-    :func:`~src.config.project_context.try_current_project`, instead of
-    raising. This fallback must be removed once binding is wired
-    everywhere -- tracked as a follow-up, not a permanent design choice.
+    Fail closed (§0 principle 3): reading a project-scoped field with no
+    project bound raises :class:`~src.config.project_context.ProjectNotBound`;
+    it never falls back to ``default``. Global fields work unbound.
     """
 
     __slots__ = ('_base',)
@@ -492,11 +484,9 @@ class CurationConfigView:
     def __getattr__(self, name: str) -> Any:
         if name not in PROJECT_SCOPED_FIELDS:
             return getattr(self._base, name)
-        from src.config.project_context import try_current_project
+        from src.config.project_context import current_project
 
-        bound = try_current_project()
-        if bound is None:
-            return getattr(self._base, name)
+        bound = current_project()
         resources = bound.record.resources
         if name == 'project_slug':
             return bound.record.slug
@@ -542,3 +532,30 @@ def idx(role: IndexRole) -> str:
     """``index_name(get_curation_config(), role)`` -- the bound project's
     index name for ``role``."""
     return index_name(get_curation_config(), role)
+
+
+# The bound project's index name per role, resolved at call time. Use
+# these (never a module-level constant): a name captured at import would
+# pin every request to one project's index.
+def images_index() -> str:
+    return idx(IndexRole.IMAGES)
+
+
+def items_index() -> str:
+    return idx(IndexRole.ITEMS)
+
+
+def labels_confirmed_index() -> str:
+    return idx(IndexRole.LABELS_CONFIRMED)
+
+
+def classes_index() -> str:
+    return idx(IndexRole.CLASSES)
+
+
+def umap_state_index() -> str:
+    return idx(IndexRole.UMAP_STATE)
+
+
+def umap_viz_state_index() -> str:
+    return idx(IndexRole.UMAP_VIZ_STATE)

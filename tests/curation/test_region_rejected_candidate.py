@@ -18,7 +18,8 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from scripts.curation.worker.verify import _region_write_doc, candidate_reject_doc
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.curation import base_curation_config
 from src.services.curation.edit_history import EditKind, restore_edit_state
 from src.services.curation.wire import serialize_item
 from src.services.detection.cascade_detect import RegionCandidate
@@ -37,7 +38,7 @@ if TYPE_CHECKING:
 
 
 F = get_region_fields()
-INDEX = get_curation_config().items_index
+INDEX = base_curation_config().items_index
 CANDIDATE = [0.3, 0.6, 0.4, 0.65]
 
 

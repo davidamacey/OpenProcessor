@@ -22,10 +22,10 @@ from src.routers.curation._class_models import (
     ResolveNewClassResponse,
 )
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
     OpenSearchDep,
     _ensure_indexes,
     get_class_registry,
+    items_index,
     logger,
     router,
 )
@@ -86,7 +86,7 @@ async def _resolve_one(
         return 'skipped', None
     except OCCFinalConflictError:
         try:
-            doc = await opensearch.get(index=CURATION_ITEMS_INDEX, id=crop_id)
+            doc = await opensearch.get(index=items_index(), id=crop_id)
             current_source = (doc.get('_source') or {}).get('class_source')
         except Exception:
             current_source = None
@@ -148,7 +148,7 @@ async def resolve_new_class_proposal(
 
     query = proposal_term_query(payload.label)
     try:
-        count_resp = await opensearch.count(index=CURATION_ITEMS_INDEX, body={'query': query})
+        count_resp = await opensearch.count(index=items_index(), body={'query': query})
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
     total = int(count_resp.get('count', 0))
@@ -161,9 +161,7 @@ async def resolve_new_class_proposal(
             ),
         )
     try:
-        hits = await scroll_hits(
-            opensearch, index=CURATION_ITEMS_INDEX, query=query, source=['crop_id']
-        )
+        hits = await scroll_hits(opensearch, index=items_index(), query=query, source=['crop_id'])
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
     crop_ids = _selected_crop_ids(hits)
@@ -236,7 +234,7 @@ async def resolve_new_class_proposal(
 
     if updated_ids:
         try:
-            await opensearch.indices.refresh(index=CURATION_ITEMS_INDEX)
+            await opensearch.indices.refresh(index=items_index())
         except Exception as exc:
             logger.warning('resolve_new_class_refresh_failed', error=str(exc))
 

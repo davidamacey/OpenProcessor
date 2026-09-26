@@ -27,6 +27,52 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 
+class _EnvDefaultProjectRecord:
+    """The ``default`` project record, with resources recomputed from the
+    env-built base config on every access -- so a test that swaps
+    ``src.config.curation._default_curation_config`` (or its env) sees its
+    own index names and paths, exactly as a fresh process would."""
+
+    slug = 'default'
+    display_name = 'Default'
+    description = ''
+    status = 'active'
+    revision = 0
+    created_at = ''
+    updated_at = ''
+    origin = None
+
+    @property
+    def resources(self) -> object:
+        from src.config.curation import base_curation_config
+        from src.config.projects import resources_for_default
+
+        return resources_for_default(base_curation_config())
+
+
+@pytest.fixture(autouse=True)
+def _bind_default_project(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Bind the ``default`` project for every test (projects_plan.md §3.3).
+
+    Project-scoped config raises ``ProjectNotBound`` when nothing is
+    bound; production binds per request (route dependency) or per script
+    process (``--project``). Tests that exercise binding itself, or an
+    entry point that must bind on its own, opt out with
+    ``@pytest.mark.unbound``."""
+    from src.config.project_context import bind_process_project, bind_project
+
+    try:
+        if request.node.get_closest_marker('unbound') is not None:
+            yield
+        else:
+            with bind_project(_EnvDefaultProjectRecord()):  # type: ignore[arg-type]
+                yield
+    finally:
+        # A script entry point run in-process binds the whole process;
+        # never let that leak into the next test.
+        bind_process_project(None)
+
+
 collect_ignore = [
     'test_full_system.py',
     'test_scrfd_pipeline.py',

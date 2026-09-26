@@ -45,7 +45,7 @@ def fake_os() -> _RecordingOS:
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch, fake_os: _RecordingOS) -> Any:
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', True)
+    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()

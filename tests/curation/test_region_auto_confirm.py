@@ -17,7 +17,8 @@ import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
 from scripts.curation.worker.verify import _combined_write_doc, _region_write_doc
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.curation import base_curation_config
 from src.services.curation.region_validation_repair import (
     apply_region_validation_repair,
     is_human_region_verdict,
@@ -36,7 +37,7 @@ if TYPE_CHECKING:
 
 
 F = get_region_fields()
-INDEX = get_curation_config().items_index
+INDEX = base_curation_config().items_index
 
 
 class TestWorkerWrites:

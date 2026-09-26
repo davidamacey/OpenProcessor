@@ -28,11 +28,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_curation_config, get_region_fields
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
     OpenSearchDep,
     RegionProfileDep,
     _now_iso,
     get_class_registry,
+    items_index,
     logger,
     router,
 )
@@ -51,7 +51,6 @@ from src.services.curation.image_serving import (
 from src.services.curation.vlm_class_attempt import prediction_class_update, with_class_snapshot
 
 
-ITEMS_INDEX = CURATION_ITEMS_INDEX
 _F = get_region_fields()
 
 
@@ -281,7 +280,7 @@ async def vlm_label_batch(
     docs_by_id = await mget_crops(
         opensearch,
         list(payload.crop_ids),
-        index=ITEMS_INDEX,
+        index=items_index(),
         source_includes=sorted(
             {'class_source', 'class_validated', 'image_path', 'bbox_norm'}
             | set(CLASS_GUARD_SOURCE_FIELDS)
@@ -395,7 +394,7 @@ async def vlm_label_batch(
                 opensearch,
                 doc_ids=list(updates_by_id.keys()),
                 merger=_merge_label_batch,
-                index=ITEMS_INDEX,
+                index=items_index(),
                 refresh=False,
                 writer_id='vlm_label_batch',
             )
@@ -452,7 +451,7 @@ async def vlm_verify_regions(
     docs_by_id = await mget_crops(
         opensearch,
         list(payload.crop_ids),
-        index=ITEMS_INDEX,
+        index=items_index(),
         source_includes=[_F.bbox_norm, 'image_path'],
     )
     for crop_id in payload.crop_ids:
@@ -503,7 +502,7 @@ async def vlm_verify_regions(
                 opensearch,
                 doc_ids=list(updates_by_id.keys()),
                 merger=_merge_verify_regions,
-                index=ITEMS_INDEX,
+                index=items_index(),
                 refresh=False,
                 writer_id='vlm_verify_regions',
             )

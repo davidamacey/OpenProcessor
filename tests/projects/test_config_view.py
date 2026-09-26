@@ -6,14 +6,20 @@ from __future__ import annotations
 import dataclasses
 from datetime import UTC, datetime
 
+import pytest
+
 from src.config.curation import (
     PROJECT_SCOPED_FIELDS,
     CurationConfig,
     base_curation_config,
     get_curation_config,
 )
-from src.config.project_context import bind_project
+from src.config.project_context import ProjectNotBound, bind_project
 from src.config.projects import ProjectRecord, resources_for_new
+
+
+# These tests are about binding itself: no autouse `default` binding.
+pytestmark = pytest.mark.unbound
 
 
 def _record(slug: str) -> ProjectRecord:
@@ -54,18 +60,22 @@ def test_global_field_works_unbound() -> None:
     assert get_curation_config().api_prefix == base_curation_config().api_prefix
 
 
-def test_unbound_scoped_field_falls_back_to_base() -> None:
-    """Documented, temporary deviation from §3.3's "always raises unbound"
-    rule -- see CurationConfigView's docstring."""
-    assert get_curation_config().items_index == base_curation_config().items_index
+@pytest.mark.parametrize('field', sorted(PROJECT_SCOPED_FIELDS))
+def test_unbound_scoped_field_fails_closed(field: str) -> None:
+    """§0 principle 3: no silent fallback to `default` -- every scoped
+    field raises when nothing is bound."""
+    with pytest.raises(ProjectNotBound):
+        getattr(get_curation_config(), field)
 
 
 def test_module_level_captured_view_follows_a_later_binding() -> None:
     config = get_curation_config()  # simulates `config = get_curation_config()` at import time
-    assert config.items_index == base_curation_config().items_index
     with bind_project(_record('alpha')):
         assert config.items_index == 'op_prj_alpha__items'
-    assert config.items_index == base_curation_config().items_index
+    with bind_project(_record('beta')):
+        assert config.items_index == 'op_prj_beta__items'
+    with pytest.raises(ProjectNotBound):
+        _ = config.items_index
 
 
 def test_idx_helper_matches_index_name() -> None:

@@ -25,7 +25,8 @@ from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
-from src.config import CurationConfig, get_curation_config, get_region_fields
+from src.config import CurationConfig, get_region_fields
+from src.config.curation import base_curation_config
 from src.services.curation.class_write_guard import (
     CLASS_GUARD_SOURCE_FIELDS,
     ClassWriteGuard,
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 F = get_region_fields()
 
 UNDO_ENTRY = {'writer': 'human:unlabel_crop', 'at': '2026-09-24T10:56:34+00:00'}
@@ -251,7 +252,7 @@ async def test_auto_promote_skips_item_restored_to_another_class(
 ) -> None:
     from src.services.curation.clustering import orchestrator
 
-    _ = orchestrator.ITEMS_INDEX
+    _ = orchestrator.items_index
     from src.services.curation.clustering import auto_promote as ap
 
     monkeypatch.setattr(ap, 'classifier_class_sources', lambda: frozenset({'det_model'}))
@@ -266,17 +267,17 @@ async def test_auto_promote_skips_item_restored_to_another_class(
         }
         for i in range(6)
     }
-    fake = QueryFakeOpenSearch({ap.ITEMS_INDEX: members})
+    fake = QueryFakeOpenSearch({ap.items_index(): members})
 
     def _undo_to_other_class() -> None:
-        doc = fake.docs(ap.ITEMS_INDEX)['m0']
+        doc = fake.docs(ap.items_index())['m0']
         doc.update(class_name='sedan', class_id=4)
         doc['class_id_history'] = [dict(UNDO_ENTRY)]
 
     _hook_mget(fake, _undo_to_other_class)
     await ap.auto_promote_clusters(fake, min_purity=0.5, min_members=2, dry_run=False)
 
-    docs = fake.docs(ap.ITEMS_INDEX)
+    docs = fake.docs(ap.items_index())
     assert docs['m0'].get('class_validated') is False
     assert docs['m0']['class_name'] == 'sedan'
     assert docs['m1']['class_validated'] is True
@@ -315,10 +316,10 @@ async def test_worker_fetch_requests_guard_fields_and_records_token() -> None:
 @pytest.mark.asyncio
 async def test_worker_drops_class_fields_when_class_changed_after_read() -> None:
     from scripts.curation.worker.bulk_writer import _bulk_update
-    from scripts.curation.worker.state import CURATION_ITEMS_INDEX, _ItemTask
+    from scripts.curation.worker.state import _ItemTask, items_index
 
     read = _discarded('w1') | {F.status: 'pending_detection'}
-    fake = QueryFakeOpenSearch({CURATION_ITEMS_INDEX: {'w1': dict(read)}})
+    fake = QueryFakeOpenSearch({items_index(): {'w1': dict(read)}})
     task = _ItemTask(
         crop_id='w1',
         image_path='/x.jpg',
@@ -336,10 +337,10 @@ async def test_worker_drops_class_fields_when_class_changed_after_read() -> None
         'class_source': 'vlm',
         'label_source': 'vlm',
     }
-    _hook_mget(fake, lambda: _restored_by_undo(fake.docs(CURATION_ITEMS_INDEX)['w1']))
+    _hook_mget(fake, lambda: _restored_by_undo(fake.docs(items_index())['w1']))
     written, _skipped = await _bulk_update(fake, [task])
 
-    doc = fake.docs(CURATION_ITEMS_INDEX)['w1']
+    doc = fake.docs(items_index())['w1']
     assert written == 1
     assert doc[F.status] == 'detected'
     assert (doc['class_id'], doc['class_source']) == (12, 'det_model')
@@ -348,10 +349,10 @@ async def test_worker_drops_class_fields_when_class_changed_after_read() -> None
 @pytest.mark.asyncio
 async def test_worker_writes_class_when_unchanged() -> None:
     from scripts.curation.worker.bulk_writer import _bulk_update
-    from scripts.curation.worker.state import CURATION_ITEMS_INDEX, _ItemTask
+    from scripts.curation.worker.state import _ItemTask, items_index
 
     read = _plain('w2') | {F.status: 'pending_detection'}
-    fake = QueryFakeOpenSearch({CURATION_ITEMS_INDEX: {'w2': dict(read)}})
+    fake = QueryFakeOpenSearch({items_index(): {'w2': dict(read)}})
     task = _ItemTask(
         crop_id='w2',
         image_path='/x.jpg',
@@ -363,4 +364,4 @@ async def test_worker_writes_class_when_unchanged() -> None:
     )
     task.update_doc = {F.status: 'detected', 'class_id': 7, 'class_source': 'vlm'}
     await _bulk_update(fake, [task])
-    assert fake.docs(CURATION_ITEMS_INDEX)['w2']['class_id'] == 7
+    assert fake.docs(items_index())['w2']['class_id'] == 7

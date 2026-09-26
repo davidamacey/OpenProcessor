@@ -19,6 +19,21 @@ from src.services.projects.registry import REVISION_DOC_ID, projects_index, reco
 logger = get_logger(__name__)
 
 
+def bind_default_for_lifespan() -> None:
+    """Bind ``default`` for the API lifespan task.
+
+    Startup work and the background loops the lifespan starts (index
+    bootstrap, kNN warmup, orphaned-job reconcile, GPU arbiter) act on the
+    ``default`` project; every ``create_task`` in the lifespan inherits
+    this binding. Requests never see it: each runs in its own task and
+    binds through its route dependency. Iterating every project in these
+    loops is P2 (projects_plan.md §5)."""
+    from src.config.project_context import set_bound_project
+    from src.services.projects.registry import default_project_record
+
+    set_bound_project(default_project_record())
+
+
 async def bootstrap_default_project(client: Any) -> ProjectRecord:
     """Create the ``default`` project doc if it does not exist yet, or
     return the existing one unchanged. Never overwrites an existing

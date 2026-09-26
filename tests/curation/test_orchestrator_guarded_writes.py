@@ -201,7 +201,7 @@ async def test_bulk_update_subids_chunks_at_1000_actions_with_one_final_refresh(
     for call in client.bulk_calls:
         assert call['refresh'] is False
     # One explicit refresh at the very end, not per chunk.
-    assert client.refresh_calls == [orch.ITEMS_INDEX]
+    assert client.refresh_calls == [orch.items_index()]
 
 
 @pytest.mark.asyncio

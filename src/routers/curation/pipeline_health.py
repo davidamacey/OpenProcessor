@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.core.logging import get_logger
-from src.routers.curation._common import CURATION_ITEMS_INDEX
+from src.routers.curation._common import items_index
 
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ async def pipeline_health_snapshot(opensearch: AsyncOpenSearch) -> dict[str, int
     """
     try:
         resp = await opensearch.search(
-            index=CURATION_ITEMS_INDEX,
+            index=items_index(),
             body={
                 'size': 0,
                 'track_total_hits': True,

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from src.config import TERMINAL_STATUSES, RegionStatus, get_curation_config, get_region_fields
+from src.config.curation import items_index  # noqa: F401 - re-exported for the worker package
 from src.core.logging import get_logger
 from src.services.detection.profile_registry import get_active_region_profile
 
@@ -34,7 +35,6 @@ logger = get_logger('curation_worker')
 
 _config = get_curation_config()
 
-CURATION_ITEMS_INDEX = _config.items_index
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
 DEFAULT_TRITON = os.environ.get('TRITON_URL', 'triton-server:8001')
 DEFAULT_SEGMENTER_URL = os.environ.get('OP_SEGMENTER_URL', 'http://sam3:8000')
