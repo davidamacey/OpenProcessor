@@ -56,10 +56,7 @@ export interface CropSlotVerifiedEvent extends CurationBaseEvent {
 }
 
 export type CurationEvent =
-  | CropCreatedEvent
-  | CropClassifiedEvent
-  | CropSlotVerifiedEvent
-  | CurationBaseEvent;
+  CropCreatedEvent | CropClassifiedEvent | CropSlotVerifiedEvent | CurationBaseEvent;
 
 export interface CurationEventSubscribeOptions {
   topic?: string;
@@ -142,9 +139,7 @@ export interface PipelineStatsEvent {
 }
 
 export type PipelineEvent =
-  | PipelineSnapshotEvent
-  | PipelineStateEvent
-  | PipelineStatsEvent;
+  PipelineSnapshotEvent | PipelineStateEvent | PipelineStatsEvent;
 
 export interface PipelineSubscribeOptions {
   onSnapshot?: (state: Record<string, unknown>, stats: Record<string, unknown>) => void;

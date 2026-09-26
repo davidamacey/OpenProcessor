@@ -91,8 +91,7 @@ describe('SlotGallery — regions reachable when only the FP bucket is clustered
     expect(gallery.selectedCluster).toBeNull();
     expect(getRegions).toHaveBeenCalled();
     const lastCallParams = vi.mocked(getRegions).mock.calls.at(-1)?.[1] as
-      | { region_cluster_id?: number }
-      | undefined;
+      { region_cluster_id?: number } | undefined;
     expect(lastCallParams?.region_cluster_id).toBeUndefined();
     // The bucket grid ("← FALSE POSITIVES" card etc.) must no longer be
     // the only thing rendered — the header now reads "All tags".

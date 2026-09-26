@@ -70,11 +70,9 @@ function baseDeps(overrides: Partial<IngestRunDeps> = {}): IngestRunDeps {
 
 describe('createIngestRun — prefilter', () => {
   it('skips files whose identifier the server already knows', async () => {
-    const lookup = vi.fn(
-      async (): Promise<IngestPathLookupResponse> => ({
-        known_paths: { 'src/a.jpg': 'img-1' },
-      }),
-    );
+    const lookup = vi.fn(async (): Promise<IngestPathLookupResponse> => ({
+      known_paths: { 'src/a.jpg': 'img-1' },
+    }));
     const upload = vi.fn(async (req) => successResponse(req.identifiers));
     const run = createIngestRun(baseDeps({ lookup, upload }));
     await run.start([mkFile('a.jpg'), mkFile('b.jpg')], {
@@ -239,57 +237,55 @@ describe('createIngestRun — pause/resume/cancel', () => {
 
 describe('createIngestRun — response handling', () => {
   it('maps success/duplicate/failed results back to their files', async () => {
-    const upload = vi.fn(
-      async (): Promise<BatchIngestResponse> => ({
-        status: 'partial',
-        summary: {
-          successful: 1,
-          duplicates: 1,
-          failed: 1,
-          mismatches: 0,
-          missed_labels: 0,
-          unmatched_detections: 0,
-          labels_imported: 0,
-          crops_indexed: 1,
+    const upload = vi.fn(async (): Promise<BatchIngestResponse> => ({
+      status: 'partial',
+      summary: {
+        successful: 1,
+        duplicates: 1,
+        failed: 1,
+        mismatches: 0,
+        missed_labels: 0,
+        unmatched_detections: 0,
+        labels_imported: 0,
+        crops_indexed: 1,
+      },
+      results: [
+        {
+          status: 'success',
+          image_id: 'img-1',
+          image_path: 'src/a.jpg',
+          imohash: 'h',
+          n_crops: 3,
+          n_regions: 0,
+          error: null,
+          error_kind: null,
+          source_identifier: 'src/a.jpg',
         },
-        results: [
-          {
-            status: 'success',
-            image_id: 'img-1',
-            image_path: 'src/a.jpg',
-            imohash: 'h',
-            n_crops: 3,
-            n_regions: 0,
-            error: null,
-            error_kind: null,
-            source_identifier: 'src/a.jpg',
-          },
-          {
-            status: 'duplicate',
-            image_id: 'img-2',
-            image_path: 'src/b.jpg',
-            imohash: 'h2',
-            n_crops: 0,
-            n_regions: 0,
-            error: null,
-            error_kind: null,
-            source_identifier: 'src/b.jpg',
-          },
-          {
-            status: 'failed',
-            image_id: '',
-            image_path: 'src/c.jpg',
-            imohash: '',
-            n_crops: 0,
-            n_regions: 0,
-            error: 'decode error',
-            error_kind: 'decode_failed',
-            source_identifier: 'src/c.jpg',
-          },
-        ],
-        disagreements: [],
-      }),
-    );
+        {
+          status: 'duplicate',
+          image_id: 'img-2',
+          image_path: 'src/b.jpg',
+          imohash: 'h2',
+          n_crops: 0,
+          n_regions: 0,
+          error: null,
+          error_kind: null,
+          source_identifier: 'src/b.jpg',
+        },
+        {
+          status: 'failed',
+          image_id: '',
+          image_path: 'src/c.jpg',
+          imohash: '',
+          n_crops: 0,
+          n_regions: 0,
+          error: 'decode error',
+          error_kind: 'decode_failed',
+          source_identifier: 'src/c.jpg',
+        },
+      ],
+      disagreements: [],
+    }));
     const run = createIngestRun(
       baseDeps({
         lookup: vi.fn(async () => ({ known_paths: {} })),

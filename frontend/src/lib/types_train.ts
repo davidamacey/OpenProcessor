@@ -16,13 +16,7 @@ export type ModelFamily = 'yolo26';
 export type ModelSize = 'n' | 's' | 'm' | 'l' | 'x';
 
 export type ProfileName =
-  | 'probe'
-  | 'nano'
-  | 'small'
-  | 'medium'
-  | 'large'
-  | 'xlarge'
-  | 'custom';
+  'probe' | 'nano' | 'small' | 'medium' | 'large' | 'xlarge' | 'custom';
 
 export type TrainState =
   | 'queued'

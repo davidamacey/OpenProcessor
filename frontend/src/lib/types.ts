@@ -14,11 +14,7 @@ import type { SlotKey, SlotData } from './annotations/types';
  *  VLM writer values, or an ingest detector's config-derived value — so
  *  it stays an open string. */
 export type LabelSource =
-  | 'human'
-  | 'human_confirmed'
-  | 'vlm'
-  | 'vlm_human_confirmed'
-  | (string & {});
+  'human' | 'human_confirmed' | 'vlm' | 'vlm_human_confirmed' | (string & {});
 
 export type ClassSource = 'registry' | 'derived' | 'imported';
 
@@ -1055,11 +1051,7 @@ export interface KeyboardShortcut {
 }
 
 export type ModelStatus =
-  | 'ready'
-  | 'not_ready'
-  | 'unavailable'
-  | 'not_configured'
-  | 'not_installed';
+  'ready' | 'not_ready' | 'unavailable' | 'not_configured' | 'not_installed';
 export type ModelKind = 'triton' | 'external';
 
 export interface ModelInfo {

@@ -11,11 +11,7 @@ export type BakeoffModelSource = 'run' | 'baseline' | 'custom';
 export type BakeoffMode = 'full' | 'crop' | 'both';
 export type RankScope = 'common' | 'overall';
 export type ClassMappingMethod =
-  | 'explicit'
-  | 'run_class_remap'
-  | 'registry_ids'
-  | 'names'
-  | 'single_class_fallback';
+  'explicit' | 'run_class_remap' | 'registry_ids' | 'names' | 'single_class_fallback';
 
 // --- eval datasets (§7.2) ---------------------------------------------------
 

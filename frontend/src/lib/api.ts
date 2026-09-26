@@ -3531,11 +3531,7 @@ export function moveCropsToCluster(
 /** Reasons the operator can attach when ignoring crops. 'ignore' is the
  *  default one-click value; the others record *why* for later analysis. */
 export type ExcludeReason =
-  | 'ignore'
-  | 'blurry'
-  | 'unidentifiable'
-  | 'not_the_subject'
-  | 'partial_crop';
+  'ignore' | 'blurry' | 'unidentifiable' | 'not_the_subject' | 'partial_crop';
 
 export function excludeCrops(
   cropIds: string[],

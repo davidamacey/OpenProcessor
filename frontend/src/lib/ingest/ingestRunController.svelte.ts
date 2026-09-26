@@ -41,13 +41,7 @@ import { createIngestResults, type IngestResults } from './ingestResults.svelte'
 import { toastStore } from '$stores/toast.svelte';
 
 export type IngestRunState =
-  | 'idle'
-  | 'prefiltering'
-  | 'uploading'
-  | 'paused'
-  | 'done'
-  | 'cancelled'
-  | 'error';
+  'idle' | 'prefiltering' | 'uploading' | 'paused' | 'done' | 'cancelled' | 'error';
 
 export interface IngestTotals {
   queued: number;

@@ -9,11 +9,7 @@
 import { SvelteMap } from 'svelte/reactivity';
 
 export type IngestResultKind =
-  | 'ingested'
-  | 'duplicate'
-  | 'failed'
-  | 'skipped'
-  | 'not_sent';
+  'ingested' | 'duplicate' | 'failed' | 'skipped' | 'not_sent';
 
 export interface IngestFileResult {
   identifier: string;

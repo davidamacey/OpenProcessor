@@ -248,13 +248,7 @@ export interface LifecycleCapability {
 /* ------------------------------------------------------------------ */
 
 export type SlotAction =
-  | 'confirm'
-  | 'reject'
-  | 'markFalsePositive'
-  | 'editBox'
-  | 'back'
-  | 'skip'
-  | 'undo';
+  'confirm' | 'reject' | 'markFalsePositive' | 'editBox' | 'back' | 'skip' | 'undo';
 
 export interface QueueCapability {
   /** Backend cohort id — the `{id}` in `GET {API_PREFIX}/review/{id}`. */

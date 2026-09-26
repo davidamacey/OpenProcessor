@@ -602,9 +602,7 @@ row. This is the concrete artifact the backend can diff against
       "frameField": "plate_bbox_frame",
       "scoreField": "plate_score",
       "visibleField": "plate_visible",
-      "envelope": {
-        /* PLATE_SHAPE_ENVELOPE, see src/lib/shapeGate.ts */
-      },
+      "envelope": {/* PLATE_SHAPE_ENVELOPE, see src/lib/shapeGate.ts */},
       "thumbnail": {
         "path": "/crops/{cropId}/region_thumbnail?size={size}",
         "aspect": "2 / 1",
