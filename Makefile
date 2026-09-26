@@ -273,6 +273,18 @@ contracts-check: ## Fail if any committed API contract under contracts/ is stale
 	$(PYTHON) scripts/codegen/generate_contracts.py --check
 
 # ==================================================================================
+# Release (local, not CI -- see installer plan §11.1 item 2)
+# ==================================================================================
+
+.PHONY: release-dry-run
+release-dry-run: ## Build + Trivy-scan every published image; push nothing
+	scripts/release/build_and_publish.sh --dry-run
+
+.PHONY: release
+release: ## Build + Trivy-scan + push every published image; writes images.lock
+	scripts/release/build_and_publish.sh --push
+
+# ==================================================================================
 # Benchmarking
 # ==================================================================================
 

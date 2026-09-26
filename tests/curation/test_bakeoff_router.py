@@ -309,6 +309,55 @@ def test_eval_datasets_lists_multiclass_export(env: dict[str, Path], client: Tes
     assert row['is_current'] is False
 
 
+def test_eval_datasets_registry_class_name_resolved_by_id_with_gaps(
+    env: dict[str, Path], client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``registry_class_name`` is looked up by ``registry_class_id`` -- never
+    assumed equal to the eval dataset's own class name -- and stays null
+    for a registry id that has a gap (deprecated/removed) at that slot."""
+    from src.services.curation import eval_datasets
+
+    class _Cls:
+        def __init__(self, class_id: int, class_name: str) -> None:
+            self.class_id = class_id
+            self.class_name = class_name
+
+    class _Loaded:
+        def __init__(self, classes: list[_Cls]) -> None:
+            self.classes = classes
+
+    class _FakeRegistry:
+        def load(self) -> _Loaded:
+            # LIVE_EXPORT_ID_MAP maps registry r -> export r-1, so the
+            # export's 5 test classes (eval ids 37/38/43/51/78) carry
+            # registry ids 38/39/44/52/79. Registry id 38 is gone here --
+            # a gap in the id space -- while the other four are present,
+            # renamed (so the test can't pass by coincidentally reusing the
+            # eval dataset's own class name).
+            return _Loaded(
+                [
+                    _Cls(39, 'miata-renamed'),
+                    _Cls(44, 'mustang-renamed'),
+                    _Cls(52, 'porsche-renamed'),
+                    _Cls(79, 'vw-renamed'),
+                ]
+            )
+
+    monkeypatch.setattr(eval_datasets, 'get_class_registry', lambda: _FakeRegistry())
+
+    _live_export(env, background=('bg_0',))
+    body = client.get('/curation/bakeoff/eval_datasets', params={'source': 'export'}).json()
+    [row] = body['datasets']
+    by_registry_id = {c['registry_class_id']: c['registry_class_name'] for c in row['classes']}
+    assert by_registry_id == {
+        38: None,  # gap: registry entry no longer exists
+        39: 'miata-renamed',
+        44: 'mustang-renamed',
+        52: 'porsche-renamed',
+        79: 'vw-renamed',
+    }
+
+
 def test_eval_datasets_sha_source_manifest(env: dict[str, Path], client: TestClient) -> None:
     make_export(
         env['exports'],
@@ -1022,6 +1071,39 @@ def test_profiles_configured_json_default_row(
     body = client.get('/curation/bakeoff/profiles').json()
     [row] = [p for p in body['profiles'] if p['default']]
     assert (row['name'], row['kind'], row['context_class_ids']) == ('generic', 'registered', [4])
+    # No registry configured in this env -- falls back to the id's string
+    # form rather than 500ing or guessing a name.
+    assert row['context_class_names'] == ['4']
+
+
+def test_profiles_context_class_names_resolved_by_registry_id(
+    env: dict[str, Path], client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``context_class_names`` is paired with ``context_class_ids`` by id
+    lookup against the live registry, same order/length."""
+    from src.routers.curation import bakeoff
+
+    class _Cls:
+        def __init__(self, class_id: int, class_name: str) -> None:
+            self.class_id = class_id
+            self.class_name = class_name
+
+    class _Loaded:
+        def __init__(self, classes: list[_Cls]) -> None:
+            self.classes = classes
+
+    class _FakeRegistry:
+        def load(self) -> _Loaded:
+            return _Loaded([_Cls(4, 'guardrail'), _Cls(7, 'cone')])
+
+    monkeypatch.setattr(bakeoff, 'get_class_registry', lambda: _FakeRegistry())
+    monkeypatch.setenv('OP_BAKEOFF_PROFILE_CONTEXT_CLASS_IDS', '4,7,99')
+    body = client.get('/curation/bakeoff/profiles').json()
+    [row] = [p for p in body['profiles'] if p['default']]
+    assert row['context_class_ids'] == [4, 7, 99]
+    # id 99 has no registry entry -- falls back to its string form, never
+    # a guess -- while 4 and 7 resolve by id, not by list position.
+    assert row['context_class_names'] == ['guardrail', 'cone', '99']
 
 
 def test_profiles_bad_default_is_reported(

@@ -1,0 +1,9 @@
+# Accepted-CVE allowlist for the release Trivy gate.
+#
+# Format: one CVE per line, "CVE-XXXX-XXXXX # reason". A line with no
+# reason after '#' is rejected by build_and_publish.sh -- every accepted
+# finding must record why it's accepted. Blank lines and lines starting
+# with '#' are comments.
+#
+# Example (remove once a real waiver is needed):
+# CVE-2024-00000 # no fix available upstream yet, tracked in issue #123
