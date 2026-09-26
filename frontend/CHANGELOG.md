@@ -8,16 +8,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- **Basic release pipeline** (`.github/workflows/release.yml`): a
-  `v*`-tag or manual trigger builds a `linux/amd64`-only image, runs a
-  Trivy CRITICAL/HIGH-with-fix gate, pushes `davidamacey/cropwright`
-  (`X.Y.Z`/`X.Y`/`latest`) to Docker Hub with OCI labels and an SBOM
-  attestation, and creates a GitHub release from the matching
-  `CHANGELOG.md` section.
-- `docker-compose.yml` gained an `image:` line
-  (`davidamacey/cropwright:${CROPWRIGHT_TAG:-latest}`) alongside the
-  existing `build:`, so a pull-based deploy no longer requires a local
-  build.
+- **Local, multi-arch release pipeline** (`./scripts/release.sh` +
+  `scripts/release/NN-*.sh`), replacing the earlier
+  `.github/workflows/release.yml` (removed — CI minutes are exhausted,
+  and this is the standard workflow elsewhere in this org). Stages:
+  `preflight verify build scan smoke tag publish finish`, each
+  independently runnable/resumable via a local ledger under
+  `.release/<version>/` (gitignored); `tag`/`publish`/`finish` are the
+  only stages that leave the machine and each requires explicit
+  confirmation. `build`/`scan`/`smoke` cover both `linux/amd64` and
+  `linux/arm64` via a multi-arch buildx builder with a remote node that
+  builds arm64 natively (no QEMU); `smoke` loads the arm64 image into
+  its remote docker context and runs `scripts/release-smoke.sh` there
+  (rewritten to check everything via `docker exec`, so it works
+  identically over a remote context, not just a published local port).
+  `publish` pushes one multi-arch manifest to `davidamacey/cropwright`
+  (`X.Y.Z`/`X.Y`/`latest`) with an SBOM attestation; `finish` creates
+  the GitHub release from the matching `CHANGELOG.md` section.
+- **`docker-compose.yml` is now pull-only** (`image:
+davidamacey/cropwright:${CROPWRIGHT_TAG:-latest}`, no `build:`) — a
+  user needs only this file plus `.env` to run, no repo checkout. A new
+  `docker-compose.build.yml` overlay (`docker compose -f
+docker-compose.yml -f docker-compose.build.yml up -d --build`, tagged
+  `cropwright-dev:local`) is the explicit opt-in dev path; deliberately
+  not an auto-loading `docker-compose.override.yml`, so a plain clone
+  never silently builds instead of pulling. README's quick start now
+  leads with `curl`-ing the compose file + `.env.example` and `docker
+compose pull && docker compose up -d` — no `git clone` needed.
 
 ### Security
 
