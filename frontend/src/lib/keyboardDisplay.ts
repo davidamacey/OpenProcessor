@@ -29,3 +29,18 @@ function formatPart(part: string): string {
 export function formatShortcutKey(combo: string): string {
   return combo.split('+').map(formatPart).join('+');
 }
+
+// Symbol forms for tight spaces (button <kbd> badges, the box-editor
+// footer): `shift+n` -> "⇧N", `shift+enter` -> "⇧↵", `backspace` -> "⌫".
+const COMPACT_NAMES: Record<string, string> = {
+  shift: '⇧',
+  enter: '↵',
+  backspace: '⌫',
+};
+
+export function formatCompactKey(combo: string): string {
+  return combo
+    .split('+')
+    .map((p) => COMPACT_NAMES[p] ?? formatPart(p))
+    .join('');
+}
