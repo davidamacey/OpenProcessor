@@ -3,8 +3,17 @@
 // Replaces the former Promtail setup (Promtail is EOL since 2026-03-02).
 // Same topology: discover containers over the Docker socket, keep only
 // the Triton and FastAPI services, label with container + stream, and
-// push to Loki. Regexes use a trailing wildcard so renamed variants
-// (e.g. compose-project prefixes/suffixes) still match.
+// push to Loki.
+//
+// Bug fix (installer plan, Wave 0): docker-compose.yml's container_name
+// is `${COMPOSE_PROJECT_NAME:-openprocessor}-triton` /
+// `${COMPOSE_PROJECT_NAME:-openprocessor}-api`, never a bare
+// `triton-server` or `yolo-api` container -- the old `/triton-server.*`
+// and `/(yolo-api|pytorch-api).*` regexes never matched THIS compose
+// project's own containers under any project name, so Loki only ever
+// received a different stack's logs (or nothing). Match on the
+// `-triton` / `-api` container-name SUFFIX instead, with a leading
+// wildcard so it's independent of COMPOSE_PROJECT_NAME.
 
 discovery.docker "containers" {
   host             = "unix:///var/run/docker.sock"
@@ -17,7 +26,7 @@ discovery.relabel "triton" {
 
   rule {
     source_labels = ["__meta_docker_container_name"]
-    regex         = "/triton-server.*"
+    regex         = "/.*-triton"
     action        = "keep"
   }
   rule {
@@ -40,7 +49,7 @@ discovery.relabel "fastapi" {
 
   rule {
     source_labels = ["__meta_docker_container_name"]
-    regex         = "/(yolo-api|pytorch-api).*"
+    regex         = "/.*-(api|pytorch-api)"
     action        = "keep"
   }
   rule {

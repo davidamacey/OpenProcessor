@@ -9,7 +9,13 @@
 SHELL := /bin/bash
 
 # Variables
-COMPOSE := docker compose
+# Installer plan §1: docker-compose.yml is deploy-safe (no `build:`, no
+# source mounts); every `build:` block and source mount lives in
+# docker-compose.dev.yml instead. The Makefile only ever runs from a
+# checkout, so it always adds that overlay -- detected by src/main.py
+# existing next to the compose file (same check scripts/setup.sh and
+# scripts/openprocessor.sh use).
+COMPOSE := docker compose $(if $(wildcard src/main.py),-f docker-compose.yml -f docker-compose.dev.yml,-f docker-compose.yml)
 V := .venv/bin
 # Prefer the project venv's interpreter when it exists; fall back to
 # system python3 for a fresh checkout that hasn't created .venv yet.

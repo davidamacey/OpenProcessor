@@ -695,6 +695,14 @@ lives in [`env.template`](../env.template) — this table summarizes it
 by area; consult `env.template`'s inline comments for full detail and
 defaults.
 
+**Fastest path:** `env.template`'s "Curation quick-config" block (right
+above the "Curation / Labeling Subsystem" header) gathers the handful of
+vars every curation tier actually needs to get running — ingest
+detector, segmenter URL, VLM endpoint, feature flags, GPU placement, and
+the optional region profile path — into one copy-pasteable block. The
+one-line installer writes exactly that block. Start there; the rest of
+this section and `env.template` cover every advanced/per-field override.
+
 **Import-time only:** curation routers build their mount prefix and
 index names at *module import time*. Any `OP_*` var here must be set in
 the process environment **before** `src.main` is imported — it cannot

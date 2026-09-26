@@ -37,6 +37,18 @@ source "${SCRIPT_DIR}/lib/export.sh"
 source "${SCRIPT_DIR}/lib/config.sh"
 source "${SCRIPT_DIR}/lib/ports.sh"
 
+# Installer plan §1: docker-compose.yml is deploy-safe (no `build:`, no
+# source mounts) as of this split; every `build:` block and source mount
+# now lives in docker-compose.dev.yml. This script only ever runs from a
+# checkout (it lives in scripts/), so it always needs that overlay --
+# detect it the same way the Makefile's COMPOSE var does, by checking for
+# src/main.py next to the compose file.
+DC_FILES=(-f "$PROJECT_DIR/docker-compose.yml")
+if [[ -f "$PROJECT_DIR/src/main.py" ]]; then
+    DC_FILES+=(-f "$PROJECT_DIR/docker-compose.dev.yml")
+fi
+dc() { docker compose "${DC_FILES[@]}" "$@"; }
+
 # G-04 / F-66: env_port() (scripts/lib/ports.sh) reads a single KEY=value
 # out of .env without sourcing the whole file. Smoke tests below hit
 # whatever ports THIS deployment's .env actually configured, not the
@@ -402,7 +414,7 @@ build_docker_images() {
     # Fall back to building from Dockerfiles if pull fails (e.g., first release,
     # no internet, or user wants a custom build).
     log_step "Pulling pre-built images from Docker Hub..."
-    if docker compose pull yolo-api triton-server 2>/dev/null; then
+    if dc pull yolo-api triton-server 2>/dev/null; then
         log_success "Pre-built images pulled from Docker Hub"
         return 0
     else
@@ -413,7 +425,7 @@ build_docker_images() {
 
     # Build from Dockerfiles
     log_step "Building yolo-api image..."
-    if ! docker compose build yolo-api; then
+    if ! dc build yolo-api; then
         log_error "Failed to build yolo-api image"
         log_info "Check your internet connection and disk space (need ~5GB free)"
         return 1
@@ -421,7 +433,7 @@ build_docker_images() {
     log_success "yolo-api image ready"
 
     log_step "Building triton-server image..."
-    if ! docker compose build triton-server; then
+    if ! dc build triton-server; then
         log_error "Failed to build triton-server image"
         log_info "Check your internet connection and disk space (need ~20GB free)"
         return 1
@@ -540,14 +552,14 @@ start_services_step() {
     # different project's containers, even on a host running several
     # OpenProcessor stacks.
     local compose_project
-    compose_project="$(docker compose config --format json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("name",""))' 2>/dev/null || true)"
+    compose_project="$(dc config --format json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("name",""))' 2>/dev/null || true)"
     log_info "Stopping existing containers in project '${compose_project:-<unresolved>}'..."
-    docker compose stop 2>/dev/null || true
-    docker compose rm -f 2>/dev/null || true
+    dc stop 2>/dev/null || true
+    dc rm -f 2>/dev/null || true
 
     # Start all services (now that model.plan files exist, triton-server will load them)
     log_info "Starting all services..."
-    docker compose up -d
+    dc up -d
 
     # Wait for services to be ready
     wait_for_services
