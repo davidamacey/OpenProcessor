@@ -6,7 +6,65 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Basic release pipeline** (`.github/workflows/release.yml`): a
+  `v*`-tag or manual trigger builds a `linux/amd64`-only image, runs a
+  Trivy CRITICAL/HIGH-with-fix gate, pushes `davidamacey/cropwright`
+  (`X.Y.Z`/`X.Y`/`latest`) to Docker Hub with OCI labels and an SBOM
+  attestation, and creates a GitHub release from the matching
+  `CHANGELOG.md` section.
+- `docker-compose.yml` gained an `image:` line
+  (`davidamacey/cropwright:${CROPWRIGHT_TAG:-latest}`) alongside the
+  existing `build:`, so a pull-based deploy no longer requires a local
+  build.
+
+### Security
+
+- **nginx security headers now actually reach every response.** nginx
+  doesn't inherit server-level `add_header`s into a location that sets
+  its own — so `/`, `/clusters` and every other SPA route served via the
+  `try_files` fallback were previously missing X-Frame-Options,
+  X-Content-Type-Options and Referrer-Policy entirely. Headers moved
+  into a shared snippet (`nginx-security-headers.conf`) included by
+  every location that emits `Cache-Control`; also added
+  `Permissions-Policy` and `server_tokens off` (no more
+  `Server: nginx/...` on any response).
+- Static-asset `Cache-Control` dropped `immutable` (the entrypoint
+  rewrites hashed JS/CSS chunk _contents_ at container start without
+  changing filenames, so `immutable` could tell a browser to keep a
+  stale chunk across a config change) in favor of a plain long
+  `max-age`.
+- Docker/compose hardening: `docker-compose.yml`'s `cropwright` service
+  now sets `security_opt: [no-new-privileges:true]`, `cap_drop: [ALL]`
+  and bounded json-file log rotation. CI workflows (`ci.yml`,
+  `mutation.yml`) now declare `permissions: contents: read` and a
+  `concurrency` group that cancels superseded runs on the same ref.
+- Fixed the `devalue`/`svelte` advisories present in the shipped bundle
+  via an in-range `@sveltejs/kit`/`svelte` bump (`npm audit fix`);
+  `npm audit --omit=dev` is now clean.
+
 ### Changed
+
+- **Node 26 (current LTS), replacing Node 20 (EOL 2026-04-30)**: the
+  Dockerfile's build stage, both CI workflows (via a new root
+  `.nvmrc`/`node-version-file`) and the README now target Node 26.
+- The nginx runtime base is pinned to an exact tag,
+  `nginxinc/nginx-unprivileged:1.31.2-alpine3.23`, instead of the
+  floating `1.30-alpine` minor.
+- Dropped `curl` from the runtime image (unused; the healthcheck already
+  uses busybox `wget`) and tightened the `HEALTHCHECK` flags
+  (`--start-period`, `--retries`, `wget --spider`). `.dockerignore` now
+  excludes `.stryker-tmp/`, `coverage/` and `.vscode/` from the build
+  context.
+- `.github/dependabot.yml` now groups npm updates into one weekly
+  minor/patch PR and one weekly major PR (instead of one PR per
+  package), groups `github-actions` and `docker` updates monthly, and
+  ignores the `eslint`/`@eslint/js`/`typescript-eslint` major-version
+  trio until `typescript-eslint` supports an eslint 10 engine. This
+  supersedes (does not close) the existing open per-package Dependabot
+  PRs for `@sveltejs/kit`, `eslint`, `@eslint/js`, `eslint-plugin-svelte`,
+  `node`, `nginxinc/nginx-unprivileged` and the `actions/*` bumps.
 
 - **Public-release preparation (F9/F10 Phase A-C,
   `docs/design/cropwright-oss-export-plan-2026-09-25.md`).**
