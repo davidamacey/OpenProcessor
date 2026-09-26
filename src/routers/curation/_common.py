@@ -36,7 +36,6 @@ from src.clients.curation_opensearch import (
     ensure_labels_confirmed_fields,
 )
 from src.config import IndexRole, get_curation_config, index_name
-from src.core.dependencies import get_opensearch
 from src.core.logging import get_logger
 from src.routers.curation._item_models import CropsPageResponse, ItemDoc  # noqa: F401 - re-export
 
@@ -118,9 +117,11 @@ RegistryDep = Annotated[ClassRegistry, Depends(_registry_dep)]
 
 async def _raw_opensearch_dep() -> Any:
     """Return the raw AsyncOpenSearch instead of the project's
-    ``OpenSearchClient`` wrapper."""
-    wrapper = await get_opensearch()
-    return getattr(wrapper, 'client', wrapper)
+    ``OpenSearchClient`` wrapper, with the project guard installed
+    (``src.services.projects.guard``, §2.4)."""
+    from src.services.projects.guard import make_curation_opensearch
+
+    return await make_curation_opensearch()
 
 
 OpenSearchDep = Annotated[Any, Depends(_raw_opensearch_dep)]
