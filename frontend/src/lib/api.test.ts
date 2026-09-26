@@ -25,6 +25,7 @@ import {
   getReviewQueue,
   getScoresCoverage,
   getScoresStatus,
+  apiFetch,
   getSelectStatus,
   getVizProjection,
   locateInReviewQueue,
@@ -2538,5 +2539,107 @@ describe('getScoresCoverage / computeScores / getScoresStatus / cancelScores', (
 
     const result = await cancelScores();
     expect(result.cancelled).toBe(false);
+  });
+});
+
+/**
+ * OpenProcessor 3cd4ca87: a 503 (e.g. Triton unreachable) sends
+ * `Retry-After: 5` — apiFetch honours it in place of that attempt's fixed
+ * backoff delay, still within the existing 3-retry budget, and clamps an
+ * oversized value rather than extending the wait unboundedly.
+ */
+describe('apiFetch 503 Retry-After', () => {
+  const jsonResponse = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('waits the served Retry-After (seconds) before retrying, then succeeds', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            detail: 'Inference backend (Triton) is temporarily unavailable',
+          }),
+          {
+            status: 503,
+            headers: { 'Retry-After': '3' },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const p = apiFetch<{ ok: boolean }>('/x');
+    // Flush the first attempt's fetch resolution before asserting timers.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // A hair under the served 3s: no retry fired yet.
+    await vi.advanceTimersByTimeAsync(2900);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Past the served 3s: the retry fires.
+    await vi.advanceTimersByTimeAsync(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await expect(p).resolves.toEqual({ ok: true });
+  });
+
+  it('clamps an oversized Retry-After to the bounded max, never stalling past it', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: 'unavailable' }), {
+          status: 503,
+          headers: { 'Retry-After': '600' },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const p = apiFetch<{ ok: boolean }>('/x');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Clamped to 5s (MAX_RETRY_AFTER_MS), nowhere near the served 600s.
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await expect(p).resolves.toEqual({ ok: true });
+  });
+
+  it('fails with the served detail after the retry budget is exhausted', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockImplementation(
+      () =>
+        new Response(
+          JSON.stringify({
+            detail: 'Inference backend (Triton) is temporarily unavailable',
+          }),
+          { status: 503, headers: { 'Retry-After': '1' } },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const p = apiFetch<unknown>('/x');
+    p.catch(() => {});
+    // 1 initial + 3 retries at the served 1s each = well within 10s.
+    for (let i = 0; i < 4; i++) {
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+    await expect(p).rejects.toMatchObject({
+      status: 503,
+      detail: 'Inference backend (Triton) is temporarily unavailable',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });
