@@ -285,3 +285,15 @@ API container.
   graph with the same torch wheel. Revisit once Phase B lands.
 - Segmenter on `python:*-slim` + pip torch: would change the pinned
   `torch 2.7.0+cu126` / conda environment the model is validated on.
+
+## Owner decision (2026-09-26)
+
+**Plan B** (includes Plan A's dedupe and shared layers): a slim runtime API/worker image plus a separate export image holding the model-export environment. Better layering throughout, so that pulls dedupe across images.
+
+To evaluate when the task resumes: use an upstream image as the export base instead of building our own, e.g. the official `ultralytics/ultralytics` GPU image, or NVIDIA's TensorRT container (`nvcr.io/nvidia/tensorrt`). Compare them on:
+- size and layer reuse with our images;
+- the TensorRT version matching the Triton server's (engines must be built with the same TRT major/minor);
+- the license (ultralytics is AGPL-3.0, compatible with this project) and the NGC terms for redistribution;
+- digest pinning.
+
+Also: make torch a lazy import on /health and ingest where possible, so the runtime image can drop more.
