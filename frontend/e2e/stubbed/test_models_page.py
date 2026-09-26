@@ -9,6 +9,8 @@ null inference/exec/latency fields.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 MODELS = {
     "models": [
         {
@@ -76,7 +78,7 @@ def test_not_configured_status_and_null_counts_render_as_dashes(stub, page, app_
     stub.on("GET", r"/models/status(\?|$)", MODELS)
 
     page.goto(f"{app_url}/models")
-    page.get_by_text("Segmenter", exact=False).wait_for(timeout=15000)
+    page.get_by_text("Segmenter", exact=False).wait_for(timeout=ACTION_TIMEOUT_MS)
 
     card = page.locator("li", has_text="Segmenter")
     assert "not configured" in card.inner_text().lower(), card.inner_text()
@@ -94,7 +96,7 @@ def test_region_protected_model_shows_protected_chip_not_an_unload_button(
     stub.on("GET", r"/models/status(\?|$)", MODELS)
 
     page.goto(f"{app_url}/models")
-    page.get_by_text("Primary Item Proposer", exact=False).wait_for(timeout=15000)
+    page.get_by_text("Primary Item Proposer", exact=False).wait_for(timeout=ACTION_TIMEOUT_MS)
 
     card = page.locator("li", has_text="Primary Item Proposer")
     assert "protected: in use by the pipeline" in card.inner_text().lower(), (
@@ -111,7 +113,7 @@ def test_external_unloadable_false_model_shows_neither_button_nor_chip(
     stub.on("GET", r"/models/status(\?|$)", MODELS)
 
     page.goto(f"{app_url}/models")
-    page.get_by_text("Segmenter", exact=False).wait_for(timeout=15000)
+    page.get_by_text("Segmenter", exact=False).wait_for(timeout=ACTION_TIMEOUT_MS)
 
     card = page.locator("li", has_text="Segmenter")
     assert "protected" not in card.inner_text().lower(), card.inner_text()
@@ -126,7 +128,7 @@ def test_ordinary_unloadable_model_still_offers_a_plain_unload_button(
 
     page.goto(f"{app_url}/models")
     page.get_by_text("PE-Core-L14-336 Image Encoder", exact=False).wait_for(
-        timeout=15000
+        timeout=ACTION_TIMEOUT_MS
     )
 
     card = page.locator("li", has_text="PE-Core-L14-336 Image Encoder")

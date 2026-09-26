@@ -9,6 +9,8 @@ no "changed" toast.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import REGION_PROFILE, REGION_TAB_LABEL
 from test_labeling_flow import register_base
 
@@ -34,7 +36,7 @@ def test_failed_boot_health_then_success_shows_region_tab_without_toast(stub, pa
 
     page.goto(f"{app_url}/review")
     page.get_by_test_id("review-tabs").get_by_role("button", name=REGION_TAB_LABEL).wait_for(
-        timeout=15000
+        timeout=ACTION_TIMEOUT_MS
     )
     assert calls["n"] >= 4, calls
     body = page.locator("body").inner_text()

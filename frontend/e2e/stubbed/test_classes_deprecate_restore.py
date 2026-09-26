@@ -14,6 +14,8 @@ exists"). This proves the real browser-rendered page:
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 CLASSES_LIVE = [
     {
         "class_id": 10,
@@ -76,12 +78,12 @@ def test_deprecate_empty_class_succeeds_and_refreshes(stub, page, app_url):
 
     page.goto(f"{app_url}/classes")
     row = page.get_by_test_id("class-row-10")
-    row.wait_for(timeout=15000)
+    row.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("deprecate-10").click()
 
     assert any(c[1] == "/curation/classes/10/deprecate" for c in stub.calls)
     toast = page.get_by_text("Deprecated coupe.")
-    toast.wait_for(timeout=15000)
+    toast.wait_for(timeout=ACTION_TIMEOUT_MS)
 
 
 def test_deprecate_still_referenced_offers_merge_preselecting_source(stub, page, app_url):
@@ -108,14 +110,14 @@ def test_deprecate_still_referenced_offers_merge_preselecting_source(stub, page,
 
     page.goto(f"{app_url}/classes")
     row = page.get_by_test_id("class-row-11")
-    row.wait_for(timeout=15000)
+    row.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("deprecate-11").click()
 
     # Both confirm dialogs are auto-accepted above (deprecate confirm, then
     # the "merge instead?" confirm) — the merge dialog should now be open
     # with sedan preselected as the source.
     dialog = page.get_by_role("dialog", name="Merge classes")
-    dialog.wait_for(timeout=15000)
+    dialog.wait_for(timeout=ACTION_TIMEOUT_MS)
     source_select = dialog.locator("select").first
     assert source_select.input_value() == "11"
 
@@ -133,10 +135,10 @@ def test_restore_succeeds_and_row_disappears(stub, page, app_url):
 
     page.goto(f"{app_url}/classes")
     toggle = page.get_by_text("Deprecated classes (1)")
-    toggle.wait_for(timeout=15000)
+    toggle.wait_for(timeout=ACTION_TIMEOUT_MS)
     toggle.click()
     restore_btn = page.get_by_test_id("restore-99")
-    restore_btn.wait_for(timeout=15000)
+    restore_btn.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert restore_btn.is_enabled()
     restore_btn.click()
 
@@ -156,12 +158,12 @@ def test_restore_conflict_shows_plain_string_detail_verbatim(stub, page, app_url
 
     page.goto(f"{app_url}/classes")
     toggle = page.get_by_text("Deprecated classes (1)")
-    toggle.wait_for(timeout=15000)
+    toggle.wait_for(timeout=ACTION_TIMEOUT_MS)
     toggle.click()
     page.get_by_test_id("restore-99").click()
 
     toast = page.get_by_text('a live class already uses the name "wagon"')
-    toast.wait_for(timeout=15000)
+    toast.wait_for(timeout=ACTION_TIMEOUT_MS)
 
 
 def test_restore_merged_class_names_the_merge_target(stub, page, app_url):
@@ -191,12 +193,12 @@ def test_restore_merged_class_names_the_merge_target(stub, page, app_url):
 
     page.goto(f"{app_url}/classes")
     toggle = page.get_by_text("Deprecated classes (1)")
-    toggle.wait_for(timeout=15000)
+    toggle.wait_for(timeout=ACTION_TIMEOUT_MS)
     toggle.click()
     page.get_by_test_id("restore-99").click()
 
     page.get_by_text("Merged into sedan; un-merge isn't supported.", exact=False).wait_for(
-        timeout=15000
+        timeout=ACTION_TIMEOUT_MS
     )
     body = page.locator("body").inner_text()
     assert "relabel crops by hand to split them back out" in body
@@ -212,7 +214,7 @@ def test_merged_class_row_has_no_restore(stub, page, app_url):
 
     page.goto(f"{app_url}/classes")
     toggle = page.get_by_text("Deprecated classes (1)")
-    toggle.wait_for(timeout=15000)
+    toggle.wait_for(timeout=ACTION_TIMEOUT_MS)
     toggle.click()
     assert page.get_by_test_id("merged-into-99").inner_text().strip() == "merged into sedan"
     assert page.get_by_test_id("restore-99").count() == 0
@@ -238,7 +240,7 @@ def test_merge_preview_says_validations_carry_over(stub, page, app_url):
         },
     )
     page.goto(f"{app_url}/classes")
-    page.get_by_role("button", name="Merge classes").click(timeout=15000)
+    page.get_by_role("button", name="Merge classes").click(timeout=ACTION_TIMEOUT_MS)
     dialog = page.get_by_role("dialog", name="Merge classes")
     dialog.wait_for(timeout=5000)
     dialog.locator("select").nth(0).select_option("10")

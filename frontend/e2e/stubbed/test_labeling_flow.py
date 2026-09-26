@@ -11,6 +11,8 @@ behavior.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 import re
 
 from fixtures.wire import make_item
@@ -174,7 +176,7 @@ def test_labeling_flow(stub, page, app_url):
 
     # ---- cluster detail page ------------------------------------
     page.goto(f"{app_url}/clusters/1")
-    page.wait_for_selector("img", timeout=15000)
+    page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(600)
     assert page.locator("article, li, div").count() > 0, "grid did not render"
 
@@ -230,7 +232,7 @@ def test_labeling_flow(stub, page, app_url):
     register_base(stub, fail_put_label=True)
     page.goto(f"{app_url}/review")
     counter = page.get_by_test_id("queue-counter")
-    counter.first.wait_for(timeout=15000)
+    counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(700)
     before = counter.first.inner_text()
     page.keyboard.press("Enter")
@@ -248,7 +250,7 @@ def test_labeling_flow(stub, page, app_url):
     for route in ROUTES:
         stub.console_errors.clear()
         page.goto(f"{app_url}{route}")
-        page.locator("main").first.wait_for(timeout=15000)
+        page.locator("main").first.wait_for(timeout=ACTION_TIMEOUT_MS)
         page.wait_for_timeout(300)
         crashed = [c for c in stub.console_errors if c.startswith("pageerror") or "Uncaught" in c]
         body = page.locator("main").first.inner_text()

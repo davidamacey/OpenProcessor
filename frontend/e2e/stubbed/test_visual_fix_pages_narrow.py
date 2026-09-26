@@ -6,6 +6,8 @@ browser: each asserts on measured geometry, not on class names.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import REGION_CLASS, make_item
 
 NARROW = {"width": 800, "height": 1000}
@@ -89,7 +91,7 @@ def test_crop_card_class_name_is_readable_at_800(stub, page, app_url):
 
     page.goto(f"{app_url}/clusters/{CLUSTER_ID}")
     name = page.locator('[data-testid="class-name"]').first
-    name.wait_for(timeout=15000)
+    name.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(400)
 
     box = name.evaluate(
@@ -135,7 +137,7 @@ def test_region_gallery_chips_stay_inside_their_cards_at_800(stub, page, app_url
     stub.on("GET", r"/regions(\?|$)", {"items": items, "total": 4})
 
     page.goto(f"{app_url}/clusters?class={REGION_CLASS}")
-    page.locator('[data-testid="slot-text-value"]').first.wait_for(timeout=15000)
+    page.locator('[data-testid="slot-text-value"]').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(400)
 
     # C2: the filter chip names the class, not "#80".
@@ -174,7 +176,7 @@ def test_ignored_mode_hides_cluster_grid_controls(stub, page, app_url):
 
     page.goto(f"{app_url}/clusters")
     sort = page.locator('label:has-text("Sort") select')
-    sort.wait_for(timeout=15000)
+    sort.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     page.locator("button:has-text('Ignored')").first.click()
     page.get_by_text("Nothing ignored.").wait_for(timeout=10000)
@@ -193,7 +195,7 @@ def test_models_updated_label_does_not_overlap_description(stub, page, app_url):
 
     page.goto(f"{app_url}/models")
     status = page.locator('[data-testid="models-status"]')
-    status.get_by_text("Updated", exact=False).wait_for(timeout=15000)
+    status.get_by_text("Updated", exact=False).wait_for(timeout=ACTION_TIMEOUT_MS)
 
     boxes = page.evaluate(
         """() => {
@@ -257,7 +259,7 @@ def test_dashboard_recluster_card_stacks_at_800(stub, page, app_url):
 
     page.goto(f"{app_url}/dashboard")
     desc = page.locator('[data-testid="recluster-description"]')
-    desc.wait_for(timeout=15000)
+    desc.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(400)
 
     # Stacked: the description spans its card's full content width.

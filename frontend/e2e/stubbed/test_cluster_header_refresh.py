@@ -13,6 +13,8 @@ picks up the server's new count with no navigation/reload.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 import json
 
 from fixtures.wire import make_item
@@ -114,11 +116,11 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
     stub.on("PUT", r"/crops/batch_label$", batch_label_handler)
 
     page.goto(f"{app_url}/clusters/{CLUSTER_ID}")
-    page.wait_for_selector("img", timeout=15000)
+    page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(400)
 
     header = page.get_by_title("validated · labeled · cluster total")
-    header.wait_for(timeout=15000)
+    header.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert "0" in header.inner_text(), f"expected the pre-label count first: {header.inner_text()!r}"
 
     page.locator("img").first.click()

@@ -10,6 +10,8 @@ the card only rendered the export's counts when nothing was picked.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from test_train_gpus import register_train_mount
 
 CURRENT = "/exports/20260924T233203Z"
@@ -46,7 +48,7 @@ def test_card_shows_current_export_contents_for_explicit_pick(stub, page, app_ur
 
     page.goto(f"{app_url}/train")
     select = page.locator("label:has-text('dataset version') select")
-    select.wait_for(timeout=15000)
+    select.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_text("images: train", exact=False).first.wait_for(timeout=10000)
 
     select.select_option(CURRENT)

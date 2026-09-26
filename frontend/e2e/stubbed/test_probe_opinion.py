@@ -9,6 +9,8 @@ threshold) renders as a muted "model unsure: <predicted class>" instead."""
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import make_item
 
 CLASSES = [
@@ -47,7 +49,7 @@ def _open(stub, page, app_url, item) -> None:
         lambda _r, _m: (200, {"items": [item], "total": 1, "page": 1, "page_size": 30}),
     )
     page.goto(f"{app_url}/review?tab=model_disagreements")
-    page.get_by_role("button", name="Confirm", exact=True).wait_for(timeout=15000)
+    page.get_by_role("button", name="Confirm", exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
 
 
 def test_out_of_scope_item_shows_no_opinion_and_no_accept(stub, page, app_url):

@@ -3,6 +3,8 @@ acceptance report, measured in a real browser (jsdom has no layout)."""
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 NARROW = {"width": 800, "height": 1000}
 
 CLASSES = [
@@ -40,7 +42,7 @@ def test_breadcrumb_is_not_truncated_at_800(stub, page, app_url):
     _classes_page_stubs(stub)
     page.goto(f"{app_url}/classes")
     crumb = page.locator('nav[aria-label="Breadcrumb"]')
-    crumb.wait_for(timeout=15000)
+    crumb.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
     dims = crumb.evaluate("el => ({sw: el.scrollWidth, cw: el.clientWidth})")
     assert dims["sw"] <= dims["cw"] + 1, f"breadcrumb clipped at 800px: {dims}"
@@ -69,7 +71,7 @@ def test_bakeoff_ranked_table_shows_scroll_cue_at_800(stub, page, app_url):
     stub.on("GET", r"/bakeoff/results/job-1$", COMPARISON)
 
     page.goto(f"{app_url}/bakeoff")
-    page.locator('[data-job-id="job-1"]').click(timeout=15000)
+    page.locator('[data-job-id="job-1"]').click(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("comparison-rows").wait_for(timeout=10000)
     page.wait_for_timeout(300)
     assert "bake-off protocol:" in page.get_by_test_id("comparison-protocol").inner_text()
@@ -98,7 +100,7 @@ def test_settings_unset_sort_is_not_blank(stub, page, app_url):
     register(stub, methods, 200, SETTINGS_EMPTY)
     page.goto(f"{app_url}/settings")
     sort_select = page.locator("select").nth(1)
-    sort_select.wait_for(timeout=15000)
+    sort_select.wait_for(timeout=ACTION_TIMEOUT_MS)
     shown = sort_select.evaluate("el => el.options[el.selectedIndex]?.text ?? ''")
     assert shown.strip() != "", "the unset sort select renders blank"
     assert "not set" in shown, shown
@@ -119,7 +121,7 @@ def test_region_inventory_card_uses_served_display_name(stub, page, app_url):
 
     page.goto(f"{app_url}/clusters")
     title = page.get_by_test_id("slot-card-title")
-    title.wait_for(timeout=15000)
+    title.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert title.inner_text().strip() == REGION_TAB_LABEL
     assert REGION_TAB_LABEL != REGION_CLASS
     chip = page.get_by_test_id("cluster-cohesion").first

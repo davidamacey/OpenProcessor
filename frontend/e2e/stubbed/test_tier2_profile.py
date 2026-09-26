@@ -24,6 +24,8 @@ baked at build time — safe to intercept against a `vite preview` build):
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 import re
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL
@@ -85,7 +87,7 @@ _TAB_COUNT = re.compile(r"\s+[\d,]+$")
 def tab_labels(page) -> list[str]:
     # The active tab carries a count badge once its queue loads ("All 0"),
     # so match the tab with or without it and strip counts from the labels.
-    page.get_by_role("button", name=re.compile(r"^All(\s+[\d,]+)?$")).wait_for(timeout=15000)
+    page.get_by_role("button", name=re.compile(r"^All(\s+[\d,]+)?$")).wait_for(timeout=ACTION_TIMEOUT_MS)
     texts = page.locator("div.border-b.border-zinc-800 button").all_inner_texts()
     return [_TAB_COUNT.sub("", t.strip()) for t in texts]
 

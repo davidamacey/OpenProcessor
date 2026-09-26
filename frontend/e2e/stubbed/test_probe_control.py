@@ -6,6 +6,8 @@ empty_state.has_probe_predictions checks for.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from test_train_gpus import register_train_mount
 
 JOB_ID = "2026-09-24T23-47-55_yolo26n"
@@ -36,7 +38,7 @@ NO_CHECKPOINT_STATUS = {
 
 def _open_results(page, app_url, job_id: str):
     page.goto(f"{app_url}/train")
-    page.get_by_text(job_id, exact=False).first.wait_for(timeout=15000)
+    page.get_by_text(job_id, exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
     results_button = page.get_by_role("button", name="Results")
     results_button.wait_for(timeout=10000)
     results_button.click()
@@ -125,7 +127,7 @@ def test_confirm_then_run_probe_posts_this_runs_job_id_and_polls_status(
 
     page.wait_for_function(
         "document.querySelector('[data-testid=\"probe-control\"]')?.textContent.includes('42 items updated')",
-        timeout=15000,
+        timeout=ACTION_TIMEOUT_MS,
     )
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]

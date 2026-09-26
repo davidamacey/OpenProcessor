@@ -9,6 +9,8 @@ Z -> undoLast() -> `POST {API_PREFIX}/crops/{id}/label/undo`
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import make_item
 
 CLASSES = [
@@ -73,7 +75,7 @@ def test_review_assign_then_undo(stub, page, app_url):
 
     page.goto(f"{app_url}/review")
     counter = page.get_by_test_id("queue-counter")
-    counter.first.wait_for(timeout=15000)
+    counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     before = counter.first.inner_text()
 
     page.keyboard.press("Enter")

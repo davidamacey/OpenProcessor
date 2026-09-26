@@ -9,6 +9,8 @@ without ever throwing a page error — resolveStatsUpdate
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 import json
 
 CLASSES = [
@@ -50,7 +52,7 @@ def test_dashboard_stats_unavailable(stub, page, app_url):
     stub.on("GET", r"/pipeline/events", (200, sse_body, "text/event-stream"))
 
     page.goto(f"{app_url}/dashboard")
-    page.get_by_text("Stats unavailable:", exact=False).first.wait_for(timeout=15000)
+    page.get_by_text("Stats unavailable:", exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 
     assert page.get_by_text("Stats unavailable: stats unavailable (503)", exact=False).count() > 0, (

@@ -10,6 +10,8 @@ region tab is labelled by the served `display_name` even when
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 import re
 
 from fixtures.wire import REGION_CLASS, REGION_PROFILE, make_item
@@ -58,7 +60,7 @@ _TAB_COUNT = re.compile(r"\s+[\d,]+$")
 
 
 def tab_labels(page) -> list[str]:
-    page.get_by_role("button", name=re.compile(r"^All(\s+[\d,]+)?$")).wait_for(timeout=15000)
+    page.get_by_role("button", name=re.compile(r"^All(\s+[\d,]+)?$")).wait_for(timeout=ACTION_TIMEOUT_MS)
     texts = page.get_by_test_id("review-tabs").locator("button").all_inner_texts()
     return [_TAB_COUNT.sub("", t.strip()) for t in texts]
 
@@ -103,7 +105,7 @@ def test_every_route_mounts_without_region_calls(stub, page, app_url):
     for route in ROUTES:
         stub.console_errors.clear()
         page.goto(f"{app_url}{route}")
-        page.locator("main").first.wait_for(timeout=15000)
+        page.locator("main").first.wait_for(timeout=ACTION_TIMEOUT_MS)
         page.wait_for_timeout(500)
         crashed = [c for c in stub.console_errors if c.startswith("pageerror") or "Uncaught" in c]
         assert not crashed, f"{route} should mount without errors: {crashed[:2]}"
@@ -118,25 +120,25 @@ def test_region_surfaces_absent(stub, page, app_url):
     assert tab_labels(page) == CORE_TABS
     # ...and says why, instead of switching to All silently.
     notice = page.get_by_test_id("tab-unavailable")
-    notice.wait_for(timeout=15000)
+    notice.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert "no region profile" in notice.inner_text()
 
     # /dashboard: no region detections panel.
     page.goto(f"{app_url}/dashboard")
-    page.locator("main").first.wait_for(timeout=15000)
+    page.locator("main").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(800)
     assert page.get_by_text("verifier-confirmed").count() == 0
 
     # /clusters?class=<region class>: the normal class-filtered grid, not
     # a region gallery.
     page.goto(f"{app_url}/clusters?class={REGION_CLASS}")
-    page.get_by_test_id("class-filter-chip").first.wait_for(timeout=15000)
+    page.get_by_test_id("class-filter-chip").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(500)
     assert page.get_by_role("button", name=re.compile("⟳")).count() == 0
 
     # /clusters/[id]: crop cards offer no sub-box editor.
     page.goto(f"{app_url}/clusters/1")
-    page.wait_for_selector("img", timeout=15000)
+    page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(500)
     assert page.locator('button[aria-label^="Edit "]').count() == 0
     assert page.get_by_text("✎").count() == 0
@@ -145,7 +147,7 @@ def test_region_surfaces_absent(stub, page, app_url):
     page.goto(f"{app_url}/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     page.wait_for_timeout(500)
-    page.get_by_text("Ingest status").first.wait_for(timeout=15000)
+    page.get_by_text("Ingest status").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text("Region detection worklog").count() == 0
 
     assert not region_requests(stub), region_requests(stub)

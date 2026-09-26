@@ -9,6 +9,8 @@ their own collapsed section with the served reason, and offers no
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 import re
 
 CLASSES = [
@@ -84,7 +86,7 @@ def test_classes_flagged_terms_are_listed_with_no_create_action(stub, page, app_
     # F-53: the proposals list sits below the registry in a collapsed
     # <details>; open it first.
     section = page.get_by_test_id("proposals-section")
-    section.wait_for(timeout=15000)
+    section.wait_for(timeout=ACTION_TIMEOUT_MS)
     section.locator("summary").click()
 
     # top_terms: one actionable row with "Create class & assign".
@@ -95,7 +97,7 @@ def test_classes_flagged_terms_are_listed_with_no_create_action(stub, page, app_
     # by count) instead of a collapsed, action-less <details>; each shows
     # its served reason and never a create action.
     rows = page.get_by_test_id("proposal-row")
-    rows.first.wait_for(timeout=15000)
+    rows.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     for label, reason in (
         ("motorcycle", "generic parent"),
         ("suv", "existing class"),
@@ -133,7 +135,7 @@ def test_classes_table_fits_800px(stub, page, app_url):
     page.set_viewport_size({"width": 800, "height": 1000})
     page.goto(f"{app_url}/classes")
     table = page.locator("table").first
-    table.wait_for(timeout=15000)
+    table.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("validated-test-suffix").first.wait_for(timeout=10000)
     width = table.evaluate("t => t.scrollWidth")
     container = table.evaluate("t => t.parentElement.clientWidth")
@@ -163,9 +165,9 @@ def test_class_table_keeps_its_height_under_a_long_proposals_list(stub, page, ap
     page.set_viewport_size({"width": 800, "height": 1000})
     page.goto(f"{app_url}/classes")
     table = page.locator("table").first
-    table.wait_for(timeout=15000)
+    table.wait_for(timeout=ACTION_TIMEOUT_MS)
     section = page.get_by_test_id("proposals-section")
-    section.wait_for(timeout=15000)
+    section.wait_for(timeout=ACTION_TIMEOUT_MS)
     section.locator("summary").click()
     page.get_by_test_id("proposal-row").nth(59).wait_for(timeout=10000)
     # F-53: the registry renders first and is never squeezed by the list

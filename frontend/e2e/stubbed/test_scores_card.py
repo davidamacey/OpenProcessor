@@ -8,6 +8,8 @@ pre-`/scores/*` (404) backend.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 import re
 
 COVERAGE_BEFORE = {
@@ -125,7 +127,7 @@ def test_scores_card_absent_on_404(stub, page, app_url):
     register(stub, coverage_status=404)
 
     page.goto(f"{app_url}/settings")
-    page.get_by_text("Deployment defaults").first.wait_for(timeout=15000)
+    page.get_by_text("Deployment defaults").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(400)
 
     assert not [c for c in stub.console_errors if c.startswith("pageerror")]
@@ -139,7 +141,7 @@ def test_scores_card_compute_all_flow(stub, page, app_url):
     compute_calls = register(stub)
 
     page.goto(f"{app_url}/settings")
-    page.get_by_text("Curation scores").first.wait_for(timeout=15000)
+    page.get_by_text("Curation scores").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 
     assert not [c for c in stub.console_errors if c.startswith("pageerror")]
@@ -176,7 +178,7 @@ def test_scores_card_compute_selected_and_cancel(stub, page, app_url):
     compute_calls = register(stub)
 
     page.goto(f"{app_url}/settings")
-    page.get_by_text("Curation scores").first.wait_for(timeout=15000)
+    page.get_by_text("Curation scores").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 
     page.get_by_label("Select near_dup").check()

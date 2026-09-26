@@ -13,6 +13,8 @@ review/+page.svelte).
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
 CLASSES = [
@@ -70,7 +72,7 @@ def test_region_confirm_unchanged_box_sends_patch_region_meta(stub, page, app_ur
 
     page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
-    counter.first.wait_for(timeout=15000)
+    counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     # Give the slot canvas a beat to seed editedSlotBox from the served
     # region_bbox_in_parent before confirming.

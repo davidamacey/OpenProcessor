@@ -15,6 +15,8 @@ Four passes against `/settings`:
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 import re
 
 METHODS_TODAY = {
@@ -84,7 +86,7 @@ def test_curation_settings(stub, page, app_url):
     register(stub, METHODS_TODAY, 404, None)
 
     page.goto(f"{app_url}/settings")
-    page.get_by_text(re.compile(r"does not support shared curation defaults")).first.wait_for(timeout=15000)
+    page.get_by_text(re.compile(r"does not support shared curation defaults")).first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 
     assert not [c for c in stub.console_errors if c.startswith("pageerror")], "page should render with no pageerror"
@@ -98,7 +100,7 @@ def test_curation_settings(stub, page, app_url):
     put_calls = register(stub, METHODS_TODAY, 200, SETTINGS_EMPTY, put_response=SETTINGS_MERGED)
 
     page.goto(f"{app_url}/settings")
-    page.get_by_text("Clustering method").first.wait_for(timeout=15000)
+    page.get_by_text("Clustering method").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 
     selects = page.locator("select")
@@ -143,7 +145,7 @@ def test_curation_settings(stub, page, app_url):
     register(stub, METHODS_WITH_ASSIST_AXES, 200, SETTINGS_EMPTY)
 
     page.goto(f"{app_url}/settings")
-    page.get_by_text("Set by the backend's startup config").first.wait_for(timeout=15000)
+    page.get_by_text("Set by the backend's startup config").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 
     assert page.get_by_text("grounding_v2").count() > 0
@@ -163,7 +165,7 @@ def test_curation_settings(stub, page, app_url):
     register(stub, METHODS_TODAY, 200, SETTINGS_EMPTY, put_response=SETTINGS_422, put_status=422)
 
     page.goto(f"{app_url}/settings")
-    page.get_by_text("Clustering method").first.wait_for(timeout=15000)
+    page.get_by_text("Clustering method").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 
     sort_select4 = page.locator("select").nth(1)

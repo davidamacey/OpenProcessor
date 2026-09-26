@@ -35,6 +35,8 @@ the time the key lands.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 import re
 import threading
 from urllib.parse import parse_qs, urlparse
@@ -150,7 +152,7 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
     # route handler can block the driver's dispatch loop for later
     # page.* calls (it polls the already-rendered DOM, same as the
     # locate request itself firing only after this text is on screen).
-    page.wait_for_selector("text=Locating crop", timeout=15000)
+    page.wait_for_selector("text=Locating crop", timeout=ACTION_TIMEOUT_MS)
 
     # Fire the keypress while the locate response is still held open.
     # Whether the browser processes it now or only once the driver loop
@@ -160,7 +162,7 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
     page.keyboard.press("Enter")
 
     locate_gate.set()
-    page.wait_for_selector("text=Locating crop", state="detached", timeout=15000)
+    page.wait_for_selector("text=Locating crop", state="detached", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)  # let any in-flight PUT (there shouldn't be one) land
 
     assert not any("crop-0" in c for c in label_calls), (

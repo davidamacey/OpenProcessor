@@ -18,6 +18,8 @@ served `rejection_reasons` vocabulary, never the generic per-item
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_LABEL, REGION_TAB_URL_ID
 
 CLASSES = [
@@ -153,7 +155,7 @@ def test_region_status_filter_forwards_the_param_and_needs_human_reason_never_re
 
     page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
-    counter.first.wait_for(timeout=15000)
+    counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(500)
 
     # The served label renders (not a raw param name), and the label
@@ -204,7 +206,7 @@ def test_region_status_from_the_url_reaches_the_queue_request(stub, page, app_ur
     stub.on("GET", r"/review/regions(\?|$)", review_handler)
 
     page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected")
-    page.get_by_test_id("queue-counter").first.wait_for(timeout=15000)
+    page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(1500)
 
     assert region_calls, "the region queue must be fetched"
