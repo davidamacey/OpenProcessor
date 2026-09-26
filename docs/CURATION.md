@@ -86,6 +86,16 @@ Stated up front, honestly, rather than discovered in production:
 
 ## Models you must supply
 
+**Rebuild `yolo-api` before exporting any of these.** A pulled
+`davidamacey/openprocessor:latest` image can predate the source tree
+you're exporting against. If `make export-pe` (or another curation
+export target) fails with `ModuleNotFoundError: No module named 'core'`,
+that's the `perception_models` package missing from a stale image, not a
+code bug — run `docker compose build yolo-api && docker compose up -d
+--force-recreate yolo-api` first, then re-run the export target. See the
+top-level [README.md](../README.md#curation--active-learning) for the
+same note.
+
 Nothing in this subsystem ships a pretrained region-detector, VLM, or
 trainer. A deployment supplies:
 
@@ -281,6 +291,27 @@ trainer. A deployment supplies:
   check telling you to run `POST /export/yolo` first, instead of a bare
   422 with no explanation.)
 
+## New-deployment env checklist
+
+One canonical starting point instead of assembling settings across this
+guide's quick-start steps, the GPU-arbiter section, and the full env
+reference below. This lists every `OP_*` var `docker-compose.yml` itself
+sets or reads for the `curation`/`training`/`segmenter`/`vlm` profiles
+(derived from `docker-compose.yml` + `CurationConfig.from_env()` in
+[`src/config/curation.py`](../src/config/curation.py), not memory), grouped
+by what it's for. Full detail, every other `OP_*` var, and defaults live
+in ["Environment variables"](#environment-variables) below.
+
+| Purpose | Vars |
+|---|---|
+| Ingest / detector | `OP_INGEST_PRIMARY_DETECTOR_MODEL`, `OP_INGEST_PRIMARY_CLASS_IDS`, `OP_SOURCE_ROOT_HOST` (host path bind-mounted `:ro` to `OP_SOURCE_ROOT`, container default `/data/source`) |
+| Region detection (segmenter cascade) | `OP_REGION_PROFILE_PATH`, `OP_SEGMENTER_URL` / `OP_SEGMENTER_URLS` |
+| VLM labeling | `OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY` |
+| Feature flags | `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW`, `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED` |
+| GPU / training placement | `OP_GPU_ALLOWED_IDS`, `OP_GPU_LABELS`, `OP_GPU_ARBITER_CONTAINERS`, `OP_GPU_ARBITER_TRAINER_CONTAINER`, `OP_TRAIN_DEFAULT_GPUS`, `OP_TRAIN_GPU_ORDER` |
+| Class registry / API surface | `OP_REGISTRY_PATH`, `OP_API_PREFIX` |
+| Image build/tag (compose only, not app config) | `OP_IMAGE_REPO`, `OP_IMAGE_TAG`, `OP_BUILD_SHA` |
+
 ## Class-registry schema
 
 The class registry is a single JSON file at `OP_REGISTRY_PATH` (default
@@ -385,6 +416,13 @@ detection-worker read of that same path fails with
 `detection_failed`/`reason=image_unavailable`, since the worker is a
 separate container with its own filesystem view.
 
+Because this mount is `:ro`, the dataset-fetch scripts
+(`scripts/datasets/fetch_coco_subset.py`,
+`fetch_openimages_plates.py`) must run on the **host**, not via
+`docker compose exec` — see the "Run this on the host" note in either
+script's module docstring. `make sample-coco*` / `make sample-plates`
+already do this correctly.
+
 ## VLM
 
 Three ways to get a VLM behind `OP_VLM_URL` (`src/services/labeling/vlm_client.py`):
@@ -421,7 +459,9 @@ the most common "VLM labeling returns 400s in the worker logs" cause.
 
 ## GPU arbiter container coordination
 
-`OP_GPU_ARBITER_CONTAINERS` (see "Environment variables" below) lets a
+`OP_GPU_ARBITER_CONTAINERS` (see the ["New-deployment env
+checklist"](#new-deployment-env-checklist) and "Environment variables"
+below) lets a
 training job stop/restart named sibling containers around the run so
 they don't fight it for GPU memory. Doing that from inside the `yolo-api`
 container requires Docker socket access, which is **not** mounted by
@@ -474,6 +514,10 @@ reach this API from inside the same compose network:
 | Docker network | `${COMPOSE_PROJECT_NAME:-openprocessor}_triton_net` | The network `docker-compose.yml` creates (`triton_net`, prefixed with the compose project name) — join it as an `external: true` network in Cropwright's own compose file, or attach the container to it directly. |
 
 ## Seed / bootstrap path for a fresh install
+
+Setting up a new curation deployment? See the ["New-deployment env
+checklist"](#new-deployment-env-checklist) above for the `OP_*` vars this
+path needs set before step 1.
 
 **No dataset to ingest yet?** `make sample-coco` /
 `make sample-coco-readme` / `make sample-plates` fetch public,

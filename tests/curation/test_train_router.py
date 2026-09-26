@@ -1312,6 +1312,11 @@ def test_promote_endpoint_force_bypasses_gate(
     out = r.json()
     assert out['triton_name'] == 'yolo26m_forced'
     assert out['triton_loaded'] is True
+    # Final E2E run 2026-09-26: first inference after promote took ~85s
+    # (TensorRT JIT engine build on first request, not on /load). The
+    # promote response must surface this so a caller doesn't mistake it
+    # for a hang.
+    assert out['cold_start_expected_on_first_inference'] is True
 
 
 # =============================================================================

@@ -5981,6 +5981,11 @@
             "title": "Class Remap Source",
             "type": "string"
           },
+          "cold_start_expected_on_first_inference": {
+            "default": true,
+            "title": "Cold Start Expected On First Inference",
+            "type": "boolean"
+          },
           "config_path": {
             "title": "Config Path",
             "type": "string"

@@ -1800,6 +1800,9 @@ class PromoteResponse(BaseModel):
     gate_report: dict[str, Any] | None = None
     lineage_stamped: bool = False
     class_remap_source: str = 'none'
+    # Truthful static hint, not a live measurement: see
+    # TritonPromoter.PromoteResult.cold_start_expected_on_first_inference.
+    cold_start_expected_on_first_inference: bool = True
 
 
 @router.post(
@@ -2056,6 +2059,7 @@ async def promote_run(
         gate_report=gate_report if gate_failures else None,
         lineage_stamped=lineage_stamped,
         class_remap_source=class_remap.source,
+        cold_start_expected_on_first_inference=result.cold_start_expected_on_first_inference,
     )
 
 
