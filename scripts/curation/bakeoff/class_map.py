@@ -207,8 +207,17 @@ class ClassMapping:
     unmapped_model_classes: list[dict[str, Any]] = field(default_factory=list)
     not_covered_eval_classes: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    eval_names: dict[int, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        model_to_eval_names = (
+            None
+            if self.model_to_eval is None
+            else {
+                str(mid): self.eval_names.get(eid, str(eid))
+                for mid, eid in sorted(self.model_to_eval.items())
+            }
+        )
         return {
             'method': self.method,
             'model_to_eval': (
@@ -216,6 +225,7 @@ class ClassMapping:
                 if self.model_to_eval is None
                 else {str(k): v for k, v in sorted(self.model_to_eval.items())}
             ),
+            'model_to_eval_names': model_to_eval_names,
             'unmapped_model_classes': list(self.unmapped_model_classes),
             'not_covered_eval_classes': list(self.not_covered_eval_classes),
             'warnings': list(self.warnings),
@@ -262,7 +272,7 @@ def finalize(
         for eid in sorted(set(scored_class_ids))
         if eid not in covered
     ]
-    return ClassMapping(method, m2e, unmapped, not_covered, notes)
+    return ClassMapping(method, m2e, unmapped, not_covered, notes, dict(eval_names))
 
 
 def resolve_for_loaded_model(

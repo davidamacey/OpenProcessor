@@ -29,6 +29,7 @@ from src.clients.occ import OCCFinalConflictError
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_settings
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
+from src.core.error_handlers import triton_unavailable_response
 from src.core.logging import (
     bind_request_id,
     configure_logging,
@@ -58,6 +59,7 @@ from src.routers.curation_images import (
 )
 from src.routers.curation_train import router as curation_train_router
 from src.routers.curation_umap import router as curation_umap_router
+from src.utils.retry import RetryExhaustedError
 
 
 # Request correlation IDs (request_id_ctx / get_request_id) live in
@@ -580,6 +582,8 @@ def create_app() -> FastAPI:
             },
             headers={'X-Request-ID': req_id},
         )
+
+    application.exception_handler(RetryExhaustedError)(triton_unavailable_response)
 
     # Global Exception Handler - include request ID for debugging
     @application.exception_handler(Exception)

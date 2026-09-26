@@ -19,6 +19,7 @@ from fastapi.responses import ORJSONResponse
 from src.config.settings import TritonModelConfig
 from src.schemas.detection import BatchInferenceResult, InferenceResult
 from src.services.inference import InferenceService
+from src.utils.retry import RetryExhaustedError
 
 
 logger = logging.getLogger(__name__)
@@ -90,6 +91,8 @@ def detect_single(
         logger.warning(f'Invalid image {filename}: {e}')
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+    except RetryExhaustedError:
+        raise
     except Exception as e:
         logger.error(f'Detection failed for {filename}: {e}')
         raise HTTPException(status_code=500, detail=f'Detection failed: {e!s}') from e
@@ -218,6 +221,8 @@ def detect_batch(
         )
 
     except HTTPException:
+        raise
+    except RetryExhaustedError:
         raise
     except Exception as e:
         logger.error(f'Batch detection failed: {e}')
