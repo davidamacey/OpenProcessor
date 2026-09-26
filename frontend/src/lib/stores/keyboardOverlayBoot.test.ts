@@ -10,13 +10,20 @@
  * rather than sharing keyboard.svelte.test.ts's already-registered
  * singleton.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 function press(init: KeyboardEventInit & { key: string }): void {
   window.dispatchEvent(
     new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }),
   );
 }
+
+// Compile the store once up front: under a loaded full suite the first
+// fresh import can exceed the test timeout, and the timed-out import then
+// finishes in the background and leaves the overlay open for the next test.
+beforeAll(async () => {
+  await import('./keyboard.svelte');
+});
 
 beforeEach(() => {
   vi.resetModules();
