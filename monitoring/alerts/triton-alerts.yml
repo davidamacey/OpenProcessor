@@ -38,16 +38,15 @@ groups:
           summary: "High failure rate on {{ $labels.model }}"
           description: "Model {{ $labels.model }} has {{ $value | humanizePercentage }} failure rate"
 
-      # Model not ready
-      - alert: ModelNotReady
-        expr: nv_model_ready_state == 0
-        for: 1m
-        labels:
-          severity: critical
-          component: triton
-        annotations:
-          summary: "Model {{ $labels.model }} is not ready"
-          description: "Model {{ $labels.model }} version {{ $labels.version }} has been in not-ready state for over 1 minute"
+      # Removed: ModelNotReady used to alert on `nv_model_ready_state == 0`,
+      # but this Triton version's /metrics never exports a per-model
+      # readiness gauge (confirmed against a live server's actual
+      # exposition; see tests/test_monitoring_metrics.py) -- the alert
+      # could never fire either way. No Triton or DCGM/nvidia-exporter
+      # metric is an honest equivalent (readiness is a Triton-internal
+      # concept, not a GPU one); use `GET /v2/repository/index` or
+      # `/curation/health` for real per-model readiness instead.
+      # TritonServerDown below still covers "the whole server is gone".
 
       # High GPU utilization
       - alert: HighGPUUtilization

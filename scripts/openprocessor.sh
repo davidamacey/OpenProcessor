@@ -22,6 +22,18 @@ source "${SCRIPT_DIR}/lib/colors.sh"
 source "${SCRIPT_DIR}/lib/gpu.sh"
 source "${SCRIPT_DIR}/lib/ports.sh"
 
+# Installer plan §1: docker-compose.yml is deploy-safe (no `build:`, no
+# source mounts); every `build:` block and source mount now lives in
+# docker-compose.dev.yml. This script only ever runs from a checkout (it
+# lives in scripts/), so it always needs that overlay -- detect it the
+# same way the Makefile's COMPOSE var does, by checking for src/main.py
+# next to the compose file.
+DC_FILES=(-f "$PROJECT_DIR/docker-compose.yml")
+if [[ -f "$PROJECT_DIR/src/main.py" ]]; then
+    DC_FILES+=(-f "$PROJECT_DIR/docker-compose.dev.yml")
+fi
+dc() { docker compose "${DC_FILES[@]}" "$@"; }
+
 # F-66: resolve every port from THIS deployment's .env (falling back to the
 # stock defaults) instead of hardcoding localhost:4603/4600/4607/4605. On a
 # shared host running a second isolated stack (remapped ports via .env),
@@ -52,7 +64,7 @@ load_config_lib() {
 cmd_start() {
     log_step "Starting OpenProcessor services..."
     cd "$PROJECT_DIR"
-    docker compose up -d
+    dc up -d
     log_success "Services started"
     echo ""
     cmd_status
@@ -61,7 +73,7 @@ cmd_start() {
 cmd_stop() {
     log_step "Stopping OpenProcessor services..."
     cd "$PROJECT_DIR"
-    docker compose down
+    dc down
     log_success "Services stopped"
 }
 
@@ -71,12 +83,12 @@ cmd_restart() {
     if [[ -n "$service" ]]; then
         log_step "Restarting $service..."
         cd "$PROJECT_DIR"
-        docker compose restart "$service"
+        dc restart "$service"
         log_success "$service restarted"
     else
         log_step "Restarting all services..."
         cd "$PROJECT_DIR"
-        docker compose restart
+        dc restart
         log_success "All services restarted"
     fi
 }
@@ -89,15 +101,15 @@ cmd_logs() {
 
     if [[ -n "$service" ]]; then
         if [[ "$follow" == "-f" ]] || [[ "$follow" == "--follow" ]]; then
-            docker compose logs -f "$service"
+            dc logs -f "$service"
         else
-            docker compose logs --tail=100 "$service"
+            dc logs --tail=100 "$service"
         fi
     else
         if [[ "$1" == "-f" ]] || [[ "$1" == "--follow" ]]; then
-            docker compose logs -f
+            dc logs -f
         else
-            docker compose logs --tail=50
+            dc logs --tail=50
         fi
     fi
 }
@@ -109,8 +121,8 @@ cmd_status() {
 
     # Container status
     echo -e "${BOLD}Containers:${NC}"
-    docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || \
-        docker compose ps
+    dc ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || \
+        dc ps
 
     echo ""
 
@@ -369,21 +381,21 @@ cmd_curation() {
     case "$subcommand" in
         up)
             log_step "Starting curation subsystem (profile: curation)..."
-            docker compose --profile curation up -d
+            dc --profile curation up -d
             log_success "Curation services starting. Check with: $0 curation status"
             ;;
         down)
             log_step "Stopping curation subsystem (profile: curation)..."
-            docker compose --profile curation down
+            dc --profile curation down
             log_success "Curation services stopped"
             ;;
         logs)
-            docker compose --profile curation logs -f \
+            dc --profile curation logs -f \
                 curation-detection-worker curation-vlm-worker \
                 curation-auto-label-worker curation-cluster-refresh
             ;;
         status)
-            docker compose --profile curation ps \
+            dc --profile curation ps \
                 curation-detection-worker curation-vlm-worker \
                 curation-auto-label-worker curation-cluster-refresh curation-evaluator
             ;;
@@ -473,11 +485,11 @@ cmd_update() {
 
     # Pull latest images
     log_info "Pulling latest Docker images..."
-    docker compose pull
+    dc pull
 
     # Rebuild if needed
     log_info "Rebuilding containers..."
-    docker compose build
+    dc build
 
     log_success "Update complete"
     log_info "Restart to apply: ./scripts/openprocessor.sh restart"

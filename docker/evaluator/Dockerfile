@@ -19,6 +19,15 @@
 # One-shot job:
 #   docker compose --profile curation run --rm curation-evaluator \
 #     python -m scripts.curation.bakeoff.bakeoff_runner --job /eval_jobs/x.job.json
+#
+# WAIVER (installer plan §3.4 release checklist, Wave 0): still a single
+# `FROM`, not multi-stage. build-essential/cmake/pkg-config stay in the
+# final image to compile wheel deps at `pip install` time, which the
+# other images' builder-stage split avoids. Deferred: Wave 0 scope is the
+# compose/mount split, not image-size hardening, and this image is
+# on-demand only (`docker compose ... run --rm`), never a long-running
+# service. Track the multi-stage conversion as release-checklist debt
+# (§3.4) rather than doing it silently here.
 # =============================================================================
 
 FROM python:3.13-slim-trixie
@@ -74,6 +83,12 @@ ENV PYTHONUNBUFFERED=1 \
 
 COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser scripts/ ./scripts/
+# scripts/curation/bakeoff/profile.py reads opt-in baseline profiles under
+# the repo's examples/ tree (path given explicitly via a job's
+# baselines_path) -- bake it in so a non-checkout deploy doesn't need a
+# bind mount just to use that opt-in feature. Not mounted separately in
+# docker-compose.yml today, matching current behavior.
+COPY --chown=appuser:appuser examples/ ./examples/
 
 USER appuser
 
