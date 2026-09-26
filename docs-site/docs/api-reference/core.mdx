@@ -1,0 +1,121 @@
+---
+sidebar_position: 2
+title: Core routes
+---
+
+# Core routes
+
+Each router below is mounted at its root path and again under `/v1`
+(`/detect` and `/v1/detect` behave identically). Field names are the
+multipart/query names the handlers declare. For full request and response
+schemas, open the running API's `/docs`.
+
+## Detection
+
+| Method | Path | Inputs | Returns |
+|---|---|---|---|
+| POST | `/detect` | `image`; query `model_name`, `confidence` | `detections[]` (normalized box, `confidence`, `class_id`, `class_name`), `image` size, timing |
+| POST | `/detect/batch` | `images` (up to 64); same query | One result per image |
+
+`model_name` selects any loaded detector, YOLO11 end2end or YOLO26 alike:
+the output format is resolved from Triton metadata.
+
+```bash
+curl -X POST "http://localhost:4603/detect?confidence=0.3" -F "image=@photo.jpg"
+```
+
+## Faces and persons
+
+| Method | Path | Inputs | Purpose |
+|---|---|---|---|
+| POST | `/faces/detect` | `image`; `confidence` | SCRFD boxes + 5-point landmarks |
+| POST | `/faces/recognize` | `image`; `confidence` | Detection + ArcFace 512-dim embeddings |
+| POST | `/faces/verify` | `image1`, `image2`; `threshold`, `confidence` | 1:1 comparison |
+| POST | `/faces/search` | `image`; `face_index`, `top_k`, `min_score` | Similar faces in the index |
+| POST | `/faces/identify` | `image`; `top_k`, `threshold` | 1:N identification |
+| POST | `/persons/cluster` | `similarity_threshold`, `min_faces_per_person`, `max_persons` | Group indexed faces into persons |
+| GET | `/persons`, `/persons/{person_id}` | `limit` | List / get persons |
+| PUT | `/persons/{person_id}/name` | | Name a person |
+| POST | `/persons/merge` | | Merge persons |
+| DELETE | `/persons/{person_id}` | `delete_faces` | Delete a person |
+
+## Embeddings
+
+| Method | Path | Inputs | Returns |
+|---|---|---|---|
+| POST | `/embed/image` | `image`; `use_cache`, `index`, `image_id` | 512-dim MobileCLIP image embedding |
+| POST | `/embed/text` | JSON `{"text": "..."}`; `use_cache` | 512-dim text embedding (77-token limit) |
+| POST | `/embed/batch` | `images` | One embedding per image |
+| POST | `/embed/boxes` | `image`, `boxes` (JSON `[[x1,y1,x2,y2], ...]`, normalized) | One embedding per crop |
+
+## Visual search
+
+| Method | Path | Inputs | Searches |
+|---|---|---|---|
+| POST | `/search/image` | `image`; `top_k`, `min_score` | Global image embeddings |
+| POST | `/search/text` | query `text`, `top_k`, `min_score` | Text-to-image via CLIP |
+| POST | `/search/face` | `image`; `face_index`, `top_k`, `min_score` | Face embeddings |
+| POST | `/search/ocr` | query `text`, `top_k`, `min_score` | Images by recognized text |
+| POST | `/search/object` | `image`; `box_index`, `top_k`, `min_score`, `class_filter` | Object-crop embeddings |
+
+```bash
+curl -X POST "http://localhost:4603/search/text?text=sunset+beach&top_k=10"
+```
+
+## Ingest and analysis
+
+| Method | Path | Inputs | Purpose |
+|---|---|---|---|
+| POST | `/ingest` | `image`; form `image_id`, `image_path`, `metadata`, `skip_duplicates`, `detect_near_duplicates`, `near_duplicate_threshold`, `enable_ocr`, `enable_detection`, `enable_faces`, `enable_clip` | Run every enabled model and index the results |
+| POST | `/ingest/batch` | `images` (up to 64); form `image_ids`, `image_paths`, same toggles, `defer_heavy_ops` | Batch ingest |
+| POST | `/ingest/directory` | query `directory`, `recursive`, `max_images`, `batch_size`, same toggles | Ingest a server-side directory |
+| POST | `/analyze` | `image`; `include_embedding`, `include_face_embeddings`, `enable_ocr`, `confidence`, `face_confidence` | Detection + faces + CLIP + OCR in one call, no indexing |
+| POST | `/analyze/batch` | `images`; `include_full_results`, ... | Batch analysis |
+
+## OCR
+
+| Method | Path | Inputs | Purpose |
+|---|---|---|---|
+| POST | `/ocr/predict` | `image`; `min_det_score`, `min_rec_score`, `filter_by_score` | PP-OCRv5 text boxes, strings, scores |
+| POST | `/ocr/batch` | `images`; `min_det_score`, `min_rec_score`, `max_workers` | Batch OCR |
+| POST | `/ocr/search` | query `text`, `page`, `size`, `fuzzy` | Search indexed OCR text |
+
+## Clustering, albums and queries
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/clusters/train/{index}` | Train FAISS clustering for an index (`n_clusters`, `max_samples`) |
+| POST | `/clusters/assign/{index}` | Assign vectors to clusters |
+| GET | `/clusters/stats/{index}` | Cluster statistics |
+| GET | `/clusters/{index}/{cluster_id}` | Cluster members (`page`, `size`) |
+| POST, GET | `/clusters/rebalance/{index}`, `/clusters/balance/{index}` | Rebalance / inspect balance |
+| GET | `/clusters/albums` | Auto-generated albums (`min_size`) |
+| GET | `/query/stats` | Statistics for every index |
+| GET, DELETE | `/query/image/{image_id}` | Stored image data (`include_embedding`) / delete from all indexes |
+| GET | `/query/duplicates`, `/query/duplicates/stats`, `/query/duplicates/{group_id}` | Duplicate groups |
+
+## Model management
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/models` | Models in the Triton repository |
+| POST | `/models/upload` | Upload a checkpoint (`file`; form `triton_name`, `max_batch`, `formats`, `normalize_boxes`, `auto_load`) |
+| POST | `/models/{model_name}/export` | Export to TensorRT in the background |
+| GET | `/models/export/{task_id}`, `/models/exports` | Export task status |
+| GET | `/models/{model_name}/status` | Load status |
+| POST | `/models/{model_name}/load`, `/models/{model_name}/unload` | Runtime load / unload |
+| DELETE | `/models/{model_name}` | Remove from the repository |
+| POST | `/models/{model_name}/test` | Run a test image through a model |
+
+## Example response
+
+```json
+{
+  "detections": [
+    {"x1": 0.094, "y1": 0.278, "x2": 0.870, "y2": 0.989,
+     "confidence": 0.918, "class_id": 0, "class_name": "person"}
+  ],
+  "image": {"width": 1920, "height": 1080},
+  "inference_time_ms": 12.5
+}
+```

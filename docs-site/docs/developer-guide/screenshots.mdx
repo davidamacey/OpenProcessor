@@ -1,0 +1,70 @@
+---
+sidebar_position: 1
+title: Screenshots and image credits
+---
+
+# Screenshots and image credits
+
+OpenProcessor is a backend and has no UI of its own. The screenshots in
+these docs were **captured from Cropwright, a frontend for this backend**,
+and are used here because they show backend-driven features directly:
+cluster cards (`GET /curation/clusters`), review queues
+(`GET /curation/review/{tab}`), region review, training (`/curation/train/*`)
+and model comparison (`/curation/bakeoff/*`).
+
+**Public data only.** Every screenshot must come from an instance holding
+public sample data (`make sample-coco`, `make sample-plates`). Never
+capture from, or commit an image sourced from, a real deployment: its
+imagery, class names and counts are not public data.
+
+The files live under `docs-site/static/img/screenshots/`. The landing-page
+showcase list is `docs-site/src/data/screenshots.json`, and the frontend
+routes they were captured from are recorded in
+`docs-site/src/data/screenshot_routes.json`. Cropwright's own capture
+script drives a browser against those routes; review every PNG for
+leaked hostnames, paths or unexpected text before committing it.
+
+## The landing-page walkthrough GIF
+
+`docs-site/static/img/openprocessor-workflow.gif` is built by
+`scripts/docs/create-workflow-gif.sh` (ImageMagick) from frames that
+`scripts/docs/capture_hero_frames.py` (Playwright) captures from a running
+API holding public sample data:
+
+```bash
+OP_DOCS_API=http://localhost:<port> PYTHON=.venv/bin/python \
+  scripts/docs/create-workflow-gif.sh
+```
+
+The frames are a terminal session (`/detect` on a public COCO image,
+`/embed/text`, the curation ingest limits and status), the Swagger UI at
+`/docs`, and two closing frames from the Cropwright screenshots above.
+Every request the capture makes is read-only. Set `OP_DOCS_MLFLOW` to add
+an MLflow frame once the stack has training runs, and `KEEP_FRAMES=<dir>`
+to review the individual frames. Set `heroDemo` to `null` in
+`docs-site/site.config.ts` to hide the GIF.
+
+## Image credits
+
+The screenshots show photographs from the [COCO](https://cocodataset.org)
+2017 set and the
+[Open Images](https://storage.googleapis.com/openimages/web/index.html) V7
+"Vehicle registration plate" subset, fetched by the sample tooling above.
+COCO images are Flickr uploads under their owners' Creative Commons
+licenses (filtered to redistributable ones); Open Images images are listed
+by their authors as CC BY 2.0. Per-image author and license records are in
+the `ATTRIBUTION.csv` each fetch writes. Boxes, labels and scores shown are
+produced by OpenProcessor and drawn by Cropwright, not by either dataset.
+
+## Building these docs
+
+```bash
+cd docs-site
+npm ci
+npm run build          # fails on any broken link or anchor
+npx docusaurus serve   # preview the production build
+```
+
+`docs-site/Dockerfile` builds the same site into an unprivileged nginx
+image, and `.github/workflows/docs.yml` builds it on pull requests and
+publishes it to GitHub Pages from the default branch.

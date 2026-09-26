@@ -1,0 +1,136 @@
+---
+sidebar_position: 1
+title: Deployment and GPU sizing
+---
+
+# Deployment and GPU sizing
+
+## Hardware
+
+| | Minimum | Recommended |
+|---|---|---|
+| GPU | NVIDIA, 8 GB+ VRAM, Ampere or newer | A100 / A6000 / RTX 4090 class, 16 GB+ |
+| RAM | 16 GB | 64 GB |
+| CPU | 16 cores | 48+ cores |
+| Storage | | NVMe SSD for image storage |
+| Software | Docker with the NVIDIA Container Toolkit | |
+
+## GPU profiles
+
+`scripts/setup.sh` detects your GPU and picks one; switch later with
+`./scripts/openprocessor.sh profile <name>`.
+
+| Profile | VRAM | Example GPUs | Approx. throughput |
+|---|---|---|---|
+| `minimal` | 6-8 GB | RTX 3060, RTX 4060 | ~5 RPS |
+| `standard` | 12-24 GB | RTX 3080, RTX 4090 | ~15 RPS |
+| `full` | 48 GB+ | A6000, A100 | ~50 RPS |
+
+## Core Triton loadout
+
+Measured on a 48 GB card by unloading each model in turn. The previous
+default instance counts came to about **25.2 GB**; the shipped
+`config.pbtxt` defaults now use `count: 1` for the three over-provisioned
+models, bringing the core loadout to roughly **16-17 GB**.
+
+| Model | Instances (old, now default) | Approx. VRAM | Notes |
+|---|---|---|---|
+| `scrfd_10g_bnkps` | 4, now 1 | 6.8 GB, now ~1.7 GB | Face detection |
+| `mobileclip2_s2_image_encoder` | 2, now 1 | 3.4 GB, now ~1.7 GB | FP32 build |
+| `arcface_w600k_r50` | 4, now 1 | 2.75 GB, now ~0.7 GB | Face embeddings |
+| `mobileclip2_s2_text_encoder` | 1 | 0.7 GB | |
+| YOLO11 / PE / OCR (remaining core models) | as shipped | ~11.65 GB combined | No per-model breakdown measured yet |
+| `pe_text_encoder` | 1, `KIND_CPU` | 0 GB | Host RAM only |
+
+Raise instance counts in `config.pbtxt` (or re-export) on a card with
+headroom; hot-path models benefit most. A curation-only deployment that
+doesn't need faces can unload those models entirely.
+
+## Segmenter
+
+The optional `segmenter` (`--profile segmenter`) is the largest curation
+VRAM item after Triton.
+
+| `SEGMENTER_INSTANCES` | `SEGMENTER_SHARED_WEIGHTS` | Approx. VRAM | Notes |
+|---|---|---|---|
+| 1 | 0 or 1 | ~2 GB | Fits a 12 GB card next to Triton |
+| 2 | 1 (recommended) | ~4 GB | One weight copy, per-instance activations |
+| 2 | 0 | ~4-6 GB | Each instance loads its own weights; no benefit |
+| 4 | 1 | ~7-8 GB | 48 GB-class cards, with room for training too |
+
+Rule of thumb: 1-2 instances on a 12-24 GB card, 2-4 on a 48 GB card,
+shared weights either way. Measure with `nvidia-smi` once the service's
+`/health` reports `"loaded":true`; these are starting points, and actual
+use depends on image resolution and batch size.
+
+## VLM
+
+The in-compose `vlm` service (vLLM) claims `VLM_GPU_MEMORY_UTILIZATION`
+of its GPU (default `0.4`). The shipped default model measured about
+**23 GB** in the same end-to-end run that measured the Triton loadout
+above. Example budget from `env.template`: a 48 GB card running Triton
+(~10 GB) plus the segmenter (~4 GB) plus the VLM at `0.30` (~14 GB) leaves
+headroom; a 12-24 GB card should run a smaller or quantized model
+instead. Any OpenAI-compatible endpoint works, so the VLM can also live
+on another host entirely (`OP_VLM_URL`).
+
+## Training
+
+A training run holds its GPU(s) for hours. `curation-trainer` is pinned by
+`OP_TRAIN_GPU_ORDER` (default `0`); training/bake-off jobs may only target
+ids in `OP_GPU_ALLOWED_IDS` (empty means any). If training shares a card
+with GPU-resident services, `OP_GPU_ARBITER_CONTAINERS` can stop and
+restart named containers around a run (requires the gpu-arbiter overlay;
+see [Security](./security.mdx)).
+
+## GPU ids
+
+Every GPU-using service is pinned independently, so a multi-GPU host can
+spread the load:
+
+| Variable | Service |
+|---|---|
+| `TRITON_GPU_ID` | `triton-server` |
+| `API_GPU_ID` | `yolo-api` |
+| `EVALUATOR_GPU_ID` | `curation-evaluator` |
+| `SEGMENTER_GPU_ID` | `segmenter` |
+| `VLM_GPU_ID` | `vlm` |
+| `OP_TRAIN_GPU_ORDER` | `curation-trainer` |
+
+All default to `0`. Set each explicitly: `.env` values are not
+shell-expanded, so one can't reference another. The trainer accepts a
+single id from the variable; a multi-GPU trainer (`OP_TRAIN_GPU_ORDER=0,2`)
+also needs a compose override file listing the same `device_ids` in the
+same order. A setup-generated `docker-compose.override.yml` pins Triton
+and the API itself and takes precedence over these variables.
+
+Example layout on a three-GPU host (one card per heavy tenant):
+
+```bash
+TRITON_GPU_ID=1
+API_GPU_ID=1
+SEGMENTER_GPU_ID=0
+EVALUATOR_GPU_ID=0
+VLM_GPU_ID=2
+OP_TRAIN_GPU_ORDER=0
+OP_GPU_ALLOWED_IDS=0
+```
+
+## Measured performance
+
+Single-request latency from the README (one GPU):
+
+| Operation | Time | Throughput |
+|---|---|---|
+| Object detection | 140-170 ms | ~6-7 RPS |
+| Face detection | 100-150 ms | ~7-10 RPS |
+| Face recognition | 105-130 ms | ~8-9 RPS |
+| Image embedding (CLIP) | 6-8 ms | ~120 RPS |
+| Text embedding (CLIP) | 5-17 ms | ~60-200 RPS |
+| OCR | 170-350 ms | ~3-6 RPS |
+| Full analyze | 280-430 ms | ~2-3 RPS |
+| Single-image ingest | 750-950 ms | ~1-1.3 RPS |
+| Batch ingest (50 images) | 7.3 s total | ~6.8 images/s |
+
+Batching gives roughly 2-3x the throughput of sequential single-image
+calls. The planned throughput work is on the [Roadmap](/roadmap).

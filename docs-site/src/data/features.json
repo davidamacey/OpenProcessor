@@ -1,0 +1,37 @@
+[
+  {
+    "title": "Object detection",
+    "icon": "box",
+    "desc": "YOLO11 (EfficientNMS end2end, GPU NMS) and YOLO26 (natively NMS-free) served side by side from one Triton instance. POST /detect, /detect/batch; pick a model per request."
+  },
+  {
+    "title": "Faces",
+    "icon": "user",
+    "desc": "SCRFD-10G detection with 5-point landmarks plus ArcFace 512-dim embeddings: detect, recognize, 1:1 verify, 1:N identify and similarity search under /faces."
+  },
+  {
+    "title": "Embeddings and visual search",
+    "icon": "search",
+    "desc": "MobileCLIP image and text embeddings (512-dim) indexed in OpenSearch k-NN: image-to-image, text-to-image, face, OCR-text and object-level search."
+  },
+  {
+    "title": "OCR",
+    "icon": "text",
+    "desc": "PP-OCRv5 text detection and recognition behind a Triton Python-backend (BLS) pipeline: POST /ocr/predict and /ocr/batch, plus text search over ingested images."
+  },
+  {
+    "title": "Combined analysis and ingest",
+    "icon": "layers",
+    "desc": "POST /analyze runs detection, faces, CLIP and OCR on one image; /ingest indexes everything into OpenSearch, one image, a batch of up to 64, or a server directory."
+  },
+  {
+    "title": "Curation backend (experimental)",
+    "icon": "grid",
+    "desc": "A domain-agnostic active-learning subsystem under /curation: item ingest, clustering, review queues, VLM-assisted labeling, region cascades, export, training and model comparison."
+  },
+  {
+    "title": "TensorRT on Triton",
+    "icon": "cpu",
+    "desc": "Every core model is exported to TensorRT FP16 with dynamic batching; Triton runs in explicit model-control mode so models load, unload and promote at runtime."
+  }
+]

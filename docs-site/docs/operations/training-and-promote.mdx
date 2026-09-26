@@ -1,0 +1,149 @@
+---
+sidebar_position: 5
+title: Training, bake-off and promote
+---
+
+# Training, bake-off and promote
+
+<Screenshot
+  name="train-1600.png"
+  alt="Training setup driven by /curation/train/*, captured from Cropwright, a frontend for this backend"
+  caption="Training setup over /curation/train/* (captured from Cropwright, a frontend for this backend)"
+/>
+
+## The file protocol
+
+`/curation/train/*` is a control plane over files on the shared `/jobs`
+volume; the API never calls the trainer:
+
+| File | Written by | Meaning |
+|---|---|---|
+| `<job_id>.job.json` | API (`POST /train/start`) | The job spec; the trainer claims it |
+| `<job_id>.cancel` | API (`POST /train/cancel/{job_id}`) | Cancel sentinel |
+| `<job_id>.status.json` | Trainer, every ~5 s | State, epochs, metrics, the `eval` block |
+| `<job_id>.run.log` | Trainer | Log, served by `GET /train/log/tail/{job_id}` |
+| `<job_id>.manifest.json` | Trainer, at the end | Lineage: dataset SHA, code versions, class remap, eval |
+| `.trainer_capabilities.json` | Trainer, every ~30 s | Heartbeat used by preflight |
+
+The shipped trainer (`docker/trainer/`, service `curation-trainer`) runs
+jobs through Ultralytics. Any trainer that speaks this protocol can
+replace it.
+
+## Running a training job
+
+```bash
+docker compose --profile training up -d          # trainer + MLflow
+curl -s -X POST "$API/curation/train/preflight" -H 'content-type: application/json' -d '{}'
+curl -s "$API/curation/train/profiles"           # hyperparameter tables per family/size/profile
+curl -s -X POST "$API/curation/train/start" -H 'content-type: application/json' -d '{
+  "model_family": "yolo26", "model_size": "s", "profile": "small",
+  "cuda_visible_devices": "0",
+  "hyperparameters": {"epochs": 70, "imgsz": 640, "batch": 16, "optimizer": "MuSGD"}
+}'
+curl -s "$API/curation/train/status"
+```
+
+- **Profiles are not merged into the request.** `GET /train/profiles`
+  returns a table for a UI to render; posting `"profile": "small"` alone
+  does not pull those values in. Copy every value you want into
+  `hyperparameters`. A top-level `epochs` (outside `hyperparameters`) is
+  a `422`.
+- `dataset_export_dir` defaults to the current export. With no export at
+  all, preflight returns one clear blocking check telling you to run
+  `POST /export/yolo` first.
+- **Subsets:** `hyperparameters.include_classes` trains on a subset of a
+  multi-class export; `GET /train/presets` lists named subsets
+  (`OP_TRAIN_PRESETS_PATH` adds your own).
+- **Preflight** returns blocking checks and warnings (empty train or val
+  split, a trained class missing from a split, unlabeled objects on
+  exported images, trainer reachability, GPU availability). `?force=true`
+  on `/train/start` bypasses blocking checks, except that only one run can
+  be active at a time.
+- **GPUs:** `cuda_visible_devices` names host GPU ids, restricted to
+  `OP_GPU_ALLOWED_IDS`; `GET /train/gpus` lists the options.
+- **Campaigns:** `POST /train/start_campaign` runs a progressive,
+  multi-size sequence; `POST /train/cancel_campaign/{campaign_id}` cancels
+  every non-terminal run in it.
+- **Offline hosts:** unless `hyperparameters.model` points at a local file,
+  the trainer downloads the base checkpoint for the requested family/size
+  from Ultralytics' release assets at run start. Pre-download it and set
+  `hyperparameters.model` on an air-gapped host.
+- **MLflow** (`curation-mlflow`, port 4609) is optional; set
+  `OP_MLFLOW_PUBLIC_URL` so served run links resolve in a browser.
+
+`GET /train/runs`, `GET /train/status/{job_id}`,
+`GET /train/manifest/{job_id}` and `GET /train/artifacts/{job_id}/{name}`
+expose past runs, their evaluation on the frozen test split and their
+lineage.
+
+## Bake-off: comparing models
+
+<Screenshot
+  name="bakeoff-1600.png"
+  alt="Model comparison setup driven by /curation/bakeoff/*, captured from Cropwright, a frontend for this backend"
+  caption="Bake-off setup over /curation/bakeoff/* (captured from Cropwright, a frontend for this backend)"
+/>
+
+The evaluator (`curation-evaluator`, `--profile curation`) scores trained
+runs and baseline models **per class** on the test split of any export,
+or on frozen external sets under `OP_BAKEOFF_EVAL_ROOT`.
+
+1. `GET /bakeoff/eval_datasets` lists what can be scored (exports with a
+   labeled test split and external sets), with class lists and SHAs.
+2. `GET /bakeoff/trained_models`, `GET /bakeoff/baseline_models` and
+   `GET /bakeoff/profiles` list candidates and scoring profiles (the
+   generic profile scores every class present in the eval split).
+3. `POST /bakeoff/run` queues a job file for the evaluator.
+4. `GET /bakeoff/status/{job_id}`, `/results/{job_id}` and
+   `/matrix/{job_id}` return the per-class comparison and the model x
+   dataset matrix (schema v2; older result files answer `409`).
+
+Classes a model doesn't cover are shown, not hidden. A queued bake-off
+also claims its GPU through the arbiter, like training.
+
+## Promote
+
+`POST /curation/train/promote/{job_id}` takes a finished run's ONNX
+export, writes it into the Triton model repository
+(`models/<name>/1/model.onnx` plus a YOLO26 single-output `config.pbtxt`
+and a `labels.txt`), and asks Triton to load it.
+
+It is gated on the run's `eval` block:
+
+| Gate | Threshold |
+|---|---|
+| mAP50 | at least `0.65` |
+| Per-class precision | at least `0.50` for every class |
+| Per-class support | at least `5` for every class |
+
+A failing gate is a `422` whose body lists structured `failures` and says
+whether `force=true` can bypass that particular failure (a run that isn't
+finished can't be forced). Other outcomes: `404` (no job or no ONNX yet),
+`409` (a model with that name exists; pass `overwrite=true`), `502`
+(Triton refused the load).
+
+For a subset or single-class run, promote resolves the class remap (from
+the manifest's lineage, then the weights directory) before writing
+`labels.txt`, so a subset model never serves the full registry's names.
+
+Triton runs in explicit model-control mode, so a restart forgets promoted
+models that aren't in its `--load-model` list. `POST /train/reload_promoted`
+(or `make reload-promoted`, which `make restart-triton` runs for you) loads
+them again.
+
+:::note[Promoted models and ingest]
+A promoted YOLO26 engine has one `[300, 6]` output. It serves fine through
+`POST /detect?model_name=<promoted>`, but doesn't yet fit either ingest
+detector contract, so don't point `OP_INGEST_PRIMARY_DETECTOR_MODEL` or
+`OP_INGEST_SECONDARY_DETECTOR_MODEL` at it.
+:::
+
+## Closing the loop
+
+`POST /curation/probe/run` runs the active-learning probe over the item
+pool and stores its prediction, confidence and entropy per item. The
+`model_disagreements` review queue then shows items where the model and
+the human label disagree, and `uncertainty` sorts by entropy. A
+disagreement is offered as a one-click fix only when the probe's
+confidence is at least `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE` (default
+`0.5`). Those corrections feed the next export.
