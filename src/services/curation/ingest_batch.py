@@ -263,6 +263,9 @@ async def run_ingest_batch(
     }
 
     async def _one(i: int, image_bytes: bytes, image_path: str, image_hash: str) -> IngestResult:
+        # Clients match results to request entries by source_identifier, so
+        # every duplicate carries its own, even though image_id is shared.
+        source_identifier = source_identifiers[i] if source_identifiers else None
         existing_id = hash_to_existing.get(image_hash)
         if existing_id:
             return IngestResult(
@@ -270,6 +273,7 @@ async def run_ingest_batch(
                 image_id=existing_id,
                 image_path=image_path,
                 imohash=image_hash,
+                source_identifier=source_identifier,
             )
         rep = batch_dup_of.get(i)
         if rep is not None:
@@ -280,6 +284,7 @@ async def run_ingest_batch(
                     image_id=rep_result.image_id,
                     image_path=image_path,
                     imohash=image_hash,
+                    source_identifier=source_identifier,
                 )
             # The representative failed (e.g. undecodable bytes) — don't
             # guess a duplicate-of relationship against a failed ingest;
@@ -294,7 +299,7 @@ async def run_ingest_batch(
                 prefilled_items=prefilled_items.get(i),
                 prefilled_secondary=prefilled_secondary.get(i),
                 whole_frame_from_bytes=whole_frame_from_bytes,
-                source_identifier=source_identifiers[i] if source_identifiers else None,
+                source_identifier=source_identifier,
                 ingest_run_id=ingest_run_id,
             )
         if i in rep_futures:
