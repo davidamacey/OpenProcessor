@@ -573,6 +573,13 @@ def test_class_map_registry_subset_remap() -> None:
     assert mapping.to_dict() == {
         'method': 'run_class_remap',
         'model_to_eval': {'0': 37, '1': 38, '2': 43, '3': 51, '4': 78},
+        'model_to_eval_names': {
+            '0': 'miata',
+            '1': 'minicooper',
+            '2': 'mustang',
+            '3': 'porsche',
+            '4': 'vw',
+        },
         'unmapped_model_classes': [],
         'not_covered_eval_classes': [],
         'warnings': [],

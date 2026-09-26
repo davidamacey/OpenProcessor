@@ -17,6 +17,7 @@ from src.config import get_settings
 from src.config.settings import TritonModelConfig
 from src.utils.cache import get_clip_tokenizer, get_image_cache, get_text_cache
 from src.utils.image_processing import decode_image, validate_image
+from src.utils.retry import RetryExhaustedError
 
 
 logger = logging.getLogger(__name__)
@@ -220,6 +221,8 @@ class InferenceService:
 
         try:
             result = face_client.recognize(image_bytes, confidence=confidence)
+        except RetryExhaustedError:
+            raise
         except Exception as e:
             logger.error(f'Face detection failed: {e}')
             return {
@@ -316,6 +319,8 @@ class InferenceService:
                 face_future = executor.submit(run_face_detection)
                 yolo_result = yolo_future.result()
                 face_result = face_future.result()
+        except RetryExhaustedError:
+            raise
         except Exception as e:
             logger.error(f'Face recognition failed: {e}')
             return {
@@ -500,6 +505,8 @@ class InferenceService:
                 face_future = executor.submit(run_face_detection)
                 yolo_result = yolo_future.result()
                 face_result = face_future.result()
+        except RetryExhaustedError:
+            raise
         except Exception as e:
             logger.error(f'Full analysis failed: {e}')
             return {
@@ -566,6 +573,8 @@ class InferenceService:
                 result['text_scores'] = (
                     ocr_result['text_scores'].tolist() if len(ocr_result['text_scores']) > 0 else []
                 )
+            except RetryExhaustedError:
+                raise
             except Exception as e:
                 logger.warning(f'OCR failed: {e}')
                 result['num_texts'] = 0
