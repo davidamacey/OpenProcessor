@@ -9,9 +9,10 @@ two very different callers can use the same centroids:
 * the **ingest path** (yolo-api) loads them once and assigns every new
   residual crop to its nearest centroid at ingest time — no batch wait.
 
-Both processes mount the same configured state directory
-(``CurationConfig.state_dir``, default ``/var/lib/openprocessor``), so the
-store lives at ``<state_dir>/ivf_residuals/``:
+Both processes resolve the store directory from the currently bound
+project's ``project_state_dir`` (not the global ``state_dir`` -- that
+one is shared across every project), so each project's store lives at
+its own ``<project_state_dir>/ivf_residuals/``:
 
     centroids.faiss   IndexFlatL2 over the K centroid vectors
     metadata.json     {trained_at, n_clusters, embedding_dim,
@@ -44,25 +45,42 @@ from src.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-IVF_STORE_DIR = Path(get_curation_config().state_dir) / 'ivf_residuals'
-CENTROIDS_PATH = IVF_STORE_DIR / 'centroids.faiss'
-METADATA_PATH = IVF_STORE_DIR / 'metadata.json'
-# Primary-subject clustering gate, persisted decoupled from the centroids so
-# both the worker (full recluster) and ingest (per-crop assign) apply the
-# SAME policy. Empty / absent file = no gate (cluster the full residual pool).
-GATE_PATH = IVF_STORE_DIR / 'gate.json'
-
-
 class IVFCentroidStore:
-    """Load / save / assign against persisted FAISS IVF centroids."""
+    """Load / save / assign against persisted FAISS IVF centroids.
+
+    ``store_dir`` defaults to the CURRENTLY bound project's
+    ``project_state_dir`` (resolved fresh on every construction, never
+    cached at import/module level -- two ``IVFCentroidStore()`` calls
+    made while bound to different projects must resolve to different
+    directories).
+    """
 
     def __init__(self, store_dir: Path | str | None = None) -> None:
-        self._dir = Path(store_dir) if store_dir is not None else IVF_STORE_DIR
+        self._dir = (
+            Path(store_dir)
+            if store_dir is not None
+            else Path(get_curation_config().project_state_dir) / 'ivf_residuals'
+        )
         self._centroids_path = self._dir / 'centroids.faiss'
         self._metadata_path = self._dir / 'metadata.json'
         self._gate_path = self._dir / 'gate.json'
         self._index: Any = None  # lazily-loaded faiss.IndexFlatL2
         self._metadata: dict[str, Any] = {}
+
+    # -- concrete file paths (only meaningful for an instance that has
+    # already resolved its own project's directory) ----------------------
+
+    @property
+    def centroids_path(self) -> Path:
+        return self._centroids_path
+
+    @property
+    def metadata_path(self) -> Path:
+        return self._metadata_path
+
+    @property
+    def gate_path(self) -> Path:
+        return self._gate_path
 
     # -- existence / metadata ---------------------------------------------
 
@@ -295,9 +313,5 @@ class IVFCentroidStore:
 
 
 __all__ = [
-    'CENTROIDS_PATH',
-    'GATE_PATH',
-    'IVF_STORE_DIR',
-    'METADATA_PATH',
     'IVFCentroidStore',
 ]
