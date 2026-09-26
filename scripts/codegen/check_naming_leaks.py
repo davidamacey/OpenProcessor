@@ -7,13 +7,16 @@ whole tracked tree:
 
 * **Scan A** — hard leak scan, zero tolerance. Company/product initials and
   filesystem paths that must never appear in the public repo at all
-  (``reference``, ``legacy_``/``LEGACY_``/``Legacy[A-Z]``, ``/legacy`` prefix, ``Provider``,
-  ``example-org``, private mount paths, ...).
+  (the private company name, its two-letter initials used as an
+  identifier/path prefix, the dataset provider, the parent org, private
+  hostnames and mount paths, ...). These terms are the private names
+  themselves, so the pattern is stored ROT13-encoded: neither the public
+  tree nor its history may spell them.
 * **Scan B** — domain-vocabulary scan (vendor model names the generic
   plumbing must not hardcode: ``gemma``, ``lpr``, ``sam_worker``, ``v6``,
   ``plate_*`` field literals, ``hdd_source``, and any spelling of
   "license plate" used outside the public reference example).
-* **Scan C** — private class-registry vocabulary (domain vehicle class
+* **Scan C** — private class-registry vocabulary (private vehicle class
   names that must not leak into generic code or test fixtures).
 
 Each scan's raw hits are filtered through the allowlist
@@ -31,6 +34,7 @@ regardless of which files are staged.
 
 from __future__ import annotations
 
+import codecs
 import re
 import subprocess
 import sys
@@ -45,9 +49,10 @@ ALLOWLIST_PATH = REPO_ROOT / 'scripts' / 'codegen' / 'naming_leak_allowlist.txt'
 # today; kept as the mechanism for the next such file.
 _ALWAYS_EXCLUDE_PATHS: tuple[str, ...] = ()
 
-SCAN_A = (
-    r'reference|Reference|REFERENCE|\blegacy_|\bLEGACY_|\bLegacy[A-Z]|/legacy\b|Provider|provider|'
-    r'example-org|/data/archive|/data|domain|workstation|host\.local'
+SCAN_A = codecs.decode(
+    r'xvyyobl|Xvyyobl|XVYYOBL|(?<![N-Mn-m0-9])(?:xo|XO)_|\oXo[N-M]|/xo\o|\oxo-[n-m]|'
+    r'Cbjreurnq|cbjreurnq|nggriba|/zag/anf|/zag/aiz|zbgbefcbeg|fhcrefghqvb|ubzr\.necn',
+    'rot13',
 )
 SCAN_B = (
     r'(?i)gemma|(?<![a-z])lpr|nanov11|sam_worker|sam_drain|segment_plate|'

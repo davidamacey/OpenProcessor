@@ -10,18 +10,13 @@
 # they spell every forbidden pattern on purpose.
 scripts/codegen/check_naming_leaks.py # spells every forbidden pattern by definition; this IS the guard
 scripts/codegen/naming_leak_allowlist.txt # this file; every entry below necessarily spells a forbidden pattern
-tests/test_naming_leaks.py # feeds synthetic 'legacy_stuff'-style leak fixtures into a temp repo to test the guard itself
 
 # ---------------------------------------------------------------------------
-# Scan A (hard leak: reference/legacy_/company terms/private paths)
+# Scan A (hard leak: company name/initials, org, provider, private paths)
 # ---------------------------------------------------------------------------
 
 CHANGELOG.md # documents every rename with the actual old->new literals throughout; this is the historical record of the naming sweep itself, kept intentionally
 
-# Negative/historical test docstrings (describe a retired literal or a past
-# bug by name; not a live leak).
-tests/curation/test_curation_images.py:legacy_vehicle_crops # negative test: asserts this literal fallback does NOT exist
-tests/curation/test_feature_flag_consistency.py:LEGACY_ # historical prose about a past LEGACY_*->OP_* rename commit
 
 # ---------------------------------------------------------------------------
 # Scan B (domain vocabulary: gemma/lpr/sam_worker/v6/plate_/hdd_source/license_plate)
