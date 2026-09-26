@@ -176,3 +176,100 @@ def test_get_project_missing_raises_404(monkeypatch: pytest.MonkeyPatch) -> None
     detail = excinfo.value.detail
     parsed = ConfigErrorDetail.model_validate(detail)
     assert parsed.error == 'project_not_found'
+
+
+# --- Review deltas 2 and 3 (exact wire shapes Cropwright consumes) ---
+
+SUMMARY_KEYS = {
+    'slug',
+    'display_name',
+    'description',
+    'prefix',
+    'status',
+    'writable',
+    'selectable',
+    'is_default',
+    'deletable',
+    'revision',
+    'created_at',
+    'updated_at',
+    'counts',
+    'origin',
+}
+
+
+def test_summary_exact_key_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    reg = _registry_with(_record('default'))
+    monkeypatch.setattr(projects_router, 'get_project_registry', lambda: reg)
+
+    result = asyncio.run(projects_router.list_projects(include_archived=False))
+    assert set(result.projects[0].model_dump()) == SUMMARY_KEYS
+    assert result.projects[0].revision == 1
+
+
+def test_list_serves_status_labels(monkeypatch: pytest.MonkeyPatch) -> None:
+    reg = _registry_with(_record('default'))
+    monkeypatch.setattr(projects_router, 'get_project_registry', lambda: reg)
+
+    result = asyncio.run(projects_router.list_projects(include_archived=False))
+    assert set(result.labels.status) == {
+        'building',
+        'active',
+        'archived',
+        'deleting',
+        'deleted',
+        'failed',
+    }
+    assert all(result.labels.status.values())
+
+
+def test_list_serves_retired_slugs(monkeypatch: pytest.MonkeyPatch) -> None:
+    reg = _registry_with(_record('default'), _record('gone', status='deleted'))
+    monkeypatch.setattr(projects_router, 'get_project_registry', lambda: reg)
+
+    result = asyncio.run(projects_router.list_projects(include_archived=False))
+    assert result.limits.retired_slugs == ['gone']
+    assert 'gone' not in {p.slug for p in result.projects}
+
+
+@pytest.mark.parametrize(
+    ('status', 'selectable', 'writable'),
+    [
+        ('active', True, True),
+        ('archived', True, False),
+        ('building', False, False),
+        ('failed', False, False),
+        ('deleting', False, False),
+    ],
+)
+def test_selectable_writable_per_status(
+    monkeypatch: pytest.MonkeyPatch, status: str, selectable: bool, writable: bool
+) -> None:
+    reg = _registry_with(_record('default'), _record('cars', status=status))  # type: ignore[arg-type]
+    monkeypatch.setattr(projects_router, 'get_project_registry', lambda: reg)
+
+    result = asyncio.run(projects_router.list_projects(include_archived=True))
+    cars = next(p for p in result.projects if p.slug == 'cars')
+    assert (cars.selectable, cars.writable) == (selectable, writable)
+
+
+def test_get_project_exact_key_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    reg = _registry_with(_record('cars'))
+    monkeypatch.setattr(projects_router, 'get_project_registry', lambda: reg)
+
+    result = asyncio.run(projects_router.get_project(project='cars'))
+    assert set(result.model_dump()) == SUMMARY_KEYS | {'resources', 'error'}
+
+
+def test_lifecycle_envelope_shape() -> None:
+    """P3's create/patch/archive/unarchive/clone_settings all answer
+    ``{project: ProjectSummary, warnings: [{code, message}]}``."""
+    from src.routers.curation._project_models import ProjectLifecycleResponse, ProjectWarning
+
+    assert set(ProjectLifecycleResponse.model_fields) == {'project', 'warnings'}
+    assert set(ProjectWarning.model_fields) == {'code', 'message'}
+
+
+def test_revision_conflict_is_an_error_code() -> None:
+    detail = ConfigErrorDetail(error='revision_conflict', message='stale', current_revision=5)
+    assert detail.current_revision == 5

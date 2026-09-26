@@ -11,6 +11,7 @@ from fastapi import APIRouter, Path, Query
 
 from src.config import IndexRole
 from src.config.projects import DEFAULT_SLUG, PROJECT_SLUG_RE
+from src.core.logging import get_logger
 from src.routers.curation._config_common_models import api_error
 from src.routers.curation._project_models import (
     ProjectCounts,
@@ -20,12 +21,13 @@ from src.routers.curation._project_models import (
     capacity_wire,
     list_membership,
     resources_wire,
-    status_labels,
     summarize,
 )
 from src.services.projects.guard import make_curation_opensearch
 from src.services.projects.registry import get_project_registry
 
+
+logger = get_logger(__name__)
 
 global_router = APIRouter(tags=['Projects'])
 
@@ -93,11 +95,12 @@ async def list_projects(
     except Exception:
         capacity = None
 
+    retired = sorted(slug for slug, record in snapshot.items() if record.status == 'deleted')
     return ProjectsResponse(
         default_slug=DEFAULT_SLUG,
         projects=summaries,
         capacity=capacity,
-        limits=ProjectLimits(),
+        limits=ProjectLimits(retired_slugs=retired),
         include_archived=include_archived,
     )
 
@@ -112,13 +115,15 @@ async def get_project(
     if record is None or record.status == 'deleted':
         raise api_error(404, 'project_not_found', f"no project named '{project}'", project=project)
 
-    summary = summarize(record, ProjectCounts())
+    counts = ProjectCounts()
+    try:
+        client = await make_curation_opensearch()
+        counts = (await _fetch_counts(client, {project: record})).get(project, counts)
+    except Exception as exc:
+        logger.warning('project_counts_unavailable', project=project, error=str(exc))
+    summary = summarize(record, counts)
     return ProjectRecordResponse(
         **summary.model_dump(),
         resources=resources_wire(record.resources),
         error=None,
     )
-
-
-def status_labels_wire() -> dict[str, str]:
-    return status_labels()

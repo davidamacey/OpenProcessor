@@ -5908,6 +5908,39 @@
         "title": "ProjectCounts",
         "type": "object"
       },
+      "ProjectError": {
+        "description": "Why a ``failed`` project failed.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ProjectError",
+        "type": "object"
+      },
+      "ProjectLabels": {
+        "description": "Display copy for served enums, so a client renders a status\nwithout its own table.",
+        "properties": {
+          "status": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Status",
+            "type": "object"
+          }
+        },
+        "title": "ProjectLabels",
+        "type": "object"
+      },
       "ProjectLimits": {
         "properties": {
           "cloneable_axes": {
@@ -5939,6 +5972,13 @@
             "title": "Reserved Slugs",
             "type": "array"
           },
+          "retired_slugs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Retired Slugs",
+            "type": "array"
+          },
           "slug_max": {
             "default": 32,
             "title": "Slug Max",
@@ -5959,7 +5999,7 @@
         "type": "object"
       },
       "ProjectRecordResponse": {
-        "description": "``GET /projects/{project}``: ``ProjectSummary`` + ``resources`` (paths\nas served strings) + ``error`` (null unless ``status == \"failed\"``,\nwhich P1 never produces -- create is P3 scope).",
+        "description": "``GET {prefix}`` (``/projects/{project}``): exactly ``ProjectSummary``\n+ ``resources`` (paths as served strings) + ``error`` (null unless\n``status == \"failed\"``, which P1 never produces -- create is P3\nscope).",
         "properties": {
           "counts": {
             "$ref": "#/components/schemas/ProjectCounts"
@@ -5983,14 +6023,12 @@
           "error": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/ProjectError"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Error"
+            ]
           },
           "is_default": {
             "title": "Is Default",
@@ -6182,6 +6220,9 @@
           "include_archived": {
             "title": "Include Archived",
             "type": "boolean"
+          },
+          "labels": {
+            "$ref": "#/components/schemas/ProjectLabels"
           },
           "limits": {
             "$ref": "#/components/schemas/ProjectLimits"

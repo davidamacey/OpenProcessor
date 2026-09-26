@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.config.projects import (
     PROJECT_SLUG_MAX_LEN,
@@ -104,7 +104,17 @@ class ProjectLimits(BaseModel):
     slug_min: int = PROJECT_SLUG_MIN_LEN
     slug_max: int = PROJECT_SLUG_MAX_LEN
     reserved_slugs: list[str] = sorted(RESERVED_SLUGS)
+    # Slugs of deleted projects: retired forever (a create answers 409
+    # ``slug_retired``), served so a create form can flag them before submit.
+    retired_slugs: list[str] = Field(default_factory=list)
     cloneable_axes: list[str] = list(CLONEABLE_AXES)
+
+
+class ProjectLabels(BaseModel):
+    """Display copy for served enums, so a client renders a status
+    without its own table."""
+
+    status: dict[str, str] = Field(default_factory=lambda: dict(_STATUS_LABELS))
 
 
 class ProjectsResponse(BaseModel):
@@ -112,7 +122,32 @@ class ProjectsResponse(BaseModel):
     projects: list[ProjectSummary]
     capacity: dict[str, Any] | None
     limits: ProjectLimits
+    labels: ProjectLabels = Field(default_factory=ProjectLabels)
     include_archived: bool
+
+
+class ProjectWarning(BaseModel):
+    """A non-blocking note on a lifecycle response (e.g.
+    ``shard_budget_high``)."""
+
+    code: str
+    message: str
+
+
+class ProjectLifecycleResponse(BaseModel):
+    """Every project lifecycle mutation (create 201, PATCH, archive,
+    unarchive, clone_settings; P3) answers this envelope, so the switcher
+    adopts the returned summary without a re-read."""
+
+    project: ProjectSummary
+    warnings: list[ProjectWarning] = Field(default_factory=list)
+
+
+class ProjectError(BaseModel):
+    """Why a ``failed`` project failed."""
+
+    code: str
+    message: str
 
 
 def capacity_wire(capacity: ProjectCapacity | None) -> dict[str, Any] | None:
@@ -120,12 +155,13 @@ def capacity_wire(capacity: ProjectCapacity | None) -> dict[str, Any] | None:
 
 
 class ProjectRecordResponse(ProjectSummary):
-    """``GET /projects/{project}``: ``ProjectSummary`` + ``resources`` (paths
-    as served strings) + ``error`` (null unless ``status == "failed"``,
-    which P1 never produces -- create is P3 scope)."""
+    """``GET {prefix}`` (``/projects/{project}``): exactly ``ProjectSummary``
+    + ``resources`` (paths as served strings) + ``error`` (null unless
+    ``status == "failed"``, which P1 never produces -- create is P3
+    scope)."""
 
     resources: dict[str, Any]
-    error: dict[str, Any] | None = None
+    error: ProjectError | None = None
 
 
 def resources_wire(resources: Any) -> dict[str, Any]:
@@ -142,7 +178,3 @@ def resources_wire(resources: Any) -> dict[str, Any]:
         'mlflow_experiment': resources.mlflow_experiment,
         'model_prefix': resources.model_prefix,
     }
-
-
-def status_labels() -> dict[str, str]:
-    return dict(_STATUS_LABELS)
