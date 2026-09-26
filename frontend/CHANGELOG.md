@@ -218,6 +218,44 @@ compose pull && docker compose up -d` — no `git clone` needed.
 
 ### Changed
 
+- **Dependabot #15 npm major-bump group applied** (`vite` 6→8,
+  `@sveltejs/vite-plugin-svelte` 5→7, `vitest` 4→5, `jsdom` 29→30,
+  `eslint-plugin-svelte` 2→3, `prettier-plugin-svelte` 3→4, `@types/node`
+  22→26; `eslint`/`@eslint/js` 9→10 and `eslint-plugin-svelte` added to
+  the same pass to keep the flat-config lint stack in step, matching
+  `transcribe-app/frontend`'s working setup). `eslint.config.js` now
+  parses `.svelte`/`.svelte.ts`/`.svelte.js` with the project's
+  `svelte.config.js` (`parserOptions.svelteConfig`) — required by
+  typescript-eslint's parser under eslint-plugin-svelte 3 to read Svelte
+  5 rune syntax in a `.svelte.ts` module; without it every rune module
+  failed to parse. `svelte/no-navigation-without-resolve` and
+  `svelte/prefer-svelte-reactivity` (new in eslint-plugin-svelte 3's
+  `recommended` config) are downgraded to `warn` — real, pre-existing
+  debt (raw `href`/`goto()`/`replaceState()` calls that predate
+  SvelteKit's `resolve()`, and native `Set`/`Map` in reactive scope that
+  should be `SvelteSet`/`SvelteMap`) across ~20 files, not something to
+  fix as a drive-by inside a dependency bump; ratchet back to `error` as
+  each call site is migrated. Fixed the two new rule violations that
+  landed as hard errors: a dead reassignment in
+  `src/lib/contract/apiCallScanner.ts` (`no-useless-assignment`, new in
+  `@eslint/js` 10's `recommended`) and a literal-string mustache in
+  `AugmentationPanel.svelte` (`svelte/no-useless-mustaches`) rewritten as
+  a plain multi-line attribute string (same rendered placeholder value).
+  `prettier-plugin-svelte` 4 reformatted two files' `<textarea>` closing
+  tags (cosmetic only). **TypeScript stays on `^5.9.3`, not the PR's
+  proposed 7.0.2** — `typescript@7.0.2` is a hard `npm install`
+  `ERESOLVE`: `svelte-check@4.7.6` (latest) and `@sveltejs/kit` both
+  still declare their `typescript` peer as `^5.0.0 || ^6.0.0` on the
+  registry (verified live 2026-09-26); `transcribe-app/frontend` hit the
+  same wall and reverted (`e851c207`). `.github/dependabot.yml` now
+  ignores `typescript` major bumps (with the reasoning above) so
+  Dependabot stops re-proposing it; the eslint-major ignore for
+  `eslint`/`@eslint/js`/`typescript-eslint` is removed since
+  `typescript-eslint@8.70.1` already supports `eslint@^10`, so the
+  conflict it guarded against no longer exists. `npm run check`/
+  `npm test` (2433 tests)/`npm run lint`/`npm run build`/
+  `npm run test:e2e` (99 stubbed tests) and the production Docker build
+  are all green with no test weakened.
 - **Vendored contracts pinned to OpenProcessor `main` 7e758390** (a
   full-class promote gate over a registry gap/deprecated class,
   registry-scoped probe prediction ids, and an OCR-sentinel change —
