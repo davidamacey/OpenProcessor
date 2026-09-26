@@ -5821,6 +5821,323 @@
         "title": "ProfilesResponse",
         "type": "object"
       },
+      "ProjectCounts": {
+        "properties": {
+          "images": {
+            "default": 0,
+            "title": "Images",
+            "type": "integer"
+          },
+          "items": {
+            "default": 0,
+            "title": "Items",
+            "type": "integer"
+          },
+          "validated": {
+            "default": 0,
+            "title": "Validated",
+            "type": "integer"
+          }
+        },
+        "title": "ProjectCounts",
+        "type": "object"
+      },
+      "ProjectLimits": {
+        "properties": {
+          "cloneable_axes": {
+            "default": [
+              "settings_defaults",
+              "classes"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "title": "Cloneable Axes",
+            "type": "array"
+          },
+          "reserved_slugs": {
+            "default": [
+              "all",
+              "combine",
+              "global",
+              "health",
+              "new",
+              "none",
+              "projects",
+              "settings",
+              "vlm"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "title": "Reserved Slugs",
+            "type": "array"
+          },
+          "slug_max": {
+            "default": 32,
+            "title": "Slug Max",
+            "type": "integer"
+          },
+          "slug_min": {
+            "default": 2,
+            "title": "Slug Min",
+            "type": "integer"
+          },
+          "slug_pattern": {
+            "default": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+            "title": "Slug Pattern",
+            "type": "string"
+          }
+        },
+        "title": "ProjectLimits",
+        "type": "object"
+      },
+      "ProjectRecordResponse": {
+        "description": "``GET /projects/{project}``: ``ProjectSummary`` + ``resources`` (paths\nas served strings) + ``error`` (null unless ``status == \"failed\"``,\nwhich P1 never produces -- create is P3 scope).",
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/ProjectCounts"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "deletable": {
+            "title": "Deletable",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          },
+          "resources": {
+            "additionalProperties": true,
+            "title": "Resources",
+            "type": "object"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "selectable": {
+            "title": "Selectable",
+            "type": "boolean"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "building",
+              "active",
+              "archived",
+              "deleting",
+              "deleted",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "writable": {
+            "title": "Writable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "slug",
+          "display_name",
+          "description",
+          "prefix",
+          "status",
+          "writable",
+          "selectable",
+          "is_default",
+          "deletable",
+          "revision",
+          "created_at",
+          "updated_at",
+          "counts",
+          "resources"
+        ],
+        "title": "ProjectRecordResponse",
+        "type": "object"
+      },
+      "ProjectSummary": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/ProjectCounts"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "deletable": {
+            "title": "Deletable",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "selectable": {
+            "title": "Selectable",
+            "type": "boolean"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "building",
+              "active",
+              "archived",
+              "deleting",
+              "deleted",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "writable": {
+            "title": "Writable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "slug",
+          "display_name",
+          "description",
+          "prefix",
+          "status",
+          "writable",
+          "selectable",
+          "is_default",
+          "deletable",
+          "revision",
+          "created_at",
+          "updated_at",
+          "counts"
+        ],
+        "title": "ProjectSummary",
+        "type": "object"
+      },
+      "ProjectsResponse": {
+        "properties": {
+          "capacity": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity"
+          },
+          "default_slug": {
+            "title": "Default Slug",
+            "type": "string"
+          },
+          "include_archived": {
+            "title": "Include Archived",
+            "type": "boolean"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/ProjectLimits"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectSummary"
+            },
+            "title": "Projects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "default_slug",
+          "projects",
+          "capacity",
+          "limits",
+          "include_archived"
+        ],
+        "title": "ProjectsResponse",
+        "type": "object"
+      },
       "PromoteGateFailedDetail": {
         "description": "The ``detail`` body of every promote-blocking 422.\n\n``force_allowed`` tells the caller (and the UI) whether re-submitting\nwith ``force=true`` can get past *this specific* failure — some 422s\n(e.g. the job simply isn't finished yet) force cannot bypass.",
         "properties": {
@@ -13319,6 +13636,92 @@
         "summary": "Probe Status",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/projects": {
+      "get": {
+        "operationId": "list_projects_curation_projects_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Archived",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Projects",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/curation/projects/{project}": {
+      "get": {
+        "operationId": "get_project_curation_projects__project__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectRecordResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Project",
+        "tags": [
+          "Projects"
         ]
       }
     },

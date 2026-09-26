@@ -59,3 +59,47 @@ async def _bump_revision(client: Any) -> None:
     except Exception:
         revision = 1
     await client.index(index=projects_index(), id=REVISION_DOC_ID, body={'revision': revision})
+
+
+async def startup_bootstrap_project_registry() -> Any:
+    """Everything ``src.main``'s lifespan needs for the projects
+    foundation: upsert the ``default`` record, do one registry refresh,
+    and return an ``asyncio.Task`` running the background poll loop
+    (the caller owns cancelling it at shutdown). Pulled out of
+    ``src.main`` to keep that module under the repo's per-file LOC
+    ratchet."""
+    import asyncio
+
+    from src.services.projects.guard import make_curation_opensearch
+    from src.services.projects.registry import get_project_registry
+
+    client = await make_curation_opensearch()
+    await bootstrap_default_project(client)
+    registry = get_project_registry()
+    await registry.ensure_fresh()
+    return asyncio.create_task(registry.poll_loop())
+
+
+async def shutdown_project_registry(task: Any | None) -> None:
+    """Cancel the poll task ``startup_bootstrap_project_registry``
+    started, and swallow the resulting ``CancelledError``."""
+    import asyncio
+    import contextlib
+
+    if task is None:
+        return
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError, Exception):
+        await task
+
+
+async def startup_bootstrap_project_registry_safe() -> Any | None:
+    """``startup_bootstrap_project_registry``, but never raises -- a
+    startup-time OpenSearch hiccup here must not block the rest of the
+    app from starting; the next request-time ``ensure_fresh()`` call
+    still runs."""
+    try:
+        return await startup_bootstrap_project_registry()
+    except Exception as exc:
+        logger.warning('project_registry_bootstrap_skipped', error=str(exc))
+        return None

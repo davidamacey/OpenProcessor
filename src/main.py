@@ -52,6 +52,7 @@ from src.routers import (
     v1_router,
 )
 from src.routers.curation import router as curation_router
+from src.routers.curation.projects import global_router as curation_projects_router
 from src.routers.curation_images import (
     crops_router as curation_crops_router,
     router as curation_images_router,
@@ -86,6 +87,7 @@ class AppResources:
     async_triton_pool: AsyncTritonPool | None = None
     arbiter_task: asyncio.Task[None] | None = None
     curation_knn_warmup_task: asyncio.Task[None] | None = None
+    project_registry_poll_task: asyncio.Task[None] | None = None
     event_bus_started: bool = False
 
 
@@ -200,6 +202,11 @@ async def lifespan(app: FastAPI):
     from src.core.dependencies import bootstrap_opensearch_indexes
 
     AppResources.curation_knn_warmup_task = await bootstrap_opensearch_indexes()
+
+    # Projects foundation (P1): default record + poll loop, best-effort.
+    from src.services.projects.bootstrap import startup_bootstrap_project_registry_safe
+
+    AppResources.project_registry_poll_task = await startup_bootstrap_project_registry_safe()
 
     # S-3: tail the shared cross-process event log so this uvicorn
     # worker's SSE clients see events published by any other worker or
@@ -357,6 +364,11 @@ async def lifespan(app: FastAPI):
             await AppResources.arbiter_task
         AppResources.arbiter_task = None
         logger.info('gpu_arbiter_loop_stopped')
+
+    from src.services.projects.bootstrap import shutdown_project_registry
+
+    await shutdown_project_registry(AppResources.project_registry_poll_task)
+    AppResources.project_registry_poll_task = None
 
     # Stop the event-bus tail task.
     if AppResources.event_bus_started:
@@ -662,6 +674,7 @@ def create_app() -> FastAPI:
     application.include_router(query_router)  # /query - Data retrieval
     application.include_router(ocr_router)  # /ocr - Text extraction
     application.include_router(models_router)  # /models - Model management
+    application.include_router(curation_projects_router, prefix=curation_router.prefix)
     application.include_router(curation_router)  # /curation/* - Curation/labeling pipeline
     application.include_router(curation_images_router)  # /curation/images/* - Source image serving
     application.include_router(

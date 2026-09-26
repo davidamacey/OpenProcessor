@@ -1,0 +1,148 @@
+"""Wire models for the projects lifecycle surface (§4). P1 only serves
+``GET /projects`` and ``GET /projects/{project}``; the rest of this
+module's shapes exist because §4's exact JSON needs them, not because
+P1 implements their routes.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Literal
+
+from pydantic import BaseModel
+
+from src.config.projects import (
+    PROJECT_SLUG_MAX_LEN,
+    PROJECT_SLUG_MIN_LEN,
+    PROJECT_SLUG_RE,
+    RESERVED_SLUGS,
+)
+
+
+if TYPE_CHECKING:
+    from src.services.projects.capacity import ProjectCapacity
+
+
+_STATUS_LABELS: dict[str, str] = {
+    'active': 'Active',
+    'archived': 'Archived',
+    'building': 'Building',
+    'failed': 'Failed',
+    'deleting': 'Deleting',
+    'deleted': 'Deleted',
+}
+
+# List membership by status (§4 rev 2 / delta 3): active always;
+# archived only opt-in; building/failed/deleting always (so a stuck
+# create or an in-flight combine target survive a reload); deleted
+# never.
+_ALWAYS_LISTED_STATUSES = frozenset({'active', 'building', 'failed', 'deleting'})
+_ARCHIVED_STATUS = 'archived'
+
+CLONEABLE_AXES: tuple[str, ...] = ('settings_defaults', 'classes')
+
+
+class ProjectCounts(BaseModel):
+    images: int = 0
+    items: int = 0
+    validated: int = 0
+
+
+class ProjectSummary(BaseModel):
+    slug: str
+    display_name: str
+    description: str
+    prefix: str
+    status: Literal['building', 'active', 'archived', 'deleting', 'deleted', 'failed']
+    writable: bool
+    selectable: bool
+    is_default: bool
+    deletable: bool
+    revision: int
+    created_at: str
+    updated_at: str
+    counts: ProjectCounts
+    origin: dict[str, Any] | None = None
+
+
+def list_membership(status: str, *, include_archived: bool) -> bool:
+    """Whether a project of this ``status`` appears in ``GET /projects``'s
+    ``projects[]`` (§4 delta 3)."""
+    if status == _ARCHIVED_STATUS:
+        return include_archived
+    return status in _ALWAYS_LISTED_STATUSES
+
+
+def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
+    from src.config.project_context import bind_project
+    from src.config.projects import DEFAULT_SLUG
+
+    with bind_project(record):
+        from src.config.project_context import project_api_base
+
+        prefix = project_api_base()
+    is_default = record.slug == DEFAULT_SLUG
+    return ProjectSummary(
+        slug=record.slug,
+        display_name=record.display_name,
+        description=record.description,
+        prefix=prefix,
+        status=record.status,
+        writable=record.status == 'active',
+        selectable=record.status in ('active', 'archived'),
+        is_default=is_default,
+        deletable=not is_default,
+        revision=record.revision,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+        counts=counts,
+        origin=record.origin,
+    )
+
+
+class ProjectLimits(BaseModel):
+    slug_pattern: str = PROJECT_SLUG_RE
+    slug_min: int = PROJECT_SLUG_MIN_LEN
+    slug_max: int = PROJECT_SLUG_MAX_LEN
+    reserved_slugs: list[str] = sorted(RESERVED_SLUGS)
+    cloneable_axes: list[str] = list(CLONEABLE_AXES)
+
+
+class ProjectsResponse(BaseModel):
+    default_slug: str
+    projects: list[ProjectSummary]
+    capacity: dict[str, Any] | None
+    limits: ProjectLimits
+    include_archived: bool
+
+
+def capacity_wire(capacity: ProjectCapacity | None) -> dict[str, Any] | None:
+    return capacity.to_wire() if capacity is not None else None
+
+
+class ProjectRecordResponse(ProjectSummary):
+    """``GET /projects/{project}``: ``ProjectSummary`` + ``resources`` (paths
+    as served strings) + ``error`` (null unless ``status == "failed"``,
+    which P1 never produces -- create is P3 scope)."""
+
+    resources: dict[str, Any]
+    error: dict[str, Any] | None = None
+
+
+def resources_wire(resources: Any) -> dict[str, Any]:
+    return {
+        'indexes': {role.value: name for role, name in resources.indexes.items()},
+        'class_registry_path': str(resources.class_registry_path),
+        'export_root': str(resources.export_root),
+        'upload_root': str(resources.upload_root),
+        'bakeoff_eval_root': str(resources.bakeoff_eval_root),
+        'project_state_dir': str(resources.project_state_dir),
+        'train_jobs_dir': str(resources.train_jobs_dir),
+        'autolabel_dir': str(resources.autolabel_dir),
+        'bakeoff_jobs_dir': str(resources.bakeoff_jobs_dir),
+        'mlflow_experiment': resources.mlflow_experiment,
+        'model_prefix': resources.model_prefix,
+    }
+
+
+def status_labels() -> dict[str, str]:
+    return dict(_STATUS_LABELS)
