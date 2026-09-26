@@ -303,8 +303,8 @@
                 onblur={commitManual}
                 rows="4"
                 class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
-                placeholder={'81:8\n47:5'}
-              ></textarea>
+                placeholder="81:8
+47:5"></textarea>
             </label>
           {:else if oversampleMode === 'auto'}
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
