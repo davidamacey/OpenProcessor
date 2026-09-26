@@ -22,8 +22,8 @@ Two subcommands, both against a stack holding public sample data only:
       Dashboards' index management.
 
     Grafana needs a viewer login. The script never reads a ``.env`` file:
-    it takes ``OP_GRAFANA_TOKEN`` (a service-account token) or
-    ``OP_GRAFANA_USER`` + ``OP_GRAFANA_PASSWORD`` from the environment,
+    it takes ``DOCS_GRAFANA_TOKEN`` (a service-account token) or
+    ``DOCS_GRAFANA_USER`` + ``DOCS_GRAFANA_PASSWORD`` from the environment,
     sends them only to the Grafana origin, and never prints them. Without
     either, the Grafana captures are skipped.
 
@@ -134,10 +134,10 @@ def _get_json(url: str, headers: dict | None = None, body: dict | None = None) -
 
 
 def _grafana_auth() -> dict | None:
-    token = os.environ.get('OP_GRAFANA_TOKEN')
+    token = os.environ.get('DOCS_GRAFANA_TOKEN')
     if token:
         return {'Authorization': f'Bearer {token}'}
-    user, pw = os.environ.get('OP_GRAFANA_USER'), os.environ.get('OP_GRAFANA_PASSWORD')
+    user, pw = os.environ.get('DOCS_GRAFANA_USER'), os.environ.get('DOCS_GRAFANA_PASSWORD')
     if user and pw:
         return {'Authorization': 'Basic ' + base64.b64encode(f'{user}:{pw}'.encode()).decode()}
     return None
@@ -197,7 +197,7 @@ def capture_prometheus(page, prom: str, out: Path) -> None:
 def capture_grafana(browser, grafana: str, out: Path, minutes: int) -> None:
     auth = _grafana_auth()
     if auth is None:
-        print('skipping Grafana: set OP_GRAFANA_TOKEN or OP_GRAFANA_USER/OP_GRAFANA_PASSWORD')
+        print('skipping Grafana: set DOCS_GRAFANA_TOKEN or DOCS_GRAFANA_USER/DOCS_GRAFANA_PASSWORD')
         return
     dashboards = _get_json(f'{grafana}/api/search?type=dash-db', headers=auth)
     ctx = browser.new_context(viewport={'width': WIDTH, 'height': 1000}, extra_http_headers=auth)

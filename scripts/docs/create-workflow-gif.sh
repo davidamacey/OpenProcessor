@@ -17,8 +17,8 @@
 # scripts/docs/capture_backend_screens.py. Both only ever read: point them
 # at a stack holding PUBLIC sample data only. They refuse ports 4600-4799.
 # Run `capture_backend_screens.py traffic` for a few minutes first so the
-# Grafana panels have live data. Grafana frames need OP_GRAFANA_TOKEN or
-# OP_GRAFANA_USER/OP_GRAFANA_PASSWORD in the environment; without them
+# Grafana panels have live data. Grafana frames need DOCS_GRAFANA_TOKEN or
+# DOCS_GRAFANA_USER/DOCS_GRAFANA_PASSWORD in the environment; without them
 # they are skipped.
 #
 # Usage:

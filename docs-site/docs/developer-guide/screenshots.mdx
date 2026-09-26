@@ -53,8 +53,8 @@ It writes the model status (`GET /models/`, rendered as a terminal
 frame), Swagger UI's endpoint groups, Prometheus target health, each
 Grafana dashboard, MLflow's experiment, run, metric-chart and run
 comparison pages, and OpenSearch Dashboards' index list. Grafana needs a
-viewer login: the script reads `OP_GRAFANA_TOKEN` (a service-account
-token) or `OP_GRAFANA_USER` and `OP_GRAFANA_PASSWORD` from the
+viewer login: the script reads `DOCS_GRAFANA_TOKEN` (a service-account
+token) or `DOCS_GRAFANA_USER` and `DOCS_GRAFANA_PASSWORD` from the
 environment, sends them only to Grafana, never prints them, and skips
 Grafana when they are unset. The script refuses any URL on ports
 4600-4799, which are reserved for non-public stacks. Copy the PNGs you
