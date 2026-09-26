@@ -94,6 +94,7 @@ def mount_curation(
 def mount_all_curation_routers(app: FastAPI) -> None:
     """Mount the global router and every curation router on ``app``
     (see :func:`mount_curation` for the order)."""
+    import src.routers.curation.global_status  # noqa: F401 - registers /health, /events on global_router
     from src.routers.curation import router as curation_router
     from src.routers.curation.projects import global_router
     from src.routers.curation_images import crops_router, router as images_router

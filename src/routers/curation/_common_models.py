@@ -270,7 +270,16 @@ class TestHoldoutFreezeResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    """Scoped ``{prefix}/health``. Project-bound keys: ``project``,
+    ``opensearch.indexes``, ``registry``, ``region_profile``; the rest are
+    deployment facts (also on the global ``/health``). See
+    ``src/routers/curation/health.py``."""
+
     status: Literal['ok', 'degraded', 'down']
+    project: str = Field(
+        description='The bound project slug, so a late response from a previously '
+        'selected project can be recognised and dropped.'
+    )
     triton: dict[str, Any]
     opensearch: dict[str, Any]
     vlm: dict[str, Any]

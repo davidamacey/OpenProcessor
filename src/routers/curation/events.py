@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import Query
 from fastapi.responses import StreamingResponse
 
+from src.config import get_curation_config
 from src.routers.curation._common import _PublishEvent, router
 from src.services.curation.event_hub import get_event_hub
 from src.services.curation.wire import region_wire_key
@@ -29,7 +30,8 @@ async def curation_events(
         'events whose class matches.',
     ),
 ) -> StreamingResponse:
-    """SSE stream of advisory crop-state events.
+    """SSE stream of advisory crop-state events for the bound project,
+    plus every global (``project: null``) event.
 
     The connection stays open until the client disconnects. A heartbeat
     comment line is sent every 15s so reverse-proxies don't kill the
@@ -37,7 +39,15 @@ async def curation_events(
     1000 events; oldest drops on overflow — events are advisory).
     """
     hub = get_event_hub()
-    sub = await hub.subscribe(topic=topic, class_id=class_id)
+    sub = await hub.subscribe(
+        project=get_curation_config().project_slug, topic=topic, class_id=class_id
+    )
+    return sse_response(hub, sub)
+
+
+def sse_response(hub: Any, sub: Any) -> StreamingResponse:
+    """Stream ``sub``'s queue as SSE until the client disconnects, then
+    unsubscribe. Shared by the scoped ``/events`` and the global one."""
 
     async def event_gen() -> Any:
         try:

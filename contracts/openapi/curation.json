@@ -3143,6 +3143,65 @@
         "title": "FailedTask",
         "type": "object"
       },
+      "GlobalHealthResponse": {
+        "description": "Deployment facts only -- nothing here depends on a project. The\nscoped ``{prefix}/health`` serves the same facts plus the bound\nproject's.",
+        "properties": {
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "mlflow_public_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Public Url"
+          },
+          "opensearch": {
+            "additionalProperties": true,
+            "description": "``{reachable, detail?}``; no index facts.",
+            "title": "Opensearch",
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "degraded",
+              "down"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "triton": {
+            "additionalProperties": true,
+            "title": "Triton",
+            "type": "object"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "vlm": {
+            "additionalProperties": true,
+            "title": "Vlm",
+            "type": "object"
+          }
+        },
+        "required": [
+          "status",
+          "triton",
+          "opensearch",
+          "vlm",
+          "version",
+          "api_version"
+        ],
+        "title": "GlobalHealthResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -3157,6 +3216,7 @@
         "type": "object"
       },
       "HealthResponse": {
+        "description": "Scoped ``{prefix}/health``. Project-bound keys: ``project``,\n``opensearch.indexes``, ``registry``, ``region_profile``; the rest are\ndeployment facts (also on the global ``/health``). See\n``src/routers/curation/health.py``.",
         "properties": {
           "mlflow_public_url": {
             "anyOf": [
@@ -3174,6 +3234,11 @@
             "additionalProperties": true,
             "title": "Opensearch",
             "type": "object"
+          },
+          "project": {
+            "description": "The bound project slug, so a late response from a previously selected project can be recognised and dropped.",
+            "title": "Project",
+            "type": "string"
           },
           "region_profile": {
             "anyOf": [
@@ -3213,6 +3278,7 @@
         },
         "required": [
           "status",
+          "project",
           "triton",
           "opensearch",
           "vlm",
@@ -8926,6 +8992,78 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/curation/events": {
+      "get": {
+        "description": "SSE stream of global events only (``project: null``): project\nlifecycle (``project.*``), VLM-registry ``config.changed`` and\n``combine.*``. A ``combine.*`` event names the project it builds in\n``target``. No project's own events are ever delivered here.",
+        "operationId": "global_events_curation_events_get",
+        "parameters": [
+          {
+            "description": "Optional topic filter.",
+            "in": "query",
+            "name": "topic",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional topic filter.",
+              "title": "Topic"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Global Events",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/curation/health": {
+      "get": {
+        "description": "Deployment health: Triton, OpenSearch reachability, VLM, versions.",
+        "operationId": "global_health_curation_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalHealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Global Health",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
     "/curation/projects": {
       "get": {
         "operationId": "list_projects_curation_projects_get",
@@ -12540,7 +12678,7 @@
     },
     "/curation/projects/{project}/events": {
       "get": {
-        "description": "SSE stream of advisory crop-state events.\n\nThe connection stays open until the client disconnects. A heartbeat\ncomment line is sent every 15s so reverse-proxies don't kill the\nsocket. Subscribers each get their own bounded queue (capped at\n1000 events; oldest drops on overflow — events are advisory).",
+        "description": "SSE stream of advisory crop-state events for the bound project,\nplus every global (``project: null``) event.\n\nThe connection stays open until the client disconnects. A heartbeat\ncomment line is sent every 15s so reverse-proxies don't kill the\nsocket. Subscribers each get their own bounded queue (capped at\n1000 events; oldest drops on overflow — events are advisory).",
         "operationId": "curation_events_curation_projects__project__events_get",
         "parameters": [
           {
@@ -13067,7 +13205,7 @@
     },
     "/curation/projects/{project}/health": {
       "get": {
-        "description": "Aggregated health: Triton + OpenSearch + VLM + registry mtime.",
+        "description": "Aggregated health for the bound project: Triton + OpenSearch (the\nproject's indexes) + VLM + the project's registry file. See the\nmodule docstring for which keys are project-bound.",
         "operationId": "curation_health_curation_projects__project__health_get",
         "parameters": [
           {

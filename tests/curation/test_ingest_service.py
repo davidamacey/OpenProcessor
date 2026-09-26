@@ -737,7 +737,7 @@ class TestCropCreatedEvents:
     async def _subscribe() -> Any:
         from src.services.curation.event_hub import get_event_hub
 
-        return await get_event_hub().subscribe()
+        return await get_event_hub().subscribe(project='default')
 
     @staticmethod
     def _drain(sub: Any) -> list[dict[str, Any]]:

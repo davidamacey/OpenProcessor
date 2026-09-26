@@ -1,4 +1,4 @@
-"""Curation /health + /models/status + /models/{name} (unload) endpoints.
+"""Curation /models/status + /models/{name} (unload) endpoints (``/health`` lives in ``health.py``).
 
 Drives the pipeline-model roster off generic config rather than any
 hardcoded, domain-specific model list:
@@ -16,8 +16,7 @@ import contextlib
 import json
 import os
 import re
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any
 
 import httpx
 from fastapi import HTTPException, Query
@@ -26,18 +25,7 @@ from pydantic import BaseModel
 from src.clients.pe_encoder import PE_IMAGE_MODEL
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
-from src.core.dependencies import AsyncTritonDep  # noqa: TC001
-from src.routers.curation._common import (
-    HealthResponse,
-    OpenSearchDep,
-    classes_index,
-    get_class_registry,
-    images_index,
-    items_index,
-    labels_confirmed_index,
-    logger,
-    router,
-)
+from src.routers.curation._common import logger, router
 from src.routers.curation._models_segmenter import build_segmenter_entry
 from src.routers.curation.vlm import _get_vlm_labeler
 from src.services.detection.profile_registry import get_active_region_profile
@@ -53,95 +41,6 @@ from src.services.training.triton_promote import (
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-
-@router.get('/health', response_model=HealthResponse)
-async def curation_health(
-    opensearch: OpenSearchDep,
-    triton_pool: AsyncTritonDep,
-) -> HealthResponse:
-    """Aggregated health: Triton + OpenSearch + VLM + registry mtime."""
-    triton_status: dict[str, Any] = {'reachable': False, 'detail': ''}
-    try:
-        # AsyncTritonDep is a single AsyncInferenceServerClient, not the pool.
-        # Both have is_server_live; fall back to is_server_ready.
-        if hasattr(triton_pool, 'is_server_live'):
-            ok = await triton_pool.is_server_live()
-        elif hasattr(triton_pool, 'health_check'):
-            ok = await triton_pool.health_check()
-        else:
-            ok = False
-        triton_status['reachable'] = bool(ok)
-    except Exception as exc:
-        triton_status['detail'] = str(exc)
-
-    # opensearch dep here is the project's wrapper. Reach the raw async client
-    # via attributes commonly exposed; fall back to assuming `opensearch` IS
-    # an AsyncOpenSearch.
-    raw_os = getattr(opensearch, 'client', None) or opensearch
-
-    os_status: dict[str, Any] = {'reachable': False, 'indexes': {}}
-    try:
-        for idx_name in (
-            images_index(),
-            items_index(),
-            labels_confirmed_index(),
-            classes_index(),
-        ):
-            os_status['indexes'][idx_name] = bool(await raw_os.indices.exists(index=idx_name))
-        os_status['reachable'] = True
-    except Exception as exc:
-        os_status['detail'] = str(exc)
-
-    vlm_status: dict[str, Any] = {'reachable': False}
-    try:
-        labeler = _get_vlm_labeler()
-        h = await labeler.health()
-        vlm_status['reachable'] = h.reachable
-        vlm_status['model'] = h.model
-        if h.last_error:
-            vlm_status['last_error'] = h.last_error
-    except Exception as exc:
-        vlm_status['detail'] = str(exc)
-
-    reg_path = get_class_registry().path
-    registry_status: dict[str, Any] = {
-        'path': str(reg_path),
-        'exists': reg_path.exists(),
-    }
-    if reg_path.exists():
-        try:
-            registry_status['mtime'] = datetime.fromtimestamp(
-                reg_path.stat().st_mtime, tz=UTC
-            ).isoformat()
-        except OSError as exc:
-            registry_status['detail'] = str(exc)
-
-    overall: Literal['ok', 'degraded', 'down']
-    if triton_status['reachable'] and os_status['reachable'] and registry_status.get('exists'):
-        overall = 'ok' if vlm_status['reachable'] else 'degraded'
-    elif os_status['reachable']:
-        overall = 'degraded'
-    else:
-        overall = 'down'
-
-    from src.services.curation.region_vocabulary import region_profile_summary
-    from src.services.detection.profile_registry import get_active_region_profile
-
-    active_profile = get_active_region_profile()
-    region_profile = region_profile_summary(active_profile) if active_profile is not None else None
-
-    from src.config import get_curation_config
-
-    return HealthResponse(
-        status=overall,
-        triton=triton_status,
-        opensearch=os_status,
-        vlm=vlm_status,
-        registry=registry_status,
-        region_profile=region_profile,
-        mlflow_public_url=get_curation_config().mlflow_public_url,
-    )
 
 
 def _core_models() -> tuple[tuple[str, str, str, str], ...]:

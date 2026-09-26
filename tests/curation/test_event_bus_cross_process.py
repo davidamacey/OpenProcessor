@@ -48,7 +48,7 @@ async def test_second_process_sees_first_processs_publish(tmp_path: Path) -> Non
     try:
         await hub_a.start_tail()
         await hub_b.start_tail()
-        sub_b = await hub_b.subscribe()
+        sub_b = await hub_b.subscribe(project='default')
 
         hub_a.publish({'type': 'crop.created', 'topic': 'crop', 'crop_id': 'x1'})
 
@@ -67,7 +67,7 @@ async def test_publisher_process_does_not_receive_its_own_event_twice(tmp_path: 
     hub_a = _make_hub(log_path)
     try:
         await hub_a.start_tail()
-        sub_a = await hub_a.subscribe()
+        sub_a = await hub_a.subscribe(project='default')
 
         hub_a.publish({'type': 'crop.created', 'topic': 'crop', 'crop_id': 'x2'})
 
@@ -105,7 +105,7 @@ async def test_rotation_delivers_every_event_in_order(
     try:
         await hub_a.start_tail()
         await hub_b.start_tail()
-        sub_b = await hub_b.subscribe()
+        sub_b = await hub_b.subscribe(project='default')
 
         # Yield to the event loop between publishes (as real callers would —
         # each publish() comes from a separate request/task, never a tight
