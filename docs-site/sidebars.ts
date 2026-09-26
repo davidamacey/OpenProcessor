@@ -38,6 +38,7 @@ const sidebars: SidebarsConfig = {
         'operations/workers',
         'operations/exports-and-retention',
         'operations/training-and-promote',
+        'operations/monitoring',
       ],
     },
     {

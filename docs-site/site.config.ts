@@ -40,7 +40,7 @@ export const siteConfig = {
   // public-sample-data stack. Set to null to hide it.
   heroDemo: {
     src: '/img/openprocessor-workflow.gif',
-    alt: 'OpenProcessor walkthrough: /detect on a COCO image, /embed/text, curation ingest status, the Swagger API docs, then Cropwright, the labeling UI for this API',
+    alt: 'OpenProcessor walkthrough: API calls in a terminal, the Swagger API docs, Triton model status, Prometheus targets, MLflow training runs and a run comparison, OpenSearch Dashboards, then Cropwright, the labeling UI for this API',
   } as {src: string; alt: string} | null,
 
   // Cross-links to sibling projects sharing this docs framework / product family.

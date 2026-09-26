@@ -76,6 +76,41 @@ curl -s "$API/curation/train/status"
 expose past runs, their evaluation on the frozen test split and their
 lineage.
 
+### Runs in MLflow
+
+With `curation-mlflow` running (`--profile training`, port 4609), the
+trainer logs every run to the experiment named by `MLFLOW_EXPERIMENT_NAME`
+(default `openprocessor`): the full Ultralytics argument set as
+parameters, per-epoch losses, learning rates and mAP as metrics, lineage
+tags (`dataset_sha`, `frozen_test_sha`, `test_label_sha`, `profile`,
+`seed`), the training plots and `run_metadata.json` as artifacts, and a
+model version registered under `OP_MLFLOW_MODEL_NAME` (default
+`openprocessor_detector`).
+
+<Screenshot
+  name="backend-mlflow-experiments.png"
+  alt="MLflow experiment page listing the training runs the curation trainer logged"
+  caption="The openprocessor experiment with the runs the trainer logged (public-sample-data stack)"
+/>
+
+<Screenshot
+  name="backend-mlflow-run.png"
+  alt="MLflow run overview: status, duration, lineage tags, registered model version, parameters and metrics"
+  caption="One run: lineage tags, the registered model version, 112 parameters and 20 metrics"
+/>
+
+<Screenshot
+  name="backend-mlflow-run-metrics.png"
+  alt="MLflow run page, Model metrics tab: per-epoch learning-rate and loss charts"
+  caption="Per-epoch metric charts for the same run"
+/>
+
+<Screenshot
+  name="backend-mlflow-compare.png"
+  alt="MLflow run comparison of two training runs with only differing parameters and metrics shown"
+  caption="Two runs compared with Show diff only: epochs and the per-class mAP differ. These are short runs on the small public sample, so the mAP values are low"
+/>
+
 ## Bake-off: comparing models
 
 <Screenshot

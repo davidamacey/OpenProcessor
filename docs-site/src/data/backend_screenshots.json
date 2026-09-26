@@ -1,0 +1,37 @@
+[
+  {
+    "name": "backend-models.png",
+    "alt": "Terminal showing GET /models/ on a public-sample-data stack: each Triton model with its status, backend and max batch size",
+    "caption": "Model status: GET /models/ lists every Triton model, its backend and batch size"
+  },
+  {
+    "name": "backend-swagger.png",
+    "alt": "Swagger UI at /docs with the endpoint groups collapsed: health, detection, faces, embeddings, search, ingest, analysis, OCR, models, curation",
+    "caption": "Swagger UI at /docs: every endpoint group, try-it-out included"
+  },
+  {
+    "name": "backend-prometheus-targets.png",
+    "alt": "Prometheus target health page with the triton, yolo-api, node, dcgm and loki scrape targets all up",
+    "caption": "Prometheus: Triton, API, node, GPU (DCGM) and Loki targets, all up"
+  },
+  {
+    "name": "backend-mlflow-experiments.png",
+    "alt": "MLflow experiment page listing the training runs the curation trainer logged",
+    "caption": "MLflow: training runs logged by the curation trainer"
+  },
+  {
+    "name": "backend-mlflow-run-metrics.png",
+    "alt": "MLflow run page, Model metrics tab: per-epoch learning-rate and loss charts for one training run",
+    "caption": "MLflow: per-epoch metric charts for one run"
+  },
+  {
+    "name": "backend-mlflow-compare.png",
+    "alt": "MLflow run comparison of two training runs with only differing parameters and metrics shown",
+    "caption": "MLflow: two runs compared, differences only (epochs, mAP)"
+  },
+  {
+    "name": "backend-opensearch-indices.png",
+    "alt": "OpenSearch Dashboards index management listing the op_ curation indexes with document counts and sizes",
+    "caption": "OpenSearch Dashboards: the op_* curation indexes"
+  }
+]

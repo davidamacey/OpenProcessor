@@ -161,7 +161,10 @@ def terminal_steps(api: str, image: bytes) -> list[tuple[str, dict]]:
     return steps
 
 
-def _terminal_html(lines: list[tuple[str, str]]) -> str:
+def _terminal_html(
+    lines: list[tuple[str, str]],
+    title: str = 'OpenProcessor API: detect, embed, curation ingest status',
+) -> str:
     body = []
     for kind, text in lines[-MAX_LINES:]:
         esc = html.escape(text)
@@ -180,7 +183,7 @@ body {{ margin:0; background:#09090b; font-family:'DejaVu Sans Mono',Menlo,monos
 .term {{ padding:14px 20px; font-size:17px; line-height:1.38; white-space:pre; color:#d4d4d8; }}
 .p {{ color:#60a5fa; }} .c {{ color:#f4f4f5; }} .o {{ color:#a7f3d0; }} .m {{ color:#71717a; }}
 </style></head><body><div class="win"><div class="bar"><span class="dot"></span><span class="dot"></span>
-<span class="dot"></span><span class="title">OpenProcessor API: detect, embed, curation ingest status</span></div>
+<span class="dot"></span><span class="title">{html.escape(title)}</span></div>
 <div class="term">{''.join(body)}</div></div></body></html>"""
 
 

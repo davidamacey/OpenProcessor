@@ -5,8 +5,11 @@ title: Screenshots and image credits
 
 # Screenshots and image credits
 
-OpenProcessor is a backend and has no UI of its own. The screenshots in
-these docs were **captured from Cropwright, a frontend for this backend**,
+OpenProcessor is a backend and has no UI of its own. Two kinds of
+screenshots appear in these docs: the tools the stack ships (Swagger UI,
+Prometheus, Grafana, MLflow, OpenSearch Dashboards; see
+[Backend screenshots](#backend-screenshots)), and the curation screens,
+which were **captured from Cropwright, a frontend for this backend**,
 and are used here because they show backend-driven features directly:
 cluster cards (`GET /curation/clusters`), review queues
 (`GET /curation/review/{tab}`), region review, training (`/curation/train/*`)
@@ -24,25 +27,79 @@ routes they were captured from are recorded in
 script drives a browser against those routes; review every PNG for
 leaked hostnames, paths or unexpected text before committing it.
 
+## Backend screenshots
+
+The "See the backend in action" gallery on the landing page, and the
+screenshots on [Monitoring](../operations/monitoring.mdx) and
+[Training, bake-off and promote](../operations/training-and-promote.mdx),
+are the tools the stack ships, captured by
+`scripts/docs/capture_backend_screens.py` from a stack holding public
+sample data only:
+
+```bash
+# 1. A few minutes of read-only inference traffic (COCO val2017 images),
+#    so the dashboards have live data. Nothing is ingested or indexed.
+.venv/bin/python scripts/docs/capture_backend_screens.py traffic \
+  --api http://localhost:<api-port> --seconds 300
+
+# 2. 1600-px screenshots of every tool.
+.venv/bin/python scripts/docs/capture_backend_screens.py capture \
+  --api http://localhost:<api-port> --prometheus http://localhost:<prometheus-port> \
+  --grafana http://localhost:<grafana-port> --mlflow http://localhost:<mlflow-port> \
+  --osd http://localhost:<dashboards-port> --out <dir>
+```
+
+It writes the model status (`GET /models/`, rendered as a terminal
+frame), Swagger UI's endpoint groups, Prometheus target health, each
+Grafana dashboard, MLflow's experiment, run, metric-chart and run
+comparison pages, and OpenSearch Dashboards' index list. Grafana needs a
+viewer login: the script reads `OP_GRAFANA_TOKEN` (a service-account
+token) or `OP_GRAFANA_USER` and `OP_GRAFANA_PASSWORD` from the
+environment, sends them only to Grafana, never prints them, and skips
+Grafana when they are unset. The script refuses any URL on ports
+4600-4799, which are reserved for non-public stacks. Copy the PNGs you
+want into `docs-site/static/img/screenshots/` as `backend-<name>.png` and
+list them in `docs-site/src/data/backend_screenshots.json`.
+
+The screenshots show the user interfaces of
+[Swagger UI](https://github.com/swagger-api/swagger-ui) (Apache-2.0),
+[Prometheus](https://github.com/prometheus/prometheus) (Apache-2.0),
+[Grafana](https://github.com/grafana/grafana) (AGPL-3.0),
+[MLflow](https://github.com/mlflow/mlflow) (Apache-2.0) and
+[OpenSearch Dashboards](https://github.com/opensearch-project/OpenSearch-Dashboards)
+(Apache-2.0); product names belong to their respective owners. The data
+in them (model
+names, metrics, runs, index counts) comes from the public-sample-data
+stack.
+
 ## The landing-page walkthrough GIF
 
 `docs-site/static/img/openprocessor-workflow.gif` is built by
-`scripts/docs/create-workflow-gif.sh` (ImageMagick) from frames that
-`scripts/docs/capture_hero_frames.py` (Playwright) captures from a running
-API holding public sample data:
+`scripts/docs/create-workflow-gif.sh` (ImageMagick) from frames captured
+by `scripts/docs/capture_hero_frames.py` and
+`scripts/docs/capture_backend_screens.py` against a running stack holding
+public sample data:
 
 ```bash
-OP_DOCS_API=http://localhost:<port> PYTHON=.venv/bin/python \
-  scripts/docs/create-workflow-gif.sh
+OP_DOCS_API=http://localhost:<api-port> \
+OP_DOCS_PROMETHEUS=http://localhost:<prometheus-port> \
+OP_DOCS_GRAFANA=http://localhost:<grafana-port> \
+OP_DOCS_MLFLOW=http://localhost:<mlflow-port> \
+OP_DOCS_OSD=http://localhost:<dashboards-port> \
+PYTHON=.venv/bin/python scripts/docs/create-workflow-gif.sh
 ```
 
-The frames are a terminal session (`/detect` on a public COCO image,
-`/embed/text`, the curation ingest limits and status), the Swagger UI at
-`/docs`, and two closing frames from the Cropwright screenshots above.
-Every request the capture makes is read-only. Set `OP_DOCS_MLFLOW` to add
-an MLflow frame once the stack has training runs, and `KEEP_FRAMES=<dir>`
-to review the individual frames. Set `heroDemo` to `null` in
-`docs-site/site.config.ts` to hide the GIF.
+The frames run in this order, each with a caption bar: a terminal session
+(`/detect` on a public COCO image, `/embed/text`, the curation ingest
+limits and status), Swagger UI, Triton model status, the Grafana
+dashboards, Prometheus targets, MLflow runs and a run comparison,
+OpenSearch Dashboards, and two closing frames from the Cropwright
+screenshots above. Each tool's frames are skipped when its URL is unset
+(Grafana's also without a login). Every request the capture makes is
+read-only. `KEEP_FRAMES=<dir>` keeps the captioned frames for review, and
+`GIF_COLORS` (default 96) trades palette size against file size; keep the
+GIF under about 1.5 MB. Set `heroDemo` to `null` in
+`docs-site/site.config.ts` to hide it.
 
 ## Image credits
 
