@@ -1,15 +1,12 @@
-"""P1 commit 2/3 static guard: nothing captures a project-scoped value at
-import time, and no raw ``AsyncOpenSearch``/``OpenSearch(`` bypasses the
-factory inside the curation packages this pass covers (§3.3/§2.4).
+"""Static guards for project isolation (projects_plan.md §3.3/§2.4):
 
-**Known, documented gap** (see PR notes / SubagentHandback report): the
-plan's own text says "AsyncOpenSearch( / OpenSearch( outside the factory"
-should be forbidden repo-wide, including ``scripts/curation/*.py``. This
-codebase has 17 script files that construct ``AsyncOpenSearch`` directly
-and were never routed through ``make_curation_opensearch()`` in this
-pass -- routing them through one factory is real, separate work. So this
-test only scans ``src/services/curation/`` and ``src/routers/curation*``
-for that specific rule, not ``scripts/``.
+- nothing captures a project-scoped value at import time (a captured
+  string would pin every request to one project's index);
+- no bare ``run_in_executor`` in the curation request code (it drops the
+  bound project on the thread hop);
+- no ``AsyncOpenSearch(...)`` / ``OpenSearch(...)`` construction anywhere
+  in ``src/`` or ``scripts/`` outside the guarded factories;
+- every ``scripts/curation`` entry point takes ``--project`` and binds it.
 """
 
 from __future__ import annotations
@@ -25,7 +22,32 @@ _INDEX_CONST_NAMES = {
     'CURATION_IMAGES_INDEX',
     'CURATION_LABELS_CONFIRMED_INDEX',
     'CURATION_CLASSES_INDEX',
+    'ITEMS_INDEX',
+    'UMAP_STATE_INDEX',
+    'UMAP_VIZ_STATE_INDEX',
 }
+
+# Standalone raw-HTTP workers that name the items index from their own
+# env override; making them multi-project is P2 (projects_plan.md §5.2).
+_P2_RAW_HTTP_WORKERS = frozenset(
+    {
+        'scripts/curation/vlm_worker.py',
+        'scripts/curation/cluster_refresh_daemon.py',
+    }
+)
+
+# The only places allowed to construct an OpenSearch client: the shared
+# API client wrapper (guarded by make_curation_opensearch) and the guard
+# module's own factories.
+_CLIENT_FACTORIES = frozenset({'src/clients/opensearch.py', 'src/services/projects/guard.py'})
+
+_CURATION_REQUEST_CODE = (
+    'src/services/curation',
+    'src/routers/curation',
+    'src/routers/curation_images.py',
+    'src/routers/curation_umap.py',
+    'src/routers/curation_train.py',
+)
 
 
 def _iter_py_files(*roots: str) -> list[Path]:
@@ -39,99 +61,94 @@ def _iter_py_files(*roots: str) -> list[Path]:
     return files
 
 
+def _rel(path: Path) -> str:
+    return str(path.relative_to(REPO_ROOT))
+
+
 def _parse(path: Path) -> ast.Module:
     return ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
 
 
-def _module_level_assignments(tree: ast.Module) -> list[ast.Assign]:
-    return [node for node in tree.body if isinstance(node, ast.Assign)]
+def _import_time_nodes(tree: ast.Module) -> list[ast.AST]:
+    """Everything evaluated when the module is imported: module and class
+    bodies, decorators and default argument values -- never a function
+    body."""
+    out: list[ast.AST] = []
+
+    def _visit(body: list[ast.stmt]) -> None:
+        for stmt in body:
+            if isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef):
+                out.extend(stmt.args.defaults)
+                out.extend(d for d in stmt.args.kw_defaults if d is not None)
+                out.extend(stmt.decorator_list)
+            elif isinstance(stmt, ast.ClassDef):
+                out.extend(stmt.decorator_list)
+                _visit(stmt.body)
+            elif isinstance(stmt, ast.If | ast.Try):
+                _visit(stmt.body)
+                _visit(stmt.orelse)
+                for handler in getattr(stmt, 'handlers', []):
+                    _visit(handler.body)
+            else:
+                out.append(stmt)
+
+    _visit(tree.body)
+    return out
 
 
-def test_no_module_level_get_curation_config_project_field_capture() -> None:
-    """A module-level ``X = get_curation_config().<project field>`` (or a
-    two-step ``config = get_curation_config(); X = config.<field>``)
-    freezes a project-scoped value at import time -- the exact bug the
-    view exists to prevent."""
+def test_no_import_time_read_of_a_project_scoped_field() -> None:
+    """``X = get_curation_config().items_index``, ``config.export_root`` as a
+    default argument, and friends freeze one project's value at import."""
     from src.config.curation import PROJECT_SCOPED_FIELDS
 
     offenders: list[str] = []
     for path in _iter_py_files('src', 'scripts'):
         tree = _parse(path)
-        module_config_names: set[str] = set()
-        for assign in _module_level_assignments(tree):
-            value = assign.value
-            if (
-                isinstance(value, ast.Call)
-                and isinstance(value.func, ast.Name)
-                and value.func.id == 'get_curation_config'
-            ):
-                for target in assign.targets:
-                    if isinstance(target, ast.Name):
-                        module_config_names.add(target.id)
-            elif (
-                isinstance(value, ast.Attribute)
-                and isinstance(value.value, ast.Name)
-                and value.value.id in module_config_names
-                and value.attr in PROJECT_SCOPED_FIELDS
-            ):
-                offenders.append(f'{path.relative_to(REPO_ROOT)}: {value.value.id}.{value.attr}')
-    # Known red: commit 5 (the codemod over the ~15 documented captures)
-    # has not landed yet in this pass.
-    if offenders:
-        import pytest
-
-        pytest.xfail(
-            'commit 5 (module-level capture codemod) not landed yet: ' + ', '.join(offenders)
-        )
+        config_names = {'config', 'cfg', '_config', '_cfg', 'CFG'}
+        for node in _import_time_nodes(tree):
+            for sub in ast.walk(node):
+                if (
+                    isinstance(sub, ast.Attribute)
+                    and sub.attr in PROJECT_SCOPED_FIELDS
+                    and (
+                        (isinstance(sub.value, ast.Name) and sub.value.id in config_names)
+                        or (
+                            isinstance(sub.value, ast.Call)
+                            and isinstance(sub.value.func, ast.Name)
+                            and sub.value.func.id == 'get_curation_config'
+                        )
+                    )
+                ):
+                    offenders.append(f'{_rel(path)}:{sub.lineno} {ast.unparse(sub)}')  # noqa: PERF401
+    assert offenders == []
 
 
 def test_no_module_level_index_name_call() -> None:
+    offenders = [
+        f'{_rel(path)}:{sub.lineno}'
+        for path in _iter_py_files('src', 'scripts')
+        for node in _import_time_nodes(_parse(path))
+        for sub in ast.walk(node)
+        if isinstance(sub, ast.Call)
+        and isinstance(sub.func, ast.Name)
+        and sub.func.id in ('index_name', 'idx')
+    ]
+    assert offenders == []
+
+
+def test_no_frozen_index_name_constants() -> None:
     offenders: list[str] = []
     for path in _iter_py_files('src', 'scripts'):
-        tree = _parse(path)
-        for assign in _module_level_assignments(tree):
-            value = assign.value
-            if (
-                isinstance(value, ast.Call)
-                and isinstance(value.func, ast.Name)
-                and value.func.id == 'index_name'
-            ):
-                offenders.append(str(path.relative_to(REPO_ROOT)))
-    # Known red: commit 5 (the CURATION_*_INDEX -> function codemod) has
-    # not landed yet in this pass -- _common.py/curation_train.py still
-    # compute their module-level index constants via index_name().
-    if offenders:
-        import pytest
-
-        pytest.xfail('commit 5 (index_name() codemod) not landed yet: ' + ', '.join(offenders))
-
-
-def test_no_frozen_curation_index_constants() -> None:
-    """The legacy ``CURATION_*_INDEX``/``ITEMS_INDEX``-style module
-    constants must not exist as *assignment targets* anywhere (the
-    codemod to functions is P1 commit 5 scope; this asserts the target
-    state once that codemod lands, and documents today's known-red
-    baseline in the assertion message rather than silently skipping)."""
-    offenders: list[str] = []
-    for path in _iter_py_files('src', 'scripts'):
-        tree = _parse(path)
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Assign):
-                continue
-            for target in node.targets:
-                if isinstance(target, ast.Name) and (
-                    target.id in _INDEX_CONST_NAMES or target.id in ('ITEMS_INDEX',)
-                ):
-                    offenders.append(f'{path.relative_to(REPO_ROOT)}: {target.id}')  # noqa: PERF401
-    # Known red: commit 5 (the codemod) has not landed yet in this pass.
-    # Document rather than silently pass.
-    if offenders:
-        import pytest
-
-        pytest.xfail(
-            'commit 5 (index-constant codemod) not landed yet; frozen constants remain: '
-            + ', '.join(offenders)
-        )
+        if _rel(path) in _P2_RAW_HTTP_WORKERS:
+            continue
+        for node in ast.walk(_parse(path)):
+            if isinstance(node, ast.Assign):
+                offenders.extend(
+                    f'{_rel(path)}:{node.lineno} {target.id}'
+                    for target in node.targets
+                    if isinstance(target, ast.Name) and target.id in _INDEX_CONST_NAMES
+                )
+    assert offenders == []
 
 
 def test_no_dataclasses_replace_or_asdict_on_curation_config() -> None:
@@ -139,70 +156,62 @@ def test_no_dataclasses_replace_or_asdict_on_curation_config() -> None:
     for path in _iter_py_files('src', 'scripts'):
         if path.name == 'curation.py' and path.parent.name == 'config':
             continue  # the dataclass's own module may legitimately reference these
-        tree = _parse(path)
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
+        for node in ast.walk(_parse(path)):
+            if not isinstance(node, ast.Call) or not node.args:
                 continue
             func = node.func
-            name = None
-            if isinstance(func, ast.Attribute):
-                name = func.attr
-            elif isinstance(func, ast.Name):
-                name = func.id
-            if name in ('replace', 'asdict') and node.args:
-                first = node.args[0]
-                if (
-                    isinstance(first, ast.Call)
-                    and isinstance(first.func, ast.Name)
-                    and first.func.id == 'get_curation_config'
-                ):
-                    offenders.append(str(path.relative_to(REPO_ROOT)))
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, 'id', None)
+            first = node.args[0]
+            if (
+                name in ('replace', 'asdict')
+                and isinstance(first, ast.Call)
+                and isinstance(first.func, ast.Name)
+                and first.func.id == 'get_curation_config'
+            ):
+                offenders.append(_rel(path))
     assert not offenders, f'dataclasses.replace/asdict on get_curation_config(): {offenders}'
 
 
-def test_no_bare_run_in_executor_in_curation_packages() -> None:
+def test_no_bare_run_in_executor_in_curation_request_code() -> None:
+    """Request code runs in a per-request context; ``run_in_executor``
+    would drop it. (Scripts bind the whole process, so their thread hops
+    keep the binding.)"""
+    offenders = [
+        f'{_rel(path)}:{node.lineno}'
+        for path in _iter_py_files(*_CURATION_REQUEST_CODE)
+        for node in ast.walk(_parse(path))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == 'run_in_executor'
+    ]
+    assert offenders == []
+
+
+def test_no_raw_opensearch_construction_outside_the_factories() -> None:
     offenders: list[str] = []
-    for path in _iter_py_files(
-        'src/services/curation',
-        'src/routers/curation',
-        'src/routers/curation_images.py',
-        'src/routers/curation_umap.py',
-        'src/routers/curation_train.py',
-    ):
-        tree = _parse(path)
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == 'run_in_executor'
-            ):
-                offenders.append(str(path.relative_to(REPO_ROOT)))  # noqa: PERF401
-    # Known red: commit 5 (run_in_executor_bound migration) not landed.
-    if offenders:
-        import pytest
-
-        pytest.xfail(
-            'commit 5 (run_in_executor_bound migration) not landed yet: ' + ', '.join(offenders)
-        )
-
-
-def test_no_raw_opensearch_construction_outside_factory() -> None:
-    """Scoped to src/services/curation and src/routers/curation* for this
-    pass -- see module docstring for the scripts/ gap."""
-    offenders: list[str] = []
-    for path in _iter_py_files(
-        'src/services/curation',
-        'src/routers/curation',
-        'src/routers/curation_images.py',
-        'src/routers/curation_umap.py',
-        'src/routers/curation_train.py',
-    ):
-        tree = _parse(path)
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id in ('AsyncOpenSearch', 'OpenSearch')
-            ):
-                offenders.append(str(path.relative_to(REPO_ROOT)))  # noqa: PERF401
+    for path in _iter_py_files('src', 'scripts'):
+        if _rel(path) in _CLIENT_FACTORIES:
+            continue
+        for node in ast.walk(_parse(path)):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, 'id', None)
+            if name in ('AsyncOpenSearch', 'OpenSearch'):
+                offenders.append(f'{_rel(path)}:{node.lineno}')
     assert not offenders, f'raw AsyncOpenSearch()/OpenSearch() outside the factory: {offenders}'
+
+
+def test_every_curation_script_takes_and_binds_a_project() -> None:
+    offenders: list[str] = []
+    for path in _iter_py_files('scripts/curation'):
+        text = path.read_text(encoding='utf-8')
+        if 'argparse.ArgumentParser(' not in text or "__name__ == '__main__'" not in text:
+            continue
+        if path.parent.name == 'bakeoff':
+            continue  # the evaluator container's own tools; no curation config
+        if 'add_project_argument(' not in text:
+            offenders.append(f'{_rel(path)}: no --project')
+        if 'bind_script_project(' not in text:
+            offenders.append(f'{_rel(path)}: --project never bound')
+    assert offenders == []

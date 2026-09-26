@@ -49,6 +49,7 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 from scripts.curation._fast_walk import iter_image_paths
 from src.config import get_curation_config
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -191,7 +192,9 @@ def main() -> None:
     parser.add_argument(
         '--dry-run', action='store_true', help='Only report what would be submitted'
     )
+    add_project_argument(parser)
     args = parser.parse_args()
+    bind_script_project(args.project)
 
     extensions = frozenset(f'.{e.strip().lstrip(".").lower()}' for e in args.extensions.split(','))
 

@@ -54,6 +54,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.config.region_state import RegionStatus  # noqa: E402 - needs the sys.path fix above
+from src.services.projects.guard import make_script_opensearch  # noqa: E402
+from src.services.projects.script_binding import (  # noqa: E402 - needs the sys.path fix above
+    add_project_argument,
+    bind_script_project,
+)
 
 
 RANDOM_SEED = 1337
@@ -381,8 +386,6 @@ async def _bulk(client: Any, index: str, docs: list[dict[str, Any]], id_key: str
 
 
 async def _seed(args: argparse.Namespace) -> int:
-    from opensearchpy import AsyncOpenSearch
-
     from src.clients.curation_opensearch import ClassRegistry
     from src.config import get_curation_config, get_region_fields
     from src.routers.curation._common import _ensure_indexes
@@ -391,7 +394,7 @@ async def _seed(args: argparse.Namespace) -> int:
     fields = get_region_fields()
     _assert_verify_scoped(cfg)
 
-    client = AsyncOpenSearch(hosts=[args.opensearch_url], timeout=60, max_retries=3)
+    client = make_script_opensearch([args.opensearch_url], timeout=60, max_retries=3)
     try:
         if args.wipe:
             for name in (
@@ -482,7 +485,9 @@ def main() -> int:
         action='store_true',
         help='Delete the verify_* indexes, registry and job files first.',
     )
+    add_project_argument(parser)
     args = parser.parse_args()
+    bind_script_project(args.project, opensearch_url=args.opensearch_url)
     if args.source_root is None:
         from src.config import get_curation_config
 

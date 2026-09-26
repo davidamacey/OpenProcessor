@@ -41,6 +41,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from src.services.curation.worker_liveness import write_heartbeat
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 # S-2: container healthcheck liveness. The daemon's real poll interval
@@ -90,6 +91,7 @@ def _parse_args() -> argparse.Namespace:
         action='store_true',
         help='Run a single iteration and exit (cron-friendly).',
     )
+    add_project_argument(p)
     return p.parse_args()
 
 
@@ -213,6 +215,7 @@ async def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     args = _parse_args()
+    bind_script_project(args.project, opensearch_url=args.opensearch)
     return asyncio.run(run(args))
 
 

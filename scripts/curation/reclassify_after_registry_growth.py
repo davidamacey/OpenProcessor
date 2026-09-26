@@ -55,7 +55,6 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from opensearchpy import AsyncOpenSearch
 
 from src.clients.curation_opensearch import ClassRegistry
 from src.config import get_curation_config
@@ -64,6 +63,8 @@ from src.services.curation.registry_reclassify import (
     active_name_to_id,
     reclassify_unmatched,
 )
+from src.services.projects.guard import make_script_opensearch
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
@@ -85,7 +86,7 @@ async def _async_main(args: argparse.Namespace) -> int:
 
     sources = [UnmatchedLabelSource(p) for p in (args.label_prefix or [DEFAULT_PREFIX])]
     start_after = [args.start_after] if args.start_after else None
-    client = AsyncOpenSearch(hosts=[args.opensearch_url], use_ssl=False, timeout=300)
+    client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=300)
     try:
         for source in sources:
             result = await reclassify_unmatched(
@@ -134,7 +135,9 @@ def main() -> int:
     g = p.add_mutually_exclusive_group()
     g.add_argument('--dry-run', action='store_true', default=True)
     g.add_argument('--apply', dest='dry_run', action='store_false')
+    add_project_argument(p)
     args = p.parse_args()
+    bind_script_project(args.project, opensearch_url=args.opensearch_url)
     if args.page_size <= 0:
         p.error('--page-size must be positive')
     if args.start_after and args.label_prefix and len(args.label_prefix) > 1:

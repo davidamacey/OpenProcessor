@@ -58,7 +58,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from src.config.curation import CurationConfig
+from src.config.curation import get_curation_config
 from src.services.curation.raw_label_clusters import (
     CLUSTER_ID_FIELD,
     RAW_LABEL_FIELD,
@@ -69,6 +69,8 @@ from src.services.curation.raw_label_clusters import (
     hash_embed,
     rank_clusters,
 )
+from src.services.projects.guard import make_script_opensearch
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 if TYPE_CHECKING:
@@ -274,13 +276,11 @@ def _print_ranked(ranked: list[dict[str, Any]], top: int) -> None:
 
 
 async def _async_main(args: argparse.Namespace) -> int:
-    from opensearchpy import AsyncOpenSearch
-
-    index = args.index or CurationConfig.from_env().items_index
+    index = args.index or get_curation_config().items_index
     embed, backend = resolve_embedder(args.embedder, args.st_model)
     logger.info('index=%s embedder=%s dry_run=%s', index, backend, args.dry_run)
 
-    client = AsyncOpenSearch(hosts=[args.opensearch_url], use_ssl=False, timeout=600)
+    client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=600)
     started = time.monotonic()
     try:
         summary = await run(
@@ -348,12 +348,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--top', type=int, default=50, help='Clusters to print')
     p.add_argument('--report', type=Path, default=None, help='Write the ranked clusters as JSON')
     p.add_argument('--dry-run', action='store_true', help='Cluster and report; write nothing')
+    add_project_argument(p)
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
-    return asyncio.run(_async_main(build_parser().parse_args(argv)))
+    args = build_parser().parse_args(argv)
+    bind_script_project(args.project, opensearch_url=args.opensearch_url)
+    return asyncio.run(_async_main(args))
 
 
 if __name__ == '__main__':

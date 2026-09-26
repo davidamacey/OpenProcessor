@@ -52,6 +52,7 @@ from pathlib import Path
 import httpx
 
 from src.services.curation.worker_liveness import heartbeat_loop
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 DEFAULT_API = os.environ.get('OP_API', 'http://localhost:4603')
@@ -623,6 +624,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=10.0,
         help='Seconds to sleep between sentinel checks while paused.',
     )
+    add_project_argument(p)
     return p.parse_args(argv)
 
 
@@ -631,6 +633,7 @@ def main(argv: list[str] | None = None) -> int:
 
     reject_retired_env()
     args = parse_args(argv)
+    bind_script_project(args.project, opensearch_url=args.opensearch)
     try:
         return asyncio.run(run(args))
     except KeyboardInterrupt:

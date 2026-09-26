@@ -13,6 +13,7 @@ import asyncio
 import sys
 
 from src.core.logging import get_logger
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 logger = get_logger('curation_worker')
@@ -94,6 +95,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help='Run forever (Docker daemon mode). Polls every poll-interval '
         'until SIGINT/SIGTERM. Without this flag, exits on the first empty poll.',
     )
+    add_project_argument(p)
     return p.parse_args(argv)
 
 
@@ -102,6 +104,7 @@ def main(argv: list[str] | None = None) -> int:
 
     reject_retired_env()
     args = parse_args(argv)
+    bind_script_project(args.project, opensearch_url=args.opensearch)
     try:
         return asyncio.run(run(args))
     except KeyboardInterrupt:

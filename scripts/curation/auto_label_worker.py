@@ -79,6 +79,7 @@ from src.services.curation.autolabel.job import (
     _Progress,
 )
 from src.services.curation.worker_liveness import write_heartbeat as _write_container_heartbeat
+from src.services.projects.script_binding import bind_script_project_from_env
 
 
 logging.basicConfig(
@@ -381,6 +382,9 @@ async def _main_loop(stop: asyncio.Event) -> None:
 
 
 def main() -> int:
+    # No argument parser: the worker container selects its project with
+    # OP_PROJECT (default "default").
+    bind_script_project_from_env()
     stop = asyncio.Event()
 
     def _on_signal(*_: object) -> None:

@@ -75,7 +75,7 @@ async def _drive(
 
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
     monkeypatch.setattr(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
-    monkeypatch.setattr(worker, 'AsyncOpenSearch', MagicMock(return_value=fake_os))
+    monkeypatch.setattr(worker, 'make_script_opensearch', MagicMock(return_value=fake_os))
 
     primary_det = MagicMock()
     primary_det.detect_batch = AsyncMock(return_value=[primary])

@@ -366,7 +366,7 @@ def _cli_fake(root: Path) -> QueryFakeOpenSearch:
 
 def _run_cli(monkeypatch, fake: QueryFakeOpenSearch, argv: list[str]) -> int:
     mod = _cli()
-    monkeypatch.setattr(mod, 'AsyncOpenSearch', lambda **_kw: _Closable(fake))
+    monkeypatch.setattr(mod, 'make_script_opensearch', lambda *_a, **_kw: _Closable(fake))
     monkeypatch.setattr(mod, 'get_curation_config', lambda: CFG)
     return mod.main(argv)
 

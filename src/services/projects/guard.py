@@ -7,20 +7,18 @@ Installed once, on the one shared ``AsyncOpenSearch`` client the curation
 subsystem uses (``src.core.dependencies.get_opensearch()``'s
 ``.client``), via :func:`make_curation_opensearch`.
 
-**Known gap in this landing** (see PR notes): 17 files under
-``scripts/curation/`` construct their own ``AsyncOpenSearch(...)``
-directly rather than going through this factory, so the guard does not
-protect those call sites yet. The static "no raw AsyncOpenSearch outside
-the factory" test therefore only covers ``src/services/curation/`` and
-``src/routers/curation*`` for this pass, not ``scripts/curation/*.py`` --
-routing those 17 scripts through one factory is real, separate work
-left for whoever continues this wave.
+Scripts and workers build their own clients through
+:func:`make_script_opensearch`, which installs the same guard. A static
+test (``tests/projects/test_no_frozen_project_config.py``) forbids
+constructing ``AsyncOpenSearch(...)`` / ``OpenSearch(...)`` anywhere in
+``src/`` or ``scripts/`` except these factories.
 """
 
 from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 from src.config.project_context import current_project
 from src.core.logging import get_logger
@@ -235,11 +233,14 @@ def check_request(
 class ProjectGuardedTransport:
     """Wraps an ``opensearchpy`` transport's ``perform_request`` with
     :func:`check_request`. Installed once per client by
-    :func:`install_project_guard`."""
+    :func:`install_project_guard`. ``prime`` (optional) refreshes the
+    registry once before the first checked call -- a script's client
+    has no background poll loop to do it."""
 
-    def __init__(self, inner: Any, registry: Any) -> None:
+    def __init__(self, inner: Any, registry: Any, prime: Any = None) -> None:
         self._inner = inner
         self._registry = registry
+        self._prime = prime
 
     async def perform_request(
         self,
@@ -249,6 +250,9 @@ class ProjectGuardedTransport:
         body: Any = None,
         **kwargs: Any,
     ) -> Any:
+        if self._prime is not None:
+            prime, self._prime = self._prime, None
+            await prime()
         check_request(method, url, body, self._registry.snapshot())
         return await self._inner.perform_request(method, url, params=params, body=body, **kwargs)
 
@@ -256,11 +260,42 @@ class ProjectGuardedTransport:
         return getattr(self._inner, name)
 
 
-def install_project_guard(client: Any, registry: Any) -> None:
+def install_project_guard(client: Any, registry: Any, *, prime: Any = None) -> None:
     """Idempotently wrap ``client.transport`` with the project guard."""
     if isinstance(client.transport, ProjectGuardedTransport):
         return
-    client.transport = ProjectGuardedTransport(client.transport, registry)
+    client.transport = ProjectGuardedTransport(client.transport, registry, prime)
+
+
+class _RegistryReader:
+    """The two calls :class:`~src.services.projects.registry.ProjectRegistry`
+    makes, sent straight to the *unguarded* inner transport so reading the
+    registry never re-enters the guard that needs it."""
+
+    def __init__(self, transport: Any) -> None:
+        self._transport = transport
+
+    async def get(self, *, index: str, id: str) -> Any:  # noqa: A002 - mirrors the client API
+        return await self._transport.perform_request('GET', f'/{index}/_doc/{quote(id, safe="")}')
+
+    async def search(self, *, index: str, body: Any) -> Any:
+        return await self._transport.perform_request('POST', f'/{index}/_search', body=body)
+
+
+def make_script_opensearch(hosts: list[str], **kwargs: Any) -> Any:
+    """The one factory for script / worker OpenSearch clients: an
+    ``AsyncOpenSearch`` with the project guard installed. Its registry is
+    read once, lazily, before the first request."""
+    from opensearchpy import AsyncOpenSearch
+
+    from src.services.projects.registry import ProjectRegistry
+
+    kwargs.setdefault('use_ssl', False)
+    client = AsyncOpenSearch(hosts=hosts, **kwargs)
+    reader = _RegistryReader(client.transport)
+    registry = ProjectRegistry(lambda: reader)
+    install_project_guard(client, registry, prime=registry.ensure_fresh)
+    return client
 
 
 async def make_curation_opensearch() -> Any:

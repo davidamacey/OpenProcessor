@@ -1,0 +1,94 @@
+"""Project binding for script and worker entry points (projects_plan.md
+§3.3: "every script entry point binds from ``--project`` (default
+``default``) or ``OP_PROJECT``").
+
+A script binds its whole process (:func:`bind_process_project`), because
+ContextVars do not follow it into the threads it starts. ``default``
+resolves from the env with no I/O -- exactly today's index names and
+paths. Any other slug is looked up in the project registry through a
+short-lived guarded client.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+from typing import TYPE_CHECKING
+
+from src.config.project_context import bind_process_project
+from src.config.projects import DEFAULT_SLUG
+from src.services.projects.registry import ProjectRegistry, default_project_record
+
+
+if TYPE_CHECKING:
+    import argparse
+
+    from src.config.projects import ProjectRecord
+
+
+# Statuses a script may act on: an archived project binds read-only (the
+# guard refuses writes); building/deleting/deleted/failed refuse outright.
+_BINDABLE = frozenset({'active', 'archived'})
+
+
+def add_project_argument(parser: argparse.ArgumentParser) -> None:
+    """``--project SLUG`` (default ``$OP_PROJECT`` or ``default``)."""
+    parser.add_argument(
+        '--project',
+        default=os.environ.get('OP_PROJECT', DEFAULT_SLUG),
+        help='Project slug to act on (default: $OP_PROJECT, else "default").',
+    )
+
+
+async def resolve_project(slug: str, *, opensearch_url: str | None = None) -> ProjectRecord:
+    """The bindable record for ``slug``; raises ``SystemExit`` with a
+    clear message for an unknown or unbindable project."""
+    if slug == DEFAULT_SLUG:
+        return default_project_record()
+    from src.services.projects.guard import make_script_opensearch
+
+    client = make_script_opensearch([opensearch_url or _default_opensearch_url()])
+    try:
+        registry = ProjectRegistry(lambda: client)
+        await registry.ensure_fresh()
+        record = registry.get(slug)
+    finally:
+        await client.close()
+    if record is None or record.status == 'deleted':
+        raise SystemExit(f"no project named '{slug}'")
+    if record.status not in _BINDABLE:
+        raise SystemExit(f"project '{slug}' is {record.status}; refusing to run against it")
+    return record
+
+
+def bind_script_project(slug: str, *, opensearch_url: str | None = None) -> ProjectRecord:
+    """Resolve ``slug`` and bind it for this whole script process. Call
+    once, right after argument parsing and before anything reads
+    project-scoped config. Must not run inside an event loop (it may
+    start its own for the lookup); async entry points use
+    :func:`abind_script_project`."""
+    record = (
+        default_project_record()
+        if slug == DEFAULT_SLUG
+        else asyncio.run(resolve_project(slug, opensearch_url=opensearch_url))
+    )
+    bind_process_project(record, read_only=record.status == 'archived')
+    return record
+
+
+async def abind_script_project(slug: str, *, opensearch_url: str | None = None) -> ProjectRecord:
+    """:func:`bind_script_project` for an entry point already running in
+    an event loop."""
+    record = await resolve_project(slug, opensearch_url=opensearch_url)
+    bind_process_project(record, read_only=record.status == 'archived')
+    return record
+
+
+def bind_script_project_from_env() -> ProjectRecord:
+    """For entry points with no argument parser (long-running workers):
+    bind ``$OP_PROJECT``, else ``default``."""
+    return bind_script_project(os.environ.get('OP_PROJECT', DEFAULT_SLUG))
+
+
+def _default_opensearch_url() -> str:
+    return os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')

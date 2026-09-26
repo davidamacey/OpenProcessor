@@ -73,6 +73,7 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 from scripts.curation._fast_walk import iter_image_paths
 from src.config import get_curation_config
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 if TYPE_CHECKING:
@@ -400,6 +401,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--progress-file', type=Path, default=None, help='JSON progress snapshot')
     p.add_argument('--failed-log', type=Path, default=None, help='JSONL of failed images')
     p.add_argument('--limit', type=int, default=None, help='Stop after N walked files')
+    add_project_argument(p)
     return p
 
 
@@ -434,7 +436,9 @@ async def _async_main(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
-    return asyncio.run(_async_main(build_parser().parse_args(argv)))
+    args = build_parser().parse_args(argv)
+    bind_script_project(args.project)
+    return asyncio.run(_async_main(args))
 
 
 if __name__ == '__main__':

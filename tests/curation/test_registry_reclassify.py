@@ -234,7 +234,7 @@ def test_cli_apply_runs_every_prefix(monkeypatch, registry):
     mod = _load_script()
     fake = _fake()
     fake.docs(ITEMS)['u7']['alt_raw_label'] = 'widget'
-    monkeypatch.setattr(mod, 'AsyncOpenSearch', lambda **_kw: _Closable(fake))
+    monkeypatch.setattr(mod, 'make_script_opensearch', lambda *_a, **_kw: _Closable(fake))
     monkeypatch.setattr(mod, 'get_curation_config', lambda: CFG)
     monkeypatch.setattr(
         sys,

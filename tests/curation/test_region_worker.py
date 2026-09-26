@@ -772,7 +772,7 @@ class TestSignalHandling:
         os_client.search = AsyncMock(return_value={'hits': {'hits': []}})
         os_client.bulk = AsyncMock()
         os_client.close = AsyncMock()
-        monkeypatch.setattr(worker, 'AsyncOpenSearch', MagicMock(return_value=os_client))
+        monkeypatch.setattr(worker, 'make_script_opensearch', MagicMock(return_value=os_client))
 
         segmenter = MagicMock()
         segmenter.aclose = AsyncMock()

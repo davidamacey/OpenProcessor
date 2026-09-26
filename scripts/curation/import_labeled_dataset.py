@@ -100,6 +100,7 @@ from scripts.curation.yolo_dataset import (
     stratified_sample,
 )
 from src.config import get_curation_config
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 logger = logging.getLogger('import_labeled_dataset')
@@ -529,6 +530,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument('--force', action='store_true', help='Redo splits that have checkpoints')
     p.add_argument('--dry-run', action='store_true', help='Discover and check only')
+    add_project_argument(p)
     return p
 
 
@@ -594,7 +596,9 @@ async def _async_main(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
-    return asyncio.run(_async_main(build_parser().parse_args(argv)))
+    args = build_parser().parse_args(argv)
+    bind_script_project(args.project)
+    return asyncio.run(_async_main(args))
 
 
 if __name__ == '__main__':

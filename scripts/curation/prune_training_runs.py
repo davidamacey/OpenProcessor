@@ -35,6 +35,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from src.config import get_curation_config, get_gpu_arbiter_config
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 from src.services.training.run_retention import (
     apply_bakeoff_out_prune,
     apply_run_prune,
@@ -92,11 +93,13 @@ def build_parser() -> argparse.ArgumentParser:
     g = p.add_mutually_exclusive_group()
     g.add_argument('--dry-run', dest='apply', action='store_false', default=False)
     g.add_argument('--apply', dest='apply', action='store_true')
+    add_project_argument(p)
     return p
 
 
 def main() -> int:
     args = build_parser().parse_args()
+    bind_script_project(args.project)
     return run(args)
 
 

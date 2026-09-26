@@ -29,13 +29,11 @@ from __future__ import annotations
 #   1. ``scripts/curation/region_worker_main.py`` does ``from ... import *`` —
 #      these names are what ``*`` picks up.
 #   2. ``tests/curation/test_region_worker.py`` monkeypatches the heavy-IO
-#      constructors (``AsyncTritonPool``, ``AsyncOpenSearch``,
+#      constructors (``AsyncTritonPool``, ``make_script_opensearch``,
 #      ``SegmenterClient``, ``VlmLabeler``) on the shim module; the runner
 #      looks them up via the shim (``from scripts.curation import
 #      region_worker_main as _wkr; _wkr.AsyncTritonPool(...)``), so the
 #      patch must reach the shim's namespace.
-from opensearchpy import AsyncOpenSearch  # noqa: F401
-
 from scripts.curation.worker.cascade import SegmenterClient  # noqa: F401
 from scripts.curation.worker.runner import run  # noqa: F401
 from scripts.curation.worker.state import (  # noqa: F401
@@ -52,3 +50,4 @@ from scripts.curation.worker.state import (  # noqa: F401
 )
 from src.clients.triton_pool import AsyncTritonPool  # noqa: F401
 from src.services.labeling.vlm_labeler import VlmLabeler  # noqa: F401
+from src.services.projects.guard import make_script_opensearch  # noqa: F401

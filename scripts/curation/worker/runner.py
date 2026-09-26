@@ -345,7 +345,7 @@ async def run(args: argparse.Namespace) -> int:
             vlm.name_to_id = name_to_id
         except Exception as _exc:  # nosec B110 — best-effort, registry optional
             logger.warning('class_registry_load_failed', error=str(_exc))
-    opensearch = _wkr.AsyncOpenSearch(hosts=[args.opensearch])
+    opensearch = _wkr.make_script_opensearch([args.opensearch])
 
     started_at = time.monotonic()
     sentinel = Path(args.pause_sentinel)
