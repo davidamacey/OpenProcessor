@@ -447,6 +447,52 @@ class TestBatchIngest:
         # Only one image doc was ever created for the two identical uploads.
         assert len(os_fake.images) == 1
 
+    @pytest.mark.asyncio
+    async def test_in_batch_duplicate_keeps_its_own_source_identifier(self) -> None:
+        """D3 follow-up: clients match results to request entries by
+        source_identifier. The in-batch duplicate follower must carry its
+        OWN source_identifier (not null, not the representative's) even
+        though image_id points at the representative."""
+        data = _jpeg_bytes(seed=8)
+        svc, _, _ = _make_service()
+
+        result = await svc.ingest_batch(
+            [data, data],
+            ['/tmp/a.jpg', '/tmp/b.jpg'],
+            source_identifiers=['req-a', 'req-b'],
+        )
+
+        first, second = result.results
+        assert first.status == 'success'
+        assert first.source_identifier == 'req-a'
+        assert second.status == 'duplicate'
+        assert second.source_identifier == 'req-b'
+        assert second.image_id == first.image_id
+
+    @pytest.mark.asyncio
+    async def test_cross_batch_duplicate_keeps_its_own_source_identifier(self) -> None:
+        """Same requirement for the cross-batch dedup path (hash already
+        committed to the index before this batch started)."""
+        data = _jpeg_bytes(seed=9)
+        from src.services.curation.ingest import _imohash_bytes
+
+        existing_hash = _imohash_bytes(data)
+        os_fake = FakeIngestOpenSearch(
+            images={'existing': {'image_id': 'existing', 'imohash': existing_hash}}
+        )
+        svc, _, _ = _make_service(opensearch=os_fake)
+
+        result = await svc.ingest_batch(
+            [data],
+            ['/tmp/c.jpg'],
+            source_identifiers=['req-c'],
+        )
+
+        [only] = result.results
+        assert only.status == 'duplicate'
+        assert only.image_id == 'existing'
+        assert only.source_identifier == 'req-c'
+
 
 class TestBatchedTritonInference:
     """Regression guards for G11 — ``ingest_batch`` must issue *batched*

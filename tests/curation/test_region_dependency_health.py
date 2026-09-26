@@ -264,6 +264,29 @@ class TestStallReason:
         assert '2026-09-25T14:02:11+00:00' in reason
 
 
+class TestSegmenterOnlyMode:
+    """A profile's detector_model may not ship (the public plate example names
+    one nothing provides). The cascade then falls through to the segmenter,
+    so a missing detector with a healthy segmenter is not a stall."""
+
+    def test_missing_detector_with_ready_segmenter_is_not_a_stall(self) -> None:
+        deps = [
+            rdh.RegionDependencyStatus('detector', 'det_v1', False, '2026-09-25', 'missing'),
+            rdh.RegionDependencyStatus('segmenter', 'sam3', True, None, 'loaded=true'),
+        ]
+        assert rdh.stall_reason(deps, pending_detection=3508) is None
+
+    def test_both_down_names_both(self) -> None:
+        deps = [
+            rdh.RegionDependencyStatus('detector', 'det_v1', False, '2026-09-25', 'missing'),
+            rdh.RegionDependencyStatus('segmenter', 'sam3', False, '2026-09-25', 'not loaded'),
+        ]
+        reason = rdh.stall_reason(deps, pending_detection=10)
+        assert reason is not None
+        assert 'detector (det_v1)' in reason
+        assert 'segmenter (sam3)' in reason
+
+
 class TestStatePersistenceIsBestEffort:
     @pytest.mark.asyncio
     async def test_an_unwritable_state_dir_still_returns_a_result(
