@@ -109,6 +109,39 @@ describe('PromoteModal gate failure', () => {
   });
 });
 
+function fullClassRemapMissingGate(): ApiError {
+  // OpenProcessor 7e758390, tests/curation/test_promote_full_class_remap.py
+  // ::test_full_class_promote_without_remap_refuses_when_registry_has_a_gap
+  // -- the EXISTING PromoteGateFailedDetail shape, no class_name on the
+  // failure (this gate isn't about one class), force_allowed true.
+  const message =
+    "job 'gap-no-remap-job' is a full-class run with no resolvable class_remap and its " +
+    'pinned registry has a gap or deprecated class -- the identity map ' +
+    '(labels.txt line i = registry class i) is not provably correct for a ' +
+    'dense-id-trained model; refusing to promote (pass force=true to bypass -- ' +
+    'logged distinctly)';
+  return new ApiError(422, '/curation/train/promote/gap-no-remap-job', {
+    detail: {
+      message,
+      failures: [{ code: 'class_remap_missing_full_class', message }],
+      force_allowed: true,
+      override: 'pass force=true in the request body',
+    },
+  });
+}
+
+describe('PromoteModal gate failure — full-class remap missing (OpenProcessor 7e758390)', () => {
+  it('renders the message, the class_remap_missing_full_class failure, the override hint, and offers force', async () => {
+    vi.mocked(promoteTrainJob).mockRejectedValue(fullClassRemapMissingGate());
+    await openAndSubmit();
+    const text = target.querySelector('[data-testid="promote-gate"]')!.textContent ?? '';
+    expect(text).toContain('is a full-class run with no resolvable class_remap');
+    expect(text).toContain('pass force=true in the request body');
+    expect(target.querySelector('[data-testid="promote-force"]')).not.toBeNull();
+    expect(target.textContent).not.toContain('API 422');
+  });
+});
+
 describe('defaultTritonName', () => {
   it('is the Triton-safe job id with no version suffix', () => {
     expect(defaultTritonName('2026-09-25T17-01-25_yolo26s')).toBe(

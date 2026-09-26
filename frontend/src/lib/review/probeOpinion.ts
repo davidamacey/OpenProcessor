@@ -13,6 +13,13 @@
  *   as a muted "model unsure: <predicted class>" with no Accept button —
  *   distinct from a plain agreeing prediction. No client-side threshold
  *   anywhere; the frontend only ever branches on the served booleans.
+ * - class-id-display-audit-2026-09-26: `showAccept` used to also require
+ *   `item.probe_pred_class_id !== item.class_id` -- a client-side id
+ *   comparison redundant with (and riskier than) the served
+ *   `probe_disagreement`/`probe_actionable` flags: if `probe_pred_class_id`
+ *   were ever a dense export id rather than a registry id, this comparison
+ *   could show/hide Accept on a false read. Dropped; the served booleans
+ *   alone decide, per the thin-frontend rule.
  */
 import type { Crop } from '$lib/types';
 
@@ -42,7 +49,6 @@ export function probeOpinion(
   const showAccept =
     item.probe_disagreement === true &&
     item.probe_actionable === true &&
-    item.probe_pred_class_id != null &&
-    item.probe_pred_class_id !== item.class_id;
+    item.probe_pred_class_id != null;
   return { kind: 'prediction', showAccept };
 }

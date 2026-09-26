@@ -6,6 +6,10 @@
  * OpenProcessor main 8990ede adds `probe_actionable` — Accept requires
  * `probe_actionable === true`, not just `probe_disagreement === true`. A
  * disagreement that isn't (yet) actionable renders as "unsure", no Accept.
+ *
+ * class-id-display-audit-2026-09-26: `showAccept` used to also require a
+ * client-side `probe_pred_class_id !== class_id` comparison. That's gone —
+ * the served `probe_disagreement`/`probe_actionable` flags decide alone.
  */
 import { describe, expect, it } from 'vitest';
 import { probeOpinion } from './probeOpinion';
@@ -82,6 +86,30 @@ describe('probeOpinion', () => {
         probe_actionable: null,
       }),
     ).toEqual({ kind: 'no_opinion', showAccept: false });
+  });
+
+  it('actionable disagreement offers Accept even when probe_pred_class_id equals class_id (served flags decide, not a client id compare)', () => {
+    expect(
+      probeOpinion({
+        ...base,
+        probe_pred_class_id: base.class_id,
+        probe_in_scope: true,
+        probe_disagreement: true,
+        probe_actionable: true,
+      }),
+    ).toEqual({ kind: 'prediction', showAccept: true });
+  });
+
+  it('never offers Accept when the served probe_pred_class_id is missing, even if actionable', () => {
+    expect(
+      probeOpinion({
+        ...base,
+        probe_pred_class_id: null,
+        probe_in_scope: true,
+        probe_disagreement: true,
+        probe_actionable: true,
+      }),
+    ).toEqual({ kind: 'prediction', showAccept: false });
   });
 
   it('nothing to show without a served prediction', () => {

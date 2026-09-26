@@ -391,11 +391,9 @@
             {#if data.text.source}
               <ProvenanceChip detector={data.text.source} size="sm" />
             {/if}
-            {#if data.text.confidence != null}
-              <span class="font-mono text-[10px] text-zinc-500">
-                {pct(data.text.confidence)}
-              </span>
-            {/if}
+            <span class="font-mono text-[10px] text-zinc-500">
+              {pct(data.text.confidence)}
+            </span>
             {#if data.text.disagreement}
               <span
                 class="whitespace-nowrap rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
@@ -515,10 +513,7 @@
           >
             {line.text || '∅'}
           </span>
-          {#if line.confidence != null}
-            <span class="font-mono text-[10px] text-zinc-500">{pct(line.confidence)}</span
-            >
-          {/if}
+          <span class="font-mono text-[10px] text-zinc-500">{pct(line.confidence)}</span>
         </li>
       {/each}
     </ul>

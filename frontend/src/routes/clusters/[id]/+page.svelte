@@ -70,13 +70,13 @@
     n_pool: number | null;
   } | null>(null);
 
-  // Human-readable cluster name for the header. Class clusters resolve to
-  // the registry class name (cluster_id == class_id), falling back to the
-  // backend's dominant_class_name. Candidate clusters (>= 10000) have no
-  // name yet — label them so the operator knows it's unlabeled by design,
-  // not a bug.
+  // Human-readable cluster name for the header. Prefers the served
+  // `dominant_class_name` directly (class-id-display-audit-2026-09-26) —
+  // falling back to a registry lookup only for a served cluster that
+  // predates that field. Candidate clusters (>= 10000) have no name yet —
+  // label them so the operator knows it's unlabeled by design, not a bug.
   const clusterName = $derived(
-    clsForCluster?.name ?? cluster?.dominant_class_name ?? null,
+    cluster?.dominant_class_name ?? clsForCluster?.name ?? null,
   );
 
   const pageSize = 60;
