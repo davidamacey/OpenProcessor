@@ -107,6 +107,41 @@ describe('regionSlotFromServedProfile', () => {
     expect(s.capabilities.queue?.textFilter).toBeUndefined();
   });
 
+  it('has no text capability when text_reader is the text-free sentinel "none" (OpenProcessor W1)', () => {
+    // No `reads_text` served (pre-W1-shaped call site) — falls back to
+    // the text_reader-based heuristic, which must treat 'none' as
+    // "doesn't read text", not as a truthy non-empty reader id.
+    const s = regionSlotFromServedProfile({ ...WIDGET_TAG_PROFILE, text_reader: 'none' });
+    expect(s.capabilities.text).toBeUndefined();
+    expect(s.capabilities.queue?.textFilter).toBeUndefined();
+  });
+
+  it('gates on the served reads_text flag over text_reader when both are present', () => {
+    // A profile could in principle serve reads_text: false alongside a
+    // non-empty/non-'none' text_reader (e.g. mid-migration data); the
+    // served boolean is authoritative.
+    const off = regionSlotFromServedProfile({
+      ...WIDGET_TAG_PROFILE,
+      text_reader: 'ocr',
+      reads_text: false,
+    });
+    expect(off.capabilities.text).toBeUndefined();
+
+    const on = regionSlotFromServedProfile({
+      ...WIDGET_TAG_PROFILE,
+      text_reader: 'none',
+      reads_text: true,
+    });
+    expect(on.capabilities.text).toBeDefined();
+  });
+
+  it('a legacy backend with no reads_text field still gets text from text_reader', () => {
+    // WIDGET_TAG_PROFILE itself carries no reads_text/text_hint_enabled
+    // — the pre-W1 shape.
+    expect(WIDGET_TAG_PROFILE.reads_text).toBeUndefined();
+    expect(slot.capabilities.text?.valueField).toBe('region_text');
+  });
+
   it('falls back to a generic noun when display_name is empty', () => {
     const s = regionSlotFromServedProfile({ ...WIDGET_TAG_PROFILE, display_name: '  ' });
     expect(s.capabilities.queue?.tabLabel).toBe('Regions');

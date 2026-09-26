@@ -687,8 +687,22 @@ export interface ServedRegionProfile {
   /** The class whose items ARE regions (e.g. the class a region export
    *  writes). May be empty. */
   region_class_name: string;
-  /** How region text is read (`vlm` / `ocr` / `vlm_then_ocr` / `both`). */
+  /** How region text is read (`vlm` / `ocr` / `vlm_then_ocr` / `both`),
+   *  or `'none'` for a text-free profile (OpenProcessor W1,
+   *  2026-09-26) — a profile that detects/segments a region but never
+   *  reads text off it. */
   text_reader: string;
+  /** False for a text-free profile: no region text is read, stored or
+   *  editable — `region_text*` stays null and a `region_meta` PATCH
+   *  carrying `region_text` 422s (OpenProcessor W1). Optional/undefined
+   *  on a pre-W1 backend; callers fall back to `text_reader` being
+   *  non-empty and not `'none'` (`profileReadsText()`,
+   *  `servedRegionSlot.ts`). */
+  reads_text?: boolean;
+  /** Whether the OCR text-hint re-pass (after a segmenter miss) is
+   *  enabled for this profile. Optional/undefined on a pre-W1 backend;
+   *  informational only today — no UI reads it yet (see CLAUDE.md). */
+  text_hint_enabled?: boolean;
 }
 
 // 'outliers' was retired from the UI in the 2026-09 tab consolidation

@@ -27,10 +27,30 @@ export const WIDGET_TAG_PROFILE: ServedRegionProfile = {
   display_name_singular: 'Widget tag',
   region_class_name: WIDGET_TAG_CLASS,
   text_reader: 'ocr',
+  // Deliberately no `reads_text`/`text_hint_enabled` here — this fixture
+  // doubles as the pre-W1 "legacy backend" case (undefined fields), so
+  // `profileReadsText()`'s fallback path stays exercised.
 };
 
 export const widgetTagServedSlot: SlotSpec =
   regionSlotFromServedProfile(WIDGET_TAG_PROFILE);
+
+/** Text-free variant (OpenProcessor W1, 2026-09-26): a profile that
+ *  detects/segments the region but never reads text off it —
+ *  `text_reader: 'none'`, `reads_text: false`. */
+export const WIDGET_TAG_PROFILE_NO_TEXT: ServedRegionProfile = {
+  name: 'widget_tag',
+  display_name: 'Widget tags',
+  display_name_singular: 'Widget tag',
+  region_class_name: WIDGET_TAG_CLASS,
+  text_reader: 'none',
+  reads_text: false,
+  text_hint_enabled: false,
+};
+
+export const widgetTagServedSlotNoText: SlotSpec = regionSlotFromServedProfile(
+  WIDGET_TAG_PROFILE_NO_TEXT,
+);
 
 const served = widgetTagServedSlot;
 const wire = served.capabilities;

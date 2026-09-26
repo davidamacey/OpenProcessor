@@ -9,7 +9,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import SlotCard from './SlotCard.svelte';
 import type { RegionBrowseItem } from '$lib/api';
-import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
+import { regionSlotFromServedProfile } from '$lib/annotations/servedRegionSlot';
+import { widgetTagSlot, WIDGET_TAG_PROFILE_NO_TEXT } from '$lib/test/fixtures/regionSlot';
 
 function fakeRegionItem(overrides: Partial<RegionBrowseItem> = {}): RegionBrowseItem {
   return {
@@ -46,10 +47,10 @@ function fakeRegionItem(overrides: Partial<RegionBrowseItem> = {}): RegionBrowse
 let target: HTMLDivElement;
 let instance: unknown;
 
-function renderCard(crop: RegionBrowseItem) {
+function renderCard(crop: RegionBrowseItem, slot = widgetTagSlot) {
   target = document.createElement('div');
   document.body.appendChild(target);
-  instance = mount(SlotCard, { target, props: { crop, slot: widgetTagSlot } });
+  instance = mount(SlotCard, { target, props: { crop, slot } });
   flushSync();
   return target;
 }
@@ -78,5 +79,19 @@ describe('SlotCard — reader disagreement flag', () => {
   it('does not render the chip when region_text_disagreement is absent', () => {
     const el = renderCard(fakeRegionItem());
     expect(el.textContent).not.toContain('readers disagree');
+  });
+});
+
+describe('SlotCard — text-free region profile (OpenProcessor W1)', () => {
+  it('renders no text value row at all for a slot with no text capability', () => {
+    const noTextSlot = regionSlotFromServedProfile(WIDGET_TAG_PROFILE_NO_TEXT);
+    expect(noTextSlot.capabilities.text).toBeUndefined();
+    const el = renderCard(fakeRegionItem({ region_text: null } as never), noTextSlot);
+    expect(el.querySelector('[data-testid="slot-text-value"]')).toBeNull();
+  });
+
+  it('still renders the text value row (even with no reading yet) for a text-reading slot', () => {
+    const el = renderCard(fakeRegionItem({ region_text: null } as never));
+    expect(el.querySelector('[data-testid="slot-text-value"]')).not.toBeNull();
   });
 });

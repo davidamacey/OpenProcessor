@@ -2598,68 +2598,75 @@
                   {/each}
                 </span>
               {/if}
-              <span class="text-zinc-500">{slotLabels.textLabel}</span>
-              <span class="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  bind:value={editedSlotText}
-                  onblur={() => void commitSlotText()}
-                  onkeydown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      (e.currentTarget as HTMLInputElement).blur();
-                    }
-                  }}
-                  placeholder={slotLabels.textPlaceholder}
-                  spellcheck="false"
-                  autocapitalize={activeSlot.capabilities.text?.transform === 'uppercase'
-                    ? 'characters'
-                    : 'off'}
-                  class="w-28 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 placeholder:italic placeholder:text-zinc-600 focus:border-blue-500 focus:outline-none {activeSlot
-                    .capabilities.text?.monospace
-                    ? 'font-mono'
-                    : ''}"
-                />
-                {#if slotData?.text?.source}
-                  <ProvenanceChip detector={slotData.text.source} size="sm" />
-                {/if}
-                {#if slotData?.text?.confidence != null}
-                  <span class="text-[10px] text-zinc-500">
-                    {(slotData.text.confidence * 100).toFixed(0)}%
-                  </span>
-                {/if}
-                {#if slotData?.text?.disagreement}
-                  <span
-                    class="rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
-                    title="vlm: {slotData.text.vlmValue ?? '∅'} · ocr: {slotData.text
-                      .ocrValue ?? '∅'}"
-                  >
-                    readers disagree
-                  </span>
-                {/if}
-                <!-- dq-region (2026-09-24): why the chosen reading won /
+              <!-- OpenProcessor W1 (text-free regions): a slot with no
+                   text capability renders no text row/edit at all — not
+                   even a disabled input — since the backend 422s
+                   `region_text` on such a profile. -->
+              {#if activeSlot.capabilities.text}
+                <span class="text-zinc-500">{slotLabels.textLabel}</span>
+                <span class="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    bind:value={editedSlotText}
+                    onblur={() => void commitSlotText()}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        (e.currentTarget as HTMLInputElement).blur();
+                      }
+                    }}
+                    placeholder={slotLabels.textPlaceholder}
+                    spellcheck="false"
+                    autocapitalize={activeSlot.capabilities.text?.transform ===
+                    'uppercase'
+                      ? 'characters'
+                      : 'off'}
+                    class="w-28 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 placeholder:italic placeholder:text-zinc-600 focus:border-blue-500 focus:outline-none {activeSlot
+                      .capabilities.text?.monospace
+                      ? 'font-mono'
+                      : ''}"
+                  />
+                  {#if slotData?.text?.source}
+                    <ProvenanceChip detector={slotData.text.source} size="sm" />
+                  {/if}
+                  {#if slotData?.text?.confidence != null}
+                    <span class="text-[10px] text-zinc-500">
+                      {(slotData.text.confidence * 100).toFixed(0)}%
+                    </span>
+                  {/if}
+                  {#if slotData?.text?.disagreement}
+                    <span
+                      class="rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
+                      title="vlm: {slotData.text.vlmValue ?? '∅'} · ocr: {slotData.text
+                        .ocrValue ?? '∅'}"
+                    >
+                      readers disagree
+                    </span>
+                  {/if}
+                  <!-- dq-region (2026-09-24): why the chosen reading won /
                      why the VLM's own reading was rejected as not text —
                      labels are a titlecase-id placeholder until the
                      backend serves them on GET {API_PREFIX}/regions/vocabulary. -->
-                {#if slotData?.text?.choice && slotData.text.choice !== 'human'}
-                  <span
-                    class="rounded border border-zinc-700 bg-zinc-900 px-1 text-[10px] text-zinc-400"
-                    title="How this reading was chosen"
-                  >
-                    {regionVocabularyStore.textChoiceLabel(slotData.text.choice)}
-                  </span>
-                {/if}
-                {#if slotData?.text?.invalidReason}
-                  <span
-                    class="rounded border border-red-500/40 bg-red-500/15 px-1 text-[10px] text-red-200"
-                    title="Why the VLM's own reading wasn't used as text"
-                  >
-                    vlm invalid: {regionVocabularyStore.invalidReasonLabel(
-                      slotData.text.invalidReason,
-                    )}
-                  </span>
-                {/if}
-              </span>
+                  {#if slotData?.text?.choice && slotData.text.choice !== 'human'}
+                    <span
+                      class="rounded border border-zinc-700 bg-zinc-900 px-1 text-[10px] text-zinc-400"
+                      title="How this reading was chosen"
+                    >
+                      {regionVocabularyStore.textChoiceLabel(slotData.text.choice)}
+                    </span>
+                  {/if}
+                  {#if slotData?.text?.invalidReason}
+                    <span
+                      class="rounded border border-red-500/40 bg-red-500/15 px-1 text-[10px] text-red-200"
+                      title="Why the VLM's own reading wasn't used as text"
+                    >
+                      vlm invalid: {regionVocabularyStore.invalidReasonLabel(
+                        slotData.text.invalidReason,
+                      )}
+                    </span>
+                  {/if}
+                </span>
+              {/if}
               {#if statusWantsRejectionReason(activeSlot, editedSlotStatus, regionStatusesStore.list)}
                 {@const servedReasonKind = regionVocabularyStore.rejectionReasonKind(
                   slotData?.lifecycle?.rejectionReason,
