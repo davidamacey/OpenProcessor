@@ -1,4 +1,7 @@
-FROM node:26-alpine AS builder
+# The bundle is architecture-independent static files, so build it once on
+# the native build platform; only the nginx stage below is per-arch. This
+# keeps a multi-arch (amd64 + arm64) build from running npm under emulation.
+FROM --platform=$BUILDPLATFORM node:26-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
