@@ -1,8 +1,17 @@
-# Cropwright frontend. Joins the OpenProcessor API's docker network so
-# nginx can proxy ${PUBLIC_API_PREFIX}/* to it by container name — no
-# CORS, and the browser only ever talks to this origin.
+# Cropwright frontend — PULL-ONLY. Joins the OpenProcessor API's docker
+# network so nginx can proxy ${PUBLIC_API_PREFIX}/* to it by container
+# name — no CORS, and the browser only ever talks to this origin.
 #
-#   docker compose up -d --build
+# This file alone (plus a .env from .env.example) is enough to run —
+# nothing in it depends on a repo checkout:
+#
+#   docker compose pull && docker compose up -d
+#
+# Multi-arch image (linux/amd64 + linux/arm64), davidamacey/cropwright.
+# Pin a version with CROPWRIGHT_TAG=X.Y.Z; defaults to :latest.
+#
+# Building from source instead of pulling is a DEVELOPMENT path — see
+# README's "Development" section for the docker-compose.build.yml overlay.
 #
 # PUBLIC_API_PREFIX must equal the API's OP_API_PREFIX: the API builds
 # some URLs itself (region thumbnails) from its own prefix.
@@ -13,14 +22,10 @@
 #
 #   CROPWRIGHT_PORT=5199 CROPWRIGHT_CONTAINER_NAME=cw-second \
 #     OP_DOCKER_NETWORK=some_other_openprocessor_net \
-#     docker compose -p cw-second up -d --build
+#     docker compose -p cw-second up -d
 services:
   cropwright:
-    # `image:` lets a pull-based deploy grab the published tag without a
-    # local build; `build:` is kept so `docker compose up --build` still
-    # works from source.
     image: davidamacey/cropwright:${CROPWRIGHT_TAG:-latest}
-    build: .
     container_name: ${CROPWRIGHT_CONTAINER_NAME:-cropwright}
     restart: unless-stopped
     security_opt:
