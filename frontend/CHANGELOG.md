@@ -8,6 +8,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **OpenProcessor 3cd4ca87 adoption** (contract sync + 503/Retry-After):
+  - `apiFetch` (`src/lib/api.ts`) now honours a 503's `Retry-After`
+    (seconds) header in place of that attempt's fixed backoff delay,
+    clamped to `MAX_RETRY_AFTER_MS` (5s) so a served value can't stall
+    the UI far past the existing 3-retry budget or add an extra attempt.
+    Matches the backend's new Triton-unavailable handler, which returns
+    503 + `Retry-After: 5` (and a plain-string `detail`) instead of a
+    bare 500 or a silent empty 200 on a Triton outage. The ingest run
+    controller's existing 503 auto-pause and the health/dataset-stats
+    polling's error surfacing both already render `ApiError`'s
+    `message`/`detail`, so they show the served detail unchanged — no
+    call-site changes needed there.
+  - `types_bakeoff.ts` gains `EvalDatasetClass.registry_class_name`,
+    `BakeoffProfile.context_class_names` and
+    `ClassMapping.model_to_eval_names` (each paired-by-name alongside
+    its existing id field, per the class-id-display-audit's
+    "never a client id→name lookup" finding). None of the three is
+    rendered anywhere in `/bakeoff` today — the eval-dataset/profile/
+    class-mapping UI already shows only served names
+    (`class_filter`, `NotCoveredClass`/`UnmappedModelClass`) — so this
+    is types-only, pinned to the vendored OpenAPI by
+    `bakeoffContract.test.ts`.
+  - OCR failure reasons (`TextRegion.rec_error`/`OcrResult.rec_errors`)
+    landed only on the raw `/ocr`/`/analyze` inference routes at this
+    commit, not on the curation wire (`item_text_lines[].confidence`,
+    `region_text_confidence` still serve a bare `null` with no reason —
+    confirmed against the backend source, whose own merge commit says
+    "no OCR sentinel on the wire"). No frontend change; a null
+    confidence still renders "—" as before.
+
 - **Action-id keymap store** (internal/architecture, frontend only, step
   K1 of `docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md`).
   No behavior change: every shortcut, hint, toast and overlay row uses
