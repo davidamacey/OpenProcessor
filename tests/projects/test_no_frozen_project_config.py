@@ -27,15 +27,6 @@ _INDEX_CONST_NAMES = {
     'UMAP_VIZ_STATE_INDEX',
 }
 
-# Standalone raw-HTTP workers that name the items index from their own
-# env override; making them multi-project is P2 (projects_plan.md §5.2).
-_P2_RAW_HTTP_WORKERS = frozenset(
-    {
-        'scripts/curation/vlm_worker.py',
-        'scripts/curation/cluster_refresh_daemon.py',
-    }
-)
-
 # The only places allowed to construct an OpenSearch client: the shared
 # API client wrapper (guarded by make_curation_opensearch) and the guard
 # module's own factories.
@@ -139,8 +130,6 @@ def test_no_module_level_index_name_call() -> None:
 def test_no_frozen_index_name_constants() -> None:
     offenders: list[str] = []
     for path in _iter_py_files('src', 'scripts'):
-        if _rel(path) in _P2_RAW_HTTP_WORKERS:
-            continue
         for node in ast.walk(_parse(path)):
             if isinstance(node, ast.Assign):
                 offenders.extend(
