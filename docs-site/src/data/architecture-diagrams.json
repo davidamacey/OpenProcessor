@@ -1,0 +1,62 @@
+[
+  {
+    "id": "system",
+    "label": "System",
+    "diagrams": [
+      {
+        "id": "system-overview",
+        "title": "System Overview",
+        "description": "Every service in docker-compose.yml and how they talk: clients reach yolo-api, which calls Triton over gRPC and OpenSearch; the opt-in profiles add the curation workers, segmenter, VLM, trainer, evaluator, MLflow and monitoring. Start here.",
+        "height": 1000
+      },
+      {
+        "id": "backend-modules",
+        "title": "Backend Modules",
+        "description": "How src/ is organized: src/main.py mounts the core and curation routers, which are thin adapters over FastAPI-free services, configured by the src/config dataclasses. The curation workers import the same detection and labeling services.",
+        "height": 1000
+      },
+      {
+        "id": "data-model",
+        "title": "Data Model",
+        "description": "The OpenSearch indexes: the curation pool (images, items, classes, confirmed labels, settings and projection state, plus the JSON class registry) and the separate visual-search indexes the core /ingest route writes.",
+        "height": 1150
+      }
+    ]
+  },
+  {
+    "id": "workflows",
+    "label": "Workflows",
+    "diagrams": [
+      {
+        "id": "core-inference",
+        "title": "Core Inference",
+        "description": "What /detect, /faces, /embed and /ocr do: CPU preprocessing in the API, then TensorRT models in Triton. OCR is a single call to the ocr_pipeline Python BLS model, which runs detection and recognition inside Triton.",
+        "height": 1000
+      },
+      {
+        "id": "curation-pipeline",
+        "title": "Curation Pipeline",
+        "description": "The active-learning loop: ingest with your item detector, PE-Core embeddings, clustering, VLM suggestions, human review, export, training, bake-off and promote, with probe predictions feeding the next review cycle.",
+        "height": 1000
+      },
+      {
+        "id": "region-cascade",
+        "title": "Region Cascade",
+        "description": "The detection worker's cascade for the active region profile: region detector, then the segmenter leg, then an OCR text-hinted re-segment; every candidate is VLM-verified and its text read. Shows the code as it is today; multi-region support and editable prompts/profiles are coming soon, and this diagram will be updated when they land.",
+        "height": 1000
+      }
+    ]
+  },
+  {
+    "id": "sequences",
+    "label": "Sequences",
+    "diagrams": [
+      {
+        "id": "training-promote",
+        "title": "Training and Promote",
+        "description": "The API and the trainer exchange only files on the shared /jobs volume. The GPU arbiter claims GPUs for the run and releases them afterwards; promote checks the eval gate, writes the model repository and loads the model into Triton.",
+        "height": 1300
+      }
+    ]
+  }
+]

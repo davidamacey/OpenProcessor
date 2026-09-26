@@ -1,0 +1,262 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Region Detection Cascade",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "legs",
+        "label": "Detection legs",
+        "focus": [
+          "pending",
+          "detector",
+          "segmenter",
+          "texthint"
+        ],
+        "note": "Each leg runs only when the one before it missed or its candidate was rejected."
+      },
+      {
+        "id": "verify",
+        "label": "Verify and read",
+        "focus": [
+          "existing",
+          "verify",
+          "readtext"
+        ],
+        "note": "Every candidate is verified by the VLM (or accepted as-is without one), then its text is read."
+      },
+      {
+        "id": "no-region",
+        "label": "No region",
+        "focus": [
+          "texthint",
+          "no_box",
+          "verify",
+          "rejected"
+        ],
+        "note": "Misses and rejections become terminal statuses a human can still review and requeue."
+      }
+    ],
+    "legend": {
+      "entries": {
+        "database": {
+          "label": "Queue"
+        },
+        "cloud": {
+          "label": "Model"
+        },
+        "backend": {
+          "label": "Worker"
+        },
+        "external": {
+          "label": "VLM"
+        },
+        "security": {
+          "label": "Terminal"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "legs",
+      "label": "Detection legs"
+    },
+    {
+      "id": "verify",
+      "label": "Verify + read"
+    },
+    {
+      "id": "outcome",
+      "label": "No region",
+      "variant": "exception"
+    }
+  ],
+  "mainPath": [
+    "pending",
+    "detector",
+    "verify",
+    "readtext"
+  ],
+  "nodes": [
+    {
+      "id": "pending",
+      "lane": "legs",
+      "col": 0,
+      "type": "database",
+      "label": "Item queued",
+      "sublabel": "pending_detection",
+      "width": 140
+    },
+    {
+      "id": "detector",
+      "lane": "legs",
+      "col": 1,
+      "type": "cloud",
+      "label": "Region detector",
+      "sublabel": "Triton, profile model",
+      "width": 140
+    },
+    {
+      "id": "segmenter",
+      "lane": "legs",
+      "col": 2,
+      "type": "backend",
+      "label": "Segmenter leg",
+      "sublabel": "SAM 3 text prompt",
+      "width": 140
+    },
+    {
+      "id": "texthint",
+      "lane": "legs",
+      "col": 3,
+      "type": "backend",
+      "label": "OCR text hint",
+      "sublabel": "re-segment sub-crop",
+      "width": 140
+    },
+    {
+      "id": "existing",
+      "lane": "verify",
+      "col": 0,
+      "type": "database",
+      "label": "Candidate exists",
+      "sublabel": "pending_verification",
+      "width": 140
+    },
+    {
+      "id": "verify",
+      "lane": "verify",
+      "col": 4,
+      "type": "external",
+      "label": "VLM verify",
+      "sublabel": "or accept without VLM",
+      "width": 140
+    },
+    {
+      "id": "readtext",
+      "lane": "verify",
+      "col": 5,
+      "type": "backend",
+      "label": "Read text",
+      "sublabel": "VLM and/or OCR",
+      "tag": "detected",
+      "width": 140
+    },
+    {
+      "id": "no_box",
+      "lane": "outcome",
+      "col": 3,
+      "type": "security",
+      "label": "No region",
+      "sublabel": "no_region_box",
+      "width": 140
+    },
+    {
+      "id": "rejected",
+      "lane": "outcome",
+      "col": 5,
+      "type": "security",
+      "label": "Rejected",
+      "sublabel": "verify_rejected",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "queue-detector",
+      "from": "pending",
+      "to": "detector",
+      "variant": "emphasis"
+    },
+    {
+      "id": "detector-miss",
+      "from": "detector",
+      "to": "segmenter",
+      "label": "miss"
+    },
+    {
+      "id": "segmenter-miss",
+      "from": "segmenter",
+      "to": "texthint",
+      "label": "miss"
+    },
+    {
+      "id": "texthint-miss",
+      "from": "texthint",
+      "to": "no_box",
+      "label": "miss",
+      "role": "error",
+      "variant": "security"
+    },
+    {
+      "id": "detector-hit",
+      "from": "detector",
+      "to": "verify",
+      "label": "hit",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "segmenter-hit",
+      "from": "segmenter",
+      "to": "verify",
+      "label": "hit"
+    },
+    {
+      "id": "texthint-hit",
+      "from": "texthint",
+      "to": "verify",
+      "label": "hit"
+    },
+    {
+      "id": "existing-verify",
+      "from": "existing",
+      "to": "verify"
+    },
+    {
+      "id": "verify-read",
+      "from": "verify",
+      "to": "readtext",
+      "label": "confirmed",
+      "variant": "emphasis"
+    },
+    {
+      "id": "verify-reject",
+      "from": "verify",
+      "to": "rejected",
+      "label": "rejected",
+      "role": "error",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "One profile per process",
+      "items": [
+        "The active DetectionProfile names the detector, segmenter prompt and OCR models",
+        "With no profile configured the worker idles"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Every leg can verify",
+      "items": [
+        "A segmenter or text-hint candidate goes through the same VLM verify as a detector hit",
+        "Each step is recorded in region_detector_chain"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Failures are not verdicts",
+      "items": [
+        "A down dependency leaves the item pending, not terminal",
+        "detection_failed marks an unreadable image or a sanity-gate reject",
+        "A human can mark a detected box false_positive"
+      ]
+    }
+  ]
+}

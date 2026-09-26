@@ -89,11 +89,12 @@ export const siteConfig = {
 
   // Page copy for the generic /architecture and /roadmap pages.
   architecturePage: {
-    description: 'OpenProcessor architecture diagrams (being migrated; content coming soon).',
+    description:
+      'OpenProcessor architecture diagrams: services, backend modules, data model, inference, ' +
+      'curation, region cascade and training/promote flows.',
     intro:
-      'Architecture diagrams are being migrated to the Archify format; content coming soon. ' +
-      'Until then, see the Getting Started and Operations sections of the docs for how the ' +
-      'services fit together.',
+      'How OpenProcessor fits together, drawn from the current code. Each diagram is ' +
+      'interactive: switch views with the tabs above the canvas, and zoom or open it full screen.',
   },
   roadmapPage: {
     description: "What's shipped in OpenProcessor and what's planned next.",
