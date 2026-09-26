@@ -1840,7 +1840,14 @@ container start by `docker-entrypoint.sh`, so one image fits any deployment:
   set only when the browser must call an API on a different origin.
 
 All API calls flow through `src/lib/api.ts` with retry + AbortController
-for in-flight cancellation.
+for in-flight cancellation. `apiFetch` retries a 5xx up to 3 times
+(250/500/1000ms backoff); since OpenProcessor 3cd4ca87, a 503 carrying a
+`Retry-After` header (seconds — the shape the backend's Triton-outage
+handler sends, `Retry-After: 5`, in place of the old bare 500/silent-200
+on an inference-backend outage) replaces that attempt's fixed delay
+instead, clamped to `MAX_RETRY_AFTER_MS` (5s) so it can't stall the UI
+past the existing retry budget or add an extra attempt. Every caller
+still just sees the eventual `ApiError` with the served `detail` string.
 
 ### Groundwork for multi-project support (2026-09-26)
 

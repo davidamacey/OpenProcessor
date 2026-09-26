@@ -132,8 +132,7 @@
     <textarea
       class="input block h-24 w-full font-mono text-xs"
       bind:value={pathsText}
-      disabled={submitting}
-    ></textarea>
+      disabled={submitting}></textarea>
   </label>
   <label class="block text-xs text-zinc-400">
     Companion YOLO .txt label paths (optional, one per line — aligned by line number with
@@ -141,8 +140,7 @@
     <textarea
       class="input block h-16 w-full font-mono text-xs"
       bind:value={labelTxtPathsText}
-      disabled={submitting}
-    ></textarea>
+      disabled={submitting}></textarea>
   </label>
 
   {#if overLimit}

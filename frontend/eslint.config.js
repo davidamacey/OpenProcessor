@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import ts from 'typescript-eslint';
+import svelteConfig from './svelte.config.js';
 
 /** Svelte 5 rune globals — visible in .svelte.ts modules too. */
 const runes = {
@@ -43,7 +44,7 @@ export default ts.config(
   },
   js.configs.recommended,
   ...ts.configs.recommended,
-  ...svelte.configs['flat/recommended'],
+  ...svelte.configs.recommended,
   {
     languageOptions: {
       globals: { ...globals.browser, ...globals.node, ...runes },
@@ -56,46 +57,26 @@ export default ts.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },
       ],
-      // `flat/recommended` (eslint-plugin-svelte) started enabling these
-      // two as errors ahead of this codebase migrating to match — found
-      // 2026-09-26 while landing K2 (configurable keyboard shortcuts):
-      // ~95 pre-existing violations across files this change never
-      // touches (`clusters/+page.svelte`, `review/+page.svelte`,
-      // `train/+page.svelte`, `slotGalleryController.svelte.ts`, …),
-      // which made the `eslint` pre-commit hook fail on ANY commit
-      // touching any of those files regardless of what changed. Downgraded
-      // to `warn` here (not disabled) so `npm run lint`/the hook stay
-      // useful for new code without blocking on an unrelated backlog;
-      // migrating every existing `<a href>`/`goto()`/`replaceState()` to
-      // `resolve()` and every mutable `Set`/`Map` to `SvelteSet`/
-      // `SvelteMap` is real work for its own pass, not folded into this
-      // one.
+      // New in eslint-plugin-svelte 3's recommended config (PR #15 major
+      // bump). Both are real, pre-existing debt across ~20 files (raw
+      // <a href>/goto()/replaceState() calls that predate SvelteKit's
+      // resolve() helper, and a handful of native Set/Map instances in
+      // reactive scope that should be SvelteSet/SvelteMap) — not something
+      // to silently fix as a drive-by inside a dependency bump. Downgraded
+      // to warn for now, mirroring transcribe-app/frontend's
+      // eslint.config.js, which hit the exact same two rules on the same
+      // bump; ratchet back to 'error' as each call site is migrated.
       'svelte/no-navigation-without-resolve': 'warn',
       'svelte/prefer-svelte-reactivity': 'warn',
     },
   },
   {
-    files: ['**/*.svelte'],
-    languageOptions: { parserOptions: { parser: ts.parser } },
-  },
-  // eslint-plugin-svelte's own `flat/recommended` matches `**/*.svelte.ts`/
-  // `**/*.svelte.js` (Svelte 5's ".svelte.ts" module convention, used
-  // throughout this codebase's stores/controllers) and assigns
-  // `svelte-eslint-parser` as the top-level parser for them too, WITHOUT
-  // pointing its nested `parserOptions.parser` at the TS parser the way
-  // it does for real `.svelte` files above — every such file then fails
-  // to parse any TS-only syntax (`interface`, `type` imports, object
-  // type literals) with a bare "Unexpected token" syntax error. Found
-  // 2026-09-26 while adding `src/lib/stores/keymap.svelte.ts`: reproduced
-  // on plain `master` too (`toast.svelte.ts`, `undo.svelte.ts`,
-  // `strategyBar.svelte.ts`, …) — pre-existing, not introduced by any one
-  // change, and non-deterministic under `eslint .` depending on which
-  // config object's `languageOptions.parser` flat-config happens to
-  // resolve last. Same override as the `.svelte` block above, just
-  // targeted at the `.svelte.ts`/`.svelte.js` glob eslint-plugin-svelte
-  // itself declares.
-  {
-    files: ['**/*.svelte.ts', '**/*.svelte.js'],
-    languageOptions: { parserOptions: { parser: ts.parser } },
+    // eslint-plugin-svelte 3 + typescript-eslint 8's parser needs the
+    // project's own svelte.config.js (for preprocessors) to parse both
+    // .svelte files and .svelte.ts/.svelte.js rune modules — without it,
+    // typescript-eslint's parser chokes on Svelte 5 rune syntax in a
+    // `.svelte.ts` file ("Parsing error: Unexpected token {").
+    files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
+    languageOptions: { parserOptions: { parser: ts.parser, svelteConfig } },
   },
 );

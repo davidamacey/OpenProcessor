@@ -5,6 +5,10 @@
  * - Single base URL, defaulting to `''` (empty → relative paths, proxied
  *   by nginx in Docker production).
  * - `apiFetch` retries on 5xx with exponential backoff (3 tries, 250 / 500 / 1000ms).
+ * - A 503's `Retry-After` header (seconds) replaces that attempt's fixed
+ *   delay, clamped to `MAX_RETRY_AFTER_MS` — never an extra attempt or an
+ *   unbounded wait (OpenProcessor 3cd4ca87's Triton-unavailable 503s send
+ *   `Retry-After: 5`).
  * - Caller-supplied AbortSignal is honoured; cancellation never retries.
  * - On 4xx the original ApiError is thrown immediately (no retry).
  *
@@ -325,6 +329,30 @@ export class RegionProfileUnavailableError extends ApiError {
 
 const RETRY_DELAYS_MS = [250, 500, 1000];
 
+/**
+ * Cap on how long a single 503 `Retry-After` honour can push a retry's
+ * wait out to — the backend's Triton-unavailable handler sends `5`
+ * (`TRITON_UNAVAILABLE_RETRY_AFTER_SECONDS`, OpenProcessor 3cd4ca87), but
+ * this bounds any served value so a misbehaving/huge header can't stall
+ * the UI far past the existing retry budget. It replaces one attempt's
+ * fixed backoff delay — it never adds an attempt.
+ */
+const MAX_RETRY_AFTER_MS = 5000;
+
+/**
+ * `Retry-After` on a 503, in ms — seconds only (the only form any
+ * OpenProcessor 503 sends today), clamped to a sane non-negative range.
+ * Null when absent/unparseable, so the caller falls back to the normal
+ * fixed backoff delay for that attempt.
+ */
+function parseRetryAfterMs(res: Response): number | null {
+  const header = res.headers.get('Retry-After');
+  if (!header) return null;
+  const secs = Number(header);
+  if (!Number.isFinite(secs) || secs < 0) return null;
+  return secs * 1000;
+}
+
 async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -374,6 +402,7 @@ export async function apiFetch<T>(
   let lastError: unknown;
   // 1 initial + 3 retries on 5xx => 4 attempts max.
   for (; attempt < RETRY_DELAYS_MS.length + 1; attempt++) {
+    let retryAfterMs: number | null = null;
     try {
       const res = await fetch(url, {
         ...init,
@@ -413,6 +442,7 @@ export async function apiFetch<T>(
       const err = new ApiError(res.status, url, body);
       // Don't retry on 4xx — they won't get better.
       if (res.status < 500) throw err;
+      if (res.status === 503) retryAfterMs = parseRetryAfterMs(res);
       lastError = err;
     } catch (e) {
       if (e instanceof ApiError && e.status < 500) throw e;
@@ -420,8 +450,15 @@ export async function apiFetch<T>(
       lastError = e;
     }
     if (attempt < RETRY_DELAYS_MS.length) {
+      // A served `Retry-After` (503 only) replaces this attempt's fixed
+      // backoff delay, clamped to MAX_RETRY_AFTER_MS — it never adds an
+      // attempt or extends the total retry budget.
+      const delay =
+        retryAfterMs != null
+          ? Math.min(retryAfterMs, MAX_RETRY_AFTER_MS)
+          : RETRY_DELAYS_MS[attempt]!;
       // An abort during the backoff propagates — the caller cancelled.
-      await sleep(RETRY_DELAYS_MS[attempt]!, signal);
+      await sleep(delay, signal);
     }
   }
   throw lastError ?? new Error(`apiFetch failed: ${url}`);
