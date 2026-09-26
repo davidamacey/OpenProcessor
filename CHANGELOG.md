@@ -7,7 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Text-free region mode.** A region profile with `text_reader: "none"`
+  stores region boxes and no region text: the region OCR reader never
+  runs, a VLM reading is dropped, and `PATCH /crops/{id}/region_meta`
+  answers 422 `{"error": "region_text_disabled"}` for a `region_text`
+  edit. `GET /regions/vocabulary` then serves `text_rules: null` and
+  `text_choices: []`, and the region-profile summary (also on `/health`)
+  gains `reads_text` and `text_hint_enabled`. The `regions` review tab
+  drops its `text` filter for such a profile, and the text-repair tools
+  (`rederive_region_text.py`) exit cleanly with nothing to do.
+- **Optional OCR text hint.** New profile fields `text_hint_enabled`
+  (default `true`) and `text_hint_require_letters_and_digits` (default
+  `false`). The text-hint re-pass after a segmenter miss runs only when it
+  is enabled, an `ocr_pipeline_model` is set and the segmenter leg is on;
+  otherwise the chain ends at `<segmenter>:miss`. The `OCR text hint`
+  actor and the `segmenter_text_hint` region source are only listed in
+  the vocabulary when the hint can run.
+- **`parent_classes` region-profile field.** Restricts the region stage
+  to items whose `class_name` or `proposal_name` matches (case-insensitive;
+  empty = every item). Ingest seeds only matching items and the detection
+  worker skips non-matching ones already pending.
+- **Built-in text-free prompt pack `generic_region_v1`**, plus a public
+  car -> wheel example: `examples/region_profiles/vehicle_wheel.json`
+  (segmenter-only, text-free) and `examples/prompt_packs/vehicle_wheel.json`.
+
+### Changed
+- **Letters-and-digits text-hint rule is opt-in.** A text-hint candidate no
+  longer has to mix letters and digits unless the profile sets
+  `text_hint_require_letters_and_digits: true`
+  (`examples/region_profiles/license_plate.json` does).
+- **`examples/region_profiles/license_plate.json` is segmenter-only**
+  (`detector_model: ""`) and sets its text-hint flags explicitly.
+- Segmenter candidates carry the profile's `segmenter_name` as their
+  source instead of a hardcoded `sam3`. New geometry rejects are recorded
+  as `parent_bbox_unpack_failed` / `parent_bbox_degenerate` (were
+  `vehicle_bbox_*`). `VlmLabeler.label_vehicle_batch` is renamed
+  `label_item_batch`.
+
 ### Fixed
+- **An empty `detector_model` no longer calls Triton.** It used to run
+  inference against model `''` on every item, log `region_infer_failed`
+  and append a `':miss'` trace tag with an empty actor; the detector leg
+  is now skipped entirely.
 - **Segmenter never became reachable on a stock install (F-75).** The
   `segmenter` service's `env_file: .env` loaded the host-port variable
   `SEGMENTER_PORT` (env.template default `4611`) straight into the

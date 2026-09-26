@@ -44,9 +44,15 @@ def reference_region_profile(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     cascade refuses to run. Tests that exercise the cascade opt in to the
     example profile the same way a deployment does: ``OP_REGION_PROFILE_PATH``
     pointed at a profile file. No profile ships built in.
+
+    The example runs segmenter-only (empty ``detector_model``); the fixture
+    names a detector the way a deployment that exported its own would, so
+    the cascade tests exercise every leg.
     """
     import sys
     from pathlib import Path
+
+    from _region_profile_fixture import REFERENCE_REGION_DETECTOR_MODEL
 
     from src.services.detection import profile_registry
 
@@ -54,6 +60,7 @@ def reference_region_profile(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         Path(__file__).resolve().parents[1] / 'examples' / 'region_profiles' / 'license_plate.json'
     )
     monkeypatch.setenv('OP_REGION_PROFILE_PATH', str(example_path))
+    monkeypatch.setenv('OP_REGION_DETECTION_DETECTOR_MODEL', REFERENCE_REGION_DETECTOR_MODEL)
     profile_registry._reset_registry_for_tests()
     # The cascade's no-verdict count is process-wide; a test must not
     # inherit another test's count for the same crop id.

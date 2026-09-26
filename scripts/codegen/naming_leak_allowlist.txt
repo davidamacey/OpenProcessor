@@ -118,6 +118,7 @@ src/services/detection/region_lean.py # docstring example value
 src/services/labeling/vlm_labeler.py # docstring example value
 src/services/training/preflight_scan.py # docstring example value
 tests/conftest.py # reference_region_profile fixture: loads the public example profile
+tests/curation/test_example_profiles.py # validates the shipped example region profiles (incl. the public license_plate one) load and keep their explicit flags
 tests/_region_profile_fixture.py # defines EXAMPLE_LICENSE_PLATE_PROFILE(_PATH) -- the public example profile fixture itself
 tests/curation/test_auto_label_selection.py # exercises the example profile via the reference_region_profile fixture
 tests/curation/test_cascade_detect.py # exercises the real example profile incl. its real secondary_shape_groups (also a scan-C exemption, see below)

@@ -21,6 +21,7 @@ import pytest
 from _region_profile_fixture import (
     EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE,
     EXAMPLE_LICENSE_PLATE_PROFILE_PATH,
+    REFERENCE_REGION_DETECTOR_MODEL,
 )
 
 import scripts.curation.region_worker_main as worker
@@ -180,20 +181,21 @@ def test_models_roster_skips_region_models_when_unconfigured(
     from src.routers.curation.models import _core_models, _region_protected_models
 
     names = {name for name, *_ in _core_models()}
-    assert REFERENCE_LICENSE_PLATE_PROFILE.detector_model not in names
-    assert REFERENCE_LICENSE_PLATE_PROFILE.detector_model not in _region_protected_models()
+    assert REFERENCE_REGION_DETECTOR_MODEL not in names
+    assert REFERENCE_REGION_DETECTOR_MODEL not in _region_protected_models()
 
     region_env.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
+    region_env.setenv(f'{_ENV_PREFIX}DETECTOR_MODEL', REFERENCE_REGION_DETECTOR_MODEL)
     profile_registry._reset_registry_for_tests()
     names = {name for name, *_ in _core_models()}
-    assert REFERENCE_LICENSE_PLATE_PROFILE.detector_model in names
+    assert REFERENCE_REGION_DETECTOR_MODEL in names
 
 
 def test_training_candidates_query_uses_neutral_profile(region_env: pytest.MonkeyPatch) -> None:
     from src.routers.curation.regions import _training_candidate_query
 
     query, _reason = _training_candidate_query('low_conf_correct')
-    assert REFERENCE_LICENSE_PLATE_PROFILE.detector_model not in str(query)
+    assert REFERENCE_REGION_DETECTOR_MODEL not in str(query)
 
 
 def _patch_worker_io(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
