@@ -372,6 +372,13 @@ served `probe_disagreement` is `true` (`probeOpinion`,
 `$lib/review/probeOpinion.ts`) — never on a null disagreement — and an
 item with `probe_in_scope: false` reads "no opinion (outside the probe's
 classes)" instead of showing the probe's out-of-vocabulary prediction.
+Since OpenProcessor main 9e217f0, the button additionally requires the
+served `probe_actionable === true` (server-computed from in-scope +
+disagreement + the server's own `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE`
+threshold, echoed read-only as `ProbeStatusResponse.actionable_min_confidence`
+— no client-side threshold anywhere); a disagreement that isn't
+actionable renders as a muted "model unsure: `<predicted class>`" with
+no Accept button.
 
 ## Curation-strategy selector bar (`StrategyBar.svelte`, 2026-09)
 

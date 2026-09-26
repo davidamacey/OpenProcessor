@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Probe actionability, server-computed (OpenProcessor main 9e217f0).**
+  Items now carry a served `probe_actionable` (true only when the probe
+  disagrees AND the item is in scope AND `probe_pred_confidence` cleared
+  the backend's own `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE` threshold, echoed
+  read-only as `ProbeStatusResponse.actionable_min_confidence`). "Accept
+  model's class" on `/review` now requires `probe_actionable === true`,
+  not just a served disagreement; a disagreement the server didn't mark
+  actionable reads as a muted "model unsure: `<predicted class>`" instead,
+  with no Accept button. No client-side confidence threshold anywhere.
+  Vendored contract synced to `9e217f0`.
+- **Ingest: in-batch byte-identical duplicate no longer misreports as
+  "no result returned".** A live backend bug returns the second copy of
+  a byte-identical pair uploaded in the same chunk with
+  `source_identifier: null`, so it couldn't be matched back to its file
+  by identifier. `ingestRunController`'s `applyResponse` now falls back
+  to matching by request order for a null-identifier result, but only
+  when the response has exactly as many rows as files were sent in that
+  chunk — never when the counts differ, since that's still a genuine
+  "a result didn't come back" case.
+
 - **Class merge carries validations over; merged classes say where they
   went (OpenProcessor d817605).** The merge dry-run's
   `validations_carried_over` (it replaces `would_unvalidate`, with no shim) now

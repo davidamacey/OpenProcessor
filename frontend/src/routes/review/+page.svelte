@@ -2329,6 +2329,14 @@
               <dd class="text-zinc-400" data-testid="probe-no-opinion">
                 {NO_OPINION_TEXT}
               </dd>
+            {:else if opinion.kind === 'unsure'}
+              <!-- OpenProcessor 9e217f0: a served disagreement below the
+                   server's own confidence threshold (`probe_actionable`
+                   false) — shown, but never offered as an Accept action. -->
+              <dt class="text-zinc-500">Model predicts</dt>
+              <dd class="text-zinc-400" data-testid="probe-unsure">
+                model unsure: {current.probe_pred_class}
+              </dd>
             {:else if opinion.kind === 'prediction'}
               <!-- G4 closed 2026-09-24 (logic-moves item 14): the backend
                  now serves `probe_pred_class_id` alongside the display

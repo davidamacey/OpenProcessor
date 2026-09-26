@@ -210,10 +210,28 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
     const byIdentifier = new Map(
       res.results.map((r) => [r.source_identifier ?? r.image_path, r]),
     );
+    // Defensive fallback for an in-batch byte-identical duplicate: today's
+    // backend can return the *second* copy of a duplicate pair with
+    // `source_identifier: null` (a server-side fix is in progress), so
+    // that row has no key matching any file's own identifier and used to
+    // render as "failed — no result returned" even though the backend
+    // actually answered for it. When a result can't be matched by
+    // identifier AND the response has exactly as many rows as files sent
+    // in this chunk, fall back to matching that file by request order
+    // instead — never used when the lengths differ, since that's the
+    // signal a result genuinely didn't come back at all.
+    const canFallBackToRequestOrder = res.results.length === chunk.length;
     totals.secondary_detector_failures += res.summary?.secondary_detector_failures ?? 0;
-    for (const f of chunk) {
+    for (let i = 0; i < chunk.length; i++) {
+      const f = chunk[i]!;
       const id = identifierFor(f);
-      const r = byIdentifier.get(id);
+      let r = byIdentifier.get(id);
+      if (!r && canFallBackToRequestOrder) {
+        const positional = res.results[i];
+        if (positional && positional.source_identifier == null) {
+          r = positional;
+        }
+      }
       totals.uploaded_bytes += f.size;
       if (!r) {
         results.set(f.id, {

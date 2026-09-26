@@ -4081,6 +4081,17 @@
             ],
             "title": "Needs New Class Note"
           },
+          "probe_actionable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Actionable"
+          },
           "probe_disagreement": {
             "anyOf": [
               {
@@ -5659,6 +5670,17 @@
       },
       "ProbeStatusResponse": {
         "properties": {
+          "actionable_min_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actionable Min Confidence"
+          },
           "error": {
             "anyOf": [
               {
@@ -13262,7 +13284,7 @@
     },
     "/curation/probe/status": {
       "get": {
-        "description": "Poll the current/last probe job.",
+        "description": "Poll the current/last probe job, plus the read-only\n``actionable_min_confidence`` threshold gating the item wire's\n``probe_actionable`` field.",
         "operationId": "probe_status_curation_probe_status_get",
         "responses": {
           "200": {

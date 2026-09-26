@@ -529,6 +529,16 @@ export interface Crop {
   probe_disagreement?: boolean | null;
   probe_in_scope?: boolean | null;
   probe_model_version?: string | null;
+  /**
+   * OpenProcessor main 9e217f0: `true` only when the probe disagrees AND
+   * the item is in scope AND `probe_pred_confidence` cleared the
+   * backend's own threshold (`OP_PROBE_ACTIONABLE_MIN_CONFIDENCE`,
+   * echoed read-only as `ProbeStatusResponse.actionable_min_confidence`
+   * — no client-side threshold anywhere). `false` when scored but not
+   * actionable (including every non-disagreeing item); `null` when not
+   * scored at all.
+   */
+  probe_actionable?: boolean | null;
   updated_at: string;
 }
 

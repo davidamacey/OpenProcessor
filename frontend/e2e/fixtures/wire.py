@@ -121,6 +121,7 @@ _EXPLICIT: dict[str, Any] = {
     "probe_pred_entropy": 0.12,
     "probe_disagreement": True,
     "probe_in_scope": True,
+    "probe_actionable": True,
     "probe_model_version": "probe-v1",
     "mistakenness_score": 0.27,
     "mistakenness_method": "entropy",
