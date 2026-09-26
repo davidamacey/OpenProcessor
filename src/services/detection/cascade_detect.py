@@ -406,8 +406,11 @@ class RegionDetector:
         Returns:
             The highest-scoring region in the crop's normalized frame,
             or ``None`` if the model returned nothing above the
-            confidence floor (or if the crop could not be decoded).
+            confidence floor (or if the crop could not be decoded), or
+            when no detector model is configured (no Triton call).
         """
+        if not self.model_name:
+            return None
         try:
             img = _decode_jpeg(crop_jpeg)
         except ValueError as exc:
@@ -471,12 +474,15 @@ class RegionDetector:
 
         Returns:
             A list aligned 1:1 with ``crops_jpeg``. Failed crops yield
-            ``None``.
+            ``None``; with no detector model configured every entry is
+            ``None`` and Triton is never called.
         """
         import asyncio
 
         if not crops_jpeg:
             return []
+        if not self.model_name:
+            return [None] * len(crops_jpeg)
 
         results: list[RegionCandidate | None] = [None] * len(crops_jpeg)
 

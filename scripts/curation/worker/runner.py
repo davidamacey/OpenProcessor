@@ -642,8 +642,14 @@ async def run(args: argparse.Namespace) -> int:
                     continue
 
                 # Path 2: pending + non-secondary-shape — try the
-                # primary detector first (fast Triton call).
-                if t.region_status in _PENDING_DETECTION_ALIASES and not is_secondary:
+                # primary detector first (fast Triton call). A profile with
+                # no detector_model has no detector leg: straight to Path 3,
+                # with nothing on the trace.
+                if (
+                    t.region_status in _PENDING_DETECTION_ALIASES
+                    and not is_secondary
+                    and profile.detector_model
+                ):
                     _detector_t0 = time.monotonic()
                     try:
                         detector_results = await detector.detect_batch([t.crop_jpeg])

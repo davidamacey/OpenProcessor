@@ -9,14 +9,15 @@ empty ``detector_model`` means there is no detector leg at all.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.config import get_region_fields
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect import RegionCandidate, RegionDetector
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
-from .test_region_cascade_integrity import _FakeOpenSearch, _item, _profile
+from .test_region_cascade_integrity import _FakeOpenSearch, _item, _jpeg, _profile
 from .test_region_text_worker import _drive
 
 
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.usefixtures('reference_region_profile')
 
-TEXT_FREE = {'text_reader': 'none', 'text_hint_enabled': False}
+TEXT_FREE: dict[str, Any] = {'text_reader': 'none', 'text_hint_enabled': False}
 SEG_BOX = RegionCandidate(bbox_norm=(0.3, 0.6, 0.6, 0.75), score=0.5, source='seg')
 VLM_URL = 'http://vlm.invalid:8000'
 
@@ -122,6 +123,40 @@ class TestTextHintOptional:
         assert mocks['seg'].segment.await_count == 1
 
 
+class TestNoDetectorLeg:
+    @pytest.mark.asyncio
+    async def test_empty_detector_model_skips_the_detector(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake_os = _fake_os()
+        mocks = await _drive(
+            tmp_path,
+            monkeypatch,
+            fake_os=fake_os,
+            primary=None,
+            segmenter=SEG_BOX,
+            vlm_url='',
+            profile_overrides={**TEXT_FREE, 'detector_model': ''},
+        )
+        F = get_region_fields()
+        doc = fake_os.live['c1']
+        seg = _profile().segmenter_name
+        mocks['primary'].detect_batch.assert_not_awaited()
+        assert doc[F.status] == 'detected'
+        assert doc[F.detector] == seg
+        chain = doc[F.detector_chain]
+        assert not any(e.startswith(':') or e.endswith(':miss') for e in chain), chain
+
+    @pytest.mark.asyncio
+    async def test_detector_without_model_does_no_triton_io(self) -> None:
+        pool = MagicMock()
+        pool.infer = AsyncMock()
+        detector = RegionDetector(pool, _profile().__class__(name='p', detector_model=''))
+        assert await detector.detect(_jpeg()) is None
+        assert await detector.detect_batch([_jpeg(), _jpeg()]) == [None, None]
+        pool.infer.assert_not_awaited()
+
+
 class TestTextFreeWriteHelpers:
     @pytest.fixture
     def text_free(self, reference_region_profile: None) -> Any:  # noqa: ARG002
@@ -163,3 +198,39 @@ class TestTextFreeWriteHelpers:
             rules=region_text_rules(text_free),
         )
         assert doc == {F.status: 'detected'}
+
+
+class TestLegacyCascade:
+    @pytest.mark.asyncio
+    async def test_segmenter_only_text_free_miss(self) -> None:
+        import dataclasses
+
+        import scripts.curation.region_worker_main as worker
+        from src.services.detection.profile_registry import register_profile
+
+        from .test_region_worker import (
+            _detector_mock,
+            _make_task,
+            _ocr_recognizer_mock,
+            _segmenter_mock,
+            _vlm_mock,
+        )
+
+        register_profile(
+            dataclasses.replace(_profile(), detector_model='', **TEXT_FREE), default=True
+        )
+        detector = _detector_mock([None])
+        ocr = _ocr_recognizer_mock()
+        task = _make_task(status='pending_detection')
+        await worker._process_crop(
+            task,
+            detector=detector,
+            segmenter=_segmenter_mock(None),
+            ocr_recognizer=ocr,
+            vlm=_vlm_mock(is_region=True),
+        )
+        F = get_region_fields()
+        assert task.update_doc[F.status] == 'no_region_box'
+        assert task.update_doc[F.detector_chain] == [f'{_profile().segmenter_name}:miss']
+        detector.detect_batch.assert_not_awaited()
+        ocr.detect_regions.assert_not_awaited()

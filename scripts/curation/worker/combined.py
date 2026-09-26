@@ -270,6 +270,9 @@ async def _run_combined_cohort_path(
         )
 
     if task.region_status in _PENDING_DETECTION_ALIASES and not is_secondary:
+        if not region_profile().detector_model:
+            # No detector leg: the segmenter proposes the only candidate.
+            return await _try_combined_on_segmenter(task, segmenter=segmenter, vlm=vlm)
         return await _run_combined_pending_detection(
             task, detector=detector, segmenter=segmenter, vlm=vlm
         )

@@ -451,8 +451,9 @@ async def _process_crop(
                 task.detection_trace.append(f'{det_model}:vlm_reject')
             # Verify rejected — fall through to the secondary segmenter.
 
-        # ---- Step 2: primary detector (only if pending + non-secondary-shape). ----
-        elif task.region_status in _PENDING_DETECTION_ALIASES and not is_secondary:
+        # ---- Step 2: primary detector (only if pending + non-secondary-shape,
+        #              and the profile has a detector leg). ----
+        elif task.region_status in _PENDING_DETECTION_ALIASES and not is_secondary and det_model:
             detector_results = await detector.detect_batch([task.crop_jpeg])
             cand = detector_results[0] if detector_results else None
             if cand is None:
