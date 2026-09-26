@@ -595,79 +595,83 @@ async def _process_crop(
         # text, then re-prompt the segmenter with a tight sub-crop around
         # that text region. The segmenter produces the final geometry; the
         # OCR region is only a hint.
-        try:
-            ocr_regions = await ocr_recognizer.detect_regions(task.crop_jpeg)
-        except Exception as exc:
-            logger.warning('text_hint_ocr_failed', crop_id=task.crop_id, error=str(exc))
-            ocr_regions = []
-        ocr_pick = ocr_recognizer.pick_best_text_region(ocr_regions) if ocr_regions else None
-        if ocr_pick is not None:
-            task.detection_trace.append(f'{ocr_det_model}:text_hint:hit')
-            sub_cand, _sub_box = await _resegment_from_text_hint(
-                task.crop_jpeg, ocr_pick.bbox_norm, segmenter
-            )
-            if sub_cand is None:
-                task.detection_trace.append(f'{seg_name}:text_hint:miss')
-            else:
-                gate_ok, gate_reason = is_plausible_region_bbox(
-                    sub_cand.bbox_norm, task.vehicle_bbox_norm
+        # Optional per profile (``text_hint_enabled`` + an OCR pipeline).
+        if region_profile().text_hint_active(segmenter_enabled=segmenter.enabled):
+            try:
+                ocr_regions = await ocr_recognizer.detect_regions(task.crop_jpeg)
+            except Exception as exc:
+                logger.warning('text_hint_ocr_failed', crop_id=task.crop_id, error=str(exc))
+                ocr_regions = []
+            ocr_pick = ocr_recognizer.pick_best_text_region(ocr_regions) if ocr_regions else None
+            if ocr_pick is not None:
+                task.detection_trace.append(f'{ocr_det_model}:text_hint:hit')
+                sub_cand, _sub_box = await _resegment_from_text_hint(
+                    task.crop_jpeg, ocr_pick.bbox_norm, segmenter
                 )
-                if not gate_ok:
-                    task.detection_trace.append(f'{seg_name}:text_hint:hit')
-                    task.detection_trace.append(f'{seg_name}:text_hint:sanity_reject:{gate_reason}')
+                if sub_cand is None:
+                    task.detection_trace.append(f'{seg_name}:text_hint:miss')
                 else:
-                    region_jpeg = _crop_region_jpeg(task.crop_jpeg, sub_cand.bbox_norm)
-                    outcome = await _verify_with_vlm(vlm, task.crop_id, region_jpeg)
-                    if outcome is None:
-                        _no_verdict_done(
-                            task,
-                            actor=seg_name,
-                            version=seg_version,
-                            box=crop_norm_to_source_norm(
-                                sub_cand.bbox_norm, task.vehicle_bbox_norm
-                            ),
-                            score=sub_cand.score,
-                            source=CANDIDATE_SEGMENTER_TEXT_HINT,
-                        )
-                    ok, conf = outcome.ok, outcome.confidence
-                    if ok:
-                        projected = crop_norm_to_source_norm(
-                            sub_cand.bbox_norm, task.vehicle_bbox_norm
-                        )
-                        auto = await _auto_confirm_or_pending(
-                            sam_score=sub_cand.score,
-                            bbox_in_crop=sub_cand.bbox_norm,
-                            vlm_high_conf=conf == 'high',
-                        )
+                    gate_ok, gate_reason = is_plausible_region_bbox(
+                        sub_cand.bbox_norm, task.vehicle_bbox_norm
+                    )
+                    if not gate_ok:
                         task.detection_trace.append(f'{seg_name}:text_hint:hit')
-                        task.detection_trace.append(f'{seg_name}:text_hint:vlm_verify_ok')
-                        # Pass OCR text through when the VLM read empty so
-                        # the region text isn't lost.
-                        text_out = outcome.text or ocr_pick.text
-                        text_conf_out: str | None = outcome.text_confidence
-                        if not outcome.text and ocr_pick.text:
-                            rc = ocr_pick.rec_score
-                            text_conf_out = (
-                                'high' if rc >= 0.8 else 'medium' if rc >= 0.5 else 'low'
-                            )
-                        task.update_doc = _region_write_doc(
-                            region_in_source=projected,
-                            score=sub_cand.score,
-                            detector=seg_name,
-                            detector_version=seg_version,
-                            chain=task.detection_trace,
-                            auto_confirmed=bool(auto),
-                            region_text_reply=text_out,
-                            region_text_confidence=text_conf_out,
-                            confidence=conf,
+                        task.detection_trace.append(
+                            f'{seg_name}:text_hint:sanity_reject:{gate_reason}'
                         )
-                        raise _CascadeDoneError
-                    task.detection_trace.append(f'{seg_name}:text_hint:hit')
-                    task.detection_trace.append(f'{seg_name}:text_hint:vlm_reject')
-        elif ocr_regions:
-            task.detection_trace.append(f'{ocr_det_model}:text_hint:no_region_shape')
-        else:
-            task.detection_trace.append(f'{ocr_det_model}:text_hint:miss')
+                    else:
+                        region_jpeg = _crop_region_jpeg(task.crop_jpeg, sub_cand.bbox_norm)
+                        outcome = await _verify_with_vlm(vlm, task.crop_id, region_jpeg)
+                        if outcome is None:
+                            _no_verdict_done(
+                                task,
+                                actor=seg_name,
+                                version=seg_version,
+                                box=crop_norm_to_source_norm(
+                                    sub_cand.bbox_norm, task.vehicle_bbox_norm
+                                ),
+                                score=sub_cand.score,
+                                source=CANDIDATE_SEGMENTER_TEXT_HINT,
+                            )
+                        ok, conf = outcome.ok, outcome.confidence
+                        if ok:
+                            projected = crop_norm_to_source_norm(
+                                sub_cand.bbox_norm, task.vehicle_bbox_norm
+                            )
+                            auto = await _auto_confirm_or_pending(
+                                sam_score=sub_cand.score,
+                                bbox_in_crop=sub_cand.bbox_norm,
+                                vlm_high_conf=conf == 'high',
+                            )
+                            task.detection_trace.append(f'{seg_name}:text_hint:hit')
+                            task.detection_trace.append(f'{seg_name}:text_hint:vlm_verify_ok')
+                            # Pass OCR text through when the VLM read empty so
+                            # the region text isn't lost.
+                            text_out = outcome.text or ocr_pick.text
+                            text_conf_out: str | None = outcome.text_confidence
+                            if not outcome.text and ocr_pick.text:
+                                rc = ocr_pick.rec_score
+                                text_conf_out = (
+                                    'high' if rc >= 0.8 else 'medium' if rc >= 0.5 else 'low'
+                                )
+                            task.update_doc = _region_write_doc(
+                                region_in_source=projected,
+                                score=sub_cand.score,
+                                detector=seg_name,
+                                detector_version=seg_version,
+                                chain=task.detection_trace,
+                                auto_confirmed=bool(auto),
+                                region_text_reply=text_out,
+                                region_text_confidence=text_conf_out,
+                                confidence=conf,
+                            )
+                            raise _CascadeDoneError
+                        task.detection_trace.append(f'{seg_name}:text_hint:hit')
+                        task.detection_trace.append(f'{seg_name}:text_hint:vlm_reject')
+            elif ocr_regions:
+                task.detection_trace.append(f'{ocr_det_model}:text_hint:no_region_shape')
+            else:
+                task.detection_trace.append(f'{ocr_det_model}:text_hint:miss')
     except _CascadeDoneError:
         pass
     except VlmTransportError as exc:

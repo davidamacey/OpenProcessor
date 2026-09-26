@@ -95,9 +95,36 @@ class TestTextFreeWrites:
         mocks['ocr'].detect_regions.assert_not_awaited()
 
 
+class TestTextHintOptional:
+    @pytest.mark.asyncio
+    async def test_segmenter_miss_without_hint_is_no_region_box(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake_os = _fake_os()
+        mocks = await _drive(
+            tmp_path,
+            monkeypatch,
+            fake_os=fake_os,
+            primary=None,
+            segmenter=None,
+            vlm_url='',
+            profile_overrides={**TEXT_FREE, 'ocr_pipeline_model': ''},
+        )
+        F = get_region_fields()
+        doc = fake_os.live['c1']
+        seg = _profile().segmenter_name
+        assert doc[F.status] == 'no_region_box'
+        chain = doc[F.detector_chain]
+        assert not any('text_hint' in e for e in chain)
+        assert chain[-1] == f'{seg}:miss'
+        mocks['ocr'].detect_regions.assert_not_awaited()
+        mocks['ocr'].pick_best_text_region.assert_not_called()
+        assert mocks['seg'].segment.await_count == 1
+
+
 class TestTextFreeWriteHelpers:
     @pytest.fixture
-    def text_free(self) -> Any:
+    def text_free(self, reference_region_profile: None) -> Any:  # noqa: ARG002
         import dataclasses
 
         from src.services.detection.profile_registry import register_profile

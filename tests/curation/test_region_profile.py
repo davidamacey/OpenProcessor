@@ -263,10 +263,11 @@ async def test_worker_sends_the_profile_segmenter_prompt(
 ) -> None:
     region_env.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     region_env.setenv(f'{_ENV_PREFIX}SEGMENTER_TEXT_PROMPT', 'shipping label')
+    region_env.setenv(f'{_ENV_PREFIX}SEGMENTER_NAME', 'my_segmenter')
     mocks = _patch_worker_io(region_env)
     assert await worker.run(_worker_args(tmp_path)) == 0
     mocks['SegmenterClient'].assert_called_once_with(
-        'http://segmenter.local:8000', text_prompt='shipping label'
+        'http://segmenter.local:8000', text_prompt='shipping label', source_name='my_segmenter'
     )
 
 
@@ -277,7 +278,7 @@ async def test_worker_disables_segmenter_when_profile_has_no_prompt(
     region_env.setenv(f'{_ENV_PREFIX}NAME', 'shipping_label')
     mocks = _patch_worker_io(region_env)
     assert await worker.run(_worker_args(tmp_path)) == 0
-    mocks['SegmenterClient'].assert_called_once_with('', text_prompt='')
+    mocks['SegmenterClient'].assert_called_once_with('', text_prompt='', source_name='sam3')
 
 
 def test_secondary_shape_routing_follows_env_groups(

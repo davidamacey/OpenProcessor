@@ -15,6 +15,7 @@ Test coverage:
 
 from __future__ import annotations
 
+import dataclasses
 import io
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -539,6 +540,37 @@ def _jpeg_bytes(w: int = 64, h: int = 64) -> bytes:
     return buf.getvalue()
 
 
+LETTERS_AND_DIGITS_PROFILE = dataclasses.replace(
+    NEUTRAL_REGION_PROFILE, text_hint_require_letters_and_digits=True
+)
+
+
+def _text_region(text: str, profile: Any) -> Any:
+    from src.services.detection.cascade_detect import OcrRegion
+
+    return OcrRegion(
+        bbox_norm=(0.10, 0.40, 0.45, 0.50),
+        text=text,
+        text_raw=text,
+        det_score=0.95,
+        rec_score=0.95,
+        profile=profile,
+    )
+
+
+class TestTextHintLettersAndDigitsRule:
+    @pytest.mark.parametrize('text', ['1234567', 'ABCDEF', 'AB12CD'])
+    def test_off_by_default(self, text: str) -> None:
+        assert NEUTRAL_REGION_PROFILE.text_hint_require_letters_and_digits is False
+        assert _text_region(text, NEUTRAL_REGION_PROFILE).is_region_text_candidate
+
+    @pytest.mark.parametrize(
+        ('text', 'expected'), [('1234567', False), ('ABCDEF', False), ('AB12CD', True)]
+    )
+    def test_applies_when_enabled(self, text: str, expected: bool) -> None:
+        assert _text_region(text, LETTERS_AND_DIGITS_PROFILE).is_region_text_candidate is expected
+
+
 class TestPaddleOcrTextRecognizer:
     @pytest.mark.asyncio
     async def test_canonicalizes_and_filters(self) -> None:
@@ -595,7 +627,7 @@ class TestPaddleOcrTextRecognizer:
 
     @pytest.mark.asyncio
     async def test_f4_rejects_letters_only_text(self) -> None:
-        """Bumper-sticker / dealer-frame text without digits must not promote."""
+        """With the letters+digits rule on, lettering-only text must not promote."""
         from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
 
         pool = MagicMock()
@@ -612,7 +644,7 @@ class TestPaddleOcrTextRecognizer:
                 rec_scores=[0.98, 0.95, 0.92],
             )
         )
-        rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
+        rec = PaddleOcrTextRecognizer(pool, LETTERS_AND_DIGITS_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
         # Loose plate-shape filter accepts them, but the stricter
         # is_region_text_candidate rejects all three because they lack digits.
