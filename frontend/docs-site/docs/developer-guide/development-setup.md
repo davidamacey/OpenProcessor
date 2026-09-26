@@ -15,6 +15,16 @@ A running OpenProcessor backend (OpenSearch + the curation API, served
 under `PUBLIC_API_PREFIX`) is required for the app to do anything useful —
 there is no local database or mock-data mode.
 
+## Building the Docker image from source
+
+`docker-compose.yml` only pulls the published image. To run your own
+build instead, add the build overlay (it tags the result
+`cropwright-dev:local`, so it never overwrites a pulled image):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
 ## Before opening a PR
 
 ```bash

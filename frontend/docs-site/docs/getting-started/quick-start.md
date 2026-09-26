@@ -12,11 +12,17 @@ instance, started with `OP_API_PREFIX=/curation` (the default), on its own
 Docker network. Note that network's name — you'll need it below. See that
 project's own README for bringing it up.
 
-## 2. Clone and configure Cropwright
+## 2. Get the compose file and configure it
+
+No checkout needed: Cropwright runs from the published image
+`davidamacey/cropwright`, which is multi-arch (`linux/amd64` and
+`linux/arm64`, so it runs on Intel/AMD hosts and on ARM machines such as
+Apple Silicon). Download the compose file and the example env file:
 
 ```bash
-git clone https://github.com/davidamacey/OpenProcessor && cd cropwright
-cp .env.example .env
+mkdir cropwright && cd cropwright
+curl -fsSLO https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/.env.example -o .env
 ```
 
 Edit `.env` and set, at minimum:
@@ -27,6 +33,7 @@ Edit `.env` and set, at minimum:
 | `PUBLIC_API_PREFIX` | Must equal the backend's own `OP_API_PREFIX`                                              | `/curation`                          |
 | `OP_DOCKER_NETWORK` | The OpenProcessor backend's docker network name (`docker network ls`)                     | `openprocessor_triton_net`           |
 | `CROPWRIGHT_PORT`   | Host port to publish                                                                       | `5184`                               |
+| `CROPWRIGHT_TAG`    | Image version to run; pin one (e.g. `0.1.0`) for reproducible deploys                     | `latest`                             |
 
 See [Environment variables](../configuration/environment-variables.md) for
 the full list, including white-label and ingest-upload-cap options.
@@ -34,12 +41,15 @@ the full list, including white-label and ingest-upload-cap options.
 ## 3. Start it
 
 ```bash
-docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
 
 Open `http://localhost:5184` (or whatever `CROPWRIGHT_PORT` you set). The
 image runs nginx as a non-root user (uid 101) listening on container port
 8080; Compose maps `CROPWRIGHT_PORT` to it.
+
+Building from source instead is for development — see
+[Development setup](../developer-guide/development-setup.md).
 
 ## 4. Verify the connection
 

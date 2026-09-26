@@ -5,13 +5,18 @@ title: Upgrading
 
 # Upgrading
 
-Cropwright does not yet maintain release branches — fixes land on `main`
-and ship in the next tagged image. To upgrade:
+Fixes land on `main` and ship in the next tagged image. To upgrade, set
+`CROPWRIGHT_TAG` in `.env` to the new version (or leave it at `latest`),
+then:
 
 ```bash
-git pull
-docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
+
+Re-download `docker-compose.yml` and compare `.env.example` when the
+release notes mention a compose or environment change. If you build from
+source, `git pull` and rerun
+`docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build`.
 
 Check `CHANGELOG.md` for anything that needs a matching backend version —
 Cropwright's vendored API contract (`contracts/openprocessor/`) is checked

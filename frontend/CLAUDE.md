@@ -1694,11 +1694,23 @@ CI's scheduled run goes red, to see the exact surviving mutants
 (`reports/mutation/index.html`).
 
 The production build runs in a non-root
-`nginxinc/nginx-unprivileged:1.30-alpine` container (uid 101, nginx on
-container port 8080; F10 D13) defined by this repo's `docker-compose.yml`
-(`docker compose up -d --build`), host port 5184 (`CROPWRIGHT_PORT`,
-mapped to 8080). The deployed `cropwright` container only picks this up
-on its next `docker compose up -d --build`. Port conflicts:
+`nginxinc/nginx-unprivileged:1.31.2-alpine3.23` container (uid 101, nginx on
+container port 8080; F10 D13), host port 5184 (`CROPWRIGHT_PORT`, mapped
+to 8080). `docker-compose.yml` is pull-only (`image:
+davidamacey/cropwright:${CROPWRIGHT_TAG:-latest}`, no `build:` —
+needs no repo checkout, see README's "Quick start"); building from
+source is the `docker-compose.build.yml` overlay (`docker compose -f
+docker-compose.yml -f docker-compose.build.yml up -d --build`, tagged
+`cropwright-dev:local`, never `docker-compose.override.yml` — that
+auto-loads and would make a plain clone silently build instead of
+pull). **The currently deployed `cropwright` container on this host was
+started from a checkout with the old `build: .`-in-`docker-compose.yml`
+shape and keeps running unmodified** — its next
+`docker compose up -d --build` must use the override explicitly
+(`docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
+--build`) now that the base file is pull-only, since `latest` isn't
+published on Docker Hub yet and a bare `docker compose up -d --build`
+against the new base file has no `build:` to run. Port conflicts:
 5174=example-app-backend, 5180/5181=example-app-opensearch,
 5183=example-app-docs.
 
@@ -1782,6 +1794,17 @@ with no login and no token. Never expose Cropwright (or the
 OpenProcessor API it proxies) on the public internet; run it only on a
 trusted LAN/VPN until the backend adds opt-in auth (tracked as backend
 ask BA-5 in `docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md`).
+
+**Releasing** is local (`./scripts/release.sh`), not a GitHub Actions
+workflow, so the arm64 image is built and smoke-tested natively.
+Multi-arch
+(`linux/amd64`+`linux/arm64`) via a multi-arch buildx builder with a
+remote node that builds arm64 natively, no QEMU (`CROPWRIGHT_BUILDER`,
+default `cropwright-multiarch`); the arm64 leg is smoke-tested over its
+remote docker context (`CROPWRIGHT_REMOTE_ARM64_CONTEXT`, default
+`remote-arm64`) since it can't run on an amd64 host. See README's
+"Releasing" section for the stage list and usage; there is no
+`.github/workflows/release.yml`.
 
 ## Style
 

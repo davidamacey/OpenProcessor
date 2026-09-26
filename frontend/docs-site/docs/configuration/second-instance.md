@@ -11,7 +11,7 @@ never collides with a running instance:
 ```bash
 CROPWRIGHT_PORT=5190 CROPWRIGHT_CONTAINER_NAME=cw-second \
   OP_DOCKER_NETWORK=some_other_openprocessor_net \
-  docker compose -p cw-second up -d --build
+  docker compose -p cw-second up -d
 ```
 
 This is the same image and compose file, pointed at a different backend

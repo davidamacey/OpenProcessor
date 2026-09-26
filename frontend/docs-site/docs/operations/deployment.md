@@ -26,5 +26,8 @@ the container).
 
 ## Registry
 
-Published to Docker Hub once public releases start; until then, build
-locally with `docker compose up -d --build`.
+Released images are published to Docker Hub as `davidamacey/cropwright`
+(`X.Y.Z`, `X.Y` and `latest`), multi-arch for `linux/amd64` and
+`linux/arm64`. `docker-compose.yml` only pulls; set `CROPWRIGHT_TAG` to pin
+a version. To build from source instead, add the build overlay:
+`docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build`.

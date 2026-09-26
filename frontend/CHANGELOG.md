@@ -6,27 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Changed
-
-- **`docs-site/`: replaced the Mermaid-based `/architecture` page with
-  Archify-rendered diagrams**, matching the pattern used by a sister
-  project's docs site. `docs-site/architecture-diagrams/specs/*.json` are
-  5 hand-authored Archify specs (`system-overview`, `frontend-modules`,
-  `labeling-loop`, `ingest-upload`, `review-assign-undo`) built from real
-  repo evidence (`src/routes/`, `src/lib/api.ts`, the controllers, the
-  slot registry, `nginx.conf`, `docker-compose.yml`), validated and
-  rendered by the new `scripts/generate-architecture-diagrams.sh` into
-  `docs-site/static/architecture/*.html`. `src/pages/architecture.tsx` is
-  now a tabbed page (System / Workflows / Sequences) embedding each
-  rendered diagram as an iframe, with group/diagram metadata in the new
-  `src/data/architecture-diagrams.json` instead of hardcoded in the page.
-  Removed: `src/data/architecture.json`, the `DiagramSection` component,
-  and the `@docusaurus/theme-mermaid` dependency/config (no other page
-  used Mermaid). `docs-site/TEMPLATE.md`, `docs-site/README.md`, and this
-  file's "Documentation site" section are updated to describe the new
-  mechanism.
-
 ### Added
+
+- **Local, multi-arch release pipeline** (`./scripts/release.sh` +
+  `scripts/release/NN-*.sh`), replacing the earlier
+  `.github/workflows/release.yml` (removed; releases are cut locally so
+  the arm64 image is built and smoke-tested natively). Stages:
+  `preflight verify build scan smoke tag publish finish`, each
+  independently runnable/resumable via a local ledger under
+  `.release/<version>/` (gitignored); `tag`/`publish`/`finish` are the
+  only stages that leave the machine and each requires explicit
+  confirmation. `build`/`scan`/`smoke` cover both `linux/amd64` and
+  `linux/arm64` via a multi-arch buildx builder with a remote node that
+  builds arm64 natively (no QEMU); `smoke` loads the arm64 image into
+  its remote docker context and runs `scripts/release-smoke.sh` there
+  (rewritten to check everything via `docker exec`, so it works
+  identically over a remote context, not just a published local port).
+  `publish` pushes one multi-arch manifest to `davidamacey/cropwright`
+  (`X.Y.Z`/`X.Y`/`latest`) with an SBOM attestation; `finish` creates
+  the GitHub release from the matching `CHANGELOG.md` section.
+- **`docker-compose.yml` is now pull-only** (`image:
+davidamacey/cropwright:${CROPWRIGHT_TAG:-latest}`, no `build:`) — a
+  user needs only this file plus `.env` to run, no repo checkout. A new
+  `docker-compose.build.yml` overlay (`docker compose -f
+docker-compose.yml -f docker-compose.build.yml up -d --build`, tagged
+  `cropwright-dev:local`) is the explicit opt-in dev path; deliberately
+  not an auto-loading `docker-compose.override.yml`, so a plain clone
+  never silently builds instead of pulling. README's quick start now
+  leads with `curl`-ing the compose file + `.env.example` and `docker
+compose pull && docker compose up -d` — no `git clone` needed.
 
 - **`docs-site/`: Docusaurus 3 documentation site for Cropwright**,
   modelled on a sister project's own `docs-site/` (config style, dark
@@ -44,9 +52,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     whole directory can be cloned for a sibling project (see
     `docs-site/TEMPLATE.md`) by editing only `site.config.ts`, the data
     JSONs, `docs/**` and `static/img/**`.
-  - `/architecture` renders three Mermaid diagrams (system context,
-    labeling workflow, frontend internals) from
-    `src/data/architecture.json`.
+  - `/architecture` embeds five interactive Archify diagrams (system
+    overview, frontend modules, labeling loop, ingest upload, review
+    assign + undo) in System / Workflows / Sequences tabs. The specs in
+    `docs-site/architecture-diagrams/specs/*.json` are hand-authored from
+    the real routes, controllers, stores and wire contract, and
+    `scripts/generate-architecture-diagrams.sh` validates and renders them
+    to `docs-site/static/architecture/*.html`; the tab list lives in
+    `src/data/architecture-diagrams.json`.
   - `/roadmap` renders a hand-maintained `src/data/roadmap.json` (v0.1.0
     shipped scope, plus tracked-but-not-built follow-ups: optional API
     auth, hidden-proposal persistence, served model-status reasons, a
@@ -79,6 +92,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     surface (it has its own tooling), and the root README links to the
     published docs site.
 
+### Security
+
+- **nginx security headers now actually reach every response.** nginx
+  doesn't inherit server-level `add_header`s into a location that sets
+  its own — so `/`, `/clusters` and every other SPA route served via the
+  `try_files` fallback were previously missing X-Frame-Options,
+  X-Content-Type-Options and Referrer-Policy entirely. Headers moved
+  into a shared snippet (`nginx-security-headers.conf`) included by
+  every location that emits `Cache-Control`; also added
+  `Permissions-Policy` and `server_tokens off` (no more
+  `Server: nginx/...` on any response).
+- Static-asset `Cache-Control` dropped `immutable` (the entrypoint
+  rewrites hashed JS/CSS chunk _contents_ at container start without
+  changing filenames, so `immutable` could tell a browser to keep a
+  stale chunk across a config change) in favor of a plain long
+  `max-age`.
+- Docker/compose hardening: `docker-compose.yml`'s `cropwright` service
+  now sets `security_opt: [no-new-privileges:true]`, `cap_drop: [ALL]`
+  and bounded json-file log rotation. CI workflows (`ci.yml`,
+  `mutation.yml`) now declare `permissions: contents: read` and a
+  `concurrency` group that cancels superseded runs on the same ref.
+- Fixed the `devalue`/`svelte` advisories present in the shipped bundle
+  via an in-range `@sveltejs/kit`/`svelte` bump (`npm audit fix`);
+  `npm audit --omit=dev` is now clean.
+
 ### Changed
 
 - **`/models`: an optional model that isn't installed reads "optional ·
@@ -94,6 +132,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   OpenProcessor sha cited in code comments, tests, test file names and this
   file now names the published commit, and the vendored contracts are
   pinned to published `main` 344f1d3 (tree-identical, contents unchanged).
+- **Node 26 (current LTS), replacing Node 20 (EOL 2026-04-30)**: the
+  Dockerfile's build stage, both CI workflows (via a new root
+  `.nvmrc`/`node-version-file`) and the README now target Node 26.
+- The nginx runtime base is pinned to an exact tag,
+  `nginxinc/nginx-unprivileged:1.31.2-alpine3.23`, instead of the
+  floating `1.30-alpine` minor.
+- Dropped `curl` from the runtime image (unused; the healthcheck already
+  uses busybox `wget`) and tightened the `HEALTHCHECK` flags
+  (`--start-period`, `--retries`, `wget --spider`). `.dockerignore` now
+  excludes `.stryker-tmp/`, `coverage/` and `.vscode/` from the build
+  context.
+- `.github/dependabot.yml` now groups npm updates into one weekly
+  minor/patch PR and one weekly major PR (instead of one PR per
+  package), groups `github-actions` and `docker` updates monthly, and
+  ignores the `eslint`/`@eslint/js`/`typescript-eslint` major-version
+  trio until `typescript-eslint` supports an eslint 10 engine. This
+  supersedes (does not close) the existing open per-package Dependabot
+  PRs for `@sveltejs/kit`, `eslint`, `@eslint/js`, `eslint-plugin-svelte`,
+  `node`, `nginxinc/nginx-unprivileged` and the `actions/*` bumps.
 
 - **Public-release preparation (F9/F10 Phase A-C,
   `docs/design/cropwright-oss-export-plan-2026-09-25.md`).**

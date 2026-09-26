@@ -4,6 +4,11 @@ node_modules
 package-lock.json
 static
 contracts/openprocessor
+e2e/.venv
+.claude
+artifacts_local
+.stryker-tmp
+reports
 
 # Docusaurus docs site — its own tooling/lint story, not this project's.
 docs-site
