@@ -90,12 +90,15 @@ describe('keyboardStore.registerAction', () => {
     keyboardStore.setScope('review');
     press({ key: 'y' });
     expect(accept).not.toHaveBeenCalled();
-    expect(keyboardStore.shortcutsForCurrentScope().some((s) => s.key === 'y')).toBe(
-      false,
-    );
+    expect(
+      keyboardStore.shortcutsForCurrentScope().some((s) => s.keys.includes('y')),
+    ).toBe(false);
   });
 
-  it('lists the keymap label and every combo in the overlay rows', () => {
+  // K2 fix (plan §5, item 3): a multi-key action used to print one row
+  // per key ("Step back" showed twice, once for ← and once for B) —
+  // it's one row per ACTION, listing every combo it owns.
+  it('lists the keymap label once, with every combo, for a multi-key action', () => {
     cleanups.push(
       keyboardStore.registerAction('review.region.back', vi.fn(), 'review', {
         labelVars: { region: 'widget tag' },
@@ -105,12 +108,7 @@ describe('keyboardStore.registerAction', () => {
     const rows = keyboardStore.shortcutsForCurrentScope();
     expect(rows).toEqual([
       {
-        key: 'arrowleft',
-        scope: 'review',
-        description: 'Step back to last confirmed widget tag',
-      },
-      {
-        key: 'b',
+        keys: ['arrowleft', 'b'],
         scope: 'review',
         description: 'Step back to last confirmed widget tag',
       },

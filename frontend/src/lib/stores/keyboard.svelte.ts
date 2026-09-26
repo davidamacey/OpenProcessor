@@ -85,6 +85,7 @@ class KeyboardStore {
 
   #regs: Registration[] = [];
   #listenerInstalled = false;
+  #suspended = false;
 
   constructor() {
     // m11 (2026-09-24 interactive pass): the listener used to install lazily
@@ -146,20 +147,60 @@ class KeyboardStore {
     };
   }
 
+  /**
+   * One row per ACTION (registration), not per key. A multi-key action
+   * (e.g. "Step back" on `arrowleft`/`b`) used to print once per key —
+   * K2 fix (plan §5, item 3): every combo it owns lists together on one
+   * row, sorted by the first (lowest) combo for a stable order.
+   */
   shortcutsForCurrentScope(): KeyboardShortcut[] {
     const seen = new Set<string>();
     const out: KeyboardShortcut[] = [];
     for (const r of this.#regs) {
       if (r.scope !== 'global' && r.scope !== this.scope) continue;
-      for (const combo of regKeys(r)) {
-        const k = `${r.scope}:${combo}`;
-        if (seen.has(k)) continue;
-        seen.add(k);
-        if (!r.description) continue;
-        out.push({ key: combo, scope: r.scope, description: r.description });
-      }
+      if (!r.description) continue;
+      const keys = regKeys(r);
+      if (keys.length === 0) continue;
+      const dedupeKey = `${r.scope}:${r.actionId ?? r.description}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      out.push({ keys, scope: r.scope, description: r.description });
     }
-    return out.sort((a, b) => a.key.localeCompare(b.key));
+    return out.sort((a, b) => a.keys[0].localeCompare(b.keys[0]));
+  }
+
+  /**
+   * Belt-and-braces guard for the layout's class-hotkey listener (plan
+   * §5.3): a registered action shortcut beats a class hotkey bound to
+   * the same key, in a context where `class_hotkeys_live`. Returns
+   * `true` when some CURRENTLY-ACTIVE registration (global scope or the
+   * current page scope) owns `combo`.
+   */
+  hasActiveBinding(combo: string): boolean {
+    const c = combo.toLowerCase();
+    for (const r of this.#regs) {
+      if (r.scope !== 'global' && r.scope !== this.scope) continue;
+      if (regKeys(r).includes(c)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Suspends dispatch while a key-capture widget (the `/settings`
+   * editor) is recording a new combo, so a captured key never also fires
+   * whatever it's currently bound to. `resume()` undoes it; both are
+   * idempotent.
+   */
+  suspend(): void {
+    this.#suspended = true;
+  }
+
+  resume(): void {
+    this.#suspended = false;
+  }
+
+  get suspended(): boolean {
+    return this.#suspended;
   }
 
   toggleOverlay(): void {
@@ -178,6 +219,7 @@ class KeyboardStore {
   }
 
   #dispatch(e: KeyboardEvent): void {
+    if (this.#suspended) return;
     if (isTypingTarget(e.target)) return;
     const combo = normalize(e);
     // m11 (2026-09-24 interactive pass): on a US layout, Shift+` reports

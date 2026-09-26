@@ -8,6 +8,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Configurable keyboard shortcuts — editor + served keymap (K2 of
+  `docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md`).**
+  Built ahead of OpenProcessor W2b's `GET/PUT {prefix}/keymap`,
+  `POST {prefix}/keymap/validate` and `POST {prefix}/keymap/reset` — a
+  pre-W2b backend 404s/501s and every route below stays absent, not
+  disabled.
+  - `keymapStore` now loads the scoped `GET {prefix}/keymap` once from
+    the root layout (`loadKeymap()`, `src/lib/stores/keymap.svelte.ts`)
+    and adopts it via `setDocument(doc, 'served')`; a `config.changed
+axis=keymap` SSE frame refetches and applies live, no reload
+    (`src/routes/+layout.svelte`).
+  - New `/settings#keyboard` "Keyboard shortcuts" card
+    (`src/lib/components/settings/KeymapCard.svelte`): one table per
+    context, key-capture add/remove per action (up to
+    `grammar.max_combos_per_action`), locked actions read-only, a
+    "custom keys" badge when the project's keymap isn't the default,
+    debounced `POST /keymap/validate` rendering the server's own
+    errors/warnings verbatim, and `PUT`'s 409 `revision_conflict` /
+    409 `class_hotkey_conflict` (with an "Unbind these class keys and
+    save" retry) / 422 `validation_failed` all handled per the plan's
+    §4.3 wire shapes. "Reset this action" / "Reset all to defaults"
+    round-trip through `POST /keymap/reset`.
+  - The `~` shortcut overlay now prints ONE row per action (a
+    multi-key action like "Step back" used to print once per key) and
+    links to the new editor.
+  - Plan §5.3 guard: the layout's class-hotkey listener now defers to
+    any active keymap-registered action on the same key
+    (`keyboardStore.hasActiveBinding`), making the grandfathered
+    collision case deterministic instead of firing both handlers.
+  - `setClassHotkey` (`src/lib/classHotkey.ts`) renders the backend's
+    structured 422 `hotkey_reserved` (names the owning action(s)) and
+    409 `hotkey_taken` (names the owning class) details instead of a
+    generic string.
+  - Contract: the four `/keymap*` routes are a documented
+    pending-backend allow-list in `endpointCatalog.test.ts` until
+    OpenProcessor W2b lands and `npm run contract:sync` vendors them.
+  - e2e: `e2e/stubbed/test_keymap.py` (rebind → save → applies live on
+    `/review`; absent + default keys still work on a 404). Every
+    existing stubbed e2e test now sees a default 404 stub for
+    `GET {prefix}/keymap` (`e2e/conftest.py`).
 - **OpenProcessor 3cd4ca87 adoption** (contract sync + 503/Retry-After):
   - `apiFetch` (`src/lib/api.ts`) now honours a 503's `Retry-After`
     (seconds) header in place of that attempt's fixed backoff delay,

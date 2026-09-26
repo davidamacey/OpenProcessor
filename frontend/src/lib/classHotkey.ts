@@ -5,7 +5,7 @@
  * verbatim copies of this validation.
  */
 
-import { ApiError, renameClass } from '$lib/api';
+import { ApiError, hotkeyReservedDetail, hotkeyTakenDetail, renameClass } from '$lib/api';
 import { isPickerHiddenClass } from '$lib/classVisibility';
 import { slotRegistry } from '$lib/annotations/registeredSlots';
 import type { SlotRegistry } from '$lib/annotations/registry';
@@ -99,10 +99,26 @@ export async function setClassHotkey(cls: RegistryClass, raw: string): Promise<v
     );
     await classesStore.clearAndRefetch();
   } catch (e) {
-    // Show the server's 400/409/422 detail verbatim when it sent one — the
-    // client-side checks above cover the common cases, but a race (another
-    // operator bound the same letter a moment ago) or a rule the client
-    // doesn't know about yet still needs the server's own words.
+    // Plan §4.5/K2 item 5: `hotkey_reserved` (422) and `hotkey_taken`
+    // (409) are structured — name which action(s) own the key, or which
+    // class already claims it — rather than the generic string message.
+    const reserved = hotkeyReservedDetail(e);
+    if (reserved) {
+      const owners = reserved.actions.map((a) => a.label).join(', ');
+      toastStore.error(
+        owners ? `'${next}' is ${owners} — pick another letter.` : reserved.message,
+      );
+      return;
+    }
+    const taken = hotkeyTakenDetail(e);
+    if (taken) {
+      toastStore.error(`'${next}' is already bound to '${taken.class_name}'.`);
+      return;
+    }
+    // Otherwise show the server's 400/409/422 detail verbatim when it
+    // sent one — the client-side checks above cover the common cases,
+    // but a race or a rule the client doesn't know about yet still needs
+    // the server's own words.
     const detail = e instanceof ApiError ? (e.detail ?? e.message) : (e as Error).message;
     toastStore.error(`Hotkey set failed: ${detail}`);
   }

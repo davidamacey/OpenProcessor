@@ -55,8 +55,28 @@ export interface CropSlotVerifiedEvent extends CurationBaseEvent {
   [wireField: string]: unknown;
 }
 
+/**
+ * `config.changed` (K2, docs/design/configurable-keyboard-shortcuts-
+ * plan-2026-09-26.md §5.1/§4.4) — fired on every successful
+ * `PUT`/`POST /keymap*` write. `axis === 'keymap'` is the only one this
+ * build reacts to today; other axes are ignored by the handler, not by
+ * this type.
+ */
+export interface ConfigChangedEvent extends CurationBaseEvent {
+  type: 'config.changed';
+  axis: string;
+  name?: string | null;
+  config_revision?: number;
+  keymap_revision?: number;
+  project?: string | null;
+}
+
 export type CurationEvent =
-  CropCreatedEvent | CropClassifiedEvent | CropSlotVerifiedEvent | CurationBaseEvent;
+  | CropCreatedEvent
+  | CropClassifiedEvent
+  | CropSlotVerifiedEvent
+  | ConfigChangedEvent
+  | CurationBaseEvent;
 
 export interface CurationEventSubscribeOptions {
   topic?: string;
@@ -95,7 +115,12 @@ export function slotVerifiedEventTypes(): string[] {
 }
 
 function knownEventTypes(): string[] {
-  return ['crop.created', 'crop.classified', ...slotVerifiedEventTypes()];
+  return [
+    'crop.created',
+    'crop.classified',
+    'config.changed',
+    ...slotVerifiedEventTypes(),
+  ];
 }
 
 /**

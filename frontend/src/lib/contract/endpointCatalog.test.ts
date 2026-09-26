@@ -130,6 +130,28 @@ const MANUAL_OVERRIDES: Array<{
   },
 ];
 
+/**
+ * Routes proposed to OpenProcessor as a binding wire contract but not yet
+ * implemented server-side, so they can't appear in the vendored OpenAPI
+ * snapshot yet. Each entry names the plan section that binds it — remove
+ * the entry (not widen it) the moment `npm run contract:sync` picks up
+ * the real operation; `keymapActions.test.ts` §5.7 is the sibling check
+ * that will then start failing loudly if this allow-list is stale.
+ *
+ * K2 (docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md §4.1):
+ * OpenProcessor W2b hasn't landed the four `/keymap*` routes yet.
+ */
+const PENDING_BACKEND: Array<{ path: string; method: string }> = [
+  { path: '/keymap', method: 'GET' },
+  { path: '/keymap', method: 'PUT' },
+  { path: '/keymap/validate', method: 'POST' },
+  { path: '/keymap/reset', method: 'POST' },
+];
+
+function isPendingBackend(path: string, method: string): boolean {
+  return PENDING_BACKEND.some((p) => p.path === path && p.method === method);
+}
+
 interface ResolvedCall {
   file: string;
   path: string;
@@ -266,7 +288,12 @@ describe('endpoint catalog: every call resolves to a real OpenAPI operation', ()
 
       for (const call of calls) {
         const label = `${call.method} ${call.path}`;
-        it(`${label} exists in the OpenAPI contract`, () => {
+        const pending = isPendingBackend(call.path, call.method);
+        it(`${label} exists in the OpenAPI contract${pending ? ' (skipped: pending backend)' : ''}`, (ctx) => {
+          if (pending) {
+            ctx.skip();
+            return;
+          }
           const op = findOperation(call.path, call.method);
           expect(
             op,

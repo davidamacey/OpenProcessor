@@ -18,6 +18,9 @@
   import Toast from '$components/Toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { classSourcesStore } from '$stores/classSources.svelte';
+  import { keyboardStore } from '$stores/keyboard.svelte';
+  import { keymapAvailability, loadKeymap } from '$stores/keymap.svelte';
+  import { subscribeCurationEvents } from '$lib/sse';
   import { regionProfileStore } from '$stores/regionProfile.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
@@ -125,6 +128,13 @@
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
       if (isTextInputActive()) return;
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      // Plan §5.3: a registered action shortcut beats a class hotkey
+      // bound to the same key, in a context where the keymap declares
+      // that context's `class_hotkeys_live`. This is defense in depth
+      // behind the server-side reserved-hotkey check — it makes the
+      // grandfathered collision case (a class bound to a letter before
+      // it became reserved) deterministic: the action wins, never both.
+      if (keyboardStore.hasActiveBinding(key)) return;
       const cls = classesStore.classes.find(
         (c) =>
           !c.deprecated &&
@@ -141,6 +151,29 @@
     }
     window.addEventListener('keydown', onKeydown);
     return () => window.removeEventListener('keydown', onKeydown);
+  });
+
+  // K2 (docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md
+  // §5.1): the served keymap applies live, with no reload — a
+  // `config.changed axis=keymap` frame refetches `GET {prefix}/keymap`
+  // and swaps `keymapStore`'s document in place; every dispatch resolves
+  // an action's keys through the store at keypress time, so a rebind
+  // takes effect immediately. Only subscribed once the keymap route is
+  // known to exist (`available !== false`) — a pre-W2b backend has no
+  // `config.changed axis=keymap` event to wait for anyway.
+  $effect(() => {
+    if (keymapAvailability.available === false) return;
+    const sub = subscribeCurationEvents({
+      topic: 'config',
+      onEvent: (ev) => {
+        if (ev.type !== 'config.changed') return;
+        if ((ev as { axis?: string }).axis !== 'keymap') return;
+        void loadKeymap().then(() => {
+          toastStore.info('Keyboard shortcuts updated');
+        });
+      },
+    });
+    return () => sub.close();
   });
 
   const path = $derived(page.url.pathname);

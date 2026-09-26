@@ -52,12 +52,33 @@ export interface KeymapAction {
   locked_keys?: string[];
 }
 
+export interface KeymapValidationIssue {
+  code: string;
+  severity: 'error' | 'warning';
+  field: string;
+  message: string;
+  detail?: Record<string, unknown>;
+  bypassable?: boolean;
+}
+
 export interface KeymapDocument {
   grammar: KeymapGrammar;
   contexts: KeymapContext[];
   actions: KeymapAction[];
   /** Served only (K2): the derived class-hotkey reserved set. */
   reserved_hotkeys?: string[];
+  /** Served only (K2, plan §0.1): per-project scope. */
+  scope?: 'project' | 'deployment';
+  project?: string;
+  revision?: number;
+  etag?: string;
+  /** Whether the project has any saved override — the "custom keys" badge. */
+  is_default?: boolean;
+  updated_at?: string | null;
+  /** The raw action-id -> combos override map that produced `actions[].keys`. */
+  overrides?: Record<string, string[]>;
+  /** `keymap_class_hotkey_shadowed` warnings and similar (plan §4.2). */
+  issues?: KeymapValidationIssue[];
 }
 
 const LOCKED_KEYS = [
