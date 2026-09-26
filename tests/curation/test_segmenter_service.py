@@ -189,6 +189,23 @@ class TestClientServerContract:
         assert served.image_sizes == [(320, 240)]
 
     @pytest.mark.asyncio
+    async def test_candidate_source_is_the_configured_segmenter_name(
+        self,
+        served: _FakeProcessor,  # noqa: ARG002
+    ) -> None:
+        async with _asgi_client() as http:
+            client = SegmenterClient(
+                base_url='http://segmenter',
+                client=http,
+                text_prompt=_PROMPT,
+                source_name='my_segmenter',
+            )
+            candidate = await client.segment(_make_jpeg())
+
+        assert candidate is not None
+        assert candidate.source == 'my_segmenter'
+
+    @pytest.mark.asyncio
     async def test_empty_result_is_a_clean_miss(self) -> None:
         """No candidates → ``None``, which the cascade treats as a miss."""
         empty = _FakeProcessor(boxes=[], scores=[])
@@ -423,7 +440,7 @@ class TestCascadeWithTheShippedSegmenter:
             task = worker._ItemTask(
                 crop_id='crop-1',
                 image_path='/dev/null/never-read',
-                vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
+                item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
                 region_status='pending',
                 class_name='audi',
                 group='cars',

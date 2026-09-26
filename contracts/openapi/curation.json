@@ -4788,7 +4788,7 @@
       },
       "ItemRegionMetaRequest": {
         "additionalProperties": false,
-        "description": "Patch region metadata without touching ``region_bbox_norm``.\n\nUse this for operator corrections like fixing a region's OCR text or\nchanging the status to ``verify_rejected``. To set or clear the bbox\nitself, use ``PUT /crops/{crop_id}/region``.\n\nEvery field is optional; only the provided ones are written. ``None``\non ``region_text`` clears the text, on ``region_rejection_reason``\nclears the reason. ``region_status`` must be one of\n``HUMAN_REGION_STATUS_VALUES`` when present.",
+        "description": "Patch region metadata without touching ``region_bbox_norm``.\n\nUse this for operator corrections like fixing a region's text (text-reading\nprofiles only; a text-free profile answers 422 ``region_text_disabled``) or\nchanging the status to ``verify_rejected``. To set or clear the bbox\nitself, use ``PUT /crops/{crop_id}/region``.\n\nEvery field is optional; only the provided ones are written. ``None``\non ``region_text`` clears the text, on ``region_rejection_reason``\nclears the reason. ``region_status`` must be one of\n``HUMAN_REGION_STATUS_VALUES`` when present.",
         "properties": {
           "region_label_source": {
             "default": "human",
@@ -6146,11 +6146,22 @@
             "title": "Name",
             "type": "string"
           },
+          "reads_text": {
+            "description": "False for a text-free profile: no region text is read, stored or editable.",
+            "title": "Reads Text",
+            "type": "boolean"
+          },
           "region_class_name": {
             "title": "Region Class Name",
             "type": "string"
           },
+          "text_hint_enabled": {
+            "description": "Whether the OCR text-hint re-pass is enabled after a segmenter miss.",
+            "title": "Text Hint Enabled",
+            "type": "boolean"
+          },
           "text_reader": {
+            "description": "The profile's text reader; 'none' for a text-free profile.",
             "title": "Text Reader",
             "type": "string"
           }
@@ -6160,7 +6171,9 @@
           "display_name",
           "display_name_singular",
           "region_class_name",
-          "text_reader"
+          "text_reader",
+          "reads_text",
+          "text_hint_enabled"
         ],
         "title": "RegionProfileSummary",
         "type": "object"
@@ -6223,7 +6236,7 @@
                 "type": "null"
               }
             ],
-            "description": "Which readings count as region text; null without a region profile.",
+            "description": "Which readings count as region text; null without a region profile or for a text-free one.",
             "title": "Text Rules"
           }
         },
@@ -11175,7 +11188,7 @@
     },
     "/curation/crops/{crop_id}/region_meta": {
       "patch": {
-        "description": "Patch region metadata (text / status / rejection reason).\n\nBbox edits go through ``PUT /crops/{crop_id}/region``. Only the fields\npresent in the payload are written; a status write applies the\nlifecycle invariants (see :mod:`src.services.curation.region_writes`).\nReturns ``updated_fields`` (wire names) and ``item`` (post-write).",
+        "description": "Patch region metadata (text / status / rejection reason).\n\nBbox edits go through ``PUT /crops/{crop_id}/region``. Only the fields\npresent in the payload are written; a status write applies the\nlifecycle invariants (see :mod:`src.services.curation.region_writes`).\nReturns ``updated_fields`` (wire names) and ``item`` (post-write).\n``region_text`` is accepted on a text-reading profile only; a\ntext-free profile answers 422 ``region_text_disabled`` and writes\nnothing.",
         "operationId": "patch_crop_region_meta_curation_crops__crop_id__region_meta_patch",
         "parameters": [
           {

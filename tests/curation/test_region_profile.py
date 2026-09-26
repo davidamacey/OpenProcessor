@@ -21,6 +21,7 @@ import pytest
 from _region_profile_fixture import (
     EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE,
     EXAMPLE_LICENSE_PLATE_PROFILE_PATH,
+    REFERENCE_REGION_DETECTOR_MODEL,
 )
 
 import scripts.curation.region_worker_main as worker
@@ -180,20 +181,21 @@ def test_models_roster_skips_region_models_when_unconfigured(
     from src.routers.curation.models import _core_models, _region_protected_models
 
     names = {name for name, *_ in _core_models()}
-    assert REFERENCE_LICENSE_PLATE_PROFILE.detector_model not in names
-    assert REFERENCE_LICENSE_PLATE_PROFILE.detector_model not in _region_protected_models()
+    assert REFERENCE_REGION_DETECTOR_MODEL not in names
+    assert REFERENCE_REGION_DETECTOR_MODEL not in _region_protected_models()
 
     region_env.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
+    region_env.setenv(f'{_ENV_PREFIX}DETECTOR_MODEL', REFERENCE_REGION_DETECTOR_MODEL)
     profile_registry._reset_registry_for_tests()
     names = {name for name, *_ in _core_models()}
-    assert REFERENCE_LICENSE_PLATE_PROFILE.detector_model in names
+    assert REFERENCE_REGION_DETECTOR_MODEL in names
 
 
 def test_training_candidates_query_uses_neutral_profile(region_env: pytest.MonkeyPatch) -> None:
     from src.routers.curation.regions import _training_candidate_query
 
     query, _reason = _training_candidate_query('low_conf_correct')
-    assert REFERENCE_LICENSE_PLATE_PROFILE.detector_model not in str(query)
+    assert REFERENCE_REGION_DETECTOR_MODEL not in str(query)
 
 
 def _patch_worker_io(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
@@ -263,10 +265,11 @@ async def test_worker_sends_the_profile_segmenter_prompt(
 ) -> None:
     region_env.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     region_env.setenv(f'{_ENV_PREFIX}SEGMENTER_TEXT_PROMPT', 'shipping label')
+    region_env.setenv(f'{_ENV_PREFIX}SEGMENTER_NAME', 'my_segmenter')
     mocks = _patch_worker_io(region_env)
     assert await worker.run(_worker_args(tmp_path)) == 0
     mocks['SegmenterClient'].assert_called_once_with(
-        'http://segmenter.local:8000', text_prompt='shipping label'
+        'http://segmenter.local:8000', text_prompt='shipping label', source_name='my_segmenter'
     )
 
 
@@ -277,7 +280,7 @@ async def test_worker_disables_segmenter_when_profile_has_no_prompt(
     region_env.setenv(f'{_ENV_PREFIX}NAME', 'shipping_label')
     mocks = _patch_worker_io(region_env)
     assert await worker.run(_worker_args(tmp_path)) == 0
-    mocks['SegmenterClient'].assert_called_once_with('', text_prompt='')
+    mocks['SegmenterClient'].assert_called_once_with('', text_prompt='', source_name='sam3')
 
 
 def test_secondary_shape_routing_follows_env_groups(
@@ -292,7 +295,7 @@ def test_secondary_shape_routing_follows_env_groups(
     task = worker._ItemTask(
         crop_id='c',
         image_path='/x',
-        vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
+        item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
         region_status=None,
         class_name='audi',
     )
@@ -311,7 +314,7 @@ def test_no_secondary_shape_routing_when_profile_has_no_groups(
     task = worker._ItemTask(
         crop_id='c',
         image_path='/x',
-        vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
+        item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
         region_status=None,
         class_name='class_b',
     )

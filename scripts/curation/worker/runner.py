@@ -286,7 +286,13 @@ async def run(args: argparse.Namespace) -> int:
             detail='set OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT to use the segmenter leg',
         )
         segmenter_url = ''
-    segmenter = _wkr.SegmenterClient(segmenter_url, text_prompt=profile.segmenter_text_prompt)
+    segmenter = _wkr.SegmenterClient(
+        segmenter_url,
+        text_prompt=profile.segmenter_text_prompt,
+        source_name=profile.segmenter_name,
+    )
+    # OCR text-hint re-pass after a segmenter miss (profile-optional).
+    text_hint_on = profile.text_hint_active(segmenter_enabled=bool(segmenter.enabled))
     # The deployment's prompt pack (OP_PROMPT_PACK_PATH) tells the VLM what
     # the region IS and that ``region_text`` is its transcribed text. The
     # built-in generic pack describes an unspecified "labeled sub-region",
@@ -589,7 +595,7 @@ async def run(args: argparse.Namespace) -> int:
                         _crop_jpeg_for_task,
                         t.crop_id,
                         t.image_path,
-                        t.vehicle_bbox_norm,
+                        t.item_bbox_norm,
                     )
                 if t.crop_jpeg is None:
                     t.update_doc = unreadable_crop_update(t)
@@ -621,7 +627,7 @@ async def run(args: argparse.Namespace) -> int:
                 ):
                     t.candidate_source = CANDIDATE_DETECTOR_EXISTING
                     t.candidate_in_crop = _source_to_crop(
-                        t.detector_region_in_source, t.vehicle_bbox_norm
+                        t.detector_region_in_source, t.item_bbox_norm
                     )
                     t.candidate_in_source = t.detector_region_in_source
                     t.candidate_score = t.detector_score
@@ -636,8 +642,14 @@ async def run(args: argparse.Namespace) -> int:
                     continue
 
                 # Path 2: pending + non-secondary-shape — try the
-                # primary detector first (fast Triton call).
-                if t.region_status in _PENDING_DETECTION_ALIASES and not is_secondary:
+                # primary detector first (fast Triton call). A profile with
+                # no detector_model has no detector leg: straight to Path 3,
+                # with nothing on the trace.
+                if (
+                    t.region_status in _PENDING_DETECTION_ALIASES
+                    and not is_secondary
+                    and profile.detector_model
+                ):
                     _detector_t0 = time.monotonic()
                     try:
                         detector_results = await detector.detect_batch([t.crop_jpeg])
@@ -655,7 +667,7 @@ async def run(args: argparse.Namespace) -> int:
                         t.candidate_source = CANDIDATE_DETECTOR
                         t.candidate_in_crop = cand.bbox_norm
                         t.candidate_in_source = crop_norm_to_source_norm(
-                            cand.bbox_norm, t.vehicle_bbox_norm
+                            cand.bbox_norm, t.item_bbox_norm
                         )
                         t.candidate_score = cand.score
                         if vlm_available:
@@ -932,7 +944,7 @@ async def run(args: argparse.Namespace) -> int:
                         and _bbox_shape_is_plausible(sam_candidate.bbox_norm)
                     ):
                         projected = crop_norm_to_source_norm(
-                            sam_candidate.bbox_norm, t.vehicle_bbox_norm
+                            sam_candidate.bbox_norm, t.item_bbox_norm
                         )
                         t.detection_trace.append(f'{region_profile().segmenter_name}:hit')
                         t.detection_trace.append(
@@ -970,7 +982,7 @@ async def run(args: argparse.Namespace) -> int:
                     t.candidate_source = CANDIDATE_SEGMENTER
                     t.candidate_in_crop = sam_candidate.bbox_norm
                     t.candidate_in_source = crop_norm_to_source_norm(
-                        sam_candidate.bbox_norm, t.vehicle_bbox_norm
+                        sam_candidate.bbox_norm, t.item_bbox_norm
                     )
                     t.candidate_score = sam_candidate.score
                     if vlm_available:
@@ -983,52 +995,61 @@ async def run(args: argparse.Namespace) -> int:
                     sam_q.task_done()
                     continue
 
-                # Secondary segmenter missed globally; re-prompt it
-                # with a tight sub-crop around an OCR text hint. The
-                # OCR-detection bbox is no longer trusted; the
-                # segmenter produces the final geometry. OCR text
-                # rides along for storage.
-                if t.item_ocr_lines is not None:
-                    ocr_regions = ocr_recognizer.regions_from_lines(t.item_ocr_lines)
+                if not text_hint_on:
+                    # No text-hint re-pass: the segmenter's miss is final.
+                    if segmenter.enabled:
+                        t.detection_trace.append(f'{region_profile().segmenter_name}:miss')
                 else:
-                    try:
-                        ocr_regions = await ocr_recognizer.detect_regions(t.crop_jpeg)
-                    except Exception as exc:
-                        logger.warning('text_hint_ocr_failed', crop_id=t.crop_id, error=str(exc))
-                        ocr_regions = []
-                ocr_pick = (
-                    ocr_recognizer.pick_best_text_region(ocr_regions) if ocr_regions else None
-                )
-                if ocr_pick is not None:
-                    t.detection_trace.append(f'{region_profile().ocr_rec_model}:text_hint:hit')
-                    sub_cand, _sub_box = await _resegment_from_text_hint(
-                        t.crop_jpeg, ocr_pick.bbox_norm, segmenter
-                    )
-                    if sub_cand is not None:
-                        t.candidate_source = CANDIDATE_SEGMENTER_TEXT_HINT
-                        t.candidate_in_crop = sub_cand.bbox_norm
-                        t.candidate_in_source = crop_norm_to_source_norm(
-                            sub_cand.bbox_norm, t.vehicle_bbox_norm
-                        )
-                        t.candidate_score = sub_cand.score
-                        t.candidate_text = ocr_pick.text
-                        t.candidate_text_confidence = ocr_pick.rec_score
-                        if vlm_available:
-                            await combined_q.put(t)
-                        else:
-                            await accept_without_vlm(
-                                t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                    # Secondary segmenter missed globally; re-prompt it
+                    # with a tight sub-crop around an OCR text hint. The
+                    # OCR-detection bbox is no longer trusted; the
+                    # segmenter produces the final geometry. OCR text
+                    # rides along for storage.
+                    if t.item_ocr_lines is not None:
+                        ocr_regions = ocr_recognizer.regions_from_lines(t.item_ocr_lines)
+                    else:
+                        try:
+                            ocr_regions = await ocr_recognizer.detect_regions(t.crop_jpeg)
+                        except Exception as exc:
+                            logger.warning(
+                                'text_hint_ocr_failed', crop_id=t.crop_id, error=str(exc)
                             )
-                            await out_q.put(t)
-                        sam_q.task_done()
-                        continue
-                    t.detection_trace.append(f'{region_profile().segmenter_name}:text_hint:miss')
-                elif ocr_regions:
-                    t.detection_trace.append(
-                        f'{region_profile().ocr_rec_model}:text_hint:no_region_shape'
+                            ocr_regions = []
+                    ocr_pick = (
+                        ocr_recognizer.pick_best_text_region(ocr_regions) if ocr_regions else None
                     )
-                else:
-                    t.detection_trace.append(f'{region_profile().ocr_rec_model}:text_hint:miss')
+                    if ocr_pick is not None:
+                        t.detection_trace.append(f'{region_profile().ocr_rec_model}:text_hint:hit')
+                        sub_cand, _sub_box = await _resegment_from_text_hint(
+                            t.crop_jpeg, ocr_pick.bbox_norm, segmenter
+                        )
+                        if sub_cand is not None:
+                            t.candidate_source = CANDIDATE_SEGMENTER_TEXT_HINT
+                            t.candidate_in_crop = sub_cand.bbox_norm
+                            t.candidate_in_source = crop_norm_to_source_norm(
+                                sub_cand.bbox_norm, t.item_bbox_norm
+                            )
+                            t.candidate_score = sub_cand.score
+                            t.candidate_text = ocr_pick.text
+                            t.candidate_text_confidence = ocr_pick.rec_score
+                            if vlm_available:
+                                await combined_q.put(t)
+                            else:
+                                await accept_without_vlm(
+                                    t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                                )
+                                await out_q.put(t)
+                            sam_q.task_done()
+                            continue
+                        t.detection_trace.append(
+                            f'{region_profile().segmenter_name}:text_hint:miss'
+                        )
+                    elif ocr_regions:
+                        t.detection_trace.append(
+                            f'{region_profile().ocr_rec_model}:text_hint:no_region_shape'
+                        )
+                    else:
+                        t.detection_trace.append(f'{region_profile().ocr_rec_model}:text_hint:miss')
 
                 # Nothing found by any detector → no_region_box.
                 t.update_doc = {
@@ -1252,7 +1273,7 @@ async def run(args: argparse.Namespace) -> int:
                             # a real region of interest. Sanity-gate
                             # before committing.
                             gate_ok, gate_reason = is_plausible_region_bbox(
-                                t.candidate_in_crop, t.vehicle_bbox_norm
+                                t.candidate_in_crop, t.item_bbox_norm
                             )
                             if not gate_ok:
                                 t.detection_trace.append(f'{actor}:sanity_reject:{gate_reason}')

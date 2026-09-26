@@ -13,7 +13,10 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE_PATH
+from _region_profile_fixture import (
+    EXAMPLE_LICENSE_PLATE_PROFILE_PATH,
+    REFERENCE_REGION_DETECTOR_MODEL,
+)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -67,14 +70,15 @@ def test_regions_vocabulary_reflects_the_active_profile(
     from src.services.detection import profile_registry
 
     monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
+    monkeypatch.setenv('OP_REGION_DETECTION_DETECTOR_MODEL', REFERENCE_REGION_DETECTOR_MODEL)
     profile_registry._reset_registry_for_tests()
     try:
         resp = client.get('/curation/regions/vocabulary')
         assert resp.status_code == 200, resp.text
         body = resp.json()
         by_id = {d['id']: d for d in body['detectors']}
-        assert by_id['license_plate_detector']['role'] == 'detector'
-        assert by_id['license_plate_detector']['filterable'] is True
+        assert by_id[REFERENCE_REGION_DETECTOR_MODEL]['role'] == 'detector'
+        assert by_id[REFERENCE_REGION_DETECTOR_MODEL]['filterable'] is True
         assert by_id['sam3']['role'] == 'segmenter'
         assert by_id['sam3']['filterable'] is True
         # OCR text-hint locates text but never sets the region bbox --
@@ -125,7 +129,7 @@ def test_regions_vocabulary_env_configured_detector_reflected(
         body = resp.json()
         detector_ids = {d['id'] for d in body['detectors']}
         assert 'my_custom_region_yolo' in detector_ids
-        assert 'license_plate_detector' not in detector_ids
+        assert REFERENCE_REGION_DETECTOR_MODEL not in detector_ids
     finally:
         profile_registry._reset_registry_for_tests()
 
@@ -292,3 +296,76 @@ def test_regions_vocabulary_response_is_typed_in_openapi(client: TestClient) -> 
     assert set(entry['properties']) == {'id', 'label', 'kind', 'match', 'label_template'}
     assert set(entry['properties']['kind']['enum']) == set(REJECTION_REASON_KINDS)
     assert set(entry['properties']['match']['enum']) == {'exact', 'prefix'}
+
+
+@pytest.fixture
+def text_free_profile(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """The example profile switched to text-free, with the text hint off."""
+    from src.services.detection import profile_registry
+
+    monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
+    monkeypatch.setenv('OP_REGION_DETECTION_TEXT_READER', 'none')
+    monkeypatch.setenv('OP_REGION_DETECTION_TEXT_HINT_ENABLED', 'false')
+    profile_registry._reset_registry_for_tests()
+    yield
+    profile_registry._reset_registry_for_tests()
+
+
+@pytest.mark.usefixtures('text_free_profile')
+def test_regions_vocabulary_text_free_profile_serves_no_text_vocabulary(
+    client: TestClient,
+) -> None:
+    resp = client.get('/curation/regions/vocabulary')
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body['text_rules'] is None
+    assert body['text_choices'] == []
+    assert 'ocr' not in {d['role'] for d in body['detectors']}
+    assert 'ocr' not in {a['role'] for a in body['chain_actors']}
+    assert 'segmenter_text_hint' not in {s['id'] for s in body['region_sources']}
+    summary = body['region_profile']
+    assert summary['text_reader'] == 'none'
+    assert summary['reads_text'] is False
+    assert summary['text_hint_enabled'] is False
+
+
+def test_regions_vocabulary_text_hint_needs_an_ocr_pipeline(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services.detection import profile_registry
+
+    monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
+    monkeypatch.setenv('OP_REGION_DETECTION_OCR_PIPELINE_MODEL', '')
+    profile_registry._reset_registry_for_tests()
+    try:
+        body = client.get('/curation/regions/vocabulary').json()
+        assert 'ocr' not in {d['role'] for d in body['detectors']}
+        assert 'segmenter_text_hint' not in {s['id'] for s in body['region_sources']}
+        # Text reading is independent of the hint.
+        assert body['region_profile']['reads_text'] is True
+        assert body['text_rules'] is not None
+    finally:
+        profile_registry._reset_registry_for_tests()
+
+
+@pytest.mark.usefixtures('reference_region_profile')
+def test_regions_vocabulary_text_reading_profile_summary(client: TestClient) -> None:
+    summary = client.get('/curation/regions/vocabulary').json()['region_profile']
+    assert summary['reads_text'] is True
+    assert summary['text_hint_enabled'] is True
+
+
+def test_regions_vocabulary_segmenter_only_profile_lists_no_detector(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services.detection import profile_registry
+
+    monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
+    profile_registry._reset_registry_for_tests()
+    try:
+        body = client.get('/curation/regions/vocabulary').json()
+        assert 'detector' not in {d['role'] for d in body['detectors']}
+        assert '' not in {d['id'] for d in body['detectors']}
+        assert '' not in {a['id'] for a in body['chain_actors']}
+    finally:
+        profile_registry._reset_registry_for_tests()

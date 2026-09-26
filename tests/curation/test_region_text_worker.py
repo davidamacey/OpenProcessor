@@ -20,6 +20,7 @@ import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import runner as runner_mod
 from src.config import get_region_fields
 from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.profile_registry import register_profile
 from src.services.detection.region_text import OcrLine
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
@@ -60,12 +61,17 @@ async def _drive(
     vlm_url: str,
     reply: VlmCombinedReply | None = None,
     text_reader: str | None = None,
+    profile_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     handlers = _capture_signal_handler(monkeypatch)
     monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
     if text_reader is not None:
         profile = dataclasses.replace(_profile(), text_reader=text_reader)
         monkeypatch.setattr(runner_mod, 'get_active_region_profile', lambda: profile)
+    if profile_overrides:
+        # Registered (not just patched into the runner) so every stage that
+        # re-reads the active profile sees the same one.
+        register_profile(dataclasses.replace(_profile(), **profile_overrides), default=True)
 
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
     monkeypatch.setattr(worker, 'AsyncTritonPool', MagicMock(return_value=pool))

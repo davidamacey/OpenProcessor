@@ -1,0 +1,16 @@
+{
+  "_comment": "Example text-free region profile: wheels on car crops. SAM3 proposes wheel boxes from a text prompt; there is no detector leg (detector_model is empty) and no text reading. After you train and promote a wheel detector, set detector_model to its Triton name to add the detector leg.",
+  "name": "vehicle_wheel",
+  "detector_model": "",
+  "segmenter_name": "sam3",
+  "segmenter_version": "1",
+  "segmenter_text_prompt": "wheel",
+  "parent_classes": ["car"],
+  "text_reader": "none",
+  "text_hint_enabled": false,
+  "ocr_pipeline_model": "",
+  "auto_confirm_area_frac": [0.005, 0.5],
+  "region_class_name": "wheel",
+  "display_name": "Wheels",
+  "display_name_singular": "Wheel"
+}

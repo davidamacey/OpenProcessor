@@ -14,6 +14,7 @@ from typing import Any
 from src.config.curation import BACKBONE_EMBEDDING_FIELD
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
+from src.services.curation.region_scope import in_parent_classes
 from src.services.detection.cascade_detect import class_provenance
 from src.services.detection.profile_registry import get_active_region_profile
 
@@ -23,16 +24,26 @@ from src.services.detection.profile_registry import get_active_region_profile
 INGEST_CLASS_LABELER = 'ingest'
 
 
-def region_seed_status() -> RegionStatus | None:
+def region_seed_status(item: DetectedItem | None = None) -> RegionStatus | None:
     """Region status a newly created item starts in, or ``None``.
 
     The region-detection worker only selects items already carrying a
     pending status (``scripts/curation/worker/cascade.py``), so with a
-    region profile active every new item is seeded ``pending_detection``
-    — otherwise nothing ever reaches the cascade. With no profile (the
-    neutral default) the worker idles and nothing is written.
+    region profile active every new item in the profile's scope
+    (``parent_classes``, see :mod:`src.services.curation.region_scope`) is
+    seeded ``pending_detection`` — otherwise nothing ever reaches the
+    cascade. With no profile (the neutral default) the worker idles and
+    nothing is written. Without ``item`` the answer is whether the region
+    stage is on at all.
     """
-    return RegionStatus.PENDING_DETECTION if get_active_region_profile() is not None else None
+    profile = get_active_region_profile()
+    if profile is None:
+        return None
+    if item is not None and not in_parent_classes(
+        profile.parent_classes, class_name=item.class_name, proposal_name=item.proposal_name
+    ):
+        return None
+    return RegionStatus.PENDING_DETECTION
 
 
 @dataclass

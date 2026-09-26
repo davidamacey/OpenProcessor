@@ -254,7 +254,7 @@ class CombinedParseFailure(Exception):  # noqa: N818 - documented public symbol
     """Raised when ``label_combined`` cannot parse the VLM's response.
 
     Callers should fall back to the existing separate-call paths
-    (``label_vehicle_batch`` + ``verify_region_batch``) for the affected
+    (``label_item_batch`` + ``verify_region_batch``) for the affected
     crop.
     """
 
@@ -854,7 +854,7 @@ class VlmLabeler:
                 reachable=False, model=self.model, last_error=f'{type(exc).__name__}: {exc}'
             )
 
-    async def label_vehicle_batch(
+    async def label_item_batch(
         self,
         crops: list[ItemCrop],
         class_names: list[str],
@@ -942,13 +942,13 @@ class VlmLabeler:
         reasoning text tried -- a parsed ``content`` always wins.
         """
         content = _strip_markdown_fences(extract_message_content(response))
-        preds = self._parse_vehicle_response(content, chunk, self._fields)
+        preds = self._parse_item_response(content, chunk, self._fields)
         if any(p.failure is None for p in preds):
             return preds
         reasoning = extract_reasoning_content(response)
         if not reasoning:
             return preds
-        from_reasoning = self._parse_vehicle_response(
+        from_reasoning = self._parse_item_response(
             reasoning, chunk, self._fields, log_failures=False
         )
         if any(p.failure is None for p in from_reasoning):
@@ -961,7 +961,7 @@ class VlmLabeler:
         return preds
 
     @staticmethod
-    def _parse_vehicle_response(
+    def _parse_item_response(
         raw: str,
         chunk: list[ItemCrop],
         fields: RegionFields,
@@ -1075,7 +1075,7 @@ class VlmLabeler:
     ) -> list[VlmClassPrediction]:
         """Label crops, but allow the VLM to propose new classes when nothing fits.
 
-        Identical contract to :py:meth:`label_vehicle_batch` except the
+        Identical contract to :py:meth:`label_item_batch` except the
         open-vocabulary prompt is used (the VLM may answer ``__new__``
         with a ``proposed_class`` slug). Predictions for unrecognized
         items come back with ``class_name='__new__'`` and a populated
@@ -1777,7 +1777,7 @@ class VlmLabeler:
         gave (mirrors :py:meth:`_parse_region_visible_response`'s
         empty-reply handling). ``log_failures=False`` suppresses the
         parse-failure warnings for a second attempt against the
-        reasoning channel, matching :py:meth:`_parse_vehicle_response`.
+        reasoning channel, matching :py:meth:`_parse_item_response`.
 
         Tolerates the same VLM quirks as :py:meth:`_parse_region_response`:
         leading reasoning prose, ``{"results":[...]}`` envelopes, and

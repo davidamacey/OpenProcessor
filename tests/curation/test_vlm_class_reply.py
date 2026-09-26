@@ -57,7 +57,7 @@ class TestClassCallTransport:
         if open_vocab:
             preds = await labeler.label_or_propose_batch(_crops(2), ['widget'])
         else:
-            preds = await labeler.label_vehicle_batch(_crops(2), ['widget'])
+            preds = await labeler.label_item_batch(_crops(2), ['widget'])
         sent = labeler._client.post.await_args.kwargs['json']
         assert sent['response_format'] == {'type': 'json_object'}
         user_text = ' '.join(

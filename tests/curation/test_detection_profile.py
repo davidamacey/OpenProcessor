@@ -82,6 +82,8 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'TEXT_HINT_REC_FLOOR': '0.65',
         'TEXT_HINT_LEN_MIN': '3',
         'TEXT_HINT_LEN_MAX': '12',
+        'TEXT_HINT_ENABLED': 'false',
+        'TEXT_HINT_REQUIRE_LETTERS_AND_DIGITS': 'true',
         'AUTO_CONFIRM_ASPECT': '0.25,4.5',
         'AUTO_CONFIRM_AREA_FRAC': '0.01,0.75',
         'TEXT_PATTERN': r'[0-9]{3,}',
@@ -114,6 +116,7 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'SEGMENTER_TEXT_PROMPT': 'env prompt',
         'SECONDARY_SHAPE_GROUPS': 'group_a,group_b',
         'CLASS_IDS': '2, 3,7',
+        'PARENT_CLASSES': 'car, Bus',
         'ASSIGNS_CLASS': 'true',
         'LABELS_PATH': '/models/proposer/labels.txt',
         'REGION_CLASS_NAME': 'env_region_class',
@@ -147,6 +150,9 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
     assert profile.text_hint_rec_floor == 0.65
     assert profile.text_hint_len_min == 3
     assert profile.text_hint_len_max == 12
+    assert profile.text_hint_enabled is False
+    assert profile.text_hint_require_letters_and_digits is True
+    assert profile.parent_classes == frozenset({'car', 'Bus'})
     assert profile.auto_confirm_aspect == (0.25, 4.5)
     assert profile.auto_confirm_area_frac == (0.01, 0.75)
     assert profile.text_pattern == r'[0-9]{3,}'
