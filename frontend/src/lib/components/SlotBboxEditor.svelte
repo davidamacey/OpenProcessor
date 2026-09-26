@@ -16,12 +16,10 @@
    * `frame: 'parent'` — the server does the projection into its own
    * stored frame, so this component never re-derives it.
    *
-   * Hotkeys (focus inside the modal):
-   *   [ / ]    nudge right edge in / out by 1 crop-pixel
-   *   ↑↓←→     move whole box by 1 crop-pixel
-   *   Backspace clear the box (saves as the slot's rejectState)
-   *   Enter    save & advance
-   *   Escape   close without saving
+   * Hotkeys (focus inside the modal): the `box_edit` keymap actions, via
+   * the shared `runBoxEditKey` (`$lib/boxEditKeys`) — right-edge nudge,
+   * whole-box move (1 crop-pixel), clear (saves as the slot's
+   * rejectState), save, and close without saving.
    *
    * `onsave` fires AFTER this component has already performed the write
    * (via `setSlotBox`) — "notify", not "perform the save". It passes the
@@ -34,7 +32,11 @@
   import { slotOf } from '$lib/annotations/cropSlots';
   import type { SlotSpec } from '$lib/annotations/types';
   import { toastStore } from '$stores/toast.svelte';
+  import { keymapStore } from '$stores/keymap.svelte';
+  import { runBoxEditKey } from '$lib/boxEditKeys';
   import type { BBoxNorm, Crop } from '$lib/types';
+
+  const kg = (id: string) => keymapStore.compactGlyph(id);
 
   interface Props {
     crop: Crop;
@@ -308,46 +310,22 @@
     });
   }
 
-  async function onKeyDown(e: KeyboardEvent): Promise<void> {
+  function onKeyDown(e: KeyboardEvent): void {
     if (busy) return;
-    switch (e.key) {
-      case 'Escape':
-        e.preventDefault();
-        onclose();
-        return;
-      case 'Enter':
-        e.preventDefault();
-        await save();
-        return;
-      case 'Backspace':
-        e.preventDefault();
-        boxLocal = null;
-        return;
-      case 'ArrowUp':
-        e.preventDefault();
-        nudgeBox(0, -pxStep);
-        return;
-      case 'ArrowDown':
-        e.preventDefault();
-        nudgeBox(0, pxStep);
-        return;
-      case 'ArrowLeft':
-        e.preventDefault();
-        nudgeBox(-pxStep, 0);
-        return;
-      case 'ArrowRight':
-        e.preventDefault();
-        nudgeBox(pxStep, 0);
-        return;
-      case '[':
-        e.preventDefault();
-        nudgeRightEdge(-pxStep);
-        return;
-      case ']':
-        e.preventDefault();
-        nudgeRightEdge(pxStep);
-        return;
-    }
+    const handled = runBoxEditKey(
+      e,
+      {
+        save,
+        cancel: onclose,
+        nudge: nudgeBox,
+        nudgeRightEdge,
+        deleteBox: () => {
+          boxLocal = null;
+        },
+      },
+      pxStep,
+    );
+    if (handled) e.preventDefault();
   }
 
   // -- save -------------------------------------------------------------
@@ -512,14 +490,25 @@
     <footer class="flex flex-col gap-1 text-[11px] text-zinc-400">
       <div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono">
         <span
-          ><kbd class="rounded bg-zinc-800 px-1">[</kbd>/<kbd
-            class="rounded bg-zinc-800 px-1">]</kbd
+          ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.shrink_right')}</kbd>/<kbd
+            class="rounded bg-zinc-800 px-1">{kg('box_edit.grow_right')}</kbd
           > right edge</span
         >
-        <span><kbd class="rounded bg-zinc-800 px-1">←↑↓→</kbd> move</span>
-        <span><kbd class="rounded bg-zinc-800 px-1">⌫</kbd> clear</span>
-        <span><kbd class="rounded bg-zinc-800 px-1">↵</kbd> save</span>
-        <span><kbd class="rounded bg-zinc-800 px-1">Esc</kbd> cancel</span>
+        <span
+          ><kbd class="rounded bg-zinc-800 px-1"
+            >{kg('box_edit.nudge_left')}{kg('box_edit.nudge_up')}{kg(
+              'box_edit.nudge_down',
+            )}{kg('box_edit.nudge_right')}</kbd
+          > move</span
+        >
+        <span
+          ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.delete_box')}</kbd> clear</span
+        >
+        <span><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.save')}</kbd> save</span
+        >
+        <span
+          ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.cancel')}</kbd> cancel</span
+        >
       </div>
       <div class="font-mono text-[11px] text-zinc-500">
         {sourceFrameSummary}

@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Action-id keymap store** (internal/architecture, frontend only, step
+  K1 of `docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md`).
+  No behavior change: every shortcut, hint, toast and overlay row uses
+  exactly the same keys and wording as before. Every rebindable shortcut
+  is now a named action (`review.queue.discard`, `cluster.undo`, …, 46
+  ids) declared once in `src/lib/keymapFallback.ts` and served through
+  `keymapStore` (`src/lib/stores/keymap.svelte.ts`). Pages register
+  handlers by id (`keyboardStore.registerAction`), dispatch resolves the
+  keys at keypress time, and every printed key reads
+  `keymapStore.glyph()`/`compactGlyph()` instead of a literal. The
+  store enforces the locked keys (Esc, Enter and the arrows, which are
+  never lost and never taken by another action). `/review`'s edit mode
+  and the box-editor modal now share one `box_edit` key handler
+  (`src/lib/boxEditKeys.ts`). The served region slot's keymap is derived
+  from the store instead of being a second literal. A ratchet test
+  (`keymap.literals.scan.test.ts`) fails on any literal printed key. K2
+  will load a served `GET {prefix}/keymap` through the same store.
+
 - **Groundwork for multi-project support** (internal/architecture,
   `docs/design/any-domain-rev3-and-projects-contract-review-2026-09-26.md`
   §7). No behavior change: every URL built today is byte-identical to

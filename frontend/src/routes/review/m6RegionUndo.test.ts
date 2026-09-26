@@ -66,7 +66,8 @@ describe('M6: confirmSlot/rejectSlot/markFalsePositive/saveBboxAndExit record a 
 
 describe('M6: Z is wired globally, so it reaches region-undo entries pushed from the slot tab too', () => {
   it("registers 'z' unconditionally (outside the activeSlot-only branch), not a second slot-only binding", () => {
-    expect(src).toMatch(/reg\('z', undoLast, 'Undo last'\);/);
+    // K1: registered by keymap action id (`review.undo`, default z).
+    expect(src).toMatch(/reg\('review\.undo', undoLast\);/);
   });
 });
 
@@ -82,9 +83,14 @@ describe('M6: "← back"/"to go back" copy renamed to "step back" — Back only 
   });
 
   it('the three write-success toasts point at Z for undo and at step-back (←) separately', () => {
+    // K1: the keys are the keymap's glyphs, not literals — `undoHint()`
+    // prints review.undo (Z) and review.region.back (←) separately.
+    expect(src).toMatch(
+      /const undoHint = \(\) =>\s*`Press \$\{kg\('review\.undo'\)\} to undo, step back with \$\{kg\('review\.region\.back'\)\}\.`;/,
+    );
     for (const name of ['confirmSlot', 'rejectSlot', 'markFalsePositive']) {
       const body = fn(name);
-      expect(body).toMatch(/Press Z to undo, step back with ←\./);
+      expect(body).toMatch(/\$\{undoHint\(\)\}`/);
     }
   });
 });

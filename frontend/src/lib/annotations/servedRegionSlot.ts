@@ -17,6 +17,7 @@
  */
 
 import type { ServedRegionProfile } from '$lib/types';
+import { keymapStore } from '$stores/keymap.svelte';
 import type { SlotSpec, SlotState, SubBoxCapability, TextCapability } from './types';
 
 const encode = encodeURIComponent;
@@ -207,12 +208,14 @@ export function regionSlotFromServedProfile(p: ServedRegionProfile): SlotSpec {
         urlId: REGION_TAB_ID,
         tabLabel: noun,
         browsePath: '/regions',
+        // The region keys are the keymap's `review.region.*` actions
+        // (keymapFallback.ts), not a second literal here.
         keymap: {
-          confirm: ['enter'],
-          reject: ['d'],
-          markFalsePositive: ['f'],
-          editBox: ['e'],
-          back: ['arrowleft', 'b'],
+          confirm: keymapStore.keysFor('review.region.confirm'),
+          reject: keymapStore.keysFor('review.region.reject'),
+          markFalsePositive: keymapStore.keysFor('review.region.false_positive'),
+          editBox: keymapStore.keysFor('review.region.edit_box'),
+          back: keymapStore.keysFor('review.region.back'),
         },
         textFilter: hasText
           ? { param: 'text', label: 'Text', placeholder: '' }

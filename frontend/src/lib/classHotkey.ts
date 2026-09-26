@@ -10,6 +10,7 @@ import { isPickerHiddenClass } from '$lib/classVisibility';
 import { slotRegistry } from '$lib/annotations/registeredSlots';
 import type { SlotRegistry } from '$lib/annotations/registry';
 import { classesStore } from '$stores/classes.svelte';
+import { keymapStore } from '$stores/keymap.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import type { RegistryClass } from '$lib/types';
 
@@ -20,7 +21,10 @@ import type { RegistryClass } from '$lib/types';
  * preventDefault in one does not stop the other, so a class bound to a
  * reserved letter would fire both actions on the same keypress.
  *
- * `classesStore.reservedHotkeys` is `GET {API_PREFIX}/classes`'s own
+ * The base set is the keymap's served reserved set when the keymap is
+ * served (K2); until then — and on any backend without the keymap route —
+ * it is `classesStore.reservedHotkeys`, which stays authoritative:
+ * `GET {API_PREFIX}/classes`'s own
  * `reserved_hotkeys` field — the base action keys (`g n d z x u a m /`)
  * union every *server-known* slot's keymap letters. It is never
  * recomputed client-side; this function only adds one thing on top: any
@@ -35,7 +39,7 @@ import type { RegistryClass } from '$lib/types';
 export function reservedHotkeyLetters(
   registry: SlotRegistry = slotRegistry,
 ): Set<string> {
-  const out = new Set(classesStore.reservedHotkeys);
+  const out = new Set(keymapStore.reserved ?? classesStore.reservedHotkeys);
   for (const spec of registry.queues) {
     for (const combos of Object.values(spec.capabilities.queue?.keymap ?? {})) {
       for (const combo of combos ?? []) {

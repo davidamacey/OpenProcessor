@@ -83,7 +83,8 @@
   import { untrack } from 'svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
-  import { keyboardStore } from '$stores/keyboard.svelte';
+  import { keyboardStore, type RegisterActionOptions } from '$stores/keyboard.svelte';
+  import { keymapStore } from '$stores/keymap.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
@@ -977,7 +978,9 @@
       // based on canConfirm, so this only fires from the Confirm button —
       // which is disabled in this state — or a stale click race. Keep the
       // toast as a safety net either way.
-      toastStore.warn('No proposed class on this item — press / to search.');
+      toastStore.warn(
+        `No proposed class on this item — press ${kg('review.queue.class_picker')} to search.`,
+      );
       return;
     }
     await assign(proposed);
@@ -1172,6 +1175,11 @@
   );
   const slotLabels = $derived(activeSlot ? panelLabels(activeSlot) : null);
 
+  // Every key this page prints comes from the keymap (never a literal).
+  const kg = (actionId: string) => keymapStore.glyph(actionId);
+  const undoHint = () =>
+    `Press ${kg('review.undo')} to undo, step back with ${kg('review.region.back')}.`;
+
   // Undo stack for slot confirm/reject. Each entry holds the previously
   // confirmed box so "Back" can re-insert the crop into the queue and
   // restore what the user just saved (allowing them to fix a mistake
@@ -1232,7 +1240,9 @@
     queue.items = reinsertAt(queue.items, last.insertAt, fresh);
     queue.total = queue.total + 1;
     cursor = insertAt;
-    toastStore.info('Stepped back. Press E to re-edit, Enter to re-confirm.');
+    toastStore.info(
+      `Stepped back. Press ${kg('review.region.edit_box')} to re-edit, ${kg('review.region.confirm')} to re-confirm.`,
+    );
   }
 
   function _seedSlotFromCurrent(): void {
@@ -1430,7 +1440,9 @@
   async function saveBboxAndExit(): Promise<void> {
     if (!current || !activeSlot) return;
     if (!editedSlotBox) {
-      toastStore.warn('No bbox to save — draw one or press Backspace to clear.');
+      toastStore.warn(
+        `No bbox to save — draw one or press ${kg('box_edit.delete_box')} to clear.`,
+      );
       return;
     }
     // Save to the crop the edit session started on. If the queue moved
@@ -1467,7 +1479,7 @@
     if (!current || !activeSlot) return;
     if (!editedSlotBox) {
       toastStore.warn(
-        `No ${activeSlot.label.singular} bbox to confirm — drag one in or press D to reject.`,
+        `No ${activeSlot.label.singular} bbox to confirm — drag one in or press ${kg('review.region.reject')} to reject.`,
       );
       return;
     }
@@ -1504,9 +1516,7 @@
       // independent of the step-back stack above, which only re-queues
       // the crop locally without touching what the server just saved.
       undoStore.recordRegionWrites([item.id]);
-      toastStore.success(
-        `${activeSlot.label.title} confirmed. Press Z to undo, step back with ←.`,
-      );
+      toastStore.success(`${activeSlot.label.title} confirmed. ${undoHint()}`);
     } catch (e) {
       _removeSlotUndo(undoEntry);
       restore();
@@ -1548,9 +1558,7 @@
         await setSlotBox(activeSlot, item.id, null);
       }
       undoStore.recordRegionWrites([item.id]);
-      toastStore.success(
-        `${activeSlot.label.title} rejected. Press Z to undo, step back with ←.`,
-      );
+      toastStore.success(`${activeSlot.label.title} rejected. ${undoHint()}`);
     } catch (e) {
       _removeSlotUndo(undoEntry);
       restore();
@@ -1576,9 +1584,7 @@
     try {
       await patchSlotMeta(activeSlot, item.id, { status: fpState });
       undoStore.recordRegionWrites([item.id]);
-      toastStore.success(
-        'Marked false positive (box kept). Press Z to undo, step back with ←.',
-      );
+      toastStore.success(`Marked false positive (box kept). ${undoHint()}`);
     } catch (e) {
       _removeSlotUndo(undoEntry);
       restore();
@@ -1617,8 +1623,12 @@
     if (awaitingDeepLink) return;
 
     const offs: Array<() => void> = [];
-    const reg = (combo: string, fn: () => void | Promise<void>, desc: string) =>
-      offs.push(keyboardStore.register(combo, () => void fn(), 'review', desc));
+    const reg = (
+      actionId: string,
+      fn: () => void | Promise<void>,
+      opts?: RegisterActionOptions,
+    ) =>
+      offs.push(keyboardStore.registerAction(actionId, () => void fn(), 'review', opts));
 
     if (activeSlot) {
       // Table built by the slot-generic slotKeymap module (P2.8c), reading
@@ -1637,35 +1647,35 @@
         },
         saveAndExit: saveBboxAndExit,
       })) {
-        reg(entry.combo, entry.fn, entry.description);
+        reg(entry.actionId, entry.fn, {
+          keys: [entry.combo],
+          description: entry.description,
+        });
       }
     } else {
-      reg(
-        'enter',
-        () => {
-          // P1-5: a blank proposal made Enter a silent no-op. Open the
-          // class picker instead so the operator can act in one keystroke
-          // rather than hitting Enter and wondering why nothing happened.
-          if (canConfirm) return confirmAndAdvance();
-          openPicker();
-        },
-        'Confirm proposed & advance (or search classes if blank)',
-      );
-      reg('d', discard, 'Discard');
-      reg('/', openPicker, 'Search all classes…');
+      reg('review.queue.confirm', () => {
+        // P1-5: a blank proposal made Enter a silent no-op. Open the
+        // class picker instead so the operator can act in one keystroke
+        // rather than hitting Enter and wondering why nothing happened.
+        if (canConfirm) return confirmAndAdvance();
+        openPicker();
+      });
+      reg('review.queue.discard', discard);
+      reg('review.queue.class_picker', openPicker);
     }
     if (!editMode) {
       // In edit mode the queue never moves: N/Z (and the arrows, which the
       // canvas owns below) only act once the edit is saved or cancelled.
-      reg('n', skip, 'Skip');
-      reg('z', undoLast, 'Undo last');
+      reg('review.skip', skip);
+      reg('review.undo', undoLast);
     }
 
     let canvasKey: ((e: KeyboardEvent) => void) | null = null;
     if (activeSlot?.capabilities.subBox != null && editMode) {
-      // Edit mode only: forward bbox-fine-tune keys (arrows, [ / ],
-      // Backspace) into the slot's bbox canvas. Outside edit mode arrows
-      // page the queue like every other tab.
+      // Edit mode only: forward the `box_edit` nudge / right-edge / clear
+      // keys into the slot's bbox canvas (it resolves them through the
+      // keymap). Outside edit mode arrows page the queue like every other
+      // tab.
       canvasKey = (e: KeyboardEvent) => {
         if (!slotCanvas) return;
         const target = e.target as HTMLElement | null;
@@ -1675,21 +1685,13 @@
       window.addEventListener('keydown', canvasKey);
     } else if (!isSlotTab(tab)) {
       // On non-slot tabs arrow keys navigate the queue.
-      reg(
-        'arrowleft',
-        () => {
-          cursor = Math.max(0, cursor - 1);
-        },
-        'Previous item',
-      );
-      reg(
-        'arrowright',
-        () => {
-          cursor = Math.min(queue.items.length - 1, cursor + 1);
-          maybePrefetch();
-        },
-        'Next item',
-      );
+      reg('review.queue.prev', () => {
+        cursor = Math.max(0, cursor - 1);
+      });
+      reg('review.queue.next', () => {
+        cursor = Math.min(queue.items.length - 1, cursor + 1);
+        maybePrefetch();
+      });
     }
 
     return () => {
@@ -2059,21 +2061,31 @@
 
     <span class="hidden text-[11px] text-zinc-500 md:inline">
       {#if activeSlot?.capabilities.subBox && editMode}
-        <kbd>↑↓←→</kbd> nudge · <kbd>[ ]</kbd> right edge · <kbd>Enter</kbd> save ·
-        <kbd>Esc</kbd> cancel
+        <kbd
+          >{kg('box_edit.nudge_up')}{kg('box_edit.nudge_down')}{kg(
+            'box_edit.nudge_left',
+          )}{kg('box_edit.nudge_right')}</kbd
+        >
+        nudge · <kbd>{kg('box_edit.shrink_right')} {kg('box_edit.grow_right')}</kbd> right
+        edge ·
+        <kbd>{kg('box_edit.save')}</kbd> save ·
+        <kbd>{kg('box_edit.cancel')}</kbd> cancel
       {:else if activeSlot}
-        <kbd>Enter</kbd> confirm · <kbd>{rejectKeyGlyph(activeSlot)}</kbd> reject
+        <kbd>{kg('review.region.confirm')}</kbd> confirm ·
+        <kbd>{rejectKeyGlyph(activeSlot)}</kbd> reject
         {#if activeSlot.capabilities.lifecycle?.falsePositiveState}
-          · <kbd>F</kbd> false-pos
+          · <kbd>{kg('review.region.false_positive')}</kbd> false-pos
         {/if}
         {#if activeSlot.capabilities.subBox}
-          · <kbd>E</kbd> edit
+          · <kbd>{kg('review.region.edit_box')}</kbd> edit
         {/if}
-        · <kbd>N</kbd> skip · <kbd>←</kbd> back
+        · <kbd>{kg('review.skip')}</kbd> skip · <kbd>{kg('review.region.back')}</kbd> back
       {:else}
-        per-class letter assigns · <kbd>/</kbd> search all classes ·
-        <kbd>Enter</kbd> confirm · <kbd>N</kbd> skip · <kbd>D</kbd> discard ·
-        <kbd>Z</kbd> undo
+        per-class letter assigns · <kbd>{kg('review.queue.class_picker')}</kbd> search all
+        classes ·
+        <kbd>{kg('review.queue.confirm')}</kbd> confirm · <kbd>{kg('review.skip')}</kbd>
+        skip · <kbd>{kg('review.queue.discard')}</kbd> discard ·
+        <kbd>{kg('review.undo')}</kbd> undo
       {/if}
     </span>
   </div>
@@ -2586,7 +2598,7 @@
                     class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400"
                     title={slotLabels.noBoxHint}
                   >
-                    no bbox · press E to draw
+                    no bbox · press {kg('review.region.edit_box')} to draw
                   </span>
                 {/if}
               </span>
@@ -2735,7 +2747,9 @@
                     type="button"
                     onclick={markFalsePositive}
                     title="Detector drew a box but it's not the {activeSlot.label
-                      .singular} — keep the box as a training hard negative (F)"
+                      .singular} — keep the box as a training hard negative ({kg(
+                      'review.region.false_positive',
+                    )})"
                   >
                     False positive
                   </button>
@@ -2746,7 +2760,7 @@
                   type="button"
                   onclick={toggleEdit}
                   aria-pressed={editMode}
-                  title="Toggle bbox edit mode (E)"
+                  title="Toggle bbox edit mode ({kg('review.region.edit_box')})"
                 >
                   Edit bbox
                 </button>
@@ -2756,7 +2770,11 @@
                   onclick={slotBack}
                   disabled={slotUndoStack.length === 0}
                   title="Re-open the most-recently confirmed {activeSlot.label
-                    .singular} (←) — only re-queues it locally, use Z to undo the server write"
+                    .singular} ({kg(
+                    'review.region.back',
+                  )}) — only re-queues it locally, use {kg(
+                    'review.undo',
+                  )} to undo the server write"
                 >
                   ← Step back
                 </button>
@@ -2770,7 +2788,9 @@
                    read as "1 confirmed in this session". "Actioned" is
                    accurate for all three. -->
               <p class="mt-1 text-[10px] text-zinc-500">
-                {slotUndoStack.length} actioned in this session — press ← to step back.
+                {slotUndoStack.length} actioned in this session — press {kg(
+                  'review.region.back',
+                )} to step back.
               </p>
             {/if}
           {:else}
@@ -2785,7 +2805,7 @@
                 disabled={!canConfirm}
                 title={canConfirm
                   ? undefined
-                  : 'No proposed class on this item — press / or Enter to search.'}
+                  : `No proposed class on this item — press ${kg('review.queue.class_picker')} or ${kg('review.queue.confirm')} to search.`}
               >
                 Confirm
               </button>
@@ -2833,20 +2853,21 @@
                 class="rounded border border-dashed border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-400
                    hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-white
                    focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                title="Search all classes (/)"
+                title="Search all classes ({kg('review.queue.class_picker')})"
                 onclick={openPicker}
               >
                 <kbd
                   class="mr-1.5 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] text-blue-300"
                 >
-                  /
+                  {kg('review.queue.class_picker')}
                 </kbd>
                 search all classes…
               </button>
             </div>
             <p class="mt-1.5 text-[10px] text-zinc-500">
-              Click a class, press its bound letter, or press / to search all classes (set
-              hotkeys on /classes).
+              Click a class, press its bound letter, or press {kg(
+                'review.queue.class_picker',
+              )} to search all classes (set hotkeys on /classes).
             </p>
           {/if}
 

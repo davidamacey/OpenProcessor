@@ -27,8 +27,10 @@ describe('/review region bbox edit session', () => {
   });
 
   it('N / Z are not registered while editing, so the queue cannot move under an edit', () => {
+    // K1 (configurable-keyboard-shortcuts plan): registrations are by
+    // keymap action id; `review.skip`/`review.undo` default to n/z.
     expect(src).toContain(
-      "if (!editMode) { reg('n', skip, 'Skip'); reg('z', undoLast, 'Undo last'); }",
+      "if (!editMode) { reg('review.skip', skip); reg('review.undo', undoLast); }",
     );
   });
 });
