@@ -77,7 +77,11 @@ def residuals(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> np.ndarray:
         return MagicMock(), x.astype(np.float32), True
 
     monkeypatch.setattr(embedding_reduce, 'get_or_fit_reducer', _identity_reducer)
-    monkeypatch.setattr(ivf_store, 'IVF_STORE_DIR', tmp_path / 'ivf')
+
+    class _FakeCurationConfig:
+        project_state_dir = tmp_path
+
+    monkeypatch.setattr(ivf_store, 'get_curation_config', lambda: _FakeCurationConfig())
     return emb
 
 
