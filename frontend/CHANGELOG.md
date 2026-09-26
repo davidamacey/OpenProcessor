@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Groundwork for multi-project support** (internal/architecture,
+  `docs/design/any-domain-rev3-and-projects-contract-review-2026-09-26.md`
+  §7). No behavior change: every URL built today is byte-identical to
+  before. API calls now build their URL through one scoped-prefix
+  builder in preparation for projects — `scoped()` in `src/lib/api.ts`,
+  backed by a module-level holder (`setScopedPrefix()`) that defaults to
+  `API_PREFIX` and isn't called anywhere yet. A separate `globalApi()`
+  builder is reserved for the (currently nonexistent) endpoints that
+  will stay unscoped once the backend ships `/projects`. Client-side
+  caches that must never bleed data across projects — the
+  `SourceImageOverlay` crop-context cache and the undo ring buffer — are
+  now keyed by the active project (`activeProjectKey()`) and expose a
+  `resetForProjectChange()` hook for the future project switcher.
+  `apiCallScanner.ts`/`endpointCatalog.test.ts` and the `apiPrefixScan`
+  ratchet updated to scan for `${scoped()}` instead of `${API_PREFIX}`.
+
 - **Text-free region profiles** (OpenProcessor W1 cutover,
   5cbd7ee4). `RegionProfileSummary` (served on `GET {API_PREFIX}/health`
   and `/regions/vocabulary`) gains `reads_text`/`text_hint_enabled`, and

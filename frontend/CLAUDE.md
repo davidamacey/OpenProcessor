@@ -1757,6 +1757,36 @@ container start by `docker-entrypoint.sh`, so one image fits any deployment:
 All API calls flow through `src/lib/api.ts` with retry + AbortController
 for in-flight cancellation.
 
+### Groundwork for multi-project support (2026-09-26)
+
+The backend is moving every scoped route under
+`{API_PREFIX}/projects/{project}/...`, with a project's served `prefix`
+coming from a future `GET {API_PREFIX}/projects`; the unscoped routes
+stay as an alias bound to the `default` project
+(`docs/design/any-domain-rev3-and-projects-contract-review-2026-09-26.md`
+§7). Every scoped call in `api.ts`, `sse.ts`, `SlotCard.svelte` and
+`export/+page.svelte` now builds its URL through one function, `scoped()`
+— backed by a small module-level holder (`setScopedPrefix()`, never
+persisted) that defaults to `API_PREFIX`, so today every built URL is
+byte-identical to before this groundwork landed. A separate `globalApi()`
+builder is reserved for the (currently nonexistent) endpoints that will
+stay global once projects land — no call site uses it yet, since the
+backend hasn't said which endpoints those are.
+
+Client-side caches that must never bleed data across projects — crop ids
+are content-derived, so the same image gets the same `crop_id` in every
+project — are keyed by `activeProjectKey()` (mirrors `scoped()`'s
+current value) and expose a `resetForProjectChange()` hook for the
+future project switcher to call on every switch:
+`SourceImageOverlay.svelte`'s module-level crop-context cache, and
+`stores/undo.svelte.ts`'s undo ring buffer (which clears outright rather
+than filtering, so Z can never revert a different project's write).
+
+`apiCallScanner.ts`/`endpointCatalog.test.ts` (the contract catalog
+below) and the `apiPrefixScan` ratchet scan for `${scoped()}` rather than
+a literal `${API_PREFIX}`, so this stayed a zero-behavior-change refactor
+with no weakened test coverage.
+
 ## API contract
 
 The frontend's picture of the backend's wire format is not hand-copied —

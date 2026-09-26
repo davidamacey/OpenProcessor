@@ -27,6 +27,7 @@
 
 import {
   ApiError,
+  activeProjectKey,
   undoCropLabel,
   undoCropRegion,
   undoCropRegionBatch,
@@ -38,20 +39,33 @@ import type { Crop, UndoEntry } from '$lib/types';
 
 const MAX = 50;
 
+/** `UndoEntry` tagged with the project it was recorded under. Crop ids
+ *  are content-derived (the same image gets the same `crop_id` in every
+ *  project — projects_plan §2.1), so a bare crop id isn't enough to know
+ *  which project's write an entry reverts. Internal to this store: every
+ *  push/pop below adds/drops the tag; `UndoEntry`'s own shape (what the
+ *  rest of the app reads/constructs) is unchanged. */
+type ScopedUndoEntry = UndoEntry & { project: string };
+
 class UndoStore {
   // $state.raw, not $state: deep reactivity would wrap every pushed entry
   // in a Proxy, so `remove()` could never match the raw object the caller
   // still holds. Every mutation below reassigns the array, so raw state is
   // just as reactive for readers.
-  stack = $state.raw<UndoEntry[]>([]);
+  stack = $state.raw<ScopedUndoEntry[]>([]);
 
   push(entry: UndoEntry): void {
-    const next = [...this.stack, entry];
+    // Mutate-and-tag rather than spread into a new object: `remove()`
+    // matches by identity against whatever a caller passed to `push`, so
+    // a fresh copy here would silently break that contract for any
+    // caller holding onto the entry it pushed.
+    const scoped = Object.assign(entry, { project: activeProjectKey() });
+    const next = [...this.stack, scoped];
     if (next.length > MAX) next.shift();
     this.stack = next;
   }
 
-  pop(): UndoEntry | undefined {
+  pop(): ScopedUndoEntry | undefined {
     if (this.stack.length === 0) return undefined;
     const next = [...this.stack];
     const entry = next.pop();
@@ -75,6 +89,20 @@ class UndoStore {
 
   clear(): void {
     this.stack = [];
+  }
+
+  /**
+   * Called by the (future) project switcher on every project change.
+   * The stack is cleared outright rather than filtered down to the new
+   * project's own entries: a project's undo history is session-scoped
+   * curation UI state, not something worth carrying across a switch, and
+   * clearing is what guarantees Z can never revert a different
+   * project's write. See `resetForProjectChange()` in
+   * `SourceImageOverlay.svelte` for the sibling reset on its crop-context
+   * cache.
+   */
+  resetForProjectChange(): void {
+    this.clear();
   }
 
   /**

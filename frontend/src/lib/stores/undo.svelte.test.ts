@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { undoStore } from './undo.svelte';
 import { toastStore } from './toast.svelte';
-import { API_PREFIX } from '$lib/api';
+import { API_PREFIX, setScopedPrefix } from '$lib/api';
 import type { UndoEntry } from '$lib/types';
 
 function entry(...ids: string[]): UndoEntry {
@@ -429,5 +429,36 @@ describe('undoStore — cross-kind LIFO ordering', () => {
     const secondUndo = await undoStore.undoLast();
     expect(fetchMock.mock.calls.at(-1)![0]).toBe(`${API_PREFIX}/crops/c1/label/undo`);
     expect(secondUndo[0]?.id).toBe('c1');
+  });
+
+  describe('project scoping (multi-project groundwork)', () => {
+    afterEach(() => {
+      // Every push tags the entry with the *current* scoped prefix — reset
+      // it so a leaked override never bleeds into an unrelated test.
+      setScopedPrefix(API_PREFIX);
+    });
+
+    it('tags each pushed entry with the active project prefix', () => {
+      setScopedPrefix(`${API_PREFIX}/projects/acme`);
+      undoStore.push(entry('a'));
+      setScopedPrefix(`${API_PREFIX}/projects/widgetco`);
+      undoStore.push(entry('b'));
+
+      expect(
+        undoStore.stack.map((e) => (e as unknown as { project: string }).project),
+      ).toEqual([`${API_PREFIX}/projects/acme`, `${API_PREFIX}/projects/widgetco`]);
+    });
+
+    it("resetForProjectChange() clears every entry, including another project's", () => {
+      setScopedPrefix(`${API_PREFIX}/projects/acme`);
+      undoStore.push(entry('a'));
+      undoStore.push(entry('b'));
+      expect(undoStore.stack).toHaveLength(2);
+
+      setScopedPrefix(`${API_PREFIX}/projects/widgetco`);
+      undoStore.resetForProjectChange();
+
+      expect(undoStore.stack).toHaveLength(0);
+    });
   });
 });

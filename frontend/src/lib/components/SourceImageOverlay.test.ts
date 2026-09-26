@@ -21,6 +21,7 @@ import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 vi.mock('$lib/api', () => ({
   getCropContext: vi.fn(),
   getSourceImageScaled: (id: string) => `/image/${id}`,
+  activeProjectKey: vi.fn(() => 'default'),
 }));
 
 const { getCropContext } = await import('$lib/api');

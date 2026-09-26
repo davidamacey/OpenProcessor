@@ -1,12 +1,29 @@
 <script module lang="ts">
   import type { CropContextResponse } from '$lib/types';
+  import { activeProjectKey } from '$lib/api';
 
-  // Per-cropId cache, shared across every mounted instance: several call
-  // sites (review, cluster modal, lightbox) can open the same crop within
-  // one session; avoid refetching a 500-item context payload each time.
-  // Not evicted — bounded by "crops a human actually opened this
-  // session", which is small.
+  // Per-(project, cropId) cache, shared across every mounted instance:
+  // several call sites (review, cluster modal, lightbox) can open the
+  // same crop within one session; avoid refetching a 500-item context
+  // payload each time. Crop ids are content-derived (the same image
+  // gets the same crop_id in every project — projects_plan §2.1), so
+  // the cache key is namespaced by the active project too, or switching
+  // projects would show another project's cached context. Not evicted —
+  // bounded by "crops a human actually opened this session", which is
+  // small.
   const contextCache = new Map<string, Promise<CropContextResponse>>();
+
+  function cacheKey(cropId: string): string {
+    return `${activeProjectKey()}:${cropId}`;
+  }
+
+  /** Clears every cached context. Called by the (future) project
+   *  switcher so a project change never shows stale, cross-project
+   *  data — see `resetForProjectChange()` on `$lib/stores/undo.svelte`'s
+   *  `undoStore` for the sibling reset on the undo ring buffer. */
+  export function resetForProjectChange(): void {
+    contextCache.clear();
+  }
 </script>
 
 <script lang="ts">
@@ -73,17 +90,18 @@
     error = null;
     loading = true;
     const controller = new AbortController();
-    let cached = contextCache.get(id);
+    const key = cacheKey(id);
+    let cached = contextCache.get(key);
     if (!cached) {
       cached = getCropContext(id, controller.signal);
-      contextCache.set(id, cached);
+      contextCache.set(key, cached);
     }
     cached
       .then((res) => {
         fetchedContext = res;
       })
       .catch((e: unknown) => {
-        contextCache.delete(id);
+        contextCache.delete(key);
         if ((e as Error)?.name === 'AbortError') return;
         error = (e as Error).message;
       })
