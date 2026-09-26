@@ -30,3 +30,6 @@ static/annotation-profiles.json
 
 # Validated local artifacts kept out of /tmp (evidence, exports); never committed.
 artifacts_local/
+
+# Release orchestrator ledger (scripts/release.sh) — local run state only.
+/.release/
