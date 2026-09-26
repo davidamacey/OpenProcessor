@@ -79,6 +79,10 @@ compose pull && docker compose up -d` — no `git clone` needed.
     `docs-site/src/data/screenshot_routes.json`, and every request other
     than GET/HEAD and `/train/preflight` is aborted, so a capture can't
     write. Replaces the old stub-backed synthetic-tile version.
+  - Every screenshot opens in a large lightbox (Esc or click outside to
+    close, arrow keys to page through the landing-page gallery, keyboard
+    focusable); the `Lightbox` component is shared with OpenProcessor's
+    docs site.
   - An animated walkthrough GIF under the landing-page hero, built from
     the committed screenshots by `scripts/create-workflow-gif.sh`
     (`site.config.ts`'s `heroDemo`).

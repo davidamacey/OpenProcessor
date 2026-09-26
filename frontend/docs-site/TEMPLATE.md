@@ -19,8 +19,16 @@ a cloned sibling site:
   structural, not copy).
 - `src/css/custom.css`, `src/theme/MDXComponents.tsx`.
 - `src/components/Hero`, `FeatureGrid`, `HowItWorks`, `QuickStart`,
-  `ScreenshotShowcase`, `Screenshot`, `RoadmapView` — all
+  `ScreenshotShowcase`, `Screenshot`, `Lightbox`, `RoadmapView` — all
   data-driven, read from `site.config.ts` and `src/data/*.json`.
+  `Screenshot` opens its image in the shared `Lightbox` (Esc/click-outside
+  close, arrow keys page a gallery, keyboard focusable); the component is
+  identical in every sibling site, so copy it, don't fork it.
+  `ScreenshotShowcase` takes an optional `items` list for a second gallery.
+- Local preview: serve the build with the provided nginx `Dockerfile` (or
+  `python3 -m http.server` from a directory containing it at the baseUrl
+  path). `docusaurus serve` mishandles the baseUrl for the embedded
+  architecture iframes.
 - `src/pages/index.tsx`, `src/pages/architecture.tsx`,
   `src/pages/roadmap.tsx` — assemble the components above; carry no copy.
 - `Dockerfile`, `nginx.conf`, `.dockerignore`, `.gitignore`, `.nvmrc`,

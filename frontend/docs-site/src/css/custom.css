@@ -54,3 +54,18 @@ html {
 .cw-placeholder code {
   font-size: 0.85em;
 }
+
+/* Clickable screenshot that opens the shared Lightbox. */
+.cw-zoomable {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  border-radius: 8px;
+}
+.cw-zoomable:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 3px;
+}
