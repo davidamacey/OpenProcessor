@@ -15,6 +15,12 @@ Submit a training job against the current export.
   frontend change.
 - **Live progress** and a **log tail** while a run is active; multi-size
   campaigns get an auto-promote-best + stop-when threshold.
+- **Region dataset** — when the backend serves a region profile, the
+  dataset card offers a second, single-class dataset built from that
+  profile's region boxes, named after the profile. The screenshots below
+  come from a backend running the example license-plate profile, so it
+  reads "Plates dataset"; with a different profile it takes that
+  profile's name, and with no region profile it isn't shown.
 
 ## Past runs
 

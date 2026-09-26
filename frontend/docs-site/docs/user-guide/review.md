@@ -39,5 +39,11 @@ reader-disagreement and choice badges, a detector-provenance chip strip,
 served rejection reasons, and verifier-rejected candidates drawn dashed so
 a human can accept them.
 
+The tab, its buttons and the related dashboard and `/train` panels take
+their names from the profile. The screenshots here come from a backend
+running the example license-plate profile, which is why they read
+"Plates" and "Confirm Plate"; a profile for another region type (a tag, a
+wheel, a defect) renders the same screens under its own name.
+
 See [Keyboard shortcuts](./keyboard-shortcuts.md) for the review-queue key
 table.
