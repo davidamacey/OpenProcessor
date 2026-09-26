@@ -1,0 +1,37 @@
+[
+  {
+    "title": "Keyboard-first review",
+    "icon": "keyboard",
+    "desc": "A one-item-at-a-time queue tuned for hour-long sessions: class letters, Enter to confirm, Z to undo, N to skip — every action is a single keystroke."
+  },
+  {
+    "title": "Cluster-assisted labeling",
+    "icon": "grid",
+    "desc": "Crops the backend has grouped by visual similarity are triaged as a batch: bulk confirm, drag-and-drop onto class rows, refine into sub-clusters."
+  },
+  {
+    "title": "Client-drawn provenance",
+    "icon": "box",
+    "desc": "Every box — item and region — is drawn client-side from served coordinates, with full detector/verifier chain, rejection reasons and OCR text overlays."
+  },
+  {
+    "title": "Any domain, one backend flag",
+    "icon": "layers",
+    "desc": "Cropwright ships with no domain built in. The backend's served region profile drives the whole region UI automatically — vehicles, defects, tags, or nothing at all."
+  },
+  {
+    "title": "Training cockpit",
+    "icon": "cpu",
+    "desc": "Launch preflight-checked training runs, watch live progress and logs, review test-split evaluation and lineage, then promote to the model registry."
+  },
+  {
+    "title": "Model comparison",
+    "icon": "scale",
+    "desc": "Bake-off compares trained and baseline models across evaluation datasets in one run — a model x dataset matrix with served winners bolded."
+  },
+  {
+    "title": "Ingest at scale",
+    "icon": "upload",
+    "desc": "Browser upload or server-path batch ingest, chunked and resumable, with per-file results and a region-drain gate before the next clustering pass."
+  }
+]

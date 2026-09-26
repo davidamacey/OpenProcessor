@@ -1,0 +1,7 @@
+[
+  {"route": "/dashboard", "name": "dashboard", "wait_for": "[data-testid='dataset-stats'], main"},
+  {"route": "/ingest", "name": "ingest", "wait_for": "main"},
+  {"route": "/clusters", "name": "clusters", "wait_for": "main"},
+  {"route": "/review?tab=all", "name": "review", "wait_for": "main"},
+  {"route": "/train", "name": "train", "wait_for": "main"}
+]

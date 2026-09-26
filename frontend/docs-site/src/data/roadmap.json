@@ -1,0 +1,38 @@
+{
+  "repo": "davidamacey/OpenProcessor",
+  "note": "Hand-maintained, not derived from an issue tracker — Cropwright has no automated roadmap generator. Update this file when scope actually changes; never describe work that isn't planned.",
+  "releases": [
+    {
+      "version": "v0.1.0",
+      "headline": "Full pipeline cockpit, generalized to any domain",
+      "stage": "shipped",
+      "summary": "Every route in CLAUDE.md's table, end to end: ingest, cluster-assisted labeling, a keyboard-first review queue, class management, export, training, model comparison, and a settings page for deployment-wide curation defaults — with no domain hardcoded anywhere.",
+      "items": [
+        "Dashboard, Ingest, Clusters + cluster detail, Review (6 tabs + presets), Classes, Export, Train, Bake-off, Models, Settings",
+        "Region profile served entirely from the backend — no region UI without it",
+        "Tier-2 annotation-profiles.json for a second, backend-unaware annotation slot",
+        "Client-drawn source-image overlay (boxes/labels drawn from served coordinates, no server-side burn-in)",
+        "Curation-strategy selector bar: sort, score chips, diverse-selection overlay, embedding-plot lasso",
+        "Stubbed Playwright e2e suite, a live read-only tier, and mutation testing on the highest-value modules",
+        "Vendored API contract checked against the backend's own OpenAPI/wire snapshots"
+      ]
+    },
+    {
+      "version": "Next",
+      "headline": "Backend-tracked follow-ups",
+      "stage": "next",
+      "summary": "Items already identified and tracked against the OpenProcessor backend or this frontend, not yet built.",
+      "items": [
+        "Optional API authentication (backend ask BA-5) — the curation API has none today; see Security",
+        "Persisting a hidden new-class-proposal term across sessions (F-58 is session-only today)",
+        "Served reasons for a model-registry status, beyond the current unloadable/protected flags (F-65)",
+        "A confusion-matrix image URL on a finished training run (today: filesystem path, text only)",
+        "A public MLflow run URL distinct from the docker-internal hostname the backend serves today",
+        "A served cluster_kind on /regions/clusters, replacing the client-side false-positive bucket constant",
+        "A run_id-scoped ingest status view (BA-4 landed server-side; no frontend surface yet)",
+        "Multi-region-profile support (today: at most one served region profile per backend)",
+        "Public screenshots and an expanded documentation set, captured once a public-sample-data deployment is available"
+      ]
+    }
+  ]
+}

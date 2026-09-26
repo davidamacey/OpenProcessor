@@ -1,0 +1,22 @@
+[
+  {
+    "name": "dashboard-1600.png",
+    "alt": "Cropwright dashboard showing dataset stats and the auto-label panel",
+    "caption": "Dashboard — pipeline health and the clustering/VLM-assist trigger"
+  },
+  {
+    "name": "clusters-1600.png",
+    "alt": "Cropwright cluster grid with cohesion badges",
+    "caption": "Cluster grid — dominant class, cohesion and size per cluster"
+  },
+  {
+    "name": "review-1600.png",
+    "alt": "Cropwright keyboard-driven review queue",
+    "caption": "Review queue — one item at a time, keyboard-first"
+  },
+  {
+    "name": "train-1600.png",
+    "alt": "Cropwright training cockpit with live progress",
+    "caption": "Train — preflight, live progress, and past-run results"
+  }
+]

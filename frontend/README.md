@@ -20,6 +20,13 @@ Apple system colors, keyboard-first UX.
 
 Full walkthrough of every route with explanations: **[docs/FEATURES.md](docs/FEATURES.md)**.
 
+## Documentation
+
+Full documentation site (getting started, user guide, configuration,
+operations, developer guide, architecture diagrams, roadmap):
+**[davidamacey.github.io/cropwright](https://davidamacey.github.io/cropwright/)**
+(source in `docs-site/`).
+
 ## Security — read this before deploying
 
 **The curation API has no request authentication.** Anyone who can

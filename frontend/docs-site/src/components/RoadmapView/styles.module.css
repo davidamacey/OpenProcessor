@@ -1,0 +1,51 @@
+.timeline {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.note {
+  font-style: italic;
+  opacity: 0.75;
+  margin-bottom: 2rem;
+}
+
+.release {
+  border-left: 3px solid var(--cw-border);
+  padding-left: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.releaseHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.releaseHeader h2 {
+  margin: 0;
+}
+
+.stage {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--cw-border);
+}
+
+.stage-shipped {
+  color: #2fb350;
+  border-color: #2fb350;
+}
+
+.stage-now,
+.stage-next {
+  color: var(--ifm-color-primary);
+  border-color: var(--ifm-color-primary);
+}
+
+.stage-later {
+  color: var(--ifm-color-emphasis-600);
+}

@@ -1,0 +1,21 @@
+---
+sidebar_position: 1
+title: Dashboard
+---
+
+# Dashboard (`/dashboard`)
+
+Pipeline health at a glance.
+
+- **Live dataset stats**, polled every 10 seconds.
+- **Run Clustering Now** — starts an auto-label run with stage progress,
+  shared with the backend's own scheduled run.
+- **Assist scope** (`AssistScopeBar`) — when the backend advertises a usable
+  VLM prompt pack, an optional per-class scope lets you point the
+  VLM-assisted sweep at a single class instead of the whole pool. Absent
+  when the backend doesn't advertise one.
+- With a served region profile, a detections panel shows region coverage.
+
+<Screenshot name="dashboard-1600.png" alt="Cropwright dashboard" caption="Dashboard — live stats and the clustering/assist trigger" />
+
+`/` itself is not a route — it's a redirect to `/dashboard`.
