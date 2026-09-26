@@ -80,6 +80,13 @@ export const siteConfig = {
     guidePath: '/docs/getting-started/quick-start',
   },
 
+  // The "How it works" section's closing link.
+  howItWorksMore: {
+    prefix: 'Walk through the whole loop in the',
+    label: 'curation workflow guide',
+    to: '/docs/operations/curation-workflow',
+  },
+
   // Page copy for the generic /architecture and /roadmap pages.
   architecturePage: {
     description: 'OpenProcessor architecture diagrams (being migrated; content coming soon).',

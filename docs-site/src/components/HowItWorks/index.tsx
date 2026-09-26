@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from '@docusaurus/Link';
 import workflow from '@site/src/data/workflow.json';
+import {siteConfig} from '@site/site.config';
 import styles from './styles.module.css';
 
 export default function HowItWorks(): React.JSX.Element {
@@ -22,7 +23,8 @@ export default function HowItWorks(): React.JSX.Element {
           ))}
         </div>
         <p className={styles.more}>
-          See the full <Link to="/architecture">workflow diagram</Link>.
+          {siteConfig.howItWorksMore.prefix}{' '}
+          <Link to={siteConfig.howItWorksMore.to}>{siteConfig.howItWorksMore.label}</Link>.
         </p>
       </div>
     </section>
