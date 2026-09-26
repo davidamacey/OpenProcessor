@@ -2,9 +2,12 @@
 # =============================================================================
 # OpenProcessor Management CLI
 # =============================================================================
-# Unified command-line interface for managing OpenProcessor services
+# Unified command-line interface for managing OpenProcessor deployments.
+# Ships at the root of every install dir (installer plan section 5.5); a
+# checkout keeps a 3-line exec shim at scripts/openprocessor.sh so existing
+# muscle memory / docs keep working.
 #
-# Usage: ./scripts/openprocessor.sh <command> [options]
+# Usage: ./openprocessor <command> [options]
 # =============================================================================
 
 set -eo pipefail
@@ -13,26 +16,38 @@ set -eo pipefail
 # Configuration
 # =============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="${PROJECT_DIR}/scripts"
 export PROJECT_DIR
 
 # Source library functions
 source "${SCRIPT_DIR}/lib/colors.sh"
 source "${SCRIPT_DIR}/lib/gpu.sh"
 source "${SCRIPT_DIR}/lib/ports.sh"
+source "${SCRIPT_DIR}/lib/vlm_catalog.sh"
 
-# Installer plan §1: docker-compose.yml is deploy-safe (no `build:`, no
-# source mounts); every `build:` block and source mount now lives in
-# docker-compose.dev.yml. This script only ever runs from a checkout (it
-# lives in scripts/), so it always needs that overlay -- detect it the
-# same way the Makefile's COMPOSE var does, by checking for src/main.py
-# next to the compose file.
+# Installer plan section 5.1: every compose call goes through dc(), which
+# always passes -p. section 5.5: PROJECT_DIR is the directory holding
+# docker-compose.yml, whether that's a checkout or an install dir; in a
+# checkout (src/main.py exists next to the compose file) it adds the dev
+# overlay for hot-reload.
+OP_PROJECT="${OP_PROJECT:-${COMPOSE_PROJECT_NAME:-openprocessor}}"
 DC_FILES=(-f "$PROJECT_DIR/docker-compose.yml")
 if [[ -f "$PROJECT_DIR/src/main.py" ]]; then
     DC_FILES+=(-f "$PROJECT_DIR/docker-compose.dev.yml")
+    IS_CHECKOUT=1
+else
+    IS_CHECKOUT=0
 fi
-dc() { docker compose "${DC_FILES[@]}" "$@"; }
+dc() { docker compose -p "$OP_PROJECT" "${DC_FILES[@]}" "$@"; }
+dc_cw() { docker compose -p "${OP_PROJECT}-cw" -f "${PROJECT_DIR}/cropwright/docker-compose.yml" "$@"; }
+
+require_checkout() {
+    if [[ "$IS_CHECKOUT" != "1" ]]; then
+        log_error "'$1' requires a source checkout"
+        return 1
+    fi
+}
 
 # F-66: resolve every port from THIS deployment's .env (falling back to the
 # stock defaults) instead of hardcoding localhost:4603/4600/4607/4605. On a
@@ -554,6 +569,129 @@ EOF
 }
 
 # =============================================================================
+# New in the deploy-mode CLI (installer plan section 5.5)
+# =============================================================================
+
+cmd_sample() {
+    local sub="${1:-coco}"
+    shift 2>/dev/null || true
+    case "$sub" in
+        coco)
+            local extra_args=()
+            [[ "${1:-}" == "--full" ]] && extra_args+=(--manifest scripts/datasets/manifests/coco_va_800.json)
+            log_step "Fetching the public COCO sample (writes to /app/data/samples, no host Python)..."
+            dc run --rm --no-deps -T -w /app yolo-api python -m scripts.datasets.fetch_coco_subset \
+                --out /app/data/samples/coco_va_readme --n 200 \
+                --manifest scripts/datasets/manifests/coco_va_200.json --cache-dir /app/cache/datasets \
+                "${extra_args[@]}"
+            ;;
+        *)
+            log_error "unknown sample: $sub (only 'coco' is supported)"
+            return 1
+            ;;
+    esac
+}
+
+cmd_config() {
+    local sub="${1:-show}"
+    case "$sub" in
+        show)
+            local env_file="${PROJECT_DIR}/.env"
+            [[ -f "$env_file" ]] || { log_error "no .env at ${env_file}"; return 1; }
+            # Redact HF_TOKEN and any *_API_KEY value.
+            sed -E 's/^(HF_TOKEN|[A-Z0-9_]*_API_KEY|[A-Z0-9_]*_TOKEN)=.*/\1=***/' "$env_file"
+            ;;
+        *)
+            log_error "unknown config subcommand: $sub"
+            return 1
+            ;;
+    esac
+}
+
+cmd_gpu() {
+    local sub="${1:-plan}"
+    case "$sub" in
+        plan)
+            log_step "GPU plan (from .env)"
+            for key in TRITON_GPU_ID API_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID EVALUATOR_GPU_ID GPU_PROFILE; do
+                local value
+                value="$(grep -E "^${key}=" "${PROJECT_DIR}/.env" 2>/dev/null | tail -n1 | cut -d= -f2- || true)"
+                echo "  ${key}=${value:-<unset>}"
+            done
+            ;;
+        *)
+            log_error "unknown gpu subcommand: $sub"
+            return 1
+            ;;
+    esac
+}
+
+cmd_vlm() {
+    local sub="${1:-list}"
+    shift 2>/dev/null || true
+    case "$sub" in
+        list)
+            log_step "VLM catalog"
+            printf '%-20s %-10s %-8s %-10s\n' "id" "licence" "vram_gb" "status"
+            while IFS=$'\t' read -r id _repo licence vram _sctx _mctx _maximg status _rank _gated _key; do
+                printf '%-20s %-10s %-8s %-10s\n' "$id" "$licence" "$vram" "$status"
+            done < <(vlm_catalog_rows)
+            ;;
+        status|use|apply|probe)
+            log_error "'vlm $sub' requires the model-selection API (any-domain W9, cutover/model-selection), which has not merged yet."
+            return 3
+            ;;
+        key)
+            local action="${1:-}" slug="${2:-}"
+            if [[ "$action" != "set" || -z "$slug" ]]; then
+                log_error "usage: openprocessor vlm key set <slug>"
+                return 2
+            fi
+            mkdir -p "${PROJECT_DIR}/secrets/vlm"
+            chmod 700 "${PROJECT_DIR}/secrets/vlm"
+            read -rs -p "VLM API key for '${slug}': " key_value
+            echo ""
+            printf '%s' "$key_value" > "${PROJECT_DIR}/secrets/vlm/${slug}"
+            chmod 600 "${PROJECT_DIR}/secrets/vlm/${slug}"
+            log_success "stored secrets/vlm/${slug} (mode 600); reference it as secret:${slug}"
+            ;;
+        *)
+            log_error "unknown vlm subcommand: $sub"
+            return 1
+            ;;
+    esac
+}
+
+cmd_train_mode() {
+    local mode="${1:-}"
+    case "$mode" in
+        on)
+            log_step "train-mode on: stopping the vlm (and segmenter if it shares the trainer's GPU)"
+            dc stop vlm 2>/dev/null || true
+            ;;
+        off)
+            log_step "train-mode off: restarting the vlm"
+            dc up -d vlm 2>/dev/null || true
+            ;;
+        *)
+            log_error "usage: openprocessor train-mode on|off"
+            return 2
+            ;;
+    esac
+}
+
+cmd_upgrade() {
+    require_checkout "upgrade (from a checkout)" 2>/dev/null || true
+    log_error "upgrade delegates to setup-openprocessor.sh --version (installer plan section 5.2); run it directly."
+    return 1
+}
+
+cmd_uninstall() {
+    log_error "uninstall delegates to setup-openprocessor.sh --uninstall (installer plan section 5.3); run it directly."
+    return 1
+}
+
+# =============================================================================
 # Main
 # =============================================================================
 
@@ -590,16 +728,16 @@ main() {
             cmd_download "$@"
             ;;
         profile)
-            cmd_profile "$@"
+            require_checkout "profile" && cmd_profile "$@"
             ;;
         test)
-            cmd_test "$@"
+            require_checkout "test" && cmd_test "$@"
             ;;
         curation)
             cmd_curation "$@"
             ;;
         bench)
-            cmd_bench "$@"
+            require_checkout "bench" && cmd_bench "$@"
             ;;
         clean)
             cmd_clean "$@"
@@ -608,7 +746,31 @@ main() {
             cmd_update "$@"
             ;;
         setup)
-            exec "${SCRIPT_DIR}/setup.sh" "$@"
+            require_checkout "setup" && exec "${SCRIPT_DIR}/setup.sh" "$@"
+            ;;
+        sample)
+            cmd_sample "$@"
+            ;;
+        config)
+            cmd_config "$@"
+            ;;
+        gpu)
+            cmd_gpu "$@"
+            ;;
+        vlm)
+            cmd_vlm "$@"
+            ;;
+        train-mode)
+            cmd_train_mode "$@"
+            ;;
+        upgrade)
+            cmd_upgrade "$@"
+            ;;
+        uninstall)
+            cmd_uninstall "$@"
+            ;;
+        version)
+            echo "openprocessor CLI ${OP_CLI_VERSION:-0.1.0}"
             ;;
         help|--help|-h)
             show_help

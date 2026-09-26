@@ -16,6 +16,7 @@ scripts/codegen/naming_leak_allowlist.txt # this file; every entry below necessa
 # ---------------------------------------------------------------------------
 
 CHANGELOG.md # documents every rename with the actual old->new literals throughout; this is the historical record of the naming sweep itself, kept intentionally
+setup-openprocessor.sh:attevon-llc/cropwright # sanctioned exception (project convention): the attevon-llc GitHub org is allowed inside Cropwright URLs; CW_GH_REPO default
 
 
 # ---------------------------------------------------------------------------
@@ -26,6 +27,13 @@ CHANGELOG.md # documents every rename with the actual old->new literals througho
 # purpose is matching `'plate_...'` literals, so it necessarily spells the
 # pattern throughout (docstring, regexes, PORTED_PATHS comments).
 scripts/codegen/check_no_literal_region_fields.py # the plate_* literal guard itself; spells the pattern by definition
+
+# installer plan section 2.2: gemma-4-e4b (google/gemma-4-E4B-it,
+# Apache-2.0, ungated) is the shipped default local VLM catalog entry, not
+# a private codename -- images.lock's vlm_gemma4 image key names the vLLM
+# image that serves it.
+images.lock:gemma # public, Apache-2.0 VLM catalog entry (installer plan section 2.2), not a leak
+tests/installer/test_vlm_catalog.py # exercises examples/vlm/catalog.tsv's public gemma-4-e4b row (installer plan section 2.2), not a leak
 
 # The retired-env guard and its test spell every retired name on purpose:
 # that IS the mechanism that makes a stale env var fail loudly instead

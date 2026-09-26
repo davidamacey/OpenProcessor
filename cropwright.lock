@@ -1,0 +1,7 @@
+# cropwright.lock -- the Cropwright tag+digest known-compatible with this
+# OpenProcessor release (installer plan section 3.1). Development
+# placeholder; a real release points this at a tagged Cropwright release.
+tag=sha-devplaceholder
+image=davidamacey/cropwright@sha256:0000000000000000000000000000000000000000000000000000000000dev7
+compose_sha256=
+env_example_sha256=

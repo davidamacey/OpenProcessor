@@ -1,0 +1,7 @@
+id	hf_repo	licence	vram_gb	served_context	max_context	max_images	status	rank	gated	vllm_image_key
+gemma-4-e4b	google/gemma-4-E4B-it	Apache-2.0	23	8192	131072	8	tested	100	false	vlm_gemma4
+qwen3-vl-8b-fp8	Qwen/Qwen3-VL-8B-Instruct-FP8	Apache-2.0	19	8192	262144	8	to_verify	90	false	vlm_generic
+gemma-4-e2b	google/gemma-4-E2B-it	Apache-2.0	17	8192	131072	8	to_verify	80	false	vlm_gemma4
+qwen3-vl-4b	Qwen/Qwen3-VL-4B-Instruct	Apache-2.0	17	8192	262144	8	to_verify	70	false	vlm_generic
+qwen2.5-vl-7b-awq	Qwen/Qwen2.5-VL-7B-Instruct-AWQ	Apache-2.0	15	8192	128000	8	to_verify	60	false	vlm_generic
+qwen3-vl-8b	Qwen/Qwen3-VL-8B-Instruct	Apache-2.0	26	8192	262144	8	to_verify	50	false	vlm_generic

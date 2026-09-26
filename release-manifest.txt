@@ -1,0 +1,17 @@
+docker-compose.yml
+docker-compose.gpu-arbiter.yml	optional
+env.template
+images.lock
+openprocessor	exec
+scripts/lib/colors.sh
+scripts/lib/ports.sh
+scripts/lib/gpu.sh
+scripts/lib/config.sh
+scripts/lib/download.sh
+scripts/lib/export.sh
+scripts/lib/model_setup.sh
+scripts/lib/vlm_catalog.sh
+examples/vlm/catalog.tsv
+export/build_pe_trt.sh	exec
+monitoring/**	optional
+cropwright.lock
