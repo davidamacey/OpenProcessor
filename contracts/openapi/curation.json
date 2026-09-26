@@ -4788,7 +4788,7 @@
       },
       "ItemRegionMetaRequest": {
         "additionalProperties": false,
-        "description": "Patch region metadata without touching ``region_bbox_norm``.\n\nUse this for operator corrections like fixing a region's OCR text or\nchanging the status to ``verify_rejected``. To set or clear the bbox\nitself, use ``PUT /crops/{crop_id}/region``.\n\nEvery field is optional; only the provided ones are written. ``None``\non ``region_text`` clears the text, on ``region_rejection_reason``\nclears the reason. ``region_status`` must be one of\n``HUMAN_REGION_STATUS_VALUES`` when present.",
+        "description": "Patch region metadata without touching ``region_bbox_norm``.\n\nUse this for operator corrections like fixing a region's text (text-reading\nprofiles only; a text-free profile answers 422 ``region_text_disabled``) or\nchanging the status to ``verify_rejected``. To set or clear the bbox\nitself, use ``PUT /crops/{crop_id}/region``.\n\nEvery field is optional; only the provided ones are written. ``None``\non ``region_text`` clears the text, on ``region_rejection_reason``\nclears the reason. ``region_status`` must be one of\n``HUMAN_REGION_STATUS_VALUES`` when present.",
         "properties": {
           "region_label_source": {
             "default": "human",

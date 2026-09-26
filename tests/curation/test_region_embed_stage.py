@@ -35,7 +35,7 @@ def _make_task(
     t = _ItemTask(
         crop_id=crop_id,
         image_path='/dev/null/never-read',
-        vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
+        item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
         region_status='pending',
         class_name='',
         candidate_in_crop=candidate_in_crop,

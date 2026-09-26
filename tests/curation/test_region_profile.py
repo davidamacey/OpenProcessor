@@ -293,7 +293,7 @@ def test_secondary_shape_routing_follows_env_groups(
     task = worker._ItemTask(
         crop_id='c',
         image_path='/x',
-        vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
+        item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
         region_status=None,
         class_name='audi',
     )
@@ -312,7 +312,7 @@ def test_no_secondary_shape_routing_when_profile_has_no_groups(
     task = worker._ItemTask(
         crop_id='c',
         image_path='/x',
-        vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
+        item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
         region_status=None,
         class_name='class_b',
     )

@@ -161,7 +161,7 @@ async def _try_combined_class_region(
         return True
 
     if reply.region_bbox_correct and reply.region_visible:
-        gate_ok, gate_reason = is_plausible_region_bbox(candidate_in_crop, task.vehicle_bbox_norm)
+        gate_ok, gate_reason = is_plausible_region_bbox(candidate_in_crop, task.item_bbox_norm)
         if gate_ok:
             task.detection_trace.append(f'{detector_chain_tag}:hit')
             task.detection_trace.append(f'{detector_chain_tag}:combined_verify_ok')
@@ -205,14 +205,14 @@ async def _try_combined_on_segmenter(
         task.detection_trace.append(f'{region_profile().segmenter_name}:miss')
         _finalize_no_region(task)
         return True
-    gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_norm, task.vehicle_bbox_norm)
+    gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_norm, task.item_bbox_norm)
     if not gate_ok:
         task.detection_trace.append(
             f'{region_profile().segmenter_name}:sanity_reject:{gate_reason}'
         )
         _finalize_no_region(task)
         return True
-    projected = crop_norm_to_source_norm(cand.bbox_norm, task.vehicle_bbox_norm)
+    projected = crop_norm_to_source_norm(cand.bbox_norm, task.item_bbox_norm)
     ok = await _try_combined_class_region(
         task,
         candidate_in_crop=cand.bbox_norm,
@@ -253,7 +253,7 @@ async def _run_combined_cohort_path(
     ):
         from scripts.curation.worker.cascade import _source_to_crop  # avoid import cycle
 
-        cand_in_crop = _source_to_crop(task.detector_region_in_source, task.vehicle_bbox_norm)
+        cand_in_crop = _source_to_crop(task.detector_region_in_source, task.item_bbox_norm)
         # Combined success → True. Bbox-wrong → False so the legacy
         # secondary-segmenter cascade runs and tries to find a
         # different region bbox.
@@ -296,7 +296,7 @@ async def _run_combined_pending_detection(
     if cand is None:
         task.detection_trace.append(f'{region_profile().detector_model}:miss')
         return await _try_combined_on_segmenter(task, segmenter=segmenter, vlm=vlm)
-    gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_norm, task.vehicle_bbox_norm)
+    gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_norm, task.item_bbox_norm)
     if not gate_ok:
         task.detection_trace.append(f'{region_profile().detector_model}:hit')
         task.detection_trace.append(
@@ -305,7 +305,7 @@ async def _run_combined_pending_detection(
         # Fall through to legacy cascade (secondary-segmenter path with
         # trace already populated).
         return False
-    projected = crop_norm_to_source_norm(cand.bbox_norm, task.vehicle_bbox_norm)
+    projected = crop_norm_to_source_norm(cand.bbox_norm, task.item_bbox_norm)
     ok = await _try_combined_class_region(
         task,
         candidate_in_crop=cand.bbox_norm,

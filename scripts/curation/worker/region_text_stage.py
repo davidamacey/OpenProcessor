@@ -211,7 +211,7 @@ async def accept_without_vlm(
     actor, version = candidate_detector(t, profile)
     if f'{actor}:hit' not in t.detection_trace:
         t.detection_trace.append(f'{actor}:hit')
-    gate_ok, gate_reason = is_plausible_region_bbox(t.candidate_in_crop, t.vehicle_bbox_norm)
+    gate_ok, gate_reason = is_plausible_region_bbox(t.candidate_in_crop, t.item_bbox_norm)
     if not gate_ok:
         t.detection_trace.append(f'{actor}:sanity_reject:{gate_reason}')
         t.update_doc = _region_reject_doc(

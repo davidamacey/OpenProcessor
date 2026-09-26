@@ -440,7 +440,7 @@ class TestCascadeWithTheShippedSegmenter:
             task = worker._ItemTask(
                 crop_id='crop-1',
                 image_path='/dev/null/never-read',
-                vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
+                item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
                 region_status='pending',
                 class_name='audi',
                 group='cars',

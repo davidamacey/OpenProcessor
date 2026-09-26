@@ -118,7 +118,7 @@ async def test_worker_combined_class_write_snapshots_restorable_history() -> Non
     t = _ItemTask(
         crop_id='crop-1',
         image_path='/dev/null/never-read',
-        vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
+        item_bbox_norm=(0.1, 0.1, 0.5, 0.5),
         region_status='pending',
         class_name='',
         group='',

@@ -144,9 +144,9 @@ def is_plausible_region_bbox(
             vw = float(vx2) - float(vx1)
             vh = float(vy2) - float(vy1)
         except (TypeError, ValueError):
-            return False, 'vehicle_bbox_unpack_failed'
+            return False, 'parent_bbox_unpack_failed'
         if vw <= 0.0 or vh <= 0.0:
-            return False, 'vehicle_bbox_degenerate'
+            return False, 'parent_bbox_degenerate'
     return True, 'ok'
 
 

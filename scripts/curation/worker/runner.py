@@ -595,7 +595,7 @@ async def run(args: argparse.Namespace) -> int:
                         _crop_jpeg_for_task,
                         t.crop_id,
                         t.image_path,
-                        t.vehicle_bbox_norm,
+                        t.item_bbox_norm,
                     )
                 if t.crop_jpeg is None:
                     t.update_doc = unreadable_crop_update(t)
@@ -627,7 +627,7 @@ async def run(args: argparse.Namespace) -> int:
                 ):
                     t.candidate_source = CANDIDATE_DETECTOR_EXISTING
                     t.candidate_in_crop = _source_to_crop(
-                        t.detector_region_in_source, t.vehicle_bbox_norm
+                        t.detector_region_in_source, t.item_bbox_norm
                     )
                     t.candidate_in_source = t.detector_region_in_source
                     t.candidate_score = t.detector_score
@@ -667,7 +667,7 @@ async def run(args: argparse.Namespace) -> int:
                         t.candidate_source = CANDIDATE_DETECTOR
                         t.candidate_in_crop = cand.bbox_norm
                         t.candidate_in_source = crop_norm_to_source_norm(
-                            cand.bbox_norm, t.vehicle_bbox_norm
+                            cand.bbox_norm, t.item_bbox_norm
                         )
                         t.candidate_score = cand.score
                         if vlm_available:
@@ -944,7 +944,7 @@ async def run(args: argparse.Namespace) -> int:
                         and _bbox_shape_is_plausible(sam_candidate.bbox_norm)
                     ):
                         projected = crop_norm_to_source_norm(
-                            sam_candidate.bbox_norm, t.vehicle_bbox_norm
+                            sam_candidate.bbox_norm, t.item_bbox_norm
                         )
                         t.detection_trace.append(f'{region_profile().segmenter_name}:hit')
                         t.detection_trace.append(
@@ -982,7 +982,7 @@ async def run(args: argparse.Namespace) -> int:
                     t.candidate_source = CANDIDATE_SEGMENTER
                     t.candidate_in_crop = sam_candidate.bbox_norm
                     t.candidate_in_source = crop_norm_to_source_norm(
-                        sam_candidate.bbox_norm, t.vehicle_bbox_norm
+                        sam_candidate.bbox_norm, t.item_bbox_norm
                     )
                     t.candidate_score = sam_candidate.score
                     if vlm_available:
@@ -1027,7 +1027,7 @@ async def run(args: argparse.Namespace) -> int:
                             t.candidate_source = CANDIDATE_SEGMENTER_TEXT_HINT
                             t.candidate_in_crop = sub_cand.bbox_norm
                             t.candidate_in_source = crop_norm_to_source_norm(
-                                sub_cand.bbox_norm, t.vehicle_bbox_norm
+                                sub_cand.bbox_norm, t.item_bbox_norm
                             )
                             t.candidate_score = sub_cand.score
                             t.candidate_text = ocr_pick.text
@@ -1273,7 +1273,7 @@ async def run(args: argparse.Namespace) -> int:
                             # a real region of interest. Sanity-gate
                             # before committing.
                             gate_ok, gate_reason = is_plausible_region_bbox(
-                                t.candidate_in_crop, t.vehicle_bbox_norm
+                                t.candidate_in_crop, t.item_bbox_norm
                             )
                             if not gate_ok:
                                 t.detection_trace.append(f'{actor}:sanity_reject:{gate_reason}')

@@ -179,7 +179,7 @@ async def _fetch_pending(
             _ItemTask(
                 crop_id=h['_id'],
                 image_path=str(src.get('image_path') or ''),
-                vehicle_bbox_norm=(
+                item_bbox_norm=(
                     float(bbox[0]),
                     float(bbox[1]),
                     float(bbox[2]),
@@ -217,15 +217,15 @@ def _crop_region_jpeg(crop_jpeg: bytes, region_in_crop: tuple[float, float, floa
     y1 = max(0, round(py1 * ch))
     x2 = max(x1 + 1, round(px2 * cw))
     y2 = max(y1 + 1, round(py2 * ch))
-    plate = img.crop((x1, y1, x2, y2))
+    region = img.crop((x1, y1, x2, y2))
     buf = io.BytesIO()
-    plate.save(buf, format='JPEG', quality=JPEG_QUALITY)
+    region.save(buf, format='JPEG', quality=JPEG_QUALITY)
     return buf.getvalue()
 
 
 def _source_to_crop(
     region_in_source: tuple[float, float, float, float],
-    vehicle_in_source: tuple[float, float, float, float],
+    item_in_source: tuple[float, float, float, float],
 ) -> tuple[float, float, float, float]:
     """Inverse of :func:`crop_norm_to_source_norm` — needed to verify a
     primary-detector region that was already projected into source
@@ -235,7 +235,7 @@ def _source_to_crop(
     wrote the region bbox in source frame; the VLM needs a tight region
     JPEG, which we can only carve from the item crop.
     """
-    vx1, vy1, vx2, vy2 = vehicle_in_source
+    vx1, vy1, vx2, vy2 = item_in_source
     vw = max(vx2 - vx1, 1e-6)
     vh = max(vy2 - vy1, 1e-6)
     sx1, sy1, sx2, sy2 = region_in_source
@@ -409,7 +409,7 @@ async def _process_crop(
             task.region_status in _PENDING_VERIFICATION_ALIASES
             and task.detector_region_in_source is not None
         ):
-            region_in_crop = _source_to_crop(task.detector_region_in_source, task.vehicle_bbox_norm)
+            region_in_crop = _source_to_crop(task.detector_region_in_source, task.item_bbox_norm)
             region_jpeg = _crop_region_jpeg(task.crop_jpeg, region_in_crop)
             outcome = await _verify_with_vlm(vlm, task.crop_id, region_jpeg)
             if outcome is None:
@@ -428,9 +428,7 @@ async def _process_crop(
                 # committing the verified write. On reject, record the
                 # detector + reason and fall through to the secondary
                 # segmenter anyway (the trace captures both).
-                gate_ok, gate_reason = is_plausible_region_bbox(
-                    region_in_crop, task.vehicle_bbox_norm
-                )
+                gate_ok, gate_reason = is_plausible_region_bbox(region_in_crop, task.item_bbox_norm)
                 if not gate_ok:
                     task.detection_trace.append(f'{det_model}:sanity_reject:{gate_reason}')
                     # Fall through to the secondary segmenter.
@@ -467,9 +465,7 @@ async def _process_crop(
                 task.detection_trace.append(f'{det_model}:miss')
             else:
                 # Phase A3 sanity gate on the fresh primary-detector candidate.
-                gate_ok, gate_reason = is_plausible_region_bbox(
-                    cand.bbox_norm, task.vehicle_bbox_norm
-                )
+                gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_norm, task.item_bbox_norm)
                 if not gate_ok:
                     task.detection_trace.append(f'{det_model}:hit')
                     task.detection_trace.append(f'{det_model}:sanity_reject:{gate_reason}')
@@ -482,13 +478,13 @@ async def _process_crop(
                             task,
                             actor=det_model,
                             version=det_version,
-                            box=crop_norm_to_source_norm(cand.bbox_norm, task.vehicle_bbox_norm),
+                            box=crop_norm_to_source_norm(cand.bbox_norm, task.item_bbox_norm),
                             score=cand.score,
                             source=CANDIDATE_DETECTOR,
                         )
                     ok, conf = outcome.ok, outcome.confidence
                     if ok:
-                        projected = crop_norm_to_source_norm(cand.bbox_norm, task.vehicle_bbox_norm)
+                        projected = crop_norm_to_source_norm(cand.bbox_norm, task.item_bbox_norm)
                         auto = await _auto_confirm_or_pending(
                             sam_score=cand.score,
                             bbox_in_crop=cand.bbox_norm,
@@ -522,7 +518,7 @@ async def _process_crop(
         else:
             # Phase A3 sanity gate. Reject early before the VLM roundtrip.
             gate_ok, gate_reason = is_plausible_region_bbox(
-                sam_candidate.bbox_norm, task.vehicle_bbox_norm
+                sam_candidate.bbox_norm, task.item_bbox_norm
             )
             if not gate_ok:
                 task.detection_trace.append(f'{seg_name}:hit')
@@ -537,7 +533,7 @@ async def _process_crop(
                     and _bbox_shape_is_plausible(sam_candidate.bbox_norm)
                 ):
                     projected = crop_norm_to_source_norm(
-                        sam_candidate.bbox_norm, task.vehicle_bbox_norm
+                        sam_candidate.bbox_norm, task.item_bbox_norm
                     )
                     task.detection_trace.append(f'{seg_name}:hit')
                     task.detection_trace.append(f'{seg_name}:skip_vlm_verify')
@@ -561,16 +557,14 @@ async def _process_crop(
                         task,
                         actor=seg_name,
                         version=seg_version,
-                        box=crop_norm_to_source_norm(
-                            sam_candidate.bbox_norm, task.vehicle_bbox_norm
-                        ),
+                        box=crop_norm_to_source_norm(sam_candidate.bbox_norm, task.item_bbox_norm),
                         score=sam_candidate.score,
                         source=CANDIDATE_SEGMENTER,
                     )
                 ok, conf = outcome.ok, outcome.confidence
                 if ok:
                     projected = crop_norm_to_source_norm(
-                        sam_candidate.bbox_norm, task.vehicle_bbox_norm
+                        sam_candidate.bbox_norm, task.item_bbox_norm
                     )
                     auto = await _auto_confirm_or_pending(
                         sam_score=sam_candidate.score,
@@ -620,7 +614,7 @@ async def _process_crop(
                     task.detection_trace.append(f'{seg_name}:text_hint:miss')
                 else:
                     gate_ok, gate_reason = is_plausible_region_bbox(
-                        sub_cand.bbox_norm, task.vehicle_bbox_norm
+                        sub_cand.bbox_norm, task.item_bbox_norm
                     )
                     if not gate_ok:
                         task.detection_trace.append(f'{seg_name}:text_hint:hit')
@@ -636,7 +630,7 @@ async def _process_crop(
                                 actor=seg_name,
                                 version=seg_version,
                                 box=crop_norm_to_source_norm(
-                                    sub_cand.bbox_norm, task.vehicle_bbox_norm
+                                    sub_cand.bbox_norm, task.item_bbox_norm
                                 ),
                                 score=sub_cand.score,
                                 source=CANDIDATE_SEGMENTER_TEXT_HINT,
@@ -644,7 +638,7 @@ async def _process_crop(
                         ok, conf = outcome.ok, outcome.confidence
                         if ok:
                             projected = crop_norm_to_source_norm(
-                                sub_cand.bbox_norm, task.vehicle_bbox_norm
+                                sub_cand.bbox_norm, task.item_bbox_norm
                             )
                             auto = await _auto_confirm_or_pending(
                                 sam_score=sub_cand.score,

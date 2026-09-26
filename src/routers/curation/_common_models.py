@@ -222,7 +222,8 @@ class CropBatchStatusRequest(BaseModel):
 class ItemRegionMetaRequest(BaseModel):
     """Patch region metadata without touching ``region_bbox_norm``.
 
-    Use this for operator corrections like fixing a region's OCR text or
+    Use this for operator corrections like fixing a region's text (text-reading
+    profiles only; a text-free profile answers 422 ``region_text_disabled``) or
     changing the status to ``verify_rejected``. To set or clear the bbox
     itself, use ``PUT /crops/{crop_id}/region``.
 

@@ -164,7 +164,7 @@ def review_tab_catalog() -> list[dict[str, Any]]:
     contract ``test_class_sources.py`` enforces for ``class_source``.
 
     The ``regions`` tab's label/description come from the active region
-    profile's ``display_name`` when one is configured (e.g. "Plates"),
+    profile's ``display_name`` when one is configured (e.g. "Wheels"),
     falling back to the generic ``TAB_LABELS`` entry ("Regions") when it
     set no ``display_name``.
     """

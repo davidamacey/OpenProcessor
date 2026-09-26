@@ -68,7 +68,7 @@ def _make_task(
     return worker._ItemTask(
         crop_id=crop_id,
         image_path='/dev/null/never-read',
-        vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
+        item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
         region_status=status,
         class_name='',
         group='cars',
