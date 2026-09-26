@@ -454,8 +454,14 @@ class TritonPythonModel:
         if not text_crops or self.ctc_decode is None:
             return [], []
 
-        # Dynamic width constraints from TensorRT engine
-        MIN_WIDTH = 8
+        # Dynamic width constraints from the TensorRT engine's optimization
+        # profile (see export/export_paddleocr_rec.py MIN_WIDTH/MAX_WIDTH).
+        # Must match exactly: the engine rejects any width outside
+        # [MIN_WIDTH, MAX_WIDTH] with a binding-dimension error, which was
+        # previously swallowed below as a silent empty-text result for
+        # every crop narrower than 48px (this drifted to 8 and no longer
+        # matched the built engine's min=48).
+        MIN_WIDTH = 48
         MAX_WIDTH = 2048
 
         n_crops = len(text_crops)
@@ -487,8 +493,12 @@ class TritonPythonModel:
             infer_response = infer_request.exec()
 
             if infer_response.has_error():
-                logger.warning(f'Recognition failed for crop {i}: {infer_response.error().message()}')
-                all_results.append(('', 0.0))
+                logger.error(f'Recognition failed for crop {i}: {infer_response.error().message()}')
+                # -1.0 is a sentinel distinguishable from any real CTC
+                # confidence (always in [0, 1]) -- callers must be able to
+                # tell "recognition backend failed for this crop" apart
+                # from "recognition ran and found no confident text".
+                all_results.append(('', -1.0))
                 continue
 
             output_tensor = pb_utils.get_output_tensor_by_name(infer_response, 'fetch_name_0')
