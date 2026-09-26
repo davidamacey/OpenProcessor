@@ -33,6 +33,25 @@
   margin: 0 auto 2rem;
 }
 
+.heroDemo {
+  margin: 0 auto 2rem;
+  max-width: 880px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--cw-border);
+}
+
+.heroDemo img {
+  width: 100%;
+  display: block;
+}
+
+@media (max-width: 996px) {
+  .heroDemo {
+    max-width: 95%;
+  }
+}
+
 .actions {
   display: flex;
   gap: 1rem;

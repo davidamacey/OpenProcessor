@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
+import useBaseUrl from '@docusaurus/useBaseUrl';
 import {siteConfig} from '@site/site.config';
 import styles from './styles.module.css';
 
@@ -16,6 +17,15 @@ export default function Hero(): React.JSX.Element {
         </div>
         <h1 className={styles.title}>{docusaurusConfig.title}</h1>
         <p className={styles.tagline}>{docusaurusConfig.tagline}</p>
+        {siteConfig.heroDemo && (
+          <div className={styles.heroDemo}>
+            <img
+              src={useBaseUrl(siteConfig.heroDemo.src)}
+              alt={siteConfig.heroDemo.alt}
+              loading="eager"
+            />
+          </div>
+        )}
         <div className={styles.actions}>
           <Link className="button button--primary button--lg" to="/docs/getting-started/introduction">
             Get started

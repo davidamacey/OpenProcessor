@@ -34,6 +34,13 @@ export const siteConfig = {
   license: 'MIT',
   copyrightHolder: 'example-org LLC',
 
+  // Animated walkthrough under the hero title; built from the committed
+  // screenshots by scripts/create-workflow-gif.sh. Set to null to omit.
+  heroDemo: {
+    src: '/img/cropwright-workflow.gif',
+    alt: 'Cropwright walkthrough: dashboard, ingest, clusters, review, classes, export, train, bake-off and settings',
+  } as {src: string; alt: string} | null,
+
   // Cross-links to sibling projects sharing this docs framework / product family.
   siblingProjects: [
     {

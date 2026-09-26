@@ -46,6 +46,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `docs-site/src/data/screenshot_routes.json`, and every request other
     than GET/HEAD and `/train/preflight` is aborted, so a capture can't
     write. Replaces the old stub-backed synthetic-tile version.
+  - An animated walkthrough GIF under the landing-page hero, built from
+    the committed screenshots by `scripts/create-workflow-gif.sh`
+    (`site.config.ts`'s `heroDemo`).
   - `docs-site/Dockerfile` serves the build under `/cropwright/`, the
     GitHub Pages base path, from a non-root nginx image.
   - `.github/workflows/docs.yml` — a GitHub Pages deploy workflow
