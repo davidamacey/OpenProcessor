@@ -124,6 +124,22 @@ COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser scripts/ ./scripts/
 COPY --chown=appuser:appuser VERSION ./VERSION
 
+# Installer plan §1: docker-compose.yml is deploy-safe (no bind mount of
+# ./export or ./examples), so both must be baked into the image or every
+# `python /app/export/...` model-export step and every
+# OP_REGION_PROFILE_PATH example under /app/examples 404s in an installed
+# (non-checkout) deployment. docker-compose.dev.yml still bind-mounts both
+# read-write/read-only for checkout hot-reload, shadowing this copy.
+COPY --chown=appuser:appuser export/   ./export/
+COPY --chown=appuser:appuser examples/ ./examples/
+# Model-repo seed: Triton needs config.pbtxt/labels.txt/OCR dicts/
+# ocr_pipeline's model.py before any engine is exported. .dockerignore
+# excludes the large *.plan/*.onnx/*.pt/*.engine payloads (mounted at
+# runtime), so this only ships the small tracked config tree. Seeded into
+# ./models on first start by `cp -rn` (never overwrites a user-edited
+# config) -- see scripts/lib/model_setup.sh.
+COPY --chown=appuser:appuser models/   /opt/openprocessor/model_repo_seed/
+
 USER appuser
 
 EXPOSE 8000

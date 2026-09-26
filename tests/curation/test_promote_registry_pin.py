@@ -153,9 +153,12 @@ def test_labels_txt_uses_pinned_registry_not_live(
         'src.services.training.triton_promote.promote_yolo26_to_triton', _fake_promote
     )
 
+    # No class_remap.json here either (older run) and the single pinned id
+    # (5) isn't contiguous from 0, so this also needs force -- the pin-vs-
+    # live distinction under test is orthogonal to that gate.
     r = app_client.post(
         f'/curation/train/promote/{job_id}',
-        json={'triton_name': 'yolo26m_pin_test'},
+        json={'triton_name': 'yolo26m_pin_test', 'force': True},
     )
     assert r.status_code == 200, r.text
 
@@ -217,9 +220,19 @@ def test_labels_txt_falls_back_to_live_registry_without_a_pin(
         'src.services.training.triton_promote.promote_yolo26_to_triton', _fake_promote
     )
 
+    # No class_remap.json (older run) and the pinned/live registry's single
+    # id (5) is not contiguous from 0 -- the identity map is unprovable, so
+    # this now 422s unless forced (the class-remap correctness fix).
     r = app_client.post(
         f'/curation/train/promote/{job_id}',
         json={'triton_name': 'yolo26m_no_pin'},
+    )
+    assert r.status_code == 422, r.text
+    assert r.json()['detail']['failures'][0]['code'] == 'class_remap_missing_full_class'
+
+    r = app_client.post(
+        f'/curation/train/promote/{job_id}',
+        json={'triton_name': 'yolo26m_no_pin', 'force': True},
     )
     assert r.status_code == 200, r.text
     assert captured['class_id_to_name'][5] == 'suv_renamed'

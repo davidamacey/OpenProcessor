@@ -1789,6 +1789,23 @@ async def _resolve_full_registry_for_promote(job_id: str) -> dict[int, str]:
     return {c.class_id: c.class_name for c in registry_snapshot.classes if not c.deprecated}
 
 
+def _registry_ids_contiguous_from_zero(full_registry: dict[int, str]) -> bool:
+    """``True`` iff ``full_registry``'s ids are exactly ``0..N-1``.
+
+    Only in that case does the legacy identity map (``labels.txt`` line
+    ``i`` = registry class ``i``'s name) ever agree with the dense export
+    id a full-class-trained model actually predicted -- ``_build_export_id_map``
+    (``src/services/curation/export_support.py``) assigns dense ids in
+    ascending registry-id order over the *non-deprecated* classes only, so
+    any gap (a deprecated class, or ids that don't start at 0) makes dense
+    id != registry id for every class after the gap. Callers must pass the
+    registry snapshot pinned at export/submit time, never the live
+    registry, since "no gaps at export time" is the only claim this proves.
+    """
+    ids = sorted(full_registry)
+    return ids == list(range(len(ids)))
+
+
 class PromoteResponse(BaseModel):
     job_id: str
     triton_name: str
@@ -1958,6 +1975,51 @@ async def promote_run(
             job_id=job_id,
             note='subset/single_cls run promoted with force=true and no resolvable class_remap',
         )
+
+    if class_remap.source == 'none' and not is_subset_run:
+        # Older run, from before the trainer always wrote class_remap.json
+        # for full-class runs too. The identity map (labels.txt line i =
+        # registry class i's name) is only correct when the pinned
+        # registry snapshot has no gap/deprecation for _build_export_id_map
+        # to have skipped -- provable from full_registry itself. Anything
+        # else is the exact bug this fix closes: refuse unless forced.
+        if not _registry_ids_contiguous_from_zero(full_registry):
+            if not payload.force:
+                identity_unproven_message = (
+                    f'job {job_id!r} is a full-class run with no resolvable class_remap and its '
+                    'pinned registry has a gap or deprecated class -- the identity map '
+                    '(labels.txt line i = registry class i) is not provably correct for a '
+                    'dense-id-trained model; refusing to promote (pass force=true to bypass -- '
+                    'logged distinctly)'
+                )
+                raise HTTPException(
+                    status_code=422,
+                    detail=PromoteGateFailedDetail(
+                        message=identity_unproven_message,
+                        failures=[
+                            PromoteGateFailure(
+                                code='class_remap_missing_full_class',
+                                message=identity_unproven_message,
+                            )
+                        ],
+                        force_allowed=True,
+                        override='pass force=true in the request body',
+                    ).model_dump(),
+                )
+            logger.warning(
+                'curation_promote_full_class_identity_unproven_force_bypass',
+                job_id=job_id,
+                note=(
+                    'full-class run promoted with force=true; no class_remap and the pinned '
+                    'registry has a gap/deprecation -- labels.txt may be mislabeled'
+                ),
+            )
+        else:
+            logger.info(
+                'curation_promote_full_class_identity_proven',
+                job_id=job_id,
+                note='no class_remap, but the pinned registry has no gaps -- identity map is correct',
+            )
 
     include_classes = (job_spec or {}).get('include_classes') or []
     if class_remap.source != 'none' and not class_remap.single_cls and include_classes:
