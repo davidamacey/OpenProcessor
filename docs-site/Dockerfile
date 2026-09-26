@@ -16,7 +16,7 @@ LABEL org.opencontainers.image.title="OpenProcessor Documentation" \
       org.opencontainers.image.description="Docusaurus documentation site for OpenProcessor" \
       org.opencontainers.image.vendor="OpenProcessor Contributors" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
-      org.opencontainers.image.source="https://github.com/attevon-llc/OpenProcessor"
+      org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor"
 
 # The site is built for baseUrl /OpenProcessor/ (site.config.ts), so it is served
 # from that subpath, exactly as GitHub Pages will serve it.

@@ -15,7 +15,7 @@
 export type SiteLink = {label: string; to?: string; href?: string};
 export type SiteLinkGroup = {title: string; items: SiteLink[]};
 
-const githubRepo = 'https://github.com/attevon-llc/OpenProcessor';
+const githubRepo = 'https://github.com/davidamacey/OpenProcessor';
 
 export const siteConfig = {
   title: 'OpenProcessor',
@@ -27,7 +27,7 @@ export const siteConfig = {
   // GitHub Pages deployment target.
   organizationName: new URL(githubRepo).pathname.split('/')[1],
   projectName: 'OpenProcessor',
-  url: 'https://attevon-llc.github.io',
+  url: 'https://davidamacey.github.io',
   baseUrl: '/OpenProcessor/',
 
   githubRepo,

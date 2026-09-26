@@ -16,7 +16,7 @@ scripts/codegen/naming_leak_allowlist.txt # this file; every entry below necessa
 # ---------------------------------------------------------------------------
 
 CHANGELOG.md # documents every rename with the actual old->new literals throughout; this is the historical record of the naming sweep itself, kept intentionally
-docs-site/:github\.com/attevon-llc/(OpenProcessor|cropwright|OpenTranscribe)\b|https://attevon-llc\.github\.io # docs-site: the public GitHub org slug, allowed only inside GitHub / GitHub Pages URLs (canonical public home of OpenProcessor and its sibling projects); any other spelling, including in prose, still fails
+docs-site/:github\.com/attevon-llc/(cropwright|OpenTranscribe)\b # docs-site: the public GitHub org slug, allowed only inside GitHub URLs of the sibling projects that already live there (Cropwright, OpenTranscribe); OpenProcessor links point at github.com/davidamacey/OpenProcessor until the repo transfer; any other spelling, including in prose, still fails
 
 
 # ---------------------------------------------------------------------------

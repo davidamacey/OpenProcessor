@@ -1,5 +1,5 @@
 {
-  "repo": "https://github.com/attevon-llc/OpenProcessor",
+  "repo": "https://github.com/davidamacey/OpenProcessor",
   "note": "Hand-maintained, not derived from an issue tracker. 'Shipped' means it is on main today; 'Planned' items are design work that has not landed and may change after measurement. Update this file when scope actually changes; never describe work that isn't planned.",
   "releases": [
     {
