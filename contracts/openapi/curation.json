@@ -7863,6 +7863,17 @@
             ],
             "title": "Job Id"
           },
+          "mlflow_experiment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Experiment"
+          },
           "mlflow_run_name": {
             "anyOf": [
               {
@@ -7905,6 +7916,28 @@
             ],
             "title": "Profile",
             "type": "string"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "project_export_root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Export Root"
           },
           "registry_sha": {
             "anyOf": [

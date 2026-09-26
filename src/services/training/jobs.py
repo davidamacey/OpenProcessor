@@ -57,12 +57,17 @@ logger = get_logger(__name__)
 
 
 def _resolve_jobs_dir() -> Path:
-    """Resolve the ``/jobs/`` directory each time it's needed.
+    """Resolve the bound project's ``train_jobs_dir`` each time it's needed.
 
-    Done lazily (rather than module-level constant) so tests can override
-    ``OP_TRAIN_JOBS_DIR`` with monkeypatch / env-var without re-importing.
+    ``CurationConfig.train_jobs_dir`` is a PROJECT_SCOPED_FIELDS entry
+    (``src/config/curation.py``): for ``default`` it resolves to
+    ``OP_TRAIN_JOBS_DIR`` (default ``/jobs``), byte-for-byte the same as
+    before projects existed; for any other bound project it resolves to
+    that project's own ``<jobs_root>/projects/<slug>`` directory (see
+    ``src.config.projects.resources_for_new``), so job.json writes and run
+    listing never cross a project boundary.
     """
-    return Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
+    return get_curation_config().train_jobs_dir
 
 
 # Public for callers that want the default without the env override.
@@ -277,6 +282,17 @@ class TrainJobSpec(BaseModel):
     trainer_image_revision: str | None = None
     registry_sha: str | None = None
     registry_snapshot_path: str | None = None
+
+    # Project isolation (docs/design/openprocessor_internal/projects_plan.md
+    # §5.3) -- filled in by write_job() from the bound project, never set by
+    # API callers directly. ``project_export_root`` lets the trainer refuse
+    # a job whose ``dataset_export_dir`` escapes the project's own export
+    # tree (``export_outside_project``); ``mlflow_experiment`` is the
+    # project's own MLflow experiment name, read by the trainer instead of
+    # any env-var-only experiment name.
+    project: str | None = None
+    project_export_root: str | None = None
+    mlflow_experiment: str | None = None
 
     @field_validator('include_classes')
     @classmethod
@@ -769,6 +785,11 @@ async def write_job(job: TrainJobSpec) -> str:
         spec.job_id = f'{_slug()}_{spec.model_family}{spec.model_size}'
     if not spec.submitted_at:
         spec.submitted_at = _now_iso()
+
+    cfg = get_curation_config()
+    spec.project = cfg.project_slug
+    spec.project_export_root = str(cfg.export_root)
+    spec.mlflow_experiment = cfg.mlflow_experiment
 
     # F-73: dataset_export_dir is optional on the wire (defaults to the
     # current export -- resolved by _run_preflight, which every /start
