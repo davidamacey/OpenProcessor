@@ -55,6 +55,20 @@ def current_project() -> BoundProject:
     return bound
 
 
+def try_current_project() -> BoundProject | None:
+    """Non-raising variant of :func:`current_project`, for call sites that
+    need a graceful default rather than a hard failure -- currently only
+    :class:`~src.config.curation.CurationConfigView`, whose project-scoped
+    fields fall back to the base (env-derived) value when nothing is
+    bound. This is a deliberate, temporary relaxation of the plan's "no
+    unbound fallback" principle: until every route binds a project
+    (commit 4 of this wave), an unconditional raise here would break
+    every existing curation code path. Once the mounting/dependency wiring
+    lands, this fallback should be removed so an unbound access is a hard
+    error again, per §3.3."""
+    return _BOUND.get()
+
+
 def is_project_bound() -> bool:
     """Non-raising check, for call sites that need to branch on bound vs
     unbound *state itself* (for example a static test) rather than treat

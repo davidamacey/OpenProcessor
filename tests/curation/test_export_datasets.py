@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import src.config
-from src.config import get_curation_config
+import src.config.curation
 from src.routers.curation._common import config as curation_config
 
 
@@ -64,8 +64,13 @@ def export_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     # Not a dataset at all: ignored.
     (root / 'scratch' / 'junk').mkdir(parents=True)
 
-    cfg = dataclasses.replace(get_curation_config(), export_root=root)
-    monkeypatch.setattr(src.config, 'get_curation_config', lambda: cfg)
+    # get_curation_config() now returns a CurationConfigView, not a plain
+    # dataclass instance -- dataclasses.replace() needs the underlying
+    # base instance instead (src.config.curation.base_curation_config()).
+    from src.config.curation import base_curation_config
+
+    cfg = dataclasses.replace(base_curation_config(), export_root=root)
+    monkeypatch.setattr(src.config.curation, '_default_curation_config', cfg)
     return root
 
 

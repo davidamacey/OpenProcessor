@@ -20,7 +20,7 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 
 if TYPE_CHECKING:
@@ -199,6 +199,19 @@ class CurationConfig:
     # means the probe's top class holds a majority of the posterior mass --
     # a deployment-tunable bar, not a magic number.
     probe_actionable_min_confidence: float = 0.5
+
+    # --- Project-scoped fields (see PROJECT_SCOPED_FIELDS below and
+    # docs/design/openprocessor_internal/projects_plan.md §2.2/§3.3).
+    # Defaults here are the ``default`` project's values so a bare
+    # ``CurationConfig()``/``CurationConfig.from_env()`` instance (no
+    # project bound) keeps behaving exactly as before.
+    project_slug: str = 'default'
+    project_state_dir: Path = Path('/var/lib/openprocessor')
+    train_jobs_dir: Path = Path('/jobs')
+    autolabel_dir: Path = Path('/jobs/auto_label')
+    bakeoff_jobs_dir: Path = Path('/var/lib/openprocessor/bakeoff_jobs')
+    mlflow_experiment: str = 'openprocessor'
+    model_prefix: str = ''
 
     @property
     def pause_sentinel_path(self) -> Path:
@@ -386,22 +399,128 @@ def index_name(cfg: CurationConfig, role: IndexRole) -> str:
     return getattr(cfg, _INDEX_ROLE_ATTR[role])
 
 
+# Fields resolved from the *bound project*'s ``ProjectResources`` rather
+# than the process-global env-built instance (see
+# docs/design/openprocessor_internal/projects_plan.md §2.2/§3.3). Every
+# other ``CurationConfig`` field is global. ``test_config_view.py``
+# fails if a new dataclass field is added to neither this set nor
+# treated as global -- keep it in sync with the dataclass above.
+#
+# ``clusters_index`` is deliberately GLOBAL, not project-scoped: it has
+# no ``IndexRole`` member (no index body is ever created for it -- see
+# ``IndexRole``'s docstring), so ``ProjectResources.indexes`` has nowhere
+# to carry a per-project value for it. It is effectively dead outside
+# one script (``scripts/curation/seed_live_harness.py``); this is a
+# deliberate deviation from a strict reading of "every index field is
+# scoped", noted here rather than silently folding it in.
+PROJECT_SCOPED_FIELDS: frozenset[str] = frozenset(
+    {
+        'images_index',
+        'items_index',
+        'labels_confirmed_index',
+        'classes_index',
+        'settings_index',
+        'umap_state_index',
+        'umap_viz_state_index',
+        'class_registry_path',
+        'export_root',
+        'upload_root',
+        'bakeoff_eval_root',
+        'project_slug',
+        'project_state_dir',
+        'train_jobs_dir',
+        'autolabel_dir',
+        'bakeoff_jobs_dir',
+        'mlflow_experiment',
+        'model_prefix',
+    }
+)
+
+# Maps a PROJECT_SCOPED_FIELDS index-role field name to the IndexRole its
+# value comes from on the bound project's ``ProjectResources.indexes``.
+_PROJECT_FIELD_INDEX_ROLE: dict[str, IndexRole] = dict(
+    zip(_INDEX_ROLE_ATTR.values(), _INDEX_ROLE_ATTR.keys(), strict=True)
+)
+# ^ inverts {IndexRole: attr_name} -> {attr_name: IndexRole}; both sides
+# of ``_INDEX_ROLE_ATTR`` are unique so this round-trips exactly.
+
+# Maps a PROJECT_SCOPED_FIELDS non-index field name to the matching
+# attribute on ``ProjectResources``.
+_PROJECT_FIELD_RESOURCE_ATTR: dict[str, str] = {
+    'class_registry_path': 'class_registry_path',
+    'export_root': 'export_root',
+    'upload_root': 'upload_root',
+    'bakeoff_eval_root': 'bakeoff_eval_root',
+    'project_state_dir': 'project_state_dir',
+    'train_jobs_dir': 'train_jobs_dir',
+    'autolabel_dir': 'autolabel_dir',
+    'bakeoff_jobs_dir': 'bakeoff_jobs_dir',
+    'mlflow_experiment': 'mlflow_experiment',
+    'model_prefix': 'model_prefix',
+}
+
+
+class CurationConfigView:
+    """A ``CurationConfig``-shaped view that resolves PROJECT_SCOPED_FIELDS
+    from :func:`~src.config.project_context.current_project` at attribute
+    access time, and every other field from the process-global base
+    instance.
+
+    Because resolution happens on each ``getattr``, the 15+ existing
+    ``config = get_curation_config()`` module-level captures need no
+    edits: a later ``bind_project`` call is picked up by the very next
+    attribute access on that same captured object.
+
+    **Deviation from §3.3 for this partial landing:** the plan specifies
+    that an unbound access to a project-scoped field must raise
+    ``ProjectNotBound`` unconditionally. Until commit 4 wires a bind into
+    every request path (route dependencies, the worker loops, script
+    entry points), that would break every existing curation code path
+    the moment this view is returned from ``get_curation_config()``. So
+    for now, an unbound access falls back to the base instance's own
+    (``default``-shaped) field value via
+    :func:`~src.config.project_context.try_current_project`, instead of
+    raising. This fallback must be removed once binding is wired
+    everywhere -- tracked as a follow-up, not a permanent design choice.
+    """
+
+    __slots__ = ('_base',)
+
+    def __init__(self, base: CurationConfig) -> None:
+        self._base = base
+
+    def __getattr__(self, name: str) -> Any:
+        if name not in PROJECT_SCOPED_FIELDS:
+            return getattr(self._base, name)
+        from src.config.project_context import try_current_project
+
+        bound = try_current_project()
+        if bound is None:
+            return getattr(self._base, name)
+        resources = bound.record.resources
+        if name == 'project_slug':
+            return bound.record.slug
+        if name in _PROJECT_FIELD_INDEX_ROLE:
+            return resources.indexes[_PROJECT_FIELD_INDEX_ROLE[name]]
+        return getattr(resources, _PROJECT_FIELD_RESOURCE_ATTR[name])
+
+    def __repr__(self) -> str:
+        return f'CurationConfigView(base={self._base!r})'
+
+
 _default_curation_config: CurationConfig | None = None
 
 
-def get_curation_config() -> CurationConfig:
-    """Module-level default ``CurationConfig`` instance.
+def base_curation_config() -> CurationConfig:
+    """The process-global, env-built ``CurationConfig`` instance -- the
+    global-field half of :func:`get_curation_config`'s view, and the
+    right thing to pass to ``resources_for_default``/``resources_for_new``
+    (both of which only read global fields).
 
     Built via :meth:`CurationConfig.from_env` so the ``OP_*`` env vars
     documented on that classmethod (e.g. ``OP_API_PREFIX``) actually take
-    effect for the process-wide default — this was previously
-    constructing a bare ``CurationConfig()`` and silently ignoring every
-    ``OP_*`` override.
-
-    Callers that need a deployment-specific instance (e.g. a future
-    overlay for an existing deployment) should construct and inject
-    their own rather than relying on this default — mirrors
-    :func:`src.config.region_fields.get_region_fields`.
+    effect — this was previously constructing a bare ``CurationConfig()``
+    and silently ignoring every ``OP_*`` override.
     """
     global _default_curation_config  # noqa: PLW0603 - lazily-built module singleton
     if _default_curation_config is None:
@@ -409,12 +528,17 @@ def get_curation_config() -> CurationConfig:
     return _default_curation_config
 
 
-def base_curation_config() -> CurationConfig:
-    """The env-built instance, for global-field use (e.g. ``api_prefix``,
-    ``state_dir``'s global uses). Currently an alias for
-    :func:`get_curation_config` -- P1's foundation module (project
-    registry/bootstrap) needs a name that will keep meaning "the global
-    base config" once :func:`get_curation_config` switches to returning
-    a per-project ``CurationConfigView`` (tracked separately; not yet
-    landed in this pass -- see PR notes)."""
-    return get_curation_config()
+def get_curation_config() -> CurationConfig:
+    """The process-wide curation config: global fields from the env-built
+    base instance, project-scoped fields (PROJECT_SCOPED_FIELDS) from
+    whatever project is bound in the current context. Typed as
+    ``CurationConfig`` (it is a ``CurationConfig``-shaped view, not a
+    subclass) so every existing typed call site needs no edits.
+    """
+    return cast('CurationConfig', CurationConfigView(base_curation_config()))
+
+
+def idx(role: IndexRole) -> str:
+    """``index_name(get_curation_config(), role)`` -- the bound project's
+    index name for ``role``."""
+    return index_name(get_curation_config(), role)
