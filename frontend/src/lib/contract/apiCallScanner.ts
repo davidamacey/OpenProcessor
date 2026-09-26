@@ -374,7 +374,7 @@ export function scanApiCallSites(src: string): ApiCallSite[] {
       normInner = normInner.split(`\${${name}}`).join(value);
     }
     const markerIdx = inner.indexOf('${scoped()}');
-    let afterPrefix = inner.slice(markerIdx + '${scoped()}'.length);
+    const afterPrefix = inner.slice(markerIdx + '${scoped()}'.length);
     let normAfterPrefix = normInner.slice(
       normInner.indexOf('${scoped()}') + '${scoped()}'.length,
     );
@@ -389,7 +389,6 @@ export function scanApiCallSites(src: string): ApiCallSite[] {
       const closeParen = skipBalanced(src, openParen, '(', ')');
       const argText = src.slice(openParen + 1, closeParen - 1);
       queryParams = extractQsKeys(src, argText, t.start);
-      afterPrefix = afterPrefix.slice(0, qsIdx);
       const normQsIdx = normAfterPrefix.indexOf(qsMarker);
       normAfterPrefix = normAfterPrefix.slice(
         0,

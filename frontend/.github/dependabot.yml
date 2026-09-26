@@ -22,16 +22,19 @@ updates:
         applies-to: version-updates
         update-types: ['major']
     ignore:
-      # eslint 10 / @eslint/js 10 require an eslint 10 engine; typescript-eslint
-      # still pins eslint ^9, so a major bump here breaks both the lint job and
-      # pre-commit with an ERESOLVE. Mirrors transcribe-app's own ignore for the
-      # same pair. Bump eslint, @eslint/js and typescript-eslint together once
-      # typescript-eslint supports eslint 10.
-      - dependency-name: 'eslint'
-        update-types: ['version-update:semver-major']
-      - dependency-name: '@eslint/js'
-        update-types: ['version-update:semver-major']
-      - dependency-name: 'typescript-eslint'
+      # eslint/@eslint/js/typescript-eslint major-bump ignore removed
+      # 2026-09-26 (build/deps-majors): typescript-eslint 8.70.1 already
+      # declares `eslint: ^8.57.0 || ^9.0.0 || ^10.0.0` on the registry, so
+      # the stale-peer conflict this used to guard against no longer
+      # applies — verified live by bumping eslint/@eslint/js to ^10 and
+      # eslint-plugin-svelte to ^3 in the same pass with a clean
+      # `npm install` (no ERESOLVE).
+      # TypeScript 7 is a hard npm ERESOLVE conflict: svelte-check's latest
+      # (4.7.6) and @sveltejs/kit both still declare their typescript peer
+      # as `^5.0.0 || ^6.0.0` (verified against the registry 2026-09-26).
+      # transcribe-app/frontend hit the same wall and reverted (e851c207).
+      # Un-ignore once svelte-check ships TS 7 peer support.
+      - dependency-name: 'typescript'
         update-types: ['version-update:semver-major']
 
   - package-ecosystem: 'github-actions'

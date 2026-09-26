@@ -41,28 +41,28 @@
     "test:live": "node scripts/run-e2e.mjs e2e/live"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.5",
+    "@eslint/js": "^10.0.1",
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@sveltejs/adapter-static": "^3.0.6",
     "@sveltejs/kit": "^2.8.0",
-    "@sveltejs/vite-plugin-svelte": "^5.1.1",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^22.7.0",
-    "eslint": "^9.0.0",
-    "eslint-plugin-svelte": "^2.46.0",
+    "@types/node": "^26.6.2",
+    "eslint": "^10.0.0",
     "globals": "^17.12.0",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.1.1",
     "prettier": "^3.9.9",
-    "prettier-plugin-svelte": "^3.2.0",
+    "prettier-plugin-svelte": "^4.1.1",
     "svelte": "^5.0.0",
     "svelte-check": "^4.7.6",
     "tailwindcss": "^4.0.0",
     "tslib": "^2.7.0",
-    "typescript": "^5.6.0",
+    "typescript": "^5.9.3",
     "typescript-eslint": "^8.70.1",
-    "vite": "^6.4.2",
-    "vitest": "^4.1.11"
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1",
+    "eslint-plugin-svelte": "^3.23.0"
   },
   "dependencies": {
     "svelte-dnd-action": "^0.9.79"
