@@ -1410,11 +1410,18 @@ npm run build  # -> build/, fails on any broken link/anchor
   diagram sources for `/architecture`).
 - **Screenshots are never captured from the shared dev stack** — only
   from a Cropwright instance pointed at a public-sample-data
-  OpenProcessor backend (COCO val2017 / Open Images plates). Until that
-  capture happens, every `<Screenshot>` slot renders a "pending"
-  placeholder rather than a broken image or a private-data screenshot.
-  See `docs-site/docs/developer-guide/screenshots.md` and
-  `scripts/capture_docs_screenshots.py`.
+  OpenProcessor backend (COCO val2017 / Open Images plates). The 1600px
+  captures are committed under `docs-site/static/img/screenshots/`
+  (image credits on the screenshots page); a `<Screenshot>` slot with no
+  file renders a "pending" placeholder. `scripts/capture_docs_screenshots.py`
+  requires an explicit `--base-url`, reads its routes from
+  `docs-site/src/data/screenshot_routes.json`, and aborts every request
+  except GET/HEAD and the side-effect-free `/train/preflight`. See
+  `docs-site/docs/developer-guide/screenshots.md`.
+- Hosted locally as the `cropwright-docs` container on :5185
+  (`docker build -t cropwright-docs:local docs-site && docker run -d
+--name cropwright-docs -p 5185:8080 cropwright-docs:local`), served
+  under the same `/cropwright/` base path GitHub Pages uses.
 - Deploys to GitHub Pages via `.github/workflows/docs.yml` (build on
   every PR touching `docs-site/**`, deploy on push to `main`/`master`) —
   won't actually publish until Pages/Actions are enabled on the public
@@ -1782,7 +1789,7 @@ ships:
   tolerance, no allow-list), email/IPv4 sweeps, excluded-path presence,
   lockfile registries and gitleaks (container image).
 - Public screenshots come only from the fresh-start public-data run
-  (COCO val2017, Open Images plates); none are tracked today.
+  (COCO val2017, Open Images plates) — the docs-site captures above.
 
 ## Documentation & changelog discipline
 

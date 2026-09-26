@@ -23,3 +23,5 @@ pending item that proposed the term (a dry-run shows the real count first),
 undoable with `Z`. Flagged terms (an existing class, a generic parent, or a
 non-object) get no create action, only a served reason and, for an
 existing-class match, a one-click map.
+
+<Screenshot name="classes-1600.png" alt="Cropwright Class management" caption="Classes — registry, hotkeys and proposals" />

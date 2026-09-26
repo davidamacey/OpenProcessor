@@ -23,8 +23,11 @@ fixture-driven mock.
 Usage:
     npm run test:e2e   # once, to provision e2e/.venv with Playwright
     e2e/.venv/bin/python scripts/capture_docs_screenshots.py \\
-        --base-url http://localhost:5184
-    # or: CROPWRIGHT_URL=http://localhost:5184 e2e/.venv/bin/python scripts/capture_docs_screenshots.py
+        --base-url http://localhost:<port-of-a-public-data-instance>
+    # or: CROPWRIGHT_URL=... e2e/.venv/bin/python scripts/capture_docs_screenshots.py
+
+The capture is read-only: every non-GET/HEAD request is aborted, so a
+screenshot pass can never write to the backend it points at.
 
 The route list is NOT hardcoded here — it's read from
 docs-site/src/data/screenshot_routes.json, the same directory the
@@ -56,11 +59,27 @@ def load_routes() -> list[dict]:
     return json.loads(ROUTES_FILE.read_text())
 
 
+# POSTs that only compute a report and change nothing server-side.
+READ_ONLY_POSTS = ("/train/preflight",)
+
+
+def _read_only(route) -> None:
+    req = route.request
+    if req.method in ("GET", "HEAD") or (
+        req.method == "POST" and req.url.split("?")[0].endswith(READ_ONLY_POSTS)
+    ):
+        route.continue_()
+    else:
+        print(f"  blocked {req.method} {req.url}")
+        route.abort()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("CROPWRIGHT_URL", "http://localhost:5184"),
+        default=os.environ.get("CROPWRIGHT_URL"),
+        required="CROPWRIGHT_URL" not in os.environ,
         help="Base URL of a Cropwright instance pointed at a PUBLIC-sample-data "
         "OpenProcessor backend only. Never a real deployment.",
     )
@@ -89,6 +108,7 @@ def main() -> int:
             for route in routes:
                 for width in WIDTHS:
                     page = browser.new_page(viewport={"width": width, "height": VIEWPORT_HEIGHT})
+                    page.route("**/*", _read_only)
                     url = args.base_url.rstrip("/") + route["route"]
                     page.goto(url, wait_until="domcontentloaded", timeout=30_000)
                     wait_for = route.get("wait_for")
@@ -97,7 +117,11 @@ def main() -> int:
                             page.wait_for_selector(wait_for, timeout=10_000)
                         except Exception:
                             print(f"  warning: selector {wait_for!r} not found for {route['route']} @ {width}px")
-                    page.wait_for_timeout(500)  # let in-flight images/animations settle
+                    try:
+                        page.wait_for_load_state("networkidle", timeout=10_000)
+                    except Exception:
+                        pass  # pages with polling never go idle; the settle below covers them
+                    page.wait_for_timeout(1500)
                     out_path = args.out / f"{route['name']}-{width}.png"
                     page.screenshot(path=str(out_path), full_page=True)
                     print(f"  wrote {out_path.relative_to(REPO_ROOT)}")

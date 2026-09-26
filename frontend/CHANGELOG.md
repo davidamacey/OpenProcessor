@@ -26,7 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     JSONs, `docs/**` and `static/img/**`.
   - `/architecture` renders three Mermaid diagrams (system context,
     labeling workflow, frontend internals) from
-    `src/data/architecture.json`, kept accurate to `CLAUDE.md`.
+    `src/data/architecture.json`.
   - `/roadmap` renders a hand-maintained `src/data/roadmap.json` (v0.1.0
     shipped scope, plus tracked-but-not-built follow-ups: optional API
     auth, hidden-proposal persistence, served model-status reasons, a
@@ -35,16 +35,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     profiles).
   - A data-driven landing page (`src/pages/index.tsx`): hero, feature
     grid, "how it works" workflow steps, a screenshot showcase, and a
-    quick-start snippet — every `<Screenshot>` slot renders a clearly
-    marked "pending" placeholder until the named file exists under
-    `static/img/screenshots/`, since no screenshot can be captured from
-    the current (non-public-data) shared stack.
+    quick-start snippet. Eleven 1600px screenshots of every page,
+    captured from a public-sample-data deployment (COCO val2017 and Open
+    Images, credited on the screenshots page); a slot with no file
+    renders a "pending" placeholder.
   - `scripts/capture_docs_screenshots.py` rewritten to drive a real
-    Cropwright instance (`--base-url`/`CROPWRIGHT_URL`) pointed at a
-    **public-sample-data-only** OpenProcessor backend, reading its route
-    list from `docs-site/src/data/screenshot_routes.json` rather than a
-    hardcoded list — replaces the old stub-backed synthetic-tile
-    version.
+    Cropwright instance pointed at a **public-sample-data-only**
+    OpenProcessor backend. `--base-url` (or `CROPWRIGHT_URL`) is
+    required, the route list comes from
+    `docs-site/src/data/screenshot_routes.json`, and every request other
+    than GET/HEAD and `/train/preflight` is aborted, so a capture can't
+    write. Replaces the old stub-backed synthetic-tile version.
+  - `docs-site/Dockerfile` serves the build under `/cropwright/`, the
+    GitHub Pages base path, from a non-root nginx image.
   - `.github/workflows/docs.yml` — a GitHub Pages deploy workflow
     (build-only on PRs, deploy on push to `main`/`master`), modelled on
     a sister project's own docs deploy workflow.

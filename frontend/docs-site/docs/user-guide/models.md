@@ -15,3 +15,5 @@ latency.
   chip instead, never a button that would 403.
 - A service the backend marks not configured renders "—" for its
   inference/latency fields, never a false 0.
+
+<Screenshot name="models-1600.png" alt="Cropwright Model registry page" caption="Models — live status of every inference service" />

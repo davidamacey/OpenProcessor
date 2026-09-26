@@ -2,21 +2,31 @@
   {
     "name": "dashboard-1600.png",
     "alt": "Cropwright dashboard showing dataset stats and the auto-label panel",
-    "caption": "Dashboard — pipeline health and the clustering/VLM-assist trigger"
+    "caption": "Dashboard \u2014 pipeline health and the clustering/VLM-assist trigger"
   },
   {
     "name": "clusters-1600.png",
     "alt": "Cropwright cluster grid with cohesion badges",
-    "caption": "Cluster grid — dominant class, cohesion and size per cluster"
+    "caption": "Cluster grid \u2014 dominant class, cohesion and size per cluster"
   },
   {
     "name": "review-1600.png",
     "alt": "Cropwright keyboard-driven review queue",
-    "caption": "Review queue — one item at a time, keyboard-first"
+    "caption": "Review queue \u2014 one item at a time, keyboard-first"
+  },
+  {
+    "name": "review-regions-1600.png",
+    "alt": "Cropwright region review tab with a detected box and text reading",
+    "caption": "Region review \u2014 box, provenance and text reading, one key per decision"
   },
   {
     "name": "train-1600.png",
     "alt": "Cropwright training cockpit with live progress",
-    "caption": "Train — preflight, live progress, and past-run results"
+    "caption": "Train \u2014 preflight, live progress, and past-run results"
+  },
+  {
+    "name": "bakeoff-1600.png",
+    "alt": "Cropwright model comparison setup",
+    "caption": "Bake-off \u2014 compare trained runs on frozen test splits"
   }
 ]

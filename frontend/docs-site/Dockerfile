@@ -1,6 +1,6 @@
 # Multi-stage build: Node.js build -> nginx:alpine serve, non-root, matching
 # the main Cropwright image's convention (see repo-root Dockerfile).
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 
 COPY package*.json ./
@@ -19,7 +19,9 @@ LABEL org.opencontainers.image.title="Cropwright Documentation" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor"
 
-COPY --from=build /app/build /usr/share/nginx/html
+# The site is built for baseUrl /cropwright/ (site.config.ts), so it is served
+# from that subpath, exactly as GitHub Pages will serve it.
+COPY --from=build /app/build /usr/share/nginx/html/cropwright
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 8080

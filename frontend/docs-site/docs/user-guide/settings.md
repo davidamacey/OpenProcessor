@@ -24,3 +24,5 @@ config, never editable here.
 Per-scorer coverage, with confirm-gated "Compute all" / "Compute selected"
 actions, a progress poll while a compute job runs, and Cancel. Absent
 entirely when the backend hasn't enabled scores.
+
+<Screenshot name="settings-1600.png" alt="Cropwright Settings page" caption="Settings — deployment defaults and curation scores" />

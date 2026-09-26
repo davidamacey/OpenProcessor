@@ -29,6 +29,8 @@ probe") and a direct link to the step that fills it.
 
 <Screenshot name="review-1600.png" alt="Cropwright review queue" caption="Review — one item at a time, keyboard-first" />
 
+<Screenshot name="review-regions-1600.png" alt="Cropwright region review tab" caption="Region tab — region box, provenance chips and text reading" />
+
 ## Region tab
 
 Driven entirely by the served region profile: a sub-box editor, confirm /

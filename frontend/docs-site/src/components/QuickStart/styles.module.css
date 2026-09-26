@@ -6,3 +6,7 @@
 .section :global(.container) {
   max-width: 720px;
 }
+
+.section pre {
+  text-align: left;
+}

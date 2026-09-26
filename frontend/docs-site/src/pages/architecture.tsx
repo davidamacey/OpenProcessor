@@ -10,12 +10,9 @@ export default function Architecture(): React.JSX.Element {
       <main className="container margin-vert--lg">
         <h1>Architecture</h1>
         <p>
-          Three diagrams, kept accurate to <code>CLAUDE.md</code>: the system context (who
-          talks to whom), the labeling workflow (the loop a dataset goes through), and the
-          frontend's own internal structure. Rendered with Mermaid rather than a generated
-          Archify export — diagram sources live in{' '}
-          <code>docs-site/src/data/architecture.json</code>; edit that file when the code
-          they describe changes.
+          Three views of the system: who talks to whom, the loop a dataset goes through, and
+          how the frontend is put together. The Mermaid sources live in{' '}
+          <code>docs-site/src/data/architecture.json</code>.
         </p>
         <DiagramSection />
       </main>

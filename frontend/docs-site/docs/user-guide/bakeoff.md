@@ -24,3 +24,5 @@ per-dataset results and a per-class table (an uncovered class reads "not
 covered", not a blank). A pre-v2 result shows a compatibility note instead
 of a broken render. Nothing here computes a metric, mapping, rank or winner
 client-side — it's all served.
+
+<Screenshot name="bakeoff-1600.png" alt="Cropwright Model comparison page" caption="Bake-off — datasets, models and the results matrix" />

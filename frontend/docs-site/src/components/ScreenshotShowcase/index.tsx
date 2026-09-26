@@ -5,8 +5,8 @@ import styles from './styles.module.css';
 
 /**
  * Data-driven showcase — the route/state list lives in
- * `src/data/screenshots.json`, the same list
- * `scripts/capture_docs_screenshots.py` reads to know what to capture.
+ * `src/data/screenshots.json`; the capture script's route list is
+ * `src/data/screenshot_routes.json`.
  * Each slot degrades to the `<Screenshot>` pending placeholder until the
  * file exists under `static/img/screenshots/`.
  */
@@ -20,6 +20,12 @@ export default function ScreenshotShowcase(): React.JSX.Element {
             <Screenshot key={s.name} name={s.name} alt={s.alt} caption={s.caption} />
           ))}
         </div>
+        <p className={styles.credits}>
+          Sample imagery: <a href="https://cocodataset.org">COCO</a> val2017 and{' '}
+          <a href="https://storage.googleapis.com/openimages/web/index.html">Open Images</a>{' '}
+          (Creative Commons licensed photographs).{' '}
+          <a href="docs/developer-guide/screenshots#image-credits">Credits</a>
+        </p>
       </div>
     </section>
   );

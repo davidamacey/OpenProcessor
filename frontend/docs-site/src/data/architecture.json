@@ -8,7 +8,7 @@
   {
     "id": "labeling-workflow",
     "title": "Labeling workflow",
-    "description": "The end-to-end loop every dataset goes through, matching the README's workflow and CLAUDE.md's route table.",
+    "description": "The end-to-end loop every dataset goes through, one page per step.",
     "mermaid": "flowchart LR\n  Ingest[\"Ingest\\n/ingest\"] --> Detect[\"Region detection + VLM\\n(backend, async)\"]\n  Detect --> Clusters[\"Clusters\\n/clusters\"]\n  Clusters --> Review[\"Review\\n/review\"]\n  Review --> Classes[\"Classes\\n/classes\"]\n  Classes --> Export[\"Export + holdout\\n/export\"]\n  Export --> Train[\"Train\\n/train\"]\n  Train --> Bakeoff[\"Bake-off\\n/bakeoff\"]\n  Bakeoff --> Promote[\"Promote\\n(Triton registry)\"]\n  Promote --> Probe[\"Probe predictions\\n(feeds review)\"]\n  Probe --> Review"
   },
   {
