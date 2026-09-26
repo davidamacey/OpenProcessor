@@ -256,6 +256,23 @@ function findOperation(frontendPath: string, method: string): OpenApiOperation |
   return null;
 }
 
+/**
+ * W8 multi-box regions (feat/w8-multibox-lockstep, docs/design/
+ * w8-multibox-frontend-plan-2026-09-26.md): these four routes are new in
+ * the backend's W8 wave, so the vendored `contracts/openapi/curation.json`
+ * snapshot (pre-W8) doesn't have them yet. `it.todo` keeps them visible
+ * (not silently skipped) without failing the suite until
+ * `npm run contract:sync` picks up the backend's W8 OpenAPI additions —
+ * emptied at the lockstep merge, same as wireKeys.test.ts's
+ * PENDING_BACKEND_W8.
+ */
+const PENDING_BACKEND_W8_ENDPOINTS = new Set<string>([
+  'PUT /crops/*/regions',
+  'PUT /crops/batch_regions',
+  'PATCH /crops/*/regions/*',
+  'POST /regions/batch_box_state',
+]);
+
 describe('endpoint catalog: every call resolves to a real OpenAPI operation', () => {
   for (const file of SCANNED_FILES) {
     const calls = resolveCalls(file);
@@ -266,6 +283,10 @@ describe('endpoint catalog: every call resolves to a real OpenAPI operation', ()
 
       for (const call of calls) {
         const label = `${call.method} ${call.path}`;
+        if (PENDING_BACKEND_W8_ENDPOINTS.has(label)) {
+          it.todo(`${label} exists in the OpenAPI contract (pending backend W8)`);
+          continue;
+        }
         it(`${label} exists in the OpenAPI contract`, () => {
           const op = findOperation(call.path, call.method);
           expect(

@@ -42,8 +42,8 @@ describe('boxEditActionFor', () => {
     );
   });
 
-  it('never resolves the unavailable W8 next-box key', () => {
-    expect(boxEditActionFor(key('Tab'))).toBeNull();
+  it('resolves the W8 next-box key now that this branch enables it', () => {
+    expect(boxEditActionFor(key('Tab'))).toBe('box_edit.next_box');
   });
 });
 

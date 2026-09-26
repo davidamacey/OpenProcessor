@@ -20,6 +20,7 @@ import { parseCurationSettings, type CurationSettings } from '$lib/curationSetti
 import { mapCropSlots } from './annotations/cropSlots';
 import type { XYXY, SlotKey, SlotData, SlotSpec, SlotFrame } from './annotations/types';
 import type { DatasetExportSpec } from './annotations/datasetExport';
+import type { RegionBoxInput } from './annotations/multiBox';
 import {
   isNoRegionProfileDetail,
   notifyRegionProfileUnavailable,
@@ -2146,6 +2147,133 @@ export async function undoCropRegionBatch(
     nothing_to_undo: raw.nothing_to_undo ?? [],
     conflicts: raw.conflicts ?? [],
     not_found: raw.not_found ?? [],
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* W8 multi-box region writes (lockstep with the backend's W8; see     */
+/* docs/design/w8-multibox-frontend-plan-2026-09-26.md). Element shapes */
+/* are RegionBoxInput from annotations/multiBox.ts.                     */
+/* ------------------------------------------------------------------ */
+
+/** `PUT /crops/{crop_id}/regions` (W8.8) — replaces the box list on one
+ *  crop. `regionStatus` optionally applies a whole-set status to the
+ *  built list in the same write (Enter-after-edit: `'detected'`). */
+export async function putRegionBoxes(
+  cropId: string,
+  boxes: RegionBoxInput[],
+  opts: { regionStatus?: string; expectedRegionRevision?: number } = {},
+  signal?: AbortSignal,
+): Promise<Crop> {
+  const body: Record<string, unknown> = {
+    boxes,
+    frame: 'parent',
+    region_label_source: 'human',
+  };
+  if (opts.regionStatus != null) body.region_status = opts.regionStatus;
+  if (opts.expectedRegionRevision != null) {
+    body.expected_region_revision = opts.expectedRegionRevision;
+  }
+  const raw = await apiFetch<{ item: RawCrop }>(
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/regions`,
+    { method: 'PUT', body: JSON.stringify(body) },
+    signal,
+  );
+  return mapRawCrop(raw.item);
+}
+
+/** `PUT /crops/batch_regions` (W8.8) — replaces every listed crop's box
+ *  list with the SAME new boxes (every element must be `box_id: null`;
+ *  typically `boxes: []`, "none visible"). */
+export async function putBatchRegions(
+  cropIds: string[],
+  boxes: Array<{ bbox_norm: [number, number, number, number]; state?: string }>,
+  opts: { regionStatus?: string } = {},
+  signal?: AbortSignal,
+): Promise<void> {
+  assertNonEmptyBatch('batch region replace', cropIds);
+  const body: Record<string, unknown> = { crop_ids: cropIds, boxes, frame: 'parent' };
+  if (opts.regionStatus != null) body.region_status = opts.regionStatus;
+  await apiFetch(
+    `${scoped()}/crops/batch_regions`,
+    { method: 'PUT', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** `PATCH /crops/{crop_id}/regions/{box_id}` (W8.8) — per-box state/text
+ *  flip. Used by the selected-box accept/reject keymap actions. */
+export async function patchRegionBox(
+  cropId: string,
+  boxId: string,
+  patch: { state?: string; text?: string; expectedRegionRevision?: number },
+  signal?: AbortSignal,
+): Promise<Crop> {
+  const body: Record<string, unknown> = {};
+  if (patch.state != null) body.state = patch.state;
+  if (patch.text !== undefined) body.text = patch.text;
+  if (patch.expectedRegionRevision != null) {
+    body.expected_region_revision = patch.expectedRegionRevision;
+  }
+  const raw = await apiFetch<{ item: RawCrop }>(
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/regions/${encodeURIComponent(boxId)}`,
+    { method: 'PATCH', body: JSON.stringify(body) },
+    signal,
+  );
+  return mapRawCrop(raw.item);
+}
+
+export interface RegionBatchConflict {
+  crop_id: string;
+  error: string;
+  message: string;
+  current_source: string | null;
+  current_region_revision: number;
+  current_box_ids: string[];
+  item: RawCrop;
+}
+
+export interface RegionBatchBoxStateResult {
+  updated: number;
+  invalid: Array<{ crop_id: string; box_id: string; error: string; message: string }>;
+  conflicts: RegionBatchConflict[];
+  items: Crop[];
+}
+
+/** `POST /regions/batch_box_state` (W8.8) — one state on many boxes
+ *  across items (region-gallery triage / a region cluster = a set of
+ *  boxes). Never flips a whole item's other boxes — use `batchRegionStatus`
+ *  for that. */
+export async function postBatchBoxState(
+  targets: Array<{ cropId: string; boxId: string }>,
+  state: string,
+  signal?: AbortSignal,
+): Promise<RegionBatchBoxStateResult> {
+  if (targets.length === 0)
+    throw new Error('postBatchBoxState requires at least one target');
+  type Raw = {
+    updated: number;
+    invalid?: Array<{ crop_id: string; box_id: string; error: string; message: string }>;
+    conflicts?: RegionBatchConflict[];
+    items?: RawCrop[];
+  };
+  const raw = await apiFetch<Raw>(
+    `${scoped()}/regions/batch_box_state`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        targets: targets.map((t) => ({ crop_id: t.cropId, box_id: t.boxId })),
+        state,
+        region_label_source: 'human',
+      }),
+    },
+    signal,
+  );
+  return {
+    updated: raw.updated,
+    invalid: raw.invalid ?? [],
+    conflicts: raw.conflicts ?? [],
+    items: (raw.items ?? []).map(mapRawCrop),
   };
 }
 

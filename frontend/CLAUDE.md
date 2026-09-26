@@ -1029,6 +1029,40 @@ and the protected chip is dropped for a model that isn't installed
 (`isInstalled`). An installed-but-unloaded optional model still reads
 "not ready". Covered by `src/routes/models/modelStatus.test.ts`.
 
+## W8 multi-box regions (lockstep branch `feat/w8-multibox-lockstep`)
+
+A region item can carry an **unbounded list of boxes**, not one — the
+owner's binding rule (approved 2026-09-26): "a region is a list per item;
+one element is not a special case." No client cap; the only limit is the
+served `region_profile.limits.max_boxes_per_write` (a request-size guard,
+not a labeling rule). Built against, and merged only alongside, the
+backend's W8 wave (`openprocessor/docs/design/
+openprocessor_internal/any_domain_plan.md` §7.7); see
+`docs/design/w8-multibox-frontend-plan-2026-09-26.md` for the full wire
+model, write-path table and the "deliberately out of scope this pass"
+list. Landed so far, additively (every pre-W8 scalar region field the
+sections below describe stays declared and read — this hasn't cut over
+`/review`'s shipped UI yet):
+
+- `SlotData.subBoxes: SlotBox[]`, populated by `readSlot` from
+  `SubBoxCapability.listField` (the served region slot declares
+  `listField: 'region_boxes'`) — `src/lib/annotations/types.ts`/
+  `readSlot.ts`/`servedRegionSlot.ts`.
+- Pure box-editing/write-body logic in `src/lib/annotations/multiBox.ts`,
+  including the owner-decided **Enter confirms only `proposed` boxes**
+  rule — a whole-set confirm never overrides a per-box decision;
+  `rejected`/`false_positive` boxes are left exactly as they are.
+- `api.ts`: `putRegionBoxes` (`PUT /crops/{id}/regions`), `putBatchRegions`
+  (`PUT /crops/batch_regions`), `patchRegionBox` (`PATCH /crops/{id}/
+regions/{box_id}` — the per-box accept/reject keys, `y`/`r`), and
+  `postBatchBoxState` (`POST /regions/batch_box_state`, region-gallery
+  triage).
+- `MultiBoxCanvas.svelte` — select/add/delete/Tab-cycle over an unbounded
+  box list; a sibling to `BboxCanvas.svelte`, which stays single-box for
+  every non-region slot.
+- `keymapFallback.ts`'s `review.region.accept_box`/`reject_box`/
+  `box_edit.next_box` are `available: true` on this branch.
+
 ## Plate provenance + OCR (Wave 1 + Wave 2b, 2026-05-11)
 
 Every plate-bearing crop now carries detector provenance — which

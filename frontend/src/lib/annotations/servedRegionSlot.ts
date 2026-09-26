@@ -25,6 +25,12 @@ const encode = encodeURIComponent;
 /** Wire field names for the region sub-box, identical for every profile. */
 export const REGION_SUB_BOX: SubBoxCapability = {
   bboxField: 'region_bbox_norm',
+  // W8 multi-box list (docs/design/w8-multibox-frontend-plan-2026-09-26.md).
+  // A W8 backend serves ItemDoc.region_boxes (always an array) instead of
+  // the scalar region_bbox_norm/region_candidate_* fields above; those
+  // scalar fields stay declared here only for a pre-W8 backend during the
+  // lockstep transition (`region_boxes_migration.pending` on /health).
+  listField: 'region_boxes',
   storedFrame: 'source',
   frameField: 'region_bbox_frame',
   scoreField: 'region_score',

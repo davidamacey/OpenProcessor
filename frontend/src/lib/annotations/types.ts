@@ -84,9 +84,54 @@ export interface SubBoxRing {
   rejected: string;
 }
 
+/**
+ * One element of a multi-box list (W8, `RegionBoxWire`). Additive to the
+ * existing scalar `SubBoxCapability` fields below — a slot that declares
+ * `listField` gets `SlotData.subBoxes` populated by `readSlot`; slots that
+ * don't (every non-region slot today) are unaffected. See
+ * docs/design/w8-multibox-frontend-plan-2026-09-26.md.
+ */
+export interface SlotBox {
+  /** Stable id, e.g. `"b1"`. Null only for a not-yet-saved local box. */
+  boxId: string | null;
+  state: string;
+  /** Source-frame geometry, `[x1,y1,x2,y2]` normalized to the source image. */
+  rawXyxy: XYXY | null;
+  /** Crop-local geometry, server-projected. Null = not drawable in the crop view. */
+  parent: BBoxNormLike | null;
+  score: number | null;
+  detector: string | null;
+  detectorVersion: string | null;
+  source: string | null;
+  bboxCorrect: boolean | null;
+  confidence: string | null;
+  rejectionReason: string | null;
+  text: string | null;
+  clusterId: number | null;
+  thumbnailUrl: string | null;
+}
+
+/** Served `GET /regions/statuses` `box_states` entry (W8.7). */
+export interface BoxStateInfo {
+  value: string;
+  label: string;
+  role: 'proposed' | 'accepted' | 'rejected' | 'false_positive';
+  humanWritable: boolean;
+  exported: boolean;
+  dashed: boolean;
+  dim: boolean;
+  badge: string | null;
+}
+
 export interface SubBoxCapability {
   /** Wire field holding the box as `[x1,y1,x2,y2]`. Regions: `region_bbox_norm`. */
   bboxField: WireField;
+  /** W8: wire field holding the multi-box list on the item
+   *  (`ItemDoc.region_boxes`). When set, `readSlot` populates
+   *  `SlotData.subBoxes` from this list (element keys are the fixed
+   *  `RegionBoxWire` shape — see `SlotBox`) in addition to the legacy
+   *  scalar fields below, which a pre-W8 backend still serves. */
+  listField?: WireField;
   /** Frame the stored box uses when `frameField` is absent or unreadable. */
   storedFrame: SlotFrame;
   /** Optional wire field carrying the frame per-row (regions: `region_bbox_frame`).
@@ -320,6 +365,10 @@ export interface SlotSpec {
 
 export interface SlotData {
   key: SlotKey;
+  /** W8 multi-box list, present when the slot's `subBox.listField` is
+   *  set and the backend serves it — always an array, `[]` when the item
+   *  has no boxes, in stored (display) order. See `SlotBox`. */
+  subBoxes?: SlotBox[];
   subBox?: {
     parent: BBoxNormLike | null;
     rawXyxy: XYXY | null;

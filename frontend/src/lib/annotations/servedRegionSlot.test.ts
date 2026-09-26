@@ -29,10 +29,16 @@ function wireFields(v: unknown, out: string[] = []): string[] {
 describe('regionSlotFromServedProfile', () => {
   const slot = regionSlotFromServedProfile(WIDGET_TAG_PROFILE);
 
-  it('uses only wire keys the backend documents', () => {
+  it('uses only wire keys the backend documents (or the named pending-W8 key)', () => {
+    // 'region_boxes' is W8's SubBoxCapability.listField — see
+    // src/lib/contract/wireKeys.test.ts's PENDING_BACKEND_W8, which is
+    // the tracked, emptied-at-lockstep-sync allow-list for this.
+    const PENDING_BACKEND_W8 = ['region_boxes'];
     const fields = wireFields(slot.capabilities);
     expect(fields.length).toBeGreaterThan(20);
-    expect(fields.filter((f) => !WIRE_KEYS.has(f))).toEqual([]);
+    expect(
+      fields.filter((f) => !WIRE_KEYS.has(f) && !PENDING_BACKEND_W8.includes(f)),
+    ).toEqual([]);
   });
 
   it('keys the slot by the profile name and binds it to the region class', () => {

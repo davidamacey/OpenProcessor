@@ -83,15 +83,11 @@ describe('FALLBACK_KEYMAP', () => {
     }
   });
 
-  it('marks the W8 per-box actions unavailable, and nothing else', () => {
+  it('has no unavailable actions — the W8 per-box actions are enabled on this branch', () => {
     const unavailable = FALLBACK_KEYMAP.actions
       .filter((a) => !a.available)
       .map((a) => a.id);
-    expect(unavailable.sort()).toEqual([
-      'box_edit.next_box',
-      'review.region.accept_box',
-      'review.region.reject_box',
-    ]);
+    expect(unavailable).toEqual([]);
   });
 });
 
@@ -140,6 +136,8 @@ describe('resolving a context', () => {
       'review.region.edit_box',
       'review.region.back',
       'review.region.next',
+      'review.region.accept_box',
+      'review.region.reject_box',
     ]);
   });
 
@@ -158,9 +156,10 @@ describe('resolving a context', () => {
     expect(keymapStore.actionFor('box_edit', 'enter')).toBe('box_edit.save');
   });
 
-  it('never resolves an unavailable action', () => {
-    expect(keymapStore.actionFor('box_edit', 'tab')).toBeNull();
-    expect(keymapStore.actionFor('review.region', 'y')).toBeNull();
+  it('resolves the W8 per-box actions now that this branch enables them', () => {
+    expect(keymapStore.actionFor('box_edit', 'tab')).toBe('box_edit.next_box');
+    expect(keymapStore.actionFor('review.region', 'y')).toBe('review.region.accept_box');
+    expect(keymapStore.actionFor('review.region', 'r')).toBe('review.region.reject_box');
   });
 
   it('does not see a sibling context: box_edit excludes review', () => {

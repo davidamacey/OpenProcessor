@@ -197,6 +197,15 @@ if _missing:
 
 DEFAULT_ITEM: dict[str, Any] = {k: _EXPLICIT[k] for k in ITEM_KEYS}
 
+# W8 multi-box regions (feat/w8-multibox-lockstep, docs/design/
+# w8-multibox-frontend-plan-2026-09-26.md): `region_boxes` isn't in the
+# vendored pre-W8 contract snapshot yet (see wireKeys.test.ts's
+# PENDING_BACKEND_W8), so it can't come from ITEM_KEYS above. Added here,
+# outside the contract-derived dict, purely so e2e fixtures can exercise
+# the new list shape ahead of the lockstep contract sync. Remove this
+# line once `region_boxes` lands in ITEM_KEYS for real.
+DEFAULT_ITEM["region_boxes"] = None
+
 
 def make_item(**overrides: Any) -> dict[str, Any]:
     """Return a full item-wire payload (every key in ``item_wire.json``), with overrides applied.

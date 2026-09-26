@@ -8,6 +8,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **W8 multi-box regions — wire model and write paths (lockstep branch
+  `feat/w8-multibox-lockstep`, built against and merged only alongside the
+  backend's W8 wave; `docs/design/w8-multibox-frontend-plan-2026-09-26.md`).**
+  A region item can now carry an unbounded list of boxes
+  (`ItemDoc.region_boxes: RegionBoxWire[]`), not just one — the owner's
+  binding rule is "a region is a list per item, one element is not a
+  special case." This pass ships, additively (every pre-W8 single-box
+  field stays declared and read, so the shipped `/review` UI is
+  unaffected until it's switched over):
+  - `SlotBox`/`BoxStateInfo` types and `SubBoxCapability.listField`
+    (`src/lib/annotations/types.ts`); `SlotData.subBoxes` populated by
+    `readSlot`'s new `mapRegionBoxWire`/`mapRegionBoxList`
+    (`src/lib/annotations/readSlot.ts`); the served region slot declares
+    `listField: 'region_boxes'` (`servedRegionSlot.ts`).
+  - Pure box-editing logic in `src/lib/annotations/multiBox.ts`
+    (`EditableBox`, selection cycling, add/remove, and the
+    `PUT /crops/{crop_id}/regions` request-body builder implementing the
+    per-element addressing rule: untouched → `{box_id}`, moved →
+    `{box_id, bbox_norm}`, state-changed → `+ state`, new → `{box_id:
+null, bbox_norm}`) plus the owner-decided Enter semantics
+    (`confirmProposedBoxes`: confirms only `proposed` boxes, leaves
+    `rejected`/`false_positive` untouched).
+  - New `api.ts` functions: `putRegionBoxes`, `putBatchRegions`,
+    `patchRegionBox`, `postBatchBoxState` (W8.8's five human edit
+    routes).
+  - `MultiBoxCanvas.svelte` — a sibling to `BboxCanvas.svelte` (which
+    stays single-box) supporting select/add/delete/Tab-cycle over an
+    unbounded box list, no client cap.
+  - `review.region.accept_box`/`reject_box` (`y`/`r`) and
+    `box_edit.next_box` (`Tab`) flip from `available: false` to `true` in
+    `keymapFallback.ts`, reserving those letters via the existing
+    served-keymap union mechanism.
+  - Contract tests gained an explicit, named `PENDING_BACKEND_W8`
+    allow-list (`wireKeys.test.ts`, `servedRegionSlot.test.ts`) and
+    `it.todo` entries (`endpointCatalog.test.ts`) for the wire keys/routes
+    the backend's W8 hasn't merged yet — emptied at the lockstep contract
+    sync, not silently widened.
+  - **Not yet done in this pass** (tracked in the plan doc's
+    "deliberately out of scope" section): wiring the multi-box editor
+    into `/review/+page.svelte`'s keyboard/confirm flow, `SlotBboxEditor`,
+    `SourceImageOverlay`, `SlotCard`, `CropMetaPanel`, `SlotGallery`/
+    `slotGalleryController` (`RegionRowPage`, `has_rejected_box`), region
+    cluster `size`/`box_count`, and `RegionBatchConflict` handling.
+
 - **Action-id keymap store** (internal/architecture, frontend only, step
   K1 of `docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md`).
   No behavior change: every shortcut, hint, toast and overlay row uses

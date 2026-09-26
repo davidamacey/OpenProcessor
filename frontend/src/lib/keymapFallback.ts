@@ -17,8 +17,11 @@
  * action whose default includes one keeps it (`locked_keys`); no other
  * action may take one. The store enforces this on every document.
  *
- * The three W8 per-box actions are declared `available: false` — nothing
- * registers them until W8 lands (plan §6 step K3).
+ * The three W8 per-box actions (`review.region.accept_box`/`reject_box`,
+ * `box_edit.next_box`) are `available: true` as of the
+ * feat/w8-multibox-lockstep branch (docs/design/
+ * w8-multibox-frontend-plan-2026-09-26.md) — registered by the review
+ * page's multi-box editing surface.
  */
 
 export interface KeymapGrammar {
@@ -148,7 +151,7 @@ const SEEDS: ActionSeed[] = [
     null,
     'Accept selected {region} box',
     ['y'],
-    { available: false },
+    { available: true },
   ],
   [
     'review.region.reject_box',
@@ -156,7 +159,7 @@ const SEEDS: ActionSeed[] = [
     null,
     'Reject selected {region} box',
     ['r'],
-    { available: false },
+    { available: true },
   ],
 
   ['box_edit.save', 'box_edit', 'confirm', 'Save {region} & exit edit', ['enter']],
@@ -181,7 +184,7 @@ const SEEDS: ActionSeed[] = [
     null,
     'Select the next box',
     ['tab'],
-    { available: false },
+    { available: true },
   ],
 
   ['cluster.confirm', 'cluster', 'confirm', 'Confirm selected & advance', ['enter']],

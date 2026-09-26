@@ -95,6 +95,24 @@ function declaredWireFields(v: unknown, out: string[] = []): string[] {
   return out;
 }
 
+/**
+ * W8 multi-box regions (feat/w8-multibox-lockstep,
+ * docs/design/w8-multibox-frontend-plan-2026-09-26.md): the vendored
+ * OpenAPI/item-wire snapshot in `contracts/openprocessor/` predates the
+ * backend's W8 wave, so it does not yet know `region_boxes` (the
+ * `SubBoxCapability.listField` this branch declares) or any
+ * `RegionBoxWire` element key. This list — deliberately separate from
+ * `KNOWN_STALE` above, which is for fields the backend will never emit —
+ * is emptied by the lockstep contract sync once the backend's W8 lands
+ * and `npm run contract:sync` picks up `region_box_keys`/
+ * `region_summary_keys`/`box_states`. Do not add anything here that
+ * isn't a genuine "the backend hasn't shipped this yet" case.
+ */
+const PENDING_BACKEND_W8: readonly string[] = [
+  // ItemDoc.region_boxes — SubBoxCapability.listField (servedRegionSlot.ts)
+  'region_boxes',
+];
+
 describe('region slots (served synthesis + region example profiles) vs the backend region wire', () => {
   for (const slot of regionSlots) {
     describe(slot.key, () => {
@@ -104,9 +122,16 @@ describe('region slots (served synthesis + region example profiles) vs the backe
         expect(fields.length).toBeGreaterThan(0);
       });
 
-      it('uses only documented wire keys', () => {
-        expect(fields.filter((f) => !ALL_WIRE_KEYS.has(f))).toEqual([]);
+      it('uses only documented wire keys (or a named PENDING_BACKEND_W8 key)', () => {
+        expect(
+          fields.filter((f) => !ALL_WIRE_KEYS.has(f) && !PENDING_BACKEND_W8.includes(f)),
+        ).toEqual([]);
       });
     });
   }
+
+  it('PENDING_BACKEND_W8 does not silently accumulate keys the backend already serves', () => {
+    const nowLive = PENDING_BACKEND_W8.filter((k) => ALL_WIRE_KEYS.has(k));
+    expect(nowLive).toEqual([]);
+  });
 });

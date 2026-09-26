@@ -13,7 +13,7 @@
  * migration; this module is what that migration will call.
  */
 
-import type { SlotSpec, SlotData, XYXY, SlotFrame, BBoxNormLike } from './types';
+import type { SlotSpec, SlotData, SlotBox, XYXY, SlotFrame, BBoxNormLike } from './types';
 
 function pick(raw: Record<string, unknown>, field: string | undefined): unknown {
   return field == null ? undefined : raw[field];
@@ -100,6 +100,53 @@ export function projectFromParent(
   return [px1, py1, px2, py2];
 }
 
+/** Maps one `RegionBoxWire` element (W8, spec §7.7/W8.9) to a `SlotBox`.
+ *  Exported for direct unit testing of the mapping independent of a full
+ *  `readSlot` call. */
+export function mapRegionBoxWire(el: unknown): SlotBox | null {
+  if (el == null || typeof el !== 'object') return null;
+  const r = el as Record<string, unknown>;
+  const rawXyxy = asXyxy(r.bbox_norm);
+  const parentXyxy = asXyxy(r.bbox_in_parent);
+  const parent = parentXyxy
+    ? {
+        cx: (parentXyxy[0] + parentXyxy[2]) / 2,
+        cy: (parentXyxy[1] + parentXyxy[3]) / 2,
+        w: parentXyxy[2] - parentXyxy[0],
+        h: parentXyxy[3] - parentXyxy[1],
+      }
+    : null;
+  return {
+    boxId: asString(r.box_id),
+    state: asString(r.state) ?? 'proposed',
+    rawXyxy,
+    parent,
+    score: asNumber(r.score),
+    detector: asString(r.detector),
+    detectorVersion: asString(r.detector_version),
+    source: asString(r.source),
+    bboxCorrect: asBoolean(r.bbox_correct),
+    confidence: asString(r.confidence),
+    rejectionReason: asString(r.rejection_reason),
+    text: asString(r.text),
+    clusterId: asNumber(r.cluster_id),
+    thumbnailUrl: asString(r.thumbnail_url),
+  };
+}
+
+/** Maps the whole `region_boxes` (or equivalent `listField`) array off a
+ *  raw crop. Never throws on a malformed element — an element that isn't
+ *  a plain object is dropped, so one bad row can't blank the whole list. */
+export function mapRegionBoxList(raw: unknown): SlotBox[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SlotBox[] = [];
+  for (const el of raw) {
+    const box = mapRegionBoxWire(el);
+    if (box) out.push(box);
+  }
+  return out;
+}
+
 export function readSlot(
   raw: Record<string, unknown>,
   spec: SlotSpec,
@@ -107,6 +154,10 @@ export function readSlot(
 ): SlotData {
   const out: SlotData = { key: spec.key };
   const cap = spec.capabilities;
+
+  if (cap.subBox?.listField) {
+    out.subBoxes = mapRegionBoxList(pick(raw, cap.subBox.listField));
+  }
 
   if (cap.subBox) {
     const rawXyxy = asXyxy(pick(raw, cap.subBox.bboxField));

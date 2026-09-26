@@ -1,8 +1,64 @@
 import { describe, it, expect } from 'vitest';
-import { readSlot, projectFromParent } from './readSlot';
+import {
+  readSlot,
+  projectFromParent,
+  mapRegionBoxWire,
+  mapRegionBoxList,
+} from './readSlot';
 import { slotIsPresent } from './types';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import type { XYXY, BBoxNormLike, SlotFrame } from './types';
+
+describe('W8 multi-box mapping (region_boxes)', () => {
+  it('maps a full RegionBoxWire element', () => {
+    const box = mapRegionBoxWire({
+      box_id: 'b1',
+      state: 'accepted',
+      bbox_norm: [0.41, 0.62, 0.47, 0.71],
+      bbox_in_parent: [0.12, 0.7, 0.3, 0.98],
+      score: 0.88,
+      detector: 'sam3',
+      detector_version: '1',
+      source: 'segmenter',
+      bbox_correct: true,
+      confidence: 'high',
+      rejection_reason: null,
+      text: 'TAG-001',
+      cluster_id: 12,
+      thumbnail_url: '/curation/crops/c_123/region_thumbnail?box_id=b1',
+    });
+    expect(box).not.toBeNull();
+    expect(box?.boxId).toBe('b1');
+    expect(box?.state).toBe('accepted');
+    expect(box?.rawXyxy).toEqual([0.41, 0.62, 0.47, 0.71]);
+    expect(box?.parent).toEqual({ cx: 0.21, cy: 0.84, w: 0.18, h: 0.28 });
+    expect(box?.text).toBe('TAG-001');
+    expect(box?.clusterId).toBe(12);
+  });
+
+  it('drops a malformed element instead of throwing', () => {
+    expect(
+      mapRegionBoxList(['not-an-object', { box_id: 'b1', state: 'proposed' }]),
+    ).toHaveLength(1);
+  });
+
+  it('returns [] for a missing/absent list (no boxes on this item)', () => {
+    expect(mapRegionBoxList(undefined)).toEqual([]);
+    expect(mapRegionBoxList(null)).toEqual([]);
+  });
+
+  it('readSlot populates subBoxes for an unbounded number of boxes', () => {
+    const parent: XYXY = [0, 0, 1, 1];
+    const region_boxes = Array.from({ length: 12 }, (_, i) => ({
+      box_id: `b${i}`,
+      state: i % 2 === 0 ? 'accepted' : 'rejected',
+      bbox_norm: [0.1, 0.1, 0.2, 0.2],
+    }));
+    const d = readSlot({ region_boxes }, widgetTagSlot, parent);
+    expect(d.subBoxes).toHaveLength(12);
+    expect(d.subBoxes?.[1].state).toBe('rejected');
+  });
+});
 
 describe('readSlot / widgetTagSlot', () => {
   const parent: XYXY = [0, 0, 0.4, 0.2]; // vw=0.4, vh=0.2
