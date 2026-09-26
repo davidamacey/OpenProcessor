@@ -75,6 +75,7 @@ async def build_segmenter_entry(
             'last_error': 'OP_SEGMENTER_URL is not configured',
             'endpoint': '',
             'unloadable': False,
+            'optional': False,
         }
     # OP_SEGMENTER_URLS may load-balance across several hosts; the status
     # probe only needs one to characterize reachability, so use the first.
@@ -95,4 +96,5 @@ async def build_segmenter_entry(
         'last_error': last_error,
         'endpoint': first_url,
         'unloadable': False,
+        'optional': False,
     }

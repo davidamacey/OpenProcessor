@@ -2152,3 +2152,24 @@ cap).
 (non-exhaustive; always present alongside `error` when
 `status == 'failed'`). `unidentified_image` and `decode_error` were
 merged into `decode_failed`.
+
+**`GET /models/status` (M3, new fields)** — every roster entry now
+carries `optional: bool` (default `false`). It's `true` only for the
+active profile's region detector, and only when a segmenter is also
+configured as its fallback — mirroring
+`region_dependency_health.stall_reason`'s "a ready segmenter means a
+down detector isn't a stall" semantics. When that detector is entirely
+absent from Triton's `/v2/repository/index` (never shipped/installed —
+e.g. the public `license_plate` example profile's
+`license_plate_detector`, which has no public model), `status` is a new
+value, `not_installed`, instead of the generic `not_ready`. A model
+present in the index but not `READY` (unloaded, failed) keeps the
+unchanged `not_ready` status regardless of `optional` — this only
+changes the "entirely missing from the index" case. A client renders
+`not_installed` as "optional, not installed" rather than a red NOT
+READY.
+
+```json
+{"name": "license_plate_detector", "friendly_name": "Region Detector",
+ "kind": "triton", "status": "not_installed", "optional": true, ...}
+```
