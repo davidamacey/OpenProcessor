@@ -1349,7 +1349,7 @@ audit are done; its status section records the deviations.
   (`regions`)/`REGION_TAB_LABEL` from it. The live tier reads the class
   and label from the live `/health` (`live_region_profile`).
 - **Ratchet:** `src/lib/domainNeutral.scan.test.ts` fails on any plate
-  noun, `LPR`/`lpr_`, `legacy`, `/curation`, private dataset number, or car/
+  noun, `LPR`/`lpr_`, or car/
   vehicle-domain word (`vehicle`, `sedan`, `suv(s)`, `motorcycle`, `bmw`,
   `audi`, `brand_b`, `porsche`, `subaru`, `pickup`, `coupe`, `sidecar`,
   `classic_car`, `sports_car`, `dumptruck` — the audit §8 sweep,
@@ -1362,8 +1362,18 @@ audit are done; its status section records the deviations.
   scanned — nearly every remaining occurrence is a served model/detector
   id or its served vocabulary label (approved content per owner
   direction), and a bare-word scan would flag those fixtures for no real
-  signal; the audit doc's §8 entry has the full reasoning. `openprocessor`
-  (the private stack's name) is still an open, separate sweep.
+  signal; the audit doc's §8 entry has the full reasoning.
+- **Private-origin leak gate (F10, 2026-09-25).** The company name in
+  every spelling, the retired `/curation` prefix and `op_` names,
+  `openprocessor`, private host paths/IPs, sibling project names, private
+  dataset numbers/class names and personal emails are NOT in
+  `domainNeutral.scan.test.ts` (that file ships publicly, so it can't
+  spell them out). They live in the private-only
+  `scripts/oss-export/leak-patterns.txt`, enforced by
+  `scripts/oss-export/leak-scan.sh --tree .` over every file a public
+  export would ship (tracked files minus `exclude.txt`, with `overlay/`
+  in place of the files it replaces) — CI's `export-leak-gate` job. See
+  "Public export" below.
 
 ## Development
 
@@ -1454,9 +1464,10 @@ recommendation 5 — this replaced the old `scripts/playwright_*.py`
 runbooks, which drifted to a stale `/curation/**` prefix for weeks because
 their catch-all stub silently answered `200 {}`): a request under
 `{API_PREFIX}` that no test registered gets `501` and is recorded in
-`stub.unhandled`; a request to the retired `/curation/` prefix is intercepted
-and recorded in `stub.op_hits`; every test asserts at teardown that both
-are empty and that at least one stub actually fired. An API-prefix
+`stub.unhandled`; every test asserts at teardown that it is empty and
+that at least one stub actually fired. (The separate retired-prefix
+intercept, `stub.op_hits`, was removed in F10: the fail-closed 501 is
+the real guard.) An API-prefix
 change or a route rename fails the test outright instead of the page
 silently rendering empty. CI runs this in the `e2e-stubbed` job on every
 push/PR; a `py_compile` pre-commit hook (and CI step) gates
@@ -1607,10 +1618,14 @@ logic in `api.ts` or store logic in `stores/*.svelte.ts`, or whenever
 CI's scheduled run goes red, to see the exact surviving mutants
 (`reports/mutation/index.html`).
 
-The production build runs in an `nginx:alpine` container defined by this
-repo's `docker-compose.yml` (`docker compose up -d --build`), host port
-5184 (`CROPWRIGHT_PORT`). Port conflicts: 5174=example-app-backend,
-5180/5181=example-app-opensearch, 5183=example-app-docs.
+The production build runs in a non-root
+`nginxinc/nginx-unprivileged:1.30-alpine` container (uid 101, nginx on
+container port 8080; F10 D13) defined by this repo's `docker-compose.yml`
+(`docker compose up -d --build`), host port 5184 (`CROPWRIGHT_PORT`,
+mapped to 8080). The deployed `cropwright` container only picks this up
+on its next `docker compose up -d --build`. Port conflicts:
+5174=example-app-backend, 5180/5181=example-app-opensearch,
+5183=example-app-docs.
 
 ## Connecting to OpenProcessor
 
@@ -1645,8 +1660,12 @@ instead of silently rendering blanks or 404ing.
   verbatim, never hand-edited.
 - **Sync / check:** `npm run contract:sync` refreshes the snapshot from a
   local OpenProcessor checkout (`OPENPROCESSOR_REPO`, default
-  `../openprocessor`; `OPENPROCESSOR_REF`, default `main`) via
+  `../OpenProcessor` — on this host set
+  `OPENPROCESSOR_REPO=/data/repos/openprocessor`, or the check silently
+  skips; `OPENPROCESSOR_REF`, default `main`) via
   `git -C $OPENPROCESSOR_REPO show $OPENPROCESSOR_REF:contracts/...`.
+  `SOURCE.md` records the public repo URL (`OPENPROCESSOR_URL`) and the
+  sha, never the local checkout path.
   `npm run contract:check` diffs the vendored copy against that ref and
   exits non-zero on drift; it exits 0 with a "skipping" message when the
   backend repo isn't present (CI), so it's harmless there. Wired into
@@ -1695,6 +1714,31 @@ ask BA-5 in `docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md`).
 - No emoji. No gradients. Apple system colors.
 - Tailwind `bg-zinc-950` base, accent via CSS variables for easy retheme.
 
+## Public export (F10, `scripts/oss-export/`)
+
+Cropwright is published as a separate public repo
+(`davidamacey/OpenProcessor`, fresh history, MIT, Copyright example-org LLC)
+built from a filtered export of this tree —
+`docs/design/cropwright-oss-export-plan-2026-09-25.md`. Scrubs land here
+as ordinary forward commits; the exporter is private-only and never
+ships:
+
+- `scripts/oss-export/export.sh <SHA> <EXPORT_DIR>` — `git archive` the
+  sha, delete every path in `exclude.txt` (each must exist, or the export
+  fails), copy `overlay/` over the result, strip the private
+  `export-leak-gate` CI job and the `master` trigger, run prettier and the
+  leak gate. `EXPORT_DIR` must be empty and outside any git work tree.
+- `overlay/` holds the public `CLAUDE.md`, a fresh `CHANGELOG.md`
+  (curated `[0.1.0]`), `docs/README.md` and the `docs/design/README.md`
+  stub. **Keep the public `CLAUDE.md` in step** with this one when a
+  route, mechanism or test tier changes (until the public repo becomes
+  the upstream and this repo is archived — D5-A).
+- `leak-scan.sh <EXPORT_DIR>` / `--tree .` — `leak-patterns.txt` (zero
+  tolerance, no allow-list), email/IPv4 sweeps, excluded-path presence,
+  lockfile registries and gitleaks (container image).
+- Public screenshots come only from the fresh-start public-data run
+  (COCO val2017, Open Images plates); none are tracked today.
+
 ## Documentation & changelog discipline
 
 This is enforced (CI, see `.github/workflows/ci.yml`'s `changelog` job), not
@@ -1729,4 +1773,4 @@ just a convention — don't rely on remembering it:
 - Don't fetch full-resolution NAS images in grids. Always use the thumbnail
   endpoint (128×128 LRU cached server-side).
 - Test-holdout crops MUST never be relabeled by the VLM or via cluster
-  auto-suggest. The openprocessor `{API_PREFIX}/` endpoints filter; UI is the second line.
+  auto-suggest. The OpenProcessor `{API_PREFIX}/` endpoints filter; UI is the second line.
