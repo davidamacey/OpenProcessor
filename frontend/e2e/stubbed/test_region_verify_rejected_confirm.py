@@ -17,6 +17,8 @@ whatever the server returns.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
 CLASSES = [
@@ -112,7 +114,7 @@ def test_confirming_a_verify_rejected_item_promotes_the_candidate_via_status_pat
 
     page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
-    counter.first.wait_for(timeout=15000)
+    counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     # The candidate-box hint renders before any action — proves the item
     # is recognized as a rejected candidate, not silently treated as

@@ -13,6 +13,8 @@
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 import struct
 import zlib
 
@@ -148,8 +150,8 @@ def test_picker_and_quick_assign_never_offer_the_region_class(stub, page, app_ur
     _stub_review(stub)
     page.set_viewport_size({"width": 1600, "height": 1000})
     page.goto(f"{app_url}/review")
-    page.get_by_test_id("queue-counter").first.wait_for(timeout=15000)
-    page.get_by_role("button", name="Confirm", exact=True).wait_for(timeout=15000)
+    page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_role("button", name="Confirm", exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
 
     quick = page.locator('button[title^="Assign "]')
     quick.first.wait_for(timeout=10000)
@@ -172,7 +174,7 @@ def test_narrow_review_tabs_and_nav_show_hidden_items(stub, page, app_url):
     _stub_review(stub)
     page.set_viewport_size({"width": 800, "height": 1000})
     page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
-    page.get_by_test_id("queue-counter").first.wait_for(timeout=15000)
+    page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     # The active (last) tab was invisible past the edge — now scrolled in.
     active = page.get_by_role("button", name=REGION_TAB_LABEL, exact=True)
@@ -197,7 +199,7 @@ def test_narrow_review_tabs_and_nav_show_hidden_items(stub, page, app_url):
     # Action row within the viewport without scrolling.
     page.goto(f"{app_url}/review")
     confirm = page.get_by_role("button", name="Confirm", exact=True)
-    confirm.wait_for(timeout=15000)
+    confirm.wait_for(timeout=ACTION_TIMEOUT_MS)
     cbox = confirm.bounding_box()
     assert cbox and cbox["y"] + cbox["height"] <= 1000, cbox
     assert page.get_by_test_id("review-tabs-more-right").is_visible()
@@ -209,7 +211,7 @@ def test_empty_queue_explains_itself_and_dims_the_tab(stub, page, app_url):
     page.set_viewport_size({"width": 1600, "height": 1000})
     page.goto(f"{app_url}/review?tab=uncertainty")
     empty = page.get_by_test_id("queue-empty")
-    empty.wait_for(timeout=15000)
+    empty.wait_for(timeout=ACTION_TIMEOUT_MS)
     text = empty.inner_text()
     assert "The Uncertainty queue is empty." in text, text
     assert "High active-learning probe entropy" in text, text
@@ -235,7 +237,7 @@ def test_empty_queue_shows_served_empty_reason_and_links_to_the_probe_control(
     page.set_viewport_size({"width": 1600, "height": 1000})
     page.goto(f"{app_url}/review?tab=uncertainty")
     empty = page.get_by_test_id("queue-empty")
-    empty.wait_for(timeout=15000)
+    empty.wait_for(timeout=ACTION_TIMEOUT_MS)
     text = empty.inner_text()
     assert "no probe predictions — run a probe" in text, text
     assert "no item has 'probe_pred_entropy' yet" not in text, text
@@ -324,7 +326,7 @@ def test_region_panel_shows_served_rejection_label_and_neutral_text_placeholder(
     page.set_viewport_size({"width": 1600, "height": 1000})
     page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
     served = page.get_by_test_id("served-rejection-reason")
-    served.wait_for(timeout=15000)
+    served.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert served.inner_text().startswith("Verifier gave no verdict"), served.inner_text()
     values = page.locator("input").evaluate_all("els => els.map(e => e.value)")
     assert "verifier_no_verdict" not in values, values
@@ -348,6 +350,6 @@ def test_subject_toggle_default_explains_itself(stub, page, app_url):
     page.set_viewport_size({"width": 1600, "height": 1000})
     page.goto(f"{app_url}/review")
     top2 = page.get_by_role("button", name="Top 2", exact=True)
-    top2.wait_for(timeout=15000)
+    top2.wait_for(timeout=ACTION_TIMEOUT_MS)
     title = top2.get_attribute("title") or ""
     assert "default" in title, title

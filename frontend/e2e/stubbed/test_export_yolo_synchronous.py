@@ -20,6 +20,8 @@ train-smoke UI smoke test (artifacts_local/cw-live/train-smoke/):
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 CLASSES = [
     {
         "id": 44,
@@ -113,15 +115,15 @@ def test_export_completes_without_polling_and_refreshes_registry_buttons(stub, p
     stub.on("POST", r"/export/yolo$", export_yolo_handler)
 
     page.goto(f"{app_url}/export")
-    page.get_by_text("No frozen multi-class export yet").wait_for(timeout=15000)
+    page.get_by_text("No frozen multi-class export yet").wait_for(timeout=ACTION_TIMEOUT_MS)
 
     export_button = page.get_by_role("button", name="Export", exact=True)
-    export_button.wait_for(timeout=15000)
+    export_button.wait_for(timeout=ACTION_TIMEOUT_MS)
     export_button.click()
 
     # The modal must never show "Running…" for a synchronous success —
     # it should go straight to "Export complete."
-    page.get_by_text("Export complete.", exact=False).wait_for(timeout=15000)
+    page.get_by_text("Export complete.", exact=False).wait_for(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text("Running…", exact=False).count() == 0, (
         "a synchronous success must not render the polling 'Running…' state"
     )
@@ -130,9 +132,9 @@ def test_export_completes_without_polling_and_refreshes_registry_buttons(stub, p
 
     # Bug 1: registry buttons + banner must reflect the just-finished
     # export without the operator clicking Refresh.
-    page.wait_for_selector("text=No frozen multi-class export yet", state="detached", timeout=15000)
+    page.wait_for_selector("text=No frozen multi-class export yet", state="detached", timeout=ACTION_TIMEOUT_MS)
     registry_button = page.get_by_role("button", name="manifest.json")
-    registry_button.wait_for(timeout=15000)
+    registry_button.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert registry_button.is_enabled(), (
         "manifest.json download must be enabled once GET /export/datasets reports a current yolo export"
     )

@@ -11,6 +11,8 @@ that it renders.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import REGION_CLASS
 
 CLASSES = [
@@ -72,7 +74,7 @@ def test_region_status_filter_lists_served_statuses_and_forwards_the_query_param
     page.goto(f"{app_url}/clusters?class={REGION_CLASS}")
 
     select = page.locator('label:has-text("Status") select')
-    select.wait_for(timeout=15000)
+    select.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 
     option_values = select.locator("option").evaluate_all("opts => opts.map(o => o.value)")

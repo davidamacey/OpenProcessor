@@ -10,6 +10,8 @@ the nudged box.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item
 
 CLASSES = [
@@ -67,7 +69,7 @@ def test_nudges_stay_in_edit_mode_and_save_to_the_edited_crop(stub, page, app_ur
     stub.on("PATCH", r"/crops/([^/]+)/region_meta$", region_meta)
 
     page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
-    page.get_by_test_id("queue-counter").first.wait_for(timeout=15000)
+    page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(500)
     counter_before = page.get_by_test_id("queue-counter").first.inner_text()
 

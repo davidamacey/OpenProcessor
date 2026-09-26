@@ -9,6 +9,8 @@ per context item, and the "hide boxes" toggle removes them.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import make_item
 
 CLASSES = [
@@ -79,11 +81,11 @@ def test_review_source_panel_draws_client_side_boxes(stub, page, app_url):
 
     page.goto(f"{app_url}/review")
     counter = page.get_by_test_id("queue-counter")
-    counter.first.wait_for(timeout=15000)
+    counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     panel = page.get_by_test_id("review-source-panel")
     overlay_boxes = panel.get_by_test_id("overlay-box")
-    overlay_boxes.first.wait_for(timeout=15000)
+    overlay_boxes.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert overlay_boxes.count() == 3, "one overlay box per context item"
     assert len(context_calls) >= 1, "the source panel must hit GET .../crops/{id}/context"
 

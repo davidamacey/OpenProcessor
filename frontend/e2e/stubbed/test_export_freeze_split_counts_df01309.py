@@ -19,6 +19,8 @@ image, partial-frame policy and counts"):
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 CLASSES = [
     {
         "id": 1,
@@ -119,19 +121,19 @@ def test_export_status_renders_served_split_counts_and_highlights_zero_classes(
     register_export_mount(stub)
 
     page.goto(f"{app_url}/export")
-    page.get_by_text("620", exact=False).first.wait_for(timeout=15000)
+    page.get_by_text("620", exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     assert page.get_by_text("objects in", exact=False).count() > 0
     assert page.get_by_text("images: train 400", exact=False).count() > 0
     assert page.get_by_text("objects: train 500", exact=False).count() > 0
 
     summary = page.get_by_text("Per-class object counts", exact=False)
-    summary.wait_for(timeout=15000)
+    summary.wait_for(timeout=ACTION_TIMEOUT_MS)
     summary.click()
 
     details = page.locator("details", has_text="Per-class object counts")
     audi_row = details.locator("tr", has_text="audi")
-    audi_row.wait_for(timeout=15000)
+    audi_row.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert "bg-red-500/10" in (audi_row.get_attribute("class") or ""), (
         "audi has 0 train instances and must be highlighted"
     )
@@ -156,7 +158,7 @@ def test_freeze_modal_has_no_seed_field_and_posts_percent_only(stub, page, app_u
 
     page.goto(f"{app_url}/export")
     freeze_button = page.get_by_role("button", name="Freeze test set", exact=True)
-    freeze_button.wait_for(timeout=15000)
+    freeze_button.wait_for(timeout=ACTION_TIMEOUT_MS)
     freeze_button.click()
 
     # No Seed field anywhere in the modal.
@@ -168,7 +170,7 @@ def test_freeze_modal_has_no_seed_field_and_posts_percent_only(stub, page, app_u
     page.get_by_role("button", name="Freeze", exact=True).click()
 
     page.wait_for_function(
-        "() => document.body.innerText.includes('sha1_per_class')", timeout=15000
+        "() => document.body.innerText.includes('sha1_per_class')", timeout=ACTION_TIMEOUT_MS
     )
 
     assert len(freeze_calls) == 1, f"expected exactly one freeze POST: {freeze_calls}"
@@ -193,7 +195,7 @@ def test_require_fully_labeled_images_checkbox_sends_the_flag(stub, page, app_ur
 
     page.goto(f"{app_url}/export")
     checkbox = page.get_by_text("Only images whose every object is labeled", exact=False)
-    checkbox.wait_for(timeout=15000)
+    checkbox.wait_for(timeout=ACTION_TIMEOUT_MS)
     checkbox.click()
 
     export_button = page.get_by_role("button", name="Re-export", exact=True)
@@ -201,7 +203,7 @@ def test_require_fully_labeled_images_checkbox_sends_the_flag(stub, page, app_ur
         export_button = page.get_by_role("button", name="Export", exact=True)
     export_button.click()
 
-    page.get_by_text("Export complete.", exact=False).wait_for(timeout=15000)
+    page.get_by_text("Export complete.", exact=False).wait_for(timeout=ACTION_TIMEOUT_MS)
 
     assert len(export_calls) == 1, f"expected exactly one export POST: {export_calls}"
     assert export_calls[0].get("require_fully_labeled_images") is True, (
@@ -247,7 +249,7 @@ def test_export_shows_trainable_vs_held_out_and_classes_with_objects(stub, page,
 
     page.goto(f"{app_url}/export")
     bmw = page.locator("table tr", has_text="bmw").first
-    bmw.wait_for(timeout=15000)
+    bmw.wait_for(timeout=ACTION_TIMEOUT_MS)
     cells = [c.strip() for c in bmw.locator("td").all_inner_texts()]
     # Class, ID, Total, Validated, Trainable, Aug target, Gap, Test, Adequacy
     assert cells[3:8] == ["35", "30", "500", "+470", "5"], cells
@@ -304,7 +306,7 @@ def test_export_class_count_chip_prefers_served_classes_with_objects(
 
     page.goto(f"{app_url}/export")
     bmw = page.locator("table tr", has_text="bmw").first
-    bmw.wait_for(timeout=15000)
+    bmw.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     chip = " ".join(page.locator('[data-testid="export-class-count"]').inner_text().split())
     assert chip == "2 classes with objects (2 in registry)", chip

@@ -22,6 +22,8 @@ this exercises the fix for both.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 import json
 import re
 
@@ -125,7 +127,7 @@ def test_dashboard_run_vlm_polls_the_per_job_status_endpoint(stub, page, app_url
 
     page.goto(f"{app_url}/dashboard")
     open_btn = page.get_by_role("button", name="Run VLM Labeling")
-    open_btn.first.wait_for(timeout=15000)
+    open_btn.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 
     open_btn.first.click()
@@ -135,7 +137,7 @@ def test_dashboard_run_vlm_polls_the_per_job_status_endpoint(stub, page, app_url
     # The real job's toast (predicted 7 / updated 7) must appear — the
     # stale slot's numbers (99/99) must never appear.
     page.get_by_text("VLM labeled 7 crops (7 updated).", exact=False).first.wait_for(
-        timeout=15000
+        timeout=ACTION_TIMEOUT_MS
     )
     page.wait_for_timeout(300)
 

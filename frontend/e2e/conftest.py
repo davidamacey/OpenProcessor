@@ -55,6 +55,22 @@ def browser_type_launch_args(browser_type_launch_args: dict[str, Any]) -> dict[s
     return {**browser_type_launch_args, "args": ["--disable-gpu"]}
 API_PREFIX = "/curation"
 
+# Single, documented action-timeout budget for the whole stubbed suite.
+#
+# Every explicit `.wait_for(timeout=...)`/`.click(timeout=...)` call used to
+# hardcode a bare `15000` literal, independently, in ~40 files. On a heavily
+# loaded host (concurrent docker builds, GPU engine compiles pegging most
+# cores — see CLAUDE.md) that fixed 15s budget was occasionally too tight
+# for hydration + the stub's request round trip to finish, not a real app
+# defect: a controlled repro (pinning `vite preview` and pytest to a single
+# CPU core contended by an equal-priority stress load) reproduced both a
+# ~10x slowdown (13 tests: ~26s -> ~261s) and, under heavier contention, the
+# preview server failing to even finish starting inside its own startup
+# window. 45s gives real headroom for that kind of contention while still
+# failing fast (well under pytest's own per-test wall clock) on an actual
+# regression. Import this into a test file instead of writing a new literal.
+ACTION_TIMEOUT_MS = 45000
+
 # 1x1 transparent GIF — grids only need the <img> to resolve, not real pixels.
 TRANSPARENT_GIF = bytes.fromhex(
     "47494638396101000100800000000000ffffff21f90401000000002c00000000010001000002024401003b"
@@ -78,11 +94,24 @@ def _wait_for_server(base_url: str, proc: subprocess.Popen[str], timeout: float 
             raise RuntimeError(f"vite preview exited early (code {proc.returncode}):\n{out}")
         try:
             urllib.request.urlopen(base_url, timeout=1)
-            return
+            break
         except urllib.error.URLError:
             time.sleep(0.5)
-    proc.kill()
-    raise RuntimeError(f"vite preview did not come up within {timeout}s at {base_url}")
+    else:
+        proc.kill()
+        raise RuntimeError(f"vite preview did not come up within {timeout}s at {base_url}")
+
+    # Warm-up request: the port accepting connections doesn't guarantee the
+    # static handler's own first-request bookkeeping (route table build,
+    # first disk reads into the OS page cache) is done — under host
+    # contention that first real page load can be meaningfully slower than
+    # every one after it. A single throwaway fetch here, outside any test's
+    # own timeout budget, absorbs that cost once instead of it landing on
+    # whichever test happens to run first.
+    try:
+        urllib.request.urlopen(base_url, timeout=max(timeout, 10))
+    except urllib.error.URLError:
+        pass  # the real per-test navigation will surface a genuine failure
 
 
 @pytest.fixture(scope="session")
@@ -386,6 +415,18 @@ class Stub:
             "mismatch would otherwise pass silently (see R2 in "
             "docs/design/test-audit-2026-09-24.md)"
         )
+
+
+@pytest.fixture
+def page(page: Any) -> Any:
+    """Override pytest-playwright's own `page` fixture to apply the shared
+    ACTION_TIMEOUT_MS budget as the page's default — every *implicit*
+    timeout (a `.click()`/`.fill()`/etc. call with no explicit `timeout=`)
+    gets the same generous, documented budget as the explicit
+    `timeout=ACTION_TIMEOUT_MS` calls, instead of Playwright's own 30s
+    default living as a second, undocumented number."""
+    page.set_default_timeout(ACTION_TIMEOUT_MS)
+    return page
 
 
 @pytest.fixture

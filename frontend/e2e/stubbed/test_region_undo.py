@@ -13,6 +13,8 @@ never pushed onto `undoStore`) — `POST .../region/undo` was never called.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
 CLASSES = [
@@ -69,7 +71,7 @@ def test_region_reject_then_z_calls_region_undo(stub, page, app_url):
 
     page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
-    counter.first.wait_for(timeout=15000)
+    counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(500)
 
     # D = reject on the region tab -> the no_region_visible reject status
@@ -115,7 +117,7 @@ def test_region_reject_z_before_any_write_does_not_call_region_undo(stub, page, 
 
     page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
-    counter.first.wait_for(timeout=15000)
+    counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(500)
 
     page.keyboard.press("z")

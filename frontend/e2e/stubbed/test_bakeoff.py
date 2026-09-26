@@ -8,6 +8,8 @@ whose result predates v2 (409) shows the legacy note, not an error.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 import json
 from urllib.parse import parse_qs, urlparse
 
@@ -275,7 +277,7 @@ def test_bakeoff_select_run_poll_results(stub, page, app_url):
     stub.on("GET", r"/bakeoff/results/job-1$", COMPARISON)
 
     page.goto(f"{app_url}/bakeoff")
-    page.locator('[data-testid="run-row"][data-run-id="run-b"]').wait_for(timeout=15000)
+    page.locator('[data-testid="run-row"][data-run-id="run-b"]').wait_for(timeout=ACTION_TIMEOUT_MS)
 
     current = page.locator(f'[data-dataset-id="{DS_CURRENT}"] input[type="checkbox"]')
     assert current.is_checked(), "the current export is preselected"
@@ -308,7 +310,7 @@ def test_bakeoff_select_run_poll_results(stub, page, app_url):
     assert "not covered: bolt" in page.get_by_test_id("enqueue-summary").inner_text()
 
     # queued -> running -> done at the 3 s poll interval.
-    page.locator('[data-testid="run-state"]:has-text("done")').wait_for(timeout=15000)
+    page.locator('[data-testid="run-state"]:has-text("done")').wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("bakeoff-matrix").wait_for(timeout=5000)
     assert status_polls["n"] >= 3
 
@@ -335,7 +337,7 @@ def test_bakeoff_previous_run_predating_v2(stub, page, app_url):
     stub.on("GET", r"/bakeoff/results/old-job$", unsupported)
 
     page.goto(f"{app_url}/bakeoff")
-    page.locator('[data-job-id="old-job"]').click(timeout=15000)
+    page.locator('[data-job-id="old-job"]').click(timeout=ACTION_TIMEOUT_MS)
     note = page.get_by_test_id("comparison-legacy")
     note.wait_for(timeout=5000)
     assert "predates the v2 comparison format" in note.inner_text()
@@ -349,7 +351,7 @@ def test_bakeoff_run_rejection_shows_served_detail(stub, page, app_url):
     stub.on("POST", r"/bakeoff/run$", (422, {"detail": detail}))
 
     page.goto(f"{app_url}/bakeoff")
-    page.locator('[data-run-id="run-a"] input[type="checkbox"]').check(timeout=15000)
+    page.locator('[data-run-id="run-a"] input[type="checkbox"]').check(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("run-open").click()
     dialog = page.get_by_role("dialog", name="Confirm model comparison")
     dialog.get_by_role("button", name="Run", exact=True).click()

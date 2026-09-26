@@ -14,6 +14,8 @@ the frontend fixture this mirrors.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from test_train_gpus import register_train_mount
 
 JOB_ID = "2026-09-24T23-47-55_yolo26n"
@@ -119,7 +121,7 @@ def test_finished_run_results_render(stub, page, app_url):
     stub.on("GET", r"/train/manifest/[^/]+(\?|$)", MANIFEST)
 
     page.goto(f"{app_url}/train")
-    page.get_by_text(JOB_ID, exact=False).first.wait_for(timeout=15000)
+    page.get_by_text(JOB_ID, exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     results_button = page.get_by_role("button", name="Results")
     results_button.wait_for(timeout=10000)
@@ -176,7 +178,7 @@ def test_failed_run_shows_served_error(stub, page, app_url):
     stub.on("GET", r"/train/manifest/[^/]+(\?|$)", (404, {"detail": "not found"}))
 
     page.goto(f"{app_url}/train")
-    page.get_by_text(failed_job_id, exact=False).first.wait_for(timeout=15000)
+    page.get_by_text(failed_job_id, exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     results_button = page.get_by_role("button", name="Results")
     results_button.wait_for(timeout=10000)

@@ -6,6 +6,8 @@ preselecting the server's `default: true` entry.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 CLASSES = [
     {"id": 1, "name": "ducati", "group": "moto", "hotkey_letter": "k", "count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
 ]
@@ -65,7 +67,7 @@ def test_train_gpu_options(stub, page, app_url):
     register_train_mount(stub)
 
     page.goto(f"{app_url}/train")
-    page.get_by_text("GPUs", exact=True).first.wait_for(timeout=15000)
+    page.get_by_text("GPUs", exact=True).first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 
     radios = page.get_by_role("radio")
@@ -92,7 +94,7 @@ def test_train_gpu_options_unrestricted(stub, page, app_url):
     stub.on("GET", r"/train/gpus(\?|$)", {"options": [], "allowed_ids": [], "unrestricted": True})
 
     page.goto(f"{app_url}/train")
-    page.locator("input[aria-label='CUDA visible devices']").wait_for(timeout=15000)
+    page.locator("input[aria-label='CUDA visible devices']").wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 
     assert page.locator("input[aria-label='CUDA visible devices']").count() == 1, (

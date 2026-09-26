@@ -22,6 +22,8 @@ pre-existing params.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 import json
 import re
 from urllib.parse import urlsplit
@@ -136,7 +138,7 @@ def test_assist_scope(stub, page, app_url):
 
     page.goto(f"{app_url}/dashboard")
     start_btn = page.get_by_role("button", name="Recluster now")
-    start_btn.first.wait_for(timeout=15000)
+    start_btn.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 
     assert not [c for c in stub.console_errors if c.startswith("pageerror")], "dashboard should render with no pageerror"
@@ -164,7 +166,7 @@ def test_assist_scope(stub, page, app_url):
     stub.console_errors.clear()
     page.goto(f"{app_url}/dashboard")
     chip = page.get_by_text(re.compile(r"^assist:\s*whole dataset"))
-    chip.first.wait_for(timeout=15000)
+    chip.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 
     chip.first.click()
@@ -216,7 +218,7 @@ def test_assist_scope(stub, page, app_url):
     # Re-expand, reset — chip and button return to the unscoped defaults.
     page.goto(f"{app_url}/dashboard")
     chip2 = page.get_by_text(re.compile(r"^assist:"))
-    chip2.first.wait_for(timeout=15000)
+    chip2.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     chip2.first.click()
     page.wait_for_timeout(200)
     reset_btn = page.get_by_role("button", name="reset")

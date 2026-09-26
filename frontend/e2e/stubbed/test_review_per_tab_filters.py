@@ -9,6 +9,8 @@ hardcoded always-visible set.
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import make_item
 
 CLASSES = [
@@ -78,7 +80,7 @@ def test_review_filter_bar_hides_controls_the_active_tab_does_not_serve(stub, pa
     _stub_common(stub)
 
     page.goto(f"{app_url}/review?tab=all")
-    page.get_by_test_id("queue-counter").first.wait_for(timeout=15000)
+    page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(800)
 
     # `all`'s served filters list has no max_rank/min_blur_ratio/conf —
@@ -100,9 +102,9 @@ def test_review_subject_toggle_label_reflects_served_max_rank_default(stub, page
     _stub_common(stub)
 
     page.goto(f"{app_url}/review?tab=all&preset=primary_low_conf")
-    page.get_by_test_id("queue-counter").first.wait_for(timeout=15000)
+    page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(800)
 
     subject = page.locator('div:has(> span:text-is("subject"))')
-    subject.wait_for(timeout=15000)
+    subject.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert "Top 2" in subject.inner_text()

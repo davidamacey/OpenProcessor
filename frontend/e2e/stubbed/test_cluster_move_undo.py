@@ -10,6 +10,8 @@ Single crop moved -> Z -> `POST {API_PREFIX}/crops/{id}/label/undo`
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import make_item
 
 CLASSES = [
@@ -85,7 +87,7 @@ def test_move_then_undo_sends_single_crop_label_undo(stub, page, app_url):
     stub.on("POST", r"/crops/label/undo_batch$", undo_batch_handler)
 
     page.goto(f"{app_url}/clusters/1")
-    page.wait_for_selector("img", timeout=15000)
+    page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(400)
 
     page.locator("img").first.click()

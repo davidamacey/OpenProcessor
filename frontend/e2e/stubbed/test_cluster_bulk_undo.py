@@ -8,6 +8,8 @@ undo requests. See src/lib/stores/undo.svelte.ts's `recordWrites`/
 
 from __future__ import annotations
 
+from conftest import ACTION_TIMEOUT_MS
+
 from fixtures.wire import make_item
 
 CLASSES = [
@@ -87,7 +89,7 @@ def test_cluster_bulk_label_then_single_undo_sends_one_batch_call(stub, page, ap
     stub.on("POST", r"/crops/([^/]+)/label/undo$", undo_single_handler)
 
     page.goto(f"{app_url}/clusters/1")
-    page.wait_for_selector("img", timeout=15000)
+    page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(400)
 
     # Select two crops, then bulk-label them via the class hotkey (no
