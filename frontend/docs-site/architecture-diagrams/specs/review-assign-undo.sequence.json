@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Cropwright — Review Assign + Undo",
+    "viewBox": [900, 660],
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "assign", "label": "Keypress to write", "focus": ["operator", "page", "controller", "api"], "note": "Enter/a class hotkey triggers an optimistic queue removal before the API call resolves." },
+      { "id": "rollback", "label": "Failure rollback", "focus": ["controller", "api", "toast"], "note": "A failed write restores the removed item at its original index and cursor — never a silently-vanished item." },
+      { "id": "undo", "label": "Z undo round trip", "focus": ["operator", "undostore", "api"], "note": "Z replays the server-side undo endpoint, then re-inserts the item locally from the server's response." }
+    ]
+  },
+  "participants": [
+    { "id": "operator", "type": "external", "label": "Operator", "sublabel": "keyboard" },
+    { "id": "page", "type": "frontend", "label": "review page", "sublabel": "queue state" },
+    { "id": "controller", "type": "frontend", "label": "controller", "sublabel": "assign / undo" },
+    { "id": "undostore", "type": "backend", "label": "undoStore", "sublabel": "Z ring buffer" },
+    { "id": "api", "type": "backend", "label": "api.ts", "sublabel": "wire calls" },
+    { "id": "toast", "type": "security", "label": "toastStore", "sublabel": "rollback" }
+  ],
+  "segments": [
+    { "from": 150, "to": 320, "label": "Optimistic assign" },
+    { "from": 320, "to": 440, "label": "Rollback on failure" },
+    { "from": 440, "to": 577, "label": "Z undo" }
+  ],
+  "messages": [
+    { "from": "operator", "to": "page", "y": 175, "label": "class hotkey / Enter", "variant": "emphasis" },
+    { "from": "page", "to": "controller", "y": 205, "label": "assign(item, classId)", "variant": "emphasis" },
+    { "from": "controller", "to": "page", "y": 235, "label": "drop item, advance cursor", "variant": "default" },
+    { "from": "controller", "to": "api", "y": 265, "label": "putCropLabel(id, classId)", "variant": "emphasis" },
+    { "from": "api", "to": "controller", "y": 295, "label": "200 OK", "variant": "return" },
+    { "from": "controller", "to": "undostore", "y": 335, "label": "recordWrites([id])", "variant": "default" },
+    { "from": "api", "to": "controller", "y": 370, "label": "(failure) rejects", "variant": "security" },
+    { "from": "controller", "to": "toast", "y": 405, "label": "restore + rollback toast", "variant": "security" },
+    { "from": "operator", "to": "controller", "y": 460, "label": "Z — undoLast()", "variant": "emphasis" },
+    { "from": "controller", "to": "undostore", "y": 490, "label": "undoLast()", "variant": "emphasis" },
+    { "from": "undostore", "to": "api", "y": 510, "label": "POST undo_batch", "variant": "emphasis" },
+    { "from": "api", "to": "undostore", "y": 542, "label": "restored crop(s)", "variant": "return" },
+    { "from": "undostore", "to": "page", "y": 572, "label": "re-insert, restore cursor", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "page", "from": 174, "to": 240, "type": "frontend" },
+    { "participant": "controller", "from": 199, "to": 410, "type": "frontend" },
+    { "participant": "api", "from": 259, "to": 375, "type": "backend" },
+    { "participant": "undostore", "from": 329, "to": 572, "type": "backend" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Removal happens before the network call resolves", "items": ["removeFromQueue() drops the item and advances the cursor synchronously, returning a restore closure", "Every caller (assign, discard) must invoke that closure on failure — mutation testing caught exactly this bug three times before extraction"] },
+    { "dot": "rose", "title": "One undo, however many crops it touched", "items": ["undoStore is a Z ring buffer shared by bulk label, move, discard, VLM-accept-all, and a dismiss — one press reverts the whole action, in the order it actually happened", "Discard deliberately does NOT push an undoStore entry; it's reversible via a separate Dismissed panel, not Z"] },
+    { "dot": "emerald", "title": "Undo restores server state first, then the local queue", "items": ["POST /crops/label/undo_batch is the source of truth for what got restored — the controller never guesses the pre-undo state", "The cached reason (ReviewItem carries a served reason Crop doesn't) is reattached from a local map at removal time, not invented"] }
+  ]
+}

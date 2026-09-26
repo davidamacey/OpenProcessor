@@ -19,7 +19,7 @@ a cloned sibling site:
   structural, not copy).
 - `src/css/custom.css`, `src/theme/MDXComponents.tsx`.
 - `src/components/Hero`, `FeatureGrid`, `HowItWorks`, `QuickStart`,
-  `ScreenshotShowcase`, `Screenshot`, `RoadmapView`, `DiagramSection` — all
+  `ScreenshotShowcase`, `Screenshot`, `RoadmapView` — all
   data-driven, read from `site.config.ts` and `src/data/*.json`.
 - `src/pages/index.tsx`, `src/pages/architecture.tsx`,
   `src/pages/roadmap.tsx` — assemble the components above; carry no copy.
@@ -45,17 +45,23 @@ a cloned sibling site:
    `{title, icon, desc}` object per card; `icon` is currently unused
    (text-only cards) but kept as a stable key for a future icon swap.
 3. **`src/data/workflow.json`** — the "How it works" step list
-   (`{step, route, desc}`), also mirrored as a Mermaid diagram in
-   `src/data/architecture.json`'s `labeling-workflow` entry — keep the two
-   in sync by hand, there's no generator linking them.
+   (`{step, route, desc}`), conceptually related to but not generated from
+   the `labeling-loop` architecture diagram (see item 6 below) — keep the
+   two in sync by hand, there's no generator linking them.
 4. **`src/data/screenshots.json`** — the landing-page showcase list
    (`{name, alt, caption}`); `name` must match a file under
    `static/img/screenshots/`.
 5. **`src/data/roadmap.json`** — hand-maintained; see its own `note`
    field.
-6. **`src/data/architecture.json`** — one `{id, title, description,
-   mermaid}` entry per diagram on `/architecture`. Mermaid syntax only
-   (flowchart/sequence/etc.) — no external diagram tool is wired up.
+6. **`architecture-diagrams/specs/*.json`** — hand-authored Archify
+   specs (architecture/workflow/sequence), built from real repo evidence,
+   not app code. Rendered to `static/architecture/<name>.html` via
+   `scripts/generate-architecture-diagrams.sh` (uses the Archify Claude
+   Code skill — see `architecture-diagrams/README.md`). Group/diagram
+   metadata for the `/architecture` page's tabs lives in
+   `src/data/architecture-diagrams.json` (`{id, label, diagrams:
+   [{id, title, description, height}]}`) — edit that data file, not
+   `src/pages/architecture.tsx`, when adding or reordering a diagram.
 7. **`docs/**`** — the actual doc content. Directory names under `docs/`
    drive `sidebars.ts`'s `items` paths, so keep them in sync if you rename
    a folder.
@@ -98,6 +104,6 @@ one at the location named — never by patching `docusaurus.config.ts`,
 | GitHub repo link (navbar/footer/hero) | `site.config.ts`: `githubRepo` | e.g. `https://github.com/example-org/OpenProcessor` |
 | Pages deploy workflow's repo/branch | `.github/workflows/docs.yml` (repo root) — triggers off `push` to the *checked-out* repo's default branch via `github.ref`; no hardcoded repo name in the workflow itself, but confirm the sibling repo's default branch is actually `main` (the workflow's `if:` gate names it explicitly) | Edit the `if: github.ref == 'refs/heads/main'` line only if the sibling uses a different default branch |
 | Node version | `docs-site/.nvmrc` (`20`) and the workflow's `node-version-file: docs-site/.nvmrc` | Bump both together if the sibling wants a newer Node; keep them equal — nothing enforces that automatically here (Cropwright has no cross-repo version-consistency test) |
-| Mermaid / theme plugins | `package.json` dependencies (`@docusaurus/theme-mermaid`) + `docusaurus.config.ts`'s `markdown.mermaid: true` and `themes: ['@docusaurus/theme-mermaid']` | Keep both lines together — Mermaid rendering silently no-ops if only one is set |
+| Architecture diagrams | `architecture-diagrams/specs/*.json` (Archify specs) + `scripts/generate-architecture-diagrams.sh` (repo root) + `src/data/architecture-diagrams.json` (page tab metadata) | Re-author the specs against the sibling's own routes/controllers/wire contract — never copy Cropwright's specs verbatim; regenerate `static/architecture/*.html` before shipping |
 | Broken-link policy | `docusaurus.config.ts`: `onBrokenLinks: 'throw'`, `onBrokenAnchors: 'throw'` | Keep `'throw'` in any sibling site — do not weaken to `'warn'` to unblock a build; fix the link instead |
 | Screenshot source of truth | `docs/developer-guide/screenshots.md` (rule: public-sample-data backend only, never a real deployment) + `scripts/capture_docs_screenshots.py` (repo root) + `src/data/screenshots.json` (what the landing page shows) | Rewrite the doc page's specific sample-data instructions for the sibling's own "how to get public sample data" story; keep the "never a real deployment" rule verbatim |
