@@ -4,18 +4,23 @@
  * `queue.keymap` directly, so a slot's combos are declared exactly once
  * (no second hand-maintained copy to drift, Finding C.2).
  *
- * Returns DATA (combo -> handler + description), not the
- * `keyboardStore.register` side effect itself — the page still owns
+ * Returns DATA (action id + combo -> handler + description), not the
+ * `keyboardStore.registerAction` side effect itself — the page still owns
  * registration/cleanup.
  *
- * `enter`/`escape` in edit mode and `arrowright` (advance) in scan mode
- * stay unconditional, matching every capable slot's actual behavior
- * today (edit save/cancel and "next item" apply regardless of what a
- * profile's `queue.keymap` declares) rather than being second capability
- * fields with no current variation to justify them.
+ * Every entry names its keymap action id (docs/design/configurable-
+ * keyboard-shortcuts-plan-2026-09-26.md §5.3). The combos for the slot's
+ * own verbs (reject / false positive / edit / back) come from the slot's
+ * `queue.keymap` — the served region slot derives that from the keymap
+ * store (`servedRegionSlot.ts`), a tier-2 slot declares its own. The
+ * slot-independent ones (confirm and next in scan mode, save and cancel
+ * in edit mode) come straight from the keymap store, and every
+ * description is the store's label for the id.
  */
 
 import type { SlotSpec } from '../annotations/types';
+import { formatShortcutKey } from '$lib/keyboardDisplay';
+import { keymapStore } from '$stores/keymap.svelte';
 
 export interface SlotKeymapHandlers {
   confirm: () => void | Promise<void>;
@@ -28,6 +33,7 @@ export interface SlotKeymapHandlers {
 }
 
 export interface KeymapEntry {
+  actionId: string;
   combo: string;
   fn: () => void | Promise<void>;
   description: string;
@@ -35,11 +41,11 @@ export interface KeymapEntry {
 
 /**
  * A slot's queue-tab keymap for the given mode. Scan mode (default)
- * emits, in order: `enter` (confirm), each `reject` combo, each
+ * emits, in order: `review.region.confirm`, each `reject` combo, each
  * `markFalsePositive` combo (only if the slot declares one AND the
  * handler is supplied), each `editBox` combo, each `back` combo, then
- * `arrowright` (advance). Edit mode: `enter` (save+exit) / `escape`
- * (cancel) only — the bbox canvas owns arrow/[ / ]/Backspace directly.
+ * `review.region.next`. Edit mode: `box_edit.save` / `box_edit.cancel`
+ * only — the bbox canvas owns the nudge/edge/clear keys directly.
  *
  * For a slot with the standard region keymap this produces the
  * enter/d/f/e/arrowleft/b/arrowright sequence — pinned in
@@ -50,42 +56,31 @@ export function buildSlotKeymap(
   editMode: boolean,
   h: SlotKeymapHandlers,
 ): KeymapEntry[] {
-  const label = spec.label.singular;
+  const vars = { region: spec.label.singular };
+  const entries: KeymapEntry[] = [];
+  const add = (
+    actionId: string,
+    combos: string[],
+    fn: () => void | Promise<void>,
+  ): void => {
+    const description = keymapStore.label(actionId, vars);
+    for (const combo of combos) entries.push({ actionId, combo, fn, description });
+  };
+  const stored = (id: string) => keymapStore.keysFor(id);
   if (editMode) {
-    return [
-      { combo: 'enter', fn: h.saveAndExit, description: `Save ${label} & exit edit` },
-      { combo: 'escape', fn: h.toggleEdit, description: 'Cancel edit' },
-    ];
+    add('box_edit.save', stored('box_edit.save'), h.saveAndExit);
+    add('box_edit.cancel', stored('box_edit.cancel'), h.toggleEdit);
+    return entries;
   }
   const km = spec.capabilities.queue?.keymap ?? {};
-  const entries: KeymapEntry[] = [
-    { combo: 'enter', fn: h.confirm, description: `Confirm ${label} & advance` },
-  ];
-  for (const c of km.reject ?? []) {
-    entries.push({ combo: c, fn: h.reject, description: `Reject (no ${label} visible)` });
-  }
+  add('review.region.confirm', stored('review.region.confirm'), h.confirm);
+  add('review.region.reject', km.reject ?? [], h.reject);
   if (h.markFalsePositive) {
-    for (const c of km.markFalsePositive ?? []) {
-      entries.push({
-        combo: c,
-        fn: h.markFalsePositive,
-        description: 'False positive (keep box)',
-      });
-    }
+    add('review.region.false_positive', km.markFalsePositive ?? [], h.markFalsePositive);
   }
-  for (const c of km.editBox ?? []) {
-    entries.push({ combo: c, fn: h.toggleEdit, description: `Edit ${label} box` });
-  }
-  if (h.back) {
-    for (const c of km.back ?? []) {
-      entries.push({
-        combo: c,
-        fn: h.back,
-        description: `Step back to last confirmed ${label}`,
-      });
-    }
-  }
-  entries.push({ combo: 'arrowright', fn: h.advance, description: 'Next item' });
+  add('review.region.edit_box', km.editBox ?? [], h.toggleEdit);
+  if (h.back) add('review.region.back', km.back ?? [], h.back);
+  add('review.region.next', stored('review.region.next'), h.advance);
   return entries;
 }
 
@@ -106,10 +101,11 @@ export function singleCharCombos(entries: KeymapEntry[]): string[] {
  * `['d']` (dispatch itself was never wrong — `buildSlotKeymap` above
  * already reads `queue.keymap` correctly; only the hint text had a
  * second, hardcoded copy). Reads the exact same `keymap.reject` lookup
- * `buildSlotKeymap` uses — first bound combo, uppercased for display —
- * so there is only ever one place a slot's reject key is declared.
+ * `buildSlotKeymap` uses — first bound combo, formatted for display —
+ * so there is only ever one place a slot's reject key is declared. A
+ * slot with no reject combo prints the keymap's own reject key.
  */
 export function rejectKeyGlyph(spec: SlotSpec): string {
   const combo = spec.capabilities.queue?.keymap.reject?.[0];
-  return (combo ?? 'd').toUpperCase();
+  return combo ? formatShortcutKey(combo) : keymapStore.glyph('review.region.reject');
 }

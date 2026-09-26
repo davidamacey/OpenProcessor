@@ -40,6 +40,7 @@ import type { Pager } from '$lib/pager.svelte';
 import type { Selection } from '$lib/selection.svelte';
 import type { Crop, RegistryClass } from '$lib/types';
 import { classesStore } from '$stores/classes.svelte';
+import { keymapStore } from '$stores/keymap.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import { undoStore } from '$stores/undo.svelte';
 
@@ -419,7 +420,9 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     // can retry.
     sel.ids = new Set(ids.filter((id) => !succeededSet.has(id)));
     if (succeededIds.length > 0) {
-      toastStore.success(`Discarded ${succeededIds.length}. Press Z to undo.`);
+      toastStore.success(
+        `Discarded ${succeededIds.length}. Press ${keymapStore.glyph('cluster.undo')} to undo.`,
+      );
     }
     if (failedCount > 0) {
       toastStore.error(
@@ -462,7 +465,9 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
       sel.ids = new Set();
       lastExcludedIds = ids;
       const tag = reason === 'ignore' ? '' : ` (${reason})`;
-      toastStore.success(`Ignored ${res.excluded}${tag}. Press U to undo.`);
+      toastStore.success(
+        `Ignored ${res.excluded}${tag}. Press ${keymapStore.glyph('cluster.unignore')} to undo.`,
+      );
     } catch (e) {
       toastStore.error(`Ignore failed: ${(e as Error).message}`);
     }

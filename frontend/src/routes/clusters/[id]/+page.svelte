@@ -38,6 +38,7 @@
   import type { Cluster, Crop, PaginatedResponse } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
+  import { keymapStore } from '$stores/keymap.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { classSourcesStore } from '$stores/classSources.svelte';
@@ -724,10 +725,14 @@
 
   // ---------------- shortcuts ----------------
 
+  // Every key this page prints comes from the keymap (never a literal).
+  const kg = (actionId: string) => keymapStore.glyph(actionId);
+  const kc = (actionId: string) => keymapStore.compactGlyph(actionId);
+
   $effect(() => {
     const offs: Array<() => void> = [];
-    const reg = (combo: string, fn: () => void | Promise<void>, desc: string) =>
-      offs.push(keyboardStore.register(combo, () => void fn(), 'cluster', desc));
+    const reg = (actionId: string, fn: () => void | Promise<void>) =>
+      offs.push(keyboardStore.registerAction(actionId, () => void fn(), 'cluster'));
 
     // Per-class letter hotkeys (configured on /classes) are routed
     // through dropOnClassStore by the layout-level keydown listener;
@@ -735,100 +740,68 @@
     // been removed — one binding scheme means no "what does this key
     // do here?" friction.
 
-    reg('enter', confirmSelected, 'Confirm selected & advance');
-    reg(
-      'shift+enter',
-      controller.acceptAllVlmOnPage,
-      'Confirm all VLM suggestions on page',
-    );
-    reg(
-      'g',
-      async () => {
-        const ids = [...sel.ids];
-        for (const id of ids) {
-          const c = cropPager.items.find((cc) => cc.id === id);
-          if (c) await controller.acceptVlmForCrop(c);
-        }
-      },
-      'Accept VLM suggestion for selected',
-    );
-    reg(
-      'n',
-      async () => {
-        toastStore.info('Skipped.');
-        await advance();
-      },
-      'Skip selected',
-    );
-    // 'shift+n', not 'N': register() lowercases combos, so 'N' would
-    // collapse onto the skip binding above and never fire.
-    reg(
-      'shift+n',
-      flagSelectedForNewClass,
-      'Flag selected as needing new class (curator review)',
-    );
-    reg('d', controller.discardSelected, 'Discard selected');
-    reg('z', controller.undoLast, 'Undo last action');
-    reg(
-      'x',
-      () => void ignoreSelected('ignore'),
-      'Ignore selected (exclude from training)',
-    );
-    reg('u', controller.undoIgnore, 'Undo last ignore');
-    reg('a', selectAllPage, 'Select all on page');
+    reg('cluster.confirm', confirmSelected);
+    reg('cluster.accept_all_vlm', controller.acceptAllVlmOnPage);
+    reg('cluster.accept_vlm', async () => {
+      const ids = [...sel.ids];
+      for (const id of ids) {
+        const c = cropPager.items.find((cc) => cc.id === id);
+        if (c) await controller.acceptVlmForCrop(c);
+      }
+    });
+    reg('cluster.skip', async () => {
+      toastStore.info('Skipped.');
+      await advance();
+    });
+    // Its default is 'shift+n' (keymapFallback.ts), not 'N': combos are
+    // lowercased, so 'N' would collapse onto the skip binding above.
+    reg('cluster.flag_new_class', flagSelectedForNewClass);
+    reg('cluster.discard', controller.discardSelected);
+    reg('cluster.undo', controller.undoLast);
+    reg('cluster.ignore', () => void ignoreSelected('ignore'));
+    reg('cluster.unignore', controller.undoIgnore);
+    reg('cluster.select_all', selectAllPage);
     // Arrow keys navigate within the loaded grid. With infinite scroll the
     // next-page concept is gone — left/right move selection by one position
     // in the visible filtered list.
-    reg(
-      'arrowleft',
-      () => {
-        const ids = filteredCrops.map((c) => c.id);
-        if (ids.length === 0) return;
-        const cur = ids.findIndex((id) => sel.has(id));
-        const prev = cur <= 0 ? ids.length - 1 : cur - 1;
-        sel.ids = new Set([ids[prev]!]);
-        sel.anchorId = ids[prev]!;
-      },
-      'Previous crop',
-    );
-    reg(
-      'arrowright',
-      () => {
-        const ids = filteredCrops.map((c) => c.id);
-        if (ids.length === 0) return;
-        const cur = ids.findIndex((id) => sel.has(id));
-        const next = cur < 0 || cur >= ids.length - 1 ? 0 : cur + 1;
-        sel.ids = new Set([ids[next]!]);
-        sel.anchorId = ids[next]!;
-        if (next === ids.length - 1 && cropPager.hasMore) void loadMore();
-      },
-      'Next crop',
-    );
-    reg('m', openMovePicker, 'Move selected to cluster…');
-    reg(
-      'escape',
-      () => {
-        if (movePickerOpen) {
-          cancelMovePicker();
-          return;
-        }
-        if (dragIds.length > 0) {
-          // svelte-dnd-action can't cancel an in-progress POINTER drag —
-          // its only Escape handling is gated on the keyboard-drag (aria)
-          // module's isDragging flag. So all Escape can do here is discard
-          // the captured multi-drag set and restore the grid layout; the
-          // drag itself ends when the user releases the pointer. Do NOT
-          // re-dispatch a synthetic Escape on window: dispatchEvent is
-          // synchronous, so it re-enters this same handler with dragIds
-          // still populated and recurses until the stack blows.
-          dragIds = [];
-          grid.reset();
-          return;
-        }
-        sel.ids = new Set();
-      },
-      'Clear drag capture / close picker / clear selection',
-    );
+    reg('cluster.prev', () => {
+      const ids = filteredCrops.map((c) => c.id);
+      if (ids.length === 0) return;
+      const cur = ids.findIndex((id) => sel.has(id));
+      const prev = cur <= 0 ? ids.length - 1 : cur - 1;
+      sel.ids = new Set([ids[prev]!]);
+      sel.anchorId = ids[prev]!;
+    });
+    reg('cluster.next', () => {
+      const ids = filteredCrops.map((c) => c.id);
+      if (ids.length === 0) return;
+      const cur = ids.findIndex((id) => sel.has(id));
+      const next = cur < 0 || cur >= ids.length - 1 ? 0 : cur + 1;
+      sel.ids = new Set([ids[next]!]);
+      sel.anchorId = ids[next]!;
+      if (next === ids.length - 1 && cropPager.hasMore) void loadMore();
+    });
+    reg('cluster.move', openMovePicker);
+    reg('cluster.cancel', () => {
+      if (movePickerOpen) {
+        cancelMovePicker();
+        return;
+      }
+      if (dragIds.length > 0) {
+        // svelte-dnd-action can't cancel an in-progress POINTER drag —
+        // its only Escape handling is gated on the keyboard-drag (aria)
+        // module's isDragging flag. So all Escape can do here is discard
+        // the captured multi-drag set and restore the grid layout; the
+        // drag itself ends when the user releases the pointer. Do NOT
+        // re-dispatch a synthetic Escape on window: dispatchEvent is
+        // synchronous, so it re-enters this same handler with dragIds
+        // still populated and recurses until the stack blows.
+        dragIds = [];
+        grid.reset();
+        return;
+      }
+      sel.ids = new Set();
+    });
 
     return () => offs.forEach((off) => off());
   });
@@ -910,10 +883,20 @@
     <span class="grow"></span>
 
     <div class="flex flex-wrap items-center gap-x-0.5 gap-y-1">
-      <button class="btn" type="button" onclick={selectAllPage} title="A">
+      <button
+        class="btn"
+        type="button"
+        onclick={selectAllPage}
+        title={kg('cluster.select_all')}
+      >
         Select page
       </button>
-      <button class="btn" type="button" onclick={deselectAll} title="Esc">
+      <button
+        class="btn"
+        type="button"
+        onclick={deselectAll}
+        title={kg('cluster.cancel')}
+      >
         Deselect
       </button>
       <span class="font-mono text-xs text-zinc-500">{sel.size} selected</span>
@@ -933,7 +916,9 @@
         type="button"
         onclick={confirmSelected}
         disabled={sel.size === 0 || confirmClassId == null}
-        title="Enter — label the selected crops with the chosen class (relabel)"
+        title="{kg(
+          'cluster.confirm',
+        )} — label the selected crops with the chosen class (relabel)"
         data-testid="assign-selected"
       >
         Assign class to selected
@@ -947,26 +932,32 @@
         type="button"
         onclick={openMovePicker}
         disabled={sel.size === 0}
-        title="M — move selected to a different cluster"
+        title="{kg('cluster.move')} — move selected to a different cluster"
       >
-        Move <kbd class="ml-1 font-mono text-[10px] text-zinc-400">M</kbd>
+        Move <kbd class="ml-1 font-mono text-[10px] text-zinc-400"
+          >{kc('cluster.move')}</kbd
+        >
       </button>
       <button
         class="btn"
         type="button"
         onclick={() => void flagSelectedForNewClass()}
         disabled={sel.size === 0}
-        title="Shift+N — flag selected as needing a new class"
+        title="{kg('cluster.flag_new_class')} — flag selected as needing a new class"
       >
-        Flag <kbd class="ml-1 font-mono text-[10px] text-zinc-400">⇧N</kbd>
+        Flag <kbd class="ml-1 font-mono text-[10px] text-zinc-400"
+          >{kc('cluster.flag_new_class')}</kbd
+        >
       </button>
       <button
         class="btn"
         type="button"
         onclick={controller.acceptAllVlmOnPage}
-        title="Shift+Enter — accept all VLM suggestions on this page"
+        title="{kg('cluster.accept_all_vlm')} — accept all VLM suggestions on this page"
       >
-        Accept VLM <kbd class="ml-1 font-mono text-[10px] text-zinc-400">⇧↵</kbd>
+        Accept VLM <kbd class="ml-1 font-mono text-[10px] text-zinc-400"
+          >{kc('cluster.accept_all_vlm')}</kbd
+        >
       </button>
 
       <span class="mx-1 h-5 w-px bg-zinc-800"></span>
@@ -1013,10 +1004,14 @@
         <button
           class="btn btn-join-start"
           type="button"
-          title="Ignore selected — exclude from training + clustering (X)"
+          title="Ignore selected — exclude from training + clustering ({kg(
+            'cluster.ignore',
+          )})"
           onclick={() => void ignoreSelected('ignore')}
         >
-          Ignore <kbd class="ml-1 font-mono text-[10px] text-zinc-400">X</kbd>
+          Ignore <kbd class="ml-1 font-mono text-[10px] text-zinc-400"
+            >{kc('cluster.ignore')}</kbd
+          >
         </button>
         <button
           class="btn btn-icon btn-join-end"
@@ -1355,12 +1350,12 @@
       </h3>
       <p class="mb-3 text-xs text-zinc-400">
         Move these from cluster #{clusterId} to another cluster, by its id (the #N on each
-        <a class="text-blue-400 underline" href="/clusters">/clusters</a> card). Reversible
-        with Z.
+        <a class="text-blue-400 underline" href="/clusters">/clusters</a> card).
+        Reversible with {kg('cluster.undo')}.
       </p>
       <p class="mb-3 text-xs text-zinc-400" data-testid="move-relabel-hint">
-        To change their <strong>class</strong> instead, close this and pick a class, then "Assign
-        class to selected" (Enter), or press the class's hotkey.
+        To change their <strong>class</strong> instead, close this and pick a class, then
+        "Assign class to selected" ({kg('cluster.confirm')}), or press the class's hotkey.
       </p>
       <label class="mb-3 block text-sm">
         <span class="mb-1 block text-zinc-400">Target cluster id</span>

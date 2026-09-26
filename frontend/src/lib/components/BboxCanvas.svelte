@@ -31,11 +31,11 @@
    *   - drag a corner / edge handle → resize
    *
    * Hotkeys (when the parent forwards them via the exported handler):
-   *   ↑↓←→  move whole box by 1 px
-   *   [ / ] nudge right edge in / out
-   *   Backspace clear
+   * the `box_edit` nudge / right-edge / clear actions, resolved through
+   * the keymap by `runBoxEditKey` (`$lib/boxEditKeys`).
    */
   import { getThumbUrl } from '$lib/api';
+  import { runBoxEditKey } from '$lib/boxEditKeys';
   import type { BBoxNorm } from '$lib/types';
 
   interface Props {
@@ -296,33 +296,21 @@
     drag = null;
   }
 
-  /** Public hotkey dispatcher — parent forwards keydown events here. */
+  /** Public hotkey dispatcher — parent forwards keydown events here.
+   *  Save/cancel stay with the parent's own registrations. */
   export function handleKey(e: KeyboardEvent): boolean {
     if (busy || readonly) return false;
-    switch (e.key) {
-      case 'Backspace':
-        bbox = null;
-        return true;
-      case 'ArrowUp':
-        nudgeBox(0, -pxStep);
-        return true;
-      case 'ArrowDown':
-        nudgeBox(0, pxStep);
-        return true;
-      case 'ArrowLeft':
-        nudgeBox(-pxStep, 0);
-        return true;
-      case 'ArrowRight':
-        nudgeBox(pxStep, 0);
-        return true;
-      case '[':
-        nudgeRightEdge(-pxStep);
-        return true;
-      case ']':
-        nudgeRightEdge(pxStep);
-        return true;
-    }
-    return false;
+    return runBoxEditKey(
+      e,
+      {
+        nudge: nudgeBox,
+        nudgeRightEdge,
+        deleteBox: () => {
+          bbox = null;
+        },
+      },
+      pxStep,
+    );
   }
 
   function nudgeBox(dx: number, dy: number): void {

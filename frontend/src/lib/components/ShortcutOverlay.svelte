@@ -4,6 +4,7 @@
   import { formatShortcutKey } from '$lib/keyboardDisplay';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
+  import { keymapStore } from '$stores/keymap.svelte';
   import type { RegistryClass } from '$lib/types';
 
   const shortcuts = $derived(keyboardStore.shortcutsForCurrentScope());
@@ -154,12 +155,18 @@
         </h3>
         <ul class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
           <li class="flex items-center justify-between gap-3 text-sm">
-            <span class="text-zinc-300">Toggle this panel</span>
-            <kbd class="font-mono text-[11px]">~</kbd>
+            <span class="text-zinc-300"
+              >{keymapStore.label('global.shortcuts_overlay')}</span
+            >
+            <kbd class="font-mono text-[11px]"
+              >{keymapStore.glyph('global.shortcuts_overlay')}</kbd
+            >
           </li>
           <li class="flex items-center justify-between gap-3 text-sm">
-            <span class="text-zinc-300">Close this panel / cancel</span>
-            <kbd class="font-mono text-[11px]">Esc</kbd>
+            <span class="text-zinc-300">{keymapStore.label('global.close_overlay')}</span>
+            <kbd class="font-mono text-[11px]"
+              >{keymapStore.glyph('global.close_overlay')}</kbd
+            >
           </li>
         </ul>
       </section>

@@ -12,6 +12,7 @@
 
 import type { SlotSpec } from '../annotations/types';
 import type { RegionStatusEntry } from '../api';
+import { keymapStore } from '$stores/keymap.svelte';
 
 /**
  * Human-writable lifecycle states, in server-declared order when the
@@ -95,6 +96,6 @@ export function panelLabels(spec: SlotSpec): SlotPanelLabels {
     textPlaceholder: spec.capabilities.text?.placeholder ?? '',
     confirmLabel: `Confirm ${spec.label.title}`,
     rejectLabel: `Reject (no ${spec.label.singular})`,
-    noBoxHint: `No ${spec.label.singular} bbox on this crop — press E to draw one.`,
+    noBoxHint: `No ${spec.label.singular} bbox on this crop — press ${keymapStore.glyph('review.region.edit_box')} to draw one.`,
   };
 }

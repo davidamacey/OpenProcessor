@@ -393,44 +393,34 @@
     );
 
     const offKeys: Array<() => void> = [];
-    const reg = (combo: string, fn: () => void | Promise<void>, desc: string) =>
-      offKeys.push(keyboardStore.register(combo, () => void fn(), 'clusters', desc));
+    const reg = (actionId: string, fn: () => void | Promise<void>) =>
+      offKeys.push(keyboardStore.registerAction(actionId, () => void fn(), 'clusters'));
 
-    reg(
-      'a',
-      () => searchSel.selectAll(searchResults.map((c) => c.id)),
-      'Select all results',
+    reg('clusters_search.select_all', () =>
+      searchSel.selectAll(searchResults.map((c) => c.id)),
     );
-    reg('escape', () => searchSel.clear(), 'Clear selection');
-    reg(
-      'x',
-      async () => {
-        const ids = [...searchSel.ids];
-        if (ids.length === 0) {
-          toastStore.info('Select crops first to ignore.');
-          return;
-        }
-        try {
-          const res = await excludeCrops(ids, 'ignore');
-          const idSet = new Set(ids);
-          searchResults = searchResults.filter((c) => !idSet.has(c.id));
-          searchTotal = Math.max(0, searchTotal - ids.length);
-          searchSel.clear();
-          toastStore.success(`Ignored ${res.excluded}.`);
-        } catch (e) {
-          toastStore.error(`Ignore failed: ${(e as Error).message}`);
-        }
-      },
-      'Ignore selected (exclude from training)',
-    );
-    reg(
-      'z',
-      async () => {
-        const crops = await undoStore.undoLast();
-        for (const crop of crops) replaceSearchCrop(crop);
-      },
-      'Undo last action',
-    );
+    reg('clusters_search.cancel', () => searchSel.clear());
+    reg('clusters_search.ignore', async () => {
+      const ids = [...searchSel.ids];
+      if (ids.length === 0) {
+        toastStore.info('Select crops first to ignore.');
+        return;
+      }
+      try {
+        const res = await excludeCrops(ids, 'ignore');
+        const idSet = new Set(ids);
+        searchResults = searchResults.filter((c) => !idSet.has(c.id));
+        searchTotal = Math.max(0, searchTotal - ids.length);
+        searchSel.clear();
+        toastStore.success(`Ignored ${res.excluded}.`);
+      } catch (e) {
+        toastStore.error(`Ignore failed: ${(e as Error).message}`);
+      }
+    });
+    reg('clusters_search.undo', async () => {
+      const crops = await undoStore.undoLast();
+      for (const crop of crops) replaceSearchCrop(crop);
+    });
 
     // Unregister the drop handler + keys when search mode ends. Forgetting
     // this leaves /clusters eating drops after the user backs out of
@@ -755,11 +745,11 @@
   $effect(() => {
     const gallery = slotGallery;
     if (!gallery) return;
-    const off = keyboardStore.register(
-      'z',
+    const off = keyboardStore.registerAction(
+      'region_gallery.undo',
       () => void gallery.undoLastAction(),
       'clusters',
-      `Undo last ${gallery.slot.label.singular} action`,
+      { labelVars: { region: gallery.slot.label.singular } },
     );
     return off;
   });
