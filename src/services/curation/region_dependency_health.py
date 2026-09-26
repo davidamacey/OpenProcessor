@@ -242,6 +242,12 @@ def stall_reason(
     if pending_detection <= 0:
         return None
     unavailable = [d for d in dependencies if not d.ready]
+    # The cascade falls through to the segmenter when the detector is missing
+    # (segmenter-only deployments), so a down detector only stalls the queue
+    # when no ready segmenter can take over. A down segmenter still stalls
+    # the items the detector misses.
+    if any(d.role == 'segmenter' and d.ready for d in dependencies):
+        unavailable = [d for d in unavailable if d.role != 'detector']
     if not unavailable:
         return None
     parts = [f'{d.role} ({d.model}) unavailable since {d.unavailable_since}' for d in unavailable]
