@@ -670,6 +670,7 @@ be changed at runtime once the app has started.
 | PE text encoder (semantic-search queries) | `OP_PE_TEXT_BACKEND` (`auto`/`onnx`/`triton`/`torch`), `OP_PE_TEXT_ONNX_PATH` (default `/app/pytorch_models/pe_text_encoder.onnx`), `OP_PE_TEXT_TRITON_MODEL`, `OP_PE_TEXT_ORT_THREADS` |
 | Feature flags (off by default) | `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW` |
 | Item-scores tuning | `OP_SCORES_KNN_K`, `OP_SCORES_NPROBE`, `OP_SCORES_STATE_DIR`, `OP_CROP_DUP_THRESHOLD`, `OP_FIELD_COVERAGE_TTL_S` |
+| Active-learning probe | `OP_PROBE_JOBS_DIR`, `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE` (confidence floor gating the item wire's `probe_actionable`; default `0.5`; echoed read-only on `GET /probe/status` as `actionable_min_confidence`) |
 | Diverse-selection tuning | `OP_SELECT_JOBS_DIR`, `OP_SELECT_JOB_MAX_N`, `OP_SELECT_MAX_N`, `OP_SELECT_SYNC_MAX_OPS`, `OP_SELECT_CACHE_TTL_S` |
 | Clustering / IVF tuning | `OP_IVF_RETRAIN_CHECK_S`, `OP_IVF_RETRAIN_GROWTH`, `OP_IVF_RETRAIN_MIN_INTERVAL_S`, `OP_MAX_REFINE_MEMBERS`, `OP_OUTLIER_CACHE_TTL_S`, `OP_OUTLIER_MAX_MEMBERS`, `OP_RESIDUAL_EMBEDDING_FIELD`, `OP_REGION_CLUSTER_JOB_FILE`, `OP_REGION_FP_JOB_FILE`, `OP_REGION_PARTITION_MARKER`, `OP_REGION_REFINE_MARKER` |
 | Training pipeline | `OP_TRAIN_JOBS_DIR`, `OP_TRAIN_RUNS_ROOT`, `OP_TRAIN_STAGING`, `OP_PREFLIGHT_SCAN_CAP`, `OP_MLFLOW_PUBLIC_URL` (browser-reachable MLflow base; served `mlflow_run_url` is null when unset) |

@@ -177,6 +177,29 @@ class CurationConfig:
     # ``null`` rather than leaking the internal hostname.
     mlflow_public_url: str | None = None
 
+    # Confidence floor gating the item wire's `probe_actionable` field
+    # (see `src.services.curation.wire.serialize_item` and
+    # `docs/design/curation_api_contract.md`). `probe_actionable` is true
+    # only when the probe disagrees with the item's current class AND
+    # the probe's top-1 posterior (`probe_pred_confidence`) is at least
+    # this floor -- offering "accept model's class" when the probe itself
+    # is barely more confident than a coin flip would be misleading.
+    #
+    # **Confidence, not entropy, is the gating signal.** `probe_pred_entropy`
+    # (see `src.services.curation.probe_predictions`) is a raw Shannon
+    # entropy in nats, bounded by `log(nc)` where `nc` is the probe
+    # checkpoint's class count -- a value that varies across probe
+    # versions/class-subsets and is not stored per item. A fixed threshold
+    # against it would silently drift stricter or looser as `nc` changes.
+    # `probe_pred_confidence` (the top-1 posterior after the sum-to-1
+    # normalization in `probe_models._summarize_prediction_raw`) is always
+    # in `[0, 1]` by construction regardless of `nc`, and is written in the
+    # same bulk update as `probe_pred_class` (see `run_probe_inference`), so
+    # it is reliably present whenever the probe has scored an item. 0.5
+    # means the probe's top class holds a majority of the posterior mass --
+    # a deployment-tunable bar, not a magic number.
+    probe_actionable_min_confidence: float = 0.5
+
     @property
     def pause_sentinel_path(self) -> Path:
         """The ONE path every pause-sentinel writer/reader must agree on.
@@ -291,6 +314,9 @@ class CurationConfig:
             item_text_enabled=_bool('ITEM_TEXT_ENABLED', defaults.item_text_enabled),
             item_text_min_confidence=_float(
                 'ITEM_TEXT_MIN_CONFIDENCE', defaults.item_text_min_confidence
+            ),
+            probe_actionable_min_confidence=_float(
+                'PROBE_ACTIONABLE_MIN_CONFIDENCE', defaults.probe_actionable_min_confidence
             ),
         )
 

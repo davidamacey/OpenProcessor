@@ -195,3 +195,22 @@ def test_probe_cancel_with_nothing_running() -> None:
     r = _client().post('/curation/probe/cancel')
     assert r.status_code == 200, r.text
     assert r.json()['cancelled'] is False
+
+
+def test_probe_status_reports_the_actionable_threshold() -> None:
+    """GET /probe/status echoes CurationConfig.probe_actionable_min_confidence
+    read-only, on every poll -- even with no job ever run -- so a UI can
+    explain "model unsure" without hardcoding the threshold."""
+    r = _client().get('/curation/probe/status')
+    assert r.status_code == 200, r.text
+    assert r.json()['actionable_min_confidence'] == 0.5
+
+
+def test_probe_status_threshold_reflects_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.config import curation as curation_config_mod
+
+    monkeypatch.setenv('OP_PROBE_ACTIONABLE_MIN_CONFIDENCE', '0.9')
+    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
+    r = _client().get('/curation/probe/status')
+    assert r.status_code == 200, r.text
+    assert r.json()['actionable_min_confidence'] == 0.9

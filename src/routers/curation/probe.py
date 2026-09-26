@@ -39,6 +39,13 @@ class ProbeStatusResponse(BaseModel):
     finished_at: str | None = None
     updated_count: int | None = None
     error: str | None = None
+    # Read-only echo of CurationConfig.probe_actionable_min_confidence --
+    # the floor `probe_pred_confidence` must clear (alongside in-scope +
+    # disagreeing) for an item's `probe_actionable` to be true. Served here
+    # (not just baked into the wire) so the UI can explain "model unsure"
+    # without hardcoding the threshold. Present on every poll, independent
+    # of job state.
+    actionable_min_confidence: float | None = None
 
 
 async def _resolve_probe_weights(train_job_id: str) -> Path:
@@ -112,10 +119,16 @@ async def probe_run(payload: ProbeRunRequest, opensearch: OpenSearchDep) -> dict
 
 @router.get('/probe/status', response_model=ProbeStatusResponse)
 async def probe_status() -> dict[str, Any]:
-    """Poll the current/last probe job."""
+    """Poll the current/last probe job, plus the read-only
+    ``actionable_min_confidence`` threshold gating the item wire's
+    ``probe_actionable`` field."""
+    from src.config import get_curation_config
     from src.services.curation.probe_job import get_status
 
-    return get_status()
+    return {
+        **get_status(),
+        'actionable_min_confidence': get_curation_config().probe_actionable_min_confidence,
+    }
 
 
 @router.post('/probe/cancel')

@@ -1256,7 +1256,7 @@ always all present (a value is `null` when the stored doc has no value;
 `confidence` to `0.0`, `label_validated`/`class_validated`/`test_holdout`/
 `needs_new_class`/`class_excluded` to `false`, `item_text_lines` to `[]`).
 
-Item keys (66): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `class_confidence`, `class_confidence_source`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_class_attempted_at`, `vlm_class_empty_reason`, `vlm_raw_class`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_nearest_id`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `probe_disagreement`, `probe_in_scope`, `probe_model_version`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`, `region_candidate_bbox_in_parent`.
+Item keys (67): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `class_confidence`, `class_confidence_source`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_class_attempted_at`, `vlm_class_empty_reason`, `vlm_raw_class`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_nearest_id`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `probe_disagreement`, `probe_in_scope`, `probe_model_version`, `probe_actionable`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`, `region_candidate_bbox_in_parent`.
 
 `vlm_class_attempted_at` / `vlm_class_empty_reason`: when a VLM was last
 asked for the item's class, and why that attempt gave no class — `no_answer`
@@ -1336,6 +1336,33 @@ Derived keys (computed by the serializer, never stored):
   probe checkpoint's version tag — the closest thing to a "probe run id"
   this system persists today (see
   `src.services.curation.probe_predictions`).
+- `probe_actionable` (D1 follow-up, 2026-09-25): the backend's own
+  accept/no-accept decision, so the frontend never re-derives a
+  threshold. `null` mirrors `probe_in_scope`/`probe_disagreement` (the
+  probe hasn't scored this item). Once scored: `true` only when
+  `probe_in_scope` is `true` AND `probe_disagreement` is `true` AND the
+  probe's top-1 posterior (`probe_pred_confidence`) is at least
+  `CurationConfig.probe_actionable_min_confidence` (env
+  `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE`, default `0.5`, echoed read-only
+  as `actionable_min_confidence` on `GET /probe/status`); `false` for
+  every other case, including in-scope-and-agreeing, out-of-scope, and
+  disagreeing-but-unsure. **Confidence gates this, not
+  `probe_pred_entropy`** — entropy is a raw Shannon value in nats bounded
+  by `log(nc)` (`nc` = the probe checkpoint's class count), which varies
+  across probe versions/class-subsets and isn't stored per item, so a
+  fixed threshold against it would silently drift as `nc` changes;
+  `probe_pred_confidence` is always in `[0, 1]` by construction (a
+  sum-to-1 posterior's top value) and is written in the same bulk update
+  as `probe_pred_class`, so it's reliably present whenever the probe has
+  scored an item.
+
+  **UI contract:** offer "Accept model's class" only when
+  `probe_actionable` is `true`. When `probe_disagreement` is `true` but
+  `probe_actionable` is `false` (the probe disagrees but isn't confident
+  enough), show `"model unsure: <probe_pred_class>"` with no Accept
+  action — never let a client infer this from `probe_pred_entropy` or
+  `probe_pred_confidence` directly; the threshold decision lives only in
+  `probe_actionable`.
 
 `label_validated` is derived (`class_validated` OR `region_validated`).
 
@@ -1982,13 +2009,18 @@ stamped as the job id. `gpu` (a `cuda_visible_devices` string) claims
 through the same arbiter `POST /train/start` uses — a claim failure is
 `409`, never silent. One job at a time (`409` otherwise).
 
+`GET /probe/status` additionally serves `actionable_min_confidence`
+(read-only, always present, independent of job state) — a direct echo of
+`CurationConfig.probe_actionable_min_confidence`, so a client can render
+"model unsure" copy without hardcoding the threshold.
+
 ```json
 // POST /probe/run {"job_id": "2026-09-25T00-46-20_yolo26n", "gpu": null}
 {"job_id": "2026-09-25T00-46-20_yolo26n", "status": "running",
  "train_job_id": "2026-09-25T00-46-20_yolo26n",
  "model_path": "/jobs/.../weights/best.onnx", "gpu": null,
  "started_at": "2026-09-25T00:00:00+00:00", "finished_at": null,
- "updated_count": null, "error": null}
+ "updated_count": null, "error": null, "actionable_min_confidence": 0.5}
 ```
 
 **`GET /review/{tab}` + `GET /review/tabs` (C3, new field)** — a
