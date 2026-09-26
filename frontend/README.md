@@ -43,9 +43,13 @@ it has no data of its own to show.
 
 ## Quick start (Docker)
 
+No repo checkout needed — just the compose file and an env file. The
+published image (`davidamacey/cropwright`) is **multi-arch**
+(`linux/amd64` + `linux/arm64`):
+
 ```bash
-git clone https://github.com/davidamacey/OpenProcessor && cd cropwright
-cp .env.example .env
+curl -fsSLO https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/.env.example -o .env
 ```
 
 Edit `.env` and set, at minimum:
@@ -59,11 +63,13 @@ Edit `.env` and set, at minimum:
   (`docker network ls`; defaults to OpenProcessor's own default network
   name).
 - `CROPWRIGHT_PORT` — host port to publish (default `5184`).
+- `CROPWRIGHT_TAG` — pin a version, e.g. `CROPWRIGHT_TAG=0.2.0` in
+  `.env`. Defaults to `latest`.
 
 Then:
 
 ```bash
-docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
 
 Open `http://localhost:5184` (or whatever `CROPWRIGHT_PORT` you set).
@@ -85,7 +91,7 @@ it never collides with a running instance:
 ```bash
 CROPWRIGHT_PORT=5190 CROPWRIGHT_CONTAINER_NAME=cw-second \
   OP_DOCKER_NETWORK=some_other_openprocessor_net \
-  docker compose -p cw-second up -d --build
+  docker compose -p cw-second up -d
 ```
 
 This is the same image and compose file, pointed at a different
@@ -191,6 +197,23 @@ cluster viewed).
 
 ## Development
 
+**Build the Docker image from source**, instead of pulling
+`davidamacey/cropwright`, with a repo checkout and the `docker-compose.build.yml`
+overlay (deliberately not an auto-loading `docker-compose.override.yml`
+— a clone-and-run user must pull by default, never silently build):
+
+```bash
+git clone https://github.com/davidamacey/OpenProcessor && cd cropwright
+cp .env.example .env   # edit as in "Quick start" above
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+This tags the built image `cropwright-dev:local` rather than reusing
+`davidamacey/cropwright:latest`, so a local dev build never gets
+confused with — or overwrites — a pulled release image.
+
+**Run the SvelteKit dev server** directly (no Docker):
+
 ```bash
 npm install
 npm run dev      # http://localhost:5173 — set PUBLIC_TRITON_API_URL in .env
@@ -219,13 +242,40 @@ rename fails a frontend test instead of silently rendering blanks.
 
 ## Releasing
 
-Pushing a `vX.Y.Z` tag (or a manual `workflow_dispatch`) runs
-`.github/workflows/release.yml`: builds a `linux/amd64`-only image (no
-QEMU multi-arch, kept fast), scans it with Trivy (fails on CRITICAL/HIGH
-with an available fix), then pushes `davidamacey/cropwright:X.Y.Z`,
-`:X.Y` and `:latest` to Docker Hub and creates a GitHub release from the
-matching `CHANGELOG.md` section. Requires the `DOCKERHUB_USERNAME` /
-`DOCKERHUB_TOKEN` repo secrets.
+Local, not CI — CI minutes are exhausted and this is the standard
+workflow elsewhere in this org. `./scripts/release.sh` is a small
+orchestrator over `scripts/release/NN-*.sh` stages: `preflight verify
+build scan smoke tag publish finish`. Each is independently runnable
+and resumable via a local ledger under `.release/<version>/`
+(gitignored); `tag`/`publish`/`finish` are the only stages that leave
+this machine, and each requires an explicit `--yes` or an interactive
+confirmation.
+
+```bash
+./scripts/release.sh status 0.2.0
+./scripts/release.sh run 0.2.0 --skip scan          # skip a stage
+./scripts/release.sh run 0.2.0 --from build --yes   # resume after verify
+```
+
+`build`/`scan`/`smoke` cover both `linux/amd64` and `linux/arm64`, using
+a multi-arch buildx builder with a remote node that builds arm64
+natively (no QEMU). The arm64 image can't run on an amd64 CI/dev host,
+so `smoke` loads it into a remote docker context
+(`docker save | docker --context <ctx> load`) and re-runs
+`scripts/release-smoke.sh` there — every check in that script goes
+through `docker exec`, not a published host port, so it works
+identically over a remote context. `publish` pushes a single multi-arch
+manifest to `davidamacey/cropwright` as `X.Y.Z`, `X.Y` and `latest` with
+an SBOM attestation; `finish` creates the GitHub release (immediate, no
+draft) from the matching `CHANGELOG.md` section via the `gh` CLI.
+
+Requires a Docker Hub login (`docker login`) and a multi-arch buildx
+builder plus its remote arm64 docker context already set up on the host
+(`docker buildx ls` / `docker context ls`) — shared infrastructure, not
+something this repo provisions. `CROPWRIGHT_BUILDER` (default
+`cropwright-multiarch`) and `CROPWRIGHT_REMOTE_ARM64_CONTEXT` (default
+`remote-arm64`) point the stages at whatever your host actually names
+them.
 
 ## Troubleshooting
 
