@@ -51,14 +51,7 @@ from src.routers import (
     search_router,
     v1_router,
 )
-from src.routers.curation import router as curation_router
-from src.routers.curation.projects import global_router as curation_projects_router
-from src.routers.curation_images import (
-    crops_router as curation_crops_router,
-    router as curation_images_router,
-)
-from src.routers.curation_train import router as curation_train_router
-from src.routers.curation_umap import router as curation_umap_router
+from src.routers.curation._mounting import mount_all_curation_routers
 
 
 # Request correlation IDs (request_id_ctx / get_request_id) live in
@@ -171,6 +164,9 @@ async def lifespan(app: FastAPI):
 
     reject_retired_env()
 
+    from src.services.projects.bootstrap import bind_default_for_lifespan
+
+    bind_default_for_lifespan()  # startup work + background loops act on `default`
     # Resolve the region profile before serving: a bad profile file fails
     # startup, and no request ever races its first-use resolution.
     from src.services.detection.profile_registry import ensure_env_region_profile
@@ -674,14 +670,7 @@ def create_app() -> FastAPI:
     application.include_router(query_router)  # /query - Data retrieval
     application.include_router(ocr_router)  # /ocr - Text extraction
     application.include_router(models_router)  # /models - Model management
-    application.include_router(curation_projects_router, prefix=curation_router.prefix)
-    application.include_router(curation_router)  # /curation/* - Curation/labeling pipeline
-    application.include_router(curation_images_router)  # /curation/images/* - Source image serving
-    application.include_router(
-        curation_crops_router
-    )  # /curation/crops/* - Crop thumbnails/overlays
-    application.include_router(curation_umap_router)  # /curation/cluster/* - UMAP residual reducer
-    application.include_router(curation_train_router)  # /curation/train/* - Training pipeline
+    mount_all_curation_routers(application)  # /curation: global, scoped, default alias
 
     # Versioned API - All endpoints also available under /v1
     application.include_router(v1_router)  # /v1/* - Versioned API
