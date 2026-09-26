@@ -378,7 +378,11 @@ disagreement + the server's own `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE`
 threshold, echoed read-only as `ProbeStatusResponse.actionable_min_confidence`
 — no client-side threshold anywhere); a disagreement that isn't
 actionable renders as a muted "model unsure: `<predicted class>`" with
-no Accept button.
+no Accept button. class-id-display-audit-2026-09-26: `showAccept` used
+to also require a client-side `probe_pred_class_id !== class_id`
+comparison — dropped, since it was redundant with (and riskier than)
+the served flags above; the served `probe_disagreement`/
+`probe_actionable`/non-null `probe_pred_class_id` decide alone.
 
 ## Curation-strategy selector bar (`StrategyBar.svelte`, 2026-09)
 

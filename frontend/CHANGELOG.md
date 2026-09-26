@@ -156,6 +156,24 @@ compose pull && docker compose up -d` — no `git clone` needed.
 
 ### Changed
 
+- **Vendored contracts pinned to OpenProcessor `main` 7e758390** (a
+  full-class promote gate over a registry gap/deprecated class,
+  registry-scoped probe prediction ids, and an OCR-sentinel change —
+  see Fixed below). No wire shape drift: contract tests pass unchanged.
+- **`/review`: "Accept model's class" relies only on the served probe
+  flags, not a client-side id comparison** (class-id-display-audit-2026-09-26
+  HIGH finding). `probeOpinion`'s `showAccept` used to also require
+  `probe_pred_class_id !== class_id`, a comparison redundant with (and
+  riskier than) the served `probe_disagreement`/`probe_actionable`
+  flags — a dense export id in `probe_pred_class_id` could have shown or
+  hidden the button on a false read. Dropped; the served booleans decide
+  alone.
+- **`/clusters/[id]`'s cluster-name header prefers the served
+  `dominant_class_name`** over a `classesStore` registry lookup
+  (class-id-display-audit-2026-09-26 LOW finding), falling back to the
+  registry lookup only for a served cluster that predates the field. The
+  registry row is still used for what genuinely needs it — the live
+  hotkey/assign class id and the validated/count figures.
 - **Promote warns about the slow first prediction.** OpenProcessor ffb88b8
   serves `cold_start_expected_on_first_inference` on
   `POST /train/promote/{job_id}` (the first inference builds the TensorRT
@@ -229,6 +247,17 @@ compose pull && docker compose up -d` — no `git clone` needed.
 
 ### Fixed
 
+- **A null OCR confidence (`item_text_lines[].confidence`,
+  `region_text_confidence`) now always renders as "—".** OpenProcessor
+  7e758390 traced: a failed OCR recognition never reaches either field
+  as a negative sentinel — `item_text_lines()` drops any line below its
+  confidence floor before it's ever stored, and `region_text_confidence`
+  is either a VLM categorical-confidence float or null, never a raw OCR
+  score — so no negative-value handling was added. `CropMetaPanel`'s two
+  confidence spans were previously gated on `!= null` and simply omitted
+  the chip on a null value (never wrong, but inconsistent with the
+  existing `pct()` helper's dash fallback used elsewhere); both now
+  always render through `pct()`.
 - **Probe actionability, server-computed (OpenProcessor main 8990ede).**
   Items now carry a served `probe_actionable` (true only when the probe
   disagrees AND the item is in scope AND `probe_pred_confidence` cleared
