@@ -173,6 +173,14 @@ class _ItemTask:
     item_text_update: dict[str, Any] = field(default_factory=dict)
     # Final outcome to write back. Empty dict means "no update for this crop".
     update_doc: dict[str, Any] = field(default_factory=dict)
+    # Which project this item belongs to (projects_plan.md §5.1). Every
+    # downstream call for this task -- Triton/segmenter/VLM config reads,
+    # OpenSearch reads/writes -- must run inside ``with
+    # bind_project(task.project):`` so it resolves this item's own
+    # project, not whatever project a sibling task on another consumer
+    # happens to be processing. ``None`` only for legacy single-project
+    # test fixtures that construct a task directly without a project.
+    project: Any = None
 
 
 # =============================================================================
