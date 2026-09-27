@@ -77,8 +77,6 @@ def test_default_project_job_lands_in_the_default_dir(tmp_path, monkeypatch) -> 
     export_dir = tmp_path / 'exports' / 'current'
     with bind_project(new_project_record(DEFAULT_SLUG, base_curation_config())):
         job_id = asyncio.run(train_jobs.write_job(_spec(export_dir)))
-    with bind_project(new_project_record('default', base_curation_config())):
-        job_id = asyncio.run(train_jobs.write_job(_spec(export_dir)))
     # P1R §6.1/D-A: project_jobs_dir() always nests /projects/<slug>,
     # `default` included -- no more env-only unnested special case.
     assert (tmp_path / 'jobs' / 'projects' / 'default' / f'{job_id}.job.json').is_file()

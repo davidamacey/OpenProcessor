@@ -514,25 +514,24 @@ async def models_status() -> dict[str, Any]:
 def _project_owns_model(model_name: str) -> bool:
     """True if ``model_name`` (a ``triton_name``) belongs to the bound
     project's namespace (docs/design/openprocessor_internal/projects_plan.md
-    §5.3: ``triton_name = model_prefix + requested``).
+    §5.3/§5.5: ``triton_name = model_prefix + requested``).
 
-    ``default`` is an ordinary project (P1: no special-casing) and gets a
-    real ``model_prefix`` (``'default__'``) like any other. A namespaced
-    name (contains ``'__'``) that isn't ours belongs to some other
-    project -- registered or not, since only a project's own prefix ever
-    produces one. An *unprefixed* name (no ``'__'`` at all -- every core
-    pipeline model, plus every model promoted before projects existed)
-    carries no project's namespace, so it is owned by ``default`` alone,
-    exactly as before P1 gave every project a real prefix.
+    ``default``'s ``model_prefix`` stays the empty string (the one
+    deliberate exception to "no default special case" -- every
+    pre-projects / core-pipeline model, never namespaced, keeps
+    resolving as default's own). A non-empty prefix owns exactly the
+    names it produces. A namespaced name (contains ``'__'``) that isn't
+    ours belongs to some other project -- registered or not, since only
+    a project's own non-empty prefix ever produces one. An *unprefixed*
+    name (no ``'__'`` at all) carries no project's namespace, so it is
+    owned by ``default`` alone.
     """
-    from src.config.projects import DEFAULT_SLUG
-
     cfg = get_curation_config()
-    if model_name.startswith(cfg.model_prefix):
+    if cfg.model_prefix and model_name.startswith(cfg.model_prefix):
         return True
     if '__' in model_name:
         return False
-    return cfg.project_slug == DEFAULT_SLUG
+    return not cfg.model_prefix
 
 
 # PUT /models/{model_name}/sharing lives in _models_sharing.py (kept

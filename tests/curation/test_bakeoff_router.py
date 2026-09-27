@@ -204,9 +204,10 @@ def make_run(
     ckpt = dirs['runs'] / run_id / 'weights' / 'best.pt'
     ckpt.parent.mkdir(parents=True)
     ckpt.write_bytes(b'pt')
-    # P1R §6.1/D-A: project_jobs_dir() always nests /projects/<slug>,
-    # default included.
-    jobs = dirs['train_jobs'] / 'projects' / 'default'
+    # `dirs['train_jobs']` is already default's fully-nested
+    # `OP_TRAIN_JOBS_DIR/projects/default` (see `default_train_jobs_dir`
+    # in tests/_project_paths.py) -- do not nest it again here.
+    jobs = dirs['train_jobs']
     jobs.mkdir(parents=True, exist_ok=True)
     (jobs / f'{run_id}.status.json').write_text(
         json.dumps(
