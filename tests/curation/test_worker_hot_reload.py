@@ -121,6 +121,19 @@ def _fake_args() -> Any:
     return ns
 
 
+def _fake_ctors() -> dict[str, Any]:
+    """Stand-ins for the four heavy-IO constructors ``build_runtime``
+    now takes as parameters (never imports fresh) -- mirrors how
+    ``runner.py`` passes its own module-level names, which is exactly
+    what lets a real monkeypatch on those names reach a rebuild."""
+    return {
+        'region_detector_cls': MagicMock(),
+        'ocr_recognizer_cls': MagicMock(),
+        'segmenter_cls': MagicMock(),
+        'vlm_cls': MagicMock(),
+    }
+
+
 @pytest.mark.asyncio
 async def test_build_runtime_returns_refs() -> None:
     from scripts.curation.worker.runtime import build_runtime
@@ -138,11 +151,42 @@ async def test_build_runtime_returns_refs() -> None:
         args=_fake_args(),
         profile_revision=3,
         pack_revision=None,
+        **_fake_ctors(),
     )
     assert rt.profile_ref == (profile.name, 3)
     assert rt.pack_ref == (pack.name, None)
     assert rt.detector is not None
     assert rt.vlm is None  # no vlm_url
+
+
+@pytest.mark.asyncio
+async def test_build_runtime_uses_the_passed_in_constructors_not_fresh_imports() -> None:
+    """The monkeypatch-target fix: build_runtime must call the exact
+    classes it was handed, never import its own copies of
+    RegionDetector/PaddleOcrTextRecognizer/SegmenterClient/VlmLabeler --
+    otherwise a test (or runner.py's producer loop rebuilding through a
+    module-level name a test patched) silently keeps talking to the
+    real, unpatched class."""
+    from scripts.curation.worker.runtime import build_runtime
+
+    profile = profile_registry.get_active_region_profile()
+    assert profile is not None
+    from src.services.labeling.vlm_prompts import resolve_prompt_pack
+
+    pack = resolve_prompt_pack()
+    ctors = _fake_ctors()
+    args = _fake_args()
+    args.vlm_url = 'http://vlm.example'
+    pool = MagicMock()
+
+    rt = await build_runtime(pool=pool, profile=profile, pack=pack, args=args, **ctors)
+
+    ctors['region_detector_cls'].assert_called_once_with(pool, profile)
+    ctors['ocr_recognizer_cls'].assert_called_once_with(pool, profile)
+    ctors['segmenter_cls'].assert_called_once()
+    ctors['vlm_cls'].assert_called_once()
+    assert rt.detector is ctors['region_detector_cls'].return_value
+    assert rt.vlm is ctors['vlm_cls'].return_value
 
 
 @pytest.mark.asyncio
@@ -175,10 +219,58 @@ async def test_quiesce_and_swap_drains_queues_before_building() -> None:
         profile=profile,
         pack=pack,
         args=_fake_args(),
+        **_fake_ctors(),
     )
     assert drained_before_build
     assert holder.get('alpha') is rt
     assert holder.get('beta') is None
+
+
+# =============================================================================
+# maybe_hot_reload: the producer-loop swap check -- pointer 2
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_maybe_hot_reload_never_swaps_when_activation_is_unchanged() -> None:
+    """No activation change across repeated cycles must never rebuild --
+    the swap decision compares the store's served
+    ``(profile, pack)`` ``AxisRef`` pair, never object identity or the
+    runtime's own always-populated ``profile_ref``/``pack_ref``."""
+    from scripts.curation.worker.runtime import RuntimeHolder, maybe_hot_reload
+
+    client = FakeConfigOpenSearch()
+    project = _record('steady-project')
+    profile = profile_registry.get_active_region_profile()
+    assert profile is not None
+    from src.services.labeling.vlm_prompts import resolve_prompt_pack
+
+    pack = resolve_prompt_pack()
+    ctors = _fake_ctors()
+
+    with bind_project(project):
+        store = get_config_store(mode='pinned')
+        holder = RuntimeHolder()
+
+        for _ in range(3):
+            await maybe_hot_reload(
+                store=store,
+                opensearch=client,
+                holder=holder,
+                slug='steady-project',
+                pool=MagicMock(),
+                args=_fake_args(),
+                queues=[],
+                get_active_profile=lambda: profile,
+                get_active_pack=lambda: pack,
+                **ctors,
+            )
+
+        # First cycle builds once (nothing synced yet, store shows
+        # nothing active either -> the "off/off" baseline still counts
+        # as a change from "never synced"); every later cycle, with the
+        # store unchanged, must not call any constructor again.
+        assert ctors['region_detector_cls'].call_count == 1
 
 
 # =============================================================================

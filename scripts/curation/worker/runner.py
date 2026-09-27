@@ -334,6 +334,54 @@ async def run(args: argparse.Namespace) -> int:
     # under the item's own binding, never a process-wide list.
     opensearch = _wkr.make_script_opensearch([args.opensearch])
 
+    # W2 sec 4.5: this build's (profile, pack) pairing, tracked so the
+    # producer loop can detect a later activation and hot-swap without a
+    # restart. `_worker_slug` is whatever project this process's config
+    # resolves against today (the ``--project`` binding, or the
+    # unbound/default view when none was given) -- the *same* project
+    # every `region_profile()`/`resolve_prompt_pack()` call above already
+    # resolved through.
+    from scripts.curation.worker.runtime import RegionRuntime, RuntimeHolder
+
+    _worker_slug = 'default'
+    with contextlib.suppress(Exception):
+        from src.config.project_context import try_current_project
+
+        _bound = try_current_project()
+        if _bound is not None:
+            _worker_slug = _bound.record.slug
+    runtime_holder = RuntimeHolder()
+    runtime_holder.set(
+        _worker_slug,
+        RegionRuntime(
+            profile=profile,
+            profile_ref=(profile.name, None),
+            pack=pack,
+            pack_ref=(pack.name, None),
+            detector=detector,
+            segmenter=segmenter,
+            ocr_recognizer=ocr_recognizer,
+            text_rules=text_rules,
+            vlm=vlm,
+            item_text_enabled=item_text_enabled,
+        ),
+    )
+    # Baseline the swap check against whatever the store shows *right
+    # now* -- this build came from the env/file default, not from an
+    # activation, so the first producer cycle must not see that as a
+    # "change" (config_wants_swap compares AxisRef shapes, never the
+    # runtime's own always-populated profile_ref/pack_ref).
+    _worker_store = None
+    with contextlib.suppress(Exception):
+        from src.services.config_store.store import get_config_store as _get_config_store
+
+        _worker_store = _get_config_store(mode='pinned')
+        await _worker_store.refresh(opensearch)
+        runtime_holder.set_synced_refs(
+            _worker_slug,
+            (_worker_store.current.active_profile, _worker_store.current.active_pack),
+        )
+
     started_at = time.monotonic()
     sentinel = Path(args.pause_sentinel)
 
@@ -517,6 +565,8 @@ async def run(args: argparse.Namespace) -> int:
         96 oldest all in-flight, fresh=0) can't recur when the query
         itself already excludes in-flight ids.
         """
+        nonlocal profile, pack, detector, segmenter, ocr_recognizer, text_rules, vlm
+        nonlocal item_text_enabled
         # A project's share of the whole pipeline (every inter-stage
         # queue), so one project with a slow leg cannot fill it; with a
         # single project the cap is the pipeline itself, as before.
@@ -540,6 +590,40 @@ async def run(args: argparse.Namespace) -> int:
                 inflight_counts = collections.Counter(in_flight_owner.values())
             fairness_scheduler.set_in_flight(dict(inflight_counts))
             await project_registry.ensure_fresh()
+
+            # W2 sec 4.5: quiesce and swap. `maybe_hot_reload` refreshes
+            # this worker's own (`_worker_slug`) config store and only
+            # drains + rebuilds when the store's served (profile, pack)
+            # AxisRef pair actually moved from what was last synced --
+            # never on object identity, never every cycle. A refresh
+            # failure or a mid-run deactivation never crashes the loop.
+            if _worker_store is not None:
+                try:
+                    from scripts.curation.worker.runtime import maybe_hot_reload
+
+                    new_rt = await maybe_hot_reload(
+                        store=_worker_store,
+                        opensearch=opensearch,
+                        holder=runtime_holder,
+                        slug=_worker_slug,
+                        pool=pool,
+                        args=args,
+                        queues=[in_q, vlm_visible_q, sam_q, combined_q, out_q],
+                        get_active_profile=get_active_region_profile,
+                        get_active_pack=resolve_prompt_pack,
+                        region_detector_cls=RegionDetector,
+                        ocr_recognizer_cls=PaddleOcrTextRecognizer,
+                        segmenter_cls=_wkr.SegmenterClient,
+                        vlm_cls=_wkr.VlmLabeler,
+                    )
+                    if new_rt is not None:
+                        profile, pack = new_rt.profile, new_rt.pack
+                        detector, segmenter = new_rt.detector, new_rt.segmenter
+                        ocr_recognizer, text_rules = new_rt.ocr_recognizer, new_rt.text_rules
+                        vlm, item_text_enabled = new_rt.vlm, new_rt.item_text_enabled
+                except Exception as exc:
+                    logger.warning('config_store_hot_reload_check_failed', error=str(exc))
+
             try:
                 tasks = await fetch_pending_multi_project(
                     opensearch,

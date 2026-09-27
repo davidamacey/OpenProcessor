@@ -31,14 +31,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `test_configs_mapping_union.py` (including the "6 distinct indexes"
   glue-G1 check) and `test_axis_ids.py` were already present on this
   branch and verified green.
-  Deferred: wiring the swap into `scripts/curation/worker/runner.py`'s
-  producer loop was attempted and reverted -- `build_runtime`'s fresh
-  imports of `RegionDetector`/`SegmenterClient`/`VlmLabeler` bypass the
-  module-level monkeypatches six existing worker tests rely on, so it
-  regressed them. The runtime/holder/swap primitives are real and
-  tested standalone; full producer-loop integration (rebinding
-  `runner.py`'s closure locals at a live quiesce point) remains
-  follow-on work.
+  **Producer-loop wiring (follow-up).** `build_runtime` now takes its
+  four heavy-IO constructors (`region_detector_cls`, `ocr_recognizer_cls`,
+  `segmenter_cls`, `vlm_cls`) as parameters instead of importing them
+  fresh, so `runner.py` passes its own module-level names
+  (`RegionDetector`, `PaddleOcrTextRecognizer`) and the
+  `region_worker_main` shim's (`_wkr.SegmenterClient`, `_wkr.VlmLabeler`)
+  -- the exact names `test_region_worker.py`/`test_region_text_worker.py`
+  monkeypatch, so a rebuild honours the patch on every call, not just
+  the first. `RuntimeHolder` now tracks synced `AxisRef` pairs
+  (`get_synced_refs`/`set_synced_refs`) separately from a runtime's own
+  always-populated `profile_ref`/`pack_ref`, and a new
+  `maybe_hot_reload(...)` is the producer loop's per-cycle check: it
+  refreshes the project's store and only drains + rebuilds when the
+  store's served `(active_profile, active_pack)` pair actually differs
+  from what was last synced -- never on object identity, never every
+  cycle. `runner.py`'s producer loop calls it once per fetch cycle,
+  reassigning the `profile`/`pack`/`detector`/`segmenter`/
+  `ocr_recognizer`/`text_rules`/`vlm`/`item_text_enabled` closure locals
+  via `nonlocal` when it returns a runtime. `test_worker_hot_reload.py`
+  gained `test_build_runtime_uses_the_passed_in_constructors_not_fresh_imports`
+  and `test_maybe_hot_reload_never_swaps_when_activation_is_unchanged`
+  (asserts a constructor's call count stays at 1 across three
+  no-activation-change cycles). All 62 targeted worker tests
+  (`test_region_worker.py`, `test_region_text_worker.py`, and five other
+  worker suites) pass with the wiring live -- no monkeypatch bypass, no
+  per-cycle swap spam.
 - **P3 finish pass, final merge.** Merged `cutover/projects-workers`
   (through `fix(projects): refresh detection-worker liveness on a
   timer`) into `cutover/projects-lifecycle`: the detection-worker

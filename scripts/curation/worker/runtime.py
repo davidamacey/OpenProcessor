@@ -78,6 +78,10 @@ async def build_runtime(
     pack: PromptPack,
     args: argparse.Namespace,
     *,
+    region_detector_cls: Any,
+    ocr_recognizer_cls: Any,
+    segmenter_cls: Any,
+    vlm_cls: Any,
     profile_revision: int | None = None,
     pack_revision: int | None = None,
 ) -> RegionRuntime:
@@ -88,21 +92,26 @@ async def build_runtime(
     quiesce point without duplicating the construction logic. Never
     touches OpenSearch or the OS-level pause sentinel -- those stay in
     ``runner.py``'s own startup path.
+
+    The four heavy-IO constructors are passed in by the caller rather
+    than imported fresh here: ``runner.py`` resolves them through its
+    own module globals / the ``region_worker_main`` shim
+    (``_wkr.SegmenterClient``, ``_wkr.VlmLabeler``, module-level
+    ``RegionDetector``/``PaddleOcrTextRecognizer``) specifically so that
+    ``tests/curation/test_region_worker.py`` /
+    ``test_region_text_worker.py``'s ``monkeypatch.setattr(...)`` calls
+    on those names are honoured on every rebuild, not just the first.
+    Importing them fresh from ``src.services.detection.cascade_detect``
+    here would silently bypass those patches.
     """
     from src.core.logging import get_logger as _get_logger
-    from src.services.curation.metrics import OP_STAGE_REGION_DETECTOR_DURATION_SECONDS
-    from src.services.detection.cascade_detect import PaddleOcrTextRecognizer, RegionDetector
     from src.services.detection.region_text import validate_text_reader
     from src.services.detection.region_text_rules import region_text_rules
 
-    del OP_STAGE_REGION_DETECTOR_DURATION_SECONDS  # metrics side-effect import only
-
     _logger = _get_logger('curation_worker')
 
-    detector = RegionDetector(pool, profile)
-    ocr_recognizer = PaddleOcrTextRecognizer(pool, profile)
-
-    from scripts.curation import region_worker_main as _wkr
+    detector = region_detector_cls(pool, profile)
+    ocr_recognizer = ocr_recognizer_cls(pool, profile)
 
     segmenter_url = getattr(args, 'segmenter_url', '') or ''
     if segmenter_url and not profile.segmenter_text_prompt:
@@ -112,7 +121,7 @@ async def build_runtime(
             detail='set OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT to use the segmenter leg',
         )
         segmenter_url = ''
-    segmenter = _wkr.SegmenterClient(
+    segmenter = segmenter_cls(
         segmenter_url,
         text_prompt=profile.segmenter_text_prompt,
         source_name=profile.segmenter_name,
@@ -126,7 +135,7 @@ async def build_runtime(
     from src.config import get_curation_config
 
     item_text_enabled = get_curation_config().item_text_enabled and bool(profile.ocr_pipeline_model)
-    vlm = _wkr.VlmLabeler(base_url=vlm_url, pack=pack) if vlm_available else None
+    vlm = vlm_cls(base_url=vlm_url, pack=pack) if vlm_available else None
 
     return RegionRuntime(
         profile=profile,
@@ -146,9 +155,20 @@ async def build_runtime(
 class RuntimeHolder:
     """Per-project-slug :class:`RegionRuntime` registry (projects_plan.md
     sec 11 W2's ``runtimes[slug]``). Activating a profile in one project
-    only ever replaces that project's own entry."""
+    only ever replaces that project's own entry.
+
+    ``_synced_refs`` is tracked separately from the runtime's own
+    ``profile_ref``/``pack_ref`` (which always name *some* profile/pack,
+    even the env/file default that was never activated through the
+    store). The swap decision must compare against the store's own
+    ``AxisRef`` shape -- ``None`` / ``'off'`` / ``(name, revision)`` --
+    never against the runtime's refs, or a runtime built from an
+    env-default (never activated) would spuriously "differ" from the
+    store's ``None`` on every single check.
+    """
 
     _runtimes: dict[str, RegionRuntime] = field(default_factory=dict)
+    _synced_refs: dict[str, tuple[AxisRef, AxisRef]] = field(default_factory=dict)
 
     def get(self, slug: str) -> RegionRuntime | None:
         return self._runtimes.get(slug)
@@ -158,6 +178,13 @@ class RuntimeHolder:
 
     def drop(self, slug: str) -> None:
         self._runtimes.pop(slug, None)
+        self._synced_refs.pop(slug, None)
+
+    def get_synced_refs(self, slug: str) -> tuple[AxisRef, AxisRef] | None:
+        return self._synced_refs.get(slug)
+
+    def set_synced_refs(self, slug: str, refs: tuple[AxisRef, AxisRef]) -> None:
+        self._synced_refs[slug] = refs
 
     @property
     def current(self) -> dict[str, RegionRuntime]:
@@ -175,6 +202,10 @@ async def quiesce_and_swap(
     profile: DetectionProfile,
     pack: PromptPack,
     args: argparse.Namespace,
+    region_detector_cls: Any,
+    ocr_recognizer_cls: Any,
+    segmenter_cls: Any,
+    vlm_cls: Any,
     profile_revision: int | None = None,
     pack_revision: int | None = None,
 ) -> RegionRuntime:
@@ -190,6 +221,10 @@ async def quiesce_and_swap(
         profile,
         pack,
         args,
+        region_detector_cls=region_detector_cls,
+        ocr_recognizer_cls=ocr_recognizer_cls,
+        segmenter_cls=segmenter_cls,
+        vlm_cls=vlm_cls,
         profile_revision=profile_revision,
         pack_revision=pack_revision,
     )
@@ -206,6 +241,75 @@ async def quiesce_and_swap(
         profile=new_runtime.profile_ref,
         pack=new_runtime.pack_ref,
     )
+    return new_runtime
+
+
+def _axis_name_and_revision(ref: AxisRef) -> tuple[str | None, int | None]:
+    if isinstance(ref, tuple):
+        return ref
+    return None, None
+
+
+async def maybe_hot_reload(
+    *,
+    store: ConfigStore,
+    opensearch: Any,
+    holder: RuntimeHolder,
+    slug: str,
+    pool: Any,
+    args: argparse.Namespace,
+    queues: list[asyncio.Queue[Any]],
+    get_active_profile: Any,
+    get_active_pack: Any,
+    region_detector_cls: Any,
+    ocr_recognizer_cls: Any,
+    segmenter_cls: Any,
+    vlm_cls: Any,
+) -> RegionRuntime | None:
+    """The producer loop's per-cycle hot-reload check (sec 4.5 step 2),
+    as one call: refresh ``slug``'s store, compare its served
+    ``(active_profile, active_pack)`` ``AxisRef`` pair against what this
+    holder last synced to, and only swap when that pair actually
+    changed -- never on object identity, never on the runtime's own
+    ``profile_ref``/``pack_ref`` (see :class:`RuntimeHolder`).
+
+    Returns the (possibly unchanged) current :class:`RegionRuntime` for
+    ``slug``, or ``None`` if none has ever been built and the store has
+    no active profile either (nothing to run yet).
+    """
+    await store.refresh(opensearch)
+    want: tuple[AxisRef, AxisRef] = (store.current.active_profile, store.current.active_pack)
+    last = holder.get_synced_refs(slug)
+    if last is not None and want == last:
+        return holder.get(slug)
+
+    profile_ref, pack_ref = want
+    new_profile = get_active_profile()
+    if new_profile is None:
+        logger.warning('region_profile_deactivated_mid_run', project=slug)
+        holder.set_synced_refs(slug, want)
+        return holder.get(slug)
+
+    new_pack = get_active_pack()
+    _, profile_revision = _axis_name_and_revision(profile_ref)
+    _, pack_revision = _axis_name_and_revision(pack_ref)
+    new_runtime = await quiesce_and_swap(
+        queues=queues,
+        holder=holder,
+        slug=slug,
+        pool=pool,
+        profile=new_profile,
+        pack=new_pack,
+        args=args,
+        region_detector_cls=region_detector_cls,
+        ocr_recognizer_cls=ocr_recognizer_cls,
+        segmenter_cls=segmenter_cls,
+        vlm_cls=vlm_cls,
+        profile_revision=profile_revision,
+        pack_revision=pack_revision,
+    )
+    holder.set_synced_refs(slug, want)
+    store.pin_active()
     return new_runtime
 
 
