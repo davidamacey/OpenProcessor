@@ -397,7 +397,11 @@ class TestVlmLabelBatchHumanGuard:
         monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: fake_labeler)
 
         fake_reg = MagicMock()
-        fake_reg.load = MagicMock(return_value=MagicMock(classes=[]))
+        # One class, so the route gets past its no-classes refusal and the
+        # human-owned guard is what keeps the crop from the VLM.
+        fake_reg.load = MagicMock(
+            return_value=MagicMock(classes=[MagicMock(class_name='widget', deprecated=False)])
+        )
         monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: fake_reg)
 
         fake_os = AsyncMock()
