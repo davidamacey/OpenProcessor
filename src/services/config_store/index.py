@@ -105,6 +105,13 @@ async def _next_revision(
     revision id is never reused)."""
     if current_revision:
         return current_revision + 1
+    # B5 sibling exposure: a delete-then-recreate of the same name
+    # within the ~1s NRT window could otherwise reuse a revision id --
+    # force the index current before searching for past revisions.
+    try:
+        await client.indices.refresh(index=index)
+    except Exception as exc:  # pragma: no cover - defensive; search below still runs
+        logger.warning('config_store_index_refresh_failed', index=index, error=str(exc))
     resp = await client.search(
         index=index,
         body={

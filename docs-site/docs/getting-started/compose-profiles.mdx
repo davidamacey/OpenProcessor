@@ -1,0 +1,56 @@
+---
+sidebar_position: 4
+title: Compose profiles
+---
+
+# Compose profiles
+
+`docker-compose.yml` defines every service. Only the three core services
+have no profile, so a plain `docker compose up -d` (or `make up`) starts
+exactly Triton, the API and OpenSearch. Everything else is opt-in.
+
+| Profile | Services | Needs a GPU | Start with |
+|---|---|---|---|
+| *(none)* | `triton-server`, `yolo-api`, `opensearch` | Triton, and the API for torch fallbacks | `docker compose up -d` / `make up` |
+| `curation` | `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-cluster-refresh`, `curation-evaluator` | only the evaluator | `docker compose --profile curation up -d` / `make curation-up` |
+| `segmenter` | `segmenter` (SAM 3 behind the generic segment protocol) | yes, plus `HF_TOKEN` for the gated weights | `docker compose --profile curation --profile segmenter up -d` |
+| `vlm` | `vlm` (vLLM, OpenAI-compatible) | yes | `docker compose --profile vlm up -d` |
+| `training` | `curation-trainer`, `curation-mlflow` | the trainer | `docker compose --profile training up -d` |
+| `monitoring` | `prometheus`, `grafana`, `loki`, `alloy`, `node-exporter`, `dcgm-exporter`, `opensearch-dashboards` | no (DCGM reads all GPUs) | `docker compose --profile monitoring up -d` / `make up-monitoring` |
+| `benchmark` | `triton-sdk` (Triton client SDK image, idles for `perf_analyzer`) | no | `docker compose --profile benchmark up -d triton-sdk` |
+
+Notes:
+
+- **Profiles combine.** A full curation stack with segmenter and an
+  in-compose VLM is
+  `docker compose --profile curation --profile segmenter --profile vlm up -d`.
+- **The curation workers do not need a GPU or even a configured model to
+  start.** They idle, or fail per call, until you configure a real
+  detector/VLM endpoint.
+- **`curation-evaluator` is a long-lived watcher**, not a one-shot job.
+  Start it with `up -d`; `docker compose run --rm curation-evaluator`
+  just blocks your shell.
+- **Training is its own profile on purpose**: a run holds a GPU for hours,
+  so starting the trainer should be an explicit act.
+- **Monitoring is opt-in on shared hosts**: `alloy` mounts the Docker
+  socket to tail every container, and `dcgm-exporter` reserves all GPUs.
+  Grafana ships with `admin/admin`; change it before exposing it anywhere.
+- **Docker socket for the GPU arbiter** is a separate overlay file,
+  `docker-compose.gpu-arbiter.yml`, not a profile. It lets training jobs
+  stop and restart named sibling containers around a run, at the cost of
+  giving `yolo-api` root-equivalent control of the Docker host. See
+  [Security](../deployment/security.mdx).
+
+## Wiring a frontend to the stack
+
+The compose project creates one network,
+`${COMPOSE_PROJECT_NAME:-openprocessor}_triton_net`. `yolo-api` carries
+the network alias `op-api`, so a frontend on that network reaches the API
+at `http://op-api:8000` (or `http://yolo-api:8000`). For Cropwright:
+
+| Cropwright variable | Value |
+|---|---|
+| `API_UPSTREAM` | `http://op-api:8000` |
+| `PUBLIC_API_PREFIX` | `/curation` (must equal `OP_API_PREFIX`) |
+| `PUBLIC_TRITON_API_URL` | leave empty in Docker; the frontend never talks to Triton directly |
+| Docker network | join `<project>_triton_net` as an `external: true` network |

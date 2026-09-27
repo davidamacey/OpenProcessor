@@ -8,59 +8,124 @@ Object detection, face recognition, visual search, OCR, and embeddings - all thr
 
 ## Quick Start
 
-### Copy & Run (One Line)
+### One-line install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setup-openprocessor.sh | bash
+```
+
+This installs the latest published release into `./openprocessor/`: no git
+clone, no local image build, no host Python. The script you pipe in only
+resolves the release, downloads that release's own `setup-openprocessor.sh`
+and `SHA256SUMS`, checks the checksum, and runs the verified copy. Images are
+pinned by digest (`images.lock`) and checked after the pull. It asks which
+tiers you want, picks GPUs, exports the TensorRT engines inside the
+containers, starts everything and runs a health check.
+
+**Needs:** Linux, Docker with Compose v2, an NVIDIA GPU with the NVIDIA
+Container Toolkit, and disk for the tiers you pick (about 60 GB for `core`,
+about 135 GB for everything). First install takes 30-60 minutes, mostly image
+pulls and TensorRT export.
+
+### Tiers
+
+| Tier | What you get | Extra images | Needs |
+|---|---|---|---|
+| `core` | Triton, the API (port 4603), OpenSearch | ~53 GB | ~16 GB VRAM (`--profile minimal` for 6-8 GB cards) |
+| `curation` | curation workers, PE-Core embeddings, evaluator | + ~15 GB | + ~2 GB VRAM; implies `core` |
+| `segmenter` | SAM 3 segmenter | + ~7 GB | 2-8 GB VRAM; a HuggingFace token with SAM 3 access (gated); implies `curation` |
+| `vlm` | local vLLM serving a model from the VLM catalog | + ~19 GB | ~23 GB VRAM for the default; implies `curation` |
+| `trainer` | training service + MLflow | + ~9 GB | >= 16 GB free VRAM while training; implies `curation` |
+| `cropwright` | the Cropwright web UI (separate compose project) | + ~65 MB | implies `curation` |
+
+Monitoring (Prometheus, Grafana, Loki) is not a tier: add `--with-monitoring`.
+Its dashboards are default-open, so it is off unless you ask.
+
+### Unattended install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setup-openprocessor.sh \
+  | bash -s -- --tiers core,curation,cropwright --unattended
+```
+
+`--unattended` never prompts: every choice comes from flags or their defaults,
+and a step that needs consent (a non-loopback `--bind`, an external VLM, a
+purge) fails unless its consent variable is set. Use `--all` for every tier,
+`--version vX.Y.Z` to pin a release, `--dry-run` to see every command without
+running any. All flags: [INSTALLATION.md](INSTALLATION.md#installer-flags).
+
+### Verify the download yourself
+
+```bash
+V=v0.3.0   # the release you want
+curl -fsSLO https://github.com/davidamacey/OpenProcessor/releases/download/$V/setup-openprocessor.sh
+curl -fsSLO https://github.com/davidamacey/OpenProcessor/releases/download/$V/SHA256SUMS
+grep ' setup-openprocessor.sh$' SHA256SUMS | sha256sum -c -
+bash setup-openprocessor.sh --version "$V"
+```
+
+`SHA256SUMS` comes from the same place as the files it covers. It proves
+**integrity** (the download is complete and uncorrupted), **not authenticity**:
+anyone who could replace the release files could replace `SHA256SUMS` too. The
+same holds for `images.lock` and `cropwright.lock` (they pin exact digests
+and are covered by `SHA256SUMS`). Signed releases are follow-up work.
+
+### Network access: Cropwright on your LAN
+
+**Cropwright is reachable on your LAN by default, for homelab or
+small-business use. The API itself stays bound to 127.0.0.1. There is no login
+on Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
+everything on 127.0.0.1.**
+
+Do not port-forward Cropwright (or any OpenProcessor port) to the public
+internet. If you need access beyond a trusted network, put a reverse proxy
+with authentication in front. `--bind <ip>` publishes the API ports on that
+address instead (with a warning and a typed confirmation), and a specific
+address also narrows Cropwright to that interface. See
+[SECURITY.md](SECURITY.md).
+
+### After the install
+
+```bash
+cd openprocessor
+./openprocessor status            # services and health
+./openprocessor logs yolo-api -f  # live logs
+./openprocessor sample coco       # fetch a public COCO sample (200 images)
+./openprocessor upgrade           # to the latest release (backs up first)
+./setup-openprocessor.sh --repair | --rollback | --uninstall
+```
+
+```bash
+curl http://127.0.0.1:4603/health
+curl -X POST http://127.0.0.1:4603/detect -F "image=@your-image.jpg"
+```
+
+The installer sizes the OpenSearch heap from your RAM (RAM/8, 1-8 GB) and
+prints it in the summary; see
+[INSTALLATION.md](INSTALLATION.md#opensearch-heap-sizing).
+
+### Install from source
+
+For development, or to build the images yourself:
 
 ```bash
 git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor && ./scripts/setup.sh
 ```
 
-That's it! The setup script automatically:
-- Pulls pre-built Docker images from Docker Hub (~15GB)
-- Detects your GPU and selects the optimal profile
-- Downloads required models (~500MB, ~16 seconds)
-- Exports models to TensorRT (~30-60 min first time, one-time only)
-- Starts all services and runs smoke tests
-
-**First-time setup takes ~30-60 minutes** (mostly TensorRT compilation). Subsequent starts take seconds.
-
-### Non-Interactive Setup
-
-```bash
-# Clone and setup with defaults (no prompts)
-git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor && ./scripts/setup.sh --yes
-
-# Or specify a profile explicitly
-./scripts/setup.sh --profile=standard --gpu=0 --yes
-```
-
-### Verify Installation
-
-```bash
-curl http://localhost:4603/health
-# {"status":"ready","version":"0.3.0",...}
-
-# Quick test with an image
-curl -X POST http://localhost:4603/detect -F "image=@your-image.jpg"
-```
-
-### Management Commands
-
-```bash
-./scripts/openprocessor.sh status    # Check service health
-./scripts/openprocessor.sh logs -f   # View live logs
-./scripts/openprocessor.sh restart   # Restart all services
-./scripts/openprocessor.sh help      # See all commands
-```
-
-See [INSTALLATION.md](INSTALLATION.md) for manual installation, troubleshooting, and advanced options.
+`scripts/setup.sh` detects your GPU, picks a profile, downloads the models,
+exports them to TensorRT and starts the services. Add `--yes` for no prompts,
+or `--profile=standard --gpu=0 --yes` to choose explicitly. Manage a checkout
+with `./scripts/openprocessor.sh status|logs|restart|help`. See
+[INSTALLATION.md](INSTALLATION.md#install-from-source) for manual steps.
 
 ## Docker Hub
 
-Pre-built images are available on Docker Hub (pulled automatically by setup):
+Images are published on Docker Hub under versioned tags. The installer never
+uses `:latest`; it runs the digests in the release's `images.lock`:
 
 ```bash
-docker pull davidamacey/openprocessor:latest        # FastAPI service (~14GB)
-docker pull davidamacey/openprocessor-triton:latest  # Triton server (~18GB)
+docker pull davidamacey/openprocessor:0.3.0         # FastAPI service
+docker pull davidamacey/openprocessor-triton:0.3.0  # Triton server
 ```
 
 ---

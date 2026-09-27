@@ -181,6 +181,14 @@ class _ItemTask:
     # happens to be processing. The producer always stamps it; a task
     # without one is a bug and :func:`bind_task_project` refuses it.
     project: Any = None
+    # Minor 5 (W2 review, 2026-09-27): True once a VLM call actually ran
+    # for this task this pass (visibility gate, combined class+region, or
+    # verify -- see cascade.py/combined.py/verify.py's call sites). The
+    # bulk writer only stamps ``vlm_prompt_pack`` on a write when this is
+    # True, so a deployment with no VLM configured (or a write path that
+    # skipped the VLM, e.g. the high-confidence segmenter auto-skip) never
+    # gets a stamp implying a VLM ran.
+    vlm_called: bool = False
 
 
 def bind_task_project(task: _ItemTask) -> None:

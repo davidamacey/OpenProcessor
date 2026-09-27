@@ -61,6 +61,7 @@ from opensearchpy import AsyncOpenSearch
 from opensearchpy.exceptions import NotFoundError
 
 from curation.query_fakes import _aggregate, matches
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 API = '/curation'
@@ -172,7 +173,11 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         },
         ('POST', '/scores/compute'): {'json': {}},
         ('POST', '/select/diverse'): {'json': {'k': 1}},
-        ('PUT', '/settings'): {'json': {'defaults': {}}},
+        # minor 7 (W2 review): a config-store axis in the body, not just
+        # an empty `defaults`, so the sweep actually exercises the
+        # config-store write path (`activate` + `bump_config_revision`'s
+        # painless script) instead of only the generic settings-doc merge.
+        ('PUT', '/settings'): {'json': {'defaults': {'prompt_pack': GENERIC_ITEM_PACK.name}}},
         ('POST', '/train/preflight'): {'json': {}},
         # force: the preflight's class-balance/disk gates are not what
         # this test is about; the job files written are.
@@ -263,6 +268,12 @@ UNBOUND_BY_DESIGN: frozenset[tuple[str, str]] = frozenset(
         ('POST', '/archive'),
         ('POST', '/unarchive'),
         ('POST', '/clone_settings'),
+        # BA-P2-5: pause/resume publish project.paused/project.resumed on
+        # the *global* stream (project: null, target: slug) so every open
+        # Cropwright tab learns about it, same rationale as the other
+        # project.* lifecycle events above.
+        ('POST', '/pause'),
+        ('POST', '/resume'),
     }
 )
 
@@ -730,7 +741,21 @@ class _FakeTransport:
             if method == 'DELETE':
                 self._write(indices[0], doc_id, None, merge=False)
             elif action == '_update':
-                self._write(indices[0], doc_id, payload.get('doc') or {}, merge=True)
+                # minor 7 (W2 review): `bump_config_revision`'s painless
+                # script + upsert body needs real semantics here, not the
+                # generic doc-merge below -- mirrors
+                # tests/curation/_fake_config_opensearch.py's
+                # FakeConfigOpenSearch.update().
+                current = self.store.get(indices[0], {}).get(doc_id)
+                script_source = (payload.get('script') or {}).get('source', '')
+                if current is None and 'config_revision' in script_source:
+                    self._write(indices[0], doc_id, dict(payload.get('upsert') or {}), merge=False)
+                elif current is not None and 'config_revision += 1' in script_source:
+                    bumped = dict(current)
+                    bumped['config_revision'] = int(bumped.get('config_revision', 0)) + 1
+                    self._write(indices[0], doc_id, bumped, merge=False)
+                else:
+                    self._write(indices[0], doc_id, payload.get('doc') or {}, merge=True)
             else:
                 self._write(indices[0], doc_id, payload, merge=False)
             return {'_id': doc_id, 'result': 'updated', '_seq_no': 2, '_primary_term': 1}
@@ -1039,9 +1064,28 @@ def leak_env(
     registry._revision = 1
 
     async def _fresh(self: Any) -> None:
-        return None
+        """A real (if simplified) refresh instead of a hard no-op: syncs
+        ``_by_slug`` from the seeded ``op_projects`` store so a project
+        created mid-sweep (e.g. B2's create-then-write-own-indexes path)
+        is visible to the guard on its very next check, the way a real
+        ``ensure_fresh`` would pick it up after B2's ``refresh='wait_for'``.
+        Frozen otherwise: no revision-counter churn, so the sweep's own
+        three seeded projects never move under it."""
+        from src.services.projects.registry import doc_to_record
+
+        docs = fake.store.get(registry_mod.projects_index(), {})
+        for doc_id, doc in docs.items():
+            if doc_id.startswith('project:'):
+                self._by_slug[doc['slug']] = doc_to_record(doc)
 
     monkeypatch.setattr(ProjectRegistry, 'ensure_fresh', _fresh)
+    # P3F item 3 (B2(a) residual): create_project now also calls
+    # refresh_strict() (raises instead of swallowing). This registry's
+    # client_factory is `lambda: None` -- fine for the patched
+    # ensure_fresh above (never touches it), but the real
+    # refresh_strict would call client.get(...) on that None and blow up
+    # with an AttributeError. Give it the same sync-from-store behavior.
+    monkeypatch.setattr(ProjectRegistry, 'refresh_strict', _fresh)
     registry_mod.set_project_registry(registry)
 
     accesses: list[tuple[str | None, str, str, str]] = []
@@ -1278,7 +1322,7 @@ def _sweep(
         leaks.extend(
             f'{tag}: event {event.get("type")} went to project {event.get("project")!r}'
             for event in route_events
-            if event.get('project') != slug
+            if event.get('project') != slug and key not in UNBOUND_BY_DESIGN
         )
 
         body = response.text
@@ -1365,7 +1409,8 @@ def test_every_scoped_route_stays_inside_the_bound_project(
 def test_lifecycle_mutations_really_write_the_seeded_registry(leak_env: LeakEnv) -> None:
     """M6: with op_projects seeded, PATCH/archive/unarchive/clone_settings
     reach a real write behind the real guard (previously 404
-    project_not_found -- the gap B1 slipped through)."""
+    project_not_found -- the gap B1 slipped through). M5: each also
+    publishes its project.* event on the global stream."""
     client = TestClient(leak_env.app, raise_server_exceptions=False)
 
     record = client.get(f'{SCOPED.format(project="beta")}').json()
@@ -1389,6 +1434,11 @@ def test_lifecycle_mutations_really_write_the_seeded_registry(leak_env: LeakEnv)
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()['project']['status'] == 'active'
+
+    published = [(e.get('type'), e.get('target'), e.get('project')) for e in leak_env.events]
+    assert ('project.updated', 'beta', None) in published
+    assert ('project.archived', 'beta', None) in published
+    assert ('project.unarchived', 'beta', None) in published
 
 
 def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakEnv) -> None:
@@ -1444,6 +1494,14 @@ def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakE
         )
         == before_alpha_docs
     )
+    # M5: create publishes its event synchronously in the request; the
+    # delete route's completion event (project.deleted) is published by
+    # its own fire-and-forget _finish() task, not by
+    # lifecycle.delete_project_finish directly (called above to avoid
+    # TestClient's portal cancelling the real background task) -- so it
+    # is not expected here. See test_delete_finish_publishes_project_deleted.
+    published = [(e.get('type'), e.get('target')) for e in leak_env.events]
+    assert ('project.created', 'gamma') in published
 
 
 def test_a_misrouted_mget_is_refused_before_it_reaches_opensearch(

@@ -54,12 +54,19 @@ def test_patch_and_archive_write_the_registry(leak_env: LeakEnv) -> None:
 
 
 def _mark_archived(leak_env: LeakEnv, slug: str) -> None:
+    """Archives ``slug`` in both the in-memory registry AND the seeded
+    ``op_projects`` store -- leak_env's ``ensure_fresh`` now does a real
+    (if simplified) re-sync from the store on every bind (B2), so a
+    registry-only mutation would be clobbered on the request's own
+    ``_resolve_and_bind`` call."""
     from dataclasses import replace
 
-    from src.services.projects.registry import get_project_registry
+    from src.services.projects.registry import get_project_registry, projects_index, record_to_doc
 
     registry = get_project_registry()
-    registry._by_slug[slug] = replace(registry._by_slug[slug], status='archived')
+    archived = replace(registry._by_slug[slug], status='archived')
+    registry._by_slug[slug] = archived
+    leak_env.transport.store[projects_index()][f'project:{slug}'] = record_to_doc(archived)
 
 
 def test_archive_then_write_is_read_only_and_unarchive_restores(leak_env: LeakEnv) -> None:

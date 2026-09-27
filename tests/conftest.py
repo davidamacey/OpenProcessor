@@ -187,6 +187,9 @@ _PROCESS_CACHES = (
     # slug in a module-level dict -- every test binds the same ``default``
     # project, so a store one test mutates would leak into the next.
     ('src.services.config_store.store', '_STORES'),
+    # The global (non-project-scoped) config store singleton (M3) -- its
+    # own cache dict, never conflated with `_STORES` above.
+    ('src.services.config_store.store', '_GLOBAL_STORE'),
     ('src.services.training.preflight_scan', '_scan_cache'),
 )
 

@@ -115,6 +115,10 @@ services:
       # verify_prj_default__<role>.
       - OP_PROJECT_INDEX_PREFIX=verify_prj_
       - OP_PROJECTS_INDEX=verify_projects
+      # MJ2 (W2-finish review): op_global_configs (M3) is unprefixed by
+      # default and would otherwise trip tests/live/conftest.py's
+      # verify_-prefix safety guard.
+      - OP_GLOBAL_CONFIGS_INDEX=verify_global_configs
       # Writable, host-visible filesystem roots.
       - OP_PROJECTS_DATA_ROOT=/verify-data/projects
       - OP_SOURCE_ROOT=/verify-data/images

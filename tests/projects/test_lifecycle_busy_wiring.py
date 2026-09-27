@@ -41,6 +41,10 @@ def test_running_jobs_delegates_to_busy_module() -> None:
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
+        # P3F item 3 (B2(a) residual): create_project's registry
+        # refresh_strict() needs a real, reachable registry bound during
+        # the create itself -- set it before create_project runs.
+        set_project_registry(ProjectRegistry(lambda: client))
         await seed_default_project(client)
         record, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
 
@@ -70,9 +74,9 @@ def test_archive_busy_409_carries_typed_job_refs(monkeypatch) -> None:
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
+        set_project_registry(ProjectRegistry(lambda: client))
         await seed_default_project(client)
         record, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
-        set_project_registry(ProjectRegistry(lambda: client))
 
         monkeypatch.setattr(
             busy,
@@ -91,9 +95,35 @@ def test_archive_busy_409_carries_typed_job_refs(monkeypatch) -> None:
                 'kind_label': 'Bake-off',
                 'id': 'run-42',
                 'label': 'run-42',
-                'started_at': '',
+                'started_at': None,
             }
         ]
+
+    asyncio.run(_run())
+
+
+def test_running_jobs_uses_the_real_label_when_the_source_provides_one(monkeypatch) -> None:
+    """P3F pass-3 m-b: lifecycle.running_jobs must use busy.JobRef.label
+    when the source set a real one, falling back to job_id ONLY when it
+    didn't (test_delete_busy_409_carries_typed_job_refs below covers the
+    fallback case with no label set)."""
+    from src.services.projects import busy
+
+    async def _run() -> None:
+        client = FakeLifecycleOpenSearch()
+        set_project_registry(ProjectRegistry(lambda: client))
+        await seed_default_project(client)
+        record, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
+
+        monkeypatch.setattr(
+            busy,
+            'running_jobs',
+            lambda _rec: [busy.JobRef(kind='train', job_id='run-7', label='Nightly YOLO run')],
+        )
+
+        jobs = await lifecycle.running_jobs(record)
+        assert jobs[0].id == 'run-7'
+        assert jobs[0].label == 'Nightly YOLO run'
 
     asyncio.run(_run())
 
@@ -103,10 +133,10 @@ def test_delete_busy_409_carries_typed_job_refs(monkeypatch) -> None:
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
+        set_project_registry(ProjectRegistry(lambda: client))
         await seed_default_project(client)
         _record, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
-        set_project_registry(ProjectRegistry(lambda: client))
 
         monkeypatch.setattr(
             busy,
@@ -125,7 +155,7 @@ def test_delete_busy_409_carries_typed_job_refs(monkeypatch) -> None:
                 'kind_label': 'Training run',
                 'id': 'run-7',
                 'label': 'run-7',
-                'started_at': '',
+                'started_at': None,
             }
         ]
 

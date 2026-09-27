@@ -5,7 +5,6 @@
   "max_batch_size": 16,
   "preferred_batch_sizes": [4, 8, 16],
   "shm_size": "4g",
-  "opensearch_heap": "1g",
   "workers": 8,
   "models": [
     "yolov11_small_trt_end2end",

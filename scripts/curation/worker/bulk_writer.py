@@ -191,21 +191,28 @@ async def _bulk_update_one_project(
                 current.get(F.detector_chain), new_entries
             )
         # Config-store provenance (W2 sec 4.5): every worker region write
-        # stamps the profile/pack that produced it. Read once per bulk
-        # call (all `eligible` tasks share one bound project), not per
-        # task -- by the time this runs, the producer's quiesce-and-swap
-        # has already drained every in-flight item onto the *old*
-        # runtime's queues, so the store's current active refs always
-        # match whatever pass actually processed this batch. Only stamp
-        # when something is actually being written -- an update that
-        # stripped down to empty (a documented noop, e.g. a stale/locked
+        # stamps the profile that produced it. Read once per bulk call
+        # (all `eligible` tasks share one bound project), not per task --
+        # by the time this runs, the producer's quiesce-and-swap has
+        # already drained every in-flight item onto the *old* runtime's
+        # queues, so the store's current active refs always match
+        # whatever pass actually processed this batch. Only stamp when
+        # something is actually being written -- an update that stripped
+        # down to empty (a documented noop, e.g. a stale/locked
         # class-only write) must stay empty, never turn into a real
         # write just because of the stamp.
         if update:
             if profile_name is not None:
                 update[F.profile] = profile_name
                 update[F.profile_revision] = profile_revision
-            if pack_stamp is not None:
+            # Minor 5 (W2 review): `vlm_prompt_pack` is a per-TASK stamp,
+            # not a per-batch one -- a batch's pack may be configured and
+            # resolvable even when this particular task's write never
+            # actually involved a VLM call (no VLM configured at all, or a
+            # write path that skipped it, e.g. the high-confidence
+            # secondary-segmenter auto-skip). Stamping unconditionally
+            # would claim a VLM ran when it didn't.
+            if pack_stamp is not None and task.vlm_called:
                 update['vlm_prompt_pack'] = pack_stamp
         return update
 

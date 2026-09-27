@@ -19,7 +19,7 @@ from src.routers.curation._project_models import (
 )
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
-from .conftest import FakeLifecycleOpenSearch
+from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +40,10 @@ def _env(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _noop_ensure_indexes():
-    with patch('src.routers.curation._common._ensure_indexes', new=AsyncMock()):
+    with patch(
+        'src.routers.curation._common._ensure_indexes',
+        new=AsyncMock(side_effect=fake_ensure_indexes),
+    ):
         yield
 
 
@@ -111,3 +114,103 @@ def test_archive_unarchive_route_envelope() -> None:
         )
     )
     assert unarchived.project.status == 'active'
+
+
+@pytest.fixture
+def events(monkeypatch):
+    """Captures every event published through the real EventHub for this
+    test, global and scoped alike."""
+    from src.services.curation import event_hub
+
+    monkeypatch.setenv('OP_EVENT_BUS', 'process')
+    monkeypatch.setattr(event_hub, '_HUB', None)
+    hub = event_hub.get_event_hub()
+    captured: list[dict] = []
+    real_dispatch = hub._dispatch
+
+    def _recording_dispatch(event):
+        captured.append(dict(event))
+        real_dispatch(event)
+
+    monkeypatch.setattr(hub, '_dispatch', _recording_dispatch)
+    return captured
+
+
+def test_create_publishes_project_created(events) -> None:
+    created = asyncio.run(
+        projects_router.create_project(CreateProjectRequest(slug='cars', display_name='Cars'))
+    )
+    assert created.project.status == 'active'
+    matches = [e for e in events if e['type'] == 'project.created']
+    assert len(matches) == 1
+    assert matches[0]['target'] == 'cars'
+    assert matches[0]['project'] is None  # global stream, never scoped
+    assert matches[0]['status'] == 'active'
+
+
+def test_patch_archive_unarchive_publish_their_events(events) -> None:
+    created = asyncio.run(
+        projects_router.create_project(CreateProjectRequest(slug='cars', display_name='Cars'))
+    )
+    asyncio.run(
+        projects_router.create_project(CreateProjectRequest(slug='keep-active', display_name='x'))
+    )
+    patched = asyncio.run(
+        projects_router.patch_project(
+            'cars',
+            PatchProjectRequest(display_name='Cars 2', expected_revision=created.project.revision),
+        )
+    )
+    archived = asyncio.run(
+        projects_router.archive_project(
+            'cars', ArchiveRequest(expected_revision=patched.project.revision)
+        )
+    )
+    asyncio.run(
+        projects_router.unarchive_project(
+            'cars', ArchiveRequest(expected_revision=archived.project.revision)
+        )
+    )
+
+    types = [e['type'] for e in events]
+    assert types == [
+        'project.created',
+        'project.created',
+        'project.updated',
+        'project.archived',
+        'project.unarchived',
+    ]
+
+
+def test_delete_finish_publishes_project_deleted(events) -> None:
+    """M5 step 9 + m11: drives the real route function (not a stand-in
+    for its background task) and awaits the exact task object it
+    registers in ``_BACKGROUND_DELETE_TASKS``, proving both that the
+    task is kept alive (m11) and that it publishes on completion."""
+    from fastapi import Response
+
+    from src.services.projects.registry import get_project_registry
+
+    asyncio.run(
+        projects_router.create_project(CreateProjectRequest(slug='cars', display_name='Cars'))
+    )
+    asyncio.run(
+        projects_router.create_project(CreateProjectRequest(slug='keep-active', display_name='x'))
+    )
+    asyncio.run(get_project_registry().ensure_fresh())
+
+    async def _delete_flow():
+        await projects_router.delete_project('cars', Response(), confirm='cars')
+        # P3F pass-3 MA1: _BACKGROUND_DELETE_TASKS is now keyed by slug
+        # (not a bare set) so a re-DELETE never double-schedules a
+        # finish for the same slug -- fetch the exact task the route
+        # registered for 'cars'.
+        task = projects_router._BACKGROUND_DELETE_TASKS['cars']
+        await task
+
+    asyncio.run(_delete_flow())
+
+    matches = [e for e in events if e['type'] == 'project.deleted']
+    assert len(matches) == 1
+    assert matches[0]['target'] == 'cars'
+    assert matches[0]['status'] == 'deleted'

@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.ingest_class_sources import (
@@ -39,10 +39,7 @@ from src.services.detection.cascade_detect import (
     is_plausible_region_bbox,
 )
 from src.services.detection.profile_registry import get_active_region_profile
-from src.services.detection.region_text import validate_text_reader
-from src.services.detection.region_text_rules import region_text_rules
 from src.services.labeling.vlm_labeler import CombinedCrop, RegionCrop
-from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
 
 logger = get_logger('curation_worker')
@@ -80,13 +77,13 @@ from scripts.curation.worker.state import (
     _PENDING_DETECTION_ALIASES,
     _PENDING_VERIFICATION_ALIASES,
     _TERMINAL_STATUSES,
+    RegionProfileNotConfiguredError,
     _crop_jpeg_for_task,
     _is_secondary_shape,
     _ItemTask,
     _wait_for_sentinel_clear,
     bind_task_project,
     bound_class_catalog,
-    region_profile,
     unreadable_crop_update,
 )
 from scripts.curation.worker.verify import (
@@ -220,23 +217,6 @@ async def run(args: argparse.Namespace) -> int:
     # (and friends) still intercept calls made from this split-out runner.
     from scripts.curation import region_worker_main as _wkr
 
-    # Neutral default: with no region profile configured there is no
-    # region cascade to run. Idle (continuous/daemon mode, so the container
-    # stays healthy instead of restart-looping) or exit 0 (one-shot mode)
-    # without touching Triton/OpenSearch/the segmenter.
-    profile = get_active_region_profile()
-    if profile is None:
-        logger.warning(
-            'region_profile_not_configured',
-            detail=(
-                'region detection is disabled; set OP_REGION_PROFILE or '
-                'OP_REGION_DETECTION_* to enable it'
-            ),
-        )
-        if args.continuous:
-            await stop_event.wait()
-        return 0
-
     pool = _wkr.AsyncTritonPool(url=args.triton, pool_size=args.pool_size, max_concurrent=64)
     await pool.initialize()
 
@@ -269,118 +249,10 @@ async def run(args: argparse.Namespace) -> int:
                 detail='region_embedding will not be written this run',
             )
 
-    detector = RegionDetector(pool, profile)
-    # text-hinted re-pass: when the primary detector + secondary
-    # segmenter both globally miss but the VLM confirmed the crop has a
-    # region of interest, run the OCR pipeline (det + rec) on the whole
-    # crop, pick the region-shaped text region, then re-prompt the
-    # segmenter with a tight sub-crop around it. The segmenter produces
-    # the final geometry — the OCR-detection bbox is never trusted as a
-    # region bbox source (it's too loose; produced visibly-oversized
-    # regions).
-    ocr_recognizer = PaddleOcrTextRecognizer(pool, profile)
-    # The segmenter leg is optional. An empty ``--segmenter-url``/``OP_SEGMENTER_URL``
-    # constructs a disabled SegmenterClient — segment() then always
-    # returns None (the same "no candidate" result callers already
-    # handle) without attempting any HTTP call. A deployment with no
-    # segmentation service of its own leaves this unset.
-    # The segmenter is prompt-driven; the prompt is region-type config
-    # (OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT). A segmenter URL with no prompt
-    # would be rejected by the service on every call, so disable the leg.
-    segmenter_url = args.segmenter_url
-    if segmenter_url and not profile.segmenter_text_prompt:
-        logger.warning(
-            'segmenter_disabled_no_text_prompt',
-            profile=profile.name,
-            detail='set OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT to use the segmenter leg',
-        )
-        segmenter_url = ''
-    segmenter = _wkr.SegmenterClient(
-        segmenter_url,
-        text_prompt=profile.segmenter_text_prompt,
-        source_name=profile.segmenter_name,
-    )
-    # OCR text-hint re-pass after a segmenter miss (profile-optional).
-    text_hint_on = profile.text_hint_active(segmenter_enabled=bool(segmenter.enabled))
-    # The deployment's prompt pack (OP_PROMPT_PACK_PATH) tells the VLM what
-    # the region IS and that ``region_text`` is its transcribed text. The
-    # built-in generic pack describes an unspecified "labeled sub-region",
-    # so on any other domain the VLM verified whatever box it was shown and
-    # filled region_text with a description of it ("a red taillight") or
-    # the item's class name.
-    pack = resolve_prompt_pack()
-    logger.info('vlm_prompt_pack_resolved', pack=pack.name)
-    # Which readings count as region text at all: the profile's rules plus
-    # the pack's quoted example values, which a VLM echoes when it can't
-    # read the text.
-    text_rules = region_text_rules(profile, pack)
-    # No VLM URL at all (OP_VLM_URL unset) = a deployment without an image
-    # LLM: no visibility filter, no verify call; detector regions are
-    # accepted unverified and their text is read by OCR
-    # (region_text_stage.accept_without_vlm).
-    vlm_available = bool((args.vlm_url or '').strip())
-    validate_text_reader(profile.text_reader)
-    item_text_enabled = get_curation_config().item_text_enabled and bool(profile.ocr_pipeline_model)
-    item_text_min_conf = get_curation_config().item_text_min_confidence
-    logger.info(
-        'region_text_reader_configured',
-        vlm_available=vlm_available,
-        text_reader=profile.text_reader,
-        item_text_enabled=item_text_enabled,
-    )
-    vlm = _wkr.VlmLabeler(base_url=args.vlm_url, pack=pack) if vlm_available else None
     # The VLM class catalog (prompt class list + name -> registry id) is
     # per project: every classifying call reads bound_class_catalog()
     # under the item's own binding, never a process-wide list.
     opensearch = _wkr.make_script_opensearch([args.opensearch])
-
-    # W2 sec 4.5: this build's (profile, pack) pairing, tracked so the
-    # producer loop can detect a later activation and hot-swap without a
-    # restart. `_worker_slug` is whatever project this process's config
-    # resolves against today (the ``--project`` binding, or the
-    # unbound/default view when none was given) -- the *same* project
-    # every `region_profile()`/`resolve_prompt_pack()` call above already
-    # resolved through.
-    from scripts.curation.worker.runtime import RegionRuntime, RuntimeHolder
-
-    _worker_slug = 'default'
-    with contextlib.suppress(Exception):
-        from src.config.project_context import try_current_project
-
-        _bound = try_current_project()
-        if _bound is not None:
-            _worker_slug = _bound.record.slug
-    runtime_holder = RuntimeHolder()
-    runtime_holder.set(
-        _worker_slug,
-        RegionRuntime(
-            profile=profile,
-            profile_ref=(profile.name, None),
-            pack=pack,
-            pack_ref=(pack.name, None),
-            detector=detector,
-            segmenter=segmenter,
-            ocr_recognizer=ocr_recognizer,
-            text_rules=text_rules,
-            vlm=vlm,
-            item_text_enabled=item_text_enabled,
-        ),
-    )
-    # Baseline the swap check against whatever the store shows *right
-    # now* -- this build came from the env/file default, not from an
-    # activation, so the first producer cycle must not see that as a
-    # "change" (config_wants_swap compares AxisRef shapes, never the
-    # runtime's own always-populated profile_ref/pack_ref).
-    _worker_store = None
-    with contextlib.suppress(Exception):
-        from src.services.config_store.store import get_config_store as _get_config_store
-
-        _worker_store = _get_config_store(mode='pinned')
-        await _worker_store.refresh(opensearch)
-        runtime_holder.set_synced_refs(
-            _worker_slug,
-            (_worker_store.current.active_profile, _worker_store.current.active_pack),
-        )
 
     started_at = time.monotonic()
     sentinel = Path(args.pause_sentinel)
@@ -408,6 +280,102 @@ async def run(args: argparse.Namespace) -> int:
 
     project_registry = _WorkerProjects()
     fairness_scheduler = FairnessScheduler()
+
+    # W2 sec 4.5, per-project (B1): one RegionRuntime per active project,
+    # each fed by its OWN pinned ConfigStore -- alpha activating a
+    # profile never touches beta's runtime because each slug's store
+    # and holder entry are independent (projects_plan.md sec 11 W2
+    # "runtimes[slug]"). The worker is multi-project by default (no
+    # ``--project``); ``project_registry.active_projects()`` (already
+    # narrowed to ``--project`` when given, via ``only_project``) is the
+    # single source of truth for which slugs to hold a runtime for --
+    # never the process's own (often unbound) context.
+    from scripts.curation.worker.runtime import RuntimeHolder, maybe_hot_reload
+    from src.config.project_context import bind_project
+    from src.services.config_store.store import get_config_store as _get_config_store
+    from src.services.labeling.vlm_prompts import active_prompt_pack as _active_prompt_pack
+
+    runtime_holder = RuntimeHolder()
+    # slug -> that project's pinned ConfigStore. Built the FIRST time
+    # each project is seen, strictly before anything else for that
+    # project resolves a store (B3: an accidental `mode='live'` store
+    # from some other, earlier, default-mode `get_config_store()` call
+    # would make the pinned design inert -- the store is created here,
+    # pinned, before this project's first item is ever fetched).
+    project_stores: dict[str, Any] = {}
+    # M1: `runtime:detection_worker:<host>` is written at startup, at
+    # every swap, and at least every 60s (any_domain_plan.md sec 4.5
+    # steps 2.6 / L803-805) -- throttled per project so N active
+    # projects don't turn into N writes every single poll cycle.
+    _runtime_doc_last_written: dict[str, float] = {}
+    _RUNTIME_DOC_INTERVAL_S = 60.0
+    import socket as _socket
+
+    _hostname = _socket.gethostname()
+
+    async def _sync_project_runtime(record: Any) -> None:
+        """One project's hot-reload check (sec 4.5 step 2), run once per
+        producer cycle for every active project. Binds ``record`` for
+        the duration of the store refresh/build so every config read
+        (``get_active_region_profile()``, ``active_prompt_pack()``,
+        ``get_curation_config()``) resolves THIS project's own config,
+        never whatever project happened to be bound before. Never
+        suppresses ``ProjectNotBound`` or any other exception silently
+        -- a failure here is logged and this project's existing runtime
+        (if any) simply keeps running unchanged until the next cycle.
+        """
+        try:
+            with bind_project(record):
+                store = project_stores.get(record.slug)
+                if store is None:
+                    store = _get_config_store(mode='pinned')
+                    project_stores[record.slug] = store
+                rt = await maybe_hot_reload(
+                    store=store,
+                    opensearch=opensearch,
+                    holder=runtime_holder,
+                    slug=record.slug,
+                    pool=pool,
+                    args=args,
+                    queues=[in_q, vlm_visible_q, sam_q, combined_q, out_q],
+                    get_active_profile=get_active_region_profile,
+                    get_active_pack=_active_prompt_pack,
+                    region_detector_cls=RegionDetector,
+                    ocr_recognizer_cls=PaddleOcrTextRecognizer,
+                    segmenter_cls=_wkr.SegmenterClient,
+                    vlm_cls=_wkr.VlmLabeler,
+                )
+                if rt is None:
+                    return
+                last = _runtime_doc_last_written.get(record.slug, 0.0)
+                if time.monotonic() - last < _RUNTIME_DOC_INTERVAL_S:
+                    return
+                from scripts.curation.worker.runtime import upsert_project_runtime_doc
+
+                await upsert_project_runtime_doc(
+                    opensearch,
+                    index=store.index,
+                    hostname=_hostname,
+                    project=record.slug,
+                    runtime=rt,
+                    config_revision=store.current.config_revision,
+                )
+                _runtime_doc_last_written[record.slug] = time.monotonic()
+        except Exception as exc:
+            logger.warning('project_runtime_sync_failed', project=record.slug, error=str(exc))
+
+    def _rt_for(t: _ItemTask) -> Any:
+        """The runtime this item's own project is currently on. Never a
+        process-wide default -- a project with no runtime yet (no
+        profile configured anywhere, or not synced this cycle) raises,
+        which every stage's existing `except Exception` handler turns
+        into "drop from in_flight, write nothing" (M2's no-profile-wait
+        semantics, applied per project instead of per process)."""
+        rt = runtime_holder.get(t.project.slug)
+        if rt is None:
+            msg = f"no region runtime built yet for project '{t.project.slug}'"
+            raise RegionProfileNotConfiguredError(msg)
+        return rt
 
     in_flight: set[str] = set()
     # crop_id -> owning project slug, for the per-project in-flight caps
@@ -565,8 +533,6 @@ async def run(args: argparse.Namespace) -> int:
         96 oldest all in-flight, fresh=0) can't recur when the query
         itself already excludes in-flight ids.
         """
-        nonlocal profile, pack, detector, segmenter, ocr_recognizer, text_rules, vlm
-        nonlocal item_text_enabled
         # A project's share of the whole pipeline (every inter-stage
         # queue), so one project with a slow leg cannot fill it; with a
         # single project the cap is the pipeline itself, as before.
@@ -591,38 +557,14 @@ async def run(args: argparse.Namespace) -> int:
             fairness_scheduler.set_in_flight(dict(inflight_counts))
             await project_registry.ensure_fresh()
 
-            # W2 sec 4.5: quiesce and swap. `maybe_hot_reload` refreshes
-            # this worker's own (`_worker_slug`) config store and only
-            # drains + rebuilds when the store's served (profile, pack)
-            # AxisRef pair actually moved from what was last synced --
-            # never on object identity, never every cycle. A refresh
-            # failure or a mid-run deactivation never crashes the loop.
-            if _worker_store is not None:
-                try:
-                    from scripts.curation.worker.runtime import maybe_hot_reload
-
-                    new_rt = await maybe_hot_reload(
-                        store=_worker_store,
-                        opensearch=opensearch,
-                        holder=runtime_holder,
-                        slug=_worker_slug,
-                        pool=pool,
-                        args=args,
-                        queues=[in_q, vlm_visible_q, sam_q, combined_q, out_q],
-                        get_active_profile=get_active_region_profile,
-                        get_active_pack=resolve_prompt_pack,
-                        region_detector_cls=RegionDetector,
-                        ocr_recognizer_cls=PaddleOcrTextRecognizer,
-                        segmenter_cls=_wkr.SegmenterClient,
-                        vlm_cls=_wkr.VlmLabeler,
-                    )
-                    if new_rt is not None:
-                        profile, pack = new_rt.profile, new_rt.pack
-                        detector, segmenter = new_rt.detector, new_rt.segmenter
-                        ocr_recognizer, text_rules = new_rt.ocr_recognizer, new_rt.text_rules
-                        vlm, item_text_enabled = new_rt.vlm, new_rt.item_text_enabled
-                except Exception as exc:
-                    logger.warning('config_store_hot_reload_check_failed', error=str(exc))
+            # W2 sec 4.5 (B1): one hot-reload check per active project,
+            # each bound in turn -- never a single process-wide runtime.
+            # A brand-new project (first cycle it is seen) builds its
+            # first runtime here too; a project whose sync fails this
+            # cycle just keeps its last-known runtime (or none) and is
+            # retried next cycle.
+            for _record in project_registry.active_projects():
+                await _sync_project_runtime(_record)
 
             try:
                 tasks = await fetch_pending_multi_project(
@@ -720,6 +662,12 @@ async def run(args: argparse.Namespace) -> int:
             # on this consumer task doesn't inherit the previous id.
             structlog.contextvars.bind_contextvars(request_id=t.request_id)
             try:
+                # B1: this item's OWN project's runtime, resolved fresh
+                # every item -- never a process-wide detector/segmenter/
+                # vlm/profile. Raises (caught below, dropped from
+                # in_flight, no write) when this project has no runtime
+                # yet (M2: no profile configured anywhere for it).
+                rt = _rt_for(t)
                 # Load JPEG (parallel HDD reads across all consumers).
                 if t.crop_jpeg is None:
                     t.crop_jpeg = await asyncio.to_thread(
@@ -741,10 +689,12 @@ async def run(args: argparse.Namespace) -> int:
 
                 # One OCR read of the item crop per pass: stored as the
                 # item's searchable text and reused by the text-hint step.
-                if item_text_enabled:
-                    t.item_ocr_lines = await read_item_lines(ocr_recognizer, t.crop_jpeg, t.crop_id)
+                if rt.item_text_enabled:
+                    t.item_ocr_lines = await read_item_lines(
+                        rt.ocr_recognizer, t.crop_jpeg, t.crop_id
+                    )
                     t.item_text_update = item_text_fields(
-                        t.item_ocr_lines, min_confidence=item_text_min_conf
+                        t.item_ocr_lines, min_confidence=rt.item_text_min_conf
                     )
 
                 is_secondary = _is_secondary_shape(t)
@@ -762,11 +712,11 @@ async def run(args: argparse.Namespace) -> int:
                     )
                     t.candidate_in_source = t.detector_region_in_source
                     t.candidate_score = t.detector_score
-                    if vlm_available:
+                    if rt.vlm_available:
                         await combined_q.put(t)
                     else:
                         await accept_without_vlm(
-                            t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                            t, ocr=rt.ocr_recognizer, profile=rt.profile, rules=rt.text_rules
                         )
                         await out_q.put(t)
                     in_q.task_done()
@@ -779,11 +729,11 @@ async def run(args: argparse.Namespace) -> int:
                 if (
                     t.region_status in _PENDING_DETECTION_ALIASES
                     and not is_secondary
-                    and profile.detector_model
+                    and rt.profile.detector_model
                 ):
                     _detector_t0 = time.monotonic()
                     try:
-                        detector_results = await detector.detect_batch([t.crop_jpeg])
+                        detector_results = await rt.detector.detect_batch([t.crop_jpeg])
                     except Exception:
                         OP_STAGE_REGION_DETECTOR_DURATION_SECONDS.labels(outcome='error').observe(
                             time.monotonic() - _detector_t0
@@ -794,25 +744,25 @@ async def run(args: argparse.Namespace) -> int:
                         outcome='hit' if cand is not None else 'miss'
                     ).observe(time.monotonic() - _detector_t0)
                     if cand is not None:
-                        t.detection_trace.append(f'{region_profile().detector_model}:hit')
+                        t.detection_trace.append(f'{rt.profile.detector_model}:hit')
                         t.candidate_source = CANDIDATE_DETECTOR
                         t.candidate_in_crop = cand.bbox_norm
                         t.candidate_in_source = crop_norm_to_source_norm(
                             cand.bbox_norm, t.item_bbox_norm
                         )
                         t.candidate_score = cand.score
-                        if vlm_available:
+                        if rt.vlm_available:
                             await combined_q.put(t)
                         else:
                             await accept_without_vlm(
-                                t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                                t, ocr=rt.ocr_recognizer, profile=rt.profile, rules=rt.text_rules
                             )
                             await out_q.put(t)
                         in_q.task_done()
                         continue
                     # Recorded so the blind-spot training cohort
                     # (``<detector>:miss`` + segmenter hit) can find it.
-                    t.detection_trace.append(f'{region_profile().detector_model}:miss')
+                    t.detection_trace.append(f'{rt.profile.detector_model}:miss')
 
                 # Path 3: secondary-shape pending OR non-secondary with
                 # no primary hit. Hand off to the visibility
@@ -820,7 +770,7 @@ async def run(args: argparse.Namespace) -> int:
                 # segmenter + combined path is even worth it. Fails
                 # OPEN on parse errors so a flaky VLM never silently
                 # drops a real region. No VLM: straight to the segmenter.
-                await (vlm_visible_q if vlm_available else sam_q).put(t)
+                await (vlm_visible_q if rt.vlm_available else sam_q).put(t)
                 in_q.task_done()
             except Exception as exc:
                 logger.warning(
@@ -931,8 +881,25 @@ async def run(args: argparse.Namespace) -> int:
             )
             if chunk:
                 # _drain_chunk returns single-project chunks, so one
-                # binding covers the whole batched call.
+                # binding + one runtime resolution covers the whole
+                # batched call. A project with no runtime yet drops the
+                # whole chunk from in_flight (retried next poll) rather
+                # than crashing this consumer task.
                 bind_task_project(chunk[0])
+                try:
+                    rt = _rt_for(chunk[0])
+                except RegionProfileNotConfiguredError as exc:
+                    logger.warning(
+                        'stage_a_vlm_visible_no_runtime',
+                        project=chunk[0].project.slug,
+                        error=str(exc),
+                    )
+                    async with in_flight_lock:
+                        for t in chunk:
+                            in_flight.discard(t.crop_id)
+                    if poisoned:
+                        return
+                    continue
                 batch_request_ids = [t.request_id for t in chunk]
                 region_crops: list[RegionCrop] = []
                 bad_indices: list[int] = []
@@ -946,10 +913,15 @@ async def run(args: argparse.Namespace) -> int:
                 if region_crops:
                     _vis_t0 = time.monotonic()
                     try:
-                        if vlm is None:
+                        if rt.vlm is None:
                             msg = 'visibility stage fed without a VLM'
                             raise RuntimeError(msg)
-                        verdicts = await vlm.region_visible_batch(region_crops)
+                        verdicts = await rt.vlm.region_visible_batch(region_crops)
+                        # Minor 5 (W2 review): only a write this call actually
+                        # informed gets stamped `vlm_prompt_pack` downstream.
+                        for _t in chunk:
+                            if _t.crop_jpeg is not None:
+                                _t.vlm_called = True
                         OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS.labels(outcome='ok').observe(
                             time.monotonic() - _vis_t0
                         )
@@ -1038,6 +1010,7 @@ async def run(args: argparse.Namespace) -> int:
             bind_task_project(t)
             structlog.contextvars.bind_contextvars(request_id=t.request_id)
             try:
+                rt = _rt_for(t)
                 if t.crop_jpeg is None:
                     t.update_doc = unreadable_crop_update(t)
                     await out_q.put(t)
@@ -1046,7 +1019,7 @@ async def run(args: argparse.Namespace) -> int:
 
                 _sam_t0 = time.monotonic()
                 try:
-                    sam_candidate = await segmenter.segment(t.crop_jpeg)
+                    sam_candidate = await rt.segmenter.segment(t.crop_jpeg)
                 except SegmenterAllHostsDown as exc:
                     # Infrastructure failure (every secondary-segmenter
                     # host UNHEALTHY). Do NOT mark the crop terminal —
@@ -1094,15 +1067,13 @@ async def run(args: argparse.Namespace) -> int:
                         projected = crop_norm_to_source_norm(
                             sam_candidate.bbox_norm, t.item_bbox_norm
                         )
-                        t.detection_trace.append(f'{region_profile().segmenter_name}:hit')
-                        t.detection_trace.append(
-                            f'{region_profile().segmenter_name}:skip_vlm_verify'
-                        )
+                        t.detection_trace.append(f'{rt.profile.segmenter_name}:hit')
+                        t.detection_trace.append(f'{rt.profile.segmenter_name}:skip_vlm_verify')
                         t.update_doc = _region_write_doc(
                             region_in_source=projected,
                             score=sam_candidate.score,
-                            detector=region_profile().segmenter_name,
-                            detector_version=region_profile().segmenter_version,
+                            detector=rt.profile.segmenter_name,
+                            detector_version=rt.profile.segmenter_version,
                             chain=t.detection_trace,
                             region_verified=False,
                             verifier=None,
@@ -1111,42 +1082,42 @@ async def run(args: argparse.Namespace) -> int:
                         )
                         await apply_region_text(
                             t.update_doc,
-                            ocr=ocr_recognizer,
+                            ocr=rt.ocr_recognizer,
                             crop_jpeg=t.crop_jpeg,
                             region_in_crop=sam_candidate.bbox_norm,
-                            profile=profile,
+                            profile=rt.profile,
                             crop_id=t.crop_id,
                             vlm_text=None,
                             vlm_confidence=None,
-                            vlm_available=vlm_available,
-                            rules=text_rules,
+                            vlm_available=rt.vlm_available,
+                            rules=rt.text_rules,
                         )
                         await out_q.put(t)
                         sam_q.task_done()
                         continue
                     # Else: queue the secondary-segmenter candidate for
                     # combined VLM call.
-                    t.detection_trace.append(f'{region_profile().segmenter_name}:hit')
+                    t.detection_trace.append(f'{rt.profile.segmenter_name}:hit')
                     t.candidate_source = CANDIDATE_SEGMENTER
                     t.candidate_in_crop = sam_candidate.bbox_norm
                     t.candidate_in_source = crop_norm_to_source_norm(
                         sam_candidate.bbox_norm, t.item_bbox_norm
                     )
                     t.candidate_score = sam_candidate.score
-                    if vlm_available:
+                    if rt.vlm_available:
                         await combined_q.put(t)
                     else:
                         await accept_without_vlm(
-                            t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                            t, ocr=rt.ocr_recognizer, profile=rt.profile, rules=rt.text_rules
                         )
                         await out_q.put(t)
                     sam_q.task_done()
                     continue
 
-                if not text_hint_on:
+                if not rt.text_hint_on:
                     # No text-hint re-pass: the segmenter's miss is final.
-                    if segmenter.enabled:
-                        t.detection_trace.append(f'{region_profile().segmenter_name}:miss')
+                    if rt.segmenter.enabled:
+                        t.detection_trace.append(f'{rt.profile.segmenter_name}:miss')
                 else:
                     # Secondary segmenter missed globally; re-prompt it
                     # with a tight sub-crop around an OCR text hint. The
@@ -1154,22 +1125,24 @@ async def run(args: argparse.Namespace) -> int:
                     # segmenter produces the final geometry. OCR text
                     # rides along for storage.
                     if t.item_ocr_lines is not None:
-                        ocr_regions = ocr_recognizer.regions_from_lines(t.item_ocr_lines)
+                        ocr_regions = rt.ocr_recognizer.regions_from_lines(t.item_ocr_lines)
                     else:
                         try:
-                            ocr_regions = await ocr_recognizer.detect_regions(t.crop_jpeg)
+                            ocr_regions = await rt.ocr_recognizer.detect_regions(t.crop_jpeg)
                         except Exception as exc:
                             logger.warning(
                                 'text_hint_ocr_failed', crop_id=t.crop_id, error=str(exc)
                             )
                             ocr_regions = []
                     ocr_pick = (
-                        ocr_recognizer.pick_best_text_region(ocr_regions) if ocr_regions else None
+                        rt.ocr_recognizer.pick_best_text_region(ocr_regions)
+                        if ocr_regions
+                        else None
                     )
                     if ocr_pick is not None:
-                        t.detection_trace.append(f'{region_profile().ocr_rec_model}:text_hint:hit')
+                        t.detection_trace.append(f'{rt.profile.ocr_rec_model}:text_hint:hit')
                         sub_cand, _sub_box = await _resegment_from_text_hint(
-                            t.crop_jpeg, ocr_pick.bbox_norm, segmenter
+                            t.crop_jpeg, ocr_pick.bbox_norm, rt.segmenter
                         )
                         if sub_cand is not None:
                             t.candidate_source = CANDIDATE_SEGMENTER_TEXT_HINT
@@ -1180,24 +1153,25 @@ async def run(args: argparse.Namespace) -> int:
                             t.candidate_score = sub_cand.score
                             t.candidate_text = ocr_pick.text
                             t.candidate_text_confidence = ocr_pick.rec_score
-                            if vlm_available:
+                            if rt.vlm_available:
                                 await combined_q.put(t)
                             else:
                                 await accept_without_vlm(
-                                    t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                                    t,
+                                    ocr=rt.ocr_recognizer,
+                                    profile=rt.profile,
+                                    rules=rt.text_rules,
                                 )
                                 await out_q.put(t)
                             sam_q.task_done()
                             continue
-                        t.detection_trace.append(
-                            f'{region_profile().segmenter_name}:text_hint:miss'
-                        )
+                        t.detection_trace.append(f'{rt.profile.segmenter_name}:text_hint:miss')
                     elif ocr_regions:
                         t.detection_trace.append(
-                            f'{region_profile().ocr_rec_model}:text_hint:no_region_shape'
+                            f'{rt.profile.ocr_rec_model}:text_hint:no_region_shape'
                         )
                     else:
-                        t.detection_trace.append(f'{region_profile().ocr_rec_model}:text_hint:miss')
+                        t.detection_trace.append(f'{rt.profile.ocr_rec_model}:text_hint:miss')
 
                 # Nothing found by any detector → no_region_box.
                 t.update_doc = {
@@ -1263,6 +1237,20 @@ async def run(args: argparse.Namespace) -> int:
                 # Single-project chunk (see _drain_chunk): classify
                 # against that project's own registry.
                 bind_task_project(chunk[0])
+                try:
+                    rt = _rt_for(chunk[0])
+                except RegionProfileNotConfiguredError as exc:
+                    logger.warning(
+                        'stage_b_combined_no_runtime',
+                        project=chunk[0].project.slug,
+                        error=str(exc),
+                    )
+                    async with in_flight_lock:
+                        for t in chunk:
+                            in_flight.discard(t.crop_id)
+                    if poisoned:
+                        return
+                    continue
                 batch_request_ids = [t.request_id for t in chunk]
                 class_names, name_to_id = bound_class_catalog()
                 registry_loaded = bool(class_names)
@@ -1292,13 +1280,18 @@ async def run(args: argparse.Namespace) -> int:
                 if combined_crops:
                     _vlm_t0 = time.monotonic()
                     try:
-                        if vlm is None:
+                        if rt.vlm is None:
                             msg = 'combined stage fed without a VLM'
                             raise RuntimeError(msg)
-                        replies_by_id = await vlm.label_combined_batch(
+                        replies_by_id = await rt.vlm.label_combined_batch(
                             combined_crops,
                             class_names=class_names or None,
                         )
+                        # Minor 5 (W2 review): only a write this call actually
+                        # informed gets stamped `vlm_prompt_pack` downstream.
+                        for _t in chunk:
+                            if _t.crop_jpeg is not None:
+                                _t.vlm_called = True
                         _vlm_elapsed = time.monotonic() - _vlm_t0
                         OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS.labels(outcome='ok').observe(
                             _vlm_elapsed
@@ -1355,7 +1348,7 @@ async def run(args: argparse.Namespace) -> int:
                         )
 
                         # Canonical detector name + version for provenance.
-                        _det = candidate_detector(t, region_profile())
+                        _det = candidate_detector(t, rt.profile)
                         actor = _det[0]
                         # The candidate's detector gets exactly one ``:hit``
                         # (Stage A records it for fresh detections; an
@@ -1468,15 +1461,15 @@ async def run(args: argparse.Namespace) -> int:
                             t.update_doc[F.source] = t.candidate_source
                             await apply_region_text(
                                 t.update_doc,
-                                ocr=ocr_recognizer,
+                                ocr=rt.ocr_recognizer,
                                 crop_jpeg=t.crop_jpeg,
                                 region_in_crop=t.candidate_in_crop,
-                                profile=profile,
+                                profile=rt.profile,
                                 crop_id=t.crop_id,
                                 vlm_text=reply.region_text_reply,
                                 vlm_confidence=reply.region_confidence,
                                 vlm_available=True,
-                                rules=text_rules,
+                                rules=rt.text_rules,
                             )
                             # Text-hint OCR fallback (text_reader='vlm' only
                             # -- the other modes already read the region):
@@ -1487,8 +1480,8 @@ async def run(args: argparse.Namespace) -> int:
                                 t.update_doc,
                                 text=t.candidate_text,
                                 confidence=t.candidate_text_confidence,
-                                profile=profile,
-                                rules=text_rules,
+                                profile=rt.profile,
+                                rules=rt.text_rules,
                             )
                         elif reply.region_visible:
                             # region_bbox_correct is False but the VLM says
@@ -1549,35 +1542,51 @@ async def run(args: argparse.Namespace) -> int:
             nonlocal last_flush
             if not pending:
                 return
+            # B3: snapshot + clear `pending` up front, and call
+            # `out_q.task_done()` once per item HERE -- only once its
+            # write has actually completed (or definitively failed) --
+            # not at `get()` time. `quiesce_and_swap`'s drain
+            # (`out_q.join()`) is the guarantee that every item queued
+            # before a swap is durably written (and stamped with the
+            # OLD runtime's refs, since `_bulk_update` reads the store
+            # under the item's own project binding, which does not move
+            # until the swap that is BLOCKED on this same join()).
+            # Calling `task_done()` at `get()` time let the join()
+            # return while flushes for old-runtime items were still
+            # sitting unflushed in `pending`, so they were written --
+            # and stamped -- after the swap already happened.
+            flushing = list(pending)
+            pending.clear()
             t0 = time.monotonic()
-            batch_request_ids = [t.request_id for t in pending]
+            batch_request_ids = [t.request_id for t in flushing]
             if region_embed_pe is not None:
-                await embed_written_regions(pending, region_embed_pe)
+                await embed_written_regions(flushing, region_embed_pe)
             try:
-                n_written, n_skipped = await _bulk_update(opensearch, pending)
+                n_written, n_skipped = await _bulk_update(opensearch, flushing)
             except Exception as exc:
                 logger.warning(
                     'writer_bulk_update_failed',
-                    n=len(pending),
+                    n=len(flushing),
                     request_ids=batch_request_ids,
                     error=str(exc),
                 )
                 # Drop these from in_flight so they get re-fetched by
                 # the producer on the next pass.
                 async with in_flight_lock:
-                    for t in pending:
+                    for t in flushing:
                         in_flight.discard(t.crop_id)
-                pending.clear()
+                for _ in flushing:
+                    out_q.task_done()
                 last_flush = time.monotonic()
                 return
-            metrics['total_processed'] += len(pending)
+            metrics['total_processed'] += len(flushing)
             metrics['total_written'] += n_written
             elapsed = time.monotonic() - t0
             rate = metrics['total_processed'] / max(time.monotonic() - started_at, 1e-6)
             logger.info(
                 'region_worker_flush',
                 reason=reason,
-                flushed=len(pending),
+                flushed=len(flushing),
                 written=n_written,
                 skipped=n_skipped,
                 flush_s=round(elapsed, 2),
@@ -1589,12 +1598,13 @@ async def run(args: argparse.Namespace) -> int:
             # refresh='wait_for', so searches started from here on see it.
             released = time.monotonic()
             async with in_flight_lock:
-                for t in pending:
+                for t in flushing:
                     in_flight.discard(t.crop_id)
                     released_at[t.crop_id] = released
                     visible_no_verdict.clear(t.crop_id)
                     combined_no_verdict.clear(t.crop_id)
-            pending.clear()
+            for _ in flushing:
+                out_q.task_done()
             last_flush = time.monotonic()
 
         try:
@@ -1612,7 +1622,6 @@ async def run(args: argparse.Namespace) -> int:
                     await _flush('shutdown')
                     return
                 pending.append(t)
-                out_q.task_done()
                 if len(pending) >= WRITE_FLUSH_SIZE:
                     await _flush('size')
         except asyncio.CancelledError:
@@ -1781,9 +1790,14 @@ async def run(args: argparse.Namespace) -> int:
         with contextlib.suppress(Exception):
             await metrics_server_runner.cleanup()
     finally:
-        await segmenter.aclose()
-        if vlm is not None:
-            await vlm.aclose()
+        # Close every project's own segmenter/VLM clients (B1: no
+        # single process-wide pair to close anymore).
+        for _rt in runtime_holder.current.values():
+            with contextlib.suppress(Exception):
+                await _rt.segmenter.aclose()
+            if _rt.vlm is not None:
+                with contextlib.suppress(Exception):
+                    await _rt.vlm.aclose()
         await opensearch.close()
         await pool.close()
 

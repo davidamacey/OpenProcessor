@@ -13,14 +13,14 @@ only under the global router or a project's scoped prefix.
 
 from __future__ import annotations
 
-import asyncio
-import shutil
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+from fastapi import HTTPException
 
 from src.config.project_context import bind_project
-from src.config.projects import DEFAULT_SLUG, ProjectRecord, is_valid_slug, resources_for_new
+from src.config.projects import ProjectRecord, is_valid_slug, resources_for_new
 from src.core.logging import get_logger
 from src.routers.curation._config_common_models import api_error
 from src.routers.curation._project_models import ARCHIVABLE_STATUSES, UNARCHIVABLE_STATUSES
@@ -33,16 +33,7 @@ from src.services.projects.registry import (
 )
 
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
-
 logger = get_logger(__name__)
-
-# How long delete waits for the detection worker's per-project inflight
-# count to drain before giving up and rolling back (plan §4 step 3).
-_DELETE_DRAIN_TIMEOUT_SECONDS = 60.0
-_DELETE_DRAIN_POLL_SECONDS = 1.0
 
 
 def _now() -> str:
@@ -100,7 +91,7 @@ class JobRef:
     kind_label: str
     id: str
     label: str
-    started_at: str
+    started_at: str | None
 
     def to_wire(self) -> dict[str, Any]:
         return {
@@ -163,6 +154,101 @@ async def _get_mutable_record(
     raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
 
 
+async def _refetch_for_write(
+    client: Any,
+    slug: str,
+    *,
+    expect_status: str | frozenset[str] | None = None,
+    **fields: Any,
+) -> tuple[ProjectRecord, int | None, int | None]:
+    """P3F m2: re-read the record fresh right before a status-transition
+    write, and build the new doc FROM that fresh read -- never from a
+    closure-captured snapshot taken earlier in the same call. The OCC
+    ``if_seq_no``/``if_primary_term`` guard alone does not fix the bug
+    this closes: it protects the *write* from a stale token (so a real
+    race still 409s), but a snapshot record built from before an
+    intervening ``await`` (e.g. ``delete_project_finish``'s up-to-60s
+    drain wait) would still silently discard a concurrent PATCH's
+    ``display_name``/``description`` even though the write itself
+    succeeds under a since-refreshed seq/term.
+
+    P3F pass-3 MA1: re-reading fresh right before the write, by itself,
+    throws away the one thing OCC actually protects -- a token that is
+    ALWAYS current (because it was just read) never conflicts, no matter
+    what happened to the record between the caller's own precondition
+    checks and this write. That is exactly how a slow ``create`` could
+    resurrect a tombstoned slug through the N1 stale-``building`` escape
+    hatch: create re-reads fresh right before its ``active`` write, gets
+    a seq/term that trivially matches (nothing else is writing at that
+    exact instant), and overwrites ``deleted`` with ``active`` because
+    nothing ever checked what status the fresh read actually returned.
+    ``expect_status`` is the missing check: a caller states the ONE
+    status it still owns (e.g. ``'building'`` for create, ``'deleting'``
+    for a delete-finish rollback/tombstone), and this raises 409
+    ``invalid_transition`` instead of silently building the write from a
+    status nobody validated -- never a resurrection, never a duplicate
+    finish clobbering someone else's write."""
+    stored, seq, term = await get_record_with_seq(client, slug)
+    if stored is None:
+        raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
+    if expect_status is not None:
+        allowed = {expect_status} if isinstance(expect_status, str) else expect_status
+        if stored.status not in allowed:
+            raise api_error(
+                409,
+                'invalid_transition',
+                f"'{slug}' is no longer '{sorted(allowed)}' (now '{stored.status}'); "
+                'refusing to overwrite a status this caller never validated',
+                project=slug,
+                project_status=stored.status,
+            )
+    return replace(stored, **fields), seq, term
+
+
+async def _cleanup_orphaned_by_concurrent_delete(
+    client: Any, record: ProjectRecord, exc: HTTPException
+) -> None:
+    """F2 (known gap, documented rather than fully fixed -- see the P3
+    review, "Re-review 2026-09-27, pass 3", item F2): create's own
+    ``building``-status write (to ``active`` on success, or ``failed`` on
+    a caught exception) can lose the MA1 ``expect_status='building'``
+    race in :func:`_refetch_for_write` because a concurrent ``DELETE``
+    won it first and tombstoned this slug (fresh status ``'deleted'``).
+    That is the correct refusal -- resurrecting a retired slug would be
+    worse -- but by the time it fires, this same create may already have
+    made up to 7 ``op_prj_<slug>__*`` indexes (:func:`create_project`'s
+    ``_ensure_indexes`` step) that are now permanently unreachable: the
+    slug is retired forever, so no project-bound path can ever address
+    them again. Reproducing this needs a create running past
+    ``delete._BUILDING_STALE_SECONDS`` (120s, the N1 stale-``building``
+    escape hatch's own threshold) with a user's ``DELETE`` landing inside
+    that exact window -- rare, and it costs only shards held forever, not
+    a correctness bug (a retired slug can never come back regardless).
+
+    Best-effort cleanup: since the retired slug can never own these
+    indexes again, delete them ourselves here rather than leaving them
+    for an operator to find manually. Logged at error level either way,
+    with the exact index names, so an operator can search for them if
+    this cleanup itself fails (e.g. the same transient fault that made
+    ``_ensure_indexes`` unreliable in the first place)."""
+    detail = exc.detail if isinstance(exc.detail, dict) else {}
+    if detail.get('project_status') != 'deleted':
+        return
+    orphaned = sorted(set(record.resources.indexes.values()))
+    logger.error('project_create_orphaned_after_delete', slug=record.slug, indexes=orphaned)
+    for name in orphaned:
+        try:
+            with bind_project(record):
+                await client.indices.delete(index=name, ignore=[404])
+        except Exception as cleanup_exc:
+            logger.warning(
+                'project_create_orphan_cleanup_failed',
+                slug=record.slug,
+                index=name,
+                error=str(cleanup_exc),
+            )
+
+
 async def create_project(
     client: Any,
     *,
@@ -220,11 +306,40 @@ async def create_project(
         origin=None,
         resources=resources,
     )
-    await write_record(client, record, op_type='create')
+    try:
+        await write_record(client, record, op_type='create')
+    except HTTPException:
+        # lifecycle.write_record already translated a genuine
+        # storage-level create conflict (RevisionConflictError, i.e.
+        # this exact slug really was taken by someone else) into this
+        # 409 -- propagate untouched, never touch a record that isn't
+        # ours.
+        raise
+    except Exception:
+        # N1: anything else here can only mean the storage-level
+        # index() call for OUR OWN doc either never landed (nothing to
+        # clean up, the slug is simply free again) or landed but the
+        # registry's revision bump afterward failed: our own doc now
+        # exists, wedged in 'building' with no failure path having run.
+        # If it's there, flip it to 'failed' ourselves so a re-create
+        # (slug_retired only fires on 'deleted') or an explicit DELETE
+        # (the delete.py stale-building escape hatch) can recover it.
+        existing, seq, term = await get_record_with_seq(client, slug)
+        if existing is not None and existing.status == 'building':
+            failed_doc = replace(existing, status='failed', updated_at=_now())
+            await write_record(client, failed_doc, if_seq_no=seq, if_primary_term=term)
+        raise
+
     registry = get_project_registry()
-    await registry.ensure_fresh()
 
     try:
+        # B2(a) residual: refresh_strict() raises on any failure (unlike
+        # ensure_fresh's swallow-and-log), so a registry that can't see
+        # this project yet aborts the create cleanly through the except
+        # handler below, instead of proceeding to index creation while
+        # the guard still doesn't recognize the new slug.
+        await registry.refresh_strict()
+
         with bind_project(record):
             from src.routers.curation._common import _ensure_indexes
 
@@ -245,18 +360,67 @@ async def create_project(
 
         with bind_project(record):
             ensure_region_class()
+
+        # B2(a) residual: _ensure_indexes is itself fail-open (every
+        # create/migration failure inside it is logged and swallowed, so
+        # it never raises) -- verify every index this record claims to
+        # own actually exists before ever calling the project 'active'.
+        # Without this, a registry that caught up mid-create without
+        # this project (e.g. a transient refresh right after the
+        # 'building' write) could let create return 'active' with zero
+        # real indexes underneath it -- the exact live B2 symptom.
+        with bind_project(record, read_only=True):
+            missing_indexes = [
+                name
+                for name in sorted(set(record.resources.indexes.values()))
+                if not await client.indices.exists(index=name)
+            ]
+        if missing_indexes:
+            raise RuntimeError(
+                f"'{slug}' create verification found missing indexes: {missing_indexes}"
+            )
     except Exception as exc:
         logger.error('project_create_failed', slug=slug, error=str(exc))
-        _, seq, term = await get_record_with_seq(client, slug)
-        failed = replace(record, status='failed', updated_at=_now())
+        # MA1: build the 'failed' write from a FRESH read of OUR OWN
+        # 'building' status, never from the closure-captured `record`
+        # (stale since before every await above -- index creation,
+        # clone, verification). `expect_status='building'` additionally
+        # refuses to write 'failed' over a status this handler never
+        # validated (e.g. a delete that raced in and already tombstoned
+        # this slug via the N1 stale-building escape hatch) -- see
+        # MA1's exact resurrection probe in the P3 review.
+        try:
+            failed, seq, term = await _refetch_for_write(
+                client, slug, expect_status='building', status='failed', updated_at=_now()
+            )
+        except HTTPException as refetch_exc:
+            await _cleanup_orphaned_by_concurrent_delete(client, record, refetch_exc)
+            raise
         await write_record(client, failed, if_seq_no=seq, if_primary_term=term)
         await registry.ensure_fresh()
         raise
 
-    _, seq, term = await get_record_with_seq(client, slug)
-    active = replace(record, status='active', updated_at=_now())
+    # MA1: same 'expect_status' guard on the success path -- without it,
+    # a re-read taken immediately before this write always has a
+    # trivially-current seq/term (nothing else was writing at that
+    # exact instant), so OCC alone never catches a slow create's final
+    # 'active' write landing after some other caller already deleted
+    # and tombstoned this slug in between. Refuse instead of resurrecting.
+    # F2 (known gap): if that refusal fires because a concurrent DELETE
+    # won the race, see _cleanup_orphaned_by_concurrent_delete.
+    try:
+        active, seq, term = await _refetch_for_write(
+            client, slug, expect_status='building', status='active', updated_at=_now()
+        )
+    except HTTPException as refetch_exc:
+        await _cleanup_orphaned_by_concurrent_delete(client, record, refetch_exc)
+        raise
     await write_record(client, active, if_seq_no=seq, if_primary_term=term)
     await registry.ensure_fresh()
+
+    from src.services.projects.capacity import invalidate_capacity_cache
+
+    invalidate_capacity_cache()  # m7: a create just changed this cluster's shard count
     return active, warnings
 
 
@@ -300,7 +464,14 @@ async def running_jobs(record: ProjectRecord) -> list[JobRef]:
     truth for "is this project busy" across every job-producing
     subsystem (§5.4). Delete/archive never re-implement their own file
     scan; they only adapt ``busy.JobRef`` (``kind``/``job_id``) to this
-    module's wire-shaped ``JobRef`` (delta 11)."""
+    module's wire-shaped ``JobRef`` (delta 11).
+
+    P3F pass-3 m-b: ``label`` is the job source's own genuine human
+    label (``busy.JobRef.label``, e.g. a train run's submitted
+    ``mlflow_run_name``) when the source recorded one, falling back to
+    the internal ``job_id`` ONLY when it didn't -- documented here
+    rather than silently treating ``job_id`` as if it were always a
+    human-meaningful name."""
     from src.services.projects import busy
 
     return [
@@ -308,8 +479,8 @@ async def running_jobs(record: ProjectRecord) -> list[JobRef]:
             kind=j.kind,
             kind_label=_KIND_LABELS.get(j.kind, j.kind),
             id=j.job_id,
-            label=j.job_id,
-            started_at='',
+            label=j.label or j.job_id,
+            started_at=j.started_at,
         )
         for j in busy.running_jobs(record)
     ]
@@ -327,7 +498,18 @@ _LAST_ACTIVE_MESSAGE = 'this is the only active project; leave at least one'
 
 
 async def _last_active_check(record: ProjectRecord) -> None:
-    """Refuse an archive or delete that would leave no active project."""
+    """Refuse an archive or delete that would leave no active project.
+
+    P3F m4 (documented, not fixed): this reads the registry snapshot and
+    the caller's own OCC write happens later, so two concurrent
+    archives/deletes of the last two active projects can both pass this
+    check and both succeed -- the same class of race as two concurrent
+    creates racing the capacity check. A real fix needs a single
+    serialization point (a lock doc with its own OCC, or a distributed
+    lock) this codebase has no infra for yet; every other OCC guard here
+    protects one document's own read-modify-write, not an invariant
+    spanning every document in the registry. Left as documented
+    best-effort until that infra exists."""
     registry = get_project_registry()
     await registry.ensure_fresh()
     if not _other_active_slugs(dict(registry.snapshot()), record.slug):
@@ -395,272 +577,11 @@ async def unarchive_project(client: Any, *, slug: str, expected_revision: int) -
 # working for every existing caller.
 from src.services.projects.clone import clone_settings, clone_settings_into  # noqa: E402,F401
 
-
-async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
-    """§4 ``DELETE ?dry_run=true``: report only, writes nothing."""
-    record = _require_found(await _resolve_existing(slug), slug)
-    blocking: list[dict[str, str]] = []
-    if record.slug == DEFAULT_SLUG:
-        blocking.append(
-            {
-                'code': 'project_protected',
-                'message': 'The default project can be archived but not deleted.',
-            }
-        )
-    jobs = await running_jobs(record)
-    if jobs:
-        blocking.append({'code': 'project_busy', 'message': f'{len(jobs)} job(s) still running'})
-    registry = get_project_registry()
-    await registry.ensure_fresh()
-    if not _other_active_slugs(dict(registry.snapshot()), slug):
-        blocking.append({'code': 'last_active_project', 'message': _LAST_ACTIVE_MESSAGE})
-
-    indexes: list[dict[str, Any]] = []
-    for name in sorted(set(record.resources.indexes.values())):
-        try:
-            with bind_project(record, read_only=True):
-                count_resp = await client.count(index=name)
-            docs = int(count_resp.get('count') or 0)
-        except Exception:
-            docs = 0
-        indexes.append({'name': name, 'docs': docs, 'store_bytes': None})
-
-    dirs: list[dict[str, Any]] = []
-    for path in (
-        record.resources.export_root,
-        record.resources.upload_root,
-        record.resources.project_state_dir,
-        record.resources.bakeoff_jobs_dir,
-        record.resources.train_jobs_dir,
-        record.resources.autolabel_dir,
-    ):
-        size = 0
-        try:
-            if path.exists():
-                size = sum(f.stat().st_size for f in path.rglob('*') if f.is_file())
-        except OSError:
-            size = 0
-        dirs.append({'path': str(path), 'bytes': size})
-
-    return {
-        'indexes': indexes,
-        'dirs': dirs,
-        'promoted_models': [],
-        'mlflow_experiment': record.resources.mlflow_experiment,
-        'running_jobs': [j.to_wire() for j in jobs],
-        'referenced_by': [],
-        'blocking': [b['code'] for b in blocking],
-        'blocking_detail': blocking,
-    }
-
-
-def _path_within(path: Path, root: Path) -> bool:
-    try:
-        path.resolve().relative_to(root.resolve())
-    except ValueError:
-        return False
-    return True
-
-
-async def _delete_indexes(client: Any, record: ProjectRecord) -> None:
-    for name in sorted(set(record.resources.indexes.values())):
-        try:
-            with bind_project(record):
-                await client.indices.delete(index=name, ignore=[404])
-        except Exception as exc:
-            logger.warning(
-                'project_delete_index_failed', project=record.slug, index=name, error=str(exc)
-            )
-
-
-def _rm_dir_guarded(path: Path, expected_root: Path) -> None:
-    if not _path_within(path, expected_root):
-        logger.error('project_delete_path_escape', path=str(path), expected_root=str(expected_root))
-        raise api_error(
-            500, 'internal_isolation_error', f'refusing to delete outside {expected_root}'
-        )
-    shutil.rmtree(path, ignore_errors=True)
-
-
-async def _delete_dirs(record: ProjectRecord) -> None:
-    """Remove every per-project dir, each guarded to resolve inside its
-    expected root (§4 step 6: "a path outside refuses"). A new
-    project's dirs are siblings under ``OP_PROJECTS_DATA_ROOT``
-    (exports, class registry) or under the deployment ``state_dir``
-    (uploads, job dirs) -- never under ``default``'s own dirs, which
-    :func:`resources_for_new` never nests anything into."""
-    from src.config.curation import base_curation_config
-    from src.config.projects import projects_data_root
-
-    base = base_curation_config()
-    data_root = projects_data_root()
-    _rm_dir_guarded(record.resources.export_root, data_root)
-    _rm_dir_guarded(record.resources.class_registry_path.parent, data_root)
-    _rm_dir_guarded(record.resources.bakeoff_eval_root, data_root)
-    _rm_dir_guarded(record.resources.project_state_dir, base.state_dir)
-    _rm_dir_guarded(record.resources.upload_root, base.state_dir)
-    _rm_dir_guarded(record.resources.bakeoff_jobs_dir, base.state_dir)
-    _rm_dir_guarded(record.resources.train_jobs_dir, record.resources.train_jobs_dir.parent.parent)
-    _rm_dir_guarded(record.resources.autolabel_dir, record.resources.autolabel_dir.parent.parent)
-
-
-async def _wait_for_drain(record: ProjectRecord) -> bool:  # noqa: ARG001
-    """Best-effort drain wait (plan §4 step 3). P2 owns the authoritative
-    per-project ``runtime`` doc this reads; until it lands there is
-    nothing to poll, so this is a no-op success (nothing known to be
-    inflight)."""
-    await asyncio.sleep(0)
-    return True
-
-
-async def delete_project(
-    client: Any,
-    *,
-    slug: str,
-    confirm: str | None,
-    force: bool = False,
-) -> ProjectRecord:
-    """§4 guarded delete, background-completing (delta 10): the caller
-    gets the ``deleting`` record back immediately (202), and this
-    function runs the rest (drain wait, index/dir removal, tombstone) as
-    a background task so a slow delete never blocks past a proxy
-    timeout. Call :func:`delete_project_finish` to run steps 3-9; this
-    function only validates and flips the status."""
-    record = _require_found(await _resolve_existing(slug), slug)
-
-    if record.slug == DEFAULT_SLUG:
-        raise api_error(
-            409,
-            'project_protected',
-            'The default project can be archived but not deleted.',
-            project=slug,
-        )
-    if confirm is None:
-        raise api_error(422, 'confirm_mismatch', 'confirm is required for a real delete')
-    if confirm != slug:
-        raise api_error(422, 'confirm_mismatch', f"confirm must equal the slug '{slug}'")
-
-    jobs = await running_jobs(record)
-    if jobs:
-        raise api_error(
-            409,
-            'project_busy',
-            f"'{slug}' has {len(jobs)} running job(s)",
-            project=slug,
-            jobs=[j.to_wire() for j in jobs],
-        )
-    await _last_active_check(record)
-
-    if not force:
-        shared_models = await _shared_model_users(record)
-        if shared_models:
-            raise api_error(
-                409,
-                'in_use',
-                f"'{slug}' has {len(shared_models)} model(s) opted into cross-project "
-                'sharing; deleting could break another project that depends on them',
-                project=slug,
-                projects=shared_models,
-            )
-    else:
-        shared_models = await _shared_model_users(record)
-        if shared_models:
-            logger.warning(
-                'project_delete_forced_past_shared_models',
-                project=slug,
-                shared_models=shared_models,
-            )
-
-    _, seq, term = await get_record_with_seq(client, slug)
-    deleting = replace(record, status='deleting', updated_at=_now())
-    await write_record(client, deleting, if_seq_no=seq, if_primary_term=term)
-    await get_project_registry().ensure_fresh()
-    return deleting
-
-
-async def _shared_model_users(record: ProjectRecord) -> list[str]:
-    """§5.5 in_use guard: which of this project's own promoted models
-    have opted into cross-project sharing (``PUT /models/{name}/sharing``,
-    ``promote.json.shared``)?
-
-    KNOWN GAP (flagged, not faked): this returns the *shared model
-    names*, not the *dependent project slugs* the plan asks for -- P2's
-    model-sharing plumbing (``src.services.training.model_classes``,
-    ``src.routers.curation._models_sharing``) has no reverse index of
-    "which projects actually reference model X as their active
-    detector". That scan needs each project's own bound
-    ``DetectionProfile`` read, which is explicitly the not-yet-landed W4
-    profile-CRUD wave's job (see the ``TODO(W4/profile_validation)`` in
-    ``_models_sharing.py``, which even ``PUT .../sharing`` itself defers
-    on). Until W4 lands there is no way to name which projects would
-    actually break, so a project with any ``shared=True`` promoted model
-    is still refused (``in_use``) unless ``force=True`` -- "opted into
-    sharing" is itself evidence someone may depend on it, and silently
-    allowing the delete would be the worse failure mode -- but the
-    caller must read the returned names as "these models of mine are
-    shared", not as consumer project slugs.
-    """
-    from src.services.training.model_classes import is_model_shared, model_owner_project
-    from src.services.training.triton_promote import resolve_triton_models_dir
-
-    models_dir = resolve_triton_models_dir()
-    if not models_dir.is_dir():
-        return []
-    return sorted(
-        entry.name
-        for entry in models_dir.iterdir()
-        if entry.is_dir()
-        and model_owner_project(entry.name) == record.slug
-        and is_model_shared(entry.name)
-    )
-
-
-async def delete_project_finish(client: Any, *, slug: str) -> ProjectRecord:
-    """Steps 3-9 of the guarded delete (§4): drain wait, unload models
-    (P2 scope, not yet wired), delete the exact indexes, remove the
-    dirs, soft-delete the MLflow experiment if reachable, tombstone.
-    Idempotent: safe to re-run after a crash between any two steps,
-    because every step here is itself idempotent (index delete with
-    ``ignore=[404]``, ``rmtree(ignore_errors=True)``, and the final
-    ``deleted`` write is OCC-guarded so a duplicate run is a no-op)."""
-    stored, _, _ = await get_record_with_seq(client, slug)
-    if stored is None:
-        raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
-    record = stored
-    if record.status == 'deleted':
-        return record
-
-    drained = await _wait_for_drain(record)
-    if not drained:
-        _, seq, term = await get_record_with_seq(client, slug)
-        rolled_back = replace(record, status='failed', updated_at=_now())
-        await write_record(client, rolled_back, if_seq_no=seq, if_primary_term=term)
-        await get_project_registry().ensure_fresh()
-        raise api_error(
-            409, 'project_busy', f"'{slug}' did not drain within the timeout", project=slug
-        )
-
-    await _delete_indexes(client, record)
-    await _delete_dirs(record)
-    await _soft_delete_mlflow(record)
-
-    _, seq, term = await get_record_with_seq(client, slug)
-    tombstoned = replace(record, status='deleted', updated_at=_now())
-    await write_record(client, tombstoned, if_seq_no=seq, if_primary_term=term)
-    await get_project_registry().ensure_fresh()
-    logger.info('project_deleted', project=slug)
-    return tombstoned
-
-
-async def _soft_delete_mlflow(record: ProjectRecord) -> None:
-    """Best-effort MLflow experiment soft-delete; unreachable server is
-    reported, never fatal to the delete."""
-    try:
-        import mlflow
-
-        client = mlflow.tracking.MlflowClient()
-        experiment = client.get_experiment_by_name(record.resources.mlflow_experiment)
-        if experiment is not None:
-            client.delete_experiment(experiment.experiment_id)
-    except Exception as exc:
-        logger.info('project_delete_mlflow_skipped', project=record.slug, error=str(exc))
+# dry_run_delete / delete_project / delete_project_finish live in
+# delete.py (700-LOC ratchet); re-exported here so
+# `lifecycle.delete_project(...)` keeps working for every existing caller.
+from src.services.projects.delete import (  # noqa: E402,F401
+    delete_project,
+    delete_project_finish,
+    dry_run_delete,
+)

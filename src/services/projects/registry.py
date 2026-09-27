@@ -78,6 +78,7 @@ def record_to_doc(record: ProjectRecord) -> dict[str, Any]:
         'updated_at': record.updated_at,
         'origin': record.origin,
         'resources': _resources_to_dict(record.resources),
+        'pre_delete_status': record.pre_delete_status,
     }
 
 
@@ -92,6 +93,7 @@ def doc_to_record(doc: Mapping[str, Any]) -> ProjectRecord:
         updated_at=doc['updated_at'],
         origin=doc.get('origin'),
         resources=_resources_from_dict(doc['resources']),
+        pre_delete_status=doc.get('pre_delete_status'),
     )
 
 
@@ -160,6 +162,23 @@ async def write_record(
                 index=projects_index(),
                 id=_project_doc_id(record.slug),
                 body=record_to_doc(record),
+                # B2: op_projects is tiny -- read-your-writes here, not the
+                # ~1s default refresh interval. Without this, ensure_fresh's
+                # _search (which the guard maps index -> project from) can
+                # still see the pre-write snapshot even after this index()
+                # call returns, so a just-created project's own
+                # op_prj_<slug>__* index creation gets refused
+                # "belongs to no known project" moments after create_project
+                # wrote the doc.
+                refresh='wait_for',
+                # B2: op_projects is tiny -- read-your-writes here, not the
+                # ~1s default refresh interval. Without this, ensure_fresh's
+                # _search (which the guard maps index -> project from) can
+                # still see the pre-write snapshot even after this index()
+                # call returns, so a just-created project's own
+                # op_prj_<slug>__* index creation gets refused
+                # "belongs to no known project" moments after create_project
+                # wrote the doc.
                 **kwargs,
             )
         except Exception as exc:

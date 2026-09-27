@@ -416,7 +416,7 @@ async def _process_crop(
         ):
             region_in_crop = _source_to_crop(task.detector_region_in_source, task.item_bbox_norm)
             region_jpeg = _crop_region_jpeg(task.crop_jpeg, region_in_crop)
-            outcome = await _verify_with_vlm(vlm, task.crop_id, region_jpeg)
+            outcome = await _verify_with_vlm(vlm, task, region_jpeg)
             if outcome is None:
                 _no_verdict_done(
                     task,
@@ -477,7 +477,7 @@ async def _process_crop(
                     # Fall through to the secondary segmenter.
                 else:
                     region_jpeg = _crop_region_jpeg(task.crop_jpeg, cand.bbox_norm)
-                    outcome = await _verify_with_vlm(vlm, task.crop_id, region_jpeg)
+                    outcome = await _verify_with_vlm(vlm, task, region_jpeg)
                     if outcome is None:
                         _no_verdict_done(
                             task,
@@ -556,7 +556,7 @@ async def _process_crop(
                     raise _CascadeDoneError
 
                 region_jpeg = _crop_region_jpeg(task.crop_jpeg, sam_candidate.bbox_norm)
-                outcome = await _verify_with_vlm(vlm, task.crop_id, region_jpeg)
+                outcome = await _verify_with_vlm(vlm, task, region_jpeg)
                 if outcome is None:
                     _no_verdict_done(
                         task,
@@ -628,7 +628,7 @@ async def _process_crop(
                         )
                     else:
                         region_jpeg = _crop_region_jpeg(task.crop_jpeg, sub_cand.bbox_norm)
-                        outcome = await _verify_with_vlm(vlm, task.crop_id, region_jpeg)
+                        outcome = await _verify_with_vlm(vlm, task, region_jpeg)
                         if outcome is None:
                             _no_verdict_done(
                                 task,

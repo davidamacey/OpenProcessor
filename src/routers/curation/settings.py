@@ -130,9 +130,13 @@ async def _config_store_axis_defaults(opensearch: Any) -> dict[str, str | None]:
         ('prompt_pack', snapshot.active_pack),
         ('detection_profile', snapshot.active_profile),
     ):
-        if ref is None or ref == 'off':
+        if ref is None:
             continue
-        result[axis] = ref[0]
+        # Minor 4 (W2 review): 'off' (an explicit deactivation) is a real,
+        # distinct state from "never activated" (the store's own
+        # docstring, src/services/config_store/store.py's `AxisRef`) --
+        # report it, don't fold it into the same absence as `None`.
+        result[axis] = 'off' if ref == 'off' else ref[0]
     return result
 
 
@@ -224,13 +228,27 @@ async def _activate_config_store_axis(axis: str, value: str | None, opensearch: 
             )
         target_name = value
 
+    # M6: a stored config activates at its OWN current revision, never
+    # `None` -- `_axis_ref` on every OTHER process's read coerces a
+    # `None` revision to 0, so `(name, None)` written here and
+    # `(name, 0)` read there disagree about the stamped revision
+    # (any_domain_plan.md §3.7). An env/file id (never saved to the
+    # store) genuinely has no revision, so it keeps `None`.
+    target_revision: int | None = None
+    if target_name is not None:
+        stored = (store.current.packs if axis == 'prompt_pack' else store.current.profiles).get(
+            target_name
+        )
+        if stored is not None:
+            target_revision = stored.revision
+
     try:
         await activate_axis(
             store,
             opensearch,
             axis=cast('ConfigAxis', axis),
             name=target_name,
-            revision=None,
+            revision=target_revision,
             expected_active=expected_active,
         )
     except ActiveConflictError as exc:
