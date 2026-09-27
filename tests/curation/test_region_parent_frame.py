@@ -45,7 +45,9 @@ def client(fake_os: _FakeRegionOS) -> Any:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     with TestClient(app) as c:
         yield c
@@ -55,7 +57,7 @@ def test_put_region_parent_frame_is_projected_to_source(
     client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = client.put(
-        '/curation/crops/c1/region',
+        '/curation/projects/default/crops/c1/region',
         json={'region_bbox_norm': [0.5, 0.5, 1.0, 1.0], 'frame': 'parent'},
     )
     assert resp.status_code == 200, resp.text
@@ -68,14 +70,17 @@ def test_put_region_parent_frame_is_projected_to_source(
 
 
 def test_put_region_default_frame_is_source(client: TestClient, fake_os: _FakeRegionOS) -> None:
-    resp = client.put('/curation/crops/c1/region', json={'region_bbox_norm': [0.3, 0.5, 0.4, 0.6]})
+    resp = client.put(
+        '/curation/projects/default/crops/c1/region',
+        json={'region_bbox_norm': [0.3, 0.5, 0.4, 0.6]},
+    )
     assert resp.status_code == 200, resp.text
     assert fake_os._docs['c1'][F.bbox_norm] == [0.3, 0.5, 0.4, 0.6]
 
 
 def test_put_region_parent_frame_without_item_box_is_422(client: TestClient) -> None:
     resp = client.put(
-        '/curation/crops/nobox/region',
+        '/curation/projects/default/crops/nobox/region',
         json={'region_bbox_norm': [0.1, 0.1, 0.5, 0.5], 'frame': 'parent'},
     )
     assert resp.status_code == 422, resp.text
@@ -83,7 +88,7 @@ def test_put_region_parent_frame_without_item_box_is_422(client: TestClient) -> 
 
 def test_put_region_unknown_frame_is_422(client: TestClient) -> None:
     resp = client.put(
-        '/curation/crops/c1/region',
+        '/curation/projects/default/crops/c1/region',
         json={'region_bbox_norm': [0.1, 0.1, 0.5, 0.5], 'frame': 'crop'},
     )
     assert resp.status_code == 422
@@ -94,7 +99,7 @@ def test_batch_region_parent_frame_uses_each_items_own_box(
 ) -> None:
     fake_os._docs['c2']['bbox_norm'] = [0.0, 0.0, 0.5, 0.5]
     resp = client.put(
-        '/curation/crops/batch_region',
+        '/curation/projects/default/crops/batch_region',
         json={
             'crop_ids': ['c1', 'c2', 'nobox'],
             'region_bbox_norm': [0.0, 0.0, 0.5, 0.5],

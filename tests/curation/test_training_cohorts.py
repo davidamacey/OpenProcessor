@@ -29,14 +29,16 @@ def client() -> Any:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: object()
     with TestClient(app) as c:
         yield c
 
 
 def _by_id(client: TestClient, **params: Any) -> dict[str, dict[str, Any]]:
-    r = client.get('/curation/training_cohorts', params=params)
+    r = client.get('/curation/projects/default/training_cohorts', params=params)
     assert r.status_code == 200, r.text
     cohorts = r.json()['cohorts']
     for c in cohorts:

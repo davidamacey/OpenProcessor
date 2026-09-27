@@ -119,7 +119,7 @@ async def test_cluster_scope_selects_every_unvalidated_member(pipeline_env: _Lab
 
 @pytest.mark.usefixtures('packs')
 def test_label_cluster_route_queues_a_scoped_vlm_job(client: TestClient, job_dir: Path) -> None:  # noqa: F811
-    r = client.post(f'/curation/vlm/label_cluster/{CLUSTER}')
+    r = client.post(f'/curation/projects/default/vlm/label_cluster/{CLUSTER}')
     assert r.status_code == 200, r.text
     args = json.loads((job_dir / 'trigger.json').read_text())['args']
     assert args['cluster_id'] == CLUSTER

@@ -681,7 +681,7 @@ def create_app() -> FastAPI:
     application.include_router(query_router)  # /query - Data retrieval
     application.include_router(ocr_router)  # /ocr - Text extraction
     application.include_router(models_router)  # /models - Model management
-    mount_all_curation_routers(application)  # /curation: global, scoped, default alias
+    mount_all_curation_routers(application)  # /curation: global routes + /projects/{project}/...
 
     # Versioned API - All endpoints also available under /v1
     application.include_router(v1_router)  # /v1/* - Versioned API

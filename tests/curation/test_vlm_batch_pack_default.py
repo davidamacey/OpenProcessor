@@ -53,7 +53,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient,
 
     monkeypatch.setattr(vlm, '_get_vlm_labeler', _fake_get)
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()
     return TestClient(app), requested
 
@@ -67,7 +69,7 @@ def test_region_visible_batch_uses_settings_default_pack(
 ) -> None:
     c, requested = client
     r = c.post(
-        '/curation/vlm/region_visible_batch',
+        '/curation/projects/default/vlm/region_visible_batch',
         json={'items': [{'crop_id': 'a', 'image_b64': _IMG}]},
     )
     assert r.status_code == 200, r.text
@@ -80,7 +82,7 @@ def test_verify_region_batch_uses_settings_default_pack(
 ) -> None:
     c, requested = client
     c.post(
-        '/curation/vlm/verify_region_batch',
+        '/curation/projects/default/vlm/verify_region_batch',
         json={'items': [{'crop_id': 'a', 'region_image_b64': _IMG}]},
     )
     assert requested == ['food_v2']

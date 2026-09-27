@@ -372,9 +372,11 @@ def test_bakeoff_active_after_enqueue_with_no_env(
     clean_arbiter_env.setattr(gpu_arbiter, 'stop_gpu_services', _stop)
     assert gpu_arbiter.bakeoff_active() is False
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     r = TestClient(app).post(
-        '/curation/bakeoff/run',
+        '/curation/projects/default/bakeoff/run',
         json={
             'datasets': [{'id': 'export:e1'}],
             'models': [{'source': 'custom', 'name': 'c', 'backend': 'ultralytics'}],

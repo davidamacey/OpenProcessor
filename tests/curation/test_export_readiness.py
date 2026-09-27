@@ -130,9 +130,11 @@ def test_export_router_maps_nothing_to_export_to_422(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(GenericYoloExportService, 'export_dataset', _refuse)
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()
-    r = TestClient(app).post('/curation/export/yolo', json={})
+    r = TestClient(app).post('/curation/projects/default/export/yolo', json={})
     assert r.status_code == 422
     assert '0 items are class_validated' in r.json()['detail']
 
@@ -203,7 +205,9 @@ def train_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation_train import router as train_router
 
     app = FastAPI()
-    app.include_router(train_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, train_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -231,7 +235,8 @@ def test_preflight_blocks_single_class_export_older_than_the_index(
 ) -> None:
     export_dir = _single_class_export(tmp_path, exported_at='2026-09-24T03:20:32+00:00')
     r = train_client.post(
-        '/curation/train/preflight', json={'dataset_export_dir': export_dir, 'profile': 'medium'}
+        '/curation/projects/default/train/preflight',
+        json={'dataset_export_dir': export_dir, 'profile': 'medium'},
     )
     assert r.status_code == 200, r.text
     body = r.json()
@@ -244,7 +249,8 @@ def test_preflight_passes_generation_for_a_current_stamp(
 ) -> None:
     export_dir = _single_class_export(tmp_path, items_index=CURRENT)
     body = train_client.post(
-        '/curation/train/preflight', json={'dataset_export_dir': export_dir, 'profile': 'medium'}
+        '/curation/projects/default/train/preflight',
+        json={'dataset_export_dir': export_dir, 'profile': 'medium'},
     ).json()
     assert _check(body, 'export_generation')['severity'] == 'ok'
     assert _check(body, 'export_not_empty')['severity'] == 'ok'
@@ -259,7 +265,8 @@ def test_preflight_blocks_an_empty_multi_class_export(
         json.dumps({'image_count': 0, 'split_counts': {}, 'items_index': CURRENT})
     )
     body = train_client.post(
-        '/curation/train/preflight', json={'dataset_export_dir': str(d), 'profile': 'medium'}
+        '/curation/projects/default/train/preflight',
+        json={'dataset_export_dir': str(d), 'profile': 'medium'},
     ).json()
     assert _check(body, 'export_not_empty')['severity'] == 'block'
     assert body['blocked'] is True

@@ -26,16 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cap; `script_binding.py`: `--project` for scripts).
 - **Every curation route is scoped under
   `/curation/projects/{project}/...`** (`src/routers/curation/_mounting.py`),
-  binding the project for the request. The unscoped `/curation/...` paths
-  stay as a hidden alias (`include_in_schema=False`, `OP_UNSCOPED_ALIAS`)
-  bound to `default`, which resolves to today's env-configured index names
-  and paths — no migration. The OpenAPI contract documents only the scoped
-  paths plus the global ones. Served URLs (thumbnails, region thumbnails,
-  training artifacts) are always the canonical scoped form.
+  binding the project for the request. There is no unscoped alias: an
+  unscoped curation path is a 404. The only routes outside a project are
+  `GET /curation/projects[/{project}]`, `GET /curation/health` and
+  `GET /curation/events`. Served URLs (thumbnails, region thumbnails,
+  training artifacts) are always the scoped form.
 - **Global `GET /curation/health` and `GET /curation/events`** for
   project-less screens: deployment facts only, and only `project: null`
-  events (`project.*`, VLM-registry `config.changed`, `combine.*` with
-  `target`). They win over the alias at those two paths. The scoped
+  events (`project.*` and `combine.*` with `target`). The scoped
   `{prefix}/health` keeps its shape plus `project`.
 - `GET /curation/projects` serves `labels.status` and
   `limits.retired_slugs`; `GET /curation/projects/{project}` serves the

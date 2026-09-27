@@ -36,6 +36,9 @@ SCRIPTS_DIR := scripts
 
 # Port configurations (G-01/G-03: override via .env or `make API_PORT=...`)
 API_PORT ?= 4603
+# Curation project the curation make targets act on (every curation route is
+# under /curation/projects/<project>/...).
+PROJECT ?= default
 TRITON_HTTP_PORT ?= 4600
 TRITON_GRPC_PORT ?= 4601
 TRITON_METRICS_PORT ?= 4602
@@ -128,7 +131,7 @@ restart-triton: ## Restart only Triton server (after model changes)
 
 .PHONY: reload-promoted
 reload-promoted: ## Re-load promoted Triton models that dropped to UNAVAILABLE after a Triton restart
-	@curl -s -X POST "http://localhost:$(API_PORT)/curation/train/reload_promoted" | jq . 2>/dev/null || \
+	@curl -s -X POST "http://localhost:$(API_PORT)/curation/projects/$(PROJECT)/train/reload_promoted" | jq . 2>/dev/null || \
 		echo "API not reachable on port $(API_PORT) (it also runs this once at its own startup and every ~15s on its reconcile tick)"
 
 .PHONY: restart-api

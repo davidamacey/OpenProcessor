@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 
 config = get_curation_config()
 
-router = APIRouter(prefix=f'{config.api_prefix}/cluster', tags=[f'{config.api_tag} — Clustering'])
+router = APIRouter(prefix='/cluster', tags=[f'{config.api_tag} — Clustering'])
 
 
 @router.post('/umap/rebuild')

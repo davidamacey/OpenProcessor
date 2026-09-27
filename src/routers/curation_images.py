@@ -47,7 +47,7 @@ config = get_curation_config()
 
 
 router = APIRouter(
-    prefix=f'{config.api_prefix}/images',
+    prefix='/images',
     tags=[f'{config.api_tag} - Images'],
     default_response_class=ORJSONResponse,
 )
@@ -106,7 +106,7 @@ async def thumbnail_cache_stats() -> dict[str, int]:
 
 
 crops_router = APIRouter(
-    prefix=f'{config.api_prefix}/crops',
+    prefix='/crops',
     tags=[f'{config.api_tag} - Crops'],
     default_response_class=ORJSONResponse,
 )

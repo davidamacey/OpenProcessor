@@ -25,7 +25,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
-import os
 import signal
 import sys
 import time
@@ -40,6 +39,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
+from src.config.project_context import project_api_base
 from src.services.curation.worker_liveness import write_heartbeat
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
@@ -52,12 +52,14 @@ _LIVENESS_TICK_S = 15.0
 
 
 DEFAULT_API = 'http://localhost:4603'
-# Same env + default as CurationConfig.api_prefix, so the worker follows the API's mount.
-API_PREFIX = os.environ.get('OP_API_PREFIX', '/curation').rstrip('/')
 DEFAULT_OS = 'http://localhost:4607'
-# curation items index — see vlm_worker.py's
-# identical constant for the full explanation.
-ITEMS_INDEX = os.environ.get('OP_ITEMS_INDEX_OVERRIDE') or 'op_items'
+
+
+def _items_index() -> str:
+    """The bound project's items index (``--project``), read per call."""
+    from src.config.curation import IndexRole, get_curation_config, index_name
+
+    return index_name(get_curation_config(), IndexRole.ITEMS)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -96,14 +98,14 @@ def _parse_args() -> argparse.Namespace:
 
 
 async def _crop_count(client: httpx.AsyncClient, opensearch: str) -> int:
-    r = await client.get(f'{opensearch}/{ITEMS_INDEX}/_count', timeout=10.0)
+    r = await client.get(f'{opensearch}/{_items_index()}/_count', timeout=10.0)
     r.raise_for_status()
     return int(r.json().get('count', 0))
 
 
 async def _trigger_auto_promote(client: httpx.AsyncClient, api: str) -> dict[str, Any]:
     r = await client.post(
-        f'{api}{API_PREFIX}/clusters/auto_promote',
+        f'{api}{project_api_base()}/clusters/auto_promote',
         json={},
         # A cold-start pass (daemon restart resets in-process last_count to
         # 0, so the very next poll always re-triggers over the *full* pool,
@@ -120,7 +122,7 @@ async def _trigger_auto_promote(client: httpx.AsyncClient, api: str) -> dict[str
 
 async def _trigger_auto_label(client: httpx.AsyncClient, api: str) -> dict[str, Any]:
     r = await client.post(
-        f'{api}{API_PREFIX}/pipeline/auto_label',
+        f'{api}{project_api_base()}/pipeline/auto_label',
         json={},
         timeout=900.0,
     )

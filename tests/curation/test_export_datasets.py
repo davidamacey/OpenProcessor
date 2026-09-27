@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-P = curation_config.api_prefix
+P = f'{curation_config.api_prefix}/projects/default'
 
 
 def _write_export(d: Path, **meta: Any) -> None:
@@ -79,7 +79,9 @@ def client(export_root: Path) -> Any:
     from src.routers.curation import router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     with TestClient(app) as c:
         yield c
 

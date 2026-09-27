@@ -65,7 +65,6 @@ config = get_curation_config()
 
 
 router = APIRouter(
-    prefix=config.api_prefix,
     tags=[config.api_tag],
     default_response_class=ORJSONResponse,
 )

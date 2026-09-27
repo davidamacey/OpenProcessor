@@ -73,6 +73,50 @@ def _bind_default_project(request: pytest.FixtureRequest) -> Iterator[None]:
         bind_process_project(None)
 
 
+@pytest.fixture(autouse=True)
+def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Every ``TestClient`` request runs in a fresh ``contextvars.Context``,
+    the way uvicorn serves it: the test's own binding (above) never leaks
+    into the app, so a route that forgets to bind fails here too.
+
+    Also installs a project registry that never reaches the network: it
+    knows ``default`` (from the env) and nothing else. A test that needs
+    more projects installs its own with ``set_project_registry``."""
+    import contextvars
+
+    from fastapi.testclient import TestClient
+
+    from src.services.projects import registry as registry_mod
+
+    real_request = TestClient.request
+
+    def _unbound_request(self: TestClient, *args: object, **kwargs: object) -> object:
+        return contextvars.Context().run(real_request, self, *args, **kwargs)
+
+    monkeypatch.setattr(TestClient, 'request', _unbound_request)
+
+    def _no_registry_client() -> object:
+        raise ConnectionError('no project registry in unit tests')
+
+    registry_mod.set_project_registry(registry_mod.ProjectRegistry(_no_registry_client))
+
+    # Script entry points resolve ``--project`` through the registry; here
+    # it holds only the env-derived ``default`` (tests/projects/
+    # test_script_binding.py exercises the real read).
+    from src.services.projects import script_binding
+
+    async def _default_only_registry(_url: str | None = None) -> object:
+        registry = registry_mod.ProjectRegistry(_no_registry_client)
+        registry._refreshed = True
+        return registry
+
+    monkeypatch.setattr(script_binding, 'load_registry', _default_only_registry)
+    try:
+        yield
+    finally:
+        registry_mod.set_project_registry(None)
+
+
 collect_ignore = [
     'test_full_system.py',
     'test_scrfd_pipeline.py',

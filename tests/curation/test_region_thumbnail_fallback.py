@@ -92,19 +92,21 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, sample_image: Pa
     fake_os = _FakeOSClient(docs)
 
     app = FastAPI()
-    app.include_router(curation_images.crops_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_images.crops_router)
     app.dependency_overrides[curation_images._raw_opensearch_dep] = lambda: fake_os
     return TestClient(app)
 
 
 def test_region_thumbnail_renders_from_candidate_box(app_client: TestClient) -> None:
-    r = app_client.get('/curation/crops/candidate_only/region_thumbnail')
+    r = app_client.get('/curation/projects/default/crops/candidate_only/region_thumbnail')
     assert r.status_code == 200, r.text
     assert r.content.startswith(b'\xff\xd8'), 'must be JPEG magic bytes'
 
 
 def test_region_thumbnail_404s_with_neither_box(app_client: TestClient) -> None:
-    r = app_client.get('/curation/crops/neither_box/region_thumbnail')
+    r = app_client.get('/curation/projects/default/crops/neither_box/region_thumbnail')
     assert r.status_code == 404
     assert 'no region bbox' in r.json()['detail']
 
@@ -113,7 +115,7 @@ def test_region_thumbnail_still_renders_from_accepted_box(app_client: TestClient
     """Unchanged behavior: an accepted region box still wins over any
     (nonexistent, here) candidate -- the fallback only kicks in when
     ``region_bbox_norm`` is absent."""
-    r = app_client.get('/curation/crops/detected/region_thumbnail')
+    r = app_client.get('/curation/projects/default/crops/detected/region_thumbnail')
     assert r.status_code == 200, r.text
     assert r.content.startswith(b'\xff\xd8')
 

@@ -188,9 +188,11 @@ def test_api_default_profile_from_example_path(monkeypatch: pytest.MonkeyPatch) 
     from src.routers.curation import router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     monkeypatch.setenv('OP_BAKEOFF_PROFILE', str(PROFILE))
-    body = TestClient(app).get('/curation/bakeoff/profiles').json()
+    body = TestClient(app).get('/curation/projects/default/bakeoff/profiles').json()
     by_name = {p['name']: p for p in body['profiles']}
     assert body['default_profile'] == 'license_plate'
     assert by_name['license_plate']['default'] is True

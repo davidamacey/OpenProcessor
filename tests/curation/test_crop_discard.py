@@ -45,7 +45,7 @@ async def test_discard_then_undo_restores_exactly(crops, registry, ids, client_f
     labeled = _state(fake.docs(ITEMS)['c1'])
     client: TestClient = client_for(fake)
 
-    r = client.post('/curation/crops/c1/discard', json={})
+    r = client.post('/curation/projects/default/crops/c1/discard', json={})
     assert r.status_code == 200, r.text
     after = fake.docs(ITEMS)['c1']
     assert after['class_id'] is None
@@ -53,7 +53,7 @@ async def test_discard_then_undo_restores_exactly(crops, registry, ids, client_f
     assert after['cluster_id'] is None
     assert r.json()['class_id'] is None
 
-    r = client.post('/curation/crops/c1/label/undo')
+    r = client.post('/curation/projects/default/crops/c1/label/undo')
     assert r.status_code == 200, r.text
     assert _state(fake.docs(ITEMS)['c1']) == labeled
 
@@ -65,13 +65,13 @@ async def test_undo_after_discard_after_label_steps_back(crops, registry, ids, c
     await _label(crops, fake, registry, 'c1', ids['widget'])
     labeled = _state(fake.docs(ITEMS)['c1'])
     client = client_for(fake)
-    assert client.post('/curation/crops/c1/discard', json={}).status_code == 200
+    assert client.post('/curation/projects/default/crops/c1/discard', json={}).status_code == 200
 
-    assert client.post('/curation/crops/c1/label/undo').status_code == 200
+    assert client.post('/curation/projects/default/crops/c1/label/undo').status_code == 200
     assert _state(fake.docs(ITEMS)['c1']) == labeled
-    assert client.post('/curation/crops/c1/label/undo').status_code == 200
+    assert client.post('/curation/projects/default/crops/c1/label/undo').status_code == 200
     assert _state(fake.docs(ITEMS)['c1']) == original
-    assert client.post('/curation/crops/c1/label/undo').status_code == 409
+    assert client.post('/curation/projects/default/crops/c1/label/undo').status_code == 409
 
 
 @pytest.mark.asyncio
@@ -85,7 +85,8 @@ async def test_review_dismiss_only_keeps_class_and_is_undoable(
     before = _state(fake.docs(ITEMS)['c1'])
     client = client_for(fake)
     r = client.post(
-        '/curation/crops/c1/discard', json={'clear_class': False, 'dismiss_from_review': True}
+        '/curation/projects/default/crops/c1/discard',
+        json={'clear_class': False, 'dismiss_from_review': True},
     )
     assert r.status_code == 200, r.text
     after = fake.docs(ITEMS)['c1']
@@ -93,34 +94,39 @@ async def test_review_dismiss_only_keeps_class_and_is_undoable(
     assert _class_state(after) == _class_state(fake.docs(ITEMS)['c1'])
     assert after['cluster_id'] == before['cluster_id']
 
-    assert client.post('/curation/crops/c1/label/undo').status_code == 200
+    assert client.post('/curation/projects/default/crops/c1/label/undo').status_code == 200
     assert _state(fake.docs(ITEMS)['c1']) == before
 
 
 def test_discard_requires_an_effect(client_for) -> None:  # noqa: F811
     client = client_for(QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}}))
     r = client.post(
-        '/curation/crops/c1/discard', json={'clear_class': False, 'dismiss_from_review': False}
+        '/curation/projects/default/crops/c1/discard',
+        json={'clear_class': False, 'dismiss_from_review': False},
     )
     assert r.status_code == 422
 
 
 def test_discard_unknown_crop_is_404(client_for) -> None:  # noqa: F811
     client = client_for(QueryFakeOpenSearch({ITEMS: {}}))
-    assert client.post('/curation/crops/nope/discard', json={}).status_code == 404
+    assert client.post('/curation/projects/default/crops/nope/discard', json={}).status_code == 404
 
 
 def test_discard_batch(client_for) -> None:  # noqa: F811
     fake = QueryFakeOpenSearch({ITEMS: {k: _proposal_doc(k) for k in ('a', 'b')}})
     before = {k: _state(v) for k, v in fake.docs(ITEMS).items()}
     client = client_for(fake)
-    r = client.post('/curation/crops/discard_batch', json={'crop_ids': ['a', 'b', 'gone']})
+    r = client.post(
+        '/curation/projects/default/crops/discard_batch', json={'crop_ids': ['a', 'b', 'gone']}
+    )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['discarded'] == 2
     assert sorted(i['crop_id'] for i in body['items']) == ['a', 'b']
     assert body['not_found'] == ['gone']
-    r = client.post('/curation/crops/label/undo_batch', json={'crop_ids': ['a', 'b']})
+    r = client.post(
+        '/curation/projects/default/crops/label/undo_batch', json={'crop_ids': ['a', 'b']}
+    )
     assert r.status_code == 200, r.text
     assert {k: _state(v) for k, v in fake.docs(ITEMS).items()} == before
 
@@ -131,11 +137,12 @@ def test_discard_batch(client_for) -> None:  # noqa: F811
 def test_label_source_must_be_a_human_source(client_for, ids) -> None:  # noqa: F811
     client = client_for(QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}}))
     r = client.put(
-        '/curation/crops/c1/label', json={'class_id': ids['widget'], 'label_source': 'vlm'}
+        '/curation/projects/default/crops/c1/label',
+        json={'class_id': ids['widget'], 'label_source': 'vlm'},
     )
     assert r.status_code == 422
     r = client.put(
-        '/curation/crops/batch_label',
+        '/curation/projects/default/crops/batch_label',
         json={'crop_ids': ['c1'], 'class_id': ids['widget'], 'label_source': 'cluster_majority'},
     )
     assert r.status_code == 422

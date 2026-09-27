@@ -68,7 +68,9 @@ def app_client(fake_opensearch: AsyncMock, fake_triton_pool: AsyncMock):
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[get_opensearch] = lambda: fake_opensearch
     # The router actually injects `_raw_opensearch_dep` (which strips the
     # `.client` wrapper). That dep calls `get_opensearch()` directly —
@@ -92,7 +94,7 @@ def test_test_holdout_freeze_rejects_re_run_without_force(
 ) -> None:
     # Pretend an existing holdout already exists.
     fake_opensearch.count = AsyncMock(return_value={'count': 1234})
-    r = app_client.post('/curation/test_holdout/freeze', json={'percent': 10})
+    r = app_client.post('/curation/projects/default/test_holdout/freeze', json={'percent': 10})
     assert r.status_code == 409
     assert 'force' in r.text.lower()
 
@@ -113,7 +115,7 @@ def test_test_holdout_freeze_zero_cohort_raises_422_even_with_force(
         }
     )
     r = app_client.post(
-        '/curation/test_holdout/freeze?force=true',
+        '/curation/projects/default/test_holdout/freeze?force=true',
         json={'percent': 10},
     )
     assert r.status_code == 422, r.text
@@ -136,7 +138,7 @@ def test_classes_post_appends(app_client: Any, tmp_path: Path) -> None:
 
     with patch('src.routers.curation.get_class_registry', return_value=reg):
         r = app_client.post(
-            '/curation/classes',
+            '/curation/projects/default/classes',
             json={'name': 'subaru_brz', 'group': 'sport_compact'},
         )
     assert r.status_code == 201, r.text
@@ -160,7 +162,7 @@ def test_classes_merge_deprecates_source(
 
     with patch('src.routers.curation.get_class_registry', return_value=reg):
         r = app_client.post(
-            '/curation/classes/merge',
+            '/curation/projects/default/classes/merge',
             json={'source_id': src_id, 'target_id': tgt_id},
         )
     assert r.status_code == 200, r.text
@@ -191,7 +193,7 @@ def test_classes_merge_refuses_when_source_has_frozen_holdout_crops(
 
     with patch('src.routers.curation.get_class_registry', return_value=reg):
         r = app_client.post(
-            '/curation/classes/merge',
+            '/curation/projects/default/classes/merge',
             json={'source_id': src_id, 'target_id': tgt_id},
         )
     assert r.status_code == 409, r.text
@@ -270,7 +272,7 @@ def test_classes_merge_resets_stale_human_provenance_on_crops_only(
 
     with patch('src.routers.curation.get_class_registry', return_value=reg):
         r = app_client.post(
-            '/curation/classes/merge',
+            '/curation/projects/default/classes/merge',
             json={'source_id': src_id, 'target_id': tgt_id},
         )
     assert r.status_code == 200, r.text
@@ -325,7 +327,7 @@ def test_unlabel_crop_clears_stale_human_provenance(
     )
     fake_opensearch.update = AsyncMock(return_value={'result': 'updated'})
 
-    r = app_client.delete('/curation/crops/crop-xyz/label')
+    r = app_client.delete('/curation/projects/default/crops/crop-xyz/label')
     assert r.status_code == 200, r.text
 
     update_calls = fake_opensearch.update.call_args_list
@@ -341,8 +343,16 @@ def test_unlabel_crop_clears_stale_human_provenance(
 @pytest.mark.parametrize(
     ('method', 'url', 'body'),
     [
-        ('put', '/curation/crops/batch_label', {'crop_ids': ['crop-xyz'], 'class_id': 3}),
-        ('post', '/curation/crops/move', {'crop_ids': ['crop-xyz'], 'cluster_id': 3}),
+        (
+            'put',
+            '/curation/projects/default/crops/batch_label',
+            {'crop_ids': ['crop-xyz'], 'class_id': 3},
+        ),
+        (
+            'post',
+            '/curation/projects/default/crops/move',
+            {'crop_ids': ['crop-xyz'], 'cluster_id': 3},
+        ),
     ],
 )
 def test_human_class_writers_replace_detector_provenance(
@@ -416,7 +426,7 @@ def test_health_reports_degraded_when_vlm_down(
     )
 
     with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
-        r = app_client.get('/curation/health')
+        r = app_client.get('/curation/projects/default/health')
 
     assert r.status_code == 200, r.text
     body = r.json()
@@ -433,7 +443,7 @@ def test_health_reports_down_when_opensearch_unreachable(
     fake_vlm = MagicMock()
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=False, model='x'))
     with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
-        r = app_client.get('/curation/health')
+        r = app_client.get('/curation/projects/default/health')
     assert r.status_code == 200
     body = r.json()
     assert body['status'] in ('degraded', 'down')
@@ -458,7 +468,7 @@ def test_health_mlflow_public_url_is_null_when_unset(
     fake_vlm = MagicMock()
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
     with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
-        r = app_client.get('/curation/health')
+        r = app_client.get('/curation/projects/default/health')
     assert r.status_code == 200, r.text
     assert r.json()['mlflow_public_url'] is None
 
@@ -480,7 +490,7 @@ def test_health_mlflow_public_url_reflects_config(
     fake_vlm = MagicMock()
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
     with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
-        r = app_client.get('/curation/health')
+        r = app_client.get('/curation/projects/default/health')
     assert r.status_code == 200, r.text
     assert r.json()['mlflow_public_url'] == 'http://mlflow.example.com:4731'
 
@@ -492,7 +502,7 @@ def test_health_region_profile_is_null_without_an_active_profile(
     fake_vlm = MagicMock()
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
     with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
-        r = app_client.get('/curation/health')
+        r = app_client.get('/curation/projects/default/health')
     assert r.status_code == 200, r.text
     assert r.json()['region_profile'] is None
 
@@ -507,7 +517,7 @@ def test_health_region_profile_reflects_the_active_profile(
     fake_vlm = MagicMock()
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
     with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
-        r = app_client.get('/curation/health')
+        r = app_client.get('/curation/projects/default/health')
     assert r.status_code == 200, r.text
     region_profile = r.json()['region_profile']
     assert region_profile == {
@@ -538,7 +548,7 @@ def test_crops_listing_filters_test_holdout_by_default(
 
     fake_opensearch.search = AsyncMock(side_effect=fake_search)
 
-    r = app_client.get('/curation/crops')
+    r = app_client.get('/curation/projects/default/crops')
     assert r.status_code == 200, r.text
     # This is a pure predicate (must_not term), so it lives in
     # filter context now, not must.
@@ -564,7 +574,7 @@ def test_crops_listing_includes_test_when_requested(
 
     fake_opensearch.search = AsyncMock(side_effect=fake_search)
 
-    r = app_client.get('/curation/crops?include_test=true')
+    r = app_client.get('/curation/projects/default/crops?include_test=true')
     assert r.status_code == 200
     # When include_test=true, the test_holdout must_not filter should be absent.
     body = captured.get('body', {})
@@ -584,7 +594,7 @@ def test_batch_label_rejects_more_than_5000_crop_ids(app_client: Any) -> None:
     malformed/huge payload 422s instead of driving an unbounded OCC-bulk
     write."""
     r = app_client.put(
-        '/curation/crops/batch_label',
+        '/curation/projects/default/crops/batch_label',
         json={'crop_ids': [f'c{i}' for i in range(5001)], 'class_id': 1},
     )
     assert r.status_code == 422, r.text

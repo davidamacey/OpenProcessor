@@ -48,7 +48,9 @@ def app_client(fake_opensearch: AsyncMock) -> Any:
     fake_triton_pool.health_check = AsyncMock(return_value=True)
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[get_opensearch] = lambda: fake_opensearch
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
     app.dependency_overrides[get_async_triton] = lambda: fake_triton_pool
@@ -59,22 +61,30 @@ def app_client(fake_opensearch: AsyncMock) -> Any:
 # (method, path, json_body) for every region data/write route gated on an
 # active region profile.
 _GATED_ROUTES: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
-    ('get', '/curation/regions', None),
-    ('put', '/curation/crops/crop1/region', {'region_bbox_norm': None}),
-    ('patch', '/curation/crops/crop1/region_meta', {'region_status': 'no_region_visible'}),
-    ('put', '/curation/crops/batch_region', {'crop_ids': ['crop1'], 'region_bbox_norm': None}),
+    ('get', '/curation/projects/default/regions', None),
+    ('put', '/curation/projects/default/crops/crop1/region', {'region_bbox_norm': None}),
+    (
+        'patch',
+        '/curation/projects/default/crops/crop1/region_meta',
+        {'region_status': 'no_region_visible'},
+    ),
+    (
+        'put',
+        '/curation/projects/default/crops/batch_region',
+        {'crop_ids': ['crop1'], 'region_bbox_norm': None},
+    ),
     (
         'post',
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         {'crop_ids': ['crop1'], 'region_status': 'detected'},
     ),
-    ('post', '/curation/crops/crop1/region/undo', None),
-    ('post', '/curation/crops/region/undo_batch', {'crop_ids': ['crop1']}),
-    ('post', '/curation/vlm/verify_regions', {'crop_ids': ['crop1']}),
-    ('post', '/curation/vlm/verify_region_batch', {'crops': []}),
-    ('post', '/curation/vlm/region_visible_batch', {'crops': []}),
-    ('post', '/curation/regions/clusters/refine/5', None),
-    ('get', '/curation/regions/clusters', None),
+    ('post', '/curation/projects/default/crops/crop1/region/undo', None),
+    ('post', '/curation/projects/default/crops/region/undo_batch', {'crop_ids': ['crop1']}),
+    ('post', '/curation/projects/default/vlm/verify_regions', {'crop_ids': ['crop1']}),
+    ('post', '/curation/projects/default/vlm/verify_region_batch', {'crops': []}),
+    ('post', '/curation/projects/default/vlm/region_visible_batch', {'crops': []}),
+    ('post', '/curation/projects/default/regions/clusters/refine/5', None),
+    ('get', '/curation/projects/default/regions/clusters', None),
 )
 
 

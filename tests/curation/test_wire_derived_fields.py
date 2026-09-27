@@ -234,17 +234,22 @@ def test_crops_by_ids_returns_items_in_request_order() -> None:
         {items: {k: {'crop_id': k, 'class_id': 1, 'class_source': 'vlm'} for k in 'abc'}}
     )
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as client:
-        r = client.get('/curation/crops', params={'ids': 'c,gone,a'})
+        r = client.get('/curation/projects/default/crops', params={'ids': 'c,gone,a'})
         assert r.status_code == 200, r.text
         body = r.json()
         assert [c['crop_id'] for c in body['crops']] == ['c', 'a']
         assert body['total'] == 2
         assert body['crops'][0]['proposed_class_id'] == 1
         too_many = ','.join(f'x{i}' for i in range(501))
-        assert client.get('/curation/crops', params={'ids': too_many}).status_code == 400
+        assert (
+            client.get('/curation/projects/default/crops', params={'ids': too_many}).status_code
+            == 400
+        )
 
 
 def test_crops_needs_new_class_and_source_filters() -> None:
@@ -265,10 +270,12 @@ def test_crops_needs_new_class_and_source_filters() -> None:
         }
     )
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as client:
-        r = client.get('/curation/crops', params={'needs_new_class': 'true'})
+        r = client.get('/curation/projects/default/crops', params={'needs_new_class': 'true'})
         assert [c['crop_id'] for c in r.json()['crops']] == ['f']
-        r = client.get('/curation/crops', params={'source': 'disk_b'})
+        r = client.get('/curation/projects/default/crops', params={'source': 'disk_b'})
         assert [c['crop_id'] for c in r.json()['crops']] == ['n']

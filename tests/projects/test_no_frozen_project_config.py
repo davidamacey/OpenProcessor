@@ -27,15 +27,6 @@ _INDEX_CONST_NAMES = {
     'UMAP_VIZ_STATE_INDEX',
 }
 
-# Standalone raw-HTTP workers that name the items index from their own
-# env override; making them multi-project is P2 (projects_plan.md §5.2).
-_P2_RAW_HTTP_WORKERS = frozenset(
-    {
-        'scripts/curation/vlm_worker.py',
-        'scripts/curation/cluster_refresh_daemon.py',
-    }
-)
-
 # The only places allowed to construct an OpenSearch client: the shared
 # API client wrapper (guarded by make_curation_opensearch) and the guard
 # module's own factories.
@@ -139,8 +130,6 @@ def test_no_module_level_index_name_call() -> None:
 def test_no_frozen_index_name_constants() -> None:
     offenders: list[str] = []
     for path in _iter_py_files('src', 'scripts'):
-        if _rel(path) in _P2_RAW_HTTP_WORKERS:
-            continue
         for node in ast.walk(_parse(path)):
             if isinstance(node, ast.Assign):
                 offenders.extend(
@@ -214,4 +203,29 @@ def test_every_curation_script_takes_and_binds_a_project() -> None:
             offenders.append(f'{_rel(path)}: no --project')
         if 'bind_script_project(' not in text:
             offenders.append(f'{_rel(path)}: --project never bound')
+    assert offenders == []
+
+
+def test_no_default_index_name_literals() -> None:
+    """A string literal equal to one of the env-default index names
+    (``'op_items'`` and friends) pins code to one project's index; every
+    index name comes from the bound project (``index_name(cfg, role)``).
+    The env defaults themselves live only in ``src/config/curation.py``."""
+    import dataclasses
+
+    from src.config.curation import _INDEX_ROLE_ATTR, CurationConfig
+
+    defaults = {
+        f.default
+        for f in dataclasses.fields(CurationConfig)
+        if f.name in set(_INDEX_ROLE_ATTR.values()) and isinstance(f.default, str)
+    }
+    assert 'op_items' in defaults
+    offenders = [
+        f'{_rel(path)}:{node.lineno} {node.value!r}'
+        for path in _iter_py_files('src', 'scripts', 'docker')
+        if _rel(path) != 'src/config/curation.py'
+        for node in ast.walk(_parse(path))
+        if isinstance(node, ast.Constant) and node.value in defaults
+    ]
     assert offenders == []

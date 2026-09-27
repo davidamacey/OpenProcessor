@@ -95,7 +95,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
 
     client = TestClient(app)
@@ -109,7 +111,7 @@ def test_sort_absent_is_byte_identical_to_legacy_clause(tab: str, app_client: Te
     OpenSearch request body carries the exact legacy sort clause when
     ?sort is omitted, and the response's pre-existing keys are unaffected
     by the Phase 3 envelope additions."""
-    r = app_client.get(f'/curation/review/{tab}')
+    r = app_client.get(f'/curation/projects/default/review/{tab}')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     # The legacy clause, then the crop_id tiebreak every queue ends in.
@@ -128,7 +130,7 @@ def test_sort_absent_is_byte_identical_to_legacy_clause(tab: str, app_client: Te
 
 @pytest.mark.parametrize('tab', ALL_TABS)
 def test_sort_default_literal_matches_absent(tab: str, app_client: TestClient) -> None:
-    r = app_client.get(f'/curation/review/{tab}?sort=default')
+    r = app_client.get(f'/curation/projects/default/review/{tab}?sort=default')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     # The legacy clause, then the crop_id tiebreak every queue ends in.
@@ -139,7 +141,7 @@ def test_sort_default_literal_matches_absent(tab: str, app_client: TestClient) -
 def test_explicit_stable_sort_overrides_tab_default(app_client: TestClient) -> None:
     """mismatches' legacy default is 'recent'; explicitly asking for
     'atypicality' should apply cluster_distance desc instead."""
-    r = app_client.get('/curation/review/mismatches?sort=atypicality')
+    r = app_client.get('/curation/projects/default/review/mismatches?sort=atypicality')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     assert body['sort'] == [
@@ -150,19 +152,19 @@ def test_explicit_stable_sort_overrides_tab_default(app_client: TestClient) -> N
 
 
 def test_unknown_sort_returns_400(app_client: TestClient) -> None:
-    r = app_client.get('/curation/review/all?sort=not-a-real-sort')
+    r = app_client.get('/curation/projects/default/review/all?sort=not-a-real-sort')
     assert r.status_code == 400
     assert 'unknown review sort' in r.json()['detail']
 
 
 def test_shadow_sort_returns_400(app_client: TestClient) -> None:
-    r = app_client.get('/curation/review/all?sort=uniqueness')
+    r = app_client.get('/curation/projects/default/review/all?sort=uniqueness')
     assert r.status_code == 400
     assert 'not selectable' in r.json()['detail']
 
 
 def test_disabled_sort_returns_400_when_scores_disabled(app_client: TestClient) -> None:
-    r = app_client.get('/curation/review/all?sort=mistakenness')
+    r = app_client.get('/curation/projects/default/review/all?sort=mistakenness')
     assert r.status_code == 400
     assert 'not selectable' in r.json()['detail']
 
@@ -172,7 +174,7 @@ def test_mistakenness_sort_selectable_when_promoted(
 ) -> None:
     monkeypatch.setenv('OP_SCORES_ENABLED', '1')
     monkeypatch.setenv('OP_SCORES_SHADOW', '1')
-    r = app_client.get('/curation/review/all?sort=mistakenness')
+    r = app_client.get('/curation/projects/default/review/all?sort=mistakenness')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     assert body['sort'] == [
@@ -183,7 +185,7 @@ def test_mistakenness_sort_selectable_when_promoted(
 
 
 def test_min_mistakenness_filter_is_null_safe(app_client: TestClient) -> None:
-    r = app_client.get('/curation/review/all?min_mistakenness=0.5')
+    r = app_client.get('/curation/projects/default/review/all?min_mistakenness=0.5')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must = body['query']['bool']['must']
@@ -199,7 +201,7 @@ def test_min_mistakenness_filter_is_null_safe(app_client: TestClient) -> None:
 
 
 def test_min_mistakenness_absent_does_not_add_filter(app_client: TestClient) -> None:
-    r = app_client.get('/curation/review/all')
+    r = app_client.get('/curation/projects/default/review/all')
     assert r.status_code == 200
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must = body['query']['bool']['must']
@@ -207,7 +209,7 @@ def test_min_mistakenness_absent_does_not_add_filter(app_client: TestClient) -> 
 
 
 def test_hide_near_duplicates_filter_is_null_safe(app_client: TestClient) -> None:
-    r = app_client.get('/curation/review/all?hide_near_duplicates=true')
+    r = app_client.get('/curation/projects/default/review/all?hide_near_duplicates=true')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must = body['query']['bool']['must']
@@ -223,7 +225,7 @@ def test_hide_near_duplicates_filter_is_null_safe(app_client: TestClient) -> Non
 
 
 def test_hide_near_duplicates_false_by_default(app_client: TestClient) -> None:
-    r = app_client.get('/curation/review/all')
+    r = app_client.get('/curation/projects/default/review/all')
     assert r.status_code == 200
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must = body['query']['bool']['must']
@@ -260,11 +262,13 @@ def test_response_item_whitelist_includes_new_score_fields(
     )
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     client = TestClient(app)
 
-    r = client.get('/curation/review/all')
+    r = client.get('/curation/projects/default/review/all')
     assert r.status_code == 200, r.text
     item = r.json()['items'][0]
     assert item['mistakenness_score'] == 0.87
@@ -277,7 +281,7 @@ def test_response_item_whitelist_includes_new_score_fields(
 def test_test_holdout_filter_unchanged_by_sort_params(app_client: TestClient) -> None:
     """Hard constraint: test_holdout=true filtering must be unaffected by
     any Phase 3 addition."""
-    r = app_client.get('/curation/review/all?sort=recent')
+    r = app_client.get('/curation/projects/default/review/all?sort=recent')
     assert r.status_code == 200
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must_not = body['query']['bool']['must_not']
@@ -287,12 +291,16 @@ def test_test_holdout_filter_unchanged_by_sort_params(app_client: TestClient) ->
 def test_review_page_too_deep_is_422(app_client: TestClient) -> None:
     """from+size past the 10000 result-window ceiling must 422
     explicitly rather than let OpenSearch 500 past index.max_result_window."""
-    r = app_client.get('/curation/review/all', params={'page': 400, 'page_size': 30})
+    r = app_client.get(
+        '/curation/projects/default/review/all', params={'page': 400, 'page_size': 30}
+    )
     assert r.status_code == 422, r.text
 
 
 def test_review_page_within_window_is_fine(app_client: TestClient) -> None:
-    r = app_client.get('/curation/review/all', params={'page': 300, 'page_size': 30})
+    r = app_client.get(
+        '/curation/projects/default/review/all', params={'page': 300, 'page_size': 30}
+    )
     assert r.status_code == 200, r.text
 
 

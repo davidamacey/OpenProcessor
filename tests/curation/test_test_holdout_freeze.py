@@ -84,7 +84,9 @@ def app_client(fake_opensearch: AsyncMock, tmp_path: Path, monkeypatch: pytest.M
     )
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[get_opensearch] = lambda: fake_opensearch
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
 
@@ -182,7 +184,7 @@ def test_freeze_selects_human_validated_cohort(app_client: Any, fake_opensearch:
         )
     )
 
-    r = app_client.post('/curation/test_holdout/freeze', json={'percent': 20})
+    r = app_client.post('/curation/projects/default/test_holdout/freeze', json={'percent': 20})
     assert r.status_code == 200, r.text
 
     # The composite-agg call is always issued before any per-stratum scan.
@@ -218,7 +220,7 @@ def test_freeze_aggregates_on_keyword_subfield(app_client: Any, fake_opensearch:
         )
     )
 
-    r = app_client.post('/curation/test_holdout/freeze', json={'percent': 20})
+    r = app_client.post('/curation/projects/default/test_holdout/freeze', json={'percent': 20})
     assert r.status_code == 200, r.text
 
     call = fake_opensearch.search.call_args_list[0]
@@ -258,7 +260,7 @@ def test_freeze_paginates_beyond_one_composite_page(
         side_effect=_make_search_dispatcher(strata_pages, crop_ids_by_stratum)
     )
 
-    r = app_client.post('/curation/test_holdout/freeze', json={'percent': 20})
+    r = app_client.post('/curation/projects/default/test_holdout/freeze', json={'percent': 20})
     assert r.status_code == 200, r.text
     body = r.json()
 
@@ -291,7 +293,7 @@ def test_freeze_zero_rows_raises(app_client: Any, fake_opensearch: AsyncMock) ->
     """
     fake_opensearch.search = AsyncMock(side_effect=_make_search_dispatcher([([], None)], {}))
 
-    r = app_client.post('/curation/test_holdout/freeze', json={'percent': 20})
+    r = app_client.post('/curation/projects/default/test_holdout/freeze', json={'percent': 20})
     assert r.status_code == 422, r.text
     assert 'zero' in r.text.lower()
     fake_opensearch.bulk.assert_not_called()
@@ -322,7 +324,7 @@ def test_freeze_persists_record(
         )
     )
 
-    r = app_client.post('/curation/test_holdout/freeze', json={'percent': 20})
+    r = app_client.post('/curation/projects/default/test_holdout/freeze', json={'percent': 20})
     assert r.status_code == 200, r.text
     body = r.json()
 
@@ -362,7 +364,7 @@ def test_freeze_is_deterministic(app_client: Any, fake_opensearch: AsyncMock) ->
     fake_opensearch.search = AsyncMock(
         side_effect=_make_search_dispatcher([(buckets, None)], crop_ids_by_stratum)
     )
-    r1 = app_client.post('/curation/test_holdout/freeze', json={'percent': 20})
+    r1 = app_client.post('/curation/projects/default/test_holdout/freeze', json={'percent': 20})
     assert r1.status_code == 200, r1.text
     body1 = r1.json()
 
@@ -370,7 +372,9 @@ def test_freeze_is_deterministic(app_client: Any, fake_opensearch: AsyncMock) ->
     fake_opensearch.search = AsyncMock(
         side_effect=_make_search_dispatcher([(buckets, None)], crop_ids_by_stratum)
     )
-    r2 = app_client.post('/curation/test_holdout/freeze?force=true', json={'percent': 20})
+    r2 = app_client.post(
+        '/curation/projects/default/test_holdout/freeze?force=true', json={'percent': 20}
+    )
     assert r2.status_code == 200, r2.text
     body2 = r2.json()
 
@@ -513,7 +517,9 @@ def test_freeze_rejects_a_seed_with_422(app_client: Any, fake_opensearch: AsyncM
     fake_opensearch.search = AsyncMock(
         side_effect=_make_search_dispatcher([(buckets, None)], {(3, 'src-a'): _crop_ids('a', 6)})
     )
-    r = app_client.post('/curation/test_holdout/freeze', json={'percent': 20, 'seed': 42})
+    r = app_client.post(
+        '/curation/projects/default/test_holdout/freeze', json={'percent': 20, 'seed': 42}
+    )
     assert r.status_code == 422, r.text
     assert 'seed' in r.text
     fake_opensearch.bulk.assert_not_called()
@@ -526,7 +532,7 @@ def test_freeze_response_names_the_selection_method(
     fake_opensearch.search = AsyncMock(
         side_effect=_make_search_dispatcher([(buckets, None)], {(3, 'src-a'): _crop_ids('a', 6)})
     )
-    r = app_client.post('/curation/test_holdout/freeze', json={'percent': 20})
+    r = app_client.post('/curation/projects/default/test_holdout/freeze', json={'percent': 20})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['selection'] == 'sha1_per_class'

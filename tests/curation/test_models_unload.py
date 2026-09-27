@@ -30,7 +30,9 @@ def app_client():
     import src.routers.curation.models as models_mod
 
     app = FastAPI()
-    app.include_router(models_mod.router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, models_mod.router)
     with TestClient(app) as client:
         yield client
 
@@ -54,7 +56,7 @@ def _mock_unload(monkeypatch: pytest.MonkeyPatch, **overrides) -> AsyncMock:
 @pytest.mark.parametrize('model_name', ['paddleocr_det_trt', 'paddleocr_rec_trt'])
 def test_unload_refuses_region_protected_model(app_client, monkeypatch, model_name):
     mock = _mock_unload(monkeypatch)
-    resp = app_client.delete(f'/curation/models/{model_name}')
+    resp = app_client.delete(f'/curation/projects/default/models/{model_name}')
     assert resp.status_code == 403
     mock.assert_not_awaited()
 
@@ -65,7 +67,7 @@ def test_unload_refuses_active_profiles_detector_model(app_client, monkeypatch):
     because it IS the active profile's configured detector_model, not
     because of its name's shape."""
     mock = _mock_unload(monkeypatch)
-    resp = app_client.delete('/curation/models/license_plate_detector')
+    resp = app_client.delete('/curation/projects/default/models/license_plate_detector')
     assert resp.status_code == 403
     mock.assert_not_awaited()
 
@@ -75,7 +77,7 @@ def test_unload_allows_an_unconfigured_lpr_shaped_name(app_client, monkeypatch):
     active profile's detector_model (here: no profile configured at all)
     unloads like any other throwaway model."""
     mock = _mock_unload(monkeypatch)
-    resp = app_client.delete('/curation/models/lpr_some_future_model')
+    resp = app_client.delete('/curation/projects/default/models/lpr_some_future_model')
     assert resp.status_code == 200, resp.text
     mock.assert_awaited_once()
 
@@ -86,7 +88,9 @@ def test_unload_refuses_region_protected_model_even_with_force(app_client, monke
     one guard in the whole endpoint with no override, per the "never
     touch the configured detection pipeline's models" constraint."""
     mock = _mock_unload(monkeypatch)
-    resp = app_client.delete(f'/curation/models/{model_name}', params={'force': 'true'})
+    resp = app_client.delete(
+        f'/curation/projects/default/models/{model_name}', params={'force': 'true'}
+    )
     assert resp.status_code == 403
     mock.assert_not_awaited()
 
@@ -94,7 +98,9 @@ def test_unload_refuses_region_protected_model_even_with_force(app_client, monke
 @pytest.mark.usefixtures('reference_region_profile')
 def test_unload_refuses_active_profiles_detector_model_even_with_force(app_client, monkeypatch):
     mock = _mock_unload(monkeypatch)
-    resp = app_client.delete('/curation/models/license_plate_detector', params={'force': 'true'})
+    resp = app_client.delete(
+        '/curation/projects/default/models/license_plate_detector', params={'force': 'true'}
+    )
     assert resp.status_code == 403
     mock.assert_not_awaited()
 
@@ -107,7 +113,7 @@ def test_unload_refuses_active_profiles_detector_model_even_with_force(app_clien
 @pytest.mark.parametrize('model_name', ['mobileclip2_s2_image_encoder', 'scrfd_10g_bnkps'])
 def test_unload_refuses_core_pipeline_model_without_force(app_client, monkeypatch, model_name):
     mock = _mock_unload(monkeypatch)
-    resp = app_client.delete(f'/curation/models/{model_name}')
+    resp = app_client.delete(f'/curation/projects/default/models/{model_name}')
     assert resp.status_code == 409
     mock.assert_not_awaited()
 
@@ -115,7 +121,7 @@ def test_unload_refuses_core_pipeline_model_without_force(app_client, monkeypatc
 def test_unload_allows_core_pipeline_model_with_force(app_client, monkeypatch):
     mock = _mock_unload(monkeypatch, triton_name='mobileclip2_s2_image_encoder')
     resp = app_client.delete(
-        '/curation/models/mobileclip2_s2_image_encoder', params={'force': 'true'}
+        '/curation/projects/default/models/mobileclip2_s2_image_encoder', params={'force': 'true'}
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -131,7 +137,7 @@ def test_unload_allows_core_pipeline_model_with_force(app_client, monkeypatch):
 
 def test_unload_happy_path_no_force_needed_for_throwaway_model(app_client, monkeypatch):
     mock = _mock_unload(monkeypatch, triton_name='op_vehicle_smoke_v1')
-    resp = app_client.delete('/curation/models/op_vehicle_smoke_v1')
+    resp = app_client.delete('/curation/projects/default/models/op_vehicle_smoke_v1')
     assert resp.status_code == 200
     body = resp.json()
     assert body == {
@@ -149,7 +155,7 @@ def test_unload_propagates_not_promoted_as_404(app_client, monkeypatch):
         'src.routers.curation.models.unload_triton_model',
         AsyncMock(side_effect=ModelNotPromotedError('never_promoted')),
     )
-    resp = app_client.delete('/curation/models/never_promoted')
+    resp = app_client.delete('/curation/projects/default/models/never_promoted')
     assert resp.status_code == 404
 
 
@@ -287,7 +293,9 @@ def test_unload_refuses_configured_primary_proposer_even_with_force(
 ) -> None:
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'item_proposer_v9')
     mock = _mock_unload(monkeypatch)
-    resp = app_client.delete('/curation/models/item_proposer_v9', params={'force': 'true'})
+    resp = app_client.delete(
+        '/curation/projects/default/models/item_proposer_v9', params={'force': 'true'}
+    )
     assert resp.status_code == 403
     mock.assert_not_awaited()
 
@@ -297,7 +305,9 @@ def test_unload_refuses_configured_secondary_classifier_even_with_force(
 ) -> None:
     monkeypatch.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'secondary_classifier_x1')
     mock = _mock_unload(monkeypatch)
-    resp = app_client.delete('/curation/models/secondary_classifier_x1', params={'force': 'true'})
+    resp = app_client.delete(
+        '/curation/projects/default/models/secondary_classifier_x1', params={'force': 'true'}
+    )
     assert resp.status_code == 403
     mock.assert_not_awaited()
 
@@ -313,7 +323,7 @@ def test_unload_refuses_configured_secondary_classifier_even_with_force(
 def test_unload_refuses_the_segmenter(app_client, monkeypatch: pytest.MonkeyPatch) -> None:
     # license_plate.json's segmenter_name is 'sam3'.
     mock = _mock_unload(monkeypatch)
-    resp = app_client.delete('/curation/models/sam3')
+    resp = app_client.delete('/curation/projects/default/models/sam3')
     assert resp.status_code == 400
     mock.assert_not_awaited()
 
@@ -323,7 +333,7 @@ def test_unload_refuses_the_vlm(app_client, monkeypatch: pytest.MonkeyPatch) -> 
 
     vlm_name = models_mod._get_vlm_labeler().model
     mock = _mock_unload(monkeypatch)
-    resp = app_client.delete(f'/curation/models/{vlm_name}')
+    resp = app_client.delete(f'/curation/projects/default/models/{vlm_name}')
     assert resp.status_code == 400
     mock.assert_not_awaited()
 

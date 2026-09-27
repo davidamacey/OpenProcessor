@@ -49,7 +49,9 @@ def app_client(
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
 
     with TestClient(app) as client:
@@ -66,7 +68,9 @@ def test_put_class_rejects_reserved_hotkey(
     app_client: TestClient, registry: ClassRegistry, letter: str
 ) -> None:
     class_id = registry.load().classes[0].class_id
-    resp = app_client.put(f'/curation/classes/{class_id}', json={'hotkey_letter': letter})
+    resp = app_client.put(
+        f'/curation/projects/default/classes/{class_id}', json={'hotkey_letter': letter}
+    )
     assert resp.status_code == 422, resp.text
     # Not persisted.
     entry = registry.get(class_id)
@@ -78,7 +82,9 @@ def test_put_class_accepts_nonreserved_hotkey(
     app_client: TestClient, registry: ClassRegistry
 ) -> None:
     class_id = registry.load().classes[0].class_id
-    resp = app_client.put(f'/curation/classes/{class_id}', json={'hotkey_letter': 's'})
+    resp = app_client.put(
+        f'/curation/projects/default/classes/{class_id}', json={'hotkey_letter': 's'}
+    )
     assert resp.status_code == 200, resp.text
     entry = registry.get(class_id)
     assert entry is not None
@@ -98,15 +104,15 @@ def test_reserved_set_covers_every_single_key_labeler_action() -> None:
 
 
 def test_get_class_returns_the_same_entry_as_the_list(app_client: TestClient) -> None:
-    listed = app_client.get('/curation/classes').json()['classes']
+    listed = app_client.get('/curation/projects/default/classes').json()['classes']
     target = listed[1]
-    resp = app_client.get(f'/curation/classes/{target["class_id"]}')
+    resp = app_client.get(f'/curation/projects/default/classes/{target["class_id"]}')
     assert resp.status_code == 200, resp.text
     assert resp.json() == target
 
 
 def test_get_class_unknown_id_is_404(app_client: TestClient) -> None:
-    assert app_client.get('/curation/classes/9999').status_code == 404
+    assert app_client.get('/curation/projects/default/classes/9999').status_code == 404
 
 
 # =============================================================================
@@ -120,16 +126,17 @@ def test_get_class_unknown_id_is_404(app_client: TestClient) -> None:
 def test_list_classes_exposes_merged_into_for_a_merged_class(
     app_client: TestClient,
 ) -> None:
-    listed = app_client.get('/curation/classes').json()['classes']
+    listed = app_client.get('/curation/projects/default/classes').json()['classes']
     by_id = {c['class_id']: c for c in listed}
     source_id, target_id = min(by_id), max(by_id)
 
     r = app_client.post(
-        '/curation/classes/merge', json={'source_id': source_id, 'target_id': target_id}
+        '/curation/projects/default/classes/merge',
+        json={'source_id': source_id, 'target_id': target_id},
     )
     assert r.status_code == 200, r.text
 
-    listed_after = app_client.get('/curation/classes').json()['classes']
+    listed_after = app_client.get('/curation/projects/default/classes').json()['classes']
     by_id_after = {c['class_id']: c for c in listed_after}
     assert by_id_after[source_id]['merged_into'] == target_id
     assert by_id_after[target_id]['merged_into'] is None
@@ -138,7 +145,7 @@ def test_list_classes_exposes_merged_into_for_a_merged_class(
 def test_list_classes_merged_into_is_null_for_an_unmerged_class(
     app_client: TestClient,
 ) -> None:
-    listed = app_client.get('/curation/classes').json()['classes']
+    listed = app_client.get('/curation/projects/default/classes').json()['classes']
     assert all(c['merged_into'] is None for c in listed)
 
 
@@ -168,7 +175,7 @@ def test_region_class_is_marked_kind_region_and_keeps_real_item_counts(
     registry.add_class('license_plate', group='region')
     fake_opensearch.count = AsyncMock(side_effect=[{'count': 7}, {'count': 3}])
 
-    resp = app_client.get('/curation/classes')
+    resp = app_client.get('/curation/projects/default/classes')
     assert resp.status_code == 200, resp.text
     entry = next(c for c in resp.json()['classes'] if c['class_name'] == 'license_plate')
     assert entry['kind'] == 'region'
@@ -182,7 +189,7 @@ def test_non_region_class_is_marked_kind_item(
     fake_opensearch: AsyncMock,
     reference_region_profile: None,
 ) -> None:
-    resp = app_client.get('/curation/classes')
+    resp = app_client.get('/curation/projects/default/classes')
     assert resp.status_code == 200, resp.text
     for entry in resp.json()['classes']:
         assert entry['kind'] == 'item'
@@ -198,7 +205,7 @@ def test_region_class_kind_marking_is_a_noop_without_an_active_profile(
     to that literal)."""
     registry.add_class('license_plate', group='region')
 
-    resp = app_client.get('/curation/classes')
+    resp = app_client.get('/curation/projects/default/classes')
     assert resp.status_code == 200, resp.text
     entry = next(c for c in resp.json()['classes'] if c['class_name'] == 'license_plate')
     assert entry['kind'] == 'item'
@@ -225,7 +232,7 @@ def test_region_class_kind_marking_uses_a_differently_named_profiles_region_clas
     try:
         registry.add_class('widget_label', group='region')
 
-        resp = app_client.get('/curation/classes')
+        resp = app_client.get('/curation/projects/default/classes')
         assert resp.status_code == 200, resp.text
         entry = next(c for c in resp.json()['classes'] if c['class_name'] == 'widget_label')
         assert entry['kind'] == 'region'
