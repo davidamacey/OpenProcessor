@@ -215,6 +215,17 @@ class ProjectRegistry:
             self._failed_at = time.monotonic()
             logger.warning('project_registry_refresh_failed', error=str(exc))
 
+    async def refresh_strict(self) -> None:
+        """Reload every project doc now, raising on any failure. For
+        one-shot maintenance scripts, where silently falling back to a
+        stale or ``default``-only view would skip projects unnoticed."""
+        client = self._client_factory()
+        if asyncio.iscoroutine(client):
+            client = await client
+        async with self._lock:
+            await self._refresh(client, await _read_revision(client))
+        self._failed_at = None
+
     async def _refresh(self, client: Any, current_revision: int) -> None:
         resp = await client.search(
             index=projects_index(),

@@ -44,8 +44,11 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 from src.config import get_curation_config
 from src.config.project_context import bind_project
-from src.services.projects.registry import get_project_registry
-from src.services.projects.script_binding import bind_script_project
+from src.services.projects.script_binding import (
+    abind_script_project,
+    add_project_argument,
+    script_project_registry,
+)
 from src.services.training.run_retention import (
     apply_bakeoff_out_prune,
     apply_run_prune,
@@ -103,11 +106,11 @@ async def run(args: argparse.Namespace) -> int:
     """Prune every active + archived project (or just ``--project SLUG``
     when given), each under its own binding."""
     if args.project:
-        bind_script_project(args.project)
+        await abind_script_project(args.project)
         return _run_one_project(args)
 
-    registry = get_project_registry()
-    await registry.ensure_fresh()
+    registry = script_project_registry()
+    await registry.refresh_strict()
     projects = registry.active_projects() + registry.archived_projects()
     rc = 0
     for record in projects:
@@ -126,11 +129,9 @@ def build_parser() -> argparse.ArgumentParser:
     g = p.add_mutually_exclusive_group()
     g.add_argument('--dry-run', dest='apply', action='store_false', default=False)
     g.add_argument('--apply', dest='apply', action='store_true')
-    p.add_argument(
-        '--project',
-        default=None,
-        help='Restrict to one project slug. Default: every active + archived project.',
-    )
+    add_project_argument(p)
+    # Default: every active + archived project, each under its own binding.
+    p.set_defaults(project=None)
     return p
 
 

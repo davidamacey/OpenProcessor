@@ -41,6 +41,7 @@ from typing import TYPE_CHECKING, Any
 
 
 if TYPE_CHECKING:
+    from scripts.curation.worker.state import _ItemTask
     from src.config.projects import ProjectRecord
 
 PIPELINE_PAUSED_FLAG_NAME = 'pipeline_paused.flag'
@@ -59,7 +60,7 @@ def is_project_paused(record: ProjectRecord) -> bool:
 
 @dataclass
 class _ProjectPollState:
-    """Per-project idle-backoff bookkeeping."""
+    """Per-project poll bookkeeping: idle backoff and current in-flight."""
 
     interval_s: float = _IDLE_BACKOFF_MIN_S
     next_due_at: float = 0.0
@@ -69,58 +70,56 @@ class _ProjectPollState:
         return now >= self.next_due_at
 
     def record_empty(self, now: float) -> None:
-        """Back off: double the interval, capped."""
+        """An empty poll: wait ``interval_s``, then double it (capped)."""
+        self.next_due_at = now + self.interval_s
         self.interval_s = min(self.interval_s * 2.0, _IDLE_BACKOFF_MAX_S)
-        self.next_due_at = now + self.interval_s
 
-    def record_nonempty(self, now: float) -> None:
-        """Reset to the fast interval on any non-empty result."""
+    def record_nonempty(self) -> None:
+        """A project with work stays due every cycle; its backoff resets."""
         self.interval_s = _IDLE_BACKOFF_MIN_S
-        self.next_due_at = now + self.interval_s
+        self.next_due_at = 0.0
 
 
 @dataclass
 class CyclePlan:
-    """What the producer should do this cycle for one project."""
+    """What the producer fetches this cycle for one due project."""
 
-    slug: str
     record: ProjectRecord
     quota: int
-    in_flight_cap: int
-    should_poll: bool
+    headroom: int
 
 
 @dataclass
 class FairnessScheduler:
-    """Deficit round-robin, work-conserving scheduler across active
-    projects, plus per-project in-flight caps and idle-poll backoff.
+    """Deficit round-robin across active projects with per-project
+    in-flight caps and idle-poll backoff (projects_plan.md §5.1).
 
-    One instance lives for the worker process's lifetime; ``plan_cycle``
-    is called once per producer cycle.
+    One instance lives for the worker process; :meth:`plan_cycle` runs
+    once per producer cycle.
     """
 
     _rotation_start: int = 0
     _poll_state: dict[str, _ProjectPollState] = field(default_factory=dict)
 
     def _state_for(self, slug: str) -> _ProjectPollState:
-        st = self._poll_state.get(slug)
-        if st is None:
-            st = _ProjectPollState(next_due_at=0.0)
-            self._poll_state[slug] = st
-        return st
+        return self._poll_state.setdefault(slug, _ProjectPollState())
 
     def record_fetch_result(self, slug: str, n_fetched: int, *, now: float | None = None) -> None:
-        """Feed back how many items a project's fetch returned this
-        cycle, so idle projects back off and active ones stay fast."""
-        now = time.monotonic() if now is None else now
+        """Feed back one poll's result: empty polls back off, any work
+        keeps the project due every cycle."""
         st = self._state_for(slug)
         if n_fetched > 0:
-            st.record_nonempty(now)
+            st.record_nonempty()
         else:
-            st.record_empty(now)
+            st.record_empty(time.monotonic() if now is None else now)
 
-    def set_in_flight(self, slug: str, count: int) -> None:
-        self._state_for(slug).in_flight = count
+    def set_in_flight(self, counts: dict[str, int]) -> None:
+        """Replace every project's in-flight count (the producer derives
+        them from its in-flight set each cycle)."""
+        for slug, st in self._poll_state.items():
+            st.in_flight = counts.get(slug, 0)
+        for slug, count in counts.items():
+            self._state_for(slug).in_flight = count
 
     def in_flight(self, slug: str) -> int:
         return self._state_for(slug).in_flight
@@ -134,60 +133,35 @@ class FairnessScheduler:
         *,
         fetch_n: int,
         queue_max: int,
-        backlog_hint: dict[str, int] | None = None,
         now: float | None = None,
     ) -> list[CyclePlan]:
-        """Decide, for this cycle, which projects to poll and with what
-        quota / in-flight cap.
+        """This cycle's first-pass fetch plan, in rotation order.
 
-        ``backlog_hint`` is unused here -- the real work-conserving
-        second pass needs *this* cycle's actual fetch results (a project
-        that asked for its quota but had fewer items available), which
-        aren't known until after the first-pass fetch runs. That pass
-        lives in :func:`scripts.curation.worker.cascade.
-        fetch_pending_multi_project`, which calls :meth:`plan_cycle` for
-        the initial, equal quota split and then re-fetches leftover
-        capacity from projects whose first-pass fetch came back full.
-
-        Non-idle-poll-due projects are still included in the plan (so
-        callers can still bump in-flight caps consistently) but with
-        ``should_poll=False`` and ``quota=0``.
+        The rotation start advances one project per cycle. Each due
+        project (not backing off, below its in-flight cap
+        ``ceil(queue_max / n_active)``) gets ``quota = max(1, fetch_n //
+        n_due)``, clipped to its cap headroom. Leftover capacity is
+        handed out by :func:`fetch_pending_multi_project`'s second pass,
+        which needs this cycle's real fetch results.
         """
         now = time.monotonic() if now is None else now
-        del backlog_hint  # see docstring -- kept in the signature for API stability
-        n_active = max(1, len(projects))
-        in_flight_cap = max(1, math.ceil(queue_max / n_active))
+        if not projects:
+            return []
+        in_flight_cap = max(1, math.ceil(queue_max / len(projects)))
+        start = self._rotation_start % len(projects)
+        ordered = projects[start:] + projects[:start]
+        self._rotation_start = (start + 1) % len(projects)
 
-        # Rotation: order projects starting at _rotation_start, advance
-        # by one project per cycle for cross-cycle fairness.
-        if projects:
-            start = self._rotation_start % len(projects)
-            ordered = projects[start:] + projects[:start]
-            self._rotation_start = (self._rotation_start + 1) % len(projects)
-        else:
-            ordered = []
-
-        # Which projects are "due" this cycle (idle ones respect backoff;
-        # a project with no prior backlog info is treated as due so a
-        # brand-new project isn't starved on its first cycle).
-        due = [p for p in ordered if self._state_for(p.slug).due(now)]
-
-        quota = max(1, fetch_n // max(1, len(due))) if due else 0
-        quotas: dict[str, int] = {p.slug: quota for p in due}
-
-        plans: list[CyclePlan] = []
+        due: list[tuple[ProjectRecord, int]] = []
         for p in ordered:
-            should_poll = p in due
-            plans.append(
-                CyclePlan(
-                    slug=p.slug,
-                    record=p,
-                    quota=quotas.get(p.slug, 0) if should_poll else 0,
-                    in_flight_cap=in_flight_cap,
-                    should_poll=should_poll,
-                )
-            )
-        return plans
+            st = self._state_for(p.slug)
+            headroom = in_flight_cap - st.in_flight
+            if st.due(now) and headroom > 0:
+                due.append((p, headroom))
+        if not due:
+            return []
+        quota = max(1, fetch_n // len(due))
+        return [CyclePlan(record=p, quota=min(quota, h), headroom=h) for p, h in due]
 
 
 def discover_pollable_projects(all_active: list[ProjectRecord]) -> list[ProjectRecord]:
@@ -240,74 +214,49 @@ async def fetch_pending_multi_project(
     scheduler: FairnessScheduler,
     fetch_n: int,
     queue_max: int,
-    exclude_ids: list | None = None,
-    backlog_hint: dict[str, int] | None = None,
-) -> list:
-    """The multi-project discovery + deficit-round-robin producer step
-    (projects_plan.md §5.1). Directly unit-testable: it takes a
-    ``registry`` (anything with ``.active_projects()``) and a
-    :class:`FairnessScheduler`, plans the cycle's initial equal quota
-    split, fetches each due, unpaused project under its own binding,
-    then runs a real work-conserving second pass: any project whose
-    first-pass fetch came back FULL (it could plausibly use more) gets
-    another shot at whatever capacity the round didn't use, one project
-    at a time, until ``fetch_n`` is exhausted or no full project
-    remains. Returns one flat list of ``_ItemTask`` tagged with
-    ``project``.
+    exclude_ids: list[str] | None = None,
+) -> list[_ItemTask]:
+    """One producer cycle across every active, unpaused project
+    (projects_plan.md §5.1).
 
-    ``exclude_ids`` is applied to every project's fetch (in-flight ids
-    are a worker-wide set today, not per project, since a crop_id is
-    already globally unique across projects by construction of the
-    items index).
+    First pass: each due project fetches its :meth:`FairnessScheduler.
+    plan_cycle` quota under its own binding. Second pass (work
+    conserving): capacity the first pass left unused goes, in rotation
+    order, to projects whose first fetch came back full, up to each
+    one's in-flight headroom. Every fetch excludes the in-flight ids and
+    everything already fetched this cycle, so an item is queued once.
     """
     from scripts.curation.worker.cascade import _fetch_pending
     from src.config.project_context import bind_project
 
     active = discover_pollable_projects(registry.active_projects())
-    if not active:
-        return []
-    plans = scheduler.plan_cycle(
-        active, fetch_n=fetch_n, queue_max=queue_max, backlog_hint=backlog_hint
-    )
-    tasks: list = []
-    total_fetched = 0
-    # full_projects: a project that used its FULL first-pass quota is a
-    # candidate for leftover capacity (an empty/partial answer means it
-    # has nothing more to give right now).
-    full_projects: list = []
-    for plan in plans:
-        if not plan.should_poll or plan.quota <= 0:
-            continue
-        with bind_project(plan.record):
-            fetched = await _fetch_pending(
-                opensearch,
-                batch_size=plan.quota,
-                exclude_ids=exclude_ids,
-                project=plan.record,
-            )
-        scheduler.record_fetch_result(plan.slug, len(fetched))
-        tasks.extend(fetched)
-        total_fetched += len(fetched)
-        if len(fetched) >= plan.quota:
-            full_projects.append(plan.record)
+    plans = scheduler.plan_cycle(active, fetch_n=fetch_n, queue_max=queue_max)
+    excluded = list(exclude_ids or [])
+    tasks: list[_ItemTask] = []
+    taken: dict[str, int] = {}
+    hungry: list[CyclePlan] = []
 
-    # Second pass: work-conserving leftover redistribution within this
-    # same cycle, using this cycle's REAL fetch results (not a guess).
-    remaining = max(0, fetch_n - total_fetched)
-    while remaining > 0 and full_projects:
-        record = full_projects.pop(0)
-        with bind_project(record):
-            extra = await _fetch_pending(
-                opensearch,
-                batch_size=remaining,
-                exclude_ids=exclude_ids,
-                project=record,
+    async def _fetch(plan: CyclePlan, n: int) -> int:
+        with bind_project(plan.record):
+            got = await _fetch_pending(
+                opensearch, batch_size=n, exclude_ids=excluded, project=plan.record
             )
-        scheduler.record_fetch_result(record.slug, len(extra))
-        tasks.extend(extra)
-        remaining -= len(extra)
-        if len(extra) > 0 and remaining > 0:
-            # Still hungry -- this project may have even more; give it
-            # another turn once every other full project has had one.
-            full_projects.append(record)
+        tasks.extend(got)
+        excluded.extend(t.crop_id for t in got)
+        taken[plan.record.slug] = taken.get(plan.record.slug, 0) + len(got)
+        return len(got)
+
+    for plan in plans:
+        n = await _fetch(plan, plan.quota)
+        scheduler.record_fetch_result(plan.record.slug, n)
+        if n >= plan.quota:
+            hungry.append(plan)
+
+    while hungry and len(tasks) < fetch_n:
+        plan = hungry.pop(0)
+        want = min(fetch_n - len(tasks), plan.headroom - taken[plan.record.slug])
+        if want <= 0:
+            continue
+        if await _fetch(plan, want) >= want:
+            hungry.append(plan)
     return tasks

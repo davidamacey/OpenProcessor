@@ -8,6 +8,7 @@ from __future__ import annotations
 
 # ruff: noqa: E402
 import asyncio
+import collections
 import contextlib
 import os
 import signal
@@ -82,6 +83,8 @@ from scripts.curation.worker.state import (
     _is_secondary_shape,
     _ItemTask,
     _wait_for_sentinel_clear,
+    bind_task_project,
+    bound_class_catalog,
     region_profile,
     unreadable_crop_update,
 )
@@ -94,7 +97,6 @@ from scripts.curation.worker.verify import (
     _region_write_doc,
     candidate_reject_doc,
 )
-from src.config.project_context import set_bound_project
 from src.config.region_rejection import REJECT_REASON_SANITY_PREFIX, REJECT_REASON_VERIFIER
 from src.config.region_source import (
     CANDIDATE_DETECTOR,
@@ -326,46 +328,36 @@ async def run(args: argparse.Namespace) -> int:
         item_text_enabled=item_text_enabled,
     )
     vlm = _wkr.VlmLabeler(base_url=args.vlm_url, pack=pack) if vlm_available else None
-    # Populate class_names so ``label_combined`` callers (the
-    # primary-detector-missed cohort gate in cascade._process_crop) can
-    # classify in the same VLM round-trip as region verify + OCR.
-    # Best-effort: if the registry can't be loaded the cohort gate
-    # falls back to legacy two-call paths (label_combined with empty
-    # class_names just answers the region side).
-    name_to_id: dict[str, int] = {}
-    # Without a VLM nothing classifies, so the registry is not needed.
-    if vlm is not None:
-        try:
-            from src.clients.curation_opensearch import ClassRegistry
-
-            _reg = ClassRegistry().load()
-            # vlm.class_names is the list passed into the VLM prompt;
-            # reply.class_id is the *index* into this list, NOT the
-            # registry id. name_to_id maps the resolved name back to the
-            # registry's authoritative class_id so writes carry the
-            # correct value. Without this remap, a reply of class_id=0
-            # lands the registry's first non-deprecated class label on a
-            # doc with class_id=0 (deprecated) — historical drift.
-            vlm.class_names = [c.class_name for c in _reg.classes if not c.deprecated]
-            name_to_id = {c.class_name: int(c.class_id) for c in _reg.classes if not c.deprecated}
-            vlm.name_to_id = name_to_id
-        except Exception as _exc:  # nosec B110 — best-effort, registry optional
-            logger.warning('class_registry_load_failed', error=str(_exc))
+    # The VLM class catalog (prompt class list + name -> registry id) is
+    # per project: every classifying call reads bound_class_catalog()
+    # under the item's own binding, never a process-wide list.
     opensearch = _wkr.make_script_opensearch([args.opensearch])
 
     started_at = time.monotonic()
     sentinel = Path(args.pause_sentinel)
 
-    from src.services.projects.registry import get_project_registry
+    from src.services.projects.script_binding import only_project, script_project_registry
 
-    project_registry = get_project_registry()
+    registry = script_project_registry(args.opensearch)
+    project_filter = getattr(args, 'project', None)
+
+    class _WorkerProjects:
+        """The registry as this worker sees it: active projects, narrowed
+        to ``--project`` when given."""
+
+        async def ensure_fresh(self) -> None:
+            await registry.ensure_fresh()
+
+        def active_projects(self) -> list[Any]:
+            return only_project(registry.active_projects(), project_filter)
+
+    project_registry = _WorkerProjects()
     fairness_scheduler = FairnessScheduler()
-    # Last cycle's per-project fetch counts, fed back into the next
-    # cycle's quota split as the "has work" / "how much work" signal
-    # (projects_plan.md §5.1 deficit round-robin).
-    last_backlog: dict[str, int] = {}
 
     in_flight: set[str] = set()
+    # crop_id -> owning project slug, for the per-project in-flight caps
+    # and liveness counts (projects_plan.md §5.1).
+    in_flight_owner: dict[str, str] = {}
     in_flight_lock = asyncio.Lock()
     # crop_id -> monotonic time the writer released it after a successful
     # write. A pending search that STARTED before that moment may carry the
@@ -518,7 +510,10 @@ async def run(args: argparse.Namespace) -> int:
         96 oldest all in-flight, fresh=0) can't recur when the query
         itself already excludes in-flight ids.
         """
-        nonlocal last_backlog
+        # A project's share of the whole pipeline (every inter-stage
+        # queue), so one project with a slow leg cannot fill it; with a
+        # single project the cap is the pipeline itself, as before.
+        pipeline_capacity = sum(q.maxsize for q in (in_q, vlm_visible_q, sam_q, combined_q, out_q))
         while not stop_event.is_set():
             await _wait_for_sentinel_clear(sentinel, sleep_s=args.sentinel_sleep)
             if stop_event.is_set():
@@ -533,6 +528,10 @@ async def run(args: argparse.Namespace) -> int:
             fetch_started = time.monotonic()
             async with in_flight_lock:
                 exclude_ids = list(in_flight)
+                for cid in [c for c in in_flight_owner if c not in in_flight]:
+                    del in_flight_owner[cid]
+                inflight_counts = collections.Counter(in_flight_owner.values())
+            fairness_scheduler.set_in_flight(dict(inflight_counts))
             await project_registry.ensure_fresh()
             try:
                 tasks = await fetch_pending_multi_project(
@@ -540,16 +539,9 @@ async def run(args: argparse.Namespace) -> int:
                     registry=project_registry,
                     scheduler=fairness_scheduler,
                     fetch_n=fetch_n,
-                    queue_max=args.concurrency * 2,
+                    queue_max=pipeline_capacity,
                     exclude_ids=exclude_ids,
-                    backlog_hint=last_backlog,
                 )
-                last_backlog = {
-                    p.slug: len(
-                        [t for t in tasks if t.project is not None and t.project.slug == p.slug]
-                    )
-                    for p in project_registry.active_projects()
-                }
             except Exception as exc:
                 logger.warning('producer_fetch_error', error=str(exc))
                 await asyncio.sleep(args.poll_interval)
@@ -589,27 +581,17 @@ async def run(args: argparse.Namespace) -> int:
             async with in_flight_lock:
                 for t in fresh[: args.batch_size]:
                     in_flight.add(t.crop_id)
+                    in_flight_owner[t.crop_id] = t.project.slug
+                inflight_counts = collections.Counter(in_flight_owner.values())
             for t in fresh[: args.batch_size]:
                 await in_q.put(t)
 
-            # Liveness (§5.1.8): one doc/file per active project, per
-            # cycle. Per-project in_flight is the count of this
-            # project's crops currently in ``in_flight`` -- cheap to
-            # derive from the just-queued batch plus scheduler state.
-            per_project_inflight: dict[str, int] = {}
-            for t in fresh[: args.batch_size]:
-                if t.project is not None:
-                    per_project_inflight[t.project.slug] = (
-                        per_project_inflight.get(t.project.slug, 0) + 1
-                    )
+            # Liveness (§5.1): one runtime record per active project.
             for p in project_registry.active_projects():
-                prior = fairness_scheduler.in_flight(p.slug)
-                count = prior + per_project_inflight.get(p.slug, 0)
-                fairness_scheduler.set_in_flight(p.slug, count)
                 with contextlib.suppress(OSError):
                     write_liveness(
                         p,
-                        inflight=count,
+                        inflight=inflight_counts.get(p.slug, 0),
                         applied=True,
                         paused=is_project_paused(p),
                     )
@@ -641,8 +623,7 @@ async def run(args: argparse.Namespace) -> int:
             # the item's project, not whatever project a previous item
             # on this consumer happened to be. No-op (stays unbound)
             # for legacy single-project tasks with ``project is None``.
-            if t.project is not None:
-                set_bound_project(t.project)
+            bind_task_project(t)
             # Bind request_id so every structlog event in this iteration
             # carries it (Phase 4a). Cleared in finally so the next task
             # on this consumer task doesn't inherit the previous id.
@@ -770,8 +751,9 @@ async def run(args: argparse.Namespace) -> int:
         *,
         chunk_size: int,
         drain_timeout: float,
+        carry: list[_ItemTask],
     ) -> tuple[list[_ItemTask], bool]:
-        """Pull up to ``chunk_size`` tasks from ``q``.
+        """Pull up to ``chunk_size`` tasks of ONE project from ``q``.
 
         Blocks indefinitely on the first task; subsequent tasks are
         non-blocking up to ``drain_timeout`` total. Returns
@@ -786,15 +768,22 @@ async def run(args: argparse.Namespace) -> int:
         batching opportunity; waiting forever for chunk_size tasks
         creates terrible tail latency near end-of-run when the queue
         empties out. The bounded drain window balances both.
+
+        A batched VLM call runs under one project binding, so a chunk
+        never mixes projects: the first task of another project ends the
+        chunk and is parked in ``carry`` (owned by the calling consumer),
+        which starts that consumer's next chunk. A parked task never
+        coexists with a consumed poison pill, so shutdown cannot strand it.
         """
 
         tasks: list[_ItemTask] = []
-        first = await q.get()
+        first = carry.pop() if carry else None
         if first is None:
+            first = await q.get()
             q.task_done()
-            return tasks, True
+            if first is None:
+                return tasks, True
         tasks.append(first)
-        q.task_done()
 
         deadline = asyncio.get_running_loop().time() + drain_timeout
         poisoned = False
@@ -814,8 +803,11 @@ async def run(args: argparse.Namespace) -> int:
                 q.task_done()
                 poisoned = True
                 break
-            tasks.append(t)
             q.task_done()
+            if t.project != first.project:
+                carry.append(t)
+                break
+            tasks.append(t)
         return tasks, poisoned
 
     async def stage_a_vlm_visible(consumer_id: int) -> None:
@@ -838,19 +830,18 @@ async def run(args: argparse.Namespace) -> int:
         to the no-verdict cap; at the cap they fail open to ``sam_q``.
         """
 
+        carry: list[_ItemTask] = []
         while True:
             chunk, poisoned = await _drain_chunk(
                 vlm_visible_q,
                 chunk_size=VISIBLE_CHUNK,
                 drain_timeout=VLM_CHUNK_DRAIN_TIMEOUT,
+                carry=carry,
             )
             if chunk:
-                # Batched VLM call; bind the chunk's first task's
-                # project (documented simplification: a mixed-project
-                # chunk resolves config against one project for the
-                # shared call -- see final report).
-                if chunk[0].project is not None:
-                    set_bound_project(chunk[0].project)
+                # _drain_chunk returns single-project chunks, so one
+                # binding covers the whole batched call.
+                bind_task_project(chunk[0])
                 batch_request_ids = [t.request_id for t in chunk]
                 region_crops: list[RegionCrop] = []
                 bad_indices: list[int] = []
@@ -953,8 +944,7 @@ async def run(args: argparse.Namespace) -> int:
             if t is None:
                 sam_q.task_done()
                 return
-            if t.project is not None:
-                set_bound_project(t.project)
+            bind_task_project(t)
             structlog.contextvars.bind_contextvars(request_id=t.request_id)
             try:
                 if t.crop_jpeg is None:
@@ -1170,19 +1160,20 @@ async def run(args: argparse.Namespace) -> int:
         """
 
         F = get_region_fields()
+        carry: list[_ItemTask] = []
         while True:
             chunk, poisoned = await _drain_chunk(
                 combined_q,
                 chunk_size=COMBINED_CHUNK,
                 drain_timeout=VLM_CHUNK_DRAIN_TIMEOUT,
+                carry=carry,
             )
             if chunk:
-                # Same chunk-level binding simplification as
-                # stage_a_vlm_visible above.
-                if chunk[0].project is not None:
-                    set_bound_project(chunk[0].project)
+                # Single-project chunk (see _drain_chunk): classify
+                # against that project's own registry.
+                bind_task_project(chunk[0])
                 batch_request_ids = [t.request_id for t in chunk]
-                class_names = list(getattr(vlm, 'class_names', None) or [])
+                class_names, name_to_id = bound_class_catalog()
                 registry_loaded = bool(class_names)
 
                 # Build CombinedCrop payloads (parent item JPEG +

@@ -37,23 +37,19 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
     per project, each issued while bound to that project (projects_plan.md
     §5.1) -- the guard rejects a call issued against project A's index
     while project B is bound, so writes for different projects can never
-    share one bulk body.
-
-    Tasks with ``project is None`` (legacy single-project callers/tests
-    that never set one) are flushed together, unbound, exactly as
-    before.
+    share one bulk body. A task without a project is a producer bug and
+    raises instead of being written unbound.
     """
     from src.config.project_context import bind_project
 
     if not tasks:
         return 0, 0
     by_project: dict[str, list[_ItemTask]] = {}
-    unbound: list[_ItemTask] = []
     projects_by_slug: dict[str, Any] = {}
     for t in tasks:
         if t.project is None:
-            unbound.append(t)
-            continue
+            msg = f'item task {t.crop_id!r} has no project'
+            raise ValueError(msg)
         by_project.setdefault(t.project.slug, []).append(t)
         projects_by_slug[t.project.slug] = t.project
 
@@ -62,10 +58,6 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
     for slug, group in by_project.items():
         with bind_project(projects_by_slug[slug]):
             w, s = await _bulk_update_one_project(opensearch, group)
-        n_written += w
-        n_skipped += s
-    if unbound:
-        w, s = await _bulk_update_one_project(opensearch, unbound)
         n_written += w
         n_skipped += s
     return n_written, n_skipped
