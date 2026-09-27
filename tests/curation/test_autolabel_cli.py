@@ -59,7 +59,7 @@ def test_resolve_pipeline_fn_raises_on_missing_attribute() -> None:
 
 def test_write_exit_code_writes_the_code(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     exit_file = tmp_path / 'exit_code'
-    monkeypatch.setattr(cli_mod, '_EXIT_CODE_FILE', exit_file)
+    monkeypatch.setattr(cli_mod, '_exit_code_file', lambda: exit_file)
     cli_mod._write_exit_code(130)
     assert exit_file.read_text() == '130'
 
@@ -68,7 +68,7 @@ def test_write_exit_code_suppresses_oserror(monkeypatch: pytest.MonkeyPatch, tmp
     # A directory in place of the file: write_text raises OSError (IsADirectoryError).
     exit_dir = tmp_path / 'exit_code'
     exit_dir.mkdir()
-    monkeypatch.setattr(cli_mod, '_EXIT_CODE_FILE', exit_dir)
+    monkeypatch.setattr(cli_mod, '_exit_code_file', lambda: exit_dir)
     cli_mod._write_exit_code(1)  # must not raise
 
 
@@ -85,8 +85,8 @@ def _patch_state_io(
     writes: list[dict[str, Any]] = []
     monkeypatch.setattr(cli_mod, '_read_state', lambda: state)
     monkeypatch.setattr(cli_mod, '_atomic_write', writes.append)
-    monkeypatch.setattr(cli_mod, '_RUNNING_LOCK', tmp_path / 'running.lock')
-    monkeypatch.setattr(cli_mod, '_CANCEL_FLAG', tmp_path / 'cancel.flag')
+    monkeypatch.setattr(cli_mod, '_running_lock', lambda: tmp_path / 'running.lock')
+    monkeypatch.setattr(cli_mod, '_cancel_flag', lambda: tmp_path / 'cancel.flag')
     return writes
 
 
@@ -239,8 +239,8 @@ async def test_run_pipeline_cleans_up_lock_and_cancel_files(
     flag.touch()
     monkeypatch.setattr(cli_mod, '_read_state', lambda: state)
     monkeypatch.setattr(cli_mod, '_atomic_write', lambda _payload: None)
-    monkeypatch.setattr(cli_mod, '_RUNNING_LOCK', lock)
-    monkeypatch.setattr(cli_mod, '_CANCEL_FLAG', flag)
+    monkeypatch.setattr(cli_mod, '_running_lock', lambda: lock)
+    monkeypatch.setattr(cli_mod, '_cancel_flag', lambda: flag)
     monkeypatch.setattr(cli_mod, '_build_opensearch', _fake_build_opensearch)
 
     async def _fake_pipeline(**_kw: Any) -> dict[str, Any]:
@@ -266,9 +266,9 @@ async def _fake_build_opensearch() -> str:
 def test_main_returns_amain_result_and_writes_exit_code(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Any
 ) -> None:
-    monkeypatch.setattr(cli_mod, '_STATE_FILE', tmp_path / 'jobs' / 'state.json')
+    monkeypatch.setattr(cli_mod, '_state_file', lambda: tmp_path / 'jobs' / 'state.json')
     exit_file = tmp_path / 'exit_code'
-    monkeypatch.setattr(cli_mod, '_EXIT_CODE_FILE', exit_file)
+    monkeypatch.setattr(cli_mod, '_exit_code_file', lambda: exit_file)
 
     async def _fake_amain() -> int:
         return 0
@@ -284,9 +284,9 @@ def test_main_returns_amain_result_and_writes_exit_code(
 def test_main_keyboard_interrupt_returns_130(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Any
 ) -> None:
-    monkeypatch.setattr(cli_mod, '_STATE_FILE', tmp_path / 'jobs' / 'state.json')
+    monkeypatch.setattr(cli_mod, '_state_file', lambda: tmp_path / 'jobs' / 'state.json')
     exit_file = tmp_path / 'exit_code'
-    monkeypatch.setattr(cli_mod, '_EXIT_CODE_FILE', exit_file)
+    monkeypatch.setattr(cli_mod, '_exit_code_file', lambda: exit_file)
 
     async def _fake_amain() -> int:
         raise KeyboardInterrupt
@@ -302,9 +302,9 @@ def test_main_keyboard_interrupt_returns_130(
 def test_main_fatal_exception_writes_failed_state_and_returns_1(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Any
 ) -> None:
-    monkeypatch.setattr(cli_mod, '_STATE_FILE', tmp_path / 'jobs' / 'state.json')
+    monkeypatch.setattr(cli_mod, '_state_file', lambda: tmp_path / 'jobs' / 'state.json')
     exit_file = tmp_path / 'exit_code'
-    monkeypatch.setattr(cli_mod, '_EXIT_CODE_FILE', exit_file)
+    monkeypatch.setattr(cli_mod, '_exit_code_file', lambda: exit_file)
 
     async def _fake_amain() -> int:
         raise RuntimeError('event loop exploded')
