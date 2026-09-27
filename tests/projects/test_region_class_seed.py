@@ -7,14 +7,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from src.clients.curation_opensearch import ClassRegistry
 from src.config import DetectionProfile
 
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    import pytest
 
 
 def _seed(
@@ -63,3 +63,44 @@ def test_no_region_profile_seeds_nothing(tmp_path: Path, monkeypatch: pytest.Mon
     assert ensure_region_class() is None
     assert reg.load().classes == []
     assert reg_no_name.load().classes == []
+
+
+def test_item_classes_exclude_the_region_class(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item labelers (VLM, auto-label, probe) must never assign the region
+    class to a whole item; it is a sub-box class."""
+    from src.services.curation.region_class import item_classes
+
+    reg = _seed(tmp_path, monkeypatch, DetectionProfile(name='p', region_class_name='wheel'))
+    reg.add_class('car')
+    reg.add_class('Wheel')
+    reg.set_deprecated(reg.add_class('old'), True)
+
+    names = [c.class_name for c in item_classes(reg.load().classes)]
+    assert 'Wheel' not in names
+    assert names == ['car']
+
+
+def test_label_batch_with_only_the_region_class_is_no_classes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import asyncio
+
+    from fastapi import HTTPException
+
+    import src.routers.curation.vlm as vlm_mod
+    from src.routers.curation.vlm import VlmLabelBatchRequest
+
+    reg = _seed(tmp_path, monkeypatch, DetectionProfile(name='p', region_class_name='wheel'))
+    reg.add_class('wheel')
+    monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
+
+    def _no_labeler(*_a: object, **_k: object) -> None:
+        raise AssertionError('the VLM must not be called with only the region class')
+
+    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', _no_labeler)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['a']), object()))
+    assert exc_info.value.status_code == 409

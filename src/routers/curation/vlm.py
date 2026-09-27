@@ -234,7 +234,10 @@ async def vlm_label_batch(
         raise HTTPException(status_code=400, detail='maximum 64 crop_ids per call')
 
     reg = get_class_registry().load()
-    class_names = [c.class_name for c in reg.classes if not c.deprecated]
+    from src.services.curation.region_class import item_classes
+
+    labelable = item_classes(reg.classes)
+    class_names = [c.class_name for c in labelable]
     if not class_names:
         # A fresh project: the VLM worker already has unlabelled items to
         # send, but there is nothing to label them as yet.
@@ -341,7 +344,7 @@ async def vlm_label_batch(
     # Use the open-vocabulary path so the VLM can flag genuinely-unknown
     # items instead of silently snapping them to the wrong class.
     predictions = await labeler.label_or_propose_batch(crops, class_names)
-    name_to_id = {c.class_name: c.class_id for c in reg.classes if not c.deprecated}
+    name_to_id = {c.class_name: c.class_id for c in labelable}
     # Collect per-doc updates, then dispatch via occ_skip_on_conflict_bulk
     # so a concurrent human edit always wins.
     updates_by_id: dict[str, dict[str, Any]] = {}

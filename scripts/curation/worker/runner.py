@@ -328,9 +328,34 @@ async def run(args: argparse.Namespace) -> int:
         item_text_enabled=item_text_enabled,
     )
     vlm = _wkr.VlmLabeler(base_url=args.vlm_url, pack=pack) if vlm_available else None
-    # The VLM class catalog (prompt class list + name -> registry id) is
-    # per project: every classifying call reads bound_class_catalog()
-    # under the item's own binding, never a process-wide list.
+    # Populate class_names so ``label_combined`` callers (the
+    # primary-detector-missed cohort gate in cascade._process_crop) can
+    # classify in the same VLM round-trip as region verify + OCR.
+    # Best-effort: if the registry can't be loaded the cohort gate
+    # falls back to legacy two-call paths (label_combined with empty
+    # class_names just answers the region side).
+    name_to_id: dict[str, int] = {}
+    # Without a VLM nothing classifies, so the registry is not needed.
+    if vlm is not None:
+        try:
+            from src.clients.curation_opensearch import ClassRegistry
+
+            _reg = ClassRegistry().load()
+            # vlm.class_names is the list passed into the VLM prompt;
+            # reply.class_id is the *index* into this list, NOT the
+            # registry id. name_to_id maps the resolved name back to the
+            # registry's authoritative class_id so writes carry the
+            # correct value. Without this remap, a reply of class_id=0
+            # lands the registry's first non-deprecated class label on a
+            # doc with class_id=0 (deprecated) — historical drift.
+            from src.services.curation.region_class import item_classes
+
+            _labelable = item_classes(_reg.classes)
+            vlm.class_names = [c.class_name for c in _labelable]
+            name_to_id = {c.class_name: int(c.class_id) for c in _labelable}
+            vlm.name_to_id = name_to_id
+        except Exception as _exc:  # nosec B110 — best-effort, registry optional
+            logger.warning('class_registry_load_failed', error=str(_exc))
     opensearch = _wkr.make_script_opensearch([args.opensearch])
 
     started_at = time.monotonic()
