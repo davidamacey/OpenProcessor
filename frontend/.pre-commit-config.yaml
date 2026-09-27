@@ -82,7 +82,7 @@ repos:
       # every commit, but a red push is what CI would reject anyway.
       - id: vitest-pre-push
         name: vitest (full suite)
-        entry: npx vitest run --maxWorkers=4
+        entry: npx vitest run
         language: system
         pass_filenames: false
         stages: [pre-push]
