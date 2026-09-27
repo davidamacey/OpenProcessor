@@ -29,7 +29,7 @@ def test_defaults_are_empty_and_permissive() -> None:
     assert cfg.trainer_container is None
     # Never None: the router and the reconcile loop must watch the same dir
     # even when OP_BAKEOFF_JOBS_DIR is unset.
-    assert cfg.bakeoff_jobs_dir == str(get_curation_config().state_dir / 'bakeoff_jobs')
+    assert cfg.bakeoff_jobs_dir == str(get_curation_config().bakeoff_jobs_dir)
     assert cfg.gpu_labels == {}
     assert cfg.default_train_gpus is None
 
@@ -95,7 +95,7 @@ def test_probe_trainer_reachable_ok_on_a_stock_install_with_fresh_heartbeat(
     """
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
     monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: None)
-    _write_heartbeat(tmp_path, age_seconds=5.0)
+    _write_heartbeat(tmp_path / 'projects' / 'default', age_seconds=5.0)
 
     severity, detail = asyncio.run(
         gpu_arbiter.probe_trainer_reachable(container_name='op-test-trainer')
@@ -111,7 +111,10 @@ def test_probe_trainer_reachable_warns_on_stale_heartbeat_without_docker(
     warn, never block -- "can't tell" is not the same as "definitely down"."""
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
     monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: None)
-    _write_heartbeat(tmp_path, age_seconds=gpu_arbiter.TRAINER_HEARTBEAT_STALE_SECONDS + 60.0)
+    _write_heartbeat(
+        tmp_path / 'projects' / 'default',
+        age_seconds=gpu_arbiter.TRAINER_HEARTBEAT_STALE_SECONDS + 60.0,
+    )
 
     severity, detail = asyncio.run(
         gpu_arbiter.probe_trainer_reachable(container_name='op-test-trainer')
@@ -326,7 +329,7 @@ def test_bakeoff_jobs_dir_default_is_shared_with_the_router(
     from src.routers.curation import bakeoff
 
     cfg = GpuArbiterConfig.from_env()
-    assert cfg.bakeoff_jobs_dir == str(get_curation_config().state_dir / 'bakeoff_jobs')
+    assert cfg.bakeoff_jobs_dir == str(get_curation_config().bakeoff_jobs_dir)
     # bakeoff.JOBS_DIR is now _jobs_dir(), resolved per-project at call
     # time (projects_plan.md §5.3); for the bound default project it's
     # still byte-for-byte the arbiter's bakeoff_jobs_dir.
@@ -354,7 +357,7 @@ def test_bakeoff_active_after_enqueue_with_no_env(
         curation_config_module, '_default_curation_config', cfg, raising=False
     )
     jobs_dir = Path(get_gpu_arbiter_config().bakeoff_jobs_dir)
-    assert jobs_dir == state / 'bakeoff_jobs'
+    assert jobs_dir == state / 'projects' / 'default' / 'bakeoff_jobs'
     clean_arbiter_env.setattr(bakeoff, '_jobs_dir', lambda: jobs_dir)
     clean_arbiter_env.setattr(bakeoff, '_out_dir', lambda: tmp_path / 'out')
     exports = tmp_path / 'exports'

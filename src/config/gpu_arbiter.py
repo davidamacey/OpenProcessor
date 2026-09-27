@@ -96,10 +96,15 @@ def _parse_container_gpus(raw: str) -> tuple[tuple[str, frozenset[int] | None], 
 
 
 def _default_bakeoff_jobs_dir() -> str:
-    """``<state_dir>/bakeoff_jobs``: the one default the router and arbiter share."""
+    """The bound project's own ``bakeoff_jobs_dir`` (a PROJECT_SCOPED_FIELDS
+    entry, ``resources_for_new``) -- the one default the router and arbiter
+    share. P1R §6.1/D-A: ``default`` nests under
+    ``state_dir/projects/default/bakeoff_jobs`` like every other project;
+    reading the field directly (never reconstructing ``state_dir /
+    'bakeoff_jobs'``) is what keeps the two in sync for any project."""
     from src.config.curation import get_curation_config
 
-    return str(get_curation_config().state_dir / 'bakeoff_jobs')
+    return str(get_curation_config().bakeoff_jobs_dir)
 
 
 def _parse_gpu_labels(raw: str) -> dict[int, str]:

@@ -201,7 +201,10 @@ def make_run(
     ckpt = dirs['runs'] / run_id / 'weights' / 'best.pt'
     ckpt.parent.mkdir(parents=True)
     ckpt.write_bytes(b'pt')
-    jobs = dirs['train_jobs']
+    # P1R §6.1/D-A: project_jobs_dir() always nests /projects/<slug>,
+    # default included.
+    jobs = dirs['train_jobs'] / 'projects' / 'default'
+    jobs.mkdir(parents=True, exist_ok=True)
     (jobs / f'{run_id}.status.json').write_text(
         json.dumps(
             {
