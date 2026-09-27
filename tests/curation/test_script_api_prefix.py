@@ -64,6 +64,13 @@ class _RecordingClient:
         return _Resp()
 
 
+# vlm_worker.py/cluster_refresh_daemon.py no longer read OP_API_PREFIX
+# directly -- the caller resolves the prefix (from get_curation_config()
+# while a project is bound) and passes it in explicitly per project, so
+# these now exercise that explicit-prefix contract directly instead of
+# monkeypatching the env and reloading the module.
+
+
 @pytest.fixture
 def custom_prefix(monkeypatch: pytest.MonkeyPatch) -> Any:
     """OP_API_PREFIX=/custom-mount, and a fresh env-built base config."""
@@ -76,7 +83,9 @@ def custom_prefix(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 @pytest.fixture
 def beta_bound() -> Any:
-    """The workers' ``--project beta``: the whole process bound to beta."""
+    """A process-wide bind to project ``beta`` -- what bulk_writer's
+    background publisher runs under (script/worker entry point, not a
+    request)."""
     from datetime import UTC, datetime
 
     from src.config.curation import base_curation_config
@@ -98,13 +107,6 @@ def beta_bound() -> Any:
     bind_process_project(record)
     yield record
     bind_process_project(None)
-
-
-# vlm_worker.py/cluster_refresh_daemon.py no longer read OP_API_PREFIX
-# directly -- the caller resolves the prefix (from get_curation_config()
-# while a project is bound) and passes it in explicitly per project, so
-# these now exercise that explicit-prefix contract directly instead of
-# monkeypatching the env and reloading the module.
 
 
 @pytest.mark.unbound

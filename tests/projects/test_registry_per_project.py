@@ -274,7 +274,11 @@ def test_default_is_an_ordinary_bootstrapped_project(fake_registry_client) -> No
         f'op_prj_default__{role.value}' for role in record.resources.indexes
     }
     assert record.resources.class_registry_path.parts[-2:] == ('default', 'class_registry.json')
-    assert record.resources.model_prefix == 'default__'
+    # projects_plan.md sec5.3/sec5.5 (owner D1): model_prefix is the one
+    # deliberate exception to "no default special case" -- default stays
+    # unprefixed so every model promoted before projects existed, and
+    # every core-pipeline model, keeps resolving as default's own.
+    assert record.resources.model_prefix == ''
 
 
 def test_bootstrap_never_resets_an_existing_default_on_a_read_error(fake_registry_client) -> None:

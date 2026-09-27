@@ -336,9 +336,15 @@ async def run(args: argparse.Namespace) -> int:
     started_at = time.monotonic()
     sentinel = Path(args.pause_sentinel)
 
-    from src.services.projects.script_binding import only_project, script_project_registry
+    from src.services.projects.registry import ProjectRegistry
+    from src.services.projects.script_binding import only_project
 
-    registry = script_project_registry(args.opensearch)
+    # Reuse the already-built (and, in tests, already-patched)
+    # `opensearch` client above -- a second script_project_registry()
+    # client would open its own real AsyncOpenSearch straight from
+    # args.opensearch, bypassing whatever fake a caller/test installed
+    # at _wkr.make_script_opensearch.
+    registry = ProjectRegistry(lambda: opensearch)
     project_filter = getattr(args, 'project', None)
 
     class _WorkerProjects:

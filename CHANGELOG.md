@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Cross-project model sharing (§5.5, owner D1).** New
+  `src/services/training/model_classes.py`: `model_classes()` reads a
+  model's own classes from `promote.json.classes` (model order), else
+  `labels.txt`; `model_class_mapping()` matches a model's classes onto
+  the *consuming* project's registry by name (exact, then
+  case-insensitive) -- runs for every model, own-project included, so a
+  class renamed since training shows up as unmapped there too. Never a
+  raw model id crosses a project boundary.
+- `PUT /curation/projects/{project}/models/{name}/sharing` -- owner-only
+  opt-in/opt-out (404 for a non-owner), optimistic concurrency via
+  `promote.json.sharing_revision` (409 `revision_conflict`). The
+  used_by/in_use cross-project detector-usage scan is a documented
+  `TODO` (needs W4's per-project `DetectionProfile` read, not merged
+  here); unsharing is never refused yet.
+- `POST /curation/projects/{project}/pause`, `POST .../resume`, `GET
+  .../pause` -- the write side of the `pipeline_paused.flag` file
+  sentinel the multi-project workers already read.
+- `src/services/projects/busy.py`'s `_detection_worker_inflight` reads
+  the real per-project `runtime_detection_worker_<host>.json` liveness
+  files `fairness.py` writes, instead of a `[]` stub.
+- `triton_promote.py`'s `promote()` now writes `promote.json.classes`
+  (== `labels.txt`, model order), `shared` (preserved across a
+  re-promote) and `class_remap_source`.
+
+### Fixed
+- Merged the finished `cutover/projects-foundation` (P1) twice (once
+  before, once after its final review-resolution pass): resolved P1's
+  worker-script conflicts in P2's favour (already multi-project) and
+  P1's guard/registry/context APIs in P1's favour, per R-6.
+- Adapted to P1's `default` refactor (an ordinary registered project,
+  `resources_for_new`-built, no env-derived special case):
+  `gpu_arbiter.py`'s train-jobs-dir/bakeoff-jobs-dir resolution, the
+  many job/status/manifest/heartbeat test fixtures that assumed an
+  unnested default jobs dir, and `_project_owns_model`'s one deliberate
+  exception (`default`'s `model_prefix` stays empty, unlike every other
+  project, so pre-projects/core-pipeline models keep resolving as
+  default's own).
+- `scripts/curation/worker/runner.py`'s multi-project registry
+  discovery opened a second, unmockable `AsyncOpenSearch` straight from
+  `--opensearch`, so every region-worker end-to-end test silently
+  discovered zero projects and processed nothing; now reuses the
+  already-built (patchable) client.
+- `GpuArbiterConfig.bakeoff_jobs_dir`'s `default_factory` read the
+  *bound* project's config, which raises `ProjectNotBound` at API
+  startup (before any request binds one) and silently killed the
+  reconcile-loop task; reads `default`'s own resources directly instead.
+- Adapted P1's cross-project leak sweep's autolabel fixture to P2's
+  actual (already per-project-function, no module constants)
+  `autolabel/job.py`, and registered `preflight_scan._scan_cache` with
+  the sweep's process-cache-clearing fixture.
+
 ### Changed
 - **Merged the three projects-lifecycle branches (checkpoint 1: merges +
   adapt only).** `cutover/projects-foundation` (P1, default-is-an-
@@ -191,7 +243,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reducer/projection state files, the eval-dataset roots, and the scores /
   probe / selection / projection job dirs resolve per bound project
   (`items_index()` and friends replace the frozen `CURATION_*_INDEX` /
-  `ITEMS_INDEX` constants).
+  `ITEMS_INDEX` constants). `default` is now an ordinary project
+  (`op_prj_default__*`), created with `resources_for_new('default')`;
+  the env-derived special case is gone.
 - The event hub stamps every event with the bound `project` and refuses
   an unbound publish or one naming another project; a scoped stream
   delivers only its own project's events, the global stream only

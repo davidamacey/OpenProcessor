@@ -136,7 +136,14 @@ def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
         / slug,
         bakeoff_jobs_dir=base.state_dir / 'projects' / slug / 'bakeoff_jobs',
         mlflow_experiment=f'openprocessor-{slug}',
-        model_prefix=f'{slug}__',
+        # §5.3/§5.5: `default`'s model_prefix stays empty (not `default__`)
+        # so every model promoted before projects existed -- and every
+        # core pipeline model, which never carries a project prefix --
+        # keeps resolving as `default`'s own. This is a model-naming
+        # exception only; every OTHER resource (indexes, state dirs,
+        # class registry) still follows the ordinary per-slug convention
+        # (D-A, P1R §6.1) with no other `default` special case.
+        model_prefix='' if slug == DEFAULT_SLUG else f'{slug}__',
     )
 
 

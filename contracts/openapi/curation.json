@@ -5908,6 +5908,84 @@
         "title": "MetricBlock",
         "type": "object"
       },
+      "ModelSharingRequest": {
+        "properties": {
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "shared": {
+            "title": "Shared",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "shared",
+          "expected_revision"
+        ],
+        "title": "ModelSharingRequest",
+        "type": "object"
+      },
+      "ModelSharingResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "shared": {
+            "title": "Shared",
+            "type": "boolean"
+          },
+          "used_by": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ModelSharingUser"
+            },
+            "title": "Used By",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "project",
+          "shared",
+          "revision"
+        ],
+        "title": "ModelSharingResponse",
+        "type": "object"
+      },
+      "ModelSharingUser": {
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "ModelSharingUser",
+        "type": "object"
+      },
       "NotCoveredClass": {
         "properties": {
           "eval_class_id": {
@@ -6104,6 +6182,24 @@
           "fn"
         ],
         "title": "PerClassRow",
+        "type": "object"
+      },
+      "PipelinePauseState": {
+        "properties": {
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "paused"
+        ],
+        "title": "PipelinePauseState",
         "type": "object"
       },
       "PreflightCheck": {
@@ -15221,6 +15317,163 @@
         ]
       }
     },
+    "/curation/projects/{project}/models/{model_name}/sharing": {
+      "put": {
+        "description": "Opt a promoted model into (or out of) cross-project sharing. Only\nthe owning project may call this -- 404 for anyone else, matching\nevery other ownership check in this router.",
+        "operationId": "set_model_sharing_curation_projects__project__models__model_name__sharing_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_name",
+            "required": true,
+            "schema": {
+              "title": "Model Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Bypass the in-use refusal when unsharing (logged)",
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Bypass the in-use refusal when unsharing (logged)",
+              "title": "Force",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelSharingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSharingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Model Sharing",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/pause": {
+      "get": {
+        "operationId": "get_pipeline_pause_state_curation_projects__project__pause_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelinePauseState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Pipeline Pause State",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "post": {
+        "description": "Skip this project in every worker's next discovery cycle. Idempotent.",
+        "operationId": "pause_pipeline_curation_projects__project__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelinePauseState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause Pipeline",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/pipeline/auto_label": {
       "post": {
         "description": "Run the full auto-labeling chain end-to-end:\n\n1. (optional) Re-train FAISS clusters on every embedded item.\n2. Auto-promote items in high-purity clusters (``cluster_propagation``).\n3. Run the VLM over remaining unvalidated items with the open-vocabulary\n   prompt — high-confidence labels are auto-validated, ``__new__``\n   proposals are flagged for the curator queue.\n\nOutput enumerates each stage's counts so the labeler dashboard can show\n\"this many items still need a human.\" Idempotent: safe to re-run.",
@@ -17138,6 +17391,49 @@
           }
         },
         "summary": "Regions Vocabulary",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/resume": {
+      "post": {
+        "description": "Clear this project's pause flag. Idempotent -- resuming an\nalready-running project is a no-op, not an error.",
+        "operationId": "resume_pipeline_curation_projects__project__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelinePauseState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Pipeline",
         "tags": [
           "Curation"
         ]

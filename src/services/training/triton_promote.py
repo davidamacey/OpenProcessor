@@ -27,6 +27,7 @@ accelerator JIT-compile. We need different scaffolding.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import shutil
@@ -398,6 +399,14 @@ class TritonPromoter:
         # 5xx's (fail-soft — the files are still valid and loadable later).
         promote_json_path = model_dir / 'promote.json'
         remap = class_remap or _NONE_REMAP
+        # §5.5 (owner D1): a re-promote (new version of the same
+        # triton_name) preserves the owner's prior sharing opt-in --
+        # PUT .../sharing is the only route that changes it.
+        prior_shared = False
+        with contextlib.suppress(OSError, ValueError):
+            prior_shared = bool(
+                json.loads(promote_json_path.read_text(encoding='utf-8')).get('shared')
+            )
         backpointer = {
             'job_id': status.job_id,
             'triton_name': triton_name,
@@ -409,6 +418,15 @@ class TritonPromoter:
             # model back to its owning project without re-deriving it from
             # ``triton_name``'s prefix.
             'project': project,
+            # §5.5: never crosses a project boundary by raw id -- other
+            # projects consume this model only by class NAME
+            # (src.services.training.model_classes), via labels.txt's own
+            # model-output order.
+            'shared': prior_shared,
+            'classes': [
+                {'model_id': i, 'name': class_id_to_name[i]} for i in sorted(class_id_to_name)
+            ],
+            'class_remap_source': remap.source,
             'class_remap': {
                 'source': remap.source,
                 'n_classes': len(remap.mapping)

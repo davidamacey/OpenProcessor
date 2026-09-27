@@ -13,6 +13,7 @@ real module.
 
 from __future__ import annotations
 
+import src.routers.curation._project_pause
 import src.routers.curation.bakeoff
 import src.routers.curation.classes
 import src.routers.curation.clusters

@@ -70,12 +70,17 @@ def test_default_project_job_lands_in_the_default_dir(tmp_path, monkeypatch) -> 
     """``default`` is an ordinary project (P1: no special-casing) --
     its jobs land under ``<jobs_root>/projects/default/`` exactly like
     any other project's, not at the jobs-root top level."""
+    from src.config.curation import base_curation_config
     from src.config.projects import new_project_record
 
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path / 'jobs'))
     export_dir = tmp_path / 'exports' / 'current'
     with bind_project(new_project_record(DEFAULT_SLUG, base_curation_config())):
         job_id = asyncio.run(train_jobs.write_job(_spec(export_dir)))
+    with bind_project(new_project_record('default', base_curation_config())):
+        job_id = asyncio.run(train_jobs.write_job(_spec(export_dir)))
+    # P1R §6.1/D-A: project_jobs_dir() always nests /projects/<slug>,
+    # `default` included -- no more env-only unnested special case.
     assert (tmp_path / 'jobs' / 'projects' / 'default' / f'{job_id}.job.json').is_file()
 
 

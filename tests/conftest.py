@@ -156,6 +156,7 @@ _PROCESS_CACHES = (
     ('src.clients.curation_opensearch', '_settings_cache'),
     ('src.routers.curation.regions_fp', '_suspected_fp_cache'),
     ('src.services.curation.eval_datasets', '_CACHE'),
+    ('src.services.training.preflight_scan', '_scan_cache'),
 )
 
 

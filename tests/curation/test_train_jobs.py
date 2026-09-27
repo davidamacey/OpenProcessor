@@ -40,6 +40,11 @@ def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     not the env var's value directly -- return the resolved subdir so
     every test in this file reads/writes where the code actually does.
     """
+    """Redirect OP_TRAIN_JOBS_DIR at the env-var level and return the
+    actual resolved dir for the bound (``default``, tests/conftest.py)
+    project -- P1R §6.1/D-A: ``project_jobs_dir()`` always nests
+    ``/projects/<slug>``, ``default`` included, so callers must not
+    assume ``OP_TRAIN_JOBS_DIR`` itself is where files land."""
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
     resolved = tmp_path / 'projects' / 'default'
     resolved.mkdir(parents=True, exist_ok=True)
@@ -708,6 +713,10 @@ class _FakeCurationConfig:
         # OP_TRAIN_JOBS_DIR/projects/default the ``jobs_dir`` fixture
         # resolves to (default is an ordinary project -- P1: no
         # special-casing).
+        # _resolve_jobs_dir() reads this (projects_plan.md §5.3); these
+        # tests only care about mlflow_public_url/api_prefix. Default
+        # nests /projects/default under OP_TRAIN_JOBS_DIR (P1R §6.1/D-A:
+        # project_jobs_dir() always nests, default included).
         self.train_jobs_dir = train_jobs_dir or (
             Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs')) / 'projects' / 'default'
         )

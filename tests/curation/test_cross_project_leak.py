@@ -149,6 +149,7 @@ def route_bodies(slug: str) -> dict[tuple[str, str], dict[str, Any]]:
             'files': [('images', (f'{slug}-up.jpg', jpeg_bytes(len(slug)), 'image/jpeg'))],
         },
         ('POST', '/probe/run'): {'json': {'job_id': f'{slug}-job-0001'}},
+        ('PUT', '/models/{model_name}/sharing'): {'json': {'shared': True, 'expected_revision': 1}},
         ('PUT', '/crops/{crop_id}/region'): {'json': {'region_bbox_norm': [0.1, 0.1, 0.4, 0.4]}},
         ('PATCH', '/crops/{crop_id}/region_meta'): {'json': {'region_text': f'{slug}TXT'}},
         ('PUT', '/crops/batch_region'): {
@@ -267,6 +268,9 @@ P2_DEFERRED: dict[tuple[str, str], str] = {
     ('POST', '/bakeoff/run'): 'global bake-off jobs dir and GPU claim (P2, plan §5.3)',
     ('POST', '/train/promote/{job_id}'): 'promoted-model ownership in the shared Triton repo (P2)',
     ('DELETE', '/models/{model_name}'): 'promoted-model ownership in the shared Triton repo (P2)',
+    ('PUT', '/models/{model_name}/sharing'): (
+        'promoted-model ownership in the shared Triton repo (P2); no promote.json seeded here'
+    ),
 }
 
 
@@ -943,6 +947,15 @@ def leak_env(
     # before the project records below are built from this env.
     al_dir = tmp_path / 'jobs' / 'auto_label'
     monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(al_dir))
+    # The (P2-owned) auto-label module resolves its state dir fresh per
+    # bound project on every call (`_state_dir()` -> the bound project's
+    # own `autolabel_dir`, a PROJECT_SCOPED_FIELDS entry) -- there is no
+    # import-time module constant left to patch. Redirect the env var
+    # `resources_for_new` reads instead, so the sweep never touches the
+    # host's /jobs and each project's own nested dir
+    # (`<this>/projects/<slug>`, `default` included per P1R §6.1/D-A) is
+    # kept inside tmp_path.
+    monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'jobs' / 'auto_label'))
 
     base = base_curation_config()
     records = {'default': new_project_record('default', base)}

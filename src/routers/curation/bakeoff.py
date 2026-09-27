@@ -76,12 +76,22 @@ logger = get_logger(__name__)
 
 
 # Project-scoped (docs/design/openprocessor_internal/projects_plan.md
-# §5.3): each project's bake-off jobs and results live under its own
-# ``CurationConfig.bakeoff_jobs_dir`` (a PROJECT_SCOPED_FIELDS entry), so
-# no project's queue or results leak into another's -- ``default``
-# included. Resolved at call time (never a module-level constant) so a
-# later bind_project is always picked up. The GPU arbiter scans the same
-# per-project dirs (project_job_dirs.all_bakeoff_jobs_dirs).
+# §5.3): each project's bake-off jobs/outputs live under its own
+# ``CurationConfig.bakeoff_jobs_dir`` (a PROJECT_SCOPED_FIELDS entry), not
+# a single global dir, so no project's queue or results leak into
+# another's. Resolved at call time (never a module-level constant) so a
+# later bind_project is always picked up.
+#
+# ``default``'s ``CurationConfig.bakeoff_jobs_dir`` already resolves via
+# the same ``OP_BAKEOFF_JOBS_DIR`` env var as ``GpuArbiterConfig``'s copy
+# (``src.config.projects.resources_for_new``, used for ``default`` like
+# every other project), so ``_jobs_dir()`` is
+# byte-for-byte the old module-level ``JOBS_DIR`` for ``default``.
+# ``_out_dir()`` keeps
+# ``default``'s exact old path/env var (``OP_BAKEOFF_OUT_DIR`` / a sibling
+# ``bakeoff_out`` dir, NOT nested under ``bakeoff_jobs``) and only nests a
+# project's outputs under its own ``bakeoff_jobs_dir`` for a non-default
+# project (which has no ``OP_BAKEOFF_OUT_DIR`` precedent to preserve).
 def _jobs_dir() -> Path:
     return Path(get_curation_config().bakeoff_jobs_dir)
 

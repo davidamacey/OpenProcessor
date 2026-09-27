@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 from src.config.curation import base_curation_config
 from src.config.project_context import bind_project
-from src.config.projects import DEFAULT_SLUG, ProjectRecord, new_project_record, resources_for_new
+from src.config.projects import DEFAULT_SLUG, ProjectRecord, resources_for_new
 from src.services.training.jobs import TrainJobStatus
 from src.services.training.triton_promote import TritonPromoter
 
@@ -79,10 +79,11 @@ def test_model_prefix_matches_resources_for_new_convention() -> None:
     beta = resources_for_new('beta', base_curation_config())
     assert beta.model_prefix == 'beta__'
     default_prefix = resources_for_new('default', base_curation_config()).model_prefix
-    # default is an ordinary project (P1: no special-casing) -- its
-    # resources come from resources_for_new like any other slug's, so it
-    # gets the same 'default__' convention.
-    assert default_prefix == 'default__'
+    # §5.3/§5.5: model_prefix is the one deliberate exception to D-A's
+    # "no default special case" -- default stays unprefixed so every
+    # pre-projects / core-pipeline model (never namespaced) keeps
+    # resolving as default's own.
+    assert default_prefix == ''
 
 
 @pytest.mark.asyncio
@@ -118,22 +119,25 @@ async def test_promote_writes_namespaced_name_and_project(
 
 
 @pytest.mark.asyncio
-async def test_default_promote_name_is_namespaced_like_any_project(
+async def test_default_promote_name_is_unprefixed(
     fake_status: TrainJobStatus,
     scratch_models_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """default is an ordinary project (P1: no special-casing) -- its
-    promoted names carry its own ``default__`` prefix exactly like any
-    other project's."""
+    """default's empty model_prefix means its promoted names are exactly
+    what the caller requested -- no behavior change for the live
+    single-project stack."""
     monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=True))
     promoter = TritonPromoter(triton_models_dir=scratch_models_dir, triton_http_url='http://unused')
 
-    with bind_project(new_project_record(DEFAULT_SLUG, base_curation_config())):
+    from src.config.curation import base_curation_config
+    from src.config.projects import new_project_record
+
+    with bind_project(new_project_record('default', base_curation_config())):
         from src.config.curation import get_curation_config
 
         cfg = get_curation_config()
-        assert cfg.model_prefix == 'default__'
+        assert cfg.model_prefix == ''
         triton_name = f'{cfg.model_prefix}detector_v3'
 
     result = await promoter.promote(
@@ -142,7 +146,7 @@ async def test_default_promote_name_is_namespaced_like_any_project(
         class_id_to_name={0: 'car'},
         project=DEFAULT_SLUG,
     )
-    assert result.triton_name == 'default__detector_v3'
+    assert result.triton_name == 'detector_v3'
 
 
 def test_requested_name_with_reserved_separator_is_rejected(tmp_path, monkeypatch) -> None:
@@ -187,7 +191,10 @@ def test_project_owns_model_prefix_isolation() -> None:
             assert _project_owns_model('other__x') is False
             assert _project_owns_model('yolov11_small_trt_end2end') is False
 
-        with bind_project(new_project_record(DEFAULT_SLUG, base_curation_config())):
+        from src.config.curation import base_curation_config
+        from src.config.projects import new_project_record
+
+        with bind_project(new_project_record('default', base_curation_config())):
             assert _project_owns_model('yolov11_small_trt_end2end') is True
             assert _project_owns_model('beta__x') is False
     finally:
