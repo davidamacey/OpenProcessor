@@ -139,24 +139,28 @@ async def write_record(
     bump landed first (the storage-level race this guards against;
     callers translate it into the API's 409 ``revision_conflict``)."""
     from src.services.projects.bootstrap import bump_revision
+    from src.services.projects.guard import bind_registry_admin
 
     kwargs: dict[str, Any] = {}
     if if_seq_no is not None:
         kwargs['if_seq_no'] = if_seq_no
     if if_primary_term is not None:
         kwargs['if_primary_term'] = if_primary_term
-    try:
-        await client.index(
-            index=projects_index(),
-            id=_project_doc_id(record.slug),
-            body=record_to_doc(record),
-            **kwargs,
-        )
-    except Exception as exc:
-        if _is_conflict_exception(exc):
-            raise RevisionConflictError(f'revision conflict writing {record.slug!r}') from exc
-        raise
-    await bump_revision(client)
+    # The guard only lets lifecycle code write op_projects; a create has no
+    # project bound yet, so every registry write declares itself here.
+    with bind_registry_admin():
+        try:
+            await client.index(
+                index=projects_index(),
+                id=_project_doc_id(record.slug),
+                body=record_to_doc(record),
+                **kwargs,
+            )
+        except Exception as exc:
+            if _is_conflict_exception(exc):
+                raise RevisionConflictError(f'revision conflict writing {record.slug!r}') from exc
+            raise
+        await bump_revision(client)
 
 
 async def _read_revision(client: Any) -> int:
