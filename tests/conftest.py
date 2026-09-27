@@ -139,6 +139,20 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     stub = registry_mod.ProjectRegistry(_no_registry_client)
     stub._by_slug = {'default': DEFAULT_RECORD}  # type: ignore[dict-item]
+
+    # M2 made a stale registry (``.stale`` True after a failed
+    # ensure_fresh) refuse every non-GET route at bind time. This stub
+    # never reaches the network on purpose -- it is a deliberately frozen,
+    # authoritative-for-tests snapshot, not an instance that fell behind --
+    # so a real ensure_fresh() call against it would mark it stale and
+    # 409 every write-route test in the suite that doesn't install its own
+    # registry. Make ensure_fresh here a no-op success instead of a real
+    # (failing) refresh attempt.
+    async def _never_stale(self: object) -> None:
+        return None
+
+    monkeypatch.setattr(stub, 'ensure_fresh', _never_stale.__get__(stub))
+    stub._refreshed = True
     registry_mod.set_project_registry(stub)
 
     # Script entry points resolve ``--project`` through the registry; here
