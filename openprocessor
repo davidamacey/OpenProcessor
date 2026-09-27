@@ -16,7 +16,9 @@ set -eo pipefail
 # Configuration
 # =============================================================================
 
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Physical path (-P): compose records the resolved working_dir, and the
+# installer compares against the same form.
+PROJECT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 export PROJECT_DIR
 
@@ -59,12 +61,19 @@ resolve_project() {
     if [[ "$IS_CHECKOUT" != 1 ]]; then
         [[ -f "$PROJECT_DIR/.env" ]] || { log_error "no .env in ${PROJECT_DIR}: not an OpenProcessor install dir"; exit 3; }
         [[ -n "$from_env" ]] || { log_error "${PROJECT_DIR}/.env has no COMPOSE_PROJECT_NAME; refusing to guess a compose project"; exit 3; }
-        if [[ -f "$PROJECT_DIR/.install/state.json" ]]; then
-            from_state="$(sed -n -E 's/^  "project": "([^"]*)",?$/\1/p' "$PROJECT_DIR/.install/state.json" | head -n1)"
-            if [[ "$from_state" != "$from_env" ]]; then
-                log_error "project mismatch: .env says '${from_env}', .install/state.json says '${from_state}'"
-                exit 3
-            fi
+        # The install's own state.json is the proof this directory (and so
+        # this project) was created by setup-openprocessor.sh.
+        local state="$PROJECT_DIR/.install/state.json" from_dir
+        [[ -f "$state" ]] || { log_error "${PROJECT_DIR} has no .install/state.json: not an install made by setup-openprocessor.sh"; exit 3; }
+        from_state="$(sed -n -E 's/^  "project": "([^"]*)",?$/\1/p' "$state" | head -n1)"
+        from_dir="$(sed -n -E 's/^  "install_dir": "([^"]*)",?$/\1/p' "$state" | head -n1)"
+        if [[ "$from_state" != "$from_env" ]]; then
+            log_error "project mismatch: .env says '${from_env}', .install/state.json says '${from_state}'"
+            exit 3
+        fi
+        if [[ "$from_dir" != "$PROJECT_DIR" ]]; then
+            log_error ".install/state.json belongs to ${from_dir:-another dir}, not ${PROJECT_DIR}"
+            exit 3
         fi
     fi
     if [[ -n "$from_env" ]]; then
@@ -103,12 +112,17 @@ assert_project_owned() {
     local project="$1" dir="$2" out wd
     [[ -n "${_OWNED_OK[$project]:-}" ]] && return 0
     if ! out="$(docker ps -a --filter "label=com.docker.compose.project=${project}" \
-            --format '{{.Label "com.docker.compose.project.working_dir"}}' 2>&1)"; then
+            --format '{{.Names}}|{{.Label "com.docker.compose.project.working_dir"}}' 2>&1)"; then
         log_error "cannot query Docker (${out}); refusing to change project '${project}'"
         exit 5
     fi
+    [[ -z "$out" ]] && { _OWNED_OK[$project]=1; return 0; }
     while IFS= read -r wd; do
-        [[ -z "$wd" ]] && continue
+        wd="${wd#*|}"
+        if [[ -z "$wd" ]]; then
+            log_error "a container of project '${project}' has no working_dir label; cannot prove ownership, refusing"
+            exit 3
+        fi
         if [[ "$wd" != "$dir" ]]; then
             log_error "compose project '${project}' belongs to ${wd}, not ${dir}; refusing"
             exit 3
@@ -149,14 +163,12 @@ dc_cw() {
     local dir="${PROJECT_DIR}/cropwright"
     [[ -f "${dir}/docker-compose.yml" ]] || { log_error "no Cropwright in this install (${dir})"; return 1; }
     local -a cmd=(docker compose -p "${OP_PROJECT}-cw" --env-file "${dir}/.env"
-        --project-directory "$dir" -f "${dir}/docker-compose.yml")
-    [[ -f "${dir}/docker-compose.bind.yml" ]] && cmd+=(-f "${dir}/docker-compose.bind.yml")
-    cmd+=("$@")
+        --project-directory "$dir" -f "${dir}/docker-compose.yml" "$@")
     if ! _dc_is_readonly "$@"; then
         assert_project_owned "${OP_PROJECT}-cw" "$dir"
     fi
-    env -u COMPOSE_PROFILES -u COMPOSE_FILE -u COMPOSE_ENV_FILES \
-        COMPOSE_PROJECT_NAME="${OP_PROJECT}-cw" "${cmd[@]}"
+    env -u COMPOSE_PROFILES -u COMPOSE_FILE -u COMPOSE_ENV_FILES -u CROPWRIGHT_BIND_ADDRESS \
+        -u CROPWRIGHT_IMAGE -u CROPWRIGHT_PORT COMPOSE_PROJECT_NAME="${OP_PROJECT}-cw" "${cmd[@]}"
 }
 
 require_checkout() {
@@ -883,7 +895,7 @@ _run_setup() {
         return 1
     fi
     resolve_project
-    OP_BOOTSTRAPPED=1 exec "$PROJECT_DIR/setup-openprocessor.sh" --dir "$PROJECT_DIR" "$@"
+    exec "$PROJECT_DIR/setup-openprocessor.sh" --dir "$PROJECT_DIR" "$@"
 }
 
 cmd_upgrade() { _run_setup "$@"; }

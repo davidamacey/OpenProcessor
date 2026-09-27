@@ -8,7 +8,8 @@
 #   https://api.github.com/.../commits/<b>     -> {"sha": "$SHIM_BRANCH_SHA"}
 #   https://huggingface.co/api/models/<repo>   -> HTTP $(cat $SHIM_STATE/hf_code) (200)
 #   http://127.0.0.1:<port>/...                -> canned healthy responses
-#                                                 ($SHIM_STATE/health_down: refused)
+#                                                 ($SHIM_STATE/health_down: refused,
+#                                                  monitoring_bad: Prometheus has no config)
 set -u
 printf 'curl %s\n' "$*" >> "${SHIM_LOG:?}"
 state="${SHIM_STATE:?}"
@@ -44,6 +45,9 @@ case "$url" in
             /v1/models) body="{\"data\": [{\"id\": \"local-vlm\", \"root\": \"${SHIM_VLM_ROOT:-}\"}]}" ;;
             /health) body='{"status": "ready", "loaded": true}' ;;
             /curation/health) body='{"status": "ok"}' ;;
+            /api/v1/status/config)
+                if [[ -e "${state}/monitoring_bad" ]]; then code=503; body='{}'
+                else body='{"status":"success","data":{"yaml":"scrape_configs:\n- job_name: triton\n"}}'; fi ;;
             *) body='{}' ;;
         esac
         ;;

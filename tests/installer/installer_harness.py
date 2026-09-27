@@ -35,10 +35,10 @@ GPU_HOST = (
 
 CW_COMPOSE = """services:
   cropwright:
-    image: example.invalid/cropwright:dev
+    image: ${CROPWRIGHT_IMAGE:-davidamacey/cropwright:1.2.3}
     container_name: ${CROPWRIGHT_CONTAINER_NAME:-cropwright}
     ports:
-      - '${CROPWRIGHT_PORT:-5184}:8080'
+      - '${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}:8080'
     networks:
       - api
 networks:
@@ -88,6 +88,26 @@ def _manifest_files(src: Path) -> list[str]:
     return files
 
 
+def image_key_refs() -> list[tuple[str, str]]:
+    """(key, repo[:tag]) for every images.lock key in scripts/lib/image_keys.sh."""
+    out = subprocess.run(
+        [
+            'bash',
+            '-c',
+            f'source "{REPO_ROOT}/scripts/lib/image_keys.sh"; for k in $(image_keys); do '
+            'echo "$k $(image_key_field "$k" kind) $(image_key_field "$k" image)$(image_key_field "$k" source)"; done',
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    refs = []
+    for line in out.splitlines():
+        key, kind, ref = line.split()
+        refs.append((key, f'davidamacey/{ref}' if kind == 'build' else ref))
+    return refs
+
+
 def build_fake_release(root: Path, *, lock_override: str | None = None) -> Path:
     """Build release assets + raw files + a Cropwright release under root."""
     src = root / 'src'
@@ -96,31 +116,21 @@ def build_fake_release(root: Path, *, lock_override: str | None = None) -> Path:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO_ROOT / rel, dest)
 
-    lock_lines = [
-        f'{key}=davidamacey/{key}@{fake_digest(key)}'
-        for key in (
-            'openprocessor',
-            'openprocessor-triton',
-            'openprocessor-segmenter',
-            'openprocessor-trainer',
-            'openprocessor-evaluator',
-        )
-    ]
-    lock_lines += [
-        f'vlm_gemma4=vllm/vllm-openai@{fake_digest("vlm_gemma4")}',
-        f'vlm_generic=vllm/vllm-openai@{fake_digest("vlm_generic")}',
-    ]
+    lock_lines = [f'{key}={ref}@{fake_digest(key)}' for key, ref in image_key_refs()]
     (src / 'images.lock').write_text(lock_override or '\n'.join(lock_lines) + '\n')
 
     cw_dir = root / 'release' / 'cw' / CW_TAG
     cw_dir.mkdir(parents=True)
     (cw_dir / 'docker-compose.yml').write_text(CW_COMPOSE)
     (cw_dir / '.env.example').write_text(CW_ENV_EXAMPLE)
+    (cw_dir / 'SHA256SUMS').write_text(
+        f'{_sha(cw_dir / "docker-compose.yml")}  docker-compose.yml\n'
+        f'{_sha(cw_dir / ".env.example")}  .env.example\n'
+    )
     (src / 'cropwright.lock').write_text(
         f'tag={CW_TAG}\n'
         f'image=davidamacey/cropwright@{fake_digest("cropwright")}\n'
-        f'compose_sha256={_sha(cw_dir / "docker-compose.yml")}\n'
-        f'env_example_sha256={_sha(cw_dir / ".env.example")}\n'
+        f'sha256sums_sha256={_sha(cw_dir / "SHA256SUMS")}\n'
     )
 
     assets = root / 'release' / 'assets' / RELEASE
@@ -173,7 +183,7 @@ class Shimmed:
             f.write_text(csv)
 
     def containers(self, rows: list[tuple[str, str, str, str]]) -> None:
-        (self.state / 'containers.tsv').write_text(''.join('\t'.join(r) + '\n' for r in rows))
+        (self.state / 'containers.tsv').write_text(''.join('|'.join(r) + '\n' for r in rows))
 
     def flag(self, name: str, content: str = '') -> None:
         (self.state / name).write_text(content)

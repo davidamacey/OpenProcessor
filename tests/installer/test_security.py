@@ -77,8 +77,9 @@ def test_token_never_in_output_trace_log_or_any_argv(
     shimmed: Shimmed, tmp_path: Path, how: str
 ) -> None:
     shimmed.wrap_argv_loggers(ARGV_TOOLS)
+    shimmed.flag('allow_mutations')
     args = [
-        '--dry-run',
+        '--no-start',
         '--unattended',
         '--dir',
         'inst',

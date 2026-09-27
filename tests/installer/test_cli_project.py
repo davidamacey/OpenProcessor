@@ -22,11 +22,12 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def inst(shimmed: Shimmed) -> Path:
-    """A real install dir produced by a dry run of the installer."""
+    """A real install dir (written, nothing started) made by the installer."""
+    shimmed.flag('allow_mutations')
     result = shimmed.run(
         [
-            '--dry-run',
             '--unattended',
+            '--no-start',
             '--dir',
             'inst',
             '--project',
@@ -38,6 +39,7 @@ def inst(shimmed: Shimmed) -> Path:
         ]
     )
     assert result.returncode == 0, result.stderr
+    (shimmed.state / 'allow_mutations').unlink()
     (shimmed.state / 'mutations.log').unlink(missing_ok=True)
     shimmed.log.write_text('')
     return (shimmed.root / 'inst').resolve()
@@ -91,6 +93,9 @@ def test_shell_compose_project_name_is_ignored(shimmed: Shimmed, inst: Path) -> 
 
 
 HOSTILE = [
+    'no_state',
+    'state_other_dir',
+    'empty_label',
     'no_env',
     'env_without_project',
     'op_project_env',
@@ -103,7 +108,16 @@ HOSTILE = [
 
 def make_hostile(shimmed: Shimmed, inst: Path, case: str) -> dict[str, str]:
     env: dict[str, str] = {}
-    if case == 'no_env':
+    if case == 'no_state':
+        (inst / '.install' / 'state.json').unlink()
+    elif case == 'state_other_dir':
+        state = inst / '.install' / 'state.json'
+        state.write_text(
+            state.read_text().replace(f'"install_dir": "{inst}"', '"install_dir": "/srv/elsewhere"')
+        )
+    elif case == 'empty_label':
+        shimmed.containers([(PROJECT, '', f'{PROJECT}-api', '')])
+    elif case == 'no_env':
         (inst / '.env').unlink()
     elif case == 'env_without_project':
         set_env_project(inst, None)
@@ -225,5 +239,29 @@ def test_vlm_key_slug_cannot_escape_secrets(shimmed: Shimmed, inst: Path) -> Non
 
 
 def test_cli_files_keep_their_modes(inst: Path) -> None:
-    assert stat.S_IMODE((inst / 'openprocessor').stat().st_mode) == 0o700
-    assert stat.S_IMODE((inst / 'setup-openprocessor.sh').stat().st_mode) == 0o700
+    assert stat.S_IMODE((inst / 'openprocessor').stat().st_mode) == 0o755
+    assert stat.S_IMODE((inst / 'setup-openprocessor.sh').stat().st_mode) == 0o755
+
+
+def test_cli_works_through_a_symlinked_install_path(shimmed: Shimmed, inst: Path) -> None:
+    # r7: compose records the physical working_dir; the CLI must compare the same form.
+    link = shimmed.root / 'link'
+    link.symlink_to(inst)
+    shimmed.flag('allow_mutations')
+    shimmed.containers([(PROJECT, str(inst), f'{PROJECT}-api', '')])
+    result = subprocess.run(
+        [str(link / 'openprocessor'), 'stop'],
+        check=False,
+        cwd=str(shimmed.root),
+        env=shimmed.env(),
+        capture_output=True,
+        text=True,
+        timeout=60,
+        start_new_session=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert [
+        ln
+        for ln in shimmed.mutating_docker_calls()
+        if f'-p {PROJECT} ' in ln and ln.endswith(' down')
+    ]

@@ -40,17 +40,16 @@ def test_piped_dry_run_reexecs_the_verified_release_script(shimmed: Shimmed) -> 
     assert any(f'assets/{RELEASE}/SHA256SUMS' in ln for ln in curl)
     # No --unattended given: with no terminal it switched to unattended
     # instead of reading answers from the piped script.
-    assert 'nothing was pulled, started or removed' in result.stdout
+    assert 'nothing was written, pulled, started or removed' in result.stdout
     assert shimmed.mutating_docker_calls() == []
-    assert (shimmed.root / 'inst' / '.install' / 'state.json').exists()
+    assert not (shimmed.root / 'inst').exists()
 
 
 def test_piped_run_without_version_installs_the_latest_release(shimmed: Shimmed) -> None:
     result = shimmed.run(ARGS, piped=True)
     assert result.returncode == 0, result.stderr
     assert any('releases/latest' in ln for ln in shimmed.log_lines('curl'))
-    state = (shimmed.root / 'inst' / '.install' / 'state.json').read_text()
-    assert f'"version": "{RELEASE}"' in state
+    assert f'release     : {RELEASE}' in result.stdout
 
 
 def _tampered_release(shimmed: Shimmed, tmp_path: Path) -> Path:

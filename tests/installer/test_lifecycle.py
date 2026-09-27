@@ -11,7 +11,7 @@ import stat
 from typing import TYPE_CHECKING
 
 import pytest
-from installer_harness import PROJECT, RELEASE
+from installer_harness import PROJECT, RELEASE, fake_digest
 
 
 if TYPE_CHECKING:
@@ -137,7 +137,8 @@ def test_image_tag_mode_runs_local_images_without_pulling(shimmed: Shimmed) -> N
     result = install(shimmed, '--image-tag', 'localtest', OP_IMAGE_REPO='opinst')
     assert result.returncode == 0, result.stderr[-2000:]
     pulls = [ln for ln in shimmed.mutating_docker_calls() if ln.startswith('docker pull')]
-    assert pulls == ['docker pull opensearchproject/opensearch:3.6.0']
+    # Our images come from the local build; only lock-pinned third-party images are pulled.
+    assert pulls == [f'docker pull opensearchproject/opensearch:3.6.0@{fake_digest("opensearch")}']
     assert 'UNPINNED' in result.stderr
 
 
@@ -300,7 +301,7 @@ def test_purge_refuses_without_state_json(shimmed: Shimmed) -> None:
         ['--uninstall', '--purge-data', '--unattended', '--dir', 'inst'], OP_CONFIRM_PURGE=PROJECT
     )
     assert result.returncode != 0
-    assert 'not an installer-managed directory' in result.stderr
+    assert 'not an install made by this installer' in result.stderr
     assert (inst / 'models').exists()
 
 
@@ -344,8 +345,12 @@ def test_remove_images_only_removes_this_installs_lock_images(shimmed: Shimmed) 
     assert result.returncode == 0, result.stderr
     rmis = [ln for ln in shimmed.mutating_docker_calls() if ln.startswith('docker rmi')]
     assert rmis
-    assert all('@sha256:' in ln and ('davidamacey/' in ln or 'vllm/' in ln) for ln in rmis)
-    assert not [ln for ln in rmis if 'opensearch' in ln]
+    lock_refs = {
+        ln.split('=', 1)[1]
+        for ln in (shimmed.root / 'inst' / 'images.lock').read_text().splitlines()
+        if '=' in ln and not ln.startswith('#')
+    }
+    assert {ln.split()[-1] for ln in rmis} <= lock_refs
 
 
 def test_dry_run_uninstall_removes_nothing(shimmed: Shimmed) -> None:
@@ -369,8 +374,9 @@ def test_local_release_dir_and_local_image_tags_install_end_to_end(shimmed: Shim
     images.mkdir()
     for name in ('openprocessor', 'openprocessor-triton'):
         (images / f'opinst_{name}_localtest').write_text(f'opinst/{name}@sha256:{"0" * 64}\n')
-    (images / 'opensearchproject_opensearch_3.6.0').write_text(
-        'opensearchproject/opensearch@sha256:' + '1' * 64 + '\n'
+    pinned = f'opensearchproject/opensearch:3.6.0@{fake_digest("opensearch")}'
+    (images / pinned.replace('/', '_').replace(':', '_').replace('@', '_')).write_text(
+        f'opensearchproject/opensearch@{fake_digest("opensearch")}\n'
     )
     assets = shimmed.release / 'assets' / RELEASE
     result = install(
@@ -425,3 +431,21 @@ def test_install_refuses_a_project_flag_that_contradicts_the_install(shimmed: Sh
     )
     assert result.returncode == 2
     assert shimmed.mutating_docker_calls() == []
+
+
+def test_third_party_images_are_pinned_and_verified(shimmed: Shimmed) -> None:
+    # K-3: our images are already local and correct; only the third-party
+    # OpenSearch image is pulled, and its digest is checked like ours.
+    images = shimmed.state / 'images'
+    images.mkdir()
+    for key, name in (('api', 'openprocessor'), ('triton', 'openprocessor-triton')):
+        ref = f'davidamacey/{name}@{fake_digest(key)}'
+        (images / ref.replace('/', '_').replace(':', '_').replace('@', '_')).write_text(
+            f'davidamacey/{name}@{fake_digest(key)}\n'
+        )
+    shimmed.flag('pull_bad_digest')
+    result = install(shimmed)
+    assert result.returncode == 7
+    assert 'digest mismatch for opensearchproject/opensearch:3.6.0@sha256:' in result.stderr
+    pulls = [ln for ln in shimmed.mutating_docker_calls() if ln.startswith('docker pull')]
+    assert pulls == [f'docker pull opensearchproject/opensearch:3.6.0@{fake_digest("opensearch")}']

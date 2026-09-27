@@ -3,7 +3,7 @@
 # $SHIM_LOG and answers from fixture files in $SHIM_STATE:
 #   docker_down         present -> every call fails like an unreachable daemon
 #   ps_fail             present -> `docker ps` fails
-#   containers.tsv      project<TAB>working_dir<TAB>name<TAB>ports
+#   containers.tsv      project|working_dir|name|ports (| keeps empty fields)
 #   volumes.txt         `docker volume ls` output
 #   config.json         overrides the generated `compose config --format json`
 #   allow_mutations     present -> up/down/pull/run/... succeed (fake);
@@ -72,11 +72,13 @@ cmd_ps() {
     [[ -e "${state}/ps_fail" ]] && { echo "permission denied" >&2; exit 1; }
     [[ -n "$filter_ancestor" ]] && exit 0
     local project wd name ports
-    while IFS=$'\t' read -r project wd name ports; do
-        [[ -z "$project" ]] && continue
+    while IFS='|' read -r project wd name ports; do
+        [[ -z "$project$name" ]] && continue
         [[ -n "$filter_project" && "$project" != "$filter_project" ]] && continue
         [[ -n "$filter_name" && "$name" != "$filter_name" ]] && continue
         case "$fmt" in
+            *'.Names}}|'*working_dir*) echo "${name}|${wd}" ;;
+            *'.Names}}|'*) echo "${name}|${project}" ;;
             *working_dir*) echo "$wd" ;;
             *'"com.docker.compose.project"'*) echo "$project" ;;
             *Names*) echo "$name" ;;
@@ -111,7 +113,7 @@ cmd_compose() {
             local cpn="${COMPOSE_PROJECT_NAME:-}"
             [[ -z "$cpn" ]] && cpn="$(env_val "$envfile" COMPOSE_PROJECT_NAME)"
             [[ -z "$cpn" ]] && cpn=openprocessor
-            if [[ " ${args[*]:-} " == *" --images "* ]]; then
+            if [[ " ${args[*]:-} " == *" --images "* && "$project" != *-cw ]]; then
                 local k v repo tag
                 repo="$(env_val "$envfile" OP_IMAGE_REPO)"; repo="${repo:-davidamacey}"
                 tag="$(env_val "$envfile" OP_IMAGE_TAG)"; tag="${tag:-0.3.0}"
@@ -130,7 +132,28 @@ cmd_compose() {
                     v="$(env_val "$envfile" VLM_IMAGE)"
                     echo "${v:-vllm/vllm-openai:gemma4-cu130@sha256:0d152595cd940ea1e0890fa190a37b7a86e3f7f0f5048ac3e2e4c14529fea833}"
                 fi
-                echo "opensearchproject/opensearch:3.6.0"
+                third="OPENSEARCH_IMAGE:opensearchproject/opensearch:3.6.0"
+                [[ "$profiles" == *,training,* ]] && third+=" MLFLOW_IMAGE:ghcr.io/mlflow/mlflow:v2.19.0"
+                [[ "$profiles" == *,monitoring,* ]] && third+=" PROMETHEUS_IMAGE:prom/prometheus:v3.12.0 GRAFANA_IMAGE:grafana/grafana:13.1.0 LOKI_IMAGE:grafana/loki:3.6.12 ALLOY_IMAGE:grafana/alloy:v1.17.1"
+                for k in $third; do
+                    v="$(env_val "$envfile" "${k%%:*}")"
+                    echo "${v:-${k#*:}}"
+                done
+                return 0
+            fi
+            if [[ "$project" == *-cw ]]; then
+                local cimg cbind cport cname
+                cimg="${CROPWRIGHT_IMAGE:-$(env_val "$envfile" CROPWRIGHT_IMAGE)}"
+                cbind="${CROPWRIGHT_BIND_ADDRESS:-$(env_val "$envfile" CROPWRIGHT_BIND_ADDRESS)}"
+                cport="$(env_val "$envfile" CROPWRIGHT_PORT)"
+                cname="$(env_val "$envfile" CROPWRIGHT_CONTAINER_NAME)"
+                [[ -e "${state}/cw_ignores_bind" ]] && cbind=0.0.0.0
+                if [[ " ${args[*]:-} " == *" --images "* ]]; then
+                    echo "${cimg:-davidamacey/cropwright:1.2.3}"
+                    return 0
+                fi
+                printf '{\n  "name": "%s",\n  "services": {\n    "cropwright": {\n      "container_name": "%s",\n      "ports": [\n        {\n          "host_ip": "%s",\n          "published": "%s",\n          "target": 8080\n        }\n      ]\n    }\n  }\n}\n' \
+                    "$project" "${cname:-cropwright}" "${cbind:-0.0.0.0}" "${cport:-5184}"
                 return 0
             fi
             if [[ -f "${state}/config.json" ]]; then

@@ -167,10 +167,11 @@ def test_every_installer_prompt_reads_the_terminal() -> None:
 def test_installer_sources_only_verified_install_files() -> None:
     text = (REPO_ROOT / 'setup-openprocessor.sh').read_text()
     sources = [ln.strip() for ln in text.splitlines() if re.match(r'^\s*(source|\.)\s', ln)]
-    assert sources == [
+    assert set(sources) == {
         'source "${OP_DIR}/scripts/lib/vlm_catalog.sh"',
         'source "${OP_DIR}/scripts/lib/model_setup.sh"',
-    ]
+        'source "${OP_DIR}/scripts/lib/image_keys.sh"',
+    }
     body = text[text.index('\ndo_install() {') :]
     assert body.index('install_staged "${OP_DIR}/.install/staging"') < body.index(
         'source "${OP_DIR}/scripts/lib/vlm_catalog.sh"'

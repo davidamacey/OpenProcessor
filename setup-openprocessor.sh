@@ -51,6 +51,11 @@
 #   OP_FORCE_CPU / --cpu             no GPU; see --control-plane-only
 #   OP_ALLOW_PUBLIC_BIND=1           unattended consent for a non-loopback --bind
 #   OP_ALLOW_EXTERNAL_VLM=1          unattended consent for a non-private --vlm-remote
+#   --yes                            consent to a destructive step (uninstall, rollback,
+#                                    upgrade) without a prompt; --unattended implies it.
+#                                    A missing terminal alone is never consent.
+#   --force-existing-dir             install into a non-empty dir this installer did not
+#                                    create (its files are backed up first)
 #   OP_CONFIRM_PURGE=<project>       unattended consent for --purge-volumes/--purge-data
 #   OP_CONFIRM_PURGE_SECRETS=<project>  unattended consent to also delete secrets/
 #   HF_TOKEN_FILE / HF_TOKEN         HuggingFace token for gated tiers (segmenter)
@@ -143,7 +148,7 @@ dc() {
     fi
     cmd+=("$@")
     if [[ "${OP_DRY_RUN:-0}" == "1" ]] && ! _dc_is_readonly "$@"; then
-        echo "DRY: ${cmd[*]}"
+        echo "DRY: ${cmd[*]//"$dir"/"${OP_REAL_DIR:-$dir}"}"
         return 0
     fi
     env -u COMPOSE_PROFILES -u COMPOSE_FILE -u COMPOSE_ENV_FILES \
@@ -153,23 +158,23 @@ dc() {
 dc_cw() {
     local project="${OP_PROJECT:?OP_PROJECT not set}-cw" dir="${OP_DIR:?OP_DIR not set}/cropwright"
     local -a cmd=(docker compose -p "$project" --env-file "${dir}/.env"
-        --project-directory "$dir" -f "${dir}/docker-compose.yml")
-    if [[ -f "${dir}/docker-compose.bind.yml" ]]; then
-        cmd+=(-f "${dir}/docker-compose.bind.yml")
-    fi
-    cmd+=("$@")
+        --project-directory "$dir" -f "${dir}/docker-compose.yml" "$@")
     if [[ "${OP_DRY_RUN:-0}" == "1" ]] && ! _dc_is_readonly "$@"; then
-        echo "DRY: ${cmd[*]}"
+        echo "DRY: ${cmd[*]//"${OP_DIR}"/"${OP_REAL_DIR:-$OP_DIR}"}"
         return 0
     fi
-    env -u COMPOSE_PROFILES -u COMPOSE_FILE -u COMPOSE_ENV_FILES \
-        COMPOSE_PROJECT_NAME="$project" "${cmd[@]}"
+    env -u COMPOSE_PROFILES -u COMPOSE_FILE -u COMPOSE_ENV_FILES -u CROPWRIGHT_BIND_ADDRESS \
+        -u CROPWRIGHT_IMAGE -u CROPWRIGHT_PORT COMPOSE_PROJECT_NAME="$project" "${cmd[@]}"
 }
 
 # docker_mut ARGS... -- a state-changing plain docker call (pull/run/rmi)
 docker_mut() {
     if [[ "${OP_DRY_RUN:-0}" == "1" ]]; then
-        echo "DRY: docker $*"
+        local line="docker $*"
+        if [[ -n "${OP_DIR:-}" && -n "${OP_REAL_DIR:-}" ]]; then
+            line="${line//"$OP_DIR"/"$OP_REAL_DIR"}"
+        fi
+        echo "DRY: ${line}"
         return 0
     fi
     docker "$@"
@@ -233,7 +238,7 @@ validate_https_base() {
 
 is_ipv4() {
     local ip="$1" o
-    [[ "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+    [[ "$ip" =~ ^(0|[1-9][0-9]{0,2})(\.(0|[1-9][0-9]{0,2})){3}$ ]] || return 1
     local IFS=.
     for o in $ip; do
         (( 10#$o <= 255 )) || return 1
@@ -370,7 +375,6 @@ resolve_install_ref() {
 # needs_bootstrap SELF_PATH -> 0 when this copy was read from a pipe
 needs_bootstrap() {
     local self="$1"
-    [[ "${OP_BOOTSTRAPPED:-0}" == "1" ]] && return 1
     [[ -z "$self" || "$self" == /dev/fd/* || "$self" == /proc/self/fd/* || "$self" == /dev/stdin ]]
 }
 
@@ -397,8 +401,37 @@ bootstrap_reexec() {
     log_info "running the verified ${RESOLVED_REF} installer"
     # The child removes the temp dir on exit (exec replaces this process,
     # so no trap here could ever fire).
-    OP_BOOTSTRAPPED=1 OP_BOOTSTRAP_TMP="$tmp" OP_BOOTSTRAP_REF="$RESOLVED_REF" \
+    OP_BOOTSTRAP_TMP="$tmp" OP_BOOTSTRAP_REF="$RESOLVED_REF" \
         OP_BOOTSTRAP_MODE="$RESOLVED_MODE" exec bash "$script" "$@"
+}
+
+# bootstrap_child_setup -- the OP_BOOTSTRAP_* hand-off is honoured only by
+# the verified copy the bootstrap itself exec'd (this script's own path is
+# <OP_BOOTSTRAP_TMP>/setup-openprocessor.sh, a mktemp dir we own). From
+# anywhere else the variables are ignored, so the environment can neither
+# point the cleanup at another path nor inject a release ref.
+bootstrap_child_setup() {
+    local tmp="${OP_BOOTSTRAP_TMP:-}" ref="${OP_BOOTSTRAP_REF:-}" mode="${OP_BOOTSTRAP_MODE:-}"
+    unset OP_BOOTSTRAP_TMP OP_BOOTSTRAP_REF OP_BOOTSTRAP_MODE
+    _OP_BOOT_TMP=""
+    _OP_BOOT_REF=""
+    _OP_BOOT_MODE=""
+    [[ -n "$tmp" ]] || return 0
+    if [[ "$tmp" =~ ^/[A-Za-z0-9._/-]*/tmp\.[A-Za-z0-9]{6,}$ && "$tmp" != *..* && -d "$tmp" && ! -L "$tmp" && -O "$tmp" \
+            && "${_OP_SELF_PATH:-}" == "${tmp}/setup-openprocessor.sh" ]]; then
+        _OP_BOOT_TMP="$tmp"
+        if [[ "$mode" == release ]] && validate_version "$ref"; then
+            _OP_BOOT_REF="$ref"; _OP_BOOT_MODE=release
+        elif [[ "$mode" == branch && "$ref" =~ ^[0-9a-f]{40}$ ]]; then
+            _OP_BOOT_REF="$ref"; _OP_BOOT_MODE=branch
+        fi
+    fi
+}
+
+_op_cleanup() {
+    [[ -n "${_OP_BOOT_TMP:-}" ]] && rm -rf -- "$_OP_BOOT_TMP"
+    [[ -n "${_OP_SCRATCH:-}" ]] && rm -rf -- "$_OP_SCRATCH"
+    return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -558,10 +591,12 @@ install_staged() {
         fi
         mkdir -p "${OP_DIR}/$(dirname "$rel")"
         cp -f "$f" "${OP_DIR}/${rel}"
+        # Release files are not secret, and several are bind-mounted into
+        # containers running as other users (Prometheus, Grafana, Loki).
         if [[ "${flag_of[$rel]:-}" == *exec* ]]; then
-            chmod 700 "${OP_DIR}/${rel}"
+            chmod 755 "${OP_DIR}/${rel}"
         else
-            chmod 600 "${OP_DIR}/${rel}"
+            chmod 644 "${OP_DIR}/${rel}"
         fi
     done < <(find "$staging" -type f -print0)
     rm -rf "$staging"
@@ -1108,6 +1143,12 @@ gated_repos() {
     return 0
 }
 
+# hf_token_available -> 0 when a token can be had without prompting
+hf_token_available() {
+    [[ -n "${HF_TOKEN_FILE:-}" || -n "${HF_TOKEN:-}" ]] && return 0
+    [[ "$(read_env_var "$ENV_FILE" HF_TOKEN 2>/dev/null || true)" == hf_* ]]
+}
+
 # ensure_hf_token -- only when a selected tier is gated (plan 4.4)
 ensure_hf_token() {
     local repos=() repo code attempt=0 existing
@@ -1122,9 +1163,12 @@ ensure_hf_token() {
     existing="$(read_env_var "$ENV_FILE" HF_TOKEN || true)"
     if [[ "$OP_RESET_HF_TOKEN" != 1 && "$existing" == hf_* ]]; then
         _OP_HF_TOKEN="$existing"
+    elif [[ -n "${HF_TOKEN_FILE:-}" || -n "${HF_TOKEN:-}" ]]; then
+        # An exported token is used in every mode; the prompt is only for
+        # when none was given.
+        read_hf_token_unattended || die "HF_TOKEN_FILE/HF_TOKEN is set but unusable (see above)" "$EXIT_TOKEN"
     elif [[ "$OP_UNATTENDED" == 1 ]] || ! tty_usable; then
-        read_hf_token_unattended \
-            || die "the ${SELECTED_TIERS// /,} tiers need a HuggingFace token: set HF_TOKEN_FILE=/path (mode 600) or HF_TOKEN" "$EXIT_TOKEN"
+        die "the ${SELECTED_TIERS// /,} tiers need a HuggingFace token: set HF_TOKEN_FILE=/path (mode 600) or HF_TOKEN" "$EXIT_TOKEN"
     fi
 
     while :; do
@@ -1284,13 +1328,19 @@ require_docker() {
 # rc 1: another directory owns the project; rc 2: docker could not be queried
 check_project_owner() {
     local project="$1" expected="$2" out wd
+    # "<name>|<working_dir>": the name keeps a row with an empty label visible.
     if ! out="$(docker ps -a --filter "label=com.docker.compose.project=${project}" \
-            --format '{{.Label "com.docker.compose.project.working_dir"}}' 2>&1)"; then
+            --format '{{.Names}}|{{.Label "com.docker.compose.project.working_dir"}}' 2>&1)"; then
         log_error "could not list containers of project '${project}': ${out}"
         return 2
     fi
+    [[ -z "$out" ]] && return 0
     while IFS= read -r wd; do
-        [[ -z "$wd" ]] && continue
+        wd="${wd#*|}"
+        if [[ -z "$wd" ]]; then
+            log_error "a container of compose project '${project}' has no working_dir label; cannot prove who owns it"
+            return 1
+        fi
         if [[ "$wd" != "$expected" ]]; then
             log_error "compose project '${project}' already belongs to ${wd}, not ${expected}"
             return 1
@@ -1302,8 +1352,8 @@ check_project_owner() {
 guard_projects() {
     local p rc
     for p in "$OP_PROJECT" "${OP_PROJECT}-cw"; do
-        local expected="$OP_DIR"
-        [[ "$p" == *-cw ]] && expected="${OP_DIR}/cropwright"
+        local expected="$OP_REAL_DIR"
+        [[ "$p" == *-cw ]] && expected="${OP_REAL_DIR}/cropwright"
         if check_project_owner "$p" "$expected"; then
             continue
         else
@@ -1328,9 +1378,9 @@ compose_config_network_names() {
     '
 }
 
-# _container_owner NAME -> project label of an existing container NAME
+# _container_owner NAME -> "<name>|<project label>" for an existing container NAME
 _container_owner() {
-    docker ps -a --filter "name=^/${1}\$" --format '{{.Label "com.docker.compose.project"}}'
+    docker ps -a --filter "name=^/${1}\$" --format '{{.Names}}|{{.Label "com.docker.compose.project"}}'
 }
 
 # assert_container_names_free NAME... -- no other project owns these names
@@ -1341,7 +1391,12 @@ assert_container_names_free() {
             || die "container name '${n}' does not start with '${OP_PROJECT}-'; COMPOSE_PROJECT_NAME is not wired" "$EXIT_COLLISION"
         owner="$(_container_owner "$n")" || die "docker ps failed checking container name ${n}" "$EXIT_DOCKER"
         owner="${owner%%$'\n'*}"
-        if [[ -n "$owner" && "$owner" != "$OP_PROJECT" && "$owner" != "${OP_PROJECT}-cw" ]]; then
+        [[ -z "$owner" ]] && continue
+        owner="${owner#*|}"
+        if [[ -z "$owner" ]]; then
+            die "a container named '${n}' already exists and was not created by Compose; remove or rename it" "$EXIT_COLLISION"
+        fi
+        if [[ "$owner" != "$OP_PROJECT" && "$owner" != "${OP_PROJECT}-cw" ]]; then
             die "a container named '${n}' already exists and belongs to project '${owner}'" "$EXIT_COLLISION"
         fi
     done
@@ -1443,17 +1498,6 @@ opensearch_heap_gb() {
 # -----------------------------------------------------------------------------
 # 3.2 Images: images.lock digests, or an explicit tag for local-only builds
 # -----------------------------------------------------------------------------
-_lock_env_key() {
-    case "$1" in
-        openprocessor) echo OP_API_IMAGE ;;
-        openprocessor-triton) echo OP_TRITON_IMAGE ;;
-        openprocessor-segmenter) echo OP_SEGMENTER_IMAGE ;;
-        openprocessor-trainer) echo OP_TRAINER_IMAGE ;;
-        openprocessor-evaluator) echo OP_EVALUATOR_IMAGE ;;
-        *) echo "" ;;
-    esac
-}
-
 _lock_line_valid() {
     [[ "$1" =~ ^[a-z0-9_-]+=[a-z0-9][a-z0-9._/-]*(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$ && "$1" != *:latest@* ]]
 }
@@ -1476,18 +1520,20 @@ validate_images_lock() {
     return "$bad"
 }
 
-# apply_image_pins -- writes *_IMAGE (lock mode) or OP_IMAGE_REPO/TAG (tag mode)
+# apply_image_pins -- lock mode: every images.lock key (scripts/lib/image_keys.sh,
+# the table the release script writes from) is written to its *_IMAGE var,
+# third-party images included. Tag mode: OP_IMAGE_REPO/TAG for our images,
+# and any valid third-party pins the lock does carry.
 apply_image_pins() {
     local lock="${OP_DIR}/images.lock" key envk ref vkey
     PINNED_IMAGES=()
     if [[ "$IMAGE_MODE" == lock ]]; then
         validate_images_lock "$lock" \
             || die "images.lock is not fully digest-pinned; this release cannot be installed reproducibly (for a local build use --image-tag)" "$EXIT_VERIFY"
-        for key in openprocessor openprocessor-triton openprocessor-segmenter openprocessor-trainer openprocessor-evaluator; do
+        for key in $(image_keys build); do
             ref="$(lock_value "$lock" "$key")"
             [[ -n "$ref" ]] || die "images.lock has no '${key}' entry" "$EXIT_VERIFY"
-            envk="$(_lock_env_key "$key")"
-            env_set "$envk" "$ref"
+            env_set "$(image_key_field "$key" env)" "$ref"
             PINNED_IMAGES+=("$ref")
         done
         env_set OP_IMAGE_TAG ""
@@ -1495,10 +1541,21 @@ apply_image_pins() {
         log_warn "UNPINNED install: images run by tag ${OP_IMAGE_REPO}/*:${OP_IMAGE_TAG}; digests are recorded, not verified against images.lock"
         env_set OP_IMAGE_REPO "$OP_IMAGE_REPO"
         env_set OP_IMAGE_TAG "$OP_IMAGE_TAG"
-        for key in OP_API_IMAGE OP_TRITON_IMAGE OP_SEGMENTER_IMAGE OP_TRAINER_IMAGE OP_EVALUATOR_IMAGE; do
-            env_set "$key" ""
+        for key in $(image_keys build); do
+            env_set "$(image_key_field "$key" env)" ""
         done
     fi
+    for key in $(image_keys third); do
+        envk="$(image_key_field "$key" env)"
+        [[ "$envk" == VLM_IMAGE ]] && continue
+        ref="$(lock_value "$lock" "$key" || true)"
+        if _lock_line_valid "${key}=${ref}"; then
+            env_set "$envk" "$ref"
+            PINNED_IMAGES+=("$ref")
+        elif [[ "$IMAGE_MODE" == lock ]]; then
+            die "images.lock has no digest-pinned '${key}' entry (third-party images are pinned too)" "$EXIT_VERIFY"
+        fi
+    done
     if _has_tier vlm && [[ -n "${VLM_PICK:-}" ]]; then
         vkey="$(vlm_catalog_field "$VLM_PICK" vllm_image_key)"
         ref="$(lock_value "$lock" "$vkey" || true)"
@@ -1537,6 +1594,9 @@ pull_images() {
     fi
     log_info "pulling ${#missing[@]} image(s); the Triton image alone is ~30 GB"
     for img in "${missing[@]}"; do
+        if [[ "$IMAGE_MODE" == tag && "$RESOLVED_MODE" != branch && "$img" == "${OP_IMAGE_REPO}/openprocessor"*":${OP_IMAGE_TAG}" ]]; then
+            die "${img} is not present locally: --image-tag runs local builds only and never pulls an unpinned image (build it, or install a release)" "$EXIT_VERIFY"
+        fi
         if ! docker_mut pull "$img"; then
             if [[ "$IMAGE_MODE" == tag ]]; then
                 die "image ${img} is neither local nor pullable (no images built for this tag/commit?)" "$EXIT_VERIFY"
@@ -1558,10 +1618,7 @@ verify_image_digests() {
             pinned=0
             for p in "${PINNED_IMAGES[@]}"; do [[ "$p" == "$ref" ]] && pinned=1; done
             if (( pinned == 0 )); then
-                case "$ref" in
-                    */openprocessor*|*vllm*) die "service image ${ref} is not pinned by images.lock" "$EXIT_VERIFY" ;;
-                    *) continue ;;
-                esac
+                die "service image ${ref} is not pinned by images.lock" "$EXIT_VERIFY"
             fi
             repo="${ref%@*}"
             [[ "${repo##*/}" == *:* ]] && repo="${repo%:*}"
@@ -1575,7 +1632,7 @@ verify_image_digests() {
             fi
             IMAGE_DIGESTS+=("${repo}@${digest}")
         done
-        TRITON_DIGEST="$(lock_value "${OP_DIR}/images.lock" openprocessor-triton)"
+        TRITON_DIGEST="$(lock_value "${OP_DIR}/images.lock" triton)"
         TRITON_DIGEST="${TRITON_DIGEST##*@}"
         [[ "$OP_DRY_RUN" == 1 ]] || log_success "all ${#IMAGE_DIGESTS[@]} pinned image digests verified"
     else
@@ -1641,17 +1698,17 @@ state_write() {
         echo "  \"image_mode\": $(_json_str "${IMAGE_MODE:-}"),"
         echo "  \"image_tag\": $(_json_str "${OP_IMAGE_TAG:-}"),"
         echo "  \"project\": $(_json_str "$OP_PROJECT"),"
-        echo "  \"install_dir\": $(_json_str "$OP_DIR"),"
+        echo "  \"install_dir\": $(_json_str "$OP_REAL_DIR"),"
         echo "  \"installed_at\": $(_json_str "${INSTALLED_AT:-}"),"
         echo "  \"updated_at\": $(_json_str "$(date -u +%Y-%m-%dT%H:%M:%SZ)"),"
         echo "  \"tiers\": $(_json_str "${SELECTED_TIERS:-}"),"
         echo "  \"control_plane_only\": $(_json_str "${OP_CONTROL_PLANE_ONLY:-0}"),"
+        echo "  \"with_monitoring\": $(_json_str "${OP_WITH_MONITORING:-0}"),"
         echo "  \"gpu_plan\": $(_json_str "${GPU_PLAN_SUMMARY:-}"),"
         echo "  \"ports\": $(_json_str "${PORTS_SUMMARY%,}"),"
         echo "  \"image_digests\": $(_json_str "$(IFS=' '; echo "${IMAGE_DIGESTS[*]:-}")"),"
         echo "  \"triton_image_digest\": $(_json_str "${TRITON_DIGEST:-}"),"
         echo "  \"health\": $(_json_str "${HEALTH_RESULT:-not-run}"),"
-        echo "  \"dry_run\": $(_json_str "$OP_DRY_RUN"),"
         echo "  \"groups\": {${groups}"
         echo "  }"
         echo "}"
@@ -1666,33 +1723,62 @@ _version_ge() {
     [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" == "$2" ]]
 }
 
+# choose_cropwright_bind -> CROPWRIGHT_BIND (owner decision, plan 7 addendum):
+# the web UI is for this computer AND the local LAN, so it binds 0.0.0.0 by
+# default; --local-only, or "no" at the prompt, keeps it on 127.0.0.1. The
+# backend ports stay on OP_BIND_ADDRESS (127.0.0.1); LAN browsers reach the
+# API through Cropwright's nginx on the docker network.
+choose_cropwright_bind() {
+    local reply prev
+    prev="$(read_env_var "${OP_DIR}/cropwright/.env" CROPWRIGHT_BIND_ADDRESS 2>/dev/null || true)"
+    if [[ "$OP_LOCAL_ONLY" == 1 ]]; then
+        CROPWRIGHT_BIND=127.0.0.1
+    elif [[ "$prev" == 0.0.0.0 || "$prev" == 127.0.0.1 ]]; then
+        CROPWRIGHT_BIND="$prev"
+    elif [[ "$OP_UNATTENDED" != 1 ]] && tty_usable; then
+        prompt_line reply "Let other computers on your LAN open the Cropwright web UI? [Y/n]: " "--local-only"
+        if [[ -z "$reply" || "${reply,,}" == y* ]]; then CROPWRIGHT_BIND=0.0.0.0; else CROPWRIGHT_BIND=127.0.0.1; fi
+    else
+        CROPWRIGHT_BIND=0.0.0.0
+    fi
+}
+
 setup_cropwright() {
-    local lock="${OP_DIR}/cropwright.lock" tag image csum esum dir="${OP_DIR}/cropwright" f ver port
+    local lock="${OP_DIR}/cropwright.lock" tag image sums_sha dir="${OP_DIR}/cropwright" f port cw_base
     tag="$(read_env_var "$lock" tag || true)"
     image="$(read_env_var "$lock" image || true)"
-    csum="$(read_env_var "$lock" compose_sha256 || true)"
-    esum="$(read_env_var "$lock" env_example_sha256 || true)"
+    sums_sha="$(read_env_var "$lock" sha256sums_sha256 || true)"
     [[ "$tag" =~ ^v[0-9A-Za-z._-]+$ ]] \
         || die "cropwright.lock does not name a Cropwright release tag (got '${tag}'): the cropwright tier cannot be installed from this release" "$EXIT_VERIFY"
-    if [[ ! "$csum" =~ ^[0-9a-f]{64}$ || ! "$esum" =~ ^[0-9a-f]{64}$ ]]; then
-        die "cropwright.lock has no checksums for the Cropwright files; refusing to install unverified files" "$EXIT_VERIFY"
-    fi
+    [[ "$sums_sha" =~ ^[0-9a-f]{64}$ ]] \
+        || die "cropwright.lock has no sha256 for Cropwright's SHA256SUMS; refusing to install unverified files" "$EXIT_VERIFY"
     if [[ "$IMAGE_MODE" == lock ]] && ! _lock_line_valid "cropwright=${image}"; then
         die "cropwright.lock image is not digest-pinned: ${image}" "$EXIT_VERIFY"
     fi
     mkdir -p "$dir"
-    for f in docker-compose.yml .env.example; do
-        local want="$csum"
-        [[ "$f" == .env.example ]] && want="$esum"
-        local cw_base="${CW_ARTIFACT_BASE_URL:-https://github.com/${CW_GH_REPO}/releases/download}/${tag}"
-        [[ -n "${OP_RELEASE_DIR:-}" ]] && cw_base="file://${OP_RELEASE_DIR}/cropwright/${tag}"
+    cw_base="${CW_ARTIFACT_BASE_URL:-https://github.com/${CW_GH_REPO}/releases/download}/${tag}"
+    [[ -n "${OP_RELEASE_DIR:-}" ]] && cw_base="file://${OP_RELEASE_DIR}/cropwright/${tag}"
+    # Cropwright's release assets carry the section 3 names; its SHA256SUMS is
+    # itself pinned by cropwright.lock, which this release's checksums cover.
+    for f in SHA256SUMS docker-compose.yml .env.example; do
         if ! _dl "${cw_base}/${f}" "${dir}/${f}.new"; then
             _dl "${CW_RAW_BASE_URL:-https://raw.githubusercontent.com/${CW_GH_REPO}}/${tag}/${f}" "${dir}/${f}.new" \
                 || die "could not download Cropwright ${f} at ${tag}" "$EXIT_VERIFY"
         fi
-        [[ "$(_sha256 "${dir}/${f}.new")" == "$want" ]] || { rm -f "${dir}/${f}.new"; die "Cropwright ${f} failed checksum verification" "$EXIT_VERIFY"; }
+    done
+    if [[ "$(_sha256 "${dir}/SHA256SUMS.new")" != "$sums_sha" ]]; then
+        _cw_discard_downloads "$dir"
+        die "Cropwright SHA256SUMS does not match cropwright.lock" "$EXIT_VERIFY"
+    fi
+    for f in docker-compose.yml .env.example; do
+        if ! verify_against_sums "${dir}/SHA256SUMS.new" "${dir}/${f}.new" "$f"; then
+            _cw_discard_downloads "$dir"
+            die "Cropwright ${f} failed checksum verification" "$EXIT_VERIFY"
+        fi
+    done
+    for f in SHA256SUMS docker-compose.yml .env.example; do
         mv -f "${dir}/${f}.new" "${dir}/${f}"
-        chmod 600 "${dir}/${f}"
+        chmod 644 "${dir}/${f}"
     done
 
     port="$(read_env_var "${dir}/.env" CROPWRIGHT_PORT || true)"
@@ -1705,26 +1791,36 @@ setup_cropwright() {
     upsert_env_var "${dir}/.env" CROPWRIGHT_CONTAINER_NAME "${OP_PROJECT}-cropwright"
     upsert_env_var "${dir}/.env" OP_DOCKER_NETWORK "${OP_PROJECT}_triton_net"
     upsert_env_var "${dir}/.env" API_UPSTREAM "http://op-api:8000"
-    upsert_env_var "${dir}/.env" CROPWRIGHT_BIND_ADDRESS "$OP_BIND_ADDRESS"
+    upsert_env_var "${dir}/.env" CROPWRIGHT_BIND_ADDRESS "$CROPWRIGHT_BIND"
+    if [[ "$IMAGE_MODE" == lock ]]; then
+        upsert_env_var "${dir}/.env" CROPWRIGHT_IMAGE "$image"
+    fi
 
-    # Cropwright's own compose publishes on all interfaces until
-    # CROPWRIGHT_BIND_ADDRESS ships there; this override pins the port to
-    # the consented bind address and the image to the locked digest.
-    ver="$(dc version --short 2>/dev/null || true)"
-    ver="${ver#v}"
-    _version_ge "${ver:-0}" "$COMPOSE_MIN_OVERRIDE" \
-        || die "Docker Compose ${COMPOSE_MIN_OVERRIDE}+ is needed for the Cropwright port override (found '${ver:-unknown}')"
-    require_bind_consent "$OP_BIND_ADDRESS"
-    ( umask 077; cat > "${dir}/docker-compose.bind.yml" <<EOF
-services:
-  cropwright:
-    image: ${image}
-    ports: !override
-      - "${OP_BIND_ADDRESS}:${port}:8080"
-EOF
-    )
+    # Check what Compose will really do with Cropwright's own file: the
+    # published host IP must be the chosen one, and the image the pinned one.
+    local json hosts rendered
+    json="$(dc_cw config --format json)" || die "compose config failed for Cropwright"
+    hosts="$(printf '%s\n' "$json" | sed -n -E 's/^[[:space:]]*"host_ip":[[:space:]]*"([^"]*)".*/\1/p' | sort -u | tr '\n' ' ')"
+    # A port without a host IP is published on every interface.
+    [[ -z "$hosts" ]] && hosts="0.0.0.0 "
+    if [[ "${hosts% }" != "$CROPWRIGHT_BIND" ]]; then
+        die "Cropwright's compose would publish on '${hosts:-0.0.0.0}', not ${CROPWRIGHT_BIND} (its compose must honour CROPWRIGHT_BIND_ADDRESS)" "$EXIT_VERIFY"
+    fi
+    if [[ "$IMAGE_MODE" == lock ]]; then
+        rendered="$(dc_cw config --images)" || die "compose config failed for Cropwright"
+        [[ "$rendered" == "$image" ]] \
+            || die "Cropwright's compose runs '${rendered}', not the pinned ${image} (it must honour CROPWRIGHT_IMAGE)" "$EXIT_VERIFY"
+        PINNED_IMAGES+=("$image")
+    fi
     assert_container_names_free "${OP_PROJECT}-cropwright"
-    log_success "Cropwright ${tag} configured on ${OP_BIND_ADDRESS}:${port}"
+    log_success "Cropwright ${tag} configured on ${CROPWRIGHT_BIND}:${port}"
+}
+
+_cw_discard_downloads() {
+    local f
+    for f in SHA256SUMS docker-compose.yml .env.example; do
+        rm -f -- "${1:?}/${f}.new"
+    done
 }
 
 # -----------------------------------------------------------------------------
@@ -1860,6 +1956,22 @@ run_health() {
         wait_http "http://${h}:${CROPWRIGHT_PORT}/" 120 || fails+=("cropwright / not 200")
         wait_http "http://${h}:${CROPWRIGHT_PORT}/curation/health" 60 || fails+=("cropwright cannot reach the API through its proxy (network ${OP_PROJECT}_triton_net)")
     fi
+    if [[ "$OP_WITH_MONITORING" == 1 ]]; then
+        local unreadable
+        unreadable="$(find "${OP_DIR}/monitoring" \( -type f ! -perm -o=r \) -o \( -type d ! -perm -o=rx \) 2>/dev/null | head -n 3)"
+        [[ -z "$unreadable" ]] || fails+=("monitoring config not readable by the container users: ${unreadable//$'\n'/ }")
+        p="$(read_env_var "$ENV_FILE" PROMETHEUS_PORT)"
+        wait_http "http://${h}:${p}/api/v1/status/config" 120 'job_name:triton' \
+            || fails+=("prometheus did not load monitoring/prometheus.yml: ./openprocessor logs prometheus")
+        p="$(read_env_var "$ENV_FILE" LOKI_PORT)"
+        wait_http "http://${h}:${p}/ready" 180 || fails+=("loki not ready (config not loaded?): ./openprocessor logs loki")
+        p="$(read_env_var "$ENV_FILE" GRAFANA_PORT)"
+        if ! wait_http "http://${h}:${p}/api/health" 120; then
+            fails+=("grafana not healthy: ./openprocessor logs grafana")
+        elif dc logs --no-color --tail 500 grafana 2>/dev/null | grep -qiE 'permission denied|failed to provision|failed to read'; then
+            fails+=("grafana could not load its provisioning files: ./openprocessor logs grafana")
+        fi
+    fi
     if [[ -n "${OP_VLM_URL:-}" ]]; then
         log_warn "remote VLM registered; its endpoint probe needs the model-selection API (not in this release): check with ./openprocessor health"
     fi
@@ -1932,24 +2044,67 @@ purge_data_paths() {
     return 0
 }
 
+# _tree_has_foreign_files DIR -> 0 when something under DIR is not ours
+# (e.g. chowned to the container uid 1000 on a host where we are not 1000)
+_tree_has_foreign_files() {
+    [[ -n "$(find "$1" ! -user "$(id -u)" -print -quit 2>/dev/null)" ]]
+}
+
 safe_rm_tree() {
-    local p="$1"
+    local p="$1" img
     if [[ "$OP_DRY_RUN" == 1 ]]; then
         echo "DRY: rm -rf --one-file-system -- ${p}"
+        return 0
+    fi
+    if _tree_has_foreign_files "$p"; then
+        # Files owned by the container user: delete them the way they were
+        # created, from a container, scoped to this one directory.
+        img="$(read_env_var "$ENV_FILE" OP_API_IMAGE || true)"
+        [[ -n "$img" ]] || img="$(read_env_var "$ENV_FILE" OP_IMAGE_REPO || echo "$OP_IMAGE_NAMESPACE")/openprocessor:$(read_env_var "$ENV_FILE" OP_IMAGE_TAG || true)"
+        docker run --rm --user 0 --entrypoint rm -v "$(dirname "$p"):/purge" "$img" \
+            -rf --one-file-system -- "/purge/$(basename "$p")" \
+            || die "could not delete ${p} (it holds files owned by the container user)"
         return 0
     fi
     rm -rf --one-file-system -- "$p"
 }
 
+# require_owned_install -- the dir holds .install/state.json written by this
+# installer for this dir, and its project matches .env. Everything that
+# changes an existing install (uninstall, purge, rollback, repair, upgrade)
+# goes through this.
+require_owned_install() {
+    local sp sd envp
+    [[ -f "$STATE_FILE" ]] \
+        || die "${OP_REAL_DIR} has no .install/state.json: not an install made by this installer; nothing was changed" "$EXIT_COLLISION"
+    sp="$(state_get project || true)"
+    sd="$(state_get install_dir || true)"
+    envp="$(read_env_var "$ENV_FILE" COMPOSE_PROJECT_NAME || true)"
+    [[ -n "$sp" && "$sd" == "$OP_REAL_DIR" ]] \
+        || die "${OP_REAL_DIR}/.install/state.json records another install (${sd:-no dir}); nothing was changed" "$EXIT_COLLISION"
+    [[ -z "$envp" || "$envp" == "$sp" ]] \
+        || die "project mismatch: .env says '${envp}', .install/state.json says '${sp}'; nothing was changed" "$EXIT_COLLISION"
+    if [[ -n "$_OP_PROJECT_FLAG" && "$_OP_PROJECT_FLAG" != "$sp" ]]; then
+        die "--project ${_OP_PROJECT_FLAG} does not match this install's project '${sp}'" "$EXIT_USAGE"
+    fi
+    OP_PROJECT="$sp"
+}
+
+# require_destructive_consent WHAT -- a prompt on a terminal, or an explicit
+# --yes/--unattended. A missing terminal on its own is never consent.
+require_destructive_consent() {
+    local what="$1"
+    [[ "$OP_ASSUME_YES" == 1 ]] && return 0
+    if tty_usable; then
+        confirm_yes "${what}?" "--yes" || die "cancelled" "$EXIT_CONSENT"
+        return 0
+    fi
+    die "${what} needs confirmation, and there is no terminal: re-run with --yes (or --unattended)" "$EXIT_CONSENT"
+}
+
 do_uninstall() {
     [[ -d "$OP_DIR" ]] || die "no install at ${OP_DIR}"
-    local env_project
-    env_project="$(read_env_var "$ENV_FILE" COMPOSE_PROJECT_NAME || true)"
-    [[ -n "$env_project" ]] || die "${ENV_FILE} has no COMPOSE_PROJECT_NAME: not an installer-managed directory, nothing removed"
-    if [[ -n "$_OP_PROJECT_FLAG" && "$_OP_PROJECT_FLAG" != "$env_project" ]]; then
-        die "--project ${_OP_PROJECT_FLAG} does not match this install's project '${env_project}'" "$EXIT_USAGE"
-    fi
-    OP_PROJECT="$env_project"
+    require_owned_install
     require_docker
     guard_projects
 
@@ -1973,10 +2128,9 @@ do_uninstall() {
         mapfile -t paths < <(purge_data_paths "$OP_DIR")
         echo "directories to delete: ${paths[*]:-<none>}"
     fi
+    require_destructive_consent "Stop and remove the containers of ${OP_PROJECT}"
     if (( purge_any )); then
         require_purge_confirmation "$OP_PROJECT" "the purge" OP_CONFIRM_PURGE
-    elif [[ "$OP_UNATTENDED" != 1 ]] && tty_usable; then
-        confirm_yes "Stop and remove these containers?" "--unattended" || die "uninstall cancelled" "$EXIT_CONSENT"
     fi
 
     if [[ -f "${OP_DIR}/cropwright/docker-compose.yml" ]]; then
@@ -2038,21 +2192,18 @@ remove_install_images() {
 # 5.2 Rollback
 # -----------------------------------------------------------------------------
 do_rollback() {
-    [[ -f "$STATE_FILE" ]] || die "no .install/state.json in ${OP_DIR}: nothing to roll back"
+    require_owned_install
     local newest env_project rel
     newest="$(find "${OP_DIR}/backups" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort | tail -n1 || true)"
     [[ -n "$newest" ]] || die "no backups/ entry to roll back to"
     env_project="$(read_env_var "${newest}/.env" COMPOSE_PROJECT_NAME || true)"
-    [[ -n "$env_project" ]] || die "backup ${newest} has no .env with COMPOSE_PROJECT_NAME"
-    OP_PROJECT="$env_project"
+    [[ "$env_project" == "$OP_PROJECT" ]] || die "backup ${newest} belongs to project '${env_project:-none}', not '${OP_PROJECT}'" "$EXIT_COLLISION"
     require_docker
     guard_projects
 
     log_step "Rollback to $(basename "$newest")"
     echo "restores: $(cd "$newest" && find . -type f | sed 's#^\./##' | tr '\n' ' ')"
-    if [[ "$OP_UNATTENDED" != 1 ]] && tty_usable; then
-        confirm_yes "Restore these files and restart ${OP_PROJECT}?" "--unattended" || die "rollback cancelled" "$EXIT_CONSENT"
-    fi
+    require_destructive_consent "Restore these files and restart ${OP_PROJECT}"
     local undo
     undo="${OP_DIR}/.install/rollback-undo/$(date -u +%Y%m%dT%H%M%SZ)"
     if [[ "$OP_DRY_RUN" == 1 ]]; then
@@ -2079,7 +2230,9 @@ do_rollback() {
     fi
     PINNED_IMAGES=()
     local k
-    for k in OP_API_IMAGE OP_TRITON_IMAGE OP_SEGMENTER_IMAGE OP_TRAINER_IMAGE OP_EVALUATOR_IMAGE VLM_IMAGE; do
+    # shellcheck source=scripts/lib/image_keys.sh
+    source "${OP_DIR}/scripts/lib/image_keys.sh"
+    for k in $(for rel in $(image_keys); do image_key_field "$rel" env; done | sort -u); do
         rel="$(read_env_var "$ENV_FILE" "$k" || true)"
         [[ -n "$rel" ]] && PINNED_IMAGES+=("$rel")
     done
@@ -2101,7 +2254,7 @@ print_summary() {
     api="$(read_env_var "$ENV_FILE" API_PORT || true)"
     tri="$(read_env_var "$ENV_FILE" TRITON_HTTP_PORT || true)"
     log_step "Summary"
-    echo "  install dir : ${OP_DIR}"
+    echo "  install dir : ${OP_REAL_DIR}"
     echo "  release     : ${INSTALL_REF} (${RESOLVED_MODE}; images: ${IMAGE_MODE})"
     echo "  project     : ${OP_PROJECT}"
     echo "  tiers       : ${SELECTED_TIERS}"
@@ -2115,7 +2268,17 @@ print_summary() {
     if _has_tier segmenter; then seg="$(read_env_var "$ENV_FILE" SEGMENTER_PORT)"; echo "    Segmenter   http://${h}:${seg}/health"; fi
     if _has_tier vlm; then vlmp="$(read_env_var "$ENV_FILE" VLM_PORT)"; echo "    VLM         http://${h}:${vlmp}/v1/models (${VLM_PICK})"; fi
     if _has_tier trainer; then ml="$(read_env_var "$ENV_FILE" MLFLOW_PORT)"; echo "    MLflow      http://${h}:${ml}"; fi
-    _has_tier cropwright && echo "    Cropwright  http://${h}:${CROPWRIGHT_PORT}"
+    if _has_tier cropwright; then
+        echo "    Cropwright  http://${h}:${CROPWRIGHT_PORT}"
+        if [[ "${CROPWRIGHT_BIND:-}" == 0.0.0.0 ]]; then
+            local lan
+            lan="$(hostname -I 2>/dev/null | awk '{ print $1 }' || true)"
+            echo "    Cropwright on your LAN: http://${lan:-<this-computer-ip>}:${CROPWRIGHT_PORT}"
+            log_warn "Cropwright is reachable from your LAN and has NO login: use it only on a trusted network,"
+            log_warn "never port-forward it to the internet, and put a reverse proxy with authentication in front"
+            log_warn "for anything wider (SECURITY.md). Re-run with --local-only to keep it on this computer."
+        fi
+    fi
     if [[ "$OP_WITH_MONITORING" == 1 ]]; then
         echo "    Grafana     http://${h}:$(read_env_var "$ENV_FILE" GRAFANA_PORT) (default admin/admin: change it)"
     fi
@@ -2136,7 +2299,7 @@ print_summary() {
         for g in $failed; do echo "    re-run: ./openprocessor models install --only ${g}"; done
     fi
     echo ""
-    echo "  Manage: cd ${OP_DIR} && ./openprocessor status|logs|health|stop|start"
+    echo "  Manage: cd ${OP_REAL_DIR} && ./openprocessor status|logs|health|stop|start"
     echo "          ./setup-openprocessor.sh --repair | --rollback | --uninstall"
     [[ "$OP_NO_START" == 1 ]] && echo "  Nothing was started (--no-start): run ./openprocessor start, then ./openprocessor models install"
     return 0
@@ -2169,6 +2332,9 @@ Usage: setup-openprocessor.sh [options]
   --unattended            never prompt (automatic when there is no terminal)
   --dry-run               print every state-changing command; run none
   --force                 accept a plan the hardware check refused
+  --force-existing-dir    install into a non-empty dir this installer did not create (backed up first)
+  --local-only            Cropwright only on this computer (default: reachable from your LAN)
+  --yes                   confirm destructive steps (uninstall, rollback, upgrade) without a prompt
   --cpu [--control-plane-only]
   --repair | --rollback | --uninstall [--purge-volumes] [--purge-data] [--remove-images]
   --reset-hf-token        ask for a new HuggingFace token
@@ -2205,7 +2371,8 @@ parse_args() {
     local unattended="${OP_UNATTENDED:-0}" dry="${OP_DRY_RUN:-0}" cpu="${OP_FORCE_CPU:-0}"
     local mon="${OP_WITH_MONITORING:-0}" sample="${OP_SAMPLE_DATA:-0}" cpo="${OP_CONTROL_PLANE_ONLY:-0}"
     OP_SKIP_MODELS=0; OP_NO_START=0; OP_FORCE=0; OP_PURGE_VOLUMES=0; OP_PURGE_DATA=0
-    OP_REMOVE_IMAGES=0; OP_RESET_HF_TOKEN=0
+    OP_REMOVE_IMAGES=0; OP_RESET_HF_TOKEN=0; OP_FORCE_EXISTING_DIR=0; OP_LOCAL_ONLY=0
+    local yes=0
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -2234,6 +2401,9 @@ parse_args() {
             --cpu) cpu=1; shift ;;
             --control-plane-only) cpo=1; shift ;;
             --force) OP_FORCE=1; shift ;;
+            --force-existing-dir) OP_FORCE_EXISTING_DIR=1; shift ;;
+            --local-only) OP_LOCAL_ONLY=1; shift ;;
+            --yes|-y) yes=1; shift ;;
             --repair) OP_ACTION="repair"; shift ;;
             --rollback) OP_ACTION="rollback"; shift ;;
             --uninstall) OP_ACTION="uninstall"; shift ;;
@@ -2251,11 +2421,18 @@ parse_args() {
     done
 
     OP_UNATTENDED=0; _truthy "$unattended" && OP_UNATTENDED=1
+    # Consent to destructive steps only ever comes from an explicit flag or
+    # env var, never from the terminal simply being absent.
+    OP_ASSUME_YES=0
+    if [[ "$yes" == 1 || "$OP_UNATTENDED" == 1 ]]; then OP_ASSUME_YES=1; fi
     OP_DRY_RUN=0; _truthy "$dry" && OP_DRY_RUN=1
     OP_FORCE_CPU=0; _truthy "$cpu" && OP_FORCE_CPU=1
     OP_WITH_MONITORING=0; _truthy "$mon" && OP_WITH_MONITORING=1
     OP_SAMPLE_DATA=0; _truthy "$sample" && OP_SAMPLE_DATA=1
     OP_CONTROL_PLANE_ONLY=0; _truthy "$cpo" && OP_CONTROL_PLANE_ONLY=1
+    if [[ "$OP_CONTROL_PLANE_ONLY" == 1 && "$OP_WITH_MONITORING" == 1 ]]; then
+        die "--with-monitoring is not available with --control-plane-only (only OpenSearch and the API run)" "$EXIT_USAGE"
+    fi
     if ! tty_usable; then OP_UNATTENDED=1; fi
 
     if [[ -n "$_OP_PROJECT_FLAG" ]] && ! validate_project_name "$_OP_PROJECT_FLAG"; then
@@ -2309,15 +2486,91 @@ parse_args() {
 # -----------------------------------------------------------------------------
 # Install / repair
 # -----------------------------------------------------------------------------
+# classify_install_dir -> DIR_STATE = fresh | owned | forced
+# owned: .install/state.json written by this installer for this very dir.
+# A non-empty dir without it (a git checkout, another tool's dir) is refused
+# unless --force-existing-dir, which backs its files up first.
+classify_install_dir() {
+    local sd
+    if [[ ! -e "$OP_REAL_DIR" ]]; then
+        DIR_STATE=fresh
+        return 0
+    fi
+    [[ -d "$OP_REAL_DIR" ]] || die "${OP_REAL_DIR} exists and is not a directory" "$EXIT_USAGE"
+    if [[ -f "$STATE_FILE" ]]; then
+        sd="$(state_get install_dir || true)"
+        [[ "$sd" == "$OP_REAL_DIR" ]] \
+            || die "${OP_REAL_DIR}/.install/state.json records another install (${sd:-no dir}); refusing" "$EXIT_COLLISION"
+        DIR_STATE=owned
+        return 0
+    fi
+    if [[ -z "$(find "$OP_REAL_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+        DIR_STATE=fresh
+        return 0
+    fi
+    if [[ "$OP_FORCE_EXISTING_DIR" == 1 ]]; then
+        log_warn "${OP_REAL_DIR} is not empty and was not created by this installer; adopting it (--force-existing-dir)"
+        DIR_STATE=forced
+        return 0
+    fi
+    local what="not empty"
+    [[ -e "${OP_REAL_DIR}/.git" ]] && what="a git checkout"
+    die "${OP_REAL_DIR} is ${what} and was not created by this installer; nothing was changed. Use another --dir, or --force-existing-dir to adopt it (its files are backed up first)" "$EXIT_COLLISION"
+}
+
+# backup_foreign_dir -- before adopting a dir we did not create, save every
+# file we could overwrite (everything but data/model/cache trees).
+backup_foreign_dir() {
+    local ts dest
+    ts="$(date -u +%Y%m%dT%H%M%SZ)"
+    dest="${OP_REAL_DIR}/backups"
+    mkdir -p "$dest"
+    chmod 700 "$dest"
+    tar -C "$OP_REAL_DIR" --exclude=./models --exclude=./pytorch_models --exclude=./data --exclude=./cache \
+        --exclude=./backups -czf "${dest}/${ts}-pre-install.tar.gz" . \
+        || die "could not back up ${OP_REAL_DIR}; nothing was changed"
+    chmod 600 "${dest}/${ts}-pre-install.tar.gz"
+    log_info "backed up the existing files to ${dest}/${ts}-pre-install.tar.gz"
+}
+
+# dry_run_report -- what a real run would change in an existing dir
+dry_run_report() {
+    [[ "$OP_DRY_RUN" == 1 && "$DIR_STATE" != fresh ]] || return 0
+    local rel changed=0 key
+    log_step "Dry-run: changes a real run would make in ${OP_REAL_DIR}"
+    while IFS= read -r rel; do
+        if [[ ! -f "${OP_REAL_DIR}/${rel}" ]]; then
+            echo "  would add    ${rel}"; changed=1
+        elif ! cmp -s "${OP_DIR}/${rel}" "${OP_REAL_DIR}/${rel}"; then
+            echo "  would change ${rel}"; changed=1
+        fi
+    done < <(manifest_installed_files "$OP_DIR")
+    while IFS= read -r key; do
+        [[ -z "$key" ]] && continue
+        if [[ "$(read_env_var "${OP_DIR}/.env" "$key" || true)" != "$(read_env_var "${OP_REAL_DIR}/.env" "$key" || true)" ]]; then
+            echo "  would set    .env ${key}"; changed=1
+        fi
+    done < <(awk -F= '/^[A-Z_][A-Z0-9_]*=/ { print $1 }' "${OP_DIR}/.env" 2>/dev/null | sort -u)
+    (( changed )) || echo "  no file or .env changes"
+}
+
+# select_tiers_interactive REC -> the validated tier list; an invalid answer
+# re-prompts, and three invalid answers exit 2 (never a silent fallback).
 select_tiers_interactive() {
-    local rec="$1" reply
+    local rec="$1" reply attempt
     echo "Recommended tiers for this machine: ${rec}" >&2
     echo "Available: ${TIER_LIST[*]} (dependencies are added automatically)" >&2
-    prompt_line reply "Tiers to install [${rec}]: " "--tiers LIST"
-    [[ -z "$reply" ]] && reply="$rec"
-    reply="${reply// /}"
-    tiers_validate "$reply" || die "unknown tier in '${reply}'" "$EXIT_USAGE"
-    echo "$reply"
+    for attempt in 1 2 3; do
+        prompt_line reply "Tiers to install [${rec}]: " "--tiers LIST"
+        [[ -z "$reply" ]] && reply="$rec"
+        reply="${reply// /}"
+        if tiers_validate "$reply"; then
+            echo "$reply"
+            return 0
+        fi
+        (( attempt < 3 )) && echo "Try again (comma-separated, from: ${TIER_LIST[*]})." >&2
+    done
+    die "no valid tier list after 3 tries" "$EXIT_USAGE"
 }
 
 print_gpu_plan() {
@@ -2332,7 +2585,10 @@ print_gpu_plan() {
 
 do_install() {
     local mode="$1" existing=0 plan rec tiers_arg=""
-    [[ -f "$STATE_FILE" ]] && existing=1
+    if [[ -f "$STATE_FILE" ]]; then
+        require_owned_install
+        [[ -n "$(state_get version || true)" ]] && existing=1
+    fi
     if [[ "$mode" == repair ]]; then
         (( existing )) || die "--repair needs an existing install (no ${STATE_FILE})"
         FORCED_REF="$(state_get version)"
@@ -2344,29 +2600,28 @@ do_install() {
             [[ "$FORCED_REF" =~ ^[0-9a-f]{40}$ ]] || die "state.json branch ref is not a commit SHA"
             OP_BRANCH="${OP_BRANCH:-${FORCED_REF:0:12}}"
         fi
-        [[ -z "$OP_TIERS" ]] && OP_TIERS="$(state_get tiers)"
-        OP_TIERS="${OP_TIERS// /,}"
         if [[ "$(state_get image_mode)" == tag && -z "$OP_IMAGE_TAG" ]]; then
             OP_IMAGE_TAG="$(state_get image_tag)"
         fi
-        [[ "$(state_get control_plane_only)" == 1 ]] && OP_CONTROL_PLANE_ONLY=1
-    fi
-    local envp
-    envp="$(read_env_var "$ENV_FILE" COMPOSE_PROJECT_NAME || true)"
-    if [[ -n "$envp" ]]; then
-        if [[ -n "$_OP_PROJECT_FLAG" && "$envp" != "$_OP_PROJECT_FLAG" ]]; then
-            die "${ENV_FILE} belongs to project '${envp}'; --project ${_OP_PROJECT_FLAG} does not match" "$EXIT_USAGE"
-        fi
-        OP_PROJECT="$envp"
     fi
     if (( existing )); then
-        local p
-        p="$(state_get project || true)"
-        if [[ -n "$p" && -n "$_OP_PROJECT_FLAG" && "$p" != "$_OP_PROJECT_FLAG" ]]; then
-            die "this install belongs to project '${p}'; --project ${_OP_PROJECT_FLAG} does not match" "$EXIT_USAGE"
+        # A re-run or upgrade keeps what is installed unless told otherwise.
+        if [[ -z "$OP_TIERS" ]]; then
+            OP_TIERS="$(state_get tiers)"
+            OP_TIERS="${OP_TIERS// /,}"
+            log_info "keeping the installed tiers: ${OP_TIERS} (pass --tiers to change them)"
         fi
-        [[ -n "$p" ]] && OP_PROJECT="$p"
+        [[ "$(state_get control_plane_only)" == 1 ]] && OP_CONTROL_PLANE_ONLY=1
+        if [[ "$(state_get with_monitoring)" == 1 && "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
+            OP_WITH_MONITORING=1
+        fi
         INSTALLED_AT="$(state_get installed_at || true)"
+    elif [[ "$DIR_STATE" == forced ]]; then
+        local envp
+        envp="$(read_env_var "$ENV_FILE" COMPOSE_PROJECT_NAME || true)"
+        if [[ -n "$envp" && -z "$_OP_PROJECT_FLAG" ]]; then
+            OP_PROJECT="$envp"
+        fi
     fi
     [[ -n "$INSTALLED_AT" ]] || INSTALLED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -2374,6 +2629,11 @@ do_install() {
     log_step "Preflight"
     require_docker
     guard_projects
+    if [[ ! -f "$STATE_FILE" && "$OP_DRY_RUN" != 1 ]]; then
+        # Claim the dir now that the project name is known to be free, so an
+        # interrupted install can be resumed (and only resumed) by this installer.
+        state_write
+    fi
     local rt
     rt="$(docker_runtime_has_nvidia)"
     case "$rt" in
@@ -2387,9 +2647,9 @@ do_install() {
     if [[ -n "$FORCED_REF" ]]; then
         RESOLVED_REF="$FORCED_REF"
         RESOLVED_MODE="$FORCED_MODE"
-    elif [[ -n "${OP_BOOTSTRAP_REF:-}" && -z "$OP_VERSION" && -z "$OP_BRANCH" ]]; then
-        RESOLVED_REF="$OP_BOOTSTRAP_REF"
-        RESOLVED_MODE="${OP_BOOTSTRAP_MODE:-release}"
+    elif [[ -n "${_OP_BOOT_REF:-}" && -z "$OP_VERSION" && -z "$OP_BRANCH" ]]; then
+        RESOLVED_REF="$_OP_BOOT_REF"
+        RESOLVED_MODE="$_OP_BOOT_MODE"
     else
         resolve_install_ref
     fi
@@ -2408,9 +2668,7 @@ do_install() {
     prev="$(state_get version || true)"
     if (( existing )) && [[ -n "$prev" && "$prev" != "$INSTALL_REF" && "$mode" != repair ]]; then
         log_info "upgrade: ${prev} -> ${INSTALL_REF}"
-        if [[ "$OP_UNATTENDED" != 1 ]]; then
-            confirm_yes "Upgrade ${OP_PROJECT} from ${prev} to ${INSTALL_REF}?" "--unattended" || die "upgrade cancelled" "$EXIT_CONSENT"
-        fi
+        require_destructive_consent "Upgrade ${OP_PROJECT} from ${prev} to ${INSTALL_REF} (files are backed up first)"
     fi
     fetch_release_artifacts "$INSTALL_REF" "$RESOLVED_MODE" "${OP_DIR}/.install/staging"
     log_success "release ${INSTALL_REF} downloaded and verified"
@@ -2426,6 +2684,8 @@ do_install() {
     source "${OP_DIR}/scripts/lib/vlm_catalog.sh"
     # shellcheck source=scripts/lib/model_setup.sh
     source "${OP_DIR}/scripts/lib/model_setup.sh"
+    # shellcheck source=scripts/lib/image_keys.sh
+    source "${OP_DIR}/scripts/lib/image_keys.sh"
 
     env_create_or_merge
     env_set COMPOSE_PROJECT_NAME "$OP_PROJECT"
@@ -2465,7 +2725,7 @@ do_install() {
         cver="$(dc version --short 2>/dev/null || true)"
         _version_ge "${cver#v}" "$COMPOSE_MIN_OVERRIDE" \
             || die "Docker Compose ${COMPOSE_MIN_OVERRIDE}+ is needed for --control-plane-only (found '${cver:-unknown}')"
-        ( umask 077; printf 'services:\n  yolo-api:\n    deploy: !reset {}\n' > "${OP_DIR}/docker-compose.cpu.yml" )
+        ( umask 022; printf 'services:\n  yolo-api:\n    deploy: !reset {}\n' > "${OP_DIR}/docker-compose.cpu.yml" )
         GPU_PLAN_SUMMARY="none (control-plane-only)"
     else
         if [[ -n "$OP_TIERS" ]]; then
@@ -2490,15 +2750,20 @@ do_install() {
             (( busy > 0 )) && log_info "GPU ${line}: ${busy} other process(es) hold VRAM"
         done < <(printf '%s\n' "$plan" | sed -n -E 's/^warn=GPU ([0-9]+):.*in use.*/\1/p')
         rec="$(plan_get "$plan" recommended_tiers)"
+        if [[ -z "$tiers_arg" && ",${rec}," == *",segmenter,"* ]] && ! hf_token_available \
+                && { [[ "$OP_UNATTENDED" == 1 ]] || ! tty_usable; }; then
+            rec="${rec//,segmenter/}"
+            log_warn "the segmenter tier needs a HuggingFace token (SAM 3 is gated) and none was given: not selected (set HF_TOKEN_FILE and add --tiers ...,segmenter)"
+        fi
         if [[ -z "$tiers_arg" ]]; then
-            if [[ "$OP_UNATTENDED" == 1 ]]; then
-                tiers_arg="$(tiers_close_dependencies "$rec")"
-            else
-                tiers_arg="$(tiers_close_dependencies "$(select_tiers_interactive "$rec")")"
-                if ! plan="$(recommend_plan "$gpus" "$tiers_arg" "force=${OP_FORCE}" "vlm_id=${OP_VLM_CATALOG_ID}" \
-                        "gpu_plan=${OP_GPU_PLAN}" "profile=${GPU_PROFILE_FLAG}" "remote=${remote}")"; then
-                    die "GPU plan refused: $(plan_get "$plan" refuse)" "$EXIT_GPU"
-                fi
+            local chosen="$rec"
+            if [[ "$OP_UNATTENDED" != 1 ]] && tty_usable; then
+                chosen="$(select_tiers_interactive "$rec")"
+            fi
+            tiers_arg="$(tiers_close_dependencies "$chosen")"
+            if ! plan="$(recommend_plan "$gpus" "$tiers_arg" "force=${OP_FORCE}" "vlm_id=${OP_VLM_CATALOG_ID}" \
+                    "gpu_plan=${OP_GPU_PLAN}" "profile=${GPU_PROFILE_FLAG}" "remote=${remote}")"; then
+                die "GPU plan refused: $(plan_get "$plan" refuse)" "$EXIT_GPU"
             fi
         fi
         SELECTED_TIERS="$(tiers_close_dependencies "$(plan_get "$plan" tiers)")"
@@ -2573,6 +2838,7 @@ do_install() {
     plan_ports
     apply_image_pins
     if _has_tier cropwright; then
+        choose_cropwright_bind
         setup_cropwright
     fi
 
@@ -2686,7 +2952,8 @@ do_install() {
     state_write
     print_summary "$(_health_host)"
     if [[ "$OP_DRY_RUN" == 1 ]]; then
-        log_info "dry-run finished: files were written to ${OP_DIR}; nothing was pulled, started or removed"
+        dry_run_report
+        log_info "dry-run finished: nothing was written, pulled, started or removed"
         return 0
     fi
     if (( health_rc != 0 || group_rc != 0 )); then
@@ -2705,12 +2972,12 @@ main() {
     set -euo pipefail
     shopt -s inherit_errexit
     unset BASH_XTRACEFD
-    umask 077
-
-    if [[ -n "${OP_BOOTSTRAP_TMP:-}" ]]; then
-        # shellcheck disable=SC2064
-        trap "rm -rf '${OP_BOOTSTRAP_TMP}'" EXIT
-    fi
+    # Secrets get explicit 600/700 modes; release files and data dirs stay
+    # readable because containers running as other users bind-mount them.
+    umask 022
+    _OP_SCRATCH=""
+    bootstrap_child_setup
+    trap _op_cleanup EXIT
 
     parse_args "$@"
     if needs_bootstrap "${_OP_SELF_PATH:-}"; then
@@ -2722,13 +2989,8 @@ main() {
     fi
 
     OP_PROJECT="${_OP_PROJECT_FLAG:-openprocessor}"
-    if [[ "$OP_ACTION" == install || "$OP_ACTION" == repair ]]; then
-        mkdir -p "$OP_INSTALL_DIR" || die "cannot create ${OP_INSTALL_DIR}"
-    fi
-    OP_DIR="$(cd -P "$OP_INSTALL_DIR" 2>/dev/null && pwd)" || die "install dir not found: ${OP_INSTALL_DIR}"
-    [[ -n "$OP_DIR" && "$OP_DIR" != / ]] || die "refusing to use '/' as the install dir"
-    ENV_FILE="${OP_DIR}/.env"
-    STATE_FILE="${OP_DIR}/.install/state.json"
+    OP_REAL_DIR="$(realpath -m -- "$OP_INSTALL_DIR")" || die "bad install dir: ${OP_INSTALL_DIR}"
+    [[ "$OP_REAL_DIR" != / ]] || die "refusing to use '/' as the install dir"
     SELECTED_TIERS=""
     PORTS_SUMMARY=""
     TAKEN_PORTS=" "
@@ -2740,23 +3002,54 @@ main() {
     IMAGE_DIGESTS=()
     PINNED_IMAGES=()
     CROPWRIGHT_PORT=""
+    CROPWRIGHT_BIND=""
     ACTIVE_IMAGES=()
     VLM_PICK=""
     RESOLVED_MODE=""
     INSTALL_REF=""
     IMAGE_MODE=""
     GPU_PLAN_SUMMARY=""
+    DIR_STATE=""
 
-    if [[ "$OP_ACTION" == install || "$OP_ACTION" == repair ]]; then
-        ( umask 077; mkdir -p "${OP_DIR}/.install" )
+    if [[ "$OP_ACTION" == uninstall || "$OP_ACTION" == rollback ]]; then
+        [[ -d "$OP_REAL_DIR" ]] || die "no install at ${OP_REAL_DIR}"
+        OP_DIR="$OP_REAL_DIR"
+        ENV_FILE="${OP_DIR}/.env"
+        STATE_FILE="${OP_DIR}/.install/state.json"
+    else
+        # Decide ownership before anything is created or written.
+        STATE_FILE="${OP_REAL_DIR}/.install/state.json"
+        ENV_FILE="${OP_REAL_DIR}/.env"
+        classify_install_dir
+        if [[ "$OP_DRY_RUN" == 1 ]]; then
+            # A dry run writes nothing under the install dir (or anywhere
+            # else that outlives it): it works on a private scratch copy.
+            _OP_SCRATCH="$(mktemp -d)"
+            if [[ "$DIR_STATE" != fresh ]]; then
+                tar -C "$OP_REAL_DIR" --exclude=./models --exclude=./pytorch_models --exclude=./data \
+                    --exclude=./cache --exclude=./backups --exclude=./.git -cf - . | tar -C "$_OP_SCRATCH" -xf -
+            fi
+            OP_DIR="$_OP_SCRATCH"
+        else
+            mkdir -p "$OP_REAL_DIR" || die "cannot create ${OP_REAL_DIR}"
+            OP_DIR="$OP_REAL_DIR"
+            if [[ "$DIR_STATE" == forced ]]; then
+                backup_foreign_dir
+            fi
+        fi
+        ENV_FILE="${OP_DIR}/.env"
+        STATE_FILE="${OP_DIR}/.install/state.json"
+        mkdir -p "${OP_DIR}/.install"
         chmod 700 "${OP_DIR}/.install"
-        : >> "${OP_DIR}/.install/install.log"
-        chmod 600 "${OP_DIR}/.install/install.log"
-        exec > >(_op_redact | tee -a "${OP_DIR}/.install/install.log") \
-            2> >(_op_redact | tee -a "${OP_DIR}/.install/install.log" >&2)
+        if [[ "$OP_DRY_RUN" != 1 ]]; then
+            : >> "${OP_DIR}/.install/install.log"
+            chmod 600 "${OP_DIR}/.install/install.log"
+            exec > >(_op_redact | tee -a "${OP_DIR}/.install/install.log") \
+                2> >(_op_redact | tee -a "${OP_DIR}/.install/install.log" >&2)
+        fi
     fi
-    [[ "$OP_DRY_RUN" == 1 ]] && log_info "DRY-RUN: every state-changing docker command is printed, not run"
-    log_info "setup-openprocessor ${SCRIPT_VERSION}: action ${OP_ACTION}, dir ${OP_DIR}"
+    [[ "$OP_DRY_RUN" == 1 ]] && log_info "DRY-RUN: nothing is written, pulled, started or removed; state-changing commands are printed"
+    log_info "setup-openprocessor ${SCRIPT_VERSION}: action ${OP_ACTION}, dir ${OP_REAL_DIR}"
 
     case "$OP_ACTION" in
         install|repair) do_install "$OP_ACTION" ;;
@@ -2767,4 +3060,4 @@ main() {
 
 }
 
-__op_define && { _OP_SELF_PATH="${BASH_SOURCE[0]:-}"; [[ "${OP_SOURCE_ONLY:-0}" == 1 ]] || main "$@"; }
+__op_define && { _OP_SELF_PATH="${BASH_SOURCE[0]:-}"; [[ "${OP_SOURCE_ONLY:-0}" == 1 && -n "$_OP_SELF_PATH" && "$_OP_SELF_PATH" != "$0" ]] || main "$@"; }
