@@ -522,6 +522,15 @@ compose pull && docker compose up -d` — no `git clone` needed.
     dataset-stats region/unlabeled counters, cluster purity fields).
     Tests that exercised only a removed fallback are deleted; unit and e2e
     fixtures now serve the current wire shape.
+  - `getClass()` (unused) and the dashboard's client-side
+    validated-minus-holdout `trainableCount()`: the class-balance bars
+    are sized by the served `trainable`.
+  - Follow-up fixes on the same branch: `/export`'s Gap column tooltips
+    describe the served `trainable_gap` as the shortfall against the
+    served per-class minimum (they said "Aug target minus trainable"),
+    and `/ingest` honours the served `upload.enabled` (one line instead of
+    the upload panel when false) and `batch.enabled` (hides the
+    server-path panel when false).
 
 ### Fixed
 
