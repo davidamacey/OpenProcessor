@@ -313,6 +313,12 @@ describe('PackEditor activation', () => {
       force: false,
     });
     expect(ed.active.active?.active).toEqual({ name: 'widget_tag', revision: 2 });
+    await ed.active.activate('generic_item_v1', null, true);
+    expect(deps.activatePromptPack).toHaveBeenLastCalledWith('generic_item_v1', {
+      revision: null,
+      expected_active: { name: 'widget_tag', revision: 2 },
+      force: true,
+    });
   });
 
   it('422 keeps the served report so the page can offer force only when allowed', async () => {
