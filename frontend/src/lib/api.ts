@@ -4649,21 +4649,11 @@ export async function ingestBatch(
 }
 
 /**
- * BA-2 (landed, OpenProcessor c5c606f): typed ingest capability + limits,
- * actually enforced by `/ingest/upload`/`/ingest/batch`/`/ingest/region_drain`
- * — replaces every interim client constant in `ingestConfig.ts`. A 404
- * (pre-BA-2 backend) resolves to `null`; `resolveIngestConfig(null)` falls
- * back to the documented interim values, same as before this landed.
+ * Typed ingest capability + limits, actually enforced by
+ * `/ingest/upload`/`/ingest/batch`/`/ingest/region_drain`.
  */
-export async function getIngestConfig(
-  signal?: AbortSignal,
-): Promise<IngestConfig | null> {
-  try {
-    return await apiFetch<IngestConfig>(`${scoped()}/ingest/config`, {}, signal);
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) return null;
-    throw e;
-  }
+export function getIngestConfig(signal?: AbortSignal): Promise<IngestConfig> {
+  return apiFetch<IngestConfig>(`${scoped()}/ingest/config`, {}, signal);
 }
 
 // ===========================================================================

@@ -40,10 +40,9 @@ def _base_ingest_stubs(
     stall_reason=None,
     region_dependencies=None,
 ) -> None:
-    """BA-1..BA-7 (OpenProcessor #36, c5c606f) baseline: `/ingest/config` is
-    now real and always stubbed here (the page fetches it once
-    `ingestAvailability` confirms the router is mounted), and the drain
-    response always carries the BA-3 `drained` verdict.
+    """Baseline: `/ingest/config` is always stubbed here (the page fetches
+    it on mount), and the drain response always carries the served
+    `drained` verdict.
 
     `drained` defaults to `drain_unfinished == 0` (the obvious case — a
     caller that wants to exercise "just reached zero, not yet stable"
@@ -353,21 +352,6 @@ def test_server_path_batch_panel_absent_without_source_roots(stub, page, app_url
     page.wait_for_selector('h1:has-text("Ingest")')
     page.wait_for_selector("text=Upload")
     assert "Server-path ingest" not in page.locator("body").inner_text()
-
-
-def test_ingest_absent(stub, page, app_url):
-    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
-    stub.on("GET", r"/ingest/status(\?|$)", (404, {"detail": "not found"}, "application/json"))
-
-    page.goto(f"{app_url}/p/default/ingest")
-    page.wait_for_selector("text=This backend does not provide ingest.")
-    expect(page.locator('nav[aria-label="Primary"] a[href="/ingest"]')).to_have_count(0)
-
-    ingest_calls = [c for c in stub.calls if "/ingest/" in c[1]]
-    assert ingest_calls == []
-    assert not any(
-        "/ingest/" in path for _, path in stub.handled if not path.endswith("/ingest/status")
-    )
 
 
 def test_region_drain_shows_served_stall_reason(stub, page, app_url):

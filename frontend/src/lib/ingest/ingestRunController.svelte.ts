@@ -195,14 +195,13 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
   }
 
   function applyResponse(chunk: Chunk, res: BatchIngestResponse): void {
-    // BA-1: for an upload result, `image_path` is now the server-persisted
-    // path, not the client identifier — the identifier this controller
-    // sent (`image_paths` form field) comes back as `source_identifier`.
-    // Fall back to `image_path` for a pre-BA-1 backend that doesn't echo
-    // `source_identifier` at all (both fields collapse to the same value
-    // there, since it never rewrote the path).
+    // For an upload result `image_path` is the server-persisted path, not
+    // the client identifier — the identifier this controller sent
+    // (`image_paths` form field) comes back as `source_identifier`.
     const byIdentifier = new Map(
-      res.results.map((r) => [r.source_identifier ?? r.image_path, r]),
+      res.results
+        .filter((r) => r.source_identifier != null)
+        .map((r) => [r.source_identifier, r]),
     );
     // Defensive fallback for an in-batch byte-identical duplicate: today's
     // backend can return the *second* copy of a duplicate pair with

@@ -1210,7 +1210,7 @@ export interface IngestImageResult {
   /**
    * OpenProcessor d72cc63: set when the image itself ingested but the
    * optional secondary detector failed on it (so it carries only the
-   * primary detector's crops). Null otherwise; absent on an older backend.
+   * primary detector's crops). Null otherwise.
    */
   secondary_detector_error?: string | null;
 }

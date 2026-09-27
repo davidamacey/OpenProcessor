@@ -6,32 +6,10 @@
    * its own — that lives in `ingestRunController.svelte.ts`, driven
    * through `IngestRunPanel`.
    *
-   * §A.7 "absent, not disabled": `ingestAvailability.available === false`
-   * renders the absence copy with no other requests fired at all.
-   *
-   * BA-2 (landed, OpenProcessor c5c606f): `GET {API_PREFIX}/ingest/config`
-   * is now real. Once `ingestAvailability` confirms the router is
-   * mounted, the page fetches it once and resolves every limit/caveat
-   * from the served `IngestConfig` — `resolveIngestConfig(null)` (the
-   * documented interim fallback) only applies while the fetch is
-   * in flight or against a pre-BA-2 backend (a 404 → `getIngestConfig()`
-   * resolves `null`, same shape as "not yet served").
-   *
-   * §A.7 / F1 upload caveat: with BA-2 served and `upload.persists_bytes
-   * === true` (the deployed backend's actual value), no caveat banner
-   * renders at all — the served truth replaces the old always-on
-   * warning. The "not yet advertised" banner is now only the fallback
-   * for a pre-BA-2 backend (`config` still resolved from `null`) that
-   * hasn't set `PUBLIC_CROPWRIGHT_INGEST_UPLOAD=1`.
-   *
-   * Plan deviation (recorded per CLAUDE.md's "trust the code" rule): the
-   * plan names the override env var `CROPWRIGHT_INGEST_UPLOAD` (no
-   * prefix). `vite.config.ts`'s `envPrefix` only exposes `VITE_`/
-   * `PUBLIC_`-prefixed vars to `import.meta.env` in the client bundle —
-   * an unprefixed var is simply undefined there. This uses
-   * `PUBLIC_CROPWRIGHT_INGEST_UPLOAD` instead, matching every other
-   * client-visible env var in this codebase
-   * (`PUBLIC_API_PREFIX`/`PUBLIC_TRITON_API_URL`/`PUBLIC_APP_NAME`).
+   * Every limit and caveat comes from the served `IngestConfig`
+   * (`GET {API_PREFIX}/ingest/config`), fetched once on mount; the
+   * upload UI renders only once it has loaded. The upload caveat banner
+   * renders only when the backend serves `upload.persists_bytes: false`.
    */
   import IngestDropZone from '$lib/components/ingest/IngestDropZone.svelte';
   import IngestRunPanel from '$lib/components/ingest/IngestRunPanel.svelte';
@@ -39,7 +17,6 @@
   import RegionDrainPanel from '$lib/components/ingest/RegionDrainPanel.svelte';
   import ClusteringHandoff from '$lib/components/ingest/ClusteringHandoff.svelte';
   import IngestBatchPanel from '$lib/components/ingest/IngestBatchPanel.svelte';
-  import { ingestAvailability } from '$lib/ingest/ingestAvailability.svelte';
   import { getIngestConfig } from '$lib/api';
   import { resolveIngestConfig } from '$lib/ingest/ingestConfig';
   import { regionProfileStore } from '$stores/regionProfile.svelte';
@@ -48,26 +25,17 @@
   import type { IngestConfig, RegionDrain } from '$lib/types';
 
   let servedConfig = $state<IngestConfig | null>(null);
+  let configError = $state<string | null>(null);
 
   $effect(() => {
-    void ingestAvailability.init();
+    void getIngestConfig()
+      .then((c) => (servedConfig = c))
+      .catch((e: unknown) => {
+        configError = (e as Error)?.message ?? 'failed to load the ingest config';
+      });
   });
 
-  $effect(() => {
-    if (ingestAvailability.available === true) {
-      void getIngestConfig()
-        .then((c) => (servedConfig = c))
-        .catch(() => {
-          // Leave servedConfig at null — resolveIngestConfig(null) falls
-          // back to the documented interim config, same as a 404.
-        });
-    }
-  });
-
-  const config = $derived(resolveIngestConfig(servedConfig));
-
-  const uploadOverride =
-    (import.meta.env?.PUBLIC_CROPWRIGHT_INGEST_UPLOAD as string | undefined) === '1';
+  const config = $derived(servedConfig ? resolveIngestConfig(servedConfig) : null);
 
   let selectedFiles = $state<IngestFile[]>([]);
   let statusRefreshToken = $state(0);
@@ -91,34 +59,17 @@
 <div class="mx-auto max-w-7xl space-y-6 p-6">
   <h1 class="text-lg font-semibold text-zinc-100">Ingest</h1>
 
-  {#if ingestAvailability.available === false}
-    <p class="text-sm text-zinc-400">This backend does not provide ingest.</p>
-  {:else if ingestAvailability.available === null}
-    <!-- Deliberately not the nav link's optimistic render: §A.7 requires
-         that visiting /ingest directly when the backend lacks the
-         router fires NO other requests at all. Rendering the upload
-         section here (which mounts IngestStatusTable/RegionDrainPanel,
-         each firing its own GET on mount) before the probe resolves
-         would violate that the moment it later turns out `false`. -->
+  {#if configError}
+    <p class="text-sm text-red-300">Could not load the ingest config: {configError}</p>
+  {:else if !config}
     <p class="text-sm text-zinc-500">Loading…</p>
   {:else}
-    {#if config.uploadPersistsBytes === false}
+    {#if !config.uploadPersistsBytes}
       <p
         class="rounded border border-amber-900 bg-amber-950/30 p-3 text-xs text-amber-200"
       >
         This backend indexes uploads without keeping the image; use server-path ingest or
         the command-line uploader.
-      </p>
-    {:else if config.uploadPersistsBytes === null && !uploadOverride}
-      <!-- Pre-BA-2 fallback only: the served IngestConfig hasn't loaded
-           yet, or this backend predates it entirely. Once BA-2 is served
-           and `persists_bytes === true` (the deployed backend's real
-           value), no banner renders at all — the served truth. -->
-      <p
-        class="rounded border border-amber-900 bg-amber-950/30 p-3 text-xs text-amber-200"
-      >
-        Uploaded images can be browsed only if the backend stores upload bytes (not yet
-        advertised by this backend).
       </p>
     {/if}
 

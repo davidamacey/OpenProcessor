@@ -42,9 +42,7 @@
 
   const paths = $derived(splitLines(pathsText));
   const labelPaths = $derived(splitLines(labelTxtPathsText));
-  const overLimit = $derived(
-    config.batchMaxItems !== null && paths.length > config.batchMaxItems,
-  );
+  const overLimit = $derived(paths.length > config.batchMaxItems);
 
   const failedResults = $derived(
     result ? result.results.filter((r) => r.status === 'failed') : [],

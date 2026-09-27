@@ -300,14 +300,9 @@ class Stub:
             {"tabs": [{"id": "regions", "label": REGION_TAB_LABEL}]},
         )
         self.on("GET", r"/bakeoff/runs(\?|$)", {"runs": []})
-        # The root layout's ingestAvailability probe fires on every route
-        # (same pattern as bakeoff/runs above) — every existing test needs
-        # this default so the /ingest nav link's probe doesn't 501.
+        # /ingest's own page reads its status table and its config on
+        # mount; defaults so a route sweep through /ingest never 501s.
         self.on("GET", r"/ingest/status(\?|$)", {"total": 0, "by_source": [], "by_day": []})
-        # BA-2 (OpenProcessor #36, c5c606f): once the probe above confirms
-        # the ingest router is mounted, /ingest's own page fetches
-        # `GET /ingest/config` on mount — every existing test needs this
-        # default too, same reasoning as /ingest/status above.
         self.on(
             "GET",
             r"/ingest/config(\?|$)",
