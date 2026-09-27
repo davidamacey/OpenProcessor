@@ -1,8 +1,8 @@
 """``vlm_prompt_pack`` (any_domain_plan.md §3.7/§9 W2) is stamped onto the
-item at every VLM write site: ``/vlm/label_batch``, ``/vlm/verify_regions``
-and the pipeline's inline VLM classification stage. The worker writer
-(``scripts/curation/worker/runner.py``) is deferred to the quiesce-and-swap
-wiring -- not covered here (see the W2 completion report)."""
+item at every VLM write site: ``/vlm/label_batch``, ``/vlm/verify_regions``,
+the pipeline's inline VLM classification stage, and (the 4th site) the
+detection worker's bulk writer (``scripts/curation/worker/bulk_writer.py``),
+alongside ``RegionFields.profile``/``profile_revision``."""
 
 from __future__ import annotations
 

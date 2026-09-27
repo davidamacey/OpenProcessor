@@ -8,6 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **W2 finish pass (config store worker wiring, glue G1).**
+  `scripts/curation/worker/runtime.py` gains a real `build_runtime`
+  (extracted, testable Triton/segmenter/OCR/VLM construction),
+  `RuntimeHolder` (one `RegionRuntime` per project slug -- activating a
+  profile in one project never touches another's holder entry, backed
+  by the config store's existing per-slug `ConfigStore` isolation), and
+  `quiesce_and_swap` (drains the given queues, then rebuilds). The
+  detection worker's bulk writer (`scripts/curation/worker/bulk_writer.py`)
+  now stamps `RegionFields.profile`/`profile_revision` and
+  `vlm_prompt_pack` on every region write -- the 4th (worker-side) stamp
+  site, alongside the three route-level ones. `CLONEABLE_AXES` gains
+  `activations`: cloning a project now optionally copies the source's
+  active prompt-pack/region-profile config body and activation into the
+  target (`src/services/projects/clone.py::_clone_activations`).
+  `tests/curation/test_worker_hot_reload.py` (new) covers
+  `RuntimeHolder`/`config_wants_swap` project isolation, `build_runtime`,
+  `quiesce_and_swap`, and the write-path stamping (including a
+  store-activated profile's revision vs. an env-registered profile's
+  `None`); `tests/projects/test_clone_activations.py` (new) covers the
+  clone axis. `test_folded_roles_by_id_only.py`,
+  `test_configs_mapping_union.py` (including the "6 distinct indexes"
+  glue-G1 check) and `test_axis_ids.py` were already present on this
+  branch and verified green.
+  Deferred: wiring the swap into `scripts/curation/worker/runner.py`'s
+  producer loop was attempted and reverted -- `build_runtime`'s fresh
+  imports of `RegionDetector`/`SegmenterClient`/`VlmLabeler` bypass the
+  module-level monkeypatches six existing worker tests rely on, so it
+  regressed them. The runtime/holder/swap primitives are real and
+  tested standalone; full producer-loop integration (rebinding
+  `runner.py`'s closure locals at a live quiesce point) remains
+  follow-on work.
 - **P3 finish pass, final merge.** Merged `cutover/projects-workers`
   (through `fix(projects): refresh detection-worker liveness on a
   timer`) into `cutover/projects-lifecycle`: the detection-worker

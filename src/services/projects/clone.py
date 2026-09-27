@@ -92,6 +92,75 @@ async def _apply_clone(
         with bind_project(target_record):
             ensure_region_class()
 
+    if 'activations' in axes:
+        await _clone_activations(client, target_record=target_record, source=source)
+
+
+async def _clone_activations(
+    client: Any, *, target_record: ProjectRecord, source: ProjectRecord
+) -> None:
+    """Glue G1 (projects_plan.md §11 W2): copy the source's active
+    ``prompt_pack``/``detection_profile`` -- the stored config body plus
+    the activation itself -- into the target. A source axis that is
+    ``off``, unset, or resolves to an env/file-registered profile (never
+    written to the store) is skipped for that axis; the target simply
+    keeps whatever it already had, which is empty for a brand-new
+    project. Never raises on "nothing to clone" -- only on a genuine
+    write failure."""
+    from opensearchpy.exceptions import NotFoundError
+
+    from src.services.config_store.index import (
+        ConfigAxis,
+        ConfigKind,
+        activate,
+        config_doc_id,
+        get_activation,
+        save_config,
+    )
+
+    axis_kinds: tuple[tuple[ConfigAxis, ConfigKind], ...] = (
+        ('prompt_pack', 'prompt_pack'),
+        ('detection_profile', 'region_profile'),
+    )
+    for axis, kind in axis_kinds:
+        with bind_project(source, read_only=True):
+            from src.config import get_curation_config as _get_cfg
+
+            source_index = _get_cfg().configs_index
+            activation = await get_activation(client, source_index, axis)
+            if not activation or not activation.get('name'):
+                continue
+            name = activation['name']
+            try:
+                stored = await client.get(index=source_index, id=config_doc_id(kind, name))
+            except (NotFoundError, KeyError):
+                continue
+            body = (stored.get('_source') or {}).get('body')
+            if body is None:
+                continue
+
+        with bind_project(target_record):
+            from src.config import get_curation_config as _get_cfg
+
+            target_index = _get_cfg().configs_index
+            doc = await save_config(
+                client,
+                target_index,
+                kind=kind,
+                name=name,
+                body=body,
+                expected_revision=None,
+                cloned_from=source.slug,
+            )
+            await activate(
+                client,
+                target_index,
+                axis=axis,
+                name=name,
+                revision=doc['revision'],
+                expected_active=None,
+            )
+
 
 async def clone_settings(
     client: Any,
