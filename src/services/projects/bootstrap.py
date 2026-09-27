@@ -189,7 +189,18 @@ async def startup_bootstrap_project_registry() -> Any:
     await bootstrap_default_project(client)
     registry = get_project_registry()
     await registry.ensure_fresh()
+    _seed_region_classes()
     return asyncio.create_task(registry.poll_loop())
+
+
+def _seed_region_classes() -> None:
+    from src.services.curation.region_class import ensure_region_class
+
+    for slug in for_each_project():
+        try:
+            ensure_region_class()
+        except Exception as exc:
+            logger.warning('region_class_seed_failed', project=slug, error=str(exc))
 
 
 async def shutdown_project_registry(task: Any | None) -> None:
