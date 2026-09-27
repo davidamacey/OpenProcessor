@@ -16,7 +16,7 @@ from src.config.projects import (
     PROJECT_SLUG_RE,
     RESERVED_SLUGS,
 )
-from src.routers.curation._config_common_models import ProjectCapacityWire
+from src.routers.curation._config_common_models import JobRefWire, ProjectCapacityWire
 
 
 if TYPE_CHECKING:
@@ -227,7 +227,9 @@ class DeleteBlockingIssue(BaseModel):
 
 class DryRunIndexReport(BaseModel):
     name: str
-    docs: int
+    # P3F m10: null when the count genuinely could not be taken, matching
+    # ProjectCounts.validated's null-not-0 rule -- never a made-up 0.
+    docs: int | None = None
     store_bytes: int | None = None
 
 
@@ -241,7 +243,9 @@ class DeleteDryRunResponse(BaseModel):
     dirs: list[DryRunDirReport]
     promoted_models: list[str] = Field(default_factory=list)
     mlflow_experiment: str
-    running_jobs: list[dict[str, Any]] = Field(default_factory=list)
+    # P3F m5: typed, not a raw dict -- same JobRefWire every 409
+    # project_busy carries.
+    running_jobs: list[JobRefWire] = Field(default_factory=list)
     referenced_by: list[dict[str, Any]] = Field(default_factory=list)
     blocking: list[str]
     blocking_detail: list[DeleteBlockingIssue]
