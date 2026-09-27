@@ -327,7 +327,10 @@ def test_bakeoff_jobs_dir_default_is_shared_with_the_router(
 
     cfg = GpuArbiterConfig.from_env()
     assert cfg.bakeoff_jobs_dir == str(get_curation_config().state_dir / 'bakeoff_jobs')
-    assert Path(get_gpu_arbiter_config().bakeoff_jobs_dir) == bakeoff.JOBS_DIR
+    # bakeoff.JOBS_DIR is now _jobs_dir(), resolved per-project at call
+    # time (projects_plan.md §5.3); for the bound default project it's
+    # still byte-for-byte the arbiter's bakeoff_jobs_dir.
+    assert Path(get_gpu_arbiter_config().bakeoff_jobs_dir) == bakeoff._jobs_dir()
 
 
 def test_bakeoff_active_after_enqueue_with_no_env(
@@ -352,8 +355,8 @@ def test_bakeoff_active_after_enqueue_with_no_env(
     )
     jobs_dir = Path(get_gpu_arbiter_config().bakeoff_jobs_dir)
     assert jobs_dir == state / 'bakeoff_jobs'
-    clean_arbiter_env.setattr(bakeoff, 'JOBS_DIR', jobs_dir)
-    clean_arbiter_env.setattr(bakeoff, 'OUT_DIR', tmp_path / 'out')
+    clean_arbiter_env.setattr(bakeoff, '_jobs_dir', lambda: jobs_dir)
+    clean_arbiter_env.setattr(bakeoff, '_out_dir', lambda: tmp_path / 'out')
     exports = tmp_path / 'exports'
     d = exports / 'e1'
     (d / 'labels' / 'test').mkdir(parents=True)
