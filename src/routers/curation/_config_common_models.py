@@ -177,16 +177,51 @@ class ActiveRef(BaseModel):
     revision: int | None = None
 
 
+class AppliedRuntime(BaseModel):
+    """One worker process's "what did I actually apply" record (any_domain_plan.md
+    §4.5/§7.3), served under ``ActiveConfigResponse.applied[]`` from
+    ``runtime:<process>:<host>`` docs (``upsert_project_runtime_doc``,
+    W2). ``lagging`` is ``true`` when ``applied_config_revision`` is
+    behind the axis's current ``config_revision`` for longer than the
+    drain-plus-poll grace period (§4.5) -- a stuck/slow worker, not a
+    momentary swap in progress."""
+
+    process: str
+    host: str
+    applied_config_revision: int
+    profile: ActiveRef
+    pack: ActiveRef
+    applied_at: str | None = None
+    lagging: bool = False
+
+
 class ActiveConfigResponse(BaseModel):
     """``GET /prompt_packs/active`` / ``GET /region_profiles/active`` (W3/W4);
     also the activation-mutation response shape used by W2's settings
-    bridge and by ``store.activate``'s callers."""
+    bridge and by ``store.activate``'s callers.
+
+    ``source`` (Cropwright W3 UI, C2/Q5): where ``active`` came from --
+    ``'stored'`` (an activation doc names a saved pack/profile),
+    ``'env'`` (never activated through the store; the env/file default
+    applies), or ``'off'`` (explicitly deactivated -- ``active.name`` is
+    ``None``, distinct from ``'env'``'s ``None`` activation doc). Never
+    guessed from ``active`` alone: ``'env'`` and ``'off'`` both may
+    carry ``active.name=None`` in the profile axis's off state, but only
+    an explicit deactivation is ``'off'``.
+    ``activated_at`` is the activation doc's own timestamp -- ``None``
+    for ``'env'`` (there was no activation write). ``applied`` is every
+    live ``runtime:*`` doc for this axis (§4.5) -- empty when no worker
+    has ever applied anything, e.g. an API-only deployment.
+    """
 
     axis: Literal['prompt_pack', 'detection_profile']
     active: ActiveRef
+    source: Literal['stored', 'env', 'off']
+    activated_at: str | None = None
     previous: ActiveRef | None = None
     config_revision: int
     stale: bool = False
+    applied: list[AppliedRuntime] = []
 
 
 ConfigErrorDetail.model_rebuild()

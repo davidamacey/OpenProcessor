@@ -85,7 +85,12 @@ def _axis_ref(activation_doc: dict[str, Any] | None) -> AxisRef:
     if not activation_doc.get('name'):
         return 'off'
     revision = activation_doc.get('revision')
-    return (activation_doc['name'], int(revision) if revision is not None else 0)
+    # M6: preserve `None` (an env/file id, genuinely never revisioned)
+    # rather than coercing it to 0 -- every process must agree on the
+    # activation's revision, and a real stored revision is never 0
+    # (`_next_revision` starts at 1), so 0 was never a legitimate value
+    # here in the first place.
+    return (activation_doc['name'], int(revision) if revision is not None else None)
 
 
 class ConfigStore:
@@ -132,6 +137,17 @@ class ConfigStore:
             return snapshot
 
     async def _load_snapshot(self, client: Any, revision: int) -> ConfigSnapshot:
+        # B5: `revision` above was read with a realtime GET; `_search` is
+        # near-real-time and can otherwise return a stale doc set paired
+        # with that fresh revision number (a poll landing in the ~1s
+        # window after a save+activate). An explicit index refresh
+        # forces the search segments current before we read them, so
+        # the snapshot this call builds is never cached as "current for
+        # revision N" while missing docs that made revision N happen.
+        try:
+            await client.indices.refresh(index=self.index)
+        except Exception as exc:  # pragma: no cover - defensive; search below still runs
+            logger.warning('config_store_index_refresh_failed', index=self.index, error=str(exc))
         resp = await client.search(
             index=self.index,
             body={'size': 1000, 'query': {'bool': {'filter': [{'term': {'doc_type': 'config'}}]}}},
@@ -306,17 +322,50 @@ async def activate_axis(
 OP_CONFIG_POLL_S_DEFAULT = 5.0
 
 
+async def _poll_all_active_projects(client: Any, interval: float) -> None:
+    """M4: refresh every ACTIVE project's own store on each tick, not
+    just the one bound at lifespan startup -- otherwise an activation
+    made through uvicorn worker A stays invisible in worker B until
+    some other route happens to call that project's ``ensure_fresh()``
+    (only the two settings routes did). Cheap: one ``GET`` per active
+    project per tick when nothing changed (:meth:`ConfigStore.refresh`
+    short-circuits on an unmoved revision counter). A single project's
+    refresh failure is logged and never stops the loop or the other
+    projects' refreshes -- :meth:`ConfigStore.refresh` already swallows
+    its own errors (marks ``stale``), so this only guards the registry
+    read + project iteration itself.
+    """
+    import asyncio
+
+    from src.config.project_context import bind_project
+    from src.services.projects.registry import ProjectRegistry
+
+    registry = ProjectRegistry(lambda: client)
+    while True:
+        try:
+            await registry.ensure_fresh()
+            for record in registry.active_projects():
+                try:
+                    with bind_project(record, read_only=True):
+                        store = get_config_store(mode='live')
+                        await store.refresh(client)
+                except Exception as exc:
+                    logger.warning(
+                        'config_store_poll_project_failed', project=record.slug, error=str(exc)
+                    )
+        except Exception as exc:
+            logger.warning('config_store_poll_registry_failed', error=str(exc))
+        await asyncio.sleep(interval)
+
+
 async def startup_bootstrap_config_store_safe() -> Any | None:
     """``src.main``'s lifespan hook: refresh the bound project's store
-    once, then return a background poll task the caller owns cancelling
-    at shutdown. Never raises -- a startup-time OpenSearch hiccup here
-    must not block the rest of the app from starting; the next
-    request-time ``ensure_fresh()`` call still runs.
-
-    Only polls the project bound *at lifespan startup* (``default``,
-    per ``bind_default_for_lifespan``) -- polling every active project
-    (projects_plan.md §11 W2's ``_mget`` fan-out) is follow-on work once
-    P2/P3's per-project background-task registry exists to drive it.
+    once (so the very first request-time read is warm), then return a
+    background poll task -- fanned out over every ACTIVE project (M4),
+    not just the one bound at lifespan startup -- that the caller owns
+    cancelling at shutdown. Never raises -- a startup-time OpenSearch
+    hiccup here must not block the rest of the app from starting; the
+    next request-time ``ensure_fresh()`` call still runs.
     """
     import asyncio
     import os
@@ -328,7 +377,7 @@ async def startup_bootstrap_config_store_safe() -> Any | None:
         store = get_config_store(mode='live')
         await store.refresh(client)
         interval = float(os.environ.get('OP_CONFIG_POLL_S', str(OP_CONFIG_POLL_S_DEFAULT)))
-        return asyncio.create_task(store.poll_loop(lambda: client, interval))
+        return asyncio.create_task(_poll_all_active_projects(client, interval))
     except Exception as exc:
         logger.warning('config_store_bootstrap_skipped', error=str(exc))
         return None

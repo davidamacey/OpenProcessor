@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import scripts.curation.region_worker_main as worker
-from curation._fake_config_opensearch import FakeConfigOpenSearch
+from curation._fake_config_opensearch import FakeConfigOpenSearch, TwoProjectOpenSearch
 from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
 from scripts.curation.worker.state import _ItemTask
 from src.config import get_region_fields
@@ -210,20 +210,88 @@ async def test_quiesce_and_swap_drains_queues_before_building() -> None:
         drained_before_build = True
         q.task_done()
 
-    asyncio.get_event_loop().create_task(_drain_soon())
-    rt = await quiesce_and_swap(
-        queues=[q],
-        holder=holder,
-        slug='alpha',
-        pool=MagicMock(),
-        profile=profile,
-        pack=pack,
-        args=_fake_args(),
-        **_fake_ctors(),
-    )
+    project = _record('alpha')
+    with bind_project(project):
+        store = get_config_store(mode='pinned')
+
+        asyncio.get_event_loop().create_task(_drain_soon())
+        rt = await quiesce_and_swap(
+            queues=[q],
+            holder=holder,
+            slug='alpha',
+            store=store,
+            pool=MagicMock(),
+            args=_fake_args(),
+            want=(store.current.active_profile, store.current.active_pack),
+            get_active_profile=lambda: profile,
+            get_active_pack=lambda: pack,
+            **_fake_ctors(),
+        )
     assert drained_before_build
     assert holder.get('alpha') is rt
     assert holder.get('beta') is None
+
+
+@pytest.mark.asyncio
+async def test_quiesce_and_swap_pins_before_resolving_active_profile() -> None:
+    """B2: pin_active() must run strictly between the drain and the
+    build, so `get_active_profile`/`get_active_pack` (which read
+    `store.current`) already see the newly-pinned snapshot -- not the
+    stale one from before this cycle's refresh."""
+    from scripts.curation.worker.runtime import RuntimeHolder, quiesce_and_swap
+
+    client = FakeConfigOpenSearch()
+    project = _record('alpha')
+    profile = profile_registry.get_active_region_profile()
+    assert profile is not None
+
+    with bind_project(project):
+        store = get_config_store(mode='pinned')
+        idx = store.index
+        doc = await save_config(
+            client, idx, kind='region_profile', name=profile.name, body={}, expected_revision=None
+        )
+        await activate(
+            client,
+            idx,
+            axis='detection_profile',
+            name=profile.name,
+            revision=doc['revision'],
+            expected_active=None,
+        )
+        await store.refresh(client)
+        assert store.pending_snapshot is not None
+        assert store.current.active_profile is None  # not pinned yet
+
+        seen_active_profile_at_call_time: list[Any] = []
+
+        def _get_active_profile() -> Any:
+            seen_active_profile_at_call_time.append(store.current.active_profile)
+            return profile
+
+        holder = RuntimeHolder()
+        await quiesce_and_swap(
+            queues=[],
+            holder=holder,
+            slug='alpha',
+            store=store,
+            pool=MagicMock(),
+            args=_fake_args(),
+            want=(store.current.active_profile, store.current.active_pack),
+            get_active_profile=_get_active_profile,
+            get_active_pack=lambda: profile_registry_pack(),
+            **_fake_ctors(),
+        )
+        # By the time get_active_profile() ran, the store had already
+        # been pinned to the new activation.
+        assert seen_active_profile_at_call_time == [(profile.name, doc['revision'])]
+        assert store.pending_snapshot is None
+
+
+def profile_registry_pack() -> Any:
+    from src.services.labeling.vlm_prompts import resolve_prompt_pack
+
+    return resolve_prompt_pack()
 
 
 # =============================================================================
@@ -271,6 +339,133 @@ async def test_maybe_hot_reload_never_swaps_when_activation_is_unchanged() -> No
         # as a change from "never synced"); every later cycle, with the
         # store unchanged, must not call any constructor again.
         assert ctors['region_detector_cls'].call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_maybe_hot_reload_swaps_exactly_once_on_a_real_pinned_activation() -> None:
+    """B2 (reviewer probe #3, reproduced): pinned store, baseline sync,
+    then save+activate a profile, then 3 `maybe_hot_reload` cycles. Must
+    build exactly once (on the cycle right after the activation), not
+    zero times -- a pinned store's `refresh()` only stages
+    `pending_snapshot`; the pre-fix code compared `store.current`
+    (unmoved) against the last-synced refs and never saw the change."""
+    from scripts.curation.worker.runtime import RuntimeHolder, maybe_hot_reload
+
+    client = FakeConfigOpenSearch()
+    project = _record('pinned-project')
+    profile = profile_registry.get_active_region_profile()
+    assert profile is not None
+    from src.services.labeling.vlm_prompts import resolve_prompt_pack
+
+    pack = resolve_prompt_pack()
+    ctors = _fake_ctors()
+
+    with bind_project(project):
+        store = get_config_store(mode='pinned')
+        holder = RuntimeHolder()
+
+        # Baseline cycle: nothing activated yet.
+        await maybe_hot_reload(
+            store=store,
+            opensearch=client,
+            holder=holder,
+            slug='pinned-project',
+            pool=MagicMock(),
+            args=_fake_args(),
+            queues=[],
+            get_active_profile=lambda: profile,
+            get_active_pack=lambda: pack,
+            **ctors,
+        )
+        assert ctors['region_detector_cls'].call_count == 1  # env default, first-ever build
+
+        idx = store.index
+        doc = await save_config(
+            client, idx, kind='region_profile', name='wheel', body={}, expected_revision=None
+        )
+        await activate(
+            client,
+            idx,
+            axis='detection_profile',
+            name='wheel',
+            revision=doc['revision'],
+            expected_active=None,
+        )
+
+        for _ in range(3):
+            await maybe_hot_reload(
+                store=store,
+                opensearch=client,
+                holder=holder,
+                slug='pinned-project',
+                pool=MagicMock(),
+                args=_fake_args(),
+                queues=[],
+                get_active_profile=lambda: profile,
+                get_active_pack=lambda: pack,
+                **ctors,
+            )
+
+        # Exactly one more build across all 3 post-activation cycles.
+        assert ctors['region_detector_cls'].call_count == 2
+        assert store.current.active_profile == ('wheel', doc['revision'])
+
+
+@pytest.mark.asyncio
+async def test_build_uses_the_activated_pack_not_the_env_default() -> None:
+    """B4: a pack activation must rebuild with THAT pack (via
+    `active_prompt_pack`), never the env/file default (`resolve_prompt_pack`).
+    The reviewer's probe: activate a stored pack named differently from
+    the env default, swap, and check the built runtime's pack name and
+    ref -- not just that *a* pack got attached."""
+    from scripts.curation.worker.runtime import RuntimeHolder, maybe_hot_reload
+    from src.services.labeling.vlm_prompts import active_prompt_pack, resolve_prompt_pack
+
+    client = FakeConfigOpenSearch()
+    project = _record('pack-project')
+    profile = profile_registry.get_active_region_profile()
+    assert profile is not None
+    env_pack = resolve_prompt_pack()
+    ctors = _fake_ctors()
+
+    with bind_project(project):
+        store = get_config_store(mode='pinned')
+        idx = store.index
+        pack_body = {**env_pack.to_dict(), 'name': 'mypack'}
+        doc = await save_config(
+            client,
+            idx,
+            kind='prompt_pack',
+            name='mypack',
+            body=pack_body,
+            expected_revision=None,
+        )
+        await activate(
+            client,
+            idx,
+            axis='prompt_pack',
+            name='mypack',
+            revision=doc['revision'],
+            expected_active=None,
+        )
+
+        holder = RuntimeHolder()
+        new_rt = await maybe_hot_reload(
+            store=store,
+            opensearch=client,
+            holder=holder,
+            slug='pack-project',
+            pool=MagicMock(),
+            args=_fake_args(),
+            queues=[],
+            get_active_profile=lambda: profile,
+            get_active_pack=active_prompt_pack,
+            **ctors,
+        )
+
+    assert new_rt is not None
+    assert new_rt.pack.name == 'mypack'
+    assert new_rt.pack_ref == ('mypack', doc['revision'])
 
 
 # =============================================================================
@@ -380,3 +575,163 @@ async def test_bulk_write_stamps_store_activated_profile_revision() -> None:
         bulk_body = opensearch.bulk.await_args.kwargs['body']
         written_doc = bulk_body[1]['doc']
         assert written_doc[F.profile_revision] == doc['revision']
+
+
+# =============================================================================
+# B1: through the real worker, not RuntimeHolder units -- two projects,
+# alpha activation swaps alpha only
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
+    """B1, through the real worker (not a RuntimeHolder unit test):
+    ``worker.run()`` with two active projects (alpha, beta) from a real
+    ``ProjectRegistry`` build. Activating a profile in alpha's config
+    store mid-run must rebuild alpha's runtime (its own detector
+    construction count increases) while beta's stays untouched."""
+    import scripts.curation.region_worker_main as worker
+    from src.config.curation import base_curation_config
+    from src.config.projects import resources_for_new
+    from src.services.projects.registry import record_to_doc
+
+    client = TwoProjectOpenSearch()
+    client.close = AsyncMock()
+
+    def _project_doc(slug: str) -> dict[str, Any]:
+        from datetime import UTC, datetime
+
+        now = datetime.now(UTC).isoformat()
+        record = ProjectRecord(
+            slug=slug,
+            display_name=slug,
+            description='',
+            status='active',
+            revision=1,
+            created_at=now,
+            updated_at=now,
+            origin=None,
+            resources=resources_for_new(slug, base_curation_config()),
+        )
+        return record_to_doc(record)
+
+    projects_index = 'op_projects'
+    client._docs.setdefault(projects_index, {})
+    client._docs[projects_index]['project:alpha'] = {
+        '_source': _project_doc('alpha'),
+        '_seq_no': 0,
+    }
+    client._docs[projects_index]['project:beta'] = {
+        '_source': _project_doc('beta'),
+        '_seq_no': 0,
+    }
+
+    detector_calls: dict[str, int] = {'alpha': 0, 'beta': 0}
+    segmenter_calls: dict[str, int] = {'alpha': 0, 'beta': 0}
+
+    def _counting_detector(pool: Any, profile: Any) -> Any:
+        from src.config.project_context import current_project
+
+        detector_calls[current_project().record.slug] += 1
+        return MagicMock()
+
+    def _counting_segmenter(*_a: Any, **_k: Any) -> Any:
+        from src.config.project_context import try_current_project
+
+        bound = try_current_project()
+        if bound is not None:
+            segmenter_calls[bound.record.slug] += 1
+        m = MagicMock()
+        m.aclose = AsyncMock()
+        m.enabled = False
+        return m
+
+    pool = MagicMock()
+    pool.initialize = AsyncMock()
+    pool.close = AsyncMock()
+    pool.is_model_ready = AsyncMock(return_value=False)
+    monkeypatch_targets: list[tuple[Any, str, Any]] = []
+
+    def _patch(obj: Any, name: str, value: Any) -> None:
+        monkeypatch_targets.append((obj, name, getattr(obj, name)))
+        setattr(obj, name, value)
+
+    _patch(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
+    _patch(worker, 'make_script_opensearch', MagicMock(return_value=client))
+    import scripts.curation.worker.runner as runner_mod
+
+    _patch(runner_mod, 'RegionDetector', _counting_detector)
+    _patch(worker, 'SegmenterClient', _counting_segmenter)
+
+    def _noop_signal_handler(*_a: object, **_k: object) -> None:
+        return None
+
+    import asyncio as _asyncio
+
+    _patch(_asyncio.get_event_loop().__class__, 'add_signal_handler', _noop_signal_handler)
+
+    try:
+        args = worker.parse_args(
+            [
+                '--opensearch=http://os.local:9200',
+                '--triton=triton:8001',
+                '--segmenter-url=',
+                '--continuous',
+                '--poll-interval=0.01',
+            ]
+        )
+        run_task = asyncio.create_task(worker.run(args))
+        try:
+            # Two producer cycles' worth of settle time: both projects
+            # get their first runtime built.
+            await asyncio.sleep(0.2)
+            assert detector_calls == {'alpha': 1, 'beta': 1}
+
+            # M1: runtime:detection_worker:<host> was written for both
+            # projects on their first sync (never suppressed, never
+            # deferred past 60s the first time).
+            from src.config.curation import IndexRole
+            from src.services.config_store.index import get_runtime_docs
+
+            alpha_idx = resources_for_new('alpha', base_curation_config()).indexes[
+                IndexRole.CONFIGS
+            ]
+            alpha_runtime_docs = await get_runtime_docs(
+                client, alpha_idx, process='detection_worker'
+            )
+            assert len(alpha_runtime_docs) == 1
+            assert alpha_runtime_docs[0]['project'] == 'alpha'
+
+            # Activate a profile in ALPHA's store only.
+            profile = profile_registry.get_active_region_profile()
+            assert profile is not None
+            with bind_project(_record('alpha')):
+                store = get_config_store(mode='pinned')
+                idx = store.index
+                doc = await save_config(
+                    client,
+                    idx,
+                    kind='region_profile',
+                    name=profile.name,
+                    body={},
+                    expected_revision=None,
+                )
+                await activate(
+                    client,
+                    idx,
+                    axis='detection_profile',
+                    name=profile.name,
+                    revision=doc['revision'],
+                    expected_active=None,
+                )
+
+            await asyncio.sleep(0.3)
+            assert detector_calls['alpha'] == 2
+            assert detector_calls['beta'] == 1
+        finally:
+            run_task.cancel()
+            with __import__('contextlib').suppress(_asyncio.CancelledError):
+                await run_task
+    finally:
+        for obj, name, old in reversed(monkeypatch_targets):
+            setattr(obj, name, old)

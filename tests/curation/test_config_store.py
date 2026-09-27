@@ -4,7 +4,10 @@ docs/design/openprocessor_internal/any_domain_plan.md §3.6/§9 W2."""
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
@@ -239,3 +242,159 @@ def test_get_config_store_isolates_by_bound_project() -> None:
     assert store_alpha.index != store_beta.index
     assert store_alpha.index == 'op_prj_alpha__configs'
     assert store_beta.index == 'op_prj_beta__configs'
+
+
+@pytest.mark.asyncio
+async def test_refresh_forces_the_index_current_before_searching_configs() -> None:
+    """B5 (reviewer probe #8): a save+activate followed by a refresh
+    must not cache a snapshot whose packs/profiles disagree with the
+    just-bumped revision. Reproduced against a fake whose ``search`` lags
+    a real near-real-time index until ``indices.refresh()`` runs --
+    ``ConfigStore._load_snapshot`` must issue that refresh itself before
+    reading configs, not rely on the caller."""
+    from curation._fake_config_opensearch import NearRealTimeConfigOpenSearch
+
+    client = NearRealTimeConfigOpenSearch()
+    store = ConfigStore(index=INDEX, mode='live')
+
+    doc = await save_config(
+        client, INDEX, kind='prompt_pack', name='mypack', body={'x': 1}, expected_revision=None
+    )
+    await activate(
+        client,
+        INDEX,
+        axis='prompt_pack',
+        name='mypack',
+        revision=doc['revision'],
+        expected_active=None,
+    )
+
+    snapshot = await store.refresh(client)
+    assert snapshot.active_pack == ('mypack', doc['revision'])
+    assert 'mypack' in snapshot.packs, (
+        f'snapshot paired revision {snapshot.config_revision} with a stale doc set '
+        f'(packs={list(snapshot.packs)}) -- _load_snapshot did not force the index '
+        'current before searching'
+    )
+
+
+def test_active_config_response_serves_source_activated_at_and_applied() -> None:
+    """Cropwright W3 UI (C2/Q5, any_domain_plan.md §7.2): ActiveConfigResponse
+    must carry `source`, `activated_at` and `applied[]` -- not just
+    `axis`/`active`/`previous`/`config_revision`/`stale`."""
+    from src.routers.curation._config_common_models import (
+        ActiveConfigResponse,
+        ActiveRef,
+        AppliedRuntime,
+    )
+
+    resp = ActiveConfigResponse(
+        axis='detection_profile',
+        active=ActiveRef(name='vehicle_wheel', revision=3),
+        source='stored',
+        activated_at='2026-09-26T12:00:00Z',
+        previous=ActiveRef(name='generic_item_v1', revision=None),
+        config_revision=21,
+        stale=False,
+        applied=[
+            AppliedRuntime(
+                process='detection_worker',
+                host='opfinal-detection-worker',
+                applied_config_revision=21,
+                profile=ActiveRef(name='vehicle_wheel', revision=3),
+                pack=ActiveRef(name='vehicle_wheel', revision=1),
+                applied_at='2026-09-26T12:00:05Z',
+                lagging=False,
+            )
+        ],
+    )
+    payload = resp.model_dump()
+    assert payload['source'] == 'stored'
+    assert payload['activated_at'] == '2026-09-26T12:00:00Z'
+    assert payload['applied'][0]['process'] == 'detection_worker'
+    assert payload['applied'][0]['profile'] == {'name': 'vehicle_wheel', 'revision': 3}
+    assert payload['applied'][0]['lagging'] is False
+
+    # Defaults: an axis never activated through the store, no worker
+    # has ever applied anything.
+    env_default = ActiveConfigResponse(
+        axis='prompt_pack',
+        active=ActiveRef(name='generic_item_v1', revision=None),
+        source='env',
+        config_revision=0,
+    )
+    assert env_default.activated_at is None
+    assert env_default.applied == []
+
+    off = ActiveConfigResponse(
+        axis='detection_profile', active=ActiveRef(), source='off', config_revision=5
+    )
+    assert off.active.name is None
+
+
+@pytest.mark.asyncio
+async def test_poll_all_active_projects_refreshes_every_project_not_just_one() -> None:
+    """M4: the background poll loop must fan out over every active
+    project's own store, not just whichever project happened to be
+    bound at lifespan startup -- otherwise an activation made through
+    one uvicorn worker stays invisible in another until some other
+    route happens to touch that project's store."""
+    from curation._fake_config_opensearch import TwoProjectOpenSearch
+    from src.config.curation import base_curation_config
+    from src.config.projects import resources_for_new
+    from src.services.config_store.store import _poll_all_active_projects, get_config_store
+    from src.services.projects.registry import ProjectRecord, record_to_doc
+
+    client = TwoProjectOpenSearch()
+    projects_index = 'op_projects'
+    client._docs.setdefault(projects_index, {})
+
+    def _doc(slug: str) -> dict[str, Any]:
+        return record_to_doc(
+            ProjectRecord(
+                slug=slug,
+                display_name=slug,
+                description='',
+                status='active',
+                revision=1,
+                created_at='',
+                updated_at='',
+                origin=None,
+                resources=resources_for_new(slug, base_curation_config()),
+            )
+        )
+
+    client._docs[projects_index]['project:alpha'] = {'_source': _doc('alpha'), '_seq_no': 0}
+    client._docs[projects_index]['project:beta'] = {'_source': _doc('beta'), '_seq_no': 0}
+
+    with bind_project(_record('alpha')):
+        idx = get_config_store(mode='live').index
+    doc = await save_config(
+        client, idx, kind='region_profile', name='wheel', body={}, expected_revision=None
+    )
+    await activate(
+        client,
+        idx,
+        axis='detection_profile',
+        name='wheel',
+        revision=doc['revision'],
+        expected_active=None,
+    )
+
+    poll_task = asyncio.get_event_loop().create_task(_poll_all_active_projects(client, 0.01))
+    try:
+        await asyncio.sleep(0.05)
+    finally:
+        poll_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await poll_task
+
+    with bind_project(_record('alpha')):
+        alpha_store = get_config_store(mode='live')
+    with bind_project(_record('beta')):
+        beta_store = get_config_store(mode='live')
+
+    # The poll loop, never this test, refreshed alpha's store.
+    assert alpha_store.current.active_profile == ('wheel', doc['revision'])
+    # beta was polled too (its own, unrelated, empty store).
+    assert beta_store.current.loaded_at > 0

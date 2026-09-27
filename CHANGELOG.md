@@ -8,6 +8,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W2 review fix pass (2026-09-27).** Addresses the independent W2
+  review's 5 blockers and 7 majors (`w2_review_2026-09-27.md`):
+  - **B1** the real worker never held a runtime per project. The
+    producer loop now iterates `project_registry.active_projects()`
+    every cycle, binding each in turn (`_sync_project_runtime`) so each
+    project's `ConfigStore` and `RegionRuntime` are built/refreshed
+    under that project's own context. `ProjectNotBound` is never
+    suppressed -- store creation only ever happens inside a real
+    `bind_project(record)`. Every per-item stage (`stage_a_consumer`,
+    `stage_a_vlm_visible`, `stage_a_sam_consumer`, `stage_b_combined`)
+    now resolves `rt = _rt_for(t)` (raises
+    `RegionProfileNotConfiguredError`, caught by the stage's own
+    exception handler as a drop-and-retry, for a project with no
+    runtime yet) instead of reading process-wide `detector`/`segmenter`/
+    `ocr_recognizer`/`vlm`/`profile`/`pack`/`text_rules` closure
+    variables. `RegionDetector`/`PaddleOcrTextRecognizer`/
+    `SegmenterClient`/`VlmLabeler` are passed into `build_runtime` as
+    parameters (never imported fresh), so a real
+    `test_two_project_worker_alpha_activation_swaps_alpha_only` test
+    drives `worker.run()` with two real projects end to end and
+    confirms alpha's detector-construction count increases on an
+    alpha-only activation while beta's stays put.
+  - **B2** pinned mode could never swap past the first cycle
+    (`refresh()` only staged `pending_snapshot`; the check compared
+    `store.current`, which pin_active() alone moves). `maybe_hot_reload`
+    now reads `pending_snapshot or current`, and `quiesce_and_swap`
+    pins strictly between the drain and the build.
+  - **B3** the store silently ended up in `live` mode in a `--project`
+    deployment (an earlier default-mode `get_config_store()` call
+    stuck). The store is now always created pinned inside
+    `_sync_project_runtime`, the first thing to touch it for a given
+    project. The writer's `out_q.task_done()` no longer fires at
+    dequeue time -- it fires once per item inside `_flush()`, only
+    after that item's write actually completed, so `quiesce_and_swap`'s
+    drain (`out_q.join()`) is now a real guarantee that every
+    old-runtime item is durably written (and stamped with the store
+    state that was current when it was flushed) before the swap
+    proceeds.
+  - **B4** a pack activation rebuilt with the env/file pack
+    (`resolve_prompt_pack`) instead of the activated one. Both the
+    initial build and every swap now resolve via `active_prompt_pack`.
+    `profile_revision`/`pack_revision` are computed from the resolved
+    object's own name matching the activation ref (`_revision_for`), so
+    a fallback to the env default never inherits a stale revision.
+  - **B5** the snapshot could pair a fresh revision (read via realtime
+    `GET`) with a stale near-real-time `_search`. `_load_snapshot` and
+    `_next_revision` now force `indices.refresh(index)` before
+    searching. `tests/curation/_fake_config_opensearch.py` gained
+    `NearRealTimeConfigOpenSearch`, a fake that actually models the lag,
+    reproducing the reviewer's probe #8 as a real red-then-green test.
+  - **M1** `runtime:detection_worker:<host>` docs are now written (once
+    per project, throttled to 60s, immediately on the first sync of a
+    project) via `upsert_project_runtime_doc`.
+  - **M4** the API's background poll loop (`_poll_all_active_projects`)
+    now fans out over every active project's own store each tick,
+    not just the one bound at lifespan startup.
+  - **M5** `clone_settings`'s `activations` axis now refuses a target
+    that already has its own active pack/profile up front
+    (`target_not_empty`, before any write), and additionally maps a
+    `RevisionConflictError`/`ActiveConflictError` from the write itself
+    to a structured 409 as defense in depth.
+  - **M6** the settings bridge now resolves a stored pack/profile's own
+    current revision before activating it (never `None` for a real
+    stored config), and `_axis_ref` no longer coerces a genuinely-`None`
+    revision (an env/file id) to `0` -- two processes reading the same
+    activation now agree on its revision.
+  - **M7** `text_hint_on` (plus `vlm_available`, `item_text_enabled`,
+    `item_text_min_conf`) moved onto `RegionRuntime`, computed fresh in
+    `build_runtime` from the runtime's OWN profile/segmenter -- a swap
+    to a profile with different text-hint settings no longer keeps the
+    old gate.
+  - **Cropwright W3 UI (C2/Q5).** `ActiveConfigResponse` gained
+    `source` (`'stored' | 'env' | 'off'`), `activated_at` and
+    `applied: list[AppliedRuntime]` per any_domain_plan.md §7.2/§7.3
+    (`AppliedRuntime` is new). No route serves this yet (W3/W4 land the
+    CRUD routes); this is the shared model Cropwright's contract already
+    expects. Contracts regenerated.
+  - **Not done, recorded as remaining work (M3):** the `op_global_configs`
+    global store (for W9 endpoints / `local_vlm:desired`) does not
+    exist. `ConfigStore`/`get_config_store` remain project-scoped only.
+  - **Minors not addressed:** `name@rev` pinning is still a no-op
+    (recorded as W3 work in the original W2 commit message already);
+    `GET /settings` still hides `detection_profile: off`; the worker
+    still stamps `vlm_prompt_pack` even when no VLM ran this pass;
+    `registry_reclassify.py`'s docstring/behavior mismatch;
+    `_clone_activations`'s `except (NotFoundError, KeyError)` test-double
+    accommodation is unchanged (kept -- `FakeLifecycleOpenSearch` still
+    answers `found: false` without raising; fixing the fake itself is a
+    larger, riskier change than this pass's budget allowed).
 - **P3 review fix pass (2026-09-27).** Addresses the independent P3 review's
   blocker and majors:
   - M1: `POST /projects` create is now storage-OCC-safe (`op_type='create'`);

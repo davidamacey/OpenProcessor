@@ -96,6 +96,40 @@ async def _validate_clone(
                 f"'{target_record.slug}' already has items; classes cannot be cloned",
                 project=target_record.slug,
             )
+
+    if 'activations' in resolved_axes:
+        # M5: a clone is "every check before the first write" -- a
+        # target that already has ITS OWN activation on either axis
+        # would otherwise 409 (RevisionConflictError/ActiveConflictError,
+        # from `save_config(expected_revision=None)` /
+        # `activate(expected_active=None)` assuming an empty target)
+        # only after `settings_defaults`/`classes` had already been
+        # written. Refuse up front instead, same as `classes`.
+        from opensearchpy.exceptions import NotFoundError
+
+        from src.services.config_store.index import ConfigAxis, get_activation
+
+        with bind_project(target_record):
+            from src.config import get_curation_config as _get_cfg
+
+            target_index = _get_cfg().configs_index
+            activation_axes: tuple[ConfigAxis, ...] = ('prompt_pack', 'detection_profile')
+            for axis in activation_axes:
+                try:
+                    existing = await get_activation(client, target_index, axis)
+                except (NotFoundError, KeyError):
+                    # Same test-double accommodation as `_clone_activations`
+                    # below -- a low-fidelity fake answers a missing doc
+                    # with `{'found': False}` instead of raising.
+                    existing = None
+                if existing and existing.get('name'):
+                    raise api_error(
+                        409,
+                        'target_not_empty',
+                        f"'{target_record.slug}' already has an active {axis}; "
+                        'activations cannot be cloned',
+                        project=target_record.slug,
+                    )
     return source, resolved_axes
 
 
@@ -188,25 +222,45 @@ async def _clone_activations(
 
         with bind_project(target_record):
             from src.config import get_curation_config as _get_cfg
+            from src.services.config_store.index import ActiveConflictError, RevisionConflictError
 
             target_index = _get_cfg().configs_index
-            doc = await save_config(
-                client,
-                target_index,
-                kind=kind,
-                name=name,
-                body=body,
-                expected_revision=None,
-                cloned_from=source.slug,
-            )
-            await activate(
-                client,
-                target_index,
-                axis=axis,
-                name=name,
-                revision=doc['revision'],
-                expected_active=None,
-            )
+            # M5 (defense in depth -- _validate_clone already refuses an
+            # occupied target up front): a conflict here is still mapped
+            # to a structured 409, never a bare 500, in case the target
+            # changed between validation and this write.
+            try:
+                doc = await save_config(
+                    client,
+                    target_index,
+                    kind=kind,
+                    name=name,
+                    body=body,
+                    expected_revision=None,
+                    cloned_from=source.slug,
+                )
+                await activate(
+                    client,
+                    target_index,
+                    axis=axis,
+                    name=name,
+                    revision=doc['revision'],
+                    expected_active=None,
+                )
+            except RevisionConflictError as exc:
+                raise api_error(
+                    409,
+                    'target_not_empty',
+                    f"'{target_record.slug}' already has a stored {kind} named '{name}'",
+                    project=target_record.slug,
+                ) from exc
+            except ActiveConflictError as exc:
+                raise api_error(
+                    409,
+                    'target_not_empty',
+                    f"'{target_record.slug}' already has an active {axis}",
+                    project=target_record.slug,
+                ) from exc
 
 
 async def clone_settings(
