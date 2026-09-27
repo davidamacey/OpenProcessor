@@ -43,6 +43,7 @@ ErrorCode = Literal[
     'internal_isolation_error',
     'revision_conflict',
     'invalid_transition',
+    'export_outside_project',
 ]
 
 

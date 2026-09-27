@@ -173,7 +173,7 @@ def test_mlflow_experiment_read_from_spec(tmp_path) -> None:
 
 def test_arbiter_sees_a_run_in_a_project_dir(tmp_path, monkeypatch) -> None:
     from src.services.projects.registry import ProjectRegistry, set_project_registry
-    from src.services.training import project_job_dirs
+    from src.services.training import arbiter_dirs
 
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path / 'jobs'))
     alpha = _record('alpha')
@@ -182,8 +182,35 @@ def test_arbiter_sees_a_run_in_a_project_dir(tmp_path, monkeypatch) -> None:
     registry._revision = 0
     set_project_registry(registry)
     try:
-        dirs = project_job_dirs.all_train_jobs_dirs()
+        dirs = arbiter_dirs.all_train_jobs_dirs()
         assert dirs['alpha'] == alpha.resources.train_jobs_dir
         assert DEFAULT_SLUG in dirs
+    finally:
+        set_project_registry(None)
+
+
+def test_arbiter_keeps_the_gpu_claimed_for_another_projects_bakeoff(tmp_path) -> None:
+    """A bake-off queued by a non-default project must keep the GPU services
+    stopped: the reconcile loop's bakeoff_active() check has to see every
+    project's bakeoff_jobs_dir, not only the arbiter config's single dir."""
+    import dataclasses
+
+    from src.services.projects.registry import ProjectRegistry, set_project_registry
+    from src.services.training import gpu_arbiter
+
+    alpha = _record('alpha')
+    alpha = dataclasses.replace(
+        alpha,
+        resources=dataclasses.replace(alpha.resources, bakeoff_jobs_dir=tmp_path / 'alpha_bo'),
+    )
+    (tmp_path / 'alpha_bo').mkdir()
+    registry = ProjectRegistry(lambda: None)
+    registry._by_slug = {'alpha': alpha}
+    registry._revision = 0
+    set_project_registry(registry)
+    try:
+        assert gpu_arbiter.bakeoff_active() is False
+        (tmp_path / 'alpha_bo' / 'bo1.job.json').write_text('{}', encoding='utf-8')
+        assert gpu_arbiter.bakeoff_active() is True
     finally:
         set_project_registry(None)

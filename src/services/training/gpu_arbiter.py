@@ -43,15 +43,12 @@ import dataclasses
 import json
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 
 from src.config import get_curation_config, get_gpu_arbiter_config
 from src.core.logging import get_logger
-from src.services.training.project_job_dirs import all_train_jobs_dirs, bakeoff_active
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from src.services.training.arbiter_dirs import all_bakeoff_jobs_dirs, all_train_jobs_dirs
 
 
 logger = get_logger(__name__)
@@ -100,6 +97,25 @@ TRAINER_TERMINAL_STATES = frozenset({'finished', 'failed', 'cancelled', 'skipped
 # ``LOCK_GRACE_SECONDS`` (a short race-closer window, NOT the run duration)
 # and ages out + is cleared after that.
 LOCK_GRACE_SECONDS = 90.0
+
+
+def bakeoff_active(*, jobs_dir: Path | None = None) -> bool:
+    """True if a bake-off job is queued or running (job.json still present).
+
+    ``jobs_dir`` scans only that dir. By default every dir a bake-off can
+    be queued in is scanned (:func:`all_bakeoff_jobs_dirs`): the arbiter is
+    global, but the bake-off router writes into the bound project's own
+    ``bakeoff_jobs_dir`` (projects_plan.md §5.3). A missing dir means
+    nothing queued.
+    """
+    targets = [Path(jobs_dir)] if jobs_dir is not None else all_bakeoff_jobs_dirs()
+    for target in targets:
+        try:
+            if any(target.glob('*.job.json')):
+                return True
+        except OSError:
+            continue
+    return False
 
 
 # =============================================================================
@@ -499,7 +515,6 @@ async def release_gpus_after_training(
 async def reconcile_on_startup(
     *,
     train_jobs_dir: Path | None = None,
-    bakeoff_jobs_dir: Path | None = None,
     sentinel: Path | None = None,
 ) -> ArbiterAction:
     """Enforce the desired GPU-service state -- both directions.
@@ -508,8 +523,6 @@ async def reconcile_on_startup(
     dir + every active/archived project's own dir, §5.3), so a run
     started in any project keeps the GPUs claimed. An explicit path
     (test fixtures) scans only that one dir, attributed to no project.
-    ``bakeoff_jobs_dir`` likewise defaults to every project's own
-    bake-off queue (:func:`all_bakeoff_jobs_dirs`).
 
     Runs once at API startup *and* on a periodic loop (every uvicorn
     worker); idempotent re-enforcement, not a race.
@@ -580,7 +593,7 @@ async def reconcile_on_startup(
     # A queued bake-off claims every configured container unless
     # OP_BAKEOFF_HOST_GPUS scopes it to the evaluator's host GPUs (then
     # only an intersecting container stays stopped).
-    if bakeoff_active(jobs_dir=bakeoff_jobs_dir):
+    if bakeoff_active():
         active_stems.add('__bakeoff__')
         scope = get_gpu_arbiter_config().bakeoff_host_gpus
         stop_names.update(containers_to_stop(scope) if scope else all_configured)
@@ -636,6 +649,9 @@ __all__ = [
     'TRAINER_TERMINAL_STATES',
     'ArbiterAction',
     'GpuArbiterStopFailedError',
+    'all_bakeoff_jobs_dirs',
+    'all_train_jobs_dirs',
+    'bakeoff_active',
     'claim_gpus_for_training',
     'clear_training_lock',
     'containers_to_stop',

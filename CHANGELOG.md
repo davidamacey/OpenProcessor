@@ -66,6 +66,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-promote) and `class_remap_source`.
 
 ### Fixed
+- `src/services/projects/busy.py`'s `running_jobs()` now reports running
+  probe, item-scores, selection and viz jobs (each module's own
+  `state.json` + heartbeat busy rule, read for the given project), so a
+  P3 delete/archive busy check cannot pass while one runs. A detection
+  worker liveness file older than the worker heartbeat window
+  (`worker_liveness.DEFAULT_MAX_AGE_S`) no longer counts as busy forever.
+- `/train/preflight`, `/train/start` and `/train/start_campaign` refuse a
+  `dataset_export_dir` outside the bound project's `export_root` with 422
+  `{"detail": {"error": "export_outside_project", ...}}`, before any check
+  reads the export; `force=true` does not bypass it. Previously another
+  project's manifest, registry and label counts were read back into the
+  report, and `start?force=true` queued the job.
 - Merged the finished `cutover/projects-foundation` (P1) twice (once
   before, once after its final review-resolution pass): resolved P1's
   worker-script conflicts in P2's favour (already multi-project) and
@@ -91,6 +103,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   actual (already per-project-function, no module constants)
   `autolabel/job.py`, and registered `preflight_scan._scan_cache` with
   the sweep's process-cache-clearing fixture.
+- P2 review fixes (`projects_p2_review_2026-09-27.md`): the GPU arbiter's
+  `bakeoff_active()` now sees a bake-off queued in any project (it only
+  watched `default`'s dir and restarted the GPU services under another
+  project's running bake-off); the API reads `.trainer_capabilities.json`
+  from the trainer's watch root, not the bound project's nested jobs dir
+  (where nothing writes it); `_project_owns_model` refuses a model whose
+  `promote.json` names another project, so `default` cannot inherit a
+  project's models when it drops out of the registry snapshot. The route
+  sweep no longer exempts 14 routes from its isolation checks.
 
 ### Changed
 - **Merged the three projects-lifecycle branches (checkpoint 1: merges +

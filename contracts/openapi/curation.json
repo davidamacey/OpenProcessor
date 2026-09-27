@@ -1936,7 +1936,8 @@
               "model_name_reserved",
               "internal_isolation_error",
               "revision_conflict",
-              "invalid_transition"
+              "invalid_transition",
+              "export_outside_project"
             ],
             "title": "Error",
             "type": "string"

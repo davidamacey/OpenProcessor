@@ -26,7 +26,7 @@ with, so:
 Every field is settable from the environment via
 :meth:`GpuArbiterConfig.from_env` (``OP_GPU_ALLOWED_IDS``,
 ``OP_GPU_ARBITER_CONTAINERS``, ``OP_GPU_ARBITER_TRAINER_CONTAINER``,
-``OP_GPU_LABELS``, ``OP_TRAIN_DEFAULT_GPUS``, ``OP_BAKEOFF_HOST_GPUS``),
+``OP_BAKEOFF_JOBS_DIR``, ``OP_GPU_LABELS``, ``OP_TRAIN_DEFAULT_GPUS``),
 which is what :func:`get_gpu_arbiter_config` builds the process-wide
 default from — so a deployment pins its GPU policy in its env file, not
 in code.
@@ -95,6 +95,27 @@ def _parse_container_gpus(raw: str) -> tuple[tuple[str, frozenset[int] | None], 
     return tuple(entries)
 
 
+def _default_bakeoff_jobs_dir() -> str:
+    """The ``default`` project's own ``bakeoff_jobs_dir`` (a
+    PROJECT_SCOPED_FIELDS entry, ``resources_for_new``) -- the one
+    default the router and arbiter share. P1R §6.1/D-A: ``default``
+    nests under ``state_dir/projects/default/bakeoff_jobs`` like every
+    other project.
+
+    Computed directly from ``resources_for_new('default', ...)``, never
+    ``get_curation_config()``: this is a dataclass ``default_factory``,
+    evaluated whenever ``GpuArbiterConfig()``/``.from_env()`` is
+    constructed -- including at API startup, before any project is
+    bound. Reading the *bound* project's config here would raise
+    ``ProjectNotBound`` and take the startup reconcile loop down with
+    it (this arbiter is process-global per projects_plan.md §5.3, not
+    itself project-scoped)."""
+    from src.config.curation import base_curation_config
+    from src.config.projects import DEFAULT_SLUG, resources_for_new
+
+    return str(resources_for_new(DEFAULT_SLUG, base_curation_config()).bakeoff_jobs_dir)
+
+
 def _parse_gpu_labels(raw: str) -> dict[int, str]:
     """Parse ``OP_GPU_LABELS`` (``id=label,id=label,...``) into ``{id: label}``."""
     labels: dict[int, str] = {}
@@ -144,6 +165,7 @@ class GpuArbiterConfig:
     containers: tuple[str, ...] = ()
     container_gpus: tuple[tuple[str, frozenset[int] | None], ...] = ()
     trainer_container: str | None = None
+    bakeoff_jobs_dir: str = field(default_factory=_default_bakeoff_jobs_dir)
     gpu_labels: dict[int, str] = field(default_factory=dict)
     default_train_gpus: str | None = None
     bakeoff_host_gpus: str | None = None
@@ -165,6 +187,12 @@ class GpuArbiterConfig:
           run releases the GPUs. Unset/empty = nothing to coordinate.
         - ``OP_GPU_ARBITER_TRAINER_CONTAINER`` — trainer container name to
           probe for reachability. Unset/empty = skip the probe.
+        - ``OP_BAKEOFF_JOBS_DIR`` — the bake-off job-queue directory the
+          reconcile loop watches and the bake-off router writes job files
+          into (the router reads this field, so the two cannot drift
+          apart). Unset = ``<CurationConfig.state_dir>/bakeoff_jobs``,
+          never ``None``: a queued bake-off must keep GPU-resident
+          containers stopped on the default config too.
         - ``OP_GPU_LABELS`` — comma-separated ``id=label`` pairs (e.g.
           ``0=RTX A6000,2=RTX A6000``) used to build human-readable
           ``/train/gpus`` option labels. Unset/empty = no labels (options
@@ -208,6 +236,7 @@ class GpuArbiterConfig:
         container_gpus = _parse_container_gpus(os.environ.get('OP_GPU_ARBITER_CONTAINERS', ''))
         containers = tuple(name for name, _ in container_gpus)
         trainer = os.environ.get('OP_GPU_ARBITER_TRAINER_CONTAINER', '').strip() or None
+        jobs_dir = os.environ.get('OP_BAKEOFF_JOBS_DIR', '').strip() or _default_bakeoff_jobs_dir()
         gpu_labels = _parse_gpu_labels(os.environ.get('OP_GPU_LABELS', ''))
         default_train_gpus = os.environ.get('OP_TRAIN_DEFAULT_GPUS', '').strip() or None
         bakeoff_host_gpus = os.environ.get('OP_BAKEOFF_HOST_GPUS', '').strip() or None
@@ -216,6 +245,7 @@ class GpuArbiterConfig:
             containers=containers,
             container_gpus=container_gpus,
             trainer_container=trainer,
+            bakeoff_jobs_dir=jobs_dir,
             gpu_labels=gpu_labels,
             default_train_gpus=default_train_gpus,
             bakeoff_host_gpus=bakeoff_host_gpus,
@@ -235,7 +265,7 @@ def get_gpu_arbiter_config() -> GpuArbiterConfig:
     """Module-level default ``GpuArbiterConfig`` instance.
 
     Built via :meth:`GpuArbiterConfig.from_env` on first use, so the
-    ``OP_GPU_*`` env vars take effect for every
+    ``OP_GPU_*`` / ``OP_BAKEOFF_JOBS_DIR`` env vars take effect for every
     consumer (the lifespan reconcile loop, training-job GPU validation,
     the bake-off router). Like the other ``OP_*`` config it is resolved
     once per process — set the env before startup.

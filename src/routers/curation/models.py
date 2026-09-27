@@ -526,12 +526,26 @@ def _project_owns_model(model_name: str) -> bool:
     name (no ``'__'`` at all) carries no project's namespace, so it is
     owned by ``default`` alone.
     """
+    from src.config.projects import DEFAULT_SLUG
+    from src.services.projects.registry import get_project_registry
+    from src.services.training.model_classes import model_owner_project
+
     cfg = get_curation_config()
-    if cfg.model_prefix and model_name.startswith(cfg.model_prefix):
-        return True
-    if '__' in model_name:
+    # promote.json names the owner outright; the prefix rule alone would
+    # hand `default` another project's model once that project is missing
+    # from the registry snapshot (deleted, or a stale snapshot).
+    recorded_owner = model_owner_project(model_name)
+    if recorded_owner is not None and recorded_owner != cfg.project_slug:
         return False
-    return not cfg.model_prefix
+    own_prefix = cfg.model_prefix
+    if own_prefix:
+        return model_name.startswith(own_prefix)
+    other_prefixes = (
+        record.resources.model_prefix
+        for slug, record in get_project_registry().snapshot().items()
+        if slug != DEFAULT_SLUG and record.resources.model_prefix
+    )
+    return not any(model_name.startswith(prefix) for prefix in other_prefixes)
 
 
 # PUT /models/{model_name}/sharing lives in _models_sharing.py (kept
