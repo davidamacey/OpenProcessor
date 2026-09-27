@@ -36,7 +36,21 @@ if [[ ! -s "$notes_file" ]]; then
     exit 1
 fi
 
-if gh release create "v$VERSION" --title "v$VERSION" --notes-file "$notes_file"; then
+# OpenProcessor's one-line installer fetches these from the release assets
+# at the pinned tag and checks them against SHA256SUMS, so they come from
+# the tagged commit, never the working tree.
+asset_dir="$(mktemp -d)"
+trap 'rm -f "$notes_file"; rm -rf "$asset_dir"' EXIT
+for f in docker-compose.yml .env.example; do
+    if ! git show "v$VERSION:$f" > "$asset_dir/$f"; then
+        echo -e "${RED}$f is missing at v$VERSION${NC}" >&2
+        exit 1
+    fi
+done
+(cd "$asset_dir" && sha256sum docker-compose.yml .env.example > SHA256SUMS)
+
+if gh release create "v$VERSION" --title "v$VERSION" --notes-file "$notes_file" \
+    "$asset_dir/docker-compose.yml" "$asset_dir/.env.example" "$asset_dir/SHA256SUMS"; then
     echo -e "${GREEN}published GitHub release v$VERSION${NC}" >&2
     exit 0
 fi

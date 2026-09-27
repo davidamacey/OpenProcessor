@@ -30,6 +30,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     cannot handle (it only resolves in-app SvelteKit routes) — wrapped
     in `eslint-disable`/`eslint-enable` pairs with a reason instead.
 
+### Changed
+
+- **Bind address is configurable.** The compose port is now
+  `${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}`. The
+  default serves this machine and the local network; set `127.0.0.1` to
+  limit it to this machine. Each GitHub release now attaches
+  `docker-compose.yml`, `.env.example` and a `SHA256SUMS` for them, taken
+  from the tagged commit, for OpenProcessor's one-line installer.
+- **Faster test runs.** `npm run test:e2e` now builds and serves the app
+  once, then runs the stubbed Playwright suite across parallel pytest-xdist
+  workers. That's about 40 s instead of about 160 s for 101 tests, and the
+  worker count is set with `E2E_WORKERS`. The pre-push unit-test hook no
+  longer caps vitest at 4 workers, which cut it from about 1 min 44 s to
+  about 31 s. `test_keymap_absent_when_404` now waits on the real key and
+  request instead of fixed sleeps; it flaked under parallel load.
+
 ### Added
 
 - **Projects UI: every page under `/p/[project]`, a project switcher and
@@ -174,6 +190,44 @@ axis=keymap` SSE frame refetches and applies live, no reload
     `/review`; absent + default keys still work on a 404). Every
     existing stubbed e2e test now sees a default 404 stub for
     `GET {prefix}/keymap` (`e2e/conftest.py`).
+- **Per-context keymap overrides (K2b of `docs/design/
+configurable-keyboard-shortcuts-plan-2026-09-26.md` §0 decision 4 +
+  §5.4).** A rebind still applies on every page by default, but an
+  operator can now break a single context out of the group:
+  - `KeymapCard.svelte` gained a **Verb groups** section, one row per
+    served `group` id shared by 2+ modifiable actions across contexts
+    (`undo`, `confirm`, `discard`, `skip`, `prev`, `next`,
+    `select_all`, `ignore`, `nudge`). Editing the group row's keys
+    writes every member action id at once — "rebind Undo" changes
+    `review.undo`, `cluster.undo`, `clusters_search.undo` and
+    `region_gallery.undo` together, same as before.
+  - Each group row has a **"Customize per page" disclosure** listing
+    every member under its own context label with its own key chips.
+    Editing one there writes only that action id (detaches it from the
+    group); a "differs from the group" marker plus "reset to group"
+    render automatically — computed from the draft, not a stored flag,
+    so a pre-existing server-side per-context override shows the same
+    marker with no extra bookkeeping. Locked keys (Esc, Enter, arrows)
+    stay locked in both the group row and the per-context rows; a
+    group-level capture rejects any `grammar.locked_keys` combo
+    outright, since a group can span members whose own locked-key sets
+    differ.
+  - The existing per-context tables now hold only ungrouped actions
+    and locked/non-modifiable actions (e.g. the whole `cancel` group,
+    which has no modifiable members) — unchanged in behaviour.
+  - Writing still goes through the same `overrides` action-id map and
+    `PUT`/`validate`/`reset` plumbing; a group edit writes every member
+    id, a per-context edit writes only that id, and the server's own
+    validation errors/warnings render on the specific action row,
+    exactly as K2 already did.
+  - New mount tests in `KeymapCard.test.ts` (group edit vs. per-context
+    edit, the written override bodies, the detached marker, reset-to-
+    group) and a new e2e flow in `test_keymap.py`
+    (`test_keymap_per_context_override`): detach `cluster.discard`
+    on `/settings`, save, assert the `PUT` body carries only
+    `cluster.discard`, then confirm `/review` still discards on the
+    group's default `d` while `/clusters/[id]` discards on the new key
+    and ignores `d`.
 - **OpenProcessor 3cd4ca87 adoption** (contract sync + 503/Retry-After):
   - `apiFetch` (`src/lib/api.ts`) now honours a 503's `Retry-After`
     (seconds) header in place of that attempt's fixed backoff delay,
