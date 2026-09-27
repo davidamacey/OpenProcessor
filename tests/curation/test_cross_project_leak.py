@@ -179,6 +179,18 @@ def route_bodies(slug: str) -> dict[tuple[str, str], dict[str, Any]]:
         ('POST', '/train/promote/{job_id}'): {
             'json': {'triton_name': f'{slug}_model', 'force': True}
         },
+        # P3 lifecycle mutations (global_router, not part of the scoped
+        # double-mount, but textually under SCOPED -- see
+        # tests/projects/test_route_scoping.py). ``DELETE`` uses
+        # ``dry_run`` so the sweep never actually removes the project
+        # (which would break every later call for this slug in the same
+        # pass); the others act for real -- see NO_WRITE for why none of
+        # the five register a write here.
+        ('DELETE', ''): {'params': {'dry_run': 'true'}},
+        ('PATCH', ''): {'json': {'display_name': f'{slug}-renamed', 'expected_revision': 1}},
+        ('POST', '/archive'): {'json': {'expected_revision': 1}},
+        ('POST', '/unarchive'): {'json': {'expected_revision': 1}},
+        ('POST', '/clone_settings'): {'json': {'from': slug, 'expected_revision': 1}},
     }
 
 
@@ -198,6 +210,18 @@ NO_WRITE: dict[tuple[str, str], str] = {
         'POST',
         '/vlm/region_visible_batch',
     ): "returns the VLM's verdicts to the caller; stores nothing",
+    # P3 lifecycle mutations write the shared op_projects registry doc,
+    # never the project's own item/image/etc indexes or state-dir files
+    # -- the write-detection this sweep does (own_indexes / dir digest)
+    # has nothing of the bound project's *data* to see, by design.
+    (
+        'DELETE',
+        '',
+    ): 'dry_run=true in the sweep; a real delete mutates the registry, not project data',
+    ('PATCH', ''): 'mutates the shared project registry doc, not project data',
+    ('POST', '/archive'): 'mutates the shared project registry doc, not project data',
+    ('POST', '/unarchive'): 'mutates the shared project registry doc, not project data',
+    ('POST', '/clone_settings'): 'mutates the shared project registry doc, not project data',
 }
 
 # Routes whose ``{crop_id}`` is a seeded item other than ``-item-0001``,
@@ -210,6 +234,23 @@ CROP_FOR: dict[tuple[str, str], str] = {
 
 # Routes that answer 5xx in the fixture for a reason that is not isolation.
 EXPECTED_5XX: dict[tuple[str, str], str] = {}
+
+# P3 lifecycle mutations (global_router; textually under SCOPED but never
+# part of the scoped/alias double-mount -- see the module docstring at the
+# top of src/routers/curation/projects.py). They act *on* a project via a
+# plain ``project: str`` path parameter, not *within* one via
+# ``bind_path_project``, so their OpenSearch calls (all against the shared
+# ``op_projects`` registry doc) are correctly unbound (``try_current_project()
+# is None``) rather than bound to the slug in the URL.
+UNBOUND_BY_DESIGN: frozenset[tuple[str, str]] = frozenset(
+    {
+        ('DELETE', ''),
+        ('PATCH', ''),
+        ('POST', '/archive'),
+        ('POST', '/unarchive'),
+        ('POST', '/clone_settings'),
+    }
+)
 
 # Known leaks owned by P2 (cutover/projects-workers, projects_plan.md §5):
 # process-global state P1 did not create and P2 makes per project. Each
@@ -854,7 +895,6 @@ def leak_env(
     from src.core.dependencies import app_state, get_async_triton
     from src.routers.curation import _common
     from src.services.curation import event_hub
-    from src.services.curation.autolabel import job as autolabel_job
     from src.services.projects import guard, registry as registry_mod
     from src.services.projects.registry import ProjectRegistry
 
@@ -897,19 +937,13 @@ def leak_env(
 
     monkeypatch.setattr(embedding_reduce, 'UMAP_N_COMPONENTS', 2)
     monkeypatch.setattr(embedding_reduce, 'UMAP_N_NEIGHBORS', 3)
-    # Import-time constants of the (P2-owned) auto-label module: keep them
-    # inside tmp_path so the sweep never touches the host's /jobs.
+    # The auto-label module resolves its state dir per bound project
+    # (``_state_dir()`` -> ``get_curation_config().autolabel_dir``, itself
+    # ``OP_AUTO_LABEL_STATE_DIR`` + ``/projects/<slug>``) -- keep it inside
+    # tmp_path so the sweep never touches the host's /jobs. Must be set
+    # before the project records below are built from this env.
     al_dir = tmp_path / 'jobs' / 'auto_label'
-    for attr, fname in {
-        '_STATE_DIR': '',
-        '_STATE_FILE': 'state.json',
-        '_CANCEL_FLAG': 'cancel.flag',
-        '_RUNNING_LOCK': 'running.lock',
-        '_EXIT_CODE_FILE': 'exit_code',
-        '_TRIGGER_FILE': 'trigger.json',
-        '_HEARTBEAT_FILE': 'heartbeat',
-    }.items():
-        monkeypatch.setattr(autolabel_job, attr, al_dir / fname if fname else al_dir)
+    monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(al_dir))
 
     base = base_curation_config()
     records = {'default': new_project_record('default', base)}
@@ -1162,7 +1196,7 @@ def _sweep(
                     f'{tag}: bound={bound} reached {foreign_indexes.get(index, "every")!r} '
                     f'index {index} ({os_url})'
                 )
-            if bound != slug:
+            if bound != slug and key not in UNBOUND_BY_DESIGN:
                 leaks.append(f'{tag}: OpenSearch call bound to {bound!r}')
         leaks.extend(
             f'{tag}: event {event.get("type")} went to project {event.get("project")!r}'

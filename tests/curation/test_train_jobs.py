@@ -33,9 +33,17 @@ from src.services.training.jobs import (
 
 @pytest.fixture
 def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Redirect OP_TRAIN_JOBS_DIR at the env-var level."""
+    """Redirect OP_TRAIN_JOBS_DIR at the env-var level.
+
+    ``default`` is an ordinary project (P1: no special-casing), so its
+    real ``train_jobs_dir`` is ``OP_TRAIN_JOBS_DIR/projects/default``,
+    not the env var's value directly -- return the resolved subdir so
+    every test in this file reads/writes where the code actually does.
+    """
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
-    return tmp_path
+    resolved = tmp_path / 'projects' / 'default'
+    resolved.mkdir(parents=True, exist_ok=True)
+    return resolved
 
 
 @pytest.fixture
@@ -695,11 +703,14 @@ class _FakeCurationConfig:
     ) -> None:
         self.mlflow_public_url = mlflow_public_url
         self.api_prefix = api_prefix
-        # _resolve_jobs_dir() reads this (projects_plan.md §5.3); these
-        # tests only care about mlflow_public_url/api_prefix, so default
-        # to OP_TRAIN_JOBS_DIR/'/jobs' -- whatever _resolve_jobs_dir used
-        # before it became project-scoped.
-        self.train_jobs_dir = train_jobs_dir or Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
+        # _resolve_jobs_dir() reads this; these tests only care about
+        # mlflow_public_url/api_prefix, so default to the same
+        # OP_TRAIN_JOBS_DIR/projects/default the ``jobs_dir`` fixture
+        # resolves to (default is an ordinary project -- P1: no
+        # special-casing).
+        self.train_jobs_dir = train_jobs_dir or (
+            Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs')) / 'projects' / 'default'
+        )
 
 
 def test_public_mlflow_url_builds_from_configured_base(monkeypatch: pytest.MonkeyPatch) -> None:
