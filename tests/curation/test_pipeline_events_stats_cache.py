@@ -16,7 +16,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from src.config.project_context import bind_project
 from src.routers.curation import pipeline_events as pe
+from src.services.projects.registry import default_project_record
 
 
 if TYPE_CHECKING:
@@ -27,11 +29,18 @@ if TYPE_CHECKING:
 def _reset_stats_cache() -> Iterator[None]:
     """Each test starts with a cold cache — module-level state persists
     across tests otherwise."""
-    pe._stats_cache_payload = None
-    pe._stats_cache_expires_at = 0.0
+    pe._stats_cache_payload = {}
+    pe._stats_cache_expires_at = {}
     yield
-    pe._stats_cache_payload = None
-    pe._stats_cache_expires_at = 0.0
+    pe._stats_cache_payload = {}
+    pe._stats_cache_expires_at = {}
+
+
+@pytest.fixture(autouse=True)
+def _bind_default_project() -> Iterator[None]:
+    """_cached_stats_payload keys its cache by the bound project's slug."""
+    with bind_project(default_project_record()):
+        yield
 
 
 @pytest.mark.asyncio
