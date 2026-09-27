@@ -30,36 +30,39 @@ from src.routers.curation._common import OpenSearchDep, router
 
 # The dataset-stats aggregation used to re-run once per SSE client
 # every STATS_REFRESH_SECONDS (15s) -- N open dashboard tabs meant N
-# identical `_search?size=0` round-trips every 15s. This module-level
-# cache is shared by every SSE connection; the lock ensures that when
-# several connections' timers fire in the same window, only the first
-# actually queries OpenSearch -- the rest await the same in-flight
-# refresh (or the fresh cache value it just wrote) instead of each
-# issuing their own query.
+# identical `_search?size=0` round-trips every 15s. Keyed by the bound
+# project's slug -- a single shared cache entry here previously served
+# project B's stats to project A's SSE connection (and vice versa)
+# whenever their refresh windows overlapped. The lock ensures that when
+# several connections for the same project fire in the same window,
+# only the first actually queries OpenSearch.
 _STATS_CACHE_TTL_SECONDS = 10.0
 _stats_cache_lock = asyncio.Lock()
-_stats_cache_payload: dict[str, Any] | None = None
-_stats_cache_expires_at: float = 0.0
+_stats_cache_payload: dict[str, dict[str, Any]] = {}
+_stats_cache_expires_at: dict[str, float] = {}
 
 
 async def _cached_stats_payload(opensearch: AsyncOpenSearch) -> dict[str, Any]:
     """Return the dataset-stats payload, refreshing at most once per
-    ``_STATS_CACHE_TTL_SECONDS`` across every concurrent SSE connection."""
-    global _stats_cache_payload, _stats_cache_expires_at  # noqa: PLW0603
-
+    ``_STATS_CACHE_TTL_SECONDS`` per project, shared across that
+    project's concurrent SSE connections only."""
+    from src.config.project_context import current_project
     from src.routers.curation.stats import stats_dataset
 
+    slug = current_project().record.slug
+
     async with _stats_cache_lock:
-        # Re-check inside the lock: another connection may have just
-        # refreshed it while we were waiting to acquire.
-        if _stats_cache_payload is not None and time.monotonic() < _stats_cache_expires_at:
-            return _stats_cache_payload
+        # Re-check inside the lock: another connection for this project
+        # may have just refreshed it while we were waiting to acquire.
+        expires = _stats_cache_expires_at.get(slug, 0.0)
+        if slug in _stats_cache_payload and time.monotonic() < expires:
+            return _stats_cache_payload[slug]
         try:
             payload = await stats_dataset(opensearch)
         except Exception as exc:
             payload = {'error': f'{type(exc).__name__}: {exc}'}
-        _stats_cache_payload = payload
-        _stats_cache_expires_at = time.monotonic() + _STATS_CACHE_TTL_SECONDS
+        _stats_cache_payload[slug] = payload
+        _stats_cache_expires_at[slug] = time.monotonic() + _STATS_CACHE_TTL_SECONDS
         return payload
 
 
