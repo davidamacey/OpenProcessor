@@ -32,6 +32,10 @@
     thumbSize?: number;
     class?: string;
     busy?: boolean;
+    /** Disables drag-create/drag-move (scan mode) — click-select and
+     *  keyboard actions (Tab/y/r) still work. Matches BboxCanvas's
+     *  readonly convention. */
+    readonly?: boolean;
     ringColorFor?: (state: string) => string;
     dashedFor?: (state: string) => boolean;
     onselect?: (index: number) => void;
@@ -48,6 +52,7 @@
     thumbSize = 512,
     class: containerClass = 'aspect-square w-full',
     busy = false,
+    readonly = false,
     ringColorFor = () => 'rgb(80, 200, 255)',
     dashedFor = () => false,
     onselect,
@@ -94,7 +99,7 @@
   }
 
   function onPointerDownCanvas(e: PointerEvent): void {
-    if (busy) return;
+    if (busy || readonly) return;
     e.preventDefault();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const p = clientToNorm(e);
@@ -105,8 +110,9 @@
     if (busy) return;
     e.preventDefault();
     e.stopPropagation();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
     onselect?.(index);
+    if (readonly) return;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const p = clientToNorm(e);
     drag = { mode: 'move', startX: p.x, startY: p.y, initial: { ...boxes[index].box } };
   }
@@ -155,6 +161,17 @@
     drag = null;
   }
 
+  const pxStep = $derived(1 / thumbSize);
+
+  /** Nudges the selected box by one step in the given direction — the
+   *  `box_edit.nudge_*` actions forward here (readonly/scan mode ignores
+   *  this, matching BboxCanvas's own nudge/readonly behavior). */
+  function nudgeSelected(dx: number, dy: number): void {
+    if (readonly || busy || selectedIndex == null) return;
+    const b = boxes[selectedIndex].box;
+    onmove?.(selectedIndex, { cx: b.cx + dx, cy: b.cy + dy, w: b.w, h: b.h });
+  }
+
   export function handleKey(e: KeyboardEvent): boolean {
     if (busy) return false;
     if (e.key === 'Tab') {
@@ -164,6 +181,12 @@
     if ((e.key === 'Backspace' || e.key === 'Delete') && selectedIndex != null) {
       ondelete?.(selectedIndex);
       return true;
+    }
+    if (!readonly && selectedIndex != null) {
+      if (e.key === 'ArrowUp') return (nudgeSelected(0, -pxStep), true);
+      if (e.key === 'ArrowDown') return (nudgeSelected(0, pxStep), true);
+      if (e.key === 'ArrowLeft') return (nudgeSelected(-pxStep, 0), true);
+      if (e.key === 'ArrowRight') return (nudgeSelected(pxStep, 0), true);
     }
     return false;
   }
@@ -178,6 +201,7 @@
   onpointercancel={onPointerUp}
   role="application"
   aria-label="multi-box canvas"
+  data-testid="multibox-canvas"
 >
   <img
     src={getThumbUrl(cropId, thumbSize)}

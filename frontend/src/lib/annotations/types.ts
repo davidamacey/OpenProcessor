@@ -124,16 +124,25 @@ export interface BoxStateInfo {
 }
 
 export interface SubBoxCapability {
-  /** Wire field holding the box as `[x1,y1,x2,y2]`. Regions: `region_bbox_norm`. */
-  bboxField: WireField;
+  /**
+   * Mutually exclusive with `listField` — a capability is EITHER a
+   * single scalar box (a tier-2, non-region slot) OR a W8 multi-box list
+   * (the served region slot). Never both: `readSlot` skips the legacy
+   * scalar block entirely when `listField` is set (owner decision,
+   * 2026-09-26 — "no backward compatibility", the region wire's scalar
+   * fields are gone, not merely deprecated).
+   *
+   * Wire field holding the box as `[x1,y1,x2,y2]`. */
+  bboxField?: WireField;
   /** W8: wire field holding the multi-box list on the item
-   *  (`ItemDoc.region_boxes`). When set, `readSlot` populates
-   *  `SlotData.subBoxes` from this list (element keys are the fixed
-   *  `RegionBoxWire` shape — see `SlotBox`) in addition to the legacy
-   *  scalar fields below, which a pre-W8 backend still serves. */
+   *  (`ItemDoc.region_boxes`) — `readSlot` populates `SlotData.subBoxes`
+   *  from this list (element keys are the fixed `RegionBoxWire` shape —
+   *  see `SlotBox`), always an array (`[]` when none). The served region
+   *  slot declares only this, not `bboxField`. */
   listField?: WireField;
-  /** Frame the stored box uses when `frameField` is absent or unreadable. */
-  storedFrame: SlotFrame;
+  /** Frame the stored box uses when `frameField` is absent or unreadable.
+   *  Only meaningful with `bboxField` (single-box path). */
+  storedFrame?: SlotFrame;
   /** Optional wire field carrying the frame per-row (regions: `region_bbox_frame`).
    *  When present and parseable it overrides `storedFrame` for that row. */
   frameField?: WireField;
@@ -441,6 +450,10 @@ export interface SlotData {
  *  the row). */
 export function slotIsPresent(d: SlotData | undefined | null): boolean {
   if (!d) return false;
+  // W8: a genuinely populated multi-box list is evidence; an empty list
+  // ([] — "no boxes on this item yet") is not, same as the legacy
+  // single-box null case below.
+  if (d.subBoxes && d.subBoxes.length > 0) return true;
   if (d.subBox && d.subBox.rawXyxy != null) return true;
   if (d.subBox && d.subBox.candidate != null) return true;
   if (d.text && d.text.value != null) return true;

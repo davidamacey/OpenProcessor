@@ -156,16 +156,22 @@ export function readSlot(
   const cap = spec.capabilities;
 
   if (cap.subBox?.listField) {
+    // W8 multi-box list — always an array, [] when none (owner decision:
+    // no backward compatibility with the pre-W8 scalar shape, so this is
+    // the only region box path; the legacy single-box block below never
+    // runs for a capability declaring listField — see next `if`).
     out.subBoxes = mapRegionBoxList(pick(raw, cap.subBox.listField));
   }
 
-  if (cap.subBox) {
+  if (cap.subBox && cap.subBox.bboxField != null && cap.subBox.listField == null) {
     const rawXyxy = asXyxy(pick(raw, cap.subBox.bboxField));
     const frameRaw = cap.subBox.frameField
       ? asString(pick(raw, cap.subBox.frameField))
       : null;
     const frame: SlotFrame =
-      frameRaw === 'parent' || frameRaw === 'source' ? frameRaw : cap.subBox.storedFrame;
+      frameRaw === 'parent' || frameRaw === 'source'
+        ? frameRaw
+        : (cap.subBox.storedFrame ?? 'source');
     // Prefer the server's own parent-frame projection when it sent one
     // (regions: region_bbox_in_parent) over projecting rawXyxy ourselves —
     // one less place client and server geometry can disagree.

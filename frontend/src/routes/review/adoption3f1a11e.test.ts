@@ -79,8 +79,14 @@ describe('3f1a11e: region_bbox_correct folded into the existing Validation row',
 });
 
 describe('3f1a11e: per-item reason wording — region_rejection_reason wins over the generic reason string', () => {
-  it('currentSlotRejectionReason is derived off slotOf(current, activeSlot).lifecycle.rejectionReason', () => {
+  it('currentSlotRejectionReason reads the first rejected box (W8 multi-box) or the item-level field (tier-2 single-box)', () => {
     expect(src).toMatch(/const currentSlotRejectionReason = \$derived<string \| null>\(/);
+    // W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): the
+    // machine reason moved off the item onto each rejected SlotBox.
+    expect(src).toMatch(
+      /slotOf\(current, activeSlot\)\?\.subBoxes\?\.find\(\(b\) => b\.state === 'rejected'\)\s*\?\.rejectionReason \?\? null/,
+    );
+    // Tier-2 single-box fallback, unchanged.
     expect(src).toMatch(
       /slotOf\(current, activeSlot\)\?\.lifecycle\?\.rejectionReason \?\? null/,
     );
@@ -107,13 +113,14 @@ describe('3f1a11e: per-item reason wording — region_rejection_reason wins over
   });
 });
 
-describe('3f1a11e: candidate badges style by the served rejection kind (never "rejected" for needs_human)', () => {
-  it('the inline slot-panel candidate badge branches on rejectionReasonKind, not just presence of a reason', () => {
+describe('3f1a11e/W8: rejected-box badges style by the served rejection kind (never "rejected" for needs_human)', () => {
+  it('the W8 multi-box panel badges each rejected box, branching on rejectionReasonKind, not just presence of a reason', () => {
+    // W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): no
+    // separate "candidate" concept — one badge per rejected SlotBox.
+    expect(src).toMatch(/multiBox\.boxes\.filter\(\(b\) => b\.state === 'rejected'\)/);
+    expect(src).toMatch(/\{@const kind = regionVocabularyStore\.rejectionReasonKind\(/);
     expect(src).toMatch(
-      /\{@const candidateKind = regionVocabularyStore\.rejectionReasonKind\(\s*slotData\?\.lifecycle\?\.rejectionReason,?\s*\)\}/,
-    );
-    expect(src).toMatch(
-      /candidateKind === 'needs_human'\s*\?\s*'candidate · needs review'\s*:\s*'rejected candidate · confirm to accept'/,
+      /kind === 'needs_human'\s*\?\s*'candidate · needs review'\s*:\s*'rejected · confirm to accept'/,
     );
   });
 });

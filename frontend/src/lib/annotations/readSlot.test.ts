@@ -63,12 +63,29 @@ describe('W8 multi-box mapping (region_boxes)', () => {
 describe('readSlot / widgetTagSlot', () => {
   const parent: XYXY = [0, 0, 0.4, 0.2]; // vw=0.4, vh=0.2
 
-  it('reads a full region row into every capability', () => {
+  function oneBox(overrides: Record<string, unknown> = {}) {
+    return {
+      box_id: 'b1',
+      state: 'accepted',
+      bbox_norm: [0.1, 0.08, 0.3, 0.12],
+      bbox_in_parent: [0.1, 0.08, 0.3, 0.12],
+      score: 0.91,
+      detector: null,
+      detector_version: null,
+      source: null,
+      bbox_correct: null,
+      confidence: null,
+      rejection_reason: null,
+      text: null,
+      cluster_id: null,
+      thumbnail_url: null,
+      ...overrides,
+    };
+  }
+
+  it('reads a full region row (W8 region_boxes list) into every capability', () => {
     const raw = {
-      region_bbox_norm: [0.1, 0.08, 0.3, 0.12],
-      region_bbox_frame: 'source',
-      region_score: 0.91,
-      region_visible: true,
+      region_boxes: [oneBox()],
       region_text: 'TAG-001',
       region_text_raw: 'tag-001',
       region_text_source: 'gemma',
@@ -82,8 +99,9 @@ describe('readSlot / widgetTagSlot', () => {
     };
     const d = readSlot(raw, widgetTagSlot, parent);
     expect(slotIsPresent(d)).toBe(true);
-    expect(d.subBox?.rawXyxy).toEqual([0.1, 0.08, 0.3, 0.12]);
-    expect(d.subBox?.parent).not.toBeNull();
+    expect(d.subBoxes).toHaveLength(1);
+    expect(d.subBoxes?.[0].rawXyxy).toEqual([0.1, 0.08, 0.3, 0.12]);
+    expect(d.subBoxes?.[0].parent).not.toBeNull();
     expect(d.text?.value).toBe('TAG-001');
     expect(d.provenance?.detector).toBe('tag_detector_v1');
     expect(d.lifecycle?.status).toBe('detected');
@@ -101,30 +119,26 @@ describe('readSlot / widgetTagSlot', () => {
   it('yields no slot data at all when no region fields are present', () => {
     const d = readSlot({}, widgetTagSlot, parent);
     expect(slotIsPresent(d)).toBe(false);
-    expect(d.subBox?.rawXyxy).toBeNull();
+    expect(d.subBoxes).toEqual([]);
     expect(d.text?.value).toBeNull();
   });
 
-  it('prefers the server-projected bboxInParentField over its own projection', () => {
-    // Deliberately inconsistent with region_bbox_norm/parent so the
-    // assertion only passes if bboxInParentField actually won.
-    const raw = {
-      region_bbox_norm: [0.1, 0.08, 0.3, 0.12],
-      region_bbox_in_parent: [0.4, 0.4, 0.6, 0.6],
-    };
+  it('a box with no bbox_in_parent has no drawable crop-local geometry', () => {
+    const raw = { region_boxes: [oneBox({ bbox_in_parent: null })] };
     const d = readSlot(raw, widgetTagSlot, parent);
-    expect(d.subBox?.parent?.cx).toBeCloseTo(0.5);
-    expect(d.subBox?.parent?.cy).toBeCloseTo(0.5);
-    expect(d.subBox?.parent?.w).toBeCloseTo(0.2);
-    expect(d.subBox?.parent?.h).toBeCloseTo(0.2);
+    expect(d.subBoxes?.[0].rawXyxy).toEqual([0.1, 0.08, 0.3, 0.12]);
+    expect(d.subBoxes?.[0].parent).toBeNull();
   });
 
-  it('falls back to its own projection when bboxInParentField is absent', () => {
-    const raw = { region_bbox_norm: [0.1, 0.08, 0.3, 0.12] };
+  it('reads the served bbox_in_parent directly — no client-side projection', () => {
+    const raw = {
+      region_boxes: [oneBox({ bbox_in_parent: [0.4, 0.4, 0.6, 0.6] })],
+    };
     const d = readSlot(raw, widgetTagSlot, parent);
-    // vw=0.4, vh=0.2 (parent): cx=(0.2/0.4)=0.5, cy=(0.1/0.2)=0.5
-    expect(d.subBox?.parent?.cx).toBeCloseTo(0.5);
-    expect(d.subBox?.parent?.cy).toBeCloseTo(0.5);
+    expect(d.subBoxes?.[0].parent?.cx).toBeCloseTo(0.5);
+    expect(d.subBoxes?.[0].parent?.cy).toBeCloseTo(0.5);
+    expect(d.subBoxes?.[0].parent?.w).toBeCloseTo(0.2);
+    expect(d.subBoxes?.[0].parent?.h).toBeCloseTo(0.2);
   });
 
   it('resolves a legacy status value via aliases to the state a rename declares', () => {
@@ -169,47 +183,44 @@ describe('readSlot / widgetTagSlot', () => {
   });
 });
 
-describe('readSlot — dq-region candidate box / auto-confirm / text choice (2026-09-24)', () => {
+describe('readSlot — W8 rejected box / auto-confirm / text choice', () => {
   const parent: XYXY = [0, 0, 0.4, 0.2];
 
-  it('reads a verify_rejected candidate box when there is no main box', () => {
+  it('reads a rejected box as a SlotBox with state "rejected" and its own rejection reason (no separate candidate concept, W8)', () => {
     const raw = {
-      region_bbox_norm: null,
       region_status: 'verify_rejected',
-      region_rejection_reason: 'sanity_reject:aspect_ratio',
-      region_candidate_bbox_norm: [0.1, 0.08, 0.3, 0.12],
-      region_candidate_score: 0.42,
-      region_candidate_detector: 'tag_detector_v1',
-      region_candidate_detector_version: 'v3',
-      region_candidate_source: 'detector',
+      region_boxes: [
+        {
+          box_id: 'b1',
+          state: 'rejected',
+          bbox_norm: [0.1, 0.08, 0.3, 0.12],
+          bbox_in_parent: [0.1, 0.08, 0.3, 0.12],
+          score: 0.42,
+          detector: 'tag_detector_v1',
+          detector_version: 'v3',
+          source: 'detector',
+          bbox_correct: null,
+          confidence: null,
+          rejection_reason: 'sanity_reject:aspect_ratio',
+          text: null,
+          cluster_id: null,
+          thumbnail_url: null,
+        },
+      ],
     };
     const d = readSlot(raw, widgetTagSlot, parent);
-    expect(d.subBox?.rawXyxy).toBeNull();
-    expect(d.subBox?.candidate).not.toBeNull();
-    expect(d.subBox?.candidate?.rawXyxy).toEqual([0.1, 0.08, 0.3, 0.12]);
-    expect(d.subBox?.candidate?.score).toBeCloseTo(0.42);
-    expect(d.subBox?.candidate?.detector).toBe('tag_detector_v1');
-    expect(d.subBox?.candidate?.detectorVersion).toBe('v3');
-    expect(d.subBox?.candidate?.source).toBe('detector');
-    // Projected into the parent frame the same way the main box is.
-    expect(d.subBox?.candidate?.parent?.cx).toBeCloseTo(0.5);
-    expect(d.lifecycle?.rejectionReason).toBe('sanity_reject:aspect_ratio');
-  });
-
-  it('prefers the server-projected candidateBboxInParentField over its own projection', () => {
-    const raw = {
-      region_candidate_bbox_norm: [0.1, 0.08, 0.3, 0.12],
-      region_candidate_bbox_in_parent: [0.4, 0.4, 0.6, 0.6],
-    };
-    const d = readSlot(raw, widgetTagSlot, parent);
-    expect(d.subBox?.candidate?.parent?.cx).toBeCloseTo(0.5);
-    expect(d.subBox?.candidate?.parent?.w).toBeCloseTo(0.2);
-  });
-
-  it('has no candidate when candidateBboxField is absent', () => {
-    const raw = { region_bbox_norm: [0.1, 0.08, 0.3, 0.12] };
-    const d = readSlot(raw, widgetTagSlot, parent);
-    expect(d.subBox?.candidate).toBeNull();
+    expect(d.subBoxes).toHaveLength(1);
+    const box = d.subBoxes![0];
+    expect(box.state).toBe('rejected');
+    expect(box.rawXyxy).toEqual([0.1, 0.08, 0.3, 0.12]);
+    expect(box.score).toBeCloseTo(0.42);
+    expect(box.detector).toBe('tag_detector_v1');
+    expect(box.detectorVersion).toBe('v3');
+    expect(box.source).toBe('detector');
+    // bbox_in_parent = [0.1,0.08,0.3,0.12] served directly, no projection.
+    expect(box.parent?.cx).toBeCloseTo(0.2);
+    expect(box.parent?.cy).toBeCloseTo(0.1);
+    expect(box.rejectionReason).toBe('sanity_reject:aspect_ratio');
   });
 
   it('reads region_validated as human-only validation, separate from region_verified', () => {
@@ -262,13 +273,22 @@ describe('projectFromParent — inverse of the private projectToParent', () => {
     },
   ];
 
+  // projectFromParent/the legacy scalar-box readSlot path stay real for a
+  // tier-2 single-box slot (bboxField, no listField) — the served region
+  // slot no longer has one (W8, no backward compatibility), so this uses
+  // a minimal synthetic single-box spec rather than widgetTagSlot.
   for (const { frame, parentXyxy, childSourceXyxy } of cases) {
     it(`round-trips through readSlot's forward projection (${frame} frame)`, () => {
       const spec = {
         ...widgetTagSlot,
         capabilities: {
           ...widgetTagSlot.capabilities,
-          subBox: { ...widgetTagSlot.capabilities.subBox!, storedFrame: frame },
+          subBox: {
+            bboxField: 'region_bbox_norm',
+            storedFrame: frame,
+            ring: { confirmed: '', proposed: '', rejected: '' },
+            editor: { thumbSize: 512, viewPadding: 2.5, nudgeStep: 1 / 512 },
+          },
         },
       };
       const raw = { region_bbox_norm: childSourceXyxy };

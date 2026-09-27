@@ -72,6 +72,16 @@
 
   // false_positive regions stay visible (kept as hard negatives) but are
   // dimmed + badged so the operator sees the triage state at a glance.
+  // W8 multi-box (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
+  // the row's own box, when the browse route selected one (region_box_id
+  // set); the card's thumbnail is already server-cropped to it via
+  // getRegionThumbUrl's ?box_id= — this is just for the count/state chip.
+  const boxCount = $derived(data.subBoxes?.length ?? null);
+  const rowBox = $derived(
+    crop.region_box_id != null
+      ? (data.subBoxes?.find((b) => b.boxId === crop.region_box_id) ?? null)
+      : null,
+  );
   const isFalsePositive = $derived(
     slot.capabilities.lifecycle?.falsePositiveState != null &&
       data.lifecycle?.status === slot.capabilities.lifecycle.falsePositiveState,
@@ -209,6 +219,16 @@
           : undefined}
       >
         candidate
+      </span>
+    {:else if boxCount != null && boxCount > 0}
+      <!-- W8 multi-box: box count (+ this row's own box state, when the
+           browse route selected a specific box via region_box_id). -->
+      <span
+        class="absolute top-1 right-1 rounded border border-zinc-600/60 bg-zinc-800/85 px-1 py-0.5 text-[9px] font-semibold text-zinc-200"
+        title={rowBox ? `box state: ${rowBox.state}` : `${boxCount} box(es)`}
+      >
+        {boxCount}&nbsp;box{boxCount === 1 ? '' : 'es'}{#if rowBox}
+          · {rowBox.state}{/if}
       </span>
     {/if}
   </div>

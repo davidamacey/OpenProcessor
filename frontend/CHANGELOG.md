@@ -45,12 +45,31 @@ null, bbox_norm}`) plus the owner-decided Enter semantics
     `it.todo` entries (`endpointCatalog.test.ts`) for the wire keys/routes
     the backend's W8 hasn't merged yet — emptied at the lockstep contract
     sync, not silently widened.
-  - **Not yet done in this pass** (tracked in the plan doc's
-    "deliberately out of scope" section): wiring the multi-box editor
-    into `/review/+page.svelte`'s keyboard/confirm flow, `SlotBboxEditor`,
-    `SourceImageOverlay`, `SlotCard`, `CropMetaPanel`, `SlotGallery`/
-    `slotGalleryController` (`RegionRowPage`, `has_rejected_box`), region
-    cluster `size`/`box_count`, and `RegionBatchConflict` handling.
+  - **Second pass (2026-09-26): full cutover, no backward compatibility.**
+    Per owner confirmation (fresh build, no users), the pre-W8 scalar
+    region fields are deleted, not kept additive: `REGION_SUB_BOX`
+    declares only `listField`; `readSlot` never runs the legacy
+    scalar-box block for a `listField` capability; `setBox`/`clearBox`
+    are gone from `REGION_ENDPOINTS`. `/review`'s region tab is fully
+    wired to `MultiBoxCanvas` + the new `multiBoxRegionController.svelte.ts`
+    (extracted, not piled into the 3000-line page) in both scan and edit
+    mode — `y`/`r` PATCH the selected box immediately, Enter confirms
+    proposed boxes and flushes any pending geometry edit in one write,
+    arrow keys nudge the selected box, and the on-screen Confirm/Save-bbox
+    buttons (a real bug: they were still wired to the legacy single-box
+    functions, keyboard-only worked) now branch correctly too. `SlotCard`,
+    `CropMetaPanel` and `SourceImageOverlay` all render every box in
+    `subBoxes` (state-styled), replacing their single-`subBox` reads for
+    region. `SlotGallery` shows the served `total_rows`/`box_count`
+    alongside item counts; `batchRegionStatus`'s conflict type widened to
+    the full `RegionBatchConflict` shape. `test_region_verify_rejected_confirm.py`
+    rewritten for the real new semantics (confirm-only-proposed, per-box
+    accept/reject, add+confirm in one write, on-screen button parity, Z
+    restoring the whole list via the backend-confirmed one-step undo
+    contract). Remaining gap: region-cluster bulk triage still calls the
+    item-level `batch_status` route, not the per-box `batch_box_state`
+    (declared and unit-tested in `api.ts`, not yet wired into the gallery
+    UI) — see the plan doc's updated status section for the full list.
 
 - **Action-id keymap store** (internal/architecture, frontend only, step
   K1 of `docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md`).

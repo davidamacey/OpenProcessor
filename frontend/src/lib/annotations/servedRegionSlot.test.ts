@@ -77,9 +77,10 @@ describe('regionSlotFromServedProfile', () => {
     expect(REGION_TAB_ID).toBe('regions');
   });
 
-  it('writes through the region routes', () => {
+  it('writes through the region routes (W8: no setBox/clearBox — PUT /crops/{id}/region is a removed route)', () => {
     expect(slot.endpoints).toBe(REGION_ENDPOINTS);
-    expect(slot.endpoints.setBox!('a/b')).toBe('/crops/a%2Fb/region');
+    expect(slot.endpoints.setBox).toBeUndefined();
+    expect(slot.endpoints.clearBox).toBeUndefined();
     expect(slot.endpoints.patchMeta!('a')).toBe('/crops/a/region_meta');
     expect(slot.endpoints.batchStatus!()).toBe('/regions/batch_status');
     expect(slot.capabilities.subBox).toBe(REGION_WIRE_CAPABILITIES.subBox);

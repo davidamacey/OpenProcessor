@@ -123,8 +123,21 @@
     return [b.cx - b.w / 2, b.cy - b.h / 2, b.cx + b.w / 2, b.cy + b.h / 2];
   }
 
+  /** W8 multi-box (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
+   *  per-box state -> ring color/dash, same palette as the review page's
+   *  multiBoxRingColor/multiBoxDashed. No served box_states vocabulary
+   *  fetch yet in this pass. */
+  function multiBoxRingColorClass(state: string): string {
+    if (state === 'accepted') return 'border-green-400';
+    if (state === 'proposed') return 'border-yellow-400';
+    return 'border-zinc-500'; // rejected / false_positive
+  }
+  function multiBoxDashed(state: string): boolean {
+    return state === 'rejected' || state === 'false_positive';
+  }
+
   interface DrawBox {
-    kind: 'item' | 'region' | 'region-candidate';
+    kind: 'item' | 'region' | 'region-candidate' | 'region-box';
     cropId: string;
     xyxy: XYXY;
     dashed: boolean;
@@ -214,6 +227,29 @@
           clickable: false,
         });
       }
+
+      // W8 multi-box: draw every box in the list, numbered by position.
+      // Additive to the single-box block above — a real W8 payload
+      // serves subBoxes and leaves the legacy sub/candidate fields null,
+      // so the two loops never double-draw in practice.
+      const boxList = data?.subBoxes ?? [];
+      boxList.forEach((b, i) => {
+        if (!b.parent) return;
+        const boxXyxy = projectFromParent(b.parent, itemXyxy, 'source');
+        out.push({
+          kind: 'region-box',
+          cropId: item.id,
+          xyxy: boxXyxy,
+          dashed: multiBoxDashed(b.state),
+          colorClass: multiBoxRingColorClass(b.state),
+          label: `${slot.label.title} ${i + 1}`,
+          tooltip: `${slot.label.title} ${i + 1} · ${b.state}${
+            b.score != null ? ` · ${(b.score * 100).toFixed(0)}%` : ''
+          }`,
+          selected: false,
+          clickable: false,
+        });
+      });
     }
     return out;
   });

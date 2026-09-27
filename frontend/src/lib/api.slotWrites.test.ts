@@ -8,6 +8,31 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setSlotBox, patchSlotMeta, batchRegionStatus, API_PREFIX } from './api';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 
+// W8 (owner decision 2026-09-26, no backward compatibility): the served
+// region slot dropped its scalar bboxField/setBox/clearBox entirely — box
+// writes now go through putRegionBoxes/patchRegionBox (multiBox.test.ts,
+// multiBoxRegionController.test.ts cover those). setSlotBox itself is
+// still a real, generic write path for a tier-2 single-box slot (e.g. a
+// deployment profile that isn't multi-box-capable), so its own tests use
+// a minimal synthetic single-box spec rather than the region fixture.
+const singleBoxSlot = {
+  ...widgetTagSlot,
+  capabilities: {
+    ...widgetTagSlot.capabilities,
+    subBox: {
+      bboxField: 'region_bbox_norm',
+      storedFrame: 'source' as const,
+      ring: { confirmed: '', proposed: '', rejected: '' },
+      editor: { thumbSize: 512, viewPadding: 2.5, nudgeStep: 1 / 512 },
+    },
+  },
+  endpoints: {
+    ...widgetTagSlot.endpoints,
+    setBox: (id: string) => `/crops/${id}/region`,
+    clearBox: (id: string) => `/crops/${id}/region`,
+  },
+};
+
 function okResponse(body: unknown = {}) {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -102,7 +127,7 @@ describe('setSlotBox', () => {
     const fetchMock = vi.fn().mockResolvedValue(okResponse({ item: rawItem('c1') }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const item = await setSlotBox(widgetTagSlot, 'c1', [0.1, 0.1, 0.2, 0.2]);
+    const item = await setSlotBox(singleBoxSlot, 'c1', [0.1, 0.1, 0.2, 0.2]);
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${API_PREFIX}/crops/c1/region`);
@@ -120,7 +145,7 @@ describe('setSlotBox', () => {
     const fetchMock = vi.fn().mockResolvedValue(okResponse({ item: rawItem('c1') }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await setSlotBox(widgetTagSlot, 'c1', [0.1, 0.1, 0.2, 0.2], 'parent');
+    await setSlotBox(singleBoxSlot, 'c1', [0.1, 0.1, 0.2, 0.2], 'parent');
 
     const [, init] = fetchMock.mock.calls[0];
     expect(JSON.parse(init.body)).toEqual({
@@ -133,10 +158,10 @@ describe('setSlotBox', () => {
     const fetchMock = vi.fn().mockResolvedValue(okResponse({ item: rawItem('c1') }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await setSlotBox(widgetTagSlot, 'c1', null);
+    await setSlotBox(singleBoxSlot, 'c1', null);
 
     const [url, init] = fetchMock.mock.calls[0];
-    // widgetTagSlot's clearBox and setBox are the same URL today.
+    // singleBoxSlot's clearBox and setBox are the same URL today.
     expect(url).toBe(`${API_PREFIX}/crops/c1/region`);
     expect(JSON.parse(init.body)).toEqual({ region_bbox_norm: null, frame: 'source' });
   });

@@ -174,8 +174,11 @@ export function derivedCohorts(spec: SlotSpec): CohortSpec[] {
   const { subBox, provenance, lifecycle } = spec.capabilities;
 
   // subBox ⇒ "parent subject is present, sub-box is not" — the generic
-  // meaning of a blind spot for any sub-annotation.
-  if (subBox) {
+  // meaning of a blind spot for any sub-annotation. Only meaningful for a
+  // legacy scalar single-box capability (bboxField); a W8 multi-box slot
+  // (listField) has no single "exists" predicate field — it's covered by
+  // the served /training_cohorts modes instead (see the plan doc).
+  if (subBox?.bboxField) {
     out.push({
       id: 'blind_spots',
       label: `${spec.label.title} blind spots`,

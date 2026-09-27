@@ -552,7 +552,14 @@ export interface Cluster {
   id: number;
   /** Backend-derived: "class" | "candidate" | "unassigned". */
   cluster_kind: ClusterKind;
+  /** Items with >=1 box in the cluster. For a region cluster (W8), this
+   *  is DISTINCT from `box_count` below — an item can have more than one
+   *  box in the same cluster. */
   size: number;
+  /** W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): boxes
+   *  (rows) in the cluster, region clusters only. Absent on an item
+   *  cluster or a pre-W8 backend. */
+  box_count?: number | null;
   /** class_validated=true count. */
   validated_count: number;
   dominant_class_id: number | null;

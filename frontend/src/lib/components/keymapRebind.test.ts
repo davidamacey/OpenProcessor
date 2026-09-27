@@ -23,11 +23,11 @@ import { keyboardStore } from '$stores/keyboard.svelte';
 import { keymapStore } from '$stores/keymap.svelte';
 import { FALLBACK_KEYMAP, type KeymapDocument } from '$lib/keymapFallback';
 import {
-  installServedRegionProfile,
+  installDeploymentSlots,
   resetDeploymentSlots,
 } from '$lib/annotations/registeredSlots';
 import { mapCropSlots } from '$lib/annotations/cropSlots';
-import { WIDGET_TAG_PROFILE, widgetTagServedSlot } from '$lib/test/fixtures/regionSlot';
+import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
 import type { Crop } from '$lib/types';
 
 function withKeys(overrides: Record<string, string[]>): KeymapDocument {
@@ -119,7 +119,11 @@ describe('ShortcutOverlay prints the keymap', () => {
 
 describe('SlotBboxEditor resolves its keys through the keymap', () => {
   beforeEach(() => {
-    installServedRegionProfile(WIDGET_TAG_PROFILE);
+    // aircraftTailNumberSlot is a genuine single-box (bboxField) slot —
+    // the served region slot moved to the W8 multi-box list only (no
+    // backward compatibility), so SlotBboxEditor (the legacy single-box
+    // modal) is tested against this fixture instead.
+    installDeploymentSlots([aircraftTailNumberSlot]);
     vi.mocked(setSlotBox).mockClear();
   });
   afterEach(() => resetDeploymentSlots());
@@ -132,7 +136,7 @@ describe('SlotBboxEditor resolves its keys through the keymap', () => {
       class_id: 3,
       class_name: 'widget_a',
       label_validated: false,
-      slots: mapCropSlots({ region_bbox_norm: [0.4, 0.4, 0.6, 0.6] }, [0, 0, 1, 1]),
+      slots: mapCropSlots({ tail_bbox_norm: [0.4, 0.4, 0.6, 0.6] }, [0, 0, 1, 1]),
     } as unknown as Crop;
   }
 
@@ -149,7 +153,7 @@ describe('SlotBboxEditor resolves its keys through the keymap', () => {
   it('prints the default box-edit keys', () => {
     const el = render(SlotBboxEditor, {
       crop: crop(),
-      slot: widgetTagServedSlot,
+      slot: aircraftTailNumberSlot,
       onclose: vi.fn(),
     });
     expect(footerKeys(el)).toEqual(['[', ']', '←↑↓→', '⌫', '↵', 'Esc']);
@@ -159,7 +163,7 @@ describe('SlotBboxEditor resolves its keys through the keymap', () => {
     keymapStore.setDocument(withKeys({ 'box_edit.delete_box': ['q'] }), 'served');
     const el = render(SlotBboxEditor, {
       crop: crop(),
-      slot: widgetTagServedSlot,
+      slot: aircraftTailNumberSlot,
       onclose: vi.fn(),
     });
     expect(footerKeys(el)).toEqual(['[', ']', '←↑↓→', 'Q', '↵', 'Esc']);

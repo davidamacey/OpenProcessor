@@ -262,6 +262,12 @@
       >
         {gallery.pager.items.length.toLocaleString()} / {gallery.pager.total.toLocaleString()}
         listed
+        {#if gallery.totalRows != null && gallery.totalRows !== gallery.pager.total}
+          <!-- W8: total_rows counts boxes, not items, on a box-selecting
+               request — shown alongside, never replacing, the item total
+               (spec: total stays items so page math holds). -->
+          ({gallery.totalRows.toLocaleString()} boxes)
+        {/if}
       </span>
     </div>
 
@@ -352,7 +358,15 @@
               {:else}
                 <span class="font-semibold text-zinc-200">#{c.id}</span>
               {/if}
-              <span class="text-zinc-400">{c.size.toLocaleString()}</span>
+              <span
+                class="text-zinc-400"
+                title={c.box_count != null && c.box_count !== c.size
+                  ? `${c.size} items, ${c.box_count} boxes (W8 multi-box)`
+                  : undefined}
+              >
+                {c.size.toLocaleString()}{#if c.box_count != null && c.box_count !== c.size}
+                  &nbsp;/&nbsp;{c.box_count.toLocaleString()} boxes{/if}
+              </span>
               {#if c.n_subclusters > 0}
                 <span
                   class="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-200"

@@ -792,6 +792,11 @@ export interface RegionBrowseItem {
    *  `getRegions` via `mapCropSlots`; absent on any row that predates this
    *  mapping in a stale cache. */
   slots?: Record<SlotKey, SlotData>;
+  /** W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): the box
+   *  this row is about; null for an item-level row. Absent on a pre-W8
+   *  backend. See `RegionRowPage`'s doc comment for the `total`/
+   *  `total_rows` distinction this key exists for. */
+  region_box_id?: string | null;
 }
 
 export interface RegionsPage {
@@ -801,6 +806,14 @@ export interface RegionsPage {
   items: RegionBrowseItem[];
   mode?: string;
   selection_reason?: string;
+  /** W8's `RegionRowPage.total_rows` — counts ROWS (boxes, when the
+   *  request selects boxes), vs. `total` which keeps counting ITEMS (the
+   *  unit pages paginate) so existing page math holds unchanged. Absent
+   *  on a pre-W8 backend, or when a route doesn't select boxes (equal to
+   *  `total` in that case per spec). Render as the row count when
+   *  present; fall back to `total` otherwise — see `SlotGallery.svelte`'s
+   *  count chip. */
+  total_rows?: number;
 }
 
 export interface RegionsQuery {
@@ -2678,7 +2691,20 @@ export async function batchRegionStatus(
   signal?: AbortSignal,
 ): Promise<{
   updated: number;
-  conflicts: { crop_id: string; current_source: string | null }[];
+  // W8 (rev3, "one RegionBatchConflict shape across every region batch
+  // route"): a pre-W8 backend serves only {crop_id, current_source}; a
+  // W8 backend serves the full RegionBatchConflict. Typed as a superset
+  // (every RegionBatchConflict field optional here) so both eras read
+  // safely without a second type.
+  conflicts: Array<{
+    crop_id: string;
+    current_source: string | null;
+    error?: string;
+    message?: string;
+    current_region_revision?: number;
+    current_box_ids?: string[];
+    item?: RawCrop;
+  }>;
   invalid: BatchStatusInvalidEntry[];
   items: RegionBrowseItem[];
 }> {

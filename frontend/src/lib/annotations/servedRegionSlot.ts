@@ -22,26 +22,19 @@ import type { SlotSpec, SlotState, SubBoxCapability, TextCapability } from './ty
 
 const encode = encodeURIComponent;
 
-/** Wire field names for the region sub-box, identical for every profile. */
+/**
+ * Wire field names for the region sub-box, identical for every profile.
+ *
+ * W8 multi-box list only (docs/design/w8-multibox-frontend-plan-2026-09-26.md;
+ * owner decision 2026-09-26 — this is a fresh build, no backward
+ * compatibility, and the backend's W8 wave drops the old scalar per-box
+ * item keys entirely: `region_bbox_norm`, `region_bbox_in_parent`,
+ * `region_bbox_frame`, `region_score`, `region_visible`, every
+ * `region_candidate_*` key). `readSlot` never runs the legacy
+ * single-scalar-box path for a capability that declares `listField`.
+ */
 export const REGION_SUB_BOX: SubBoxCapability = {
-  bboxField: 'region_bbox_norm',
-  // W8 multi-box list (docs/design/w8-multibox-frontend-plan-2026-09-26.md).
-  // A W8 backend serves ItemDoc.region_boxes (always an array) instead of
-  // the scalar region_bbox_norm/region_candidate_* fields above; those
-  // scalar fields stay declared here only for a pre-W8 backend during the
-  // lockstep transition (`region_boxes_migration.pending` on /health).
   listField: 'region_boxes',
-  storedFrame: 'source',
-  frameField: 'region_bbox_frame',
-  scoreField: 'region_score',
-  visibleField: 'region_visible',
-  bboxInParentField: 'region_bbox_in_parent',
-  candidateBboxField: 'region_candidate_bbox_norm',
-  candidateBboxInParentField: 'region_candidate_bbox_in_parent',
-  candidateScoreField: 'region_candidate_score',
-  candidateDetectorField: 'region_candidate_detector',
-  candidateDetectorVersionField: 'region_candidate_detector_version',
-  candidateSourceField: 'region_candidate_source',
   thumbnail: {
     path: (id, size) => `/crops/${encode(id)}/region_thumbnail?size=${size}`,
     aspect: '2 / 1',
@@ -158,9 +151,16 @@ export const REGION_WIRE_CAPABILITIES: Pick<
   },
 };
 
+/**
+ * `setBox`/`clearBox` are gone (W8.8): `PUT /crops/{id}/region` and
+ * `PUT /crops/batch_region` are REMOVED routes (410 `route_removed`) —
+ * the multi-box writes (`putRegionBoxes`/`patchRegionBox`/
+ * `postBatchBoxState`, `api.ts`) are called directly by
+ * `multiBoxRegionController`/`MultiBoxCanvas`, never through
+ * `SlotSpec.endpoints`. `patchMeta`/`batchStatus` are unchanged W8.7
+ * whole-set-status paths.
+ */
 export const REGION_ENDPOINTS: SlotSpec['endpoints'] = {
-  setBox: (id) => `/crops/${encode(id)}/region`,
-  clearBox: (id) => `/crops/${encode(id)}/region`,
   patchMeta: (id) => `/crops/${encode(id)}/region_meta`,
   batchStatus: () => `/regions/batch_status`,
 };

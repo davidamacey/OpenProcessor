@@ -1039,15 +1039,27 @@ not a labeling rule). Built against, and merged only alongside, the
 backend's W8 wave (`openprocessor/docs/design/
 openprocessor_internal/any_domain_plan.md` §7.7); see
 `docs/design/w8-multibox-frontend-plan-2026-09-26.md` for the full wire
-model, write-path table and the "deliberately out of scope this pass"
-list. Landed so far, additively (every pre-W8 scalar region field the
-sections below describe stays declared and read — this hasn't cut over
-`/review`'s shipped UI yet):
+model, write-path table and the current gap list.
+
+**No backward compatibility (owner decision, 2026-09-26): the single-box
+scalar region fields are gone, not additive.** `REGION_SUB_BOX` declares
+only `listField: 'region_boxes'` — no `bboxField`/`scoreField`/
+`candidateBboxField`/etc. `readSlot` never runs the legacy scalar-box
+block for a capability that declares `listField`; `region_bbox_norm`,
+`region_candidate_*`, and every other pre-W8 per-box scalar key are gone
+from the wire and from this codebase's reads. `SubBoxCapability.bboxField`/
+`storedFrame` are optional now (still real for a tier-2 single-box slot,
+e.g. `aircraftTailNumberSlot` — the two shapes are mutually exclusive per
+capability, never both). `setBox`/`clearBox` are gone from
+`REGION_ENDPOINTS` (`PUT /crops/{id}/region` is a removed 410 route).
 
 - `SlotData.subBoxes: SlotBox[]`, populated by `readSlot` from
-  `SubBoxCapability.listField` (the served region slot declares
-  `listField: 'region_boxes'`) — `src/lib/annotations/types.ts`/
-  `readSlot.ts`/`servedRegionSlot.ts`.
+  `SubBoxCapability.listField` — `src/lib/annotations/types.ts`/
+  `readSlot.ts`/`servedRegionSlot.ts`. `SlotCard.svelte`,
+  `CropMetaPanel.svelte` and `SourceImageOverlay.svelte` all render every
+  box in `subBoxes` (state-styled: accepted=green, proposed=amber,
+  rejected/false_positive=dashed zinc) — none of them read the region
+  slot's `subBox` (singular) anymore.
 - Pure box-editing/write-body logic in `src/lib/annotations/multiBox.ts`,
   including the owner-decided **Enter confirms only `proposed` boxes**
   rule — a whole-set confirm never overrides a per-box decision;
@@ -1055,13 +1067,25 @@ sections below describe stays declared and read — this hasn't cut over
 - `api.ts`: `putRegionBoxes` (`PUT /crops/{id}/regions`), `putBatchRegions`
   (`PUT /crops/batch_regions`), `patchRegionBox` (`PATCH /crops/{id}/
 regions/{box_id}` — the per-box accept/reject keys, `y`/`r`), and
-  `postBatchBoxState` (`POST /regions/batch_box_state`, region-gallery
-  triage).
-- `MultiBoxCanvas.svelte` — select/add/delete/Tab-cycle over an unbounded
-  box list; a sibling to `BboxCanvas.svelte`, which stays single-box for
-  every non-region slot.
+  `postBatchBoxState` (`POST /regions/batch_box_state`, region-cluster
+  triage — declared but not yet called from the gallery UI).
+- `MultiBoxCanvas.svelte` — select/add/delete/Tab-cycle/arrow-nudge over
+  an unbounded box list; a sibling to `BboxCanvas.svelte`, which stays
+  single-box for every non-region (tier-2) slot.
+- `/review`'s region tab is fully wired to `MultiBoxCanvas` +
+  `multiBoxRegionController.svelte.ts` (new controller, following the
+  `reviewController.svelte.ts` extraction convention), in both scan and
+  edit mode — `y`/`r` PATCH the selected box immediately without
+  advancing the queue; Enter confirms proposed boxes and flushes any
+  pending geometry edit in the same write; the on-screen Confirm/Save-
+  bbox buttons (not just the keyboard path) branch on `isMultiBoxSlot`.
 - `keymapFallback.ts`'s `review.region.accept_box`/`reject_box`/
   `box_edit.next_box` are `available: true` on this branch.
+- `SlotGallery.svelte` shows the served `total_rows` (box count) beside
+  the item count when they differ, and region cluster cards show
+  `box_count` beside `size`; the `has_rejected_box` region-status filter
+  option needs no frontend code (it's one more value in the existing
+  served-enum `region_status` filter).
 
 ## Plate provenance + OCR (Wave 1 + Wave 2b, 2026-05-11)
 

@@ -59,10 +59,17 @@ export function createSlotGalleryController(slot: SlotSpec) {
     slot.capabilities.lifecycle?.falsePositiveState;
 
   const browsePath = slot.capabilities.queue?.browsePath;
+  // W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): total_rows
+  // counts rows (boxes, on a box-selecting request) vs. pager.total's
+  // item count — a side channel since createPager is generic and only
+  // ever reads `.total`. Absent on a pre-W8 backend.
+  let totalRows = $state<number | null>(null);
   const pager = createPager<RegionBrowseItem>({
     fetchPage: async (page) => {
       if (!browsePath) throw new Error(`slot "${slot.key}" declares no browse path`);
-      return await getRegions(browsePath, browseQuery(page));
+      const res = await getRegions(browsePath, browseQuery(page));
+      totalRows = res.total_rows ?? null;
+      return res;
     },
     keyOf: (p) => p.crop_id,
   });
@@ -439,8 +446,16 @@ export function createSlotGalleryController(slot: SlotSpec) {
       const conflictCount = res.conflicts?.length ?? 0;
       const invalid = res.invalid ?? [];
       if (conflictCount > 0 || invalid.length > 0) {
+        // W8: a conflict now carries a served `message` (RegionBatchConflict)
+        // on a W8 backend — show it verbatim instead of just a count when
+        // present, since it names the real reason ("The item changed
+        // since it was loaded."). A pre-W8 backend has no `message`, so
+        // this falls back to the bare count exactly as before.
+        const conflictDetail = res.conflicts?.find((c) => c.message)?.message;
         const parts = [
-          conflictCount > 0 ? `${conflictCount} conflicted` : null,
+          conflictCount > 0
+            ? `${conflictCount} conflicted${conflictDetail ? ` (${conflictDetail})` : ''}`
+            : null,
           invalid.length > 0
             ? `${invalid.length} invalid (${invalid.map((i) => i.detail).join('; ')})`
             : null,
@@ -536,6 +551,11 @@ export function createSlotGalleryController(slot: SlotSpec) {
     falsePositiveState,
     get pager() {
       return pager;
+    },
+    /** W8's total_rows (see above) — null on a pre-W8 backend or a
+     *  non-box-selecting request. */
+    get totalRows() {
+      return totalRows;
     },
     get sel() {
       return sel;

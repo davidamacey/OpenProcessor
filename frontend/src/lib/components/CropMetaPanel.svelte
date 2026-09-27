@@ -351,6 +351,43 @@
           </dd>
         {/if}
 
+        {#if data?.subBoxes && data.subBoxes.length > 0}
+          <!-- W8 multi-box (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
+               one line per box, numbered by list position. Additive to
+               the single-box Score/Candidate rows above (a real W8
+               payload leaves those null). -->
+          <dt class="text-zinc-500">Boxes ({data.subBoxes.length})</dt>
+          <dd class="flex flex-col gap-1">
+            {#each data.subBoxes as b, i (b.boxId ?? i)}
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="font-mono text-[10px] text-zinc-500">#{i + 1}</span>
+                <span
+                  class="rounded border px-1 py-0.5 text-[10px] {b.state === 'accepted'
+                    ? 'border-green-500/40 bg-green-500/15 text-green-200'
+                    : b.state === 'proposed'
+                      ? 'border-yellow-500/40 bg-yellow-500/15 text-yellow-200'
+                      : 'border-zinc-600/40 bg-zinc-700/20 text-zinc-300'}"
+                >
+                  {b.state}
+                </span>
+                {#if b.score != null}
+                  <span class="font-mono text-[10px] text-zinc-500">{pct(b.score)}</span>
+                {/if}
+                {#if b.text}
+                  <span class="font-mono text-[10px] text-zinc-400">{b.text}</span>
+                {/if}
+                {#if b.detector}
+                  <ProvenanceChip
+                    detector={b.detector}
+                    version={b.detectorVersion}
+                    size="sm"
+                  />
+                {/if}
+              </div>
+            {/each}
+          </dd>
+        {/if}
+
         {#if data?.provenance?.detector || data?.provenance?.verifier}
           <dt class="text-zinc-500">Detector</dt>
           <dd class="flex flex-wrap items-center gap-1.5">

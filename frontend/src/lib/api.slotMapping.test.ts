@@ -34,15 +34,29 @@ afterEach(() => {
 });
 
 describe('mapRawCrop slots mapping', () => {
-  it('maps every region_* wire field into slots.widget_tag for a fully-populated row', async () => {
+  it('maps every region_* wire field (W8 region_boxes list + item-level fields) into slots.widget_tag', async () => {
     const raw = {
       crop_id: 'c1',
       image_path: '/img/1.jpg',
       bbox_norm: [0, 0, 0.4, 0.2],
-      region_bbox_norm: [0.1, 0.08, 0.3, 0.12],
-      region_bbox_frame: 'source',
-      region_score: 0.91,
-      region_visible: true,
+      region_boxes: [
+        {
+          box_id: 'b1',
+          state: 'accepted',
+          bbox_norm: [0.1, 0.08, 0.3, 0.12],
+          bbox_in_parent: [0.1, 0.08, 0.3, 0.12],
+          score: 0.91,
+          detector: null,
+          detector_version: null,
+          source: null,
+          bbox_correct: null,
+          confidence: null,
+          rejection_reason: null,
+          text: null,
+          cluster_id: null,
+          thumbnail_url: null,
+        },
+      ],
       region_status: 'detected',
       region_verified: true,
       region_detector: 'tag_detector_v1',
@@ -65,10 +79,13 @@ describe('mapRawCrop slots mapping', () => {
     const slot = out.slots?.widget_tag;
     expect(slot).toBeDefined();
 
-    expect(slot!.subBox?.rawXyxy).toEqual(raw.region_bbox_norm);
-    expect(slot!.subBox?.score).toBe(0.91);
+    expect(slot!.subBoxes).toHaveLength(1);
+    expect(slot!.subBoxes![0].rawXyxy).toEqual([0.1, 0.08, 0.3, 0.12]);
+    expect(slot!.subBoxes![0].score).toBe(0.91);
     expect(slot!.lifecycle?.status).toBe('detected');
     expect(slot!.lifecycle?.verified).toBe(true);
+    // Item-level text/provenance fields are unaffected by the W8 box list
+    // (region_text* / region_detector* stay item-level per the spec).
     expect(slot!.text?.value).toBe('TAG-001');
     expect(slot!.text?.raw).toBe('tag-001');
     expect(slot!.text?.source).toBe('gemma');
@@ -82,24 +99,43 @@ describe('mapRawCrop slots mapping', () => {
     expect(slot!.provenance?.detectedAt).toBe('2026-09-01T00:00:00Z');
   });
 
-  it('is absent when region_bbox_norm is missing and there is no other evidence', async () => {
+  it('is absent when region_boxes is missing/empty and there is no other evidence', async () => {
     const raw = { crop_id: 'c2', image_path: '/img/2.jpg', bbox_norm: [0, 0, 0.4, 0.2] };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
     const out = await getCrop('c2');
     expect(out.slots?.widget_tag).toBeUndefined();
   });
 
-  it('does not crash when the parent bbox is degenerate (NaN-safe projection)', async () => {
+  it('does not crash on a degenerate item (NaN-safe — no parent-frame box served)', async () => {
     const raw = {
       crop_id: 'c3',
       image_path: '/img/3.jpg',
       bbox_norm: [0, 0, 0, 0],
-      region_bbox_norm: [0.1, 0.08, 0.3, 0.12],
+      region_boxes: [
+        {
+          box_id: 'b1',
+          state: 'accepted',
+          bbox_norm: [0.1, 0.08, 0.3, 0.12],
+          bbox_in_parent: null,
+          score: null,
+          detector: null,
+          detector_version: null,
+          source: null,
+          bbox_correct: null,
+          confidence: null,
+          rejection_reason: null,
+          text: null,
+          cluster_id: null,
+          thumbnail_url: null,
+        },
+      ],
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
     const out = await getCrop('c3');
-    expect(out.slots?.widget_tag?.subBox?.rawXyxy).toEqual([0.1, 0.08, 0.3, 0.12]);
-    expect(out.slots?.widget_tag?.subBox?.parent).toBeNull();
+    const box = out.slots?.widget_tag?.subBoxes?.[0];
+    expect(box?.rawXyxy).toEqual([0.1, 0.08, 0.3, 0.12]);
+    // No bbox_in_parent served -> not drawable in the crop view.
+    expect(box?.parent).toBeNull();
   });
 
   it('a crop with no region_* keys at all yields slots === {} (absence, not a block of nulls)', async () => {
