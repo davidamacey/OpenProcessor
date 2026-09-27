@@ -9,7 +9,7 @@ could print beside a VLM label was that detector score.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -31,21 +31,8 @@ from src.services.curation.review_queries import TAB_LABELS
 from src.services.curation.wire import serialize_item
 
 
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
-
 ITEMS = base_curation_config().items_index
 MODEL_SOURCE = 'secondary_model'
-
-
-@pytest.fixture(autouse=True)
-def _fresh_sort_coverage() -> Iterator[None]:
-    from src.services.curation.strategy_registry import _reset_field_coverage_cache
-
-    _reset_field_coverage_cache()
-    yield
-    _reset_field_coverage_cache()
 
 
 def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:

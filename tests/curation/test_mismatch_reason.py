@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -22,20 +21,12 @@ from src.services.curation.review_queries import mismatch_reason
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
     from pathlib import Path
+
+    import pytest
 
 
 ITEMS = base_curation_config().items_index
-
-
-@pytest.fixture(autouse=True)
-def _fresh_sort_coverage() -> Iterator[None]:
-    from src.services.curation.strategy_registry import _reset_field_coverage_cache
-
-    _reset_field_coverage_cache()
-    yield
-    _reset_field_coverage_cache()
 
 
 def _client(fake: Any, registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch) -> TestClient:
