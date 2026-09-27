@@ -45,6 +45,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   test.
 
 ### Fixed
+- **W2-finish review fix-on-fix pass (2026-09-27).** Addresses the
+  independent review of the W2-finish pass (`w2_finish_review_2026-09-27.md`),
+  which came back MERGE AFTER FIXES on commits `8f472157`/`707e7ee7`:
+  - **MJ1** (major): the config-store poll task never actually started
+    in production. `startup_bootstrap_config_store_safe()`
+    (`src/services/config_store/store.py`) used to also call
+    `get_config_store(mode='live')` + `store.refresh(client)` to "warm
+    the bound project's store" -- but `src.main`'s lifespan runs
+    unbound by design, so that call always raised `ProjectNotBound`,
+    which the function's own broad `except` swallowed, silently
+    returning `None` (no poll task) on every real deployment. Dropped
+    the unreachable warm-up; `ensure_global_configs_index` still runs
+    first, and the function now returns
+    `_poll_all_active_projects(...)`'s task directly -- its own first
+    tick binds and refreshes every active project. Red-then-green:
+    `test_startup_bootstrap_config_store_safe_starts_poll_task_unbound`
+    (new, `tests/curation/test_config_store.py`) reproduced the
+    reviewer's exact probe (`assert task is not None` failed with
+    `config_store_bootstrap_skipped` logged) against the unfixed code.
+  - **MJ2** (major): the new unprefixed `op_global_configs` index broke
+    the live verify harness's `verify_`-prefix safety guard
+    (`tests/live/conftest.py`'s `harness_safety_guard`). The code
+    already read the index name from `OP_GLOBAL_CONFIGS_INDEX`
+    (`global_configs_index()`, `store.py`) rather than hardcoding it, so
+    this was purely a compose-file gap: `docker/test/compose.yml` now
+    sets `OP_GLOBAL_CONFIGS_INDEX=verify_global_configs` alongside the
+    existing `OP_PROJECTS_INDEX=verify_projects`, and
+    `tests/live/conftest.py`'s `INDEXES` map gained a `global_configs`
+    entry so the static `verify_`-prefix assertion covers it too.
+  - **m1** (minor): the guard test for `op_global_configs` isolation
+    (`tests/projects/test_opensearch_guard.py::test_global_configs_index_is_a_legitimate_unowned_index`)
+    now builds its URLs from the real `global_configs_index()` resolver
+    instead of a hardcoded `'op_global_configs'` literal, so it would
+    catch the index resolving into a project's own namespace. Verified:
+    mutating `global_configs_index()`'s default to
+    `op_prj_default__configs` now turns this test red (it previously
+    stayed green against the hardcoded literal).
+  - **m3** (minor): minor 5's six `vlm_called = True` call sites had no
+    test coverage beyond the bulk-writer gate test -- removing all of
+    them left the full suite's pass/fail outcome unchanged except for
+    that one test. Added `tests/curation/test_vlm_called_call_sites.py`
+    with one test per path (the cascade verify path via
+    `verify.py::_verify_with_vlm`, the combined single-crop path via
+    `combined.py::_try_combined_class_region`, the Stage A visibility
+    batch and the Stage B combined batch, both in `runner.py`) plus one
+    negative test (the high-confidence secondary-segmenter auto-skip
+    path must NOT set `vlm_called`). Red-then-green: removing the four
+    production `vlm_called = True` assignments turned the four positive
+    tests red while the negative test and the pre-existing gate test
+    stayed green, confirming the new tests close the gap the reviewer
+    found.
+  - **m2** (minor, documented not fixed -- W9's call): reading the
+    global store while a project is bound silently degrades to an
+    empty, stale snapshot (the project guard refuses the I/O; `refresh`
+    treats that like any other failure). Added a docstring note on
+    `get_global_config_store()` making this explicit, per the review's
+    guidance that the actual read-while-bound rule is W9's decision, not
+    this pass's.
 - **W2-finish minors pass (2026-09-27).** Closes 4 of the W2 review's 7
   minors the prior fix pass left open or didn't fully close (`w2_review_2026-09-27.md`):
   - **Minor 2** (G1 copied the current body, not the activated
