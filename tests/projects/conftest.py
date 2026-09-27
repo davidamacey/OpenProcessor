@@ -111,6 +111,9 @@ class _FakeLifecycleIndices:
     async def exists(self, *, index: str) -> bool:
         return index in self._outer.indexes
 
+    async def refresh(self, *, index: str) -> dict[str, Any]:  # noqa: ARG002
+        return {'_shards': {'total': 0, 'successful': 0, 'failed': 0}}
+
 
 class _FakeTransport:
     """Faked ``/_cluster/health`` etc. so :func:`capacity_status` always
@@ -204,6 +207,18 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
 
     async def count(self, *, index: str, body: Any = None) -> dict[str, Any]:  # noqa: ARG002
         return {'count': len(self.indexes.get(index, []))}
+
+    async def bulk(self, *, body: list[Any], refresh: bool = False) -> dict[str, Any]:  # noqa: ARG002
+        """Just enough of ``_bulk`` for ``ClassRegistry.sync_to_opensearch``:
+        every other-odd item is an action header, every even item its doc."""
+        for action, doc in zip(body[0::2], body[1::2], strict=True):
+            index = next(iter(action.values()))['_index']
+            doc_id = next(iter(action.values())).get('_id')
+            self.indexes.setdefault(index, [])
+            if doc_id is not None:
+                self.docs[f'{index}:{doc_id}'] = doc
+            self.indexes[index].append(doc)
+        return {'errors': False, 'items': []}
 
 
 @pytest.fixture

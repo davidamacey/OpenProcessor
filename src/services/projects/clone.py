@@ -82,6 +82,15 @@ async def _apply_clone(
 
             registry = ClassRegistry(dst_path)
             await registry.sync_to_opensearch(client)
+    else:
+        # No class registry was copied -- the target's registry is empty
+        # (or byte-identical to whatever it already had), so the active
+        # region profile's class (if any) would otherwise never exist in
+        # it. Idempotent; a no-op when no region profile names one.
+        from src.services.curation.region_class import ensure_region_class
+
+        with bind_project(target_record):
+            ensure_region_class()
 
 
 async def clone_settings(

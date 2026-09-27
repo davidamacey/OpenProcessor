@@ -209,6 +209,13 @@ async def create_project(
                 from_slug=clone_settings_from,
                 axes=clone_axes,
             )
+        # Idempotent: a clone that copied 'classes' (or _apply_clone's own
+        # no-classes-copied branch) may already have seeded it, but every
+        # new project gets one guaranteed call under its own binding.
+        from src.services.curation.region_class import ensure_region_class
+
+        with bind_project(record):
+            ensure_region_class()
     except Exception as exc:
         logger.error('project_create_failed', slug=slug, error=str(exc))
         _, seq, term = await get_record_with_seq(client, slug)
