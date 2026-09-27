@@ -85,12 +85,24 @@ class TestNoStrayHardcodedPorts:
         offenders = self._bare_literal_port_lines(REPO_ROOT / 'scripts' / 'openprocessor.sh')
         assert offenders == []
 
+    def test_root_openprocessor_cli_has_no_bare_localhost_ports(self) -> None:
+        offenders = self._bare_literal_port_lines(REPO_ROOT / 'openprocessor')
+        assert offenders == []
+
     def test_export_paddleocr_sh_has_no_bare_localhost_ports(self) -> None:
         offenders = self._bare_literal_port_lines(REPO_ROOT / 'scripts' / 'export_paddleocr.sh')
         assert offenders == []
 
     def test_ports_lib_exists_and_is_sourced_by_both_scripts(self) -> None:
         assert PORTS_LIB.exists()
-        for name in ('openprocessor.sh', 'export_paddleocr.sh', 'setup.sh'):
+        for name in ('export_paddleocr.sh', 'setup.sh'):
             body = (REPO_ROOT / 'scripts' / name).read_text()
             assert 'lib/ports.sh' in body, f'{name} does not source ports.sh'
+        # Installer plan section 5.5 / section 8: the CLI body moved to the
+        # repo-root `openprocessor` script; scripts/openprocessor.sh is now
+        # a 3-line exec shim to it, so it sources ports.sh transitively.
+        shim_body = (REPO_ROOT / 'scripts' / 'openprocessor.sh').read_text()
+        shim_ok = 'exec' in shim_body and 'openprocessor' in shim_body
+        assert shim_ok, 'scripts/openprocessor.sh is not a shim to the root openprocessor CLI'
+        root_cli_body = (REPO_ROOT / 'openprocessor').read_text()
+        assert 'lib/ports.sh' in root_cli_body, 'openprocessor does not source ports.sh'

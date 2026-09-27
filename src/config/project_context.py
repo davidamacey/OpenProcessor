@@ -118,15 +118,10 @@ def bind_process_project(record: ProjectRecord | None, *, read_only: bool = Fals
 
 def project_jobs_dir(base: Path) -> Path:
     """A job/state dir configured by one env var for the whole deployment
-    (``base``): that path itself for ``default`` (today's location, no
-    migration), ``<base>/projects/<slug>`` for any other project -- the
-    same nesting §2.2 uses for the train and auto-label dirs. Every
-    scanner of these dirs reads fixed file names, never recursively, so a
-    nested project dir is invisible to ``default``'s job."""
-    from src.config.projects import DEFAULT_SLUG
-
-    slug = current_project().record.slug
-    return base if slug == DEFAULT_SLUG else base / 'projects' / slug
+    (``base``), nested per project: ``<base>/projects/<slug>`` -- the same
+    nesting §2.2 uses for the train and auto-label dirs, for every
+    project alike."""
+    return base / 'projects' / current_project().record.slug
 
 
 def project_api_base() -> str:

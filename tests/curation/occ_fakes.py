@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 
-_FAKE_INDEX = 'op_items'
+_FAKE_INDEX = 'op_prj_default__items'
 
 
 def make_mget_response(

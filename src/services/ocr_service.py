@@ -33,6 +33,7 @@ from typing import Any
 from src.clients.triton_client import get_triton_client
 from src.config import get_settings
 from src.utils.image_processing import decode_image, validate_image
+from src.utils.retry import RetryExhaustedError
 
 
 logger = logging.getLogger(__name__)
@@ -111,14 +112,24 @@ class OcrService:
             boxes = result.get('text_boxes', [])[:num_texts]
             boxes_norm = result.get('text_boxes_normalized', [])[:num_texts]
             det_scores = result.get('text_scores', [])[:num_texts]
+            # rec_scores is already sanitized by TritonClient.infer_ocr: a
+            # crop whose recognition failed carries None here (never the
+            # BLS's internal -1.0 sentinel), paired with a reason in
+            # rec_errors at the same index.
             rec_scores = result.get('rec_scores', [])[:num_texts]
+            rec_errors = result.get('rec_errors', [None] * num_texts)[:num_texts]
 
-            # Filter by confidence if requested
+            # Filter by confidence if requested. A failed-recognition (None)
+            # line never passes this filter, regardless of min_rec_score --
+            # unlike a numeric comparison, this can't be defeated by a
+            # caller-supplied negative threshold.
             if filter_by_score:
                 filtered_indices = [
                     i
                     for i in range(len(texts))
-                    if det_scores[i] >= self.min_det_score and rec_scores[i] >= self.min_rec_score
+                    if det_scores[i] >= self.min_det_score
+                    and rec_scores[i] is not None
+                    and rec_scores[i] >= self.min_rec_score
                 ]
 
                 texts = [texts[i] for i in filtered_indices]
@@ -134,13 +145,15 @@ class OcrService:
                 ]
                 det_scores = [float(det_scores[i]) for i in filtered_indices]
                 rec_scores = [float(rec_scores[i]) for i in filtered_indices]
+                rec_errors = [rec_errors[i] for i in filtered_indices]
                 num_texts = len(texts)
             else:
                 # Convert to lists
                 boxes = [b.tolist() if hasattr(b, 'tolist') else list(b) for b in boxes]
                 boxes_norm = [b.tolist() if hasattr(b, 'tolist') else list(b) for b in boxes_norm]
                 det_scores = [float(s) for s in det_scores]
-                rec_scores = [float(s) for s in rec_scores]
+                rec_scores = [None if s is None else float(s) for s in rec_scores]
+                rec_errors = list(rec_errors)
 
             return {
                 'status': 'success',
@@ -149,10 +162,13 @@ class OcrService:
                 'boxes_normalized': boxes_norm,
                 'det_scores': det_scores,
                 'rec_scores': rec_scores,
+                'rec_errors': rec_errors,
                 'num_texts': num_texts,
                 'image_size': [img_h, img_w],
             }
 
+        except RetryExhaustedError:
+            raise
         except Exception as e:
             logger.error(f'OCR extraction failed: {e}')
             import traceback
@@ -207,6 +223,7 @@ class OcrService:
             'boxes_normalized': [],
             'det_scores': [],
             'rec_scores': [],
+            'rec_errors': [],
             'num_texts': 0,
             'image_size': image_size or [0, 0],
         }

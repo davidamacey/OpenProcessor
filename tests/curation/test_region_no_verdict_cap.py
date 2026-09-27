@@ -380,9 +380,11 @@ class TestRejectionReasonVocabulary:
         from src.routers.curation import router as curation_router
 
         app = FastAPI()
-        app.include_router(curation_router)
+        from _curation_app import mount_curation_routers
+
+        mount_curation_routers(app, curation_router)
         with TestClient(app) as client:
-            body = client.get('/curation/regions/vocabulary').json()
+            body = client.get('/curation/projects/default/regions/vocabulary').json()
         assert body['rejection_reasons'] == rejection_reason_catalog()
 
     def test_no_vlm_geometry_reject_uses_the_served_prefix(self) -> None:

@@ -814,6 +814,12 @@ async def write_job(job: TrainJobSpec) -> str:
         )
 
     payload = spec.model_dump(mode='json', exclude_none=False)
+    # The trainer calls back into the API (campaign auto-promote, the
+    # auto-quantize bake-off) under this project's prefix; the client never
+    # chooses it.
+    from src.config.project_context import current_project
+
+    payload['project'] = current_project().record.slug
 
     await _atomic_write_json(target, payload)
     logger.info(

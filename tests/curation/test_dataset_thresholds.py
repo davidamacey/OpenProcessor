@@ -80,7 +80,9 @@ def _client(monkeypatch: pytest.MonkeyPatch, search_resp: dict[str, Any]) -> Tes
     fake.count = AsyncMock(return_value={'count': 0})
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: _Reg())
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -97,7 +99,9 @@ def _client_with_fake(
     fake.count = AsyncMock(return_value={'count': 0})
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: _Reg())
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app), fake
 
@@ -117,7 +121,7 @@ _BY_CLASS = {
 
 
 def test_stats_classes_serves_adequacy_and_aug_target(monkeypatch: pytest.MonkeyPatch) -> None:
-    r = _client(monkeypatch, _BY_CLASS).get('/curation/stats/classes')
+    r = _client(monkeypatch, _BY_CLASS).get('/curation/projects/default/stats/classes')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['thresholds'] == EXPECTED
@@ -128,7 +132,7 @@ def test_stats_classes_serves_adequacy_and_aug_target(monkeypatch: pytest.Monkey
 
 
 def test_classes_list_serves_adequacy(monkeypatch: pytest.MonkeyPatch) -> None:
-    r = _client(monkeypatch, _BY_CLASS).get('/curation/classes')
+    r = _client(monkeypatch, _BY_CLASS).get('/curation/projects/default/classes')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['thresholds'] == EXPECTED
@@ -170,7 +174,9 @@ def test_stats_classes_serves_trainable_minus_holdout_and_excluded(
     """The frontend used to compute validated - holdout client-side, and
     never accounted for class_excluded crops at all. /stats/classes now
     serves the real trainable count and its gap to the hard minimum."""
-    r = _client(monkeypatch, _BY_CLASS_WITH_HOLDOUT_AND_EXCLUDED).get('/curation/stats/classes')
+    r = _client(monkeypatch, _BY_CLASS_WITH_HOLDOUT_AND_EXCLUDED).get(
+        '/curation/projects/default/stats/classes'
+    )
     assert r.status_code == 200, r.text
     rows = {c['class_id']: c for c in r.json()['classes']}
     assert rows[1]['validated_count'] == 600
@@ -183,7 +189,9 @@ def test_stats_classes_serves_trainable_minus_holdout_and_excluded(
 def test_classes_list_serves_trainable_minus_holdout_and_excluded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    r = _client(monkeypatch, _BY_CLASS_WITH_HOLDOUT_AND_EXCLUDED).get('/curation/classes')
+    r = _client(monkeypatch, _BY_CLASS_WITH_HOLDOUT_AND_EXCLUDED).get(
+        '/curation/projects/default/classes'
+    )
     assert r.status_code == 200, r.text
     rows = {c['class_id']: c for c in r.json()['classes']}
     assert rows[1]['trainable'] == 600 - 5 - 3
@@ -212,7 +220,7 @@ def test_classes_by_cluster_agg_is_filtered_to_class_kind_ids(
         }
     }
     client, fake = _client_with_fake(monkeypatch, resp)
-    r = client.get('/curation/classes')
+    r = client.get('/curation/projects/default/classes')
     assert r.status_code == 200, r.text
 
     body = fake.search.call_args.kwargs['body']
@@ -233,7 +241,7 @@ def test_holdout_stats_flags_deficient_classes(monkeypatch: pytest.MonkeyPatch) 
             'by_class': {'buckets': [{'key': 1, 'doc_count': 9}, {'key': 2, 'doc_count': 3}]}
         },
     }
-    r = _client(monkeypatch, resp).get('/curation/test_holdout/stats')
+    r = _client(monkeypatch, resp).get('/curation/projects/default/test_holdout/stats')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['min_test_per_class'] == T.MIN_TEST_CROPS_PER_CLASS
@@ -249,7 +257,7 @@ def test_holdout_stats_tracks_total_hits(monkeypatch: pytest.MonkeyPatch) -> Non
         'aggregations': {'by_class': {'buckets': []}},
     }
     client, fake = _client_with_fake(monkeypatch, resp)
-    r = client.get('/curation/test_holdout/stats')
+    r = client.get('/curation/projects/default/test_holdout/stats')
     assert r.status_code == 200, r.text
 
     body = fake.search.call_args.kwargs['body']

@@ -1,7 +1,7 @@
 """Cross-job policy: campaign auto-skip / auto-promote, and the quant hand-off.
 
 A campaign is a set of ``job.json`` files sharing a ``campaign_id``, written in
-one go by ``POST {api_prefix}/train/start_campaign``. Nothing coordinates them
+one go by ``POST {api_prefix}/projects/{project}/train/start_campaign``. Nothing coordinates them
 at runtime except this module, which runs once per job *after* its terminal
 status is on disk (so siblings always see a consistent picture):
 
@@ -11,7 +11,7 @@ status is on disk (so siblings always see a consistent picture):
   the API's own promote endpoint.
 
 :func:`write_quant_bakeoff_job` is the other cross-process hand-off: an opt-in
-``POST {api_prefix}/bakeoff/run`` that benchmarks the finished run.
+``POST {api_prefix}/projects/{project}/bakeoff/run`` that benchmarks the finished run.
 """
 
 from __future__ import annotations
@@ -130,8 +130,16 @@ def stop_when_satisfied(stop_when: dict[str, float] | None, eval_block: dict[str
     return True
 
 
-def _post_promote(job_id: str, triton_name: str) -> bool:
-    """POST ``{api_prefix}/train/promote/{job_id}``; return success.
+def project_api_url(project: str | None) -> str | None:
+    """``{API_BASE_URL}{API_PREFIX}/projects/{project}``, or ``None`` when
+    the job names no project (a call without one would have no route)."""
+    if not project:
+        return None
+    return f'{API_BASE_URL.rstrip("/")}{API_PREFIX}/projects/{project}'
+
+
+def _post_promote(project: str | None, job_id: str, triton_name: str) -> bool:
+    """POST ``{api_prefix}/projects/{project}/train/promote/{job_id}``; return success.
 
     Errors are logged and swallowed so a flaky API doesn't cascade-fail the
     campaign -- the run itself already finished and its artifacts are on disk.
@@ -141,7 +149,11 @@ def _post_promote(job_id: str, triton_name: str) -> bool:
     except ImportError:
         logger.warning('campaign: requests unavailable; cannot auto-promote')
         return False
-    url = f'{API_BASE_URL.rstrip("/")}{API_PREFIX}/train/promote/{job_id}'
+    base = project_api_url(project)
+    if base is None:
+        logger.warning('campaign: job.json names no project; cannot auto-promote', job_id=job_id)
+        return False
+    url = f'{base}/train/promote/{job_id}'
     payload = {
         'triton_name': triton_name,
         # Conservative defaults matching the ONNX export below; an operator can
@@ -231,7 +243,7 @@ def maybe_handle_campaign(spec: JobSpec, state: StatusState) -> None:
         return
 
     triton_name = f'{campaign_id}_best'
-    ok = _post_promote(best_job_id, triton_name)
+    ok = _post_promote(spec.project, best_job_id, triton_name)
     logger.info(
         'campaign: auto-promote',
         campaign_id=campaign_id,
@@ -248,7 +260,8 @@ def maybe_handle_campaign(spec: JobSpec, state: StatusState) -> None:
 
 
 def write_quant_bakeoff_job(spec: JobSpec, state: StatusState) -> None:
-    """Ask the API to export + benchmark this finished run (``POST {api_prefix}/bakeoff/run``).
+    """Ask the API to export + benchmark this finished run
+    (``POST {api_prefix}/projects/{project}/bakeoff/run``).
 
     The bake-off job (``scripts/curation/bakeoff/bakeoff_runner.py`` in the
     evaluator container) exports the checkpoint to portable ONNX
@@ -269,7 +282,11 @@ def write_quant_bakeoff_job(spec: JobSpec, state: StatusState) -> None:
     except ImportError:
         logger.warning('auto-quantize skipped: requests unavailable', job_id=spec.job_id)
         return
-    url = f'{API_BASE_URL.rstrip("/")}{API_PREFIX}/bakeoff/run'
+    base = project_api_url(spec.project)
+    if base is None:
+        logger.warning('auto-quantize skipped: job.json names no project', job_id=spec.job_id)
+        return
+    url = f'{base}/bakeoff/run'
     payload = {
         'job_id': f'{spec.job_id}_quant',
         'datasets': [{'id': f'run:{spec.job_id}'}],

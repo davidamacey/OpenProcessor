@@ -103,7 +103,7 @@ def _run(client: TestClient, data: Path, state: Path, **cfg_overrides: Any) -> d
     found, names = mod.discover(data)
     splits = {k: mod.load_samples(v) for k, v in found.items()}
     cfg = mod.ImportConfig(
-        api_base='http://test/curation',
+        api_base='http://test/curation/projects/default',
         state_dir=state,
         source_prefix='ds',
         batch_size=2,
@@ -135,7 +135,7 @@ def test_ingest_batch_labels_visible_despite_refresh_interval(
     lbl = tmp_path / 'a.txt'
     lbl.write_text(MATCHING_LABEL)
     resp = client.post(
-        '/curation/ingest/batch',
+        '/curation/projects/default/ingest/batch',
         json={
             'items': [{'path': str(img), 'source': 'x', 'label_txt_path': str(lbl)}],
             'detect_mismatches': True,
@@ -158,7 +158,7 @@ def test_ingest_batch_returns_disagreement_records(client: TestClient, tmp_path:
     bg_lbl = tmp_path / 'bg.txt'
     bg_lbl.write_text('')
     resp = client.post(
-        '/curation/ingest/batch',
+        '/curation/projects/default/ingest/batch',
         json={
             'items': [
                 {'path': str(far), 'label_txt_path': str(far_lbl)},

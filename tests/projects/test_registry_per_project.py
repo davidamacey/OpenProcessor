@@ -167,9 +167,7 @@ def test_index_bootstrap_runs_once_per_project(tmp_path: Any, monkeypatch: Any) 
     assert created == ['alpha', 'beta']
 
 
-def test_job_dirs_nest_per_project_and_default_keeps_todays_path(
-    tmp_path: Any, monkeypatch: Any
-) -> None:
+def test_job_dirs_nest_per_project_default_included(tmp_path: Any, monkeypatch: Any) -> None:
     from pathlib import Path
 
     from src.config.project_context import bind_project
@@ -187,10 +185,93 @@ def test_job_dirs_nest_per_project_and_default_keeps_todays_path(
         'select': select_job._jobs_dir,
         'viz': embedding_viz._jobs_dir,
     }
-    # tests/conftest.py binds `default` for this test.
+    # tests/conftest.py binds `default` for this test: it nests like any project.
     for name, fn in dirs.items():
-        assert fn() == Path(tmp_path / name)
+        assert fn() == Path(tmp_path / name / 'projects' / 'default')
     with bind_project(_new_record('beta', tmp_path)):
         for name, fn in dirs.items():
             assert fn() == Path(tmp_path / name / 'projects' / 'beta')
         assert embedding_viz.viz_state_joblib_path().startswith(str(tmp_path / 'beta' / 'state'))
+
+
+def test_bootstrap_creates_the_registry_index_with_a_strict_mapping(fake_registry_client) -> None:
+    """The first registry write never auto-creates ``op_projects`` with a
+    dynamic mapping."""
+    client = fake_registry_client
+    asyncio.run(bootstrap_default_project(client))
+    body = client.indices.created['op_projects']
+    assert body['mappings']['dynamic'] is False
+    assert body['mappings']['properties']['slug'] == {'type': 'keyword'}
+
+
+def test_revision_bump_is_optimistic(fake_registry_client) -> None:
+    """Two writers that read the same revision both land: the loser of the
+    race retries on its conflict instead of overwriting the winner."""
+    from src.services.projects.bootstrap import bump_revision
+
+    client = fake_registry_client
+
+    async def _run() -> list[int]:
+        await bump_revision(client)
+        return list(await asyncio.gather(bump_revision(client), bump_revision(client)))
+
+    results = asyncio.run(_run())
+    assert sorted(results) == [2, 3]
+    assert client.docs['meta:projects_revision'] == {'revision': 3}
+
+
+def test_refresh_reads_every_project_past_one_page(fake_registry_client) -> None:
+    """No size cap: more projects than one search page are all loaded."""
+    from datetime import UTC, datetime
+
+    from src.config.curation import base_curation_config
+    from src.config.projects import ProjectRecord, resources_for_new
+    from src.services.projects import registry as registry_mod
+    from src.services.projects.registry import record_to_doc
+
+    client = fake_registry_client
+    now = datetime.now(UTC).isoformat()
+    n = registry_mod._REFRESH_PAGE_SIZE * 2 + 3
+    for i in range(n):
+        slug = f'p{i:05d}'
+        record = ProjectRecord(
+            slug=slug,
+            display_name=slug,
+            description='',
+            status='active',
+            revision=1,
+            created_at=now,
+            updated_at=now,
+            origin=None,
+            resources=resources_for_new(slug, base_curation_config()),
+        )
+        client.docs[f'project:{slug}'] = record_to_doc(record)
+        client.seq[f'project:{slug}'] = 1
+    client.docs['meta:projects_revision'] = {'revision': 7}
+    client.seq['meta:projects_revision'] = 1
+
+    registry = ProjectRegistry(lambda: client)
+    asyncio.run(registry.ensure_fresh())
+    assert len(registry.snapshot()) == n  # exactly the stored records, nothing synthesized
+
+
+def test_default_is_an_ordinary_bootstrapped_project(fake_registry_client) -> None:
+    """``default`` gets the standard naming, and a registry knows it only
+    from its stored record (nothing is synthesized from the env)."""
+    client = fake_registry_client
+
+    async def _run() -> ProjectRegistry:
+        registry = ProjectRegistry(lambda: client)
+        await registry.ensure_fresh()
+        assert registry.get('default') is None  # never bootstrapped: unknown
+        await bootstrap_default_project(client)
+        await registry.ensure_fresh()
+        return registry
+
+    record = asyncio.run(_run()).get('default')
+    assert record is not None
+    assert set(record.resources.indexes.values()) == {
+        f'op_prj_default__{role.value}' for role in record.resources.indexes
+    }
+    assert record.resources.class_registry_path.parts[-2:] == ('default', 'class_registry.json')
+    assert record.resources.model_prefix == 'default__'

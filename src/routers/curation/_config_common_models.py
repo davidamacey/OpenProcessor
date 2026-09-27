@@ -29,6 +29,7 @@ ErrorCode = Literal[
     'project_read_only',
     'project_building',
     'project_deleting',
+    'project_failed',
     'project_busy',
     'slug_taken',
     'slug_retired',

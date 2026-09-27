@@ -123,7 +123,7 @@ def main() -> int:
         '--registry',
         type=Path,
         default=None,
-        help='Registry JSON (default: CurationConfig.class_registry_path / OP_REGISTRY_PATH).',
+        help='Registry JSON (default: the --project registry path).',
     )
     p.add_argument('--page-size', type=int, default=1000, help='Items per search_after page.')
     p.add_argument('--max-pages', type=int, default=0, help='Stop after N pages (0 = no limit).')

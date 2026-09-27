@@ -95,28 +95,32 @@ class CurationConfig:
     is not part of this generic module.
     """
 
-    images_index: str = 'op_images'
-    items_index: str = 'op_items'
-    labels_confirmed_index: str = 'op_labels_confirmed'
-    classes_index: str = 'op_classes'
-    clusters_index: str = 'op_clusters'
+    # Index names are never configured by env: every project's names are
+    # ``{OP_PROJECT_INDEX_PREFIX}{slug}__{role}`` (``resources_for_new``),
+    # resolved from the bound project. These fields exist so a caller can
+    # construct an explicit ``CurationConfig`` (unit tests, one-off tools);
+    # ``get_curation_config()`` always answers from the bound project.
+    images_index: str = 'op_prj_default__images'
+    items_index: str = 'op_prj_default__items'
+    labels_confirmed_index: str = 'op_prj_default__labels_confirmed'
+    classes_index: str = 'op_prj_default__classes'
     # Single shared-defaults document (curation-strategy settings) — one
     # doc, not a full index of many rows. See
     # ``src.clients.curation_opensearch.CURATION_SETTINGS_DOC_ID`` for the
     # fixed doc id this index always addresses.
-    settings_index: str = 'op_curation_settings'
+    settings_index: str = 'op_prj_default__settings'
     # Two deliberately distinct UMAP-state indexes (see
     # ``src/services/curation/embedding_viz.py`` module docstring):
     # the retired clustering reducer's fitted-manifold cache
     # (``clustering/embedding_reduce.py``) and the visualization-only
     # projection's own metadata slot. They must never share a name or
     # state, so they get separate fields rather than one shared role.
-    umap_state_index: str = 'op_umap_state'
-    umap_viz_state_index: str = 'op_umap_viz_state'
+    umap_state_index: str = 'op_prj_default__umap_state'
+    umap_viz_state_index: str = 'op_prj_default__umap_viz_state'
     # Prompt packs, region profiles, activations, revision counter (W2).
-    configs_index: str = 'op_curation_configs'
+    configs_index: str = 'op_prj_default__configs'
 
-    class_registry_path: Path = Path('./data/class_registry.json')
+    class_registry_path: Path = Path('./data/projects/default/class_registry.json')
     # Optional deployment-supplied VLM PromptPack (see
     # ``src.services.labeling.vlm_prompts.PromptPack.from_json`` and
     # ``docs/design/curation_design_rationale.md``'s PromptPack section).
@@ -129,7 +133,7 @@ class CurationConfig:
     # built-in generic pack; chosen per run / via the settings default.
     prompt_pack_paths: tuple[Path, ...] = ()
     source_root: Path = Path('./data/images')
-    export_root: Path = Path('./data/exports')
+    export_root: Path = Path('./data/projects/default/exports')
     # ST-4: keep-last retention for auto-named (timestamped) export dirs
     # under export_root. 0 = keep all. Never touches custom-named exports,
     # the `current` symlink target, or any dir pinned by a job/run/bake-off.
@@ -146,7 +150,7 @@ class CurationConfig:
     # image_serving.py) so the path guards accept it. Default lives
     # under state_dir, following the crop_cache_dir precedent for a
     # server-owned data directory that isn't a mounted source archive.
-    upload_root: Path = Path('/var/lib/openprocessor/uploads')
+    upload_root: Path = Path('/var/lib/openprocessor/projects/default/uploads')
 
     # BA-2/BA-5: /ingest/upload + /ingest/batch request limits, served on
     # GET /ingest/config so a client never has to hardcode them.
@@ -172,7 +176,7 @@ class CurationConfig:
     # as a literal string. jobs/out mirror the state_dir/training_staging
     # precedent below; eval_root is a data root, so it mirrors
     # source_root/export_root instead.
-    bakeoff_eval_root: Path = Path('./data/bakeoff_eval')
+    bakeoff_eval_root: Path = Path('./data/projects/default/bakeoff_eval')
 
     # Searchable per-item text (src/services/curation/item_text.py): the
     # region worker stores every OCR line read on the item crop. Effective
@@ -216,12 +220,12 @@ class CurationConfig:
 
     # --- Project-scoped fields (see PROJECT_SCOPED_FIELDS below and
     # docs/design/openprocessor_internal/projects_plan.md §2.2/§3.3).
-    # Defaults here are the ``default`` project's values so a bare
-    # ``CurationConfig()``/``CurationConfig.from_env()`` instance (no
-    # project bound) keeps behaving exactly as before. The two state
-    # paths follow ``state_dir`` unless set explicitly (see __post_init__),
-    # so a config built with ``state_dir=tmp`` never points at the real
-    # default location.
+    # No env var sets any project-scoped field: ``get_curation_config()``
+    # resolves them from the bound project's persisted resources. The
+    # defaults only shape an explicitly constructed ``CurationConfig``
+    # (unit tests, one-off tools). The two state paths follow
+    # ``state_dir`` unless set explicitly (see __post_init__), so a config
+    # built with ``state_dir=tmp`` never points at the real location.
     project_slug: str = 'default'
     project_state_dir: Path = _FOLLOWS_STATE_DIR
     train_jobs_dir: Path = Path('/jobs')
@@ -296,16 +300,6 @@ class CurationConfig:
             return value.strip().lower() in {'1', 'true', 'yes', 'on'}
 
         return cls(
-            images_index=_str('IMAGES_INDEX', defaults.images_index),
-            items_index=_str('ITEMS_INDEX', defaults.items_index),
-            labels_confirmed_index=_str('LABELS_CONFIRMED_INDEX', defaults.labels_confirmed_index),
-            classes_index=_str('CLASSES_INDEX', defaults.classes_index),
-            clusters_index=_str('CLUSTERS_INDEX', defaults.clusters_index),
-            settings_index=_str('SETTINGS_INDEX', defaults.settings_index),
-            umap_state_index=_str('UMAP_STATE_INDEX', defaults.umap_state_index),
-            umap_viz_state_index=_str('UMAP_VIZ_STATE_INDEX', defaults.umap_viz_state_index),
-            configs_index=_str('CONFIGS_INDEX', defaults.configs_index),
-            class_registry_path=_path('REGISTRY_PATH', defaults.class_registry_path),
             prompt_pack_path=_optional_path('PROMPT_PACK_PATH', defaults.prompt_pack_path),
             prompt_pack_paths=tuple(
                 Path(part.strip())
@@ -314,7 +308,6 @@ class CurationConfig:
             )
             or defaults.prompt_pack_paths,
             source_root=_path('SOURCE_ROOT', defaults.source_root),
-            export_root=_path('EXPORT_ROOT', defaults.export_root),
             export_keep_last=_int('EXPORT_KEEP_LAST', defaults.export_keep_last),
             source_path_aliases=_parse_source_path_aliases(
                 _str('SOURCE_PATH_ALIASES', ''), defaults.source_path_aliases
@@ -322,7 +315,6 @@ class CurationConfig:
             state_dir=_path('STATE_DIR', defaults.state_dir),
             crop_cache_dir=_path('CROP_CACHE_DIR', defaults.crop_cache_dir),
             crop_cache_max_bytes=_int('CROP_CACHE_MAX_BYTES', defaults.crop_cache_max_bytes),
-            upload_root=_path('UPLOAD_ROOT', defaults.upload_root),
             upload_max_images_per_request=_int(
                 'UPLOAD_MAX_IMAGES_PER_REQUEST', defaults.upload_max_images_per_request
             ),
@@ -339,7 +331,6 @@ class CurationConfig:
             batch_max_items_per_request=_int(
                 'BATCH_MAX_ITEMS_PER_REQUEST', defaults.batch_max_items_per_request
             ),
-            bakeoff_eval_root=_path('BAKEOFF_EVAL_ROOT', defaults.bakeoff_eval_root),
             api_prefix=_str('API_PREFIX', defaults.api_prefix),
             api_tag=_str('API_TAG', defaults.api_tag),
             mlflow_public_url=_optional_str('MLFLOW_PUBLIC_URL', defaults.mlflow_public_url),
@@ -431,13 +422,6 @@ def index_name(cfg: CurationConfig, role: IndexRole) -> str:
 # fails if a new dataclass field is added to neither this set nor
 # treated as global -- keep it in sync with the dataclass above.
 #
-# ``clusters_index`` is deliberately GLOBAL, not project-scoped: it has
-# no ``IndexRole`` member (no index body is ever created for it -- see
-# ``IndexRole``'s docstring), so ``ProjectResources.indexes`` has nowhere
-# to carry a per-project value for it. It is effectively dead outside
-# one script (``scripts/curation/seed_live_harness.py``); this is a
-# deliberate deviation from a strict reading of "every index field is
-# scoped", noted here rather than silently folding it in.
 PROJECT_SCOPED_FIELDS: frozenset[str] = frozenset(
     {
         'images_index',
@@ -530,8 +514,8 @@ _default_curation_config: CurationConfig | None = None
 def base_curation_config() -> CurationConfig:
     """The process-global, env-built ``CurationConfig`` instance -- the
     global-field half of :func:`get_curation_config`'s view, and the
-    right thing to pass to ``resources_for_default``/``resources_for_new``
-    (both of which only read global fields).
+    right thing to pass to ``resources_for_new`` (which only reads global
+    fields).
 
     Built via :meth:`CurationConfig.from_env` so the ``OP_*`` env vars
     documented on that classmethod (e.g. ``OP_API_PREFIX``) actually take

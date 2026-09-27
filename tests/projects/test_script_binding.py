@@ -58,8 +58,13 @@ class _FakeInnerTransport:
         return None
 
 
+_REAL_LOAD_REGISTRY = script_binding.load_registry
+
+
 @pytest.fixture(autouse=True)
-def _clear_process_binding() -> Any:
+def _clear_process_binding(monkeypatch: pytest.MonkeyPatch) -> Any:
+    # The real registry read, not tests/conftest.py's default-only stub.
+    monkeypatch.setattr(script_binding, 'load_registry', _REAL_LOAD_REGISTRY)
     yield
     bind_process_project(None)
 
@@ -84,12 +89,57 @@ def test_project_argument_defaults_to_env(monkeypatch: pytest.MonkeyPatch) -> No
     assert parser.parse_args(['--project', 'alpha']).project == 'alpha'
 
 
-def test_default_binds_the_whole_process_without_io() -> None:
+def test_default_binds_the_whole_process_from_the_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _factory(_hosts: list[str], **_kw: Any) -> Any:
+        client, _inner = _guarded_client([_record('default')])
+        return client
+
+    monkeypatch.setattr(guard, 'make_script_opensearch', _factory)
     with pytest.raises(ProjectNotBound):
         current_project()
     record = script_binding.bind_script_project('default')
     assert current_project().record.slug == 'default'
+    assert not current_project().read_only
     assert record.resources.indexes == current_project().record.resources.indexes
+
+
+def test_archived_default_binds_read_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The stored status applies to ``default`` too: an archived default
+    is never writable from a script."""
+    import dataclasses
+
+    from src.config.curation import base_curation_config as _base
+    from src.config.projects import new_project_record
+
+    archived = dataclasses.replace(new_project_record('default', _base()), status='archived')
+
+    def _factory(_hosts: list[str], **_kw: Any) -> Any:
+        client, _inner = _guarded_client([archived])
+        return client
+
+    monkeypatch.setattr(guard, 'make_script_opensearch', _factory)
+    script_binding.bind_script_project('default')
+    assert current_project().read_only
+
+
+def test_unreadable_registry_refuses_to_bind(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Down:
+        async def perform_request(self, *_a: Any, **_k: Any) -> Any:
+            raise ConnectionError('opensearch down')
+
+        async def close(self) -> None:
+            return None
+
+    def _factory(_hosts: list[str], **_kw: Any) -> Any:
+        client = _REAL_FACTORY(['http://127.0.0.1:9'])
+        client.transport._inner = _Down()
+        return client
+
+    monkeypatch.setattr(guard, 'make_script_opensearch', _factory)
+    with pytest.raises(SystemExit, match='cannot read the project registry'):
+        script_binding.bind_script_project('default')
+    with pytest.raises(ProjectNotBound):
+        current_project()
 
 
 def test_script_client_is_guarded() -> None:

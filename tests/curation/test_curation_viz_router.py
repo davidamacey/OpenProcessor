@@ -33,7 +33,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
 
     fake_os = AsyncMock()
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     client = TestClient(app)
     client.fake_os = fake_os  # type: ignore[attr-defined]
@@ -47,7 +49,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
 
 def test_rebuild_disabled_400(app_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv('OP_VIZ_PROJECTION_ENABLED', raising=False)
-    r = app_client.post('/curation/viz/projection/rebuild')
+    r = app_client.post('/curation/projects/default/viz/projection/rebuild')
     assert r.status_code == 400
     assert 'disabled' in r.json()['detail']
 
@@ -56,7 +58,7 @@ def test_get_projection_disabled_400(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv('OP_VIZ_PROJECTION_ENABLED', raising=False)
-    r = app_client.get('/curation/viz/projection')
+    r = app_client.get('/curation/projects/default/viz/projection')
     assert r.status_code == 400
     assert 'disabled' in r.json()['detail']
 
@@ -68,11 +70,11 @@ def test_status_and_cancel_are_not_gated_by_the_flag(
     endpoints work regardless of the feature flag, so an operator can
     always see current state."""
     monkeypatch.delenv('OP_VIZ_PROJECTION_ENABLED', raising=False)
-    r_status = app_client.get('/curation/viz/projection/status')
+    r_status = app_client.get('/curation/projects/default/viz/projection/status')
     assert r_status.status_code == 200
     assert r_status.json()['status'] == 'idle'
 
-    r_cancel = app_client.post('/curation/viz/projection/cancel')
+    r_cancel = app_client.post('/curation/projects/default/viz/projection/cancel')
     assert r_cancel.status_code == 200
     assert r_cancel.json()['cancelled'] is False
 
@@ -86,14 +88,18 @@ def test_rebuild_cluster_scope_without_cluster_id_400(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
-    r = app_client.post('/curation/viz/projection/rebuild', params={'scope': 'cluster'})
+    r = app_client.post(
+        '/curation/projects/default/viz/projection/rebuild', params={'scope': 'cluster'}
+    )
     assert r.status_code == 400
     assert 'cluster_id' in r.json()['detail']
 
 
 def test_rebuild_unknown_scope_422(app_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
-    r = app_client.post('/curation/viz/projection/rebuild', params={'scope': 'bogus'})
+    r = app_client.post(
+        '/curation/projects/default/viz/projection/rebuild', params={'scope': 'bogus'}
+    )
     assert r.status_code == 422  # FastAPI Query(pattern=...) rejects before the handler runs
 
 
@@ -112,19 +118,23 @@ def test_rebuild_then_status_running_then_double_start_409_then_cancel(
 
     monkeypatch.setattr(embedding_viz, 'run_projection_job', _fake_run_projection_job)
 
-    r = app_client.post('/curation/viz/projection/rebuild', params={'scope': 'residual'})
+    r = app_client.post(
+        '/curation/projects/default/viz/projection/rebuild', params={'scope': 'residual'}
+    )
     assert r.status_code == 202
     body = r.json()
     assert body['status'] == 'running'
     assert body['scope'] == 'residual'
 
-    r_status = app_client.get('/curation/viz/projection/status')
+    r_status = app_client.get('/curation/projects/default/viz/projection/status')
     assert r_status.json()['status'] == 'running'
 
-    r_double = app_client.post('/curation/viz/projection/rebuild', params={'scope': 'residual'})
+    r_double = app_client.post(
+        '/curation/projects/default/viz/projection/rebuild', params={'scope': 'residual'}
+    )
     assert r_double.status_code == 409
 
-    r_cancel = app_client.post('/curation/viz/projection/cancel')
+    r_cancel = app_client.post('/curation/projects/default/viz/projection/cancel')
     assert r_cancel.status_code == 200
     assert r_cancel.json()['cancelled'] is True
     assert embedding_viz.is_cancelled()
@@ -148,7 +158,8 @@ def test_rebuild_cluster_scope_passes_cluster_id_through(
     monkeypatch.setattr(embedding_viz, 'run_projection_job', _fake_run_projection_job)
 
     r = app_client.post(
-        '/curation/viz/projection/rebuild', params={'scope': 'cluster', 'cluster_id': 10173}
+        '/curation/projects/default/viz/projection/rebuild',
+        params={'scope': 'cluster', 'cluster_id': 10173},
     )
     assert r.status_code == 202
     body = r.json()
@@ -167,7 +178,7 @@ def test_get_projection_not_built(app_client: TestClient, monkeypatch: pytest.Mo
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
     app_client.fake_os.get = AsyncMock(side_effect=Exception('not found'))
 
-    r = app_client.get('/curation/viz/projection')
+    r = app_client.get('/curation/projects/default/viz/projection')
     assert r.status_code == 200
     assert r.json() == {'status': 'not_built'}
     app_client.fake_os.search.assert_not_called()
@@ -205,7 +216,7 @@ def test_get_projection_serves_cached_points(
     )
     app_client.fake_os.count = AsyncMock(return_value={'count': 0})
 
-    r = app_client.get('/curation/viz/projection')
+    r = app_client.get('/curation/projects/default/viz/projection')
     assert r.status_code == 200
     body = r.json()
     assert body['projection_version'] == 'umap_viz_v1'
@@ -232,7 +243,7 @@ def test_get_projection_max_points_caps_the_search_size(
     app_client.fake_os.search = AsyncMock(return_value={'hits': {'hits': []}})
     app_client.fake_os.count = AsyncMock(return_value={'count': 0})
 
-    r = app_client.get('/curation/viz/projection', params={'max_points': 25})
+    r = app_client.get('/curation/projects/default/viz/projection', params={'max_points': 25})
     assert r.status_code == 200
     search_kwargs = app_client.fake_os.search.call_args.kwargs
     assert search_kwargs['body']['size'] == 25
@@ -242,7 +253,9 @@ def test_get_projection_max_points_over_ceiling_422(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
-    r = app_client.get('/curation/viz/projection', params={'max_points': 10_000_000})
+    r = app_client.get(
+        '/curation/projects/default/viz/projection', params={'max_points': 10_000_000}
+    )
     assert r.status_code == 422
 
 
@@ -276,7 +289,7 @@ def test_get_projection_never_imports_or_calls_fit(
     app_client.fake_os.search = AsyncMock(return_value={'hits': {'hits': []}})
     app_client.fake_os.count = AsyncMock(return_value={'count': 0})
 
-    r = app_client.get('/curation/viz/projection')
+    r = app_client.get('/curation/projects/default/viz/projection')
     assert r.status_code == 200
 
 

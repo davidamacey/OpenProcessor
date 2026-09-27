@@ -23,6 +23,7 @@ from src.schemas.detection import ImageMetadata
 from src.services.inference import InferenceService
 from src.services.ocr_service import get_ocr_service
 from src.utils.affine import format_detections_from_triton
+from src.utils.retry import RetryExhaustedError
 
 
 logger = logging.getLogger(__name__)
@@ -76,8 +77,15 @@ class OcrResult(BaseModel):
         default_factory=list, description='Axis-aligned boxes [x1,y1,x2,y2] normalized'
     )
     det_scores: list[float] = Field(default_factory=list, description='Detection confidence scores')
-    rec_scores: list[float] = Field(
-        default_factory=list, description='Recognition confidence scores'
+    rec_scores: list[float | None] = Field(
+        default_factory=list,
+        description='Recognition confidence scores; an entry is null when '
+        'recognition failed for that line (see rec_errors)',
+    )
+    rec_errors: list[str | None] = Field(
+        default_factory=list,
+        description="Same length/order as rec_scores; e.g. 'recognition_failed' where "
+        'rec_scores is null, null otherwise',
     )
     full_text: str = Field(default='', description='All text concatenated')
     num_texts: int = Field(default=0, description='Number of text regions')
@@ -391,6 +399,7 @@ def analyze_image(
                 boxes_normalized=ocr_result.get('boxes_normalized', []),
                 det_scores=ocr_result.get('det_scores', []),
                 rec_scores=ocr_result.get('rec_scores', []),
+                rec_errors=ocr_result.get('rec_errors', []),
                 full_text=' '.join(ocr_result.get('texts', [])),
                 num_texts=ocr_result.get('num_texts', 0),
             )
@@ -409,6 +418,8 @@ def analyze_image(
         )
 
     except HTTPException:
+        raise
+    except RetryExhaustedError:
         raise
     except Exception as e:
         logger.error(f'Analysis failed for {filename}: {e}')
@@ -623,6 +634,7 @@ def analyze_batch(
                         boxes_normalized=ocr_result.get('boxes_normalized', []),
                         det_scores=ocr_result.get('det_scores', []),
                         rec_scores=ocr_result.get('rec_scores', []),
+                        rec_errors=ocr_result.get('rec_errors', []),
                         full_text=' '.join(ocr_result.get('texts', [])),
                         num_texts=ocr_result.get('num_texts', 0),
                     )

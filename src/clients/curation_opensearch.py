@@ -11,18 +11,18 @@ Indexes (logical roles resolved via :func:`src.config.index_name`
 against a :class:`~src.config.CurationConfig` instance — the actual
 index *names* are deployment data, not hardcoded here):
 
-- ``images`` (default ``op_images``) — one document per source image
+- ``images`` (``op_prj_<project>__images``) — one document per source image
   (with a global embedding).
-- ``items`` (default ``op_items``) — one document per detected item
+- ``items`` (``op_prj_<project>__items``) — one document per detected item
   crop (with embedding, class label, region-of-interest sub-bbox,
   holdout flag).
-- ``labels_confirmed`` (default ``op_labels_confirmed``) — provenance
+- ``labels_confirmed`` (``op_prj_<project>__labels_confirmed``) — provenance
   ledger of imported YOLO-style ground-truth labels (no embedding),
   written only by label import. NOT the export source: export and
   training select ``class_validated=true`` items from ``items``, which
   every labeling path (human label/move, auto-promote, label import)
   sets — see ``tests/curation/test_labels_export_roundtrip.py``.
-- ``classes`` (default ``op_classes``) — read-projection of
+- ``classes`` (``op_prj_<project>__classes``) — read-projection of
   ``class_registry.json`` for fast term filters / dashboards. The JSON
   file is the canonical source; this index is rebuilt from it via
   :py:meth:`ClassRegistry.sync_to_opensearch`.

@@ -1,0 +1,10 @@
+# cropwright.lock -- the Cropwright release known-compatible with this
+# OpenProcessor release (installer plan section 3.1). The installer downloads
+# that tag's docker-compose.yml, .env.example and SHA256SUMS release assets,
+# checks SHA256SUMS against sha256sums_sha256 below, and the two files against
+# SHA256SUMS; the image runs pinned via CROPWRIGHT_IMAGE.
+# Development placeholder (refused by the installer); a real release points
+# this at a tagged Cropwright release.
+tag=sha-devplaceholder
+image=davidamacey/cropwright@sha256:0000000000000000000000000000000000000000000000000000000000dev7
+sha256sums_sha256=

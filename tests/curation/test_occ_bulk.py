@@ -28,7 +28,11 @@ class TestOccUpdateBulk:
             return {'class_id': 2}
 
         status = await occ_update_bulk(
-            client, index='op_items', ids=doc_ids, merge_fn=merge_fn, refresh='wait_for'
+            client,
+            index='op_prj_default__items',
+            ids=doc_ids,
+            merge_fn=merge_fn,
+            refresh='wait_for',
         )
 
         assert all(v == 'updated' for v in status.values())
@@ -43,7 +47,7 @@ class TestOccUpdateBulk:
             return {'class_id': 2}
 
         status = await occ_update_bulk(
-            client, index='op_items', ids=['a', 'missing'], merge_fn=merge_fn
+            client, index='op_prj_default__items', ids=['a', 'missing'], merge_fn=merge_fn
         )
         assert status['a'] == 'updated'
         assert status['missing'] == 'not-found'
@@ -82,7 +86,9 @@ class TestOccUpdateBulk:
         def merge_fn(_doc_id: str, _source: dict[str, Any]) -> dict[str, Any]:
             return {'class_id': 2}
 
-        status = await occ_update_bulk(client, index='op_items', ids=['a'], merge_fn=merge_fn)
+        status = await occ_update_bulk(
+            client, index='op_prj_default__items', ids=['a'], merge_fn=merge_fn
+        )
         assert status['a'] == 'updated'
         assert len(client.bulk_calls) == 2
         assert len(client.mget_calls) == 2
@@ -98,7 +104,7 @@ class TestOccUpdateBulk:
             return {'class_id': 2}
 
         status = await occ_update_bulk(
-            client, index='op_items', ids=['a'], merge_fn=merge_fn, max_retries=1
+            client, index='op_prj_default__items', ids=['a'], merge_fn=merge_fn, max_retries=1
         )
         assert status['a'] == 'conflict-exhausted'
 

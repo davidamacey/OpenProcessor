@@ -19,7 +19,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from src.config import get_curation_config
-from src.core.dependencies import get_opensearch
+from src.core.dependencies import get_curation_opensearch as _raw_opensearch_dep
 from src.core.logging import get_logger
 from src.services.curation.clustering.embedding_reduce import umap_rebuild
 
@@ -28,22 +28,11 @@ logger = get_logger(__name__)
 
 config = get_curation_config()
 
-router = APIRouter(prefix=f'{config.api_prefix}/cluster', tags=[f'{config.api_tag} — Clustering'])
-
-
-async def _get_os_client() -> Any:
-    """Return the raw AsyncOpenSearch.
-
-    The :class:`OpenSearchClient` wrapper doesn't expose ``.search`` /
-    ``.bulk`` / ``.indices`` directly — embedding_reduce calls those on
-    the raw client.
-    """
-    wrapper = await get_opensearch()
-    return getattr(wrapper, 'client', wrapper)
+router = APIRouter(prefix='/cluster', tags=[f'{config.api_tag} — Clustering'])
 
 
 @router.post('/umap/rebuild')
-async def post_umap_rebuild(client: Any = Depends(_get_os_client)) -> dict[str, Any]:
+async def post_umap_rebuild(client: Any = Depends(_raw_opensearch_dep)) -> dict[str, Any]:
     """Refit the UMAP reducer and re-cluster the residual pool.
 
     Returns the same envelope as :func:`cluster_residuals` —

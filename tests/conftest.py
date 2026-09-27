@@ -28,16 +28,17 @@ if TYPE_CHECKING:
 
 
 class _EnvDefaultProjectRecord:
-    """The ``default`` project record, with resources recomputed from the
-    env-built base config on every access -- so a test that swaps
-    ``src.config.curation._default_curation_config`` (or its env) sees its
-    own index names and paths, exactly as a fresh process would."""
+    """The ``default`` project record, with its resources recomputed on
+    every access by the same ``resources_for_new`` every project uses --
+    so a test that points ``OP_PROJECTS_DATA_ROOT`` / ``OP_STATE_DIR`` /
+    ``OP_PROJECT_INDEX_PREFIX`` somewhere else sees its own names and
+    paths, exactly as a freshly bootstrapped ``default`` would."""
 
     slug = 'default'
     display_name = 'Default'
     description = ''
     status = 'active'
-    revision = 0
+    revision = 1
     created_at = ''
     updated_at = ''
     origin = None
@@ -45,9 +46,25 @@ class _EnvDefaultProjectRecord:
     @property
     def resources(self) -> object:
         from src.config.curation import base_curation_config
-        from src.config.projects import resources_for_default
+        from src.config.projects import resources_for_new
 
-        return resources_for_default(base_curation_config())
+        return resources_for_new('default', base_curation_config())
+
+
+DEFAULT_RECORD = _EnvDefaultProjectRecord()
+
+
+@pytest.fixture(autouse=True)
+def _projects_data_root(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Per-project data (class registry, exports) lives under
+    ``OP_PROJECTS_DATA_ROOT``; never let a test write into the repo's
+    ``./data``. A test that sets its own value wins."""
+    import os
+
+    if 'OP_PROJECTS_DATA_ROOT' not in os.environ:
+        monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path_factory.mktemp('projects')))
 
 
 @pytest.fixture(autouse=True)
@@ -65,12 +82,68 @@ def _bind_default_project(request: pytest.FixtureRequest) -> Iterator[None]:
         if request.node.get_closest_marker('unbound') is not None:
             yield
         else:
-            with bind_project(_EnvDefaultProjectRecord()):  # type: ignore[arg-type]
+            with bind_project(DEFAULT_RECORD):  # type: ignore[arg-type]
                 yield
     finally:
         # A script entry point run in-process binds the whole process;
         # never let that leak into the next test.
         bind_process_project(None)
+
+
+@pytest.fixture(autouse=True)
+def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Every ``TestClient`` request runs in a fresh ``contextvars.Context``,
+    the way uvicorn serves it: the test's own binding (above) never leaks
+    into the app, so a route that forgets to bind fails here too.
+
+    Also installs a project registry that never reaches the network: it
+    knows ``default`` and nothing else. A test that needs
+    more projects installs its own with ``set_project_registry``."""
+    import contextvars
+
+    from fastapi.testclient import TestClient
+
+    from src.services.projects import registry as registry_mod
+
+    real_request = TestClient.request
+
+    def _unbound_request(self: TestClient, *args: object, **kwargs: object) -> object:
+        return contextvars.Context().run(real_request, self, *args, **kwargs)
+
+    monkeypatch.setattr(TestClient, 'request', _unbound_request)
+
+    # The lifespan (``with TestClient(app)``) starts unbound too, as it does
+    # under uvicorn: its background tasks must never inherit a project.
+    real_enter = TestClient.__enter__
+
+    def _unbound_enter(self: TestClient) -> TestClient:
+        return contextvars.Context().run(real_enter, self)
+
+    monkeypatch.setattr(TestClient, '__enter__', _unbound_enter)
+
+    def _no_registry_client() -> object:
+        raise ConnectionError('no project registry in unit tests')
+
+    stub = registry_mod.ProjectRegistry(_no_registry_client)
+    stub._by_slug = {'default': DEFAULT_RECORD}  # type: ignore[dict-item]
+    registry_mod.set_project_registry(stub)
+
+    # Script entry points resolve ``--project`` through the registry; here
+    # it holds only the env-derived ``default`` (tests/projects/
+    # test_script_binding.py exercises the real read).
+    from src.services.projects import script_binding
+
+    async def _default_only_registry(_url: str | None = None) -> object:
+        registry = registry_mod.ProjectRegistry(_no_registry_client)
+        registry._by_slug = {'default': DEFAULT_RECORD}  # type: ignore[dict-item]
+        registry._refreshed = True
+        return registry
+
+    monkeypatch.setattr(script_binding, 'load_registry', _default_only_registry)
+    try:
+        yield
+    finally:
+        registry_mod.set_project_registry(None)
 
 
 collect_ignore = [

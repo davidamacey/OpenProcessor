@@ -112,6 +112,9 @@ class JobSpec:
     # checkpoint to portable ONNX (fp32/fp16/int8) and benchmarks
     # size/speed/accuracy, so a quantization panel updates with no manual step.
     auto_quantize_bakeoff: bool = False
+    # The project the API wrote this job for; every call back into the API
+    # goes to that project's prefix (``{api_prefix}/projects/{project}``).
+    project: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -329,6 +332,7 @@ def parse_and_validate_job(job_path: Path) -> JobSpec:
         auto_promote_best=bool(raw.get('auto_promote_best', False)),
         is_last_in_campaign=bool(raw.get('is_last_in_campaign', False)),
         auto_quantize_bakeoff=bool(raw.get('auto_quantize_bakeoff', False)),
+        project=str(raw['project']) if raw.get('project') else None,
         raw=raw,
     )
 

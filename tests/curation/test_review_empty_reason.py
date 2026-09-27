@@ -18,7 +18,9 @@ def _client(fake) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -94,7 +96,7 @@ def test_review_queue_serves_empty_reason_when_zero_results(
     fake.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})
     fake.count = AsyncMock(return_value={'count': 0})
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
-    r = _client(fake).get('/curation/review/uncertainty')
+    r = _client(fake).get('/curation/projects/default/review/uncertainty')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['total'] == 0
@@ -115,7 +117,7 @@ def test_review_queue_empty_reason_is_null_when_items_exist(
     )
     fake.count = AsyncMock(return_value={'count': 0})
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
-    r = _client(fake).get('/curation/review/all')
+    r = _client(fake).get('/curation/projects/default/review/all')
     assert r.status_code == 200, r.text
     assert r.json()['empty_reason'] is None
 
@@ -123,6 +125,6 @@ def test_review_queue_empty_reason_is_null_when_items_exist(
 def test_review_tabs_serves_empty_state_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = AsyncMock()
     fake.count = AsyncMock(side_effect=[{'count': 0}, {'count': 7}])
-    r = _client(fake).get('/curation/review/tabs')
+    r = _client(fake).get('/curation/projects/default/review/tabs')
     assert r.status_code == 200, r.text
     assert r.json()['empty_state'] == {'has_probe_predictions': False, 'has_item_scores': True}

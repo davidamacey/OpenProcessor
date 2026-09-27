@@ -24,13 +24,12 @@ from typing import Any
 from fastapi import HTTPException, Query
 
 from src.config import get_region_fields
-from src.config.project_context import project_api_base
+from src.config.project_context import current_project, project_api_base
 from src.config.region_state import RegionStatus
 from src.routers.curation._common import (
     OpenSearchDep,
     RegionProfileDep,
     _ensure_indexes,
-    config,
     items_index,
     logger,
     router,
@@ -53,12 +52,14 @@ _SUSPECTED_FP_CACHE_TTL_SEC = 60.0
 """Interim fix: ``/regions/suspected_false_positives`` scrolled the
 entire region-embedding pool on every single page request (the pool is
 independent of ``page``/``page_size``). Cache the scored
-``[(dist, crop_id, subid)]`` list keyed by ``(trained_at, threshold)`` for
+``[(dist, crop_id, subid)]`` list keyed by ``(project, trained_at, threshold)`` for
 60s so paging through results doesn't re-scroll. The persisted-write
 version (store ``region_fp_distance`` at write time) is the long-term
 fix but is out of scope here."""
 
-_suspected_fp_cache: dict[tuple[Any, float], tuple[float, list[tuple[float, str, str | None]]]] = {}
+_suspected_fp_cache: dict[
+    tuple[str, Any, float], tuple[float, list[tuple[float, str, str | None]]]
+] = {}
 
 
 @router.post('/regions/cluster')
@@ -293,12 +294,13 @@ async def suspected_false_positives(
                 # Kept as its own literal so the route-parity guard
                 # (tests/integration/test_labeler_route_parity.py) can resolve
                 # the path it advertises.
-                f'{config.api_prefix}/regions/fp_centroids/build'
+                f'{project_api_base()}/regions/fp_centroids/build'
                 ' first.'
             ),
         }
 
-    cache_key = (store.metadata.get('trained_at'), threshold)
+    # The FP store is per project, and two stores may share a trained_at.
+    cache_key = (current_project().record.slug, store.metadata.get('trained_at'), threshold)
     cached = _suspected_fp_cache.get(cache_key)
     now_ts = time.monotonic()
     if cached is not None and (now_ts - cached[0]) < _SUSPECTED_FP_CACHE_TTL_SEC:

@@ -72,7 +72,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     fake_os.get = AsyncMock(side_effect=RuntimeError('no settings index'))
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     return TestClient(app)
 
@@ -84,7 +86,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 @pytest.mark.usefixtures('packs', 'job_dir')
 def test_start_unknown_prompt_pack_is_422_listing_valid_ids(client: TestClient) -> None:
-    r = client.post('/curation/pipeline/auto_label/start', params={'prompt_pack': 'nope'})
+    r = client.post(
+        '/curation/projects/default/pipeline/auto_label/start', params={'prompt_pack': 'nope'}
+    )
     assert r.status_code == 422
     detail = r.json()['detail']
     assert detail['axis'] == 'prompt_pack'
@@ -99,7 +103,9 @@ def test_start_unknown_prompt_pack_is_422_listing_valid_ids(client: TestClient) 
 def test_start_rejects_any_detection_profile(client: TestClient, value: str) -> None:
     """Even the active profile's id: accepting it would echo an override
     that changes nothing."""
-    r = client.post('/curation/pipeline/auto_label/start', params={'detection_profile': value})
+    r = client.post(
+        '/curation/projects/default/pipeline/auto_label/start', params={'detection_profile': value}
+    )
     assert r.status_code == 422
     detail = r.json()['detail']
     assert detail['param'] == 'detection_profile'
@@ -108,7 +114,9 @@ def test_start_rejects_any_detection_profile(client: TestClient, value: str) -> 
 
 @pytest.mark.usefixtures('packs')
 def test_start_echoes_prompt_pack_override_in_job_args(client: TestClient, job_dir: Path) -> None:
-    r = client.post('/curation/pipeline/auto_label/start', params={'prompt_pack': 'food_v2'})
+    r = client.post(
+        '/curation/projects/default/pipeline/auto_label/start', params={'prompt_pack': 'food_v2'}
+    )
     assert r.status_code == 200, r.text
     args = r.json()['args']
     assert args['prompt_pack'] == 'food_v2'
@@ -120,7 +128,7 @@ def test_start_echoes_prompt_pack_override_in_job_args(client: TestClient, job_d
 
 @pytest.mark.usefixtures('packs', 'job_dir')
 def test_start_omitted_resolves_to_settings_default(client: TestClient) -> None:
-    r = client.post('/curation/pipeline/auto_label/start')
+    r = client.post('/curation/projects/default/pipeline/auto_label/start')
     assert r.status_code == 200, r.text
     assert r.json()['args']['prompt_pack'] == 'pallet_v1'  # OP_PROMPT_PACK_PATH pack
 

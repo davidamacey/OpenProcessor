@@ -109,24 +109,17 @@ services:
       # rebuild. Every curation router builds its prefix at module
       # import, so this must be set before src.main is imported.
       - OP_API_PREFIX=/curation
-      # Belt and braces: every configured index name carries the
-      # `verify_` prefix, and tests/live/conftest.py refuses to run if
-      # any of them does not.
-      - OP_IMAGES_INDEX=verify_images
-      - OP_ITEMS_INDEX=verify_items
-      - OP_LABELS_CONFIRMED_INDEX=verify_labels_confirmed
-      - OP_CLASSES_INDEX=verify_classes
-      - OP_CLUSTERS_INDEX=verify_clusters
-      - OP_SETTINGS_INDEX=verify_settings
-      - OP_UMAP_STATE_INDEX=verify_umap_state
-      - OP_UMAP_VIZ_STATE_INDEX=verify_umap_viz_state
+      # Belt and braces: every project index (and the registry index)
+      # carries the `verify_` prefix, and tests/live/conftest.py refuses
+      # to run if any of them does not. `default` is bootstrapped as
+      # verify_prj_default__<role>.
+      - OP_PROJECT_INDEX_PREFIX=verify_prj_
+      - OP_PROJECTS_INDEX=verify_projects
       # Writable, host-visible filesystem roots.
-      - OP_REGISTRY_PATH=/verify-data/class_registry.json
+      - OP_PROJECTS_DATA_ROOT=/verify-data/projects
       - OP_SOURCE_ROOT=/verify-data/images
-      - OP_EXPORT_ROOT=/verify-data/exports
       - OP_STATE_DIR=/verify-data/state
       - OP_CROP_CACHE_DIR=/verify-data/crop_cache
-      - OP_BAKEOFF_EVAL_ROOT=/verify-data/bakeoff_eval
       # Shared job-file protocol with the fake trainer.
       - OP_TRAIN_JOBS_DIR=/jobs
       - OP_SCORES_STATE_DIR=/jobs/scores

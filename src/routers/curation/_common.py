@@ -43,6 +43,7 @@ from src.config.curation import (  # noqa: F401 - re-exported for the router mod
     items_index,
     labels_confirmed_index,
 )
+from src.core.dependencies import get_curation_opensearch
 from src.core.logging import get_logger
 from src.routers.curation._item_models import CropsPageResponse, ItemDoc  # noqa: F401 - re-export
 
@@ -65,7 +66,6 @@ config = get_curation_config()
 
 
 router = APIRouter(
-    prefix=config.api_prefix,
     tags=[config.api_tag],
     default_response_class=ORJSONResponse,
 )
@@ -124,13 +124,9 @@ def _registry_dep() -> ClassRegistry:
 RegistryDep = Annotated[ClassRegistry, Depends(_registry_dep)]
 
 
-async def _raw_opensearch_dep() -> Any:
-    """Return the raw AsyncOpenSearch instead of the project's
-    ``OpenSearchClient`` wrapper, with the project guard installed
-    (``src.services.projects.guard``, §2.4)."""
-    from src.services.projects.guard import make_curation_opensearch
-
-    return await make_curation_opensearch()
+# The one curation OpenSearch dependency (also used by the image, crop
+# and UMAP routers): the raw ``AsyncOpenSearch`` with the project guard.
+_raw_opensearch_dep = get_curation_opensearch
 
 
 OpenSearchDep = Annotated[Any, Depends(_raw_opensearch_dep)]

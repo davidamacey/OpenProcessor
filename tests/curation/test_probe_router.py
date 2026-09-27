@@ -29,7 +29,9 @@ def _client() -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()
     # Entered as a context manager (not just constructed) so all requests
     # in a test share one persistent event loop/portal -- required for an
@@ -44,7 +46,7 @@ def _finished_status(checkpoint_path: str) -> SimpleNamespace:
 
 def test_probe_run_404_style_409_for_unknown_job(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr('src.services.training.jobs.read_status', AsyncMock(return_value=None))
-    r = _client().post('/curation/probe/run', json={'job_id': 'nope'})
+    r = _client().post('/curation/projects/default/probe/run', json={'job_id': 'nope'})
     assert r.status_code == 409, r.text
 
 
@@ -53,7 +55,7 @@ def test_probe_run_409_when_run_not_finished(monkeypatch: pytest.MonkeyPatch) ->
         'src.services.training.jobs.read_status',
         AsyncMock(return_value=SimpleNamespace(state='running', checkpoint_path=None)),
     )
-    r = _client().post('/curation/probe/run', json={'job_id': 'run-1'})
+    r = _client().post('/curation/projects/default/probe/run', json={'job_id': 'run-1'})
     assert r.status_code == 409, r.text
     assert 'not finished' in r.json()['detail']
 
@@ -63,7 +65,7 @@ def test_probe_run_409_when_no_checkpoint(monkeypatch: pytest.MonkeyPatch) -> No
         'src.services.training.jobs.read_status',
         AsyncMock(return_value=SimpleNamespace(state='finished', checkpoint_path=None)),
     )
-    r = _client().post('/curation/probe/run', json={'job_id': 'run-1'})
+    r = _client().post('/curation/projects/default/probe/run', json={'job_id': 'run-1'})
     assert r.status_code == 409, r.text
     assert 'checkpoint_path' in r.json()['detail']
 
@@ -73,7 +75,7 @@ def test_probe_run_409_when_checkpoint_missing_on_disk(monkeypatch: pytest.Monke
         'src.services.training.jobs.read_status',
         AsyncMock(return_value=_finished_status('/no/such/file.onnx')),
     )
-    r = _client().post('/curation/probe/run', json={'job_id': 'run-1'})
+    r = _client().post('/curation/projects/default/probe/run', json={'job_id': 'run-1'})
     assert r.status_code == 409, r.text
     assert 'missing on disk' in r.json()['detail']
 
@@ -95,14 +97,14 @@ def test_probe_run_starts_and_status_reflects_it(monkeypatch: pytest.MonkeyPatch
         _fake_run_probe_inference,
     )
     client = _client()
-    r = client.post('/curation/probe/run', json={'job_id': 'run-1'})
+    r = client.post('/curation/projects/default/probe/run', json={'job_id': 'run-1'})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['status'] == 'running'
     assert body['train_job_id'] == 'run-1'
     assert body['model_path'] == str(weights)
 
-    r2 = client.get('/curation/probe/status')
+    r2 = client.get('/curation/projects/default/probe/status')
     assert r2.status_code == 200, r2.text
     assert r2.json()['status'] in ('running', 'completed')
 
@@ -135,10 +137,12 @@ def test_probe_run_default_architecture_is_yolo26(
         _fake_run_probe_inference,
     )
     client = _client()
-    r = client.post('/curation/probe/run', json={'job_id': 'run-1', 'architecture': 'yolo26'})
+    r = client.post(
+        '/curation/projects/default/probe/run', json={'job_id': 'run-1', 'architecture': 'yolo26'}
+    )
     assert r.status_code == 200, r.text
     for _ in range(50):
-        if client.get('/curation/probe/status').json()['status'] == 'completed':
+        if client.get('/curation/projects/default/probe/status').json()['status'] == 'completed':
             break
     assert seen_architectures == ['yolo26']
 
@@ -162,9 +166,9 @@ def test_probe_run_409_when_already_running(monkeypatch: pytest.MonkeyPatch, tmp
         _fake_run_probe_inference,
     )
     client = _client()
-    r1 = client.post('/curation/probe/run', json={'job_id': 'run-1'})
+    r1 = client.post('/curation/projects/default/probe/run', json={'job_id': 'run-1'})
     assert r1.status_code == 200, r1.text
-    r2 = client.post('/curation/probe/run', json={'job_id': 'run-2'})
+    r2 = client.post('/curation/projects/default/probe/run', json={'job_id': 'run-2'})
     assert r2.status_code == 409, r2.text
 
 
@@ -185,14 +189,14 @@ def test_probe_cancel_stops_the_active_job(monkeypatch: pytest.MonkeyPatch, tmp_
         _fake_run_probe_inference,
     )
     client = _client()
-    client.post('/curation/probe/run', json={'job_id': 'run-1'})
-    r = client.post('/curation/probe/cancel')
+    client.post('/curation/projects/default/probe/run', json={'job_id': 'run-1'})
+    r = client.post('/curation/projects/default/probe/cancel')
     assert r.status_code == 200, r.text
     assert r.json()['cancelled'] is True
 
 
 def test_probe_cancel_with_nothing_running() -> None:
-    r = _client().post('/curation/probe/cancel')
+    r = _client().post('/curation/projects/default/probe/cancel')
     assert r.status_code == 200, r.text
     assert r.json()['cancelled'] is False
 
@@ -201,7 +205,7 @@ def test_probe_status_reports_the_actionable_threshold() -> None:
     """GET /probe/status echoes CurationConfig.probe_actionable_min_confidence
     read-only, on every poll -- even with no job ever run -- so a UI can
     explain "model unsure" without hardcoding the threshold."""
-    r = _client().get('/curation/probe/status')
+    r = _client().get('/curation/projects/default/probe/status')
     assert r.status_code == 200, r.text
     assert r.json()['actionable_min_confidence'] == 0.5
 
@@ -211,6 +215,6 @@ def test_probe_status_threshold_reflects_env_override(monkeypatch: pytest.Monkey
 
     monkeypatch.setenv('OP_PROBE_ACTIONABLE_MIN_CONFIDENCE', '0.9')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
-    r = _client().get('/curation/probe/status')
+    r = _client().get('/curation/projects/default/probe/status')
     assert r.status_code == 200, r.text
     assert r.json()['actionable_min_confidence'] == 0.9

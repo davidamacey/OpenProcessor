@@ -138,7 +138,9 @@ def train_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation_train import router as train_router
 
     app = FastAPI()
-    app.include_router(train_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, train_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -165,7 +167,8 @@ def test_preflight_blocks_the_all_test_export(train_client: TestClient, tmp_path
         class_split_counts=[_class_row(i, n, 0, 0, 35) for i, n in enumerate('abc')],
     )
     body = train_client.post(
-        '/curation/train/preflight', json={'dataset_export_dir': export_dir, 'profile': 'medium'}
+        '/curation/projects/default/train/preflight',
+        json={'dataset_export_dir': export_dir, 'profile': 'medium'},
     ).json()
     assert _check(body, 'export_not_empty')['severity'] == 'ok'
     splits = _check(body, 'export_splits_nonempty')
@@ -185,7 +188,7 @@ def test_preflight_blocks_a_per_class_gap_on_an_included_class(
         class_split_counts=[*BALANCED[:2], _class_row(2, 'gamma', 4, 0, 5)],
     )
     body = train_client.post(
-        '/curation/train/preflight',
+        '/curation/projects/default/train/preflight',
         json={'dataset_export_dir': export_dir, 'profile': 'medium', 'include_classes': [1, 2]},
     ).json()
     assert _check(body, 'export_splits_nonempty')['severity'] == 'ok'
@@ -196,7 +199,7 @@ def test_preflight_blocks_a_per_class_gap_on_an_included_class(
     assert body['blocked'] is True
 
     ok_body = train_client.post(
-        '/curation/train/preflight',
+        '/curation/projects/default/train/preflight',
         json={'dataset_export_dir': export_dir, 'profile': 'medium', 'include_classes': [0, 1]},
     ).json()
     assert _check(ok_body, 'export_class_split_coverage')['severity'] == 'ok'
@@ -219,7 +222,8 @@ def test_preflight_single_class_export_skips_per_class_coverage(
         )
     )
     body = train_client.post(
-        '/curation/train/preflight', json={'dataset_export_dir': str(d), 'profile': 'medium'}
+        '/curation/projects/default/train/preflight',
+        json={'dataset_export_dir': str(d), 'profile': 'medium'},
     ).json()
     assert _check(body, 'export_splits_nonempty')['severity'] == 'block'
     assert _check(body, 'export_class_split_coverage')['severity'] == 'ok'
@@ -240,7 +244,8 @@ def test_preflight_warns_about_unlabeled_objects_on_exported_images(
         images_dropped_not_fully_labeled=0,
     )
     body = train_client.post(
-        '/curation/train/preflight', json={'dataset_export_dir': export_dir, 'profile': 'medium'}
+        '/curation/projects/default/train/preflight',
+        json={'dataset_export_dir': export_dir, 'profile': 'medium'},
     ).json()
     check = _check(body, 'export_unlabeled_objects')
     assert check['severity'] == 'warn'
@@ -268,6 +273,7 @@ def test_preflight_single_class_export_skips_unlabeled_object_check(
         )
     )
     body = train_client.post(
-        '/curation/train/preflight', json={'dataset_export_dir': str(d), 'profile': 'medium'}
+        '/curation/projects/default/train/preflight',
+        json={'dataset_export_dir': str(d), 'profile': 'medium'},
     ).json()
     assert _check(body, 'export_unlabeled_objects')['severity'] == 'ok'

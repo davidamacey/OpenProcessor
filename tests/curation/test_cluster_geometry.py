@@ -212,7 +212,9 @@ def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     outliers._CACHE.clear()
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -235,7 +237,8 @@ def test_core_first_orders_nearest_first_with_a_consistent_cut_line(
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
 
     r = client.get(
-        '/curation/crops', params={'cluster_id': 5, 'order': 'core_first', 'page_size': 50}
+        '/curation/projects/default/crops',
+        params={'cluster_id': 5, 'order': 'core_first', 'page_size': 50},
     )
     assert r.status_code == 200, r.text
     body = r.json()
@@ -255,7 +258,7 @@ def test_core_first_orders_nearest_first_with_a_consistent_cut_line(
         assert c['cluster_is_core'] == (c['cluster_similarity'] >= CORE_SIMILARITY_MIN)
 
     page2 = client.get(
-        '/curation/crops',
+        '/curation/projects/default/crops',
         params={'cluster_id': 5, 'order': 'core_first', 'page_size': 4, 'page': 2},
     ).json()
     assert [c['crop_id'] for c in page2['crops']] == [c['crop_id'] for c in crops[4:]]

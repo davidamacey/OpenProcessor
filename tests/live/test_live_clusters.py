@@ -374,11 +374,9 @@ def test_viz_projection_rebuild_then_serve(api_client: Any, opensearch: Any) -> 
 
 def test_viz_state_index_honours_the_configured_index_prefix(opensearch: Any) -> None:
     """The UMAP run-metadata index names (viz-only and the retired
-    clustering reducer's) are resolved through
-    ``CurationConfig.umap_viz_state_index`` / ``umap_state_index``,
-    each overridable via its own ``OP_*_INDEX`` env var — the harness sets
-    both to ``verify_``-prefixed names, so no unscoped ``op_*`` index
-    should ever appear.
+    clustering reducer's) are the bound project's, like every index:
+    ``{OP_PROJECT_INDEX_PREFIX}default__umap_*``. The harness sets the
+    prefix to ``verify_prj_``, so no ``op_*`` index should ever appear.
     """
     names = [i['index'] for i in opensearch.get('/_cat/indices?format=json').json()]
     unscoped = [n for n in names if n.startswith('op_') and not n.startswith('verify_')]

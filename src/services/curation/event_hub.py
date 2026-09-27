@@ -41,12 +41,17 @@ Design (S-3, file-backed bus):
   ``/clusters/42`` page only sees crops labeled with class 42.
 - Ops counters (``subscribers``, ``events_published``, ``events_dropped``)
   plus ``bus``/``log_path`` surfaced via ``/curation/events/stats``.
-- Project scoping (projects_plan.md §2.5): :meth:`EventHub.publish`
-  stamps ``project`` with the bound project's slug (``None`` when
-  nothing is bound, i.e. a global event). A scoped subscriber sees its
-  own project's events plus every ``project: null`` event; the global
-  subscriber (:data:`GLOBAL_STREAM`) sees only ``project: null`` events.
-  Filtering happens at fan-out, so one log still serves every project.
+- Project scoping (projects_plan.md §2.5), fail-closed:
+  :meth:`EventHub.publish` always stamps ``project`` with the bound
+  project's slug (a caller-set ``project`` that disagrees is refused),
+  and raises ``ProjectNotBound`` when nothing is bound. Only
+  :func:`publish_global_event` produces ``project: null``, and only for
+  the global event families in :data:`GLOBAL_EVENT_PREFIXES`. A scoped
+  subscriber sees exactly its own project's events; the global
+  subscriber (:data:`GLOBAL_STREAM`) sees exactly the ``project: null``
+  ones. An event with no ``project`` key at all (e.g. a stale log line)
+  reaches no one. Filtering happens at fan-out, so one log still serves
+  every project.
 
 Event payload schema (advisory — frontend code keys on ``type``):
 
@@ -56,8 +61,7 @@ Event payload schema (advisory — frontend code keys on ``type``):
 - ``crop.region_verified``: ``{type, crop_id, region_status, region_text?,
   ts}``
 - Global events (``project: null``), published with
-  :func:`publish_global_event`: ``project.*``, VLM-registry
-  ``config.changed`` and ``combine.*``. A ``combine.progress`` /
+  :func:`publish_global_event`: ``project.*`` and ``combine.*``. A ``combine.progress`` /
   ``combine.finished`` event names the project it builds in ``target``
   (the target is ``building`` and cannot be bound, so it cannot carry the
   event on its own stream): ``{type, topic: "project", project: null,
@@ -77,7 +81,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
-from src.config.project_context import try_current_project
+from src.config.project_context import current_project
 from src.core.logging import get_logger
 from src.services.curation.wire import region_event_payload
 
@@ -117,6 +121,14 @@ GLOBAL_STREAM: None = None
 # The ``topic`` global lifecycle events carry.
 GLOBAL_EVENT_TOPIC = 'project'
 
+# The only event families allowed on the global stream: project lifecycle
+# and the combine job that builds a new project (its ``target``).
+GLOBAL_EVENT_PREFIXES: tuple[str, ...] = ('project.', 'combine.')
+
+
+class EventProjectMismatchError(ValueError):
+    """An event names a project other than the bound one."""
+
 
 class _Subscriber:
     """One connected SSE client.
@@ -137,10 +149,10 @@ class _Subscriber:
 
     def matches(self, event: dict[str, Any]) -> bool:
         """Return True if this subscriber wants ``event``."""
-        ev_project = event.get('project')
-        if ev_project is not None and ev_project != self.project:
-            # Another project's event, or a project event on the global
-            # stream (``self.project is None``).
+        if 'project' not in event or event['project'] != self.project:
+            # Another project's event, a project event on the global
+            # stream, a global event on a project stream, or an unstamped
+            # event (reaches no one).
             return False
         if self.topic is not None:
             ev_topic = event.get('topic')
@@ -331,6 +343,7 @@ class EventHub:
         self._subscribers: set[_Subscriber] = set()
         self._lock = asyncio.Lock()
         self._published = 0
+        self._published_by_project: dict[str | None, int] = {}
         self._dropped = 0
         self._bus = os.environ.get('OP_EVENT_BUS', 'file')
         self._log: _EventLog | None = None
@@ -365,22 +378,34 @@ class EventHub:
     # -- publish ---------------------------------------------------------
 
     def publish(self, event: dict[str, Any]) -> None:
-        """Publisher entry point — safe from any running coroutine.
+        """Publisher entry point for project events -- safe from any
+        running coroutine.
 
-        Adds a server timestamp if the caller didn't include one, and
-        stamps ``project`` from the bound context when the caller didn't
-        set it (``None`` when unbound: a global event). On
-        the ``file`` bus this only appends to the shared log; local
-        delivery happens in this same process's tail loop (started via
-        :meth:`start_tail`), never here directly, so a process never
-        delivers its own publish twice.
+        Adds a server timestamp if the caller didn't include one and
+        stamps ``project`` with the bound project's slug. Raises
+        ``ProjectNotBound`` when nothing is bound (there is no implicit
+        global fallback: use :func:`publish_global_event`), and
+        :class:`EventProjectMismatchError` when the event already names a
+        different project. On the ``file`` bus this only appends to the
+        shared log; local delivery happens in this same process's tail
+        loop (started via :meth:`start_tail`), never here directly, so a
+        process never delivers its own publish twice.
         """
+        slug = current_project().record.slug
+        if event.get('project', slug) != slug:
+            raise EventProjectMismatchError(
+                f'event names project {event.get("project")!r} but {slug!r} is bound'
+            )
+        event['project'] = slug
+        self._publish(event)
+
+    def _publish(self, event: dict[str, Any]) -> None:
         if 'ts' not in event:
             event['ts'] = time.time()
-        if 'project' not in event:
-            bound = try_current_project()
-            event['project'] = bound.record.slug if bound is not None else None
         self._published += 1
+        self._published_by_project[event['project']] = (
+            self._published_by_project.get(event['project'], 0) + 1
+        )
         if self._bus == 'file' and self._log is not None:
             self._log.append_nowait(event)
             return
@@ -438,10 +463,13 @@ class EventHub:
 
     # -- ops -------------------------------------------------------------
 
-    def stats(self) -> dict[str, Any]:
+    def stats(self, project: str | None) -> dict[str, Any]:
+        """Counters for one stream: ``project``'s subscribers and publishes
+        (``None``: the global stream). ``events_dropped`` and the bus are
+        process-wide facts about this hub, not about any project's data."""
         return {
-            'subscribers': len(self._subscribers),
-            'events_published': self._published,
+            'subscribers': sum(1 for sub in self._subscribers if sub.project == project),
+            'events_published': self._published_by_project.get(project, 0),
             'events_dropped': self._dropped,
             'bus': self._bus,
             'log_path': str(self._log.path) if self._log is not None else None,
@@ -512,9 +540,12 @@ def publish_region_verified(
 
 def publish_global_event(event_type: str, *, target: str | None = None, **fields: Any) -> None:
     """Publish a ``project: null`` event onto the global stream, whatever
-    project (if any) is bound. ``target`` names the project a
-    ``combine.*`` / ``project.*`` event is about; it is on the wire as
-    ``null`` when not given, so a client can always read it."""
+    project (if any) is bound. Only the global families in
+    :data:`GLOBAL_EVENT_PREFIXES` may go there. ``target`` names the
+    project a ``combine.*`` / ``project.*`` event is about; it is on the
+    wire as ``null`` when not given, so a client can always read it."""
+    if not event_type.startswith(GLOBAL_EVENT_PREFIXES):
+        raise ValueError(f'{event_type!r} is not a global event type')
     event: dict[str, Any] = {
         'type': event_type,
         'topic': GLOBAL_EVENT_TOPIC,
@@ -522,4 +553,4 @@ def publish_global_event(event_type: str, *, target: str | None = None, **fields
         'project': None,
         'target': target,
     }
-    get_event_hub().publish(event)
+    get_event_hub()._publish(event)

@@ -946,6 +946,14 @@ def _parse_ocr_pipeline_result(result: Any) -> list[OcrLine]:
         )
         if not raw.strip():
             continue
+        # The BLS emits '' + -1.0 together for a failed recognition (see
+        # models/ocr_pipeline/1/model.py), so `raw.strip()` above already
+        # drops every sentinel line in practice. This is a defense-in-depth
+        # guard in case a future BLS build ever pairs -1.0 with non-empty
+        # text: the -1.0 sentinel must never reach an OcrLine.score.
+        rec_score = float(rec_scores[i])
+        if rec_score < 0.0:
+            continue
         x1, y1, x2, y2 = (max(0.0, min(1.0, float(v))) for v in boxes[i])
         if x2 <= x1 or y2 <= y1:
             continue
@@ -953,7 +961,7 @@ def _parse_ocr_pipeline_result(result: Any) -> list[OcrLine]:
             OcrLine(
                 text=raw,
                 box=(x1, y1, x2, y2),
-                score=float(rec_scores[i]),
+                score=rec_score,
                 det_score=float(det_scores[i]),
             )
         )

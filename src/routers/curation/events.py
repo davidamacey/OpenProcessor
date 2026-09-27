@@ -6,7 +6,7 @@ import asyncio as _events_asyncio
 import json as _events_json
 from typing import Any
 
-from fastapi import Query
+from fastapi import HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from src.config import get_curation_config
@@ -30,8 +30,8 @@ async def curation_events(
         'events whose class matches.',
     ),
 ) -> StreamingResponse:
-    """SSE stream of advisory crop-state events for the bound project,
-    plus every global (``project: null``) event.
+    """SSE stream of advisory crop-state events for the bound project
+    only (global ``project: null`` events go to ``{api}/events``).
 
     The connection stays open until the client disconnects. A heartbeat
     comment line is sent every 15s so reverse-proxies don't kill the
@@ -110,14 +110,25 @@ async def curation_events_publish(payload: _PublishEvent) -> dict[str, Any]:
         event[region_wire_key('text')] = payload.region_text
     if payload.image_path is not None:
         event['image_path'] = payload.image_path
-    if payload.extra:
-        event.update(payload.extra)
+    bound = get_curation_config().project_slug
+    extra = dict(payload.extra or {})
+    if 'project' in extra and extra.pop('project') != bound:
+        # The bound project always wins; an event cannot be redirected to
+        # another project's stream (or the global one) from here.
+        raise HTTPException(
+            status_code=422,
+            detail=f"extra.project must be the bound project '{bound}' (or omitted)",
+        )
+    extra.pop('target', None)
+    event.update(extra)
+    event['project'] = bound
     get_event_hub().publish(event)
     return {'ok': True}
 
 
 @router.get('/events/stats')
 async def curation_events_stats() -> dict[str, Any]:
-    """Ops counters: subscribers, events_published, events_dropped, plus
-    the active ``bus`` (``file``/``process``) and its ``log_path``."""
-    return get_event_hub().stats()
+    """Ops counters for the bound project's stream: its subscribers and
+    publishes, plus the hub's ``events_dropped``, active ``bus``
+    (``file``/``process``) and ``log_path``."""
+    return get_event_hub().stats(get_curation_config().project_slug)

@@ -457,6 +457,14 @@
             "title": "Context Class Ids",
             "type": "array"
           },
+          "context_class_names": {
+            "description": "Registry names for context_class_ids, same order/length, resolved by id lookup; an entry is the id's string form when it's no longer in the registry",
+            "items": {
+              "type": "string"
+            },
+            "title": "Context Class Names",
+            "type": "array"
+          },
           "default": {
             "title": "Default",
             "type": "boolean"
@@ -521,6 +529,7 @@
           "default_backend",
           "triton_model",
           "context_class_ids",
+          "context_class_names",
           "baselines_path"
         ],
         "title": "BakeoffProfileRow",
@@ -1372,6 +1381,21 @@
             "description": "{\"<model class id>\": <eval class id>}; null = matched by name in the evaluator",
             "title": "Model To Eval"
           },
+          "model_to_eval_names": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "{\"<model class id>\": \"<eval class name>\"}; same keys as model_to_eval, paired by name (never by raw index) so a consumer never has to re-derive the name from the eval class id; null under the same condition as model_to_eval",
+            "title": "Model To Eval Names"
+          },
           "not_covered_eval_classes": {
             "items": {
               "$ref": "#/components/schemas/NotCoveredClass"
@@ -1397,6 +1421,7 @@
         "required": [
           "method",
           "model_to_eval",
+          "model_to_eval_names",
           "unmapped_model_classes",
           "not_covered_eval_classes",
           "warnings"
@@ -2551,12 +2576,25 @@
             ],
             "description": "Class-registry id (inverse of class_registry.json export_id_map); null when the export has no registry mapping for it",
             "title": "Registry Class Id"
+          },
+          "registry_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Live registry name for registry_class_id, resolved by id lookup, never assumed equal to the eval dataset name; null when registry_class_id is null or no longer present in the registry (e.g. deleted, not merely deprecated)",
+            "title": "Registry Class Name"
           }
         },
         "required": [
           "eval_class_id",
           "name",
           "registry_class_id",
+          "registry_class_name",
           "n_objects",
           "n_images"
         ],
@@ -5758,6 +5796,7 @@
         "properties": {
           "architecture": {
             "default": "yolo26",
+            "description": "One of ('yolo11', 'yolo26', 'yolov5_objectness').",
             "title": "Architecture",
             "type": "string"
           },
@@ -5954,9 +5993,15 @@
             "type": "integer"
           },
           "validated": {
-            "default": 0,
-            "title": "Validated",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validated"
           }
         },
         "title": "ProjectCounts",
@@ -12773,7 +12818,7 @@
     },
     "/curation/projects/{project}/events": {
       "get": {
-        "description": "SSE stream of advisory crop-state events for the bound project,\nplus every global (``project: null``) event.\n\nThe connection stays open until the client disconnects. A heartbeat\ncomment line is sent every 15s so reverse-proxies don't kill the\nsocket. Subscribers each get their own bounded queue (capped at\n1000 events; oldest drops on overflow — events are advisory).",
+        "description": "SSE stream of advisory crop-state events for the bound project\nonly (global ``project: null`` events go to ``{api}/events``).\n\nThe connection stays open until the client disconnects. A heartbeat\ncomment line is sent every 15s so reverse-proxies don't kill the\nsocket. Subscribers each get their own bounded queue (capped at\n1000 events; oldest drops on overflow — events are advisory).",
         "operationId": "curation_events_curation_projects__project__events_get",
         "parameters": [
           {
@@ -12907,7 +12952,7 @@
     },
     "/curation/projects/{project}/events/stats": {
       "get": {
-        "description": "Ops counters: subscribers, events_published, events_dropped, plus\nthe active ``bus`` (``file``/``process``) and its ``log_path``.",
+        "description": "Ops counters for the bound project's stream: its subscribers and\npublishes, plus the hub's ``events_dropped``, active ``bus``\n(``file``/``process``) and ``log_path``.",
         "operationId": "curation_events_stats_curation_projects__project__events_stats_get",
         "parameters": [
           {
@@ -14982,7 +15027,7 @@
     },
     "/curation/projects/{project}/probe/run": {
       "post": {
-        "description": "Start a probe pass from a finished training run's export.\n\n``409`` when: the referenced training job isn't finished or has no\nexported checkpoint, or a probe job is already running. GPU claim\n(when ``gpu`` is given) goes through the same arbiter\n``POST /train/start`` uses; a claim failure is also ``409`` (never\nsilent -- see ``src.services.curation.probe_job``).",
+        "description": "Start a probe pass from a finished training run's export.\n\n``409`` when: the referenced training job isn't finished or has no\nexported checkpoint, or a probe job is already running. ``422`` when\n``architecture`` is outside\n:data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`. GPU\nclaim (when ``gpu`` is given) goes through the same arbiter\n``POST /train/start`` uses; a claim failure is also ``409`` (never\nsilent -- see ``src.services.curation.probe_job``).",
         "operationId": "probe_run_curation_projects__project__probe_run_post",
         "parameters": [
           {
