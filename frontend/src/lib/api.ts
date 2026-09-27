@@ -109,11 +109,17 @@ import type {
   CreateProjectRequest,
   DeleteDryRunResponse,
   PatchProjectRequest,
+  PipelinePauseState,
   ProjectErrorDetail,
   ProjectLifecycleResponse,
   ProjectRecordResponse,
   ProjectsResponse,
 } from './types_projects';
+import type {
+  ModelClassMappingResponse,
+  ModelSharingRequest,
+  ModelSharingResponse,
+} from './types_models';
 
 // Vite exposes only PUBLIC_-prefixed env vars to the client. SvelteKit uses
 // `$env/dynamic/public` but importing that here would force every consumer
@@ -1483,8 +1489,91 @@ export function getTrainingCohorts(
   );
 }
 
+/**
+ * Every model the active project can see: its own, the base models, and
+ * (projects P2, §5.5) other projects' models their owners shared, each
+ * with the served `project`/`shared`/`class_mapping`.
+ */
 export function getModelsStatus(signal?: AbortSignal): Promise<ModelsStatus> {
-  return apiFetch<ModelsStatus>(`${scoped()}/models/status`, {}, signal);
+  return apiFetch<ModelsStatus>(
+    `${scoped()}/models/status${qs({ include_other_projects: true })}`,
+    {},
+    signal,
+  );
+}
+
+/**
+ * Opt one of the active project's promoted models into (or out of)
+ * cross-project sharing. Owner only: any other project gets 404
+ * `model_not_found`. 409 `revision_conflict` carries the served
+ * `current_revision`; 409 `in_use` (unsharing while another project uses
+ * it) is bypassed by `force`.
+ */
+export function setModelSharing(
+  modelName: string,
+  body: ModelSharingRequest,
+  force = false,
+  signal?: AbortSignal,
+): Promise<ModelSharingResponse> {
+  return apiFetch<ModelSharingResponse>(
+    `${scoped()}/models/${encodeURIComponent(modelName)}/sharing${qs({ force: force || undefined })}`,
+    { method: 'PUT', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** How a model's classes map by name onto the active project's registry. */
+export function getModelClassMapping(
+  modelName: string,
+  signal?: AbortSignal,
+): Promise<ModelClassMappingResponse> {
+  return apiFetch<ModelClassMappingResponse>(
+    `${scoped()}/models/${encodeURIComponent(modelName)}/class_mapping`,
+    {},
+    signal,
+  );
+}
+
+/**
+ * A project's own served API prefix, verbatim. The only way to address a
+ * project OTHER than the active one (the `/projects` page acts on each
+ * row's own project): the prefix is the served
+ * `ProjectSummary.prefix`, never assembled from a slug.
+ */
+export function projectPrefix(project: { prefix: string }): string {
+  return project.prefix;
+}
+
+/** `GET {prefix}/pause`. A row action on `/projects`, so `global`: it
+ *  belongs to that row's project, not the active one, and is never
+ *  dropped as stale when the active project changes. */
+export function getProjectPause(
+  project: { prefix: string },
+  signal?: AbortSignal,
+): Promise<PipelinePauseState> {
+  return apiFetch<PipelinePauseState>(`${projectPrefix(project)}/pause`, {}, signal, {
+    global: true,
+  });
+}
+
+/** `POST {prefix}/pause` — workers skip the project until resumed. */
+export function pauseProject(project: { prefix: string }): Promise<PipelinePauseState> {
+  return apiFetch<PipelinePauseState>(
+    `${projectPrefix(project)}/pause`,
+    { method: 'POST' },
+    undefined,
+    { global: true },
+  );
+}
+
+/** `POST {prefix}/resume`. */
+export function resumeProject(project: { prefix: string }): Promise<PipelinePauseState> {
+  return apiFetch<PipelinePauseState>(
+    `${projectPrefix(project)}/resume`,
+    { method: 'POST' },
+    undefined,
+    { global: true },
+  );
 }
 
 /**

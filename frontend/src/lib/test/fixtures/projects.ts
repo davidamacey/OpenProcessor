@@ -15,6 +15,7 @@ export function testProject(
   over: Partial<ProjectSummary> & { slug: string },
 ): ProjectSummary {
   const slug = over.slug;
+  const status = over.status ?? 'active';
   return {
     display_name: `Project ${slug}`,
     description: '',
@@ -24,6 +25,10 @@ export function testProject(
     selectable: true,
     is_default: false,
     deletable: true,
+    // Mirrors the server's own rule (ARCHIVABLE/UNARCHIVABLE_STATUSES);
+    // a test overrides either to prove the UI reads the flag, not status.
+    archivable: status === 'active',
+    unarchivable: status === 'archived',
     revision: 3,
     created_at: '2026-09-26T12:00:00Z',
     updated_at: '2026-09-26T12:00:00Z',

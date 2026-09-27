@@ -44,6 +44,12 @@ export interface ProjectSummary {
   /** Served: whether a delete can ever be attempted (false for the
    *  default project). Delete is absent when false. */
   deletable: boolean;
+  /** Served: whether `POST /projects/{slug}/archive` accepts this
+   *  project's status. The Archive action renders only when true. */
+  archivable: boolean;
+  /** Served: whether `POST /projects/{slug}/unarchive` accepts this
+   *  project's status. The Unarchive action renders only when true. */
+  unarchivable: boolean;
   /** Optimistic-concurrency token every lifecycle write sends back as
    *  `expected_revision`. */
   revision: number;
@@ -176,4 +182,13 @@ export interface ProjectErrorDetail {
   hard_limit?: number | null;
   heap_max_bytes?: number | null;
   current_revision?: number | null;
+}
+
+/** `GET|POST {prefix}/pause`, `POST {prefix}/resume` (projects P2,
+ *  `projects_plan.md` §5.1): the project's own pipeline-pause flag. It
+ *  says nothing about WHY workers may be idle (e.g. the global GPU
+ *  training claim), so the UI shows `paused` and nothing more. */
+export interface PipelinePauseState {
+  project: string;
+  paused: boolean;
 }

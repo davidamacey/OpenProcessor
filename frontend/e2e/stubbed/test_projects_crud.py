@@ -94,7 +94,13 @@ class Projects:
         self.writes.append(("POST", f"{slug}/{verb}", request.post_data_json))
         row = self.rows[slug]
         archived = verb == "archive"
-        row.update(status="archived" if archived else "active", writable=not archived, revision=row["revision"] + 1)
+        row.update(
+            status="archived" if archived else "active",
+            writable=not archived,
+            archivable=not archived,
+            unarchivable=archived,
+            revision=row["revision"] + 1,
+        )
         return (200, {"project": row, "warnings": []})
 
     def delete(self, request: Any, m: Any) -> Any:
@@ -117,7 +123,7 @@ class Projects:
         if confirm != slug:
             return (422, {"detail": {"error": "confirm_mismatch", "message": f"confirm must equal the slug '{slug}'"}})
         row = self.rows[slug]
-        row.update(status="deleting", writable=False, selectable=False)
+        row.update(status="deleting", writable=False, selectable=False, archivable=False, unarchivable=False)
         return (202, {"project": row, "warnings": []})
 
 

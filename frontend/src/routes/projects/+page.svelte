@@ -8,19 +8,23 @@
    * from served flags alone:
    *
    * - Open, Edit: `selectable`
-   * - Archive, Copy settings: `writable`
-   * - Unarchive: `selectable && !writable` (reads work, writes don't)
+   * - Copy settings: `writable`
+   * - Archive: `archivable`; Unarchive: `unarchivable`
    * - Delete: `deletable`
+   * - Pause / Resume pipeline: `writable`, once the row's served pause
+   *   state (`GET {prefix}/pause`, read for every `selectable` row) has
+   *   loaded; the button offered is the opposite of the served `paused`
    * - Create: disabled only by a served `capacity.status === 'blocked'`
    *
    * State and writes live in `projectsAdminController.svelte.ts`.
    */
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { resolve } from '$app/paths';
   import CloneSettingsDialog from '$components/projects/CloneSettingsDialog.svelte';
   import CreateProjectDialog from '$components/projects/CreateProjectDialog.svelte';
   import DeleteProjectDialog from '$components/projects/DeleteProjectDialog.svelte';
   import EditProjectDialog from '$components/projects/EditProjectDialog.svelte';
+  import PauseProjectDialog from '$components/projects/PauseProjectDialog.svelte';
   import { formatCount } from '$lib/formatCount';
   import { projectHref } from '$lib/projectPaths';
   import {
@@ -28,6 +32,7 @@
     type ActionResult,
   } from '$lib/projects/projectsAdminController.svelte';
   import type { ProjectSummary } from '$lib/types_projects';
+  import { projectPauseStore } from '$stores/projectPause.svelte';
   import { projectsStore } from '$stores/projects.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
@@ -41,9 +46,20 @@
   let cloning = $state<ProjectSummary | null>(null);
   let deleting = $state<ProjectSummary | null>(null);
   let pending = $state<string | null>(null);
+  let pausing = $state<{ project: ProjectSummary; pause: boolean } | null>(null);
 
   onMount(() => {
     void admin.load();
+  });
+
+  // Every selectable row's served pause flag, re-read whenever the served
+  // list is (after a load or a lifecycle write). Each read goes to that
+  // row's own served prefix.
+  $effect(() => {
+    const rows = admin.list.filter((p) => p.selectable);
+    untrack(() => {
+      for (const p of rows) void projectPauseStore.load(p);
+    });
   });
 
   /** "Back to a project": the active one when there is one, else the
@@ -178,13 +194,22 @@
                 {/if}
               </td>
               <td class="px-3 py-2">
-                <span
-                  class="rounded px-1.5 py-0.5 text-xs {p.status === 'active'
-                    ? 'bg-emerald-950/60 text-emerald-300'
-                    : 'bg-amber-950/60 text-amber-300'}"
-                  data-testid="project-status-{p.slug}"
-                  >{admin.statusLabel(p.status)}</span
-                >
+                <div class="flex flex-wrap items-center gap-1">
+                  <span
+                    class="rounded px-1.5 py-0.5 text-xs {p.status === 'active'
+                      ? 'bg-emerald-950/60 text-emerald-300'
+                      : 'bg-amber-950/60 text-amber-300'}"
+                    data-testid="project-status-{p.slug}"
+                    >{admin.statusLabel(p.status)}</span
+                  >
+                  {#if projectPauseStore.pausedFor(p.slug) === true}
+                    <span
+                      class="rounded bg-amber-950/60 px-1.5 py-0.5 text-xs text-amber-300"
+                      title="Pipeline paused: workers skip this project until it's resumed"
+                      data-testid="project-paused-{p.slug}">paused</span
+                    >
+                  {/if}
+                </div>
               </td>
               <td class="px-3 py-2 text-right tabular-nums"
                 >{formatCount(p.counts.images)}</td
@@ -217,6 +242,18 @@
                       data-testid="project-clone-{p.slug}"
                       onclick={() => (cloning = p)}>Copy settings</button
                     >
+                  {/if}
+                  {#if p.writable && projectPauseStore.pausedFor(p.slug) !== undefined}
+                    {@const isPaused = projectPauseStore.pausedFor(p.slug) === true}
+                    <button
+                      type="button"
+                      class="btn btn-sm"
+                      data-testid="project-{isPaused ? 'resume' : 'pause'}-{p.slug}"
+                      onclick={() => (pausing = { project: p, pause: !isPaused })}
+                      >{isPaused ? 'Resume pipeline' : 'Pause pipeline'}</button
+                    >
+                  {/if}
+                  {#if p.archivable}
                     <button
                       type="button"
                       class="btn btn-sm"
@@ -225,7 +262,8 @@
                       onclick={() => void lifecycle(p, 'Archived', admin.archive)}
                       >Archive</button
                     >
-                  {:else if p.selectable}
+                  {/if}
+                  {#if p.unarchivable}
                     <button
                       type="button"
                       class="btn btn-sm"
@@ -265,3 +303,4 @@
 <EditProjectDialog project={editing} {admin} onclose={() => (editing = null)} />
 <CloneSettingsDialog project={cloning} {admin} onclose={() => (cloning = null)} />
 <DeleteProjectDialog project={deleting} {admin} onclose={() => (deleting = null)} />
+<PauseProjectDialog target={pausing} onclose={() => (pausing = null)} />

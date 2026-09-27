@@ -83,6 +83,10 @@ def project(api_prefix: str, slug: str, **over: Any) -> dict[str, Any]:
         "selectable": True,
         "is_default": False,
         "deletable": True,
+        # The server's own rule (ARCHIVABLE/UNARCHIVABLE_STATUSES); a test
+        # overrides either via **over.
+        "archivable": over.get("status", "active") == "active",
+        "unarchivable": over.get("status") == "archived",
         "revision": 1,
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": "2026-01-01T00:00:00Z",

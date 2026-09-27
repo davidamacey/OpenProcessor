@@ -17,6 +17,7 @@ import ProjectSwitcher from './ProjectSwitcher.svelte';
 import { API_PREFIX } from '$lib/api';
 import { FALLBACK_KEYMAP } from '$lib/keymapFallback';
 import { keymapStore } from '$stores/keymap.svelte';
+import { projectPauseStore } from '$stores/projectPause.svelte';
 import { projectsStore } from '$stores/projects.svelte';
 import { testProject, testProjectsResponse } from '$lib/test/fixtures/projects';
 
@@ -72,6 +73,8 @@ afterEach(() => {
   instance = null;
   target.remove();
   keymapStore.resetToFallback();
+  projectPauseStore.reset();
+  vi.unstubAllGlobals();
   projectsStore.select(DEFAULT);
 });
 
@@ -149,5 +152,31 @@ describe('ProjectSwitcher', () => {
         .querySelector('[data-testid="project-switcher-manage"]')!
         .getAttribute('href'),
     ).toBe('/projects');
+  });
+
+  it('shows a "paused" chip only when the active project\'s served flag is true', async () => {
+    let served = true;
+    const seen: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        seen.push(String(url));
+        return new Response(JSON.stringify({ project: 'default', paused: served }), {
+          headers: { 'content-type': 'application/json' },
+        });
+      }),
+    );
+    render();
+    const chip = () => target.querySelector('[data-testid="project-switcher-paused"]');
+    expect(chip()).toBeNull();
+    await projectPauseStore.load(DEFAULT);
+    flushSync();
+    expect(chip()?.textContent).toBe('paused');
+    expect(seen).toEqual([`${DEFAULT.prefix}/pause`]);
+    // Another project being paused never marks the active one.
+    served = false;
+    await projectPauseStore.load(DEFAULT);
+    flushSync();
+    expect(chip()).toBeNull();
   });
 });

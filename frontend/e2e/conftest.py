@@ -32,6 +32,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 from fixtures.wire import (
     REGION_PROFILE,
@@ -350,11 +351,23 @@ class Stub:
         # every existing test stays green without editing each one;
         # `test_keymap.py` overrides this per-test with a served document.
         self.on("GET", r"/keymap(\?|$)", (404, {"detail": "not found"}))
+        # Projects P2 (§5.1): the `/p/[project]` layout reads the active
+        # project's served pipeline-pause flag (`GET {prefix}/pause`) on
+        # EVERY route for the switcher's chip, and `/projects` reads it
+        # for every selectable row. Default: not paused.
+        # `test_projects_pause.py` overrides it with a stateful stub.
+        self.on("GET", r"/pause$", self._pause_state)
 
         page.route(f"**{api_prefix}/**", self._dispatch)
 
     def on(self, method: str, path_regex: str, handler_or_body: Handler | HandlerResult) -> None:
         self._handlers.append((method.upper(), re.compile(path_regex), handler_or_body))
+
+    @staticmethod
+    def _pause_state(request: Any, _match: "re.Match[str]") -> HandlerResult:
+        path = urlparse(request.url).path.rstrip("/")
+        slug = path.split("/")[-2]
+        return {"project": slug, "paused": False}
 
     @staticmethod
     def _image(_request: Any, _match: "re.Match[str]") -> HandlerResult:

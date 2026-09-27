@@ -1,5 +1,6 @@
 import { regionRuleWarnings } from '$lib/annotations/registeredSlots';
 import { loadKeymap } from '$stores/keymap.svelte';
+import { projectPauseStore } from '$stores/projectPause.svelte';
 import { loadRegionProfile } from '$stores/regionProfile.svelte';
 import { projectsStore, type ProjectResolution } from '$stores/projects.svelte';
 import type { LayoutLoad } from './$types';
@@ -26,6 +27,9 @@ export const load: LayoutLoad = async ({
   if (resolution.kind !== 'ok') return { resolution };
 
   projectsStore.select(resolution.project);
+  // The switcher's "paused" chip. Not awaited: it never blocks render,
+  // and a failed read just leaves the chip absent.
+  void projectPauseStore.load(resolution.project);
 
   // The served region profile (`{prefix}/health.region_profile`) and the
   // served keymap are per project. This is after the prefix moved and
