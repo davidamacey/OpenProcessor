@@ -105,12 +105,7 @@ class OpenSearchClientFactory:
             client = OpenSearchClient(
                 hosts=[settings.opensearch_url], http_auth=None, timeout=settings.opensearch_timeout
             )
-            # The project guard goes on at construction, before the first
-            # request of any kind (projects_plan.md §2.4).
-            from src.services.projects.guard import install_project_guard
-            from src.services.projects.registry import get_project_registry
-
-            install_project_guard(client.client, get_project_registry())
+            # OpenSearchClient installs the project guard at construction.
             app_state._opensearch_client = client
 
             if not await app_state._opensearch_client.ping():

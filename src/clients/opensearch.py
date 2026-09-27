@@ -203,6 +203,13 @@ class OpenSearchClient:
             client_kwargs['http_auth'] = http_auth
 
         self.client = AsyncOpenSearch(**client_kwargs)
+        # Every OpenSearch client carries the project guard from birth
+        # (projects_plan.md §2.4); unbound visual-search calls reach only
+        # indexes no project owns.
+        from src.services.projects.guard import install_project_guard
+        from src.services.projects.registry import get_project_registry
+
+        install_project_guard(self.client, get_project_registry())
         self.embedding_dim = 512  # MobileCLIP2-S2
 
     # =========================================================================
