@@ -577,7 +577,8 @@
                   onclick={() => (showEmptyClasses = !showEmptyClasses)}
                 >
                   {showEmptyClasses ? '▾' : '▸'}
-                  {emptyRows.length} classes with no validated crops
+                  {emptyRows.length}
+                  {emptyRows.length === 1 ? 'class' : 'classes'} with no validated crops
                 </button>
               </td>
             </tr>

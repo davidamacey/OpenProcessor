@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`/export` says "1 class with no validated crops"**, not "1 classes",
+  when a single class has none (seen on a fresh install whose registry
+  held only the region class).
 - **Lint debt (#83): `svelte/prefer-svelte-reactivity` and
   `svelte/no-navigation-without-resolve` restored to `error`.** Both
   rules were downgraded to `warn` during the eslint-plugin-svelte 3
