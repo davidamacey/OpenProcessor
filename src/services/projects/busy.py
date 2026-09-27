@@ -117,17 +117,35 @@ def _export_jobs(record: ProjectRecord) -> list[JobRef]:  # noqa: ARG001 - see d
     return []
 
 
-def _detection_worker_inflight(record: ProjectRecord) -> list[JobRef]:  # noqa: ARG001
+def _detection_worker_inflight(record: ProjectRecord) -> list[JobRef]:
     """The detection worker's per-project ``inflight`` count.
 
-    TODO(other agent's worker runtime doc): the detection worker
-    (``scripts/curation/worker/``, owned by the parallel agent) is
-    expected to publish a per-project ``runtime:detection_worker:<host>``
-    doc with an ``inflight`` count. That doc does not exist yet as of
-    this file's authorship; stubbed to ``[]`` rather than guessing at a
-    doc id/shape that may still change.
+    ``scripts/curation/worker/fairness.py``'s ``write_liveness`` drops one
+    ``runtime_detection_worker_<host>.json`` file per host under this
+    project's own ``project_state_dir`` every cycle (§5.1) -- a real,
+    file-based liveness doc, not the OpenSearch ``runtime:*`` doc the
+    plan sketched (no such mechanism exists on this branch; see that
+    module's docstring). One busy entry per host actually mid-batch
+    (``inflight > 0``), keyed by hostname so a delete/archive busy-check
+    error message can name which host is still working the project.
     """
-    return []
+    import json
+
+    state_dir = record.resources.project_state_dir
+    if not state_dir.is_dir():
+        return []
+    out: list[JobRef] = []
+    for liveness_file in sorted(state_dir.glob('runtime_detection_worker_*.json')):
+        try:
+            payload = json.loads(liveness_file.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        inflight = int(payload.get('inflight') or 0)
+        if inflight <= 0:
+            continue
+        host = str(payload.get('host') or liveness_file.stem)
+        out.append(JobRef(kind='detection_worker', job_id=host))
+    return out
 
 
 def running_jobs(record: ProjectRecord) -> list[JobRef]:

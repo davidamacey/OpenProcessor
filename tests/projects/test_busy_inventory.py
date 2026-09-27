@@ -39,6 +39,7 @@ def _record(slug: str, tmp_path=None) -> ProjectRecord:
             train_jobs_dir=tmp_path / 'jobs' / 'projects' / slug,
             bakeoff_jobs_dir=tmp_path / 'state' / 'projects' / slug / 'bakeoff_jobs',
             autolabel_dir=tmp_path / 'jobs' / 'auto_label' / 'projects' / slug,
+            project_state_dir=tmp_path / 'state' / 'projects' / slug,
         )
     return ProjectRecord(
         slug=slug,
@@ -126,13 +127,47 @@ def test_autolabel_jobs_scoped_to_its_own_dir(tmp_path) -> None:
     assert _autolabel_jobs(beta) == []
 
 
-def test_export_and_detection_stubs_report_nothing(tmp_path) -> None:
-    """Documented gaps: export has no async job protocol yet, and the
-    detection worker's per-project runtime doc doesn't exist yet -- each
-    stub returns [] rather than guessing at a shape."""
+def test_export_jobs_stub_reports_nothing(tmp_path) -> None:
+    """Documented gap: /export/yolo runs synchronously inside the
+    request -- there is no background job file to poll."""
     record = _record('alpha', tmp_path)
     assert _export_jobs(record) == []
-    assert _detection_worker_inflight(record) == []
+
+
+def test_detection_worker_inflight_reads_the_real_liveness_file(tmp_path) -> None:
+    """fairness.py's write_liveness drops one runtime_detection_worker_
+    <host>.json per host under project_state_dir every cycle."""
+    record = _record('alpha', tmp_path)
+    state_dir = record.resources.project_state_dir
+    state_dir.mkdir(parents=True)
+    (state_dir / 'runtime_detection_worker_workerhost.json').write_text(
+        json.dumps({'inflight': 3, 'applied': True, 'paused': False, 'host': 'workerhost'}),
+        encoding='utf-8',
+    )
+    (state_dir / 'runtime_detection_worker_idlehost.json').write_text(
+        json.dumps({'inflight': 0, 'applied': True, 'paused': False, 'host': 'idlehost'}),
+        encoding='utf-8',
+    )
+
+    assert _detection_worker_inflight(record) == [
+        JobRef(kind='detection_worker', job_id='workerhost')
+    ]
+
+
+def test_detection_worker_inflight_scoped_to_its_own_dir(tmp_path) -> None:
+    alpha = _record('alpha', tmp_path)
+    beta = _record('beta', tmp_path)
+    alpha.resources.project_state_dir.mkdir(parents=True)
+    beta.resources.project_state_dir.mkdir(parents=True)
+    (alpha.resources.project_state_dir / 'runtime_detection_worker_h1.json').write_text(
+        json.dumps({'inflight': 1, 'host': 'h1'}), encoding='utf-8'
+    )
+    (beta.resources.project_state_dir / 'runtime_detection_worker_h2.json').write_text(
+        json.dumps({'inflight': 1, 'host': 'h2'}), encoding='utf-8'
+    )
+
+    assert _detection_worker_inflight(alpha) == [JobRef(kind='detection_worker', job_id='h1')]
+    assert _detection_worker_inflight(beta) == [JobRef(kind='detection_worker', job_id='h2')]
 
 
 def test_running_jobs_aggregates_every_source_for_one_project(tmp_path) -> None:
