@@ -51,10 +51,33 @@ _BUILDING_STALE_SECONDS = 120.0
 # record's fate (rollback vs. tombstone) with no coordination between
 # them, and whichever writes last wins, including a finish that deletes
 # a project its own drain-timed-out sibling just rolled back to
-# 'active'. One process-wide guard, keyed by slug, makes "only one
-# delete_project_finish genuinely runs to completion per slug at a
-# time" true regardless of caller (the router's M4 retry path, a direct
-# call, ...).
+# 'active'.
+#
+# P3F pass-4 F1 correction: this guard is PER-WORKER-PROCESS ONLY --
+# yolo-api runs `--workers=32` (docker-compose.yml), and each worker has
+# its own, separate, empty copy of this set. It stops the race only
+# within the one worker process that happens to handle both the
+# original DELETE and its retry. A retried DELETE that a proxy/client
+# lands on a DIFFERENT worker (31 times out of 32 in production) sees an
+# empty guard here and would previously have run its own finish to
+# completion regardless of what a sibling finish on another worker had
+# already done to the same record -- the review's cross-worker probe
+# showed exactly this: finish A timed out and rolled the record back to
+# 'active', and finish B (on a simulated second worker, unaware of A)
+# went on to unload the models and delete all 7 indexes of what was, by
+# then, an 'active' project.
+#
+# The actual cross-process protection is the claim write in
+# `delete_project_finish`, right after the drain succeeds and before the
+# first irreversible step: it re-reads the record with
+# `_refetch_for_write(expect_status='deleting')` and writes it back
+# through the OCC-guarded `write_record`. That is a real cross-process
+# mutual-exclusion primitive built on OpenSearch's own document
+# versioning (i.e. the same machinery `expect_status` already uses
+# elsewhere in this module), so it works across all 32 workers -- not
+# just this in-memory set, which remains useful only as a fast,
+# zero-round-trip guard against a duplicate finish racing itself within
+# one worker.
 _FINISH_IN_PROGRESS: set[str] = set()
 
 
@@ -499,6 +522,13 @@ async def delete_project_finish(client: Any, *, slug: str) -> ProjectRecord:
     record wedged ``deleting`` with the indexes already gone and no way
     back (every retry hits the same escape again).
 
+    Immediately after a successful drain wait, and still before any
+    irreversible step, this claims exclusive ownership of the finish
+    with an OCC-guarded re-read-and-write (P3F pass-4 F1) -- the one
+    protection here that actually holds across ``--workers=32``
+    processes, not just within this one (``_FINISH_IN_PROGRESS`` above
+    is per-process only).
+
     Model unload runs before index deletion, not alongside or after:
     once the indexes are gone there is no cheap step back if unload then
     fails, where retrying an unload against an already-unloaded model is
@@ -555,6 +585,35 @@ async def delete_project_finish(client: Any, *, slug: str) -> ProjectRecord:
             raise api_error(
                 409, 'project_busy', f"'{slug}' did not drain within the timeout", project=slug
             )
+
+        # F1: claim exclusive ownership of this finish, right here --
+        # after the drain succeeded, before the first irreversible step
+        # (model unload, below). `_FINISH_IN_PROGRESS` above is per-
+        # worker-process only, so a finish running on a DIFFERENT worker
+        # (the common case under `--workers=32`) has its own, empty copy
+        # and would otherwise have no way to know that a sibling finish
+        # for this same slug already rolled the record back to 'active'
+        # (M3 drain timeout) or otherwise moved it on. Re-reading fresh
+        # here with `expect_status='deleting'` makes THIS read the one
+        # thing that decides who still owns the finish: if some other
+        # finish already resolved the record, the fresh status is no
+        # longer 'deleting' and this raises 409 `invalid_transition`
+        # before anything destructive runs. If two finishes' claim reads
+        # both see 'deleting' and race each other's writes, only one
+        # write's seq/term is still current by the time it executes --
+        # the other gets `RevisionConflictError`, translated by
+        # `write_record` into 409 `revision_conflict`. Either way this is
+        # a genuine cross-process mutual-exclusion primitive built on
+        # OpenSearch's own document versioning, not an in-memory guard
+        # only one process can see. `record` is reassigned to the freshly
+        # claimed doc so every step below works from the same read that
+        # won this race, not the possibly-stale read from the top of this
+        # function.
+        claimed, seq, term = await _refetch_for_write(
+            client, slug, expect_status='deleting', updated_at=_now()
+        )
+        await write_record(client, claimed, if_seq_no=seq, if_primary_term=term)
+        record = claimed
 
         failed_models = await _unload_owned_models(record)
         if failed_models:

@@ -205,6 +205,50 @@ async def _refetch_for_write(
     return replace(stored, **fields), seq, term
 
 
+async def _cleanup_orphaned_by_concurrent_delete(
+    client: Any, record: ProjectRecord, exc: HTTPException
+) -> None:
+    """F2 (known gap, documented rather than fully fixed -- see the P3
+    review, "Re-review 2026-09-27, pass 3", item F2): create's own
+    ``building``-status write (to ``active`` on success, or ``failed`` on
+    a caught exception) can lose the MA1 ``expect_status='building'``
+    race in :func:`_refetch_for_write` because a concurrent ``DELETE``
+    won it first and tombstoned this slug (fresh status ``'deleted'``).
+    That is the correct refusal -- resurrecting a retired slug would be
+    worse -- but by the time it fires, this same create may already have
+    made up to 7 ``op_prj_<slug>__*`` indexes (:func:`create_project`'s
+    ``_ensure_indexes`` step) that are now permanently unreachable: the
+    slug is retired forever, so no project-bound path can ever address
+    them again. Reproducing this needs a create running past
+    ``delete._BUILDING_STALE_SECONDS`` (120s, the N1 stale-``building``
+    escape hatch's own threshold) with a user's ``DELETE`` landing inside
+    that exact window -- rare, and it costs only shards held forever, not
+    a correctness bug (a retired slug can never come back regardless).
+
+    Best-effort cleanup: since the retired slug can never own these
+    indexes again, delete them ourselves here rather than leaving them
+    for an operator to find manually. Logged at error level either way,
+    with the exact index names, so an operator can search for them if
+    this cleanup itself fails (e.g. the same transient fault that made
+    ``_ensure_indexes`` unreliable in the first place)."""
+    detail = exc.detail if isinstance(exc.detail, dict) else {}
+    if detail.get('project_status') != 'deleted':
+        return
+    orphaned = sorted(set(record.resources.indexes.values()))
+    logger.error('project_create_orphaned_after_delete', slug=record.slug, indexes=orphaned)
+    for name in orphaned:
+        try:
+            with bind_project(record):
+                await client.indices.delete(index=name, ignore=[404])
+        except Exception as cleanup_exc:
+            logger.warning(
+                'project_create_orphan_cleanup_failed',
+                slug=record.slug,
+                index=name,
+                error=str(cleanup_exc),
+            )
+
+
 async def create_project(
     client: Any,
     *,
@@ -345,9 +389,13 @@ async def create_project(
         # validated (e.g. a delete that raced in and already tombstoned
         # this slug via the N1 stale-building escape hatch) -- see
         # MA1's exact resurrection probe in the P3 review.
-        failed, seq, term = await _refetch_for_write(
-            client, slug, expect_status='building', status='failed', updated_at=_now()
-        )
+        try:
+            failed, seq, term = await _refetch_for_write(
+                client, slug, expect_status='building', status='failed', updated_at=_now()
+            )
+        except HTTPException as refetch_exc:
+            await _cleanup_orphaned_by_concurrent_delete(client, record, refetch_exc)
+            raise
         await write_record(client, failed, if_seq_no=seq, if_primary_term=term)
         await registry.ensure_fresh()
         raise
@@ -358,9 +406,15 @@ async def create_project(
     # exact instant), so OCC alone never catches a slow create's final
     # 'active' write landing after some other caller already deleted
     # and tombstoned this slug in between. Refuse instead of resurrecting.
-    active, seq, term = await _refetch_for_write(
-        client, slug, expect_status='building', status='active', updated_at=_now()
-    )
+    # F2 (known gap): if that refusal fires because a concurrent DELETE
+    # won the race, see _cleanup_orphaned_by_concurrent_delete.
+    try:
+        active, seq, term = await _refetch_for_write(
+            client, slug, expect_status='building', status='active', updated_at=_now()
+        )
+    except HTTPException as refetch_exc:
+        await _cleanup_orphaned_by_concurrent_delete(client, record, refetch_exc)
+        raise
     await write_record(client, active, if_seq_no=seq, if_primary_term=term)
     await registry.ensure_fresh()
 

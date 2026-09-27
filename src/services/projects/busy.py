@@ -89,6 +89,13 @@ def _train_job_label(jobs_dir: Path, job_id: str) -> str | None:
         payload = json.loads(spec_path.read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return None
+    # n-f: a `job.json` can be valid JSON but not an object (e.g. a bare
+    # list) -- from hand-editing, an older/different writer, or
+    # corruption. Treat that the same as missing/unreadable (fall back to
+    # the job id) instead of crashing the busy preflight with
+    # AttributeError from `.get` on a non-dict.
+    if not isinstance(payload, dict):
+        return None
     name = payload.get('mlflow_run_name')
     return name if isinstance(name, str) and name else None
 

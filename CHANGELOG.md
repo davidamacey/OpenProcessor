@@ -8,6 +8,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **P3F finish pass 4 (2026-09-27).** Closes the pass-3 confirmation
+  re-review's two remaining small items (F1, F2) plus a nit (n-f):
+  - **F1 (the important one -- a genuine data-loss bug under the real
+    production topology)**: pass 3's `delete._FINISH_IN_PROGRESS` guard
+    is per-WORKER-PROCESS only, and `yolo-api` runs `--workers=32`. A
+    retried DELETE that lands on a different worker (31 times out of 32
+    in production) had its own, empty copy of that guard and could not
+    see that a finish for the same slug was already running elsewhere.
+    The review's cross-worker probe showed the exact failure: finish A
+    timed out on its drain wait and rolled the record back to `active`,
+    while finish B -- on the simulated second worker, unaware of A --
+    went on to unload the project's models and delete all 7 of its
+    indexes anyway, refusing only at the very last step (the tombstone
+    write), by which point the data was already gone. Fix:
+    `delete_project_finish` now claims exclusive ownership of the finish
+    with a real cross-process primitive, right after the drain succeeds
+    and before the first irreversible step (model unload) --
+    `_refetch_for_write(expect_status='deleting')` followed by an
+    OCC-guarded `write_record`. A peer finish that already moved the
+    record off `deleting` (e.g. a sibling's rollback) makes this claim
+    raise 409 `invalid_transition` before anything destructive runs; two
+    finishes whose claim reads race each other resolve via ordinary
+    OpenSearch document-version OCC (`RevisionConflictError` -> 409
+    `revision_conflict`). This works across all 32 worker processes
+    because it is backed by OpenSearch's own document versioning, not an
+    in-memory set any one process can see. The now-inaccurate
+    "process-wide" wording describing the pass-3 guard (`delete.py`,
+    `_FINISH_IN_PROGRESS`'s docstring, and this file's own pass-3 entry
+    above) is corrected to say what it actually protects: one worker
+    process, not the deployment.
+  - **F2 (known gap, documented + best-effort cleanup)**: a losing
+    resurrection attempt -- a create that loses the MA1
+    `expect_status='building'` race on its final `active`/`failed` write
+    because a concurrent stale-`building` DELETE won and tombstoned the
+    slug first -- can leave up to 7 freshly created
+    `op_prj_<slug>__*` indexes unreachable under a now-retired slug
+    (needs a create running past `_BUILDING_STALE_SECONDS`, 120s, with a
+    DELETE landing inside that exact window; rare, and it costs only
+    shards, never a correctness bug). This was previously silent.
+    `create_project` now logs `project_create_orphaned_after_delete`
+    with the exact orphaned index names whenever this fires, and
+    best-effort deletes them itself (any failure to do so is logged and
+    swallowed -- this is cleanup, not a correctness path) since the
+    retired slug can never own them again anyway.
+  - **Nit (m5 job.json label parsing)**: `_train_job_label` (`busy.py`)
+    guards against a `job.json` that is valid JSON but not an object
+    (e.g. a bare list) -- it used to call `.get(...)` unconditionally and
+    raise `AttributeError`, failing the busy preflight (and with it
+    delete/archive) for a hand-edited or corrupted `job.json`. Now
+    treated the same as missing/unreadable: falls back to the job id.
+
 - **P3F finish pass 3 (2026-09-27).** Closes the "MERGE AFTER FIXES"
   re-review's two majors and its m-a path-escape gap:
   - **MA1**: a status-transition write now re-validates the status it
@@ -24,12 +75,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     now reads the record ONCE (`_get_mutable_record`) and runs every
     precondition check plus the write against that same read's seq/term,
     instead of checking against a possibly-stale registry snapshot and
-    then re-reading fresh only at write time. A new process-wide
-    `delete._FINISH_IN_PROGRESS` guard (plus a router-level
-    `_BACKGROUND_DELETE_TASKS` keyed by slug) also ensures only one
-    `delete_project_finish` genuinely runs to completion per slug at a
-    time, so a re-DELETE issued mid-drain can no longer race a second
-    finish against the first one's own rollback.
+    then re-reading fresh only at write time. A new `delete._FINISH_IN_PROGRESS`
+    guard (plus a router-level `_BACKGROUND_DELETE_TASKS` keyed by slug)
+    also ensures only one `delete_project_finish` genuinely runs to
+    completion per slug at a time -- **within one worker process**. As
+    pass 4 below found, this guard is per-worker-process only and does
+    NOT protect across `yolo-api`'s `--workers=32`; the real cross-process
+    fix landed in pass 4.
   - **MA2**: `delete_project_finish`'s model-unload step (and
     `dry_run_delete`'s `promoted_models` report) now enumerate EVERY
     model a project owns (`_owned_models`, keyed on

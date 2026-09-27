@@ -132,6 +132,23 @@ def test_train_job_label_falls_back_to_job_id_with_no_run_name(tmp_path, monkeyp
     assert _train_jobs(record) == [JobRef(kind='train', job_id='a', started_at=None, label=None)]
 
 
+def test_train_job_label_survives_a_non_object_job_json(tmp_path, monkeypatch) -> None:
+    """P3F pass-4 nit n-f: a `job.json` that is valid JSON but not an
+    object (e.g. a bare list) must not crash the busy preflight.
+    `_train_job_label` used to call `.get(...)` unconditionally, raising
+    AttributeError on anything that isn't a dict -- this failed
+    `running_jobs`, and with it the delete/archive busy check, for a
+    hand-edited or corrupted `job.json`."""
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
+    record = _record('alpha', tmp_path)
+    jobs_dir = record.resources.train_jobs_dir
+    jobs_dir.mkdir(parents=True)
+    (jobs_dir / 'a.status.json').write_text(json.dumps({'state': 'running'}), encoding='utf-8')
+    (jobs_dir / 'a.job.json').write_text(json.dumps(['list']), encoding='utf-8')
+
+    assert _train_jobs(record) == [JobRef(kind='train', job_id='a', started_at=None, label=None)]
+
+
 def test_bakeoff_jobs_pending_only(tmp_path) -> None:
     record = _record('alpha', tmp_path)
     jobs_dir = record.resources.bakeoff_jobs_dir
