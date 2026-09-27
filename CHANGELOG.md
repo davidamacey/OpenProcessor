@@ -49,6 +49,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the model's own labels, never another model's).
 
 ### Fixed
+- **Installer review round-3 follow-ups (s1-s5).**
+  - The install summary no longer claims "every port is bound to
+    127.0.0.1" when Cropwright is on the LAN; it names Cropwright as the
+    exception.
+  - A specific non-loopback `--bind <ip>` now narrows Cropwright to that
+    interface instead of leaving it on `0.0.0.0` (`--local-only` still wins).
+  - `build_deploy_bundle.sh` stages Cropwright's release files into
+    `<out>/cropwright/<tag>/` when given `CW_RELEASE_DIR` (checked against
+    `cropwright.lock`), so a `--release-dir` install of the cropwright tier
+    is offline. Without them the installer now says it is fetching Cropwright
+    from the network instead of doing so silently.
+  - An `images.lock` line whose repo differs from the one
+    `scripts/lib/image_keys.sh` names for that key is refused (exit 7, nothing
+    pulled). This is a consistency check against a release-script mistake,
+    not an authenticity check.
+  - `--rollback` restores the newest backup of a *different* version, so a
+    same-version re-run after an upgrade no longer makes rollback land on the
+    version already installed.
 - **`SegmenterClient.source_name` has no default.** The constructor no
   longer defaults to `source_name='sam3'`; every caller (the worker
   runner, tests) passes the active profile's `segmenter_name` explicitly,
