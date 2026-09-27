@@ -2,7 +2,7 @@
 promoted model (projects_plan.md §5.5) is refused (409 ``in_use``)
 unless ``force=True``, in which case the bypass is logged distinctly.
 
-KNOWN GAP (see lifecycle._shared_model_users's docstring): there is no
+KNOWN GAP (see delete._shared_model_users's docstring): there is no
 reverse index of *which* other projects actually consume a shared
 model yet (W4 profile-CRUD not landed) -- this only proves "sharing is
 on for one of this project's own models" blocks the delete, and that
@@ -17,7 +17,7 @@ import json
 import pytest
 from fastapi import HTTPException
 
-from src.services.projects import lifecycle
+from src.services.projects import delete as delete_mod, lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
 from .conftest import FakeLifecycleOpenSearch, seed_default_project
@@ -72,7 +72,7 @@ def test_delete_force_bypasses_shared_model_block_and_logs(tmp_path, monkeypatch
 
     warnings: list[tuple[str, dict]] = []
     monkeypatch.setattr(
-        lifecycle.logger,
+        delete_mod.logger,
         'warning',
         lambda event, **fields: warnings.append((event, fields)),
     )

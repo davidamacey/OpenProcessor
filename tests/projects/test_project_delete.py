@@ -182,8 +182,10 @@ def test_delete_finish_rolls_back_to_pre_delete_status_on_drain_timeout(monkeypa
     assert deleting.status == 'deleting'
     assert deleting.pre_delete_status == 'active'
 
-    monkeypatch.setattr(lifecycle, '_DELETE_DRAIN_TIMEOUT_SECONDS', 0.01)
-    monkeypatch.setattr(lifecycle, '_DELETE_DRAIN_POLL_SECONDS', 0.01)
+    from src.services.projects import delete as delete_mod
+
+    monkeypatch.setattr(delete_mod, '_DELETE_DRAIN_TIMEOUT_SECONDS', 0.01)
+    monkeypatch.setattr(delete_mod, '_DELETE_DRAIN_POLL_SECONDS', 0.01)
     monkeypatch.setattr(
         busy,
         '_detection_worker_inflight',
@@ -198,3 +200,43 @@ def test_delete_finish_rolls_back_to_pre_delete_status_on_drain_timeout(monkeypa
     rolled_back = registry.get('alpha')
     assert rolled_back is not None
     assert rolled_back.status == 'active'
+
+
+def test_delete_finish_index_failure_leaves_record_retryable_not_tombstoned() -> None:
+    """M4: a failed indices.delete must not be swallowed into a
+    tombstone -- the record stays 'deleting' (retryable) and the
+    failing index is never actually removed, so a re-issued DELETE can
+    retry instead of orphaning it under a slug nothing can reach again."""
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+    asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
+    asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
+    asyncio.run(registry.ensure_fresh())
+    alpha_record = registry.get('alpha')
+    assert alpha_record is not None
+    failing_index = sorted(alpha_record.resources.indexes.values())[0]
+
+    real_delete = client.indices.delete
+
+    async def _delete_but_fail_one(*, index: str, ignore=None):
+        if index == failing_index:
+            raise RuntimeError('simulated cluster hiccup')
+        return await real_delete(index=index, ignore=ignore)
+
+    client.indices.delete = _delete_but_fail_one  # type: ignore[method-assign]
+
+    asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+    assert exc_info.value.detail['error'] == 'project_busy'
+
+    asyncio.run(registry.ensure_fresh())
+    stuck = registry.get('alpha')
+    assert stuck is not None
+    assert stuck.status == 'deleting'  # not 'deleted': retryable
+
+    # A retried delete_project_finish, once the transient failure clears,
+    # succeeds and tombstones -- idempotent resumability, not a dead end.
+    client.indices.delete = real_delete  # type: ignore[method-assign]
+    tombstoned = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+    assert tombstoned.status == 'deleted'
