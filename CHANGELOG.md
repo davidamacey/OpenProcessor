@@ -8,6 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **W2b: per-project configurable keymap.** `src/config/keymap_actions.json`
+  (+ a pydantic model) is the action registry: contexts, groups, defaults,
+  `modifiable`, and the wire grammar (combo syntax, locked keys, browser-
+  reserved combos, `max_combos_per_action: 3`). Every project stores its
+  own override map in its `configs` index; a project with no stored doc
+  serves the built-in defaults (`is_default: true`). Routes (all
+  project-scoped, no global alias): `GET/PUT {prefix}/keymap`,
+  `POST {prefix}/keymap/validate` (dry-run, always 200), `POST
+  {prefix}/keymap/reset` (all-or-listed actions). Every write is OCC'd
+  (`expected_revision`/`If-Match`). The validator enforces the CW-K §3.1
+  codes (unknown action, locked action/key, grammar, too-many-combos,
+  browser-reserved, context collision, overlay-must-have-a-key) as 422
+  `validation_failed`; a clash with a class hotkey is a separate 409
+  `class_hotkey_conflict` with an explicit `unbind_conflicting_class_hotkeys`
+  opt-in that clears the conflicting classes' hotkeys in the same write and
+  echoes `unbound_class_hotkeys`. `reserved_hotkeys` is now derived from the
+  active keymap (`RESERVED_HOTKEY_LETTERS` deleted); `PUT /classes/{id}`
+  reports `hotkey_reserved` (422, with the blocking `actions[]`) and
+  `hotkey_taken` (409) as typed `ConfigErrorDetail`. `config.changed` gained
+  the `keymap` axis (event-only). `CLONEABLE_AXES` gained `keymap`
+  (`clone_settings` copies the source's overrides, validated against the
+  target's class registry -- a clash is dropped from the copy, never a
+  silent unbind). W8's per-box actions
+  (`review.region.accept_box`/`reject_box` on `y`/`r`, `box_edit.next_box`
+  on `tab`, `box_edit.delete_box`) ship now, served `available: false` on
+  a project with no region profile. Exported to
+  `contracts/json/keymap_actions.json` via `generate_contracts.py`.
+
 - **P3 finish pass, final merge.** Merged `cutover/projects-workers`
   (through `fix(projects): refresh detection-worker liveness on a
   timer`) into `cutover/projects-lifecycle`: the detection-worker

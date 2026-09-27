@@ -1,0 +1,55 @@
+{
+  "grammar": {
+    "modifiers": ["ctrl", "meta", "alt", "shift"],
+    "named_keys": [
+      "enter", "escape", "space", "tab", "backspace", "delete",
+      "arrowleft", "arrowright", "arrowup", "arrowdown",
+      "home", "end", "pageup", "pagedown"
+    ],
+    "printable": "abcdefghijklmnopqrstuvwxyz0123456789`~/\\[];',.-=?",
+    "max_combos_per_action": 3,
+    "locked_keys": ["escape", "enter", "arrowleft", "arrowright", "arrowup", "arrowdown"],
+    "browser_reserved": [
+      "ctrl+w", "ctrl+t", "ctrl+n", "ctrl+shift+t", "ctrl+tab", "ctrl+l", "ctrl+r", "ctrl+q",
+      "meta+w", "meta+t", "meta+n", "meta+q", "meta+r", "meta+l",
+      "alt+arrowleft", "alt+arrowright"
+    ]
+  },
+  "contexts": [
+    {"id": "global", "label": "Everywhere", "description": "Active on every page.", "includes": [], "class_hotkeys_live": true},
+    {"id": "review", "label": "Review (every tab)", "description": "Scan mode on any /review tab.", "includes": ["global"], "class_hotkeys_live": true},
+    {"id": "review.queue", "label": "Review queue", "description": "The core /review tabs.", "includes": ["review"], "class_hotkeys_live": true},
+    {"id": "review.region", "label": "Region review", "description": "The region tab, scan mode.", "includes": ["review"], "class_hotkeys_live": true},
+    {"id": "box_edit", "label": "Box editing", "description": "Region edit mode and the box editor.", "includes": ["global"], "class_hotkeys_live": false},
+    {"id": "cluster", "label": "Cluster", "description": "A single cluster's crop grid.", "includes": ["global"], "class_hotkeys_live": true},
+    {"id": "clusters_search", "label": "Cluster search", "description": "Semantic-search results on /clusters.", "includes": ["global"], "class_hotkeys_live": true},
+    {"id": "region_gallery", "label": "Region gallery", "description": "The region gallery on /clusters.", "includes": ["global"], "class_hotkeys_live": false}
+  ],
+  "actions": [
+    {"id": "global.shortcuts_overlay", "context": "global", "group": null, "label": "Show keyboard shortcuts", "description": "Toggle the shortcut panel.", "default": ["`", "shift+~"], "modifiable": true},
+    {"id": "global.close_overlay", "context": "global", "group": "cancel", "label": "Close panel", "description": "Close the shortcut panel.", "default": ["escape"], "modifiable": false},
+    {"id": "global.class_picker", "context": "global", "group": null, "label": "Open class picker", "description": "Open the class-assignment picker.", "default": ["/"], "modifiable": true},
+    {"id": "review.confirm", "context": "review", "group": "confirm", "label": "Confirm", "description": "Confirm the current item.", "default": ["enter"], "modifiable": false},
+    {"id": "review.undo", "context": "review", "group": "undo", "label": "Undo", "description": "Undo the last action.", "default": ["z"], "modifiable": true},
+    {"id": "review.skip", "context": "review", "group": "skip", "label": "Skip", "description": "Skip this item.", "default": ["n"], "modifiable": true},
+    {"id": "review.move", "context": "review", "group": "move", "label": "Move", "description": "Move this item to another project.", "default": ["m"], "modifiable": true},
+    {"id": "review.undo_ignore", "context": "review", "group": null, "label": "Undo ignore", "description": "Restore an ignored item.", "default": ["u"], "modifiable": true},
+    {"id": "review.accept_vlm", "context": "review", "group": null, "label": "Accept VLM label", "description": "Accept the VLM-proposed label.", "default": ["f"], "modifiable": true},
+    {"id": "review.prev", "context": "review", "group": "prev", "label": "Previous", "description": "Go to the previous item.", "default": ["arrowleft"], "modifiable": false},
+    {"id": "review.next", "context": "review", "group": "next", "label": "Next", "description": "Go to the next item.", "default": ["arrowright"], "modifiable": false},
+    {"id": "review.queue.discard", "context": "review.queue", "group": "discard", "label": "Discard", "description": "Dismiss this item from every review queue.", "default": ["d"], "modifiable": true},
+    {"id": "review.queue.select_all", "context": "review.queue", "group": "select_all", "label": "Select all", "description": "Select every visible item.", "default": ["a"], "modifiable": true},
+    {"id": "review.queue.exclude", "context": "review.queue", "group": null, "label": "Exclude", "description": "Exclude this item from training.", "default": ["e"], "modifiable": true},
+    {"id": "review.region.reject", "context": "review.region", "group": "reject", "label": "Reject (no region visible)", "description": "Mark that the item shows no region.", "default": ["d"], "modifiable": true},
+    {"id": "review.region.back", "context": "review.region", "group": "prev", "label": "Step back", "description": "Step back one region.", "default": ["b"], "modifiable": true},
+    {"id": "review.region.accept_box", "context": "review.region", "group": null, "label": "Accept selected box", "description": "Set the selected box to accepted.", "default": ["y"], "modifiable": true},
+    {"id": "review.region.reject_box", "context": "review.region", "group": null, "label": "Reject selected box", "description": "Set the selected box to rejected.", "default": ["r"], "modifiable": true},
+    {"id": "box_edit.next_box", "context": "box_edit", "group": "next", "label": "Next box", "description": "Select the next box.", "default": ["tab"], "modifiable": true},
+    {"id": "box_edit.delete_box", "context": "box_edit", "group": "discard", "label": "Delete box", "description": "Delete the selected box.", "default": ["delete"], "modifiable": true},
+    {"id": "cluster.discard", "context": "cluster", "group": "discard", "label": "Discard selected", "description": "Discard the selected crops.", "default": ["x"], "modifiable": true},
+    {"id": "cluster.undo", "context": "cluster", "group": "undo", "label": "Undo", "description": "Undo the last action.", "default": ["z"], "modifiable": true},
+    {"id": "cluster.ignore", "context": "cluster", "group": "ignore", "label": "Ignore", "description": "Ignore the selected crops.", "default": ["g"], "modifiable": true},
+    {"id": "clusters_search.cancel", "context": "clusters_search", "group": "cancel", "label": "Cancel search", "description": "Cancel semantic search mode.", "default": ["escape"], "modifiable": false},
+    {"id": "region_gallery.next", "context": "region_gallery", "group": "next", "label": "Next region", "description": "Select the next region.", "default": ["arrowright"], "modifiable": false}
+  ]
+}

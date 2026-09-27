@@ -60,12 +60,31 @@ ErrorCode = Literal[
     'invalid_transition',
     'export_outside_project',
     'model_not_found',
+    # W2b
+    'class_hotkey_conflict',
+    'hotkey_reserved',
+    'hotkey_taken',
 ]
 
 # Seeded with the codes W2 raises (none yet -- W2 has no validated
 # writes of its own, only the low-level OCC primitives). W3/W4 add the
-# pack/profile validation codes; W8/W9 add theirs.
-ValidationCode = Literal['name_conflict']
+# pack/profile validation codes; W8/W9 add theirs. W2b adds the
+# keymap_* codes (CW-K §3.1).
+ValidationCode = Literal[
+    'name_conflict',
+    'keymap_unknown_action',
+    'keymap_action_locked',
+    'keymap_combo_invalid',
+    'keymap_too_many_combos',
+    'keymap_key_locked',
+    'keymap_browser_reserved',
+    'keymap_context_collision',
+    'keymap_overlay_unbound',
+    'keymap_class_hotkey_conflict',
+    'keymap_class_hotkey_shadowed',
+    'keymap_focus_key',
+    'keymap_context_no_confirm',
+]
 
 
 class ProjectCapacityWire(BaseModel):
@@ -131,6 +150,13 @@ class ConfigErrorDetail(BaseModel):
     # invalid_transition: the status the project is in, and the action refused.
     project_status: str | None = None
     action: str | None = None
+    # W2b: 409 class_hotkey_conflict / the unbind-and-save response, and
+    # 422 hotkey_reserved / 409 hotkey_taken on PUT /classes/{id}.
+    class_conflicts: list[dict[str, Any]] | None = None
+    unbound_class_hotkeys: list[dict[str, Any]] | None = None
+    actions: list[dict[str, Any]] | None = None
+    class_id: int | None = None
+    class_name: str | None = None
 
 
 class ApiErrorResponse(BaseModel):

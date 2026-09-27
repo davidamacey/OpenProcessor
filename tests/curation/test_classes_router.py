@@ -20,7 +20,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.clients.curation_opensearch import ClassRegistry
-from src.routers.curation.classes import RESERVED_HOTKEY_LETTERS
+from src.services.curation.keymap import reserved_hotkeys
+
+
+LEGACY_RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam/feb')
 
 
 @pytest.fixture
@@ -37,6 +40,11 @@ def fake_opensearch() -> AsyncMock:
     fake = AsyncMock()
     fake.search = AsyncMock(return_value={'aggregations': {}})
     fake.count = AsyncMock(return_value={'count': 0})
+    from opensearchpy.exceptions import NotFoundError
+
+    fake.get = AsyncMock(side_effect=NotFoundError('not found'))
+    fake.update = AsyncMock(return_value={})
+    fake.index = AsyncMock(return_value={})
     return fake
 
 
@@ -63,7 +71,7 @@ def app_client(
 # =============================================================================
 
 
-@pytest.mark.parametrize('letter', sorted(RESERVED_HOTKEY_LETTERS))
+@pytest.mark.parametrize('letter', sorted(LEGACY_RESERVED_HOTKEY_LETTERS | {'y', 'r', '`'}))
 def test_put_class_rejects_reserved_hotkey(
     app_client: TestClient, registry: ClassRegistry, letter: str
 ) -> None:
@@ -92,10 +100,9 @@ def test_put_class_accepts_nonreserved_hotkey(
 
 
 def test_reserved_set_covers_every_single_key_labeler_action() -> None:
-    """The backend owns the full reserved set: the global labeling actions
-    (accept, skip, discard, undo, ignore, un-ignore, select-all, move), the
-    class-picker key '/' and the region-review keys (d/f/e/b)."""
-    assert frozenset('gndzxuam/feb') == RESERVED_HOTKEY_LETTERS
+    """W2b: the derived default equals the legacy hardcoded set plus W8's
+    'y'/'r' (per-box accept/reject) and the overlay's backtick (CW-K §3.4)."""
+    assert set(reserved_hotkeys({})) == LEGACY_RESERVED_HOTKEY_LETTERS | {'y', 'r', '`'}
 
 
 # =============================================================================

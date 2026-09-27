@@ -18,7 +18,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.clients.curation_opensearch import ClassRegistry
-from src.routers.curation.classes import RESERVED_HOTKEY_LETTERS
+from src.services.curation.keymap import reserved_hotkeys
+
+
+# The legacy hardcoded set, kept only as the W2b regression fixture (CW-K
+# §3.4): the derived default must equal this set plus W8's y/r and the
+# overlay's backtick.
+LEGACY_RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam/feb')
 
 
 def _entry(registry: ClassRegistry, class_id: int) -> Any:
@@ -40,6 +46,11 @@ def fake_os() -> AsyncMock:
     fake = AsyncMock()
     fake.search = AsyncMock(return_value={'aggregations': {}})
     fake.count = AsyncMock(return_value={'count': 0})
+    from opensearchpy.exceptions import NotFoundError
+
+    fake.get = AsyncMock(side_effect=NotFoundError('not found'))
+    fake.update = AsyncMock(return_value={})
+    fake.index = AsyncMock(return_value={})
     return fake
 
 
@@ -116,7 +127,8 @@ def test_create_rejects_duplicate_hotkey(client: TestClient, registry: ClassRegi
 
 def test_list_serves_reserved_hotkeys_and_added_at(client: TestClient) -> None:
     body = client.get('/curation/projects/default/classes').json()
-    assert body['reserved_hotkeys'] == sorted(RESERVED_HOTKEY_LETTERS)
+    assert body['reserved_hotkeys'] == sorted(LEGACY_RESERVED_HOTKEY_LETTERS | {'y', 'r', '`'})
+    assert body['reserved_hotkeys'] == reserved_hotkeys({})
     assert all(c['added_at'] for c in body['classes'])
 
 

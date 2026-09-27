@@ -14,8 +14,12 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from src.config.project_context import bind_project
+from src.core.logging import get_logger
 from src.routers.curation._config_common_models import api_error
 from src.routers.curation._project_models import CLONEABLE_AXES
+
+
+logger = get_logger(__name__)
 
 
 if TYPE_CHECKING:
@@ -91,6 +95,71 @@ async def _apply_clone(
 
         with bind_project(target_record):
             ensure_region_class()
+
+    if 'keymap' in axes:
+        from src.config import get_curation_config
+        from src.services.curation.keymap import get_keymap_doc, save_keymap_doc
+        from src.services.curation.keymap_validator import validate_keymap
+
+        with bind_project(source, read_only=True):
+            src_cfg = get_curation_config()
+            source_keymap = await get_keymap_doc(client, src_cfg.configs_index)
+        with bind_project(target_record):
+            target_cfg = get_curation_config()
+            target_keymap = await get_keymap_doc(client, target_cfg.configs_index)
+            from src.routers.curation import get_class_registry
+
+            target_classes = [
+                {
+                    'class_id': c.class_id,
+                    'class_name': c.class_name,
+                    'hotkey_letter': c.hotkey_letter,
+                    'deprecated': c.deprecated,
+                }
+                for c in get_class_registry().load().classes
+            ]
+            report, class_conflicts, _resolved = validate_keymap(
+                source_keymap.overrides,
+                project=target_record.slug,
+                classes=target_classes,
+                previous_overrides=target_keymap.overrides,
+            )
+            # A clash is a report, not a silent unbind (CW-K §0 clause 1):
+            # a conflicting action override is simply dropped from the
+            # copy rather than clearing the target's class hotkey.
+            dropped = {c.action_id for c in class_conflicts}
+            overrides_to_write = (
+                source_keymap.overrides
+                if report.ok
+                else {
+                    aid: combos
+                    for aid, combos in source_keymap.overrides.items()
+                    if not any(issue.field == f'overrides.{aid}' for issue in report.errors)
+                }
+            )
+            overrides_to_write = {
+                aid: combos for aid, combos in overrides_to_write.items() if aid not in dropped
+            }
+            if class_conflicts or not report.ok:
+                logger.warning(
+                    'keymap_clone_conflicts_dropped',
+                    target=target_record.slug,
+                    from_slug=source.slug,
+                    dropped_actions=sorted(
+                        dropped
+                        | {
+                            i.field.removeprefix('overrides.')
+                            for i in report.errors
+                            if i.field is not None
+                        }
+                    ),
+                )
+            await save_keymap_doc(
+                client,
+                target_cfg.configs_index,
+                overrides=overrides_to_write,
+                expected_revision=target_keymap.revision,
+            )
 
 
 async def clone_settings(

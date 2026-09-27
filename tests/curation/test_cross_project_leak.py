@@ -163,6 +163,15 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/scores/compute'): {'json': {}},
         ('POST', '/select/diverse'): {'json': {'k': 1}},
         ('PUT', '/settings'): {'json': {'defaults': {}}},
+        ('PUT', '/keymap'): {
+            'json': {'expected_revision': 0, 'overrides': {'cluster.ignore': ['k']}}
+        },
+        ('POST', '/keymap/validate'): {'json': {'overrides': {'cluster.ignore': ['k']}}},
+        # Runs after PUT /keymap in route-declaration order, which already
+        # bumped the doc to revision 1.
+        ('POST', '/keymap/reset'): {
+            'json': {'expected_revision': 1, 'action_ids': ['cluster.ignore']}
+        },
         ('POST', '/train/preflight'): {'json': {}},
         # force: the preflight's class-balance/disk gates are not what
         # this test is about; the job files written are.
@@ -200,6 +209,7 @@ NO_WRITE: dict[tuple[str, str], str] = {
     ('POST', '/events/publish'): 'publishes an event (checked separately), writes no data',
     ('POST', '/ingest/path_lookup'): 'read-only lookup under POST',
     ('POST', '/train/preflight'): 'read-only validation under POST',
+    ('POST', '/keymap/validate'): 'dry-run report; writes nothing',
     ('POST', '/train/reload_promoted'): 'asks Triton to load promoted models; stores nothing',
     (
         'POST',

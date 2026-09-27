@@ -1910,6 +1910,21 @@
             ],
             "title": "Action"
           },
+          "actions": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actions"
+          },
           "active_shards": {
             "anyOf": [
               {
@@ -1941,6 +1956,43 @@
                 "type": "null"
               }
             ]
+          },
+          "class_conflicts": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Conflicts"
+          },
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Name"
           },
           "current": {
             "anyOf": [
@@ -1999,7 +2051,10 @@
               "name_conflict",
               "invalid_transition",
               "export_outside_project",
-              "model_not_found"
+              "model_not_found",
+              "class_hotkey_conflict",
+              "hotkey_reserved",
+              "hotkey_taken"
             ],
             "title": "Error",
             "type": "string"
@@ -2111,6 +2166,21 @@
               }
             ],
             "title": "Soft Limit"
+          },
+          "unbound_class_hotkeys": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unbound Class Hotkeys"
           },
           "valid_ids": {
             "anyOf": [
@@ -5625,6 +5695,498 @@
         "title": "JobRefWire",
         "type": "object"
       },
+      "KeymapActionWire": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "context": {
+            "title": "Context",
+            "type": "string"
+          },
+          "default": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Default",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keys",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "locked_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Locked Keys",
+            "type": "array"
+          },
+          "modifiable": {
+            "title": "Modifiable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "context",
+          "group",
+          "label",
+          "description",
+          "default",
+          "keys",
+          "modifiable",
+          "available"
+        ],
+        "title": "KeymapActionWire",
+        "type": "object"
+      },
+      "KeymapContextWire": {
+        "properties": {
+          "class_hotkeys_live": {
+            "title": "Class Hotkeys Live",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "includes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Includes",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "includes",
+          "class_hotkeys_live"
+        ],
+        "title": "KeymapContextWire",
+        "type": "object"
+      },
+      "KeymapGetResponse": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/KeymapActionWire"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "contexts": {
+            "items": {
+              "$ref": "#/components/schemas/KeymapContextWire"
+            },
+            "title": "Contexts",
+            "type": "array"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "grammar": {
+            "$ref": "#/components/schemas/KeymapGrammarWire"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "overrides": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Overrides",
+            "type": "object"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "reserved_hotkeys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reserved Hotkeys",
+            "type": "array"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "scope": {
+            "const": "project",
+            "default": "project",
+            "title": "Scope",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "project",
+          "revision",
+          "etag",
+          "is_default",
+          "updated_at",
+          "grammar",
+          "contexts",
+          "actions",
+          "overrides",
+          "reserved_hotkeys"
+        ],
+        "title": "KeymapGetResponse",
+        "type": "object"
+      },
+      "KeymapGrammarWire": {
+        "properties": {
+          "browser_reserved": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Browser Reserved",
+            "type": "array"
+          },
+          "locked_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Locked Keys",
+            "type": "array"
+          },
+          "max_combos_per_action": {
+            "title": "Max Combos Per Action",
+            "type": "integer"
+          },
+          "modifiers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Modifiers",
+            "type": "array"
+          },
+          "named_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Named Keys",
+            "type": "array"
+          },
+          "printable": {
+            "title": "Printable",
+            "type": "string"
+          }
+        },
+        "required": [
+          "modifiers",
+          "named_keys",
+          "printable",
+          "max_combos_per_action",
+          "locked_keys",
+          "browser_reserved"
+        ],
+        "title": "KeymapGrammarWire",
+        "type": "object"
+      },
+      "KeymapPutRequest": {
+        "properties": {
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "overrides": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Overrides",
+            "type": "object"
+          },
+          "unbind_conflicting_class_hotkeys": {
+            "default": false,
+            "title": "Unbind Conflicting Class Hotkeys",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "expected_revision",
+          "overrides"
+        ],
+        "title": "KeymapPutRequest",
+        "type": "object"
+      },
+      "KeymapPutResponse": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/KeymapActionWire"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "contexts": {
+            "items": {
+              "$ref": "#/components/schemas/KeymapContextWire"
+            },
+            "title": "Contexts",
+            "type": "array"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "grammar": {
+            "$ref": "#/components/schemas/KeymapGrammarWire"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "overrides": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Overrides",
+            "type": "object"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "reserved_hotkeys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reserved Hotkeys",
+            "type": "array"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "scope": {
+            "const": "project",
+            "default": "project",
+            "title": "Scope",
+            "type": "string"
+          },
+          "unbound_class_hotkeys": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Unbound Class Hotkeys",
+            "type": "array"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "project",
+          "revision",
+          "etag",
+          "is_default",
+          "updated_at",
+          "grammar",
+          "contexts",
+          "actions",
+          "overrides",
+          "reserved_hotkeys"
+        ],
+        "title": "KeymapPutResponse",
+        "type": "object"
+      },
+      "KeymapResetRequest": {
+        "properties": {
+          "action_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Ids"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "unbind_conflicting_class_hotkeys": {
+            "default": false,
+            "title": "Unbind Conflicting Class Hotkeys",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "expected_revision"
+        ],
+        "title": "KeymapResetRequest",
+        "type": "object"
+      },
+      "KeymapValidateRequest": {
+        "properties": {
+          "overrides": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Overrides",
+            "type": "object"
+          }
+        },
+        "required": [
+          "overrides"
+        ],
+        "title": "KeymapValidateRequest",
+        "type": "object"
+      },
+      "KeymapValidateResponse": {
+        "properties": {
+          "class_conflicts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Class Conflicts",
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationIssue"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "force_allowed": {
+            "title": "Force Allowed",
+            "type": "boolean"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "reserved_hotkeys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reserved Hotkeys",
+            "type": "array"
+          },
+          "resolved": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Resolved",
+            "type": "object"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationIssue"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "errors",
+          "warnings",
+          "force_allowed",
+          "resolved",
+          "reserved_hotkeys"
+        ],
+        "title": "KeymapValidateResponse",
+        "type": "object"
+      },
       "LatencyStats": {
         "properties": {
           "mean": {
@@ -6935,7 +7497,8 @@
           "cloneable_axes": {
             "default": [
               "settings_defaults",
-              "classes"
+              "classes",
+              "keymap"
             ],
             "items": {
               "type": "string"
@@ -9747,7 +10310,21 @@
             "type": "boolean"
           },
           "code": {
-            "const": "name_conflict",
+            "enum": [
+              "name_conflict",
+              "keymap_unknown_action",
+              "keymap_action_locked",
+              "keymap_combo_invalid",
+              "keymap_too_many_combos",
+              "keymap_key_locked",
+              "keymap_browser_reserved",
+              "keymap_context_collision",
+              "keymap_overlay_unbound",
+              "keymap_class_hotkey_conflict",
+              "keymap_class_hotkey_shadowed",
+              "keymap_focus_key",
+              "keymap_context_no_confirm"
+            ],
             "title": "Code",
             "type": "string"
           },
@@ -15545,6 +16122,202 @@
           }
         },
         "summary": "Curation Ingest Upload",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/keymap": {
+      "get": {
+        "operationId": "get_keymap_curation_projects__project__keymap_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeymapGetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Keymap",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "put": {
+        "operationId": "put_keymap_curation_projects__project__keymap_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeymapPutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeymapPutResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Keymap",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/keymap/reset": {
+      "post": {
+        "operationId": "reset_keymap_curation_projects__project__keymap_reset_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeymapResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeymapPutResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Keymap",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/keymap/validate": {
+      "post": {
+        "operationId": "validate_keymap_route_curation_projects__project__keymap_validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeymapValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeymapValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Keymap Route",
         "tags": [
           "Curation"
         ]

@@ -7,6 +7,11 @@ from typing import Annotated, Any
 from fastapi import HTTPException, Query, status
 
 from src.clients.curation_opensearch import ClassRegistry, ClassRegistryError, RegistryClassEntry
+from src.routers.curation._class_hotkeys import (
+    project_keymap_overrides,
+    project_reserved_hotkeys,
+    validated_hotkey,
+)
 from src.routers.curation._class_models import (
     ClassCreateRequest,
     ClassEntry,
@@ -28,41 +33,6 @@ from src.routers.curation.crops import list_crops
 from src.services.curation.class_sources import class_source_catalog
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.dataset_thresholds import adequacy, dataset_thresholds
-
-
-# Single keys the labeler binds to actions: the global labeling actions
-# accept-vlm, skip, discard, undo, ignore, undo-ignore, select-all and move;
-# '/' for the class picker; and the region-review keys d/f/e/b. Binding a class
-# hotkey to one of these fires the action *and* assigns the class on the
-# same keypress (Label Studio #491/#7431). Served on GET /classes.
-RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam/feb')
-
-
-def _validated_hotkey(raw: str, *, class_id: int | None, registry_obj: Any) -> str | None:
-    """Normalize a requested hotkey; ``None`` = clear. 400 not one char,
-    422 reserved, 409 bound to another active class."""
-    stripped = raw.strip()
-    if stripped == '':
-        return None
-    if len(stripped) != 1:
-        raise HTTPException(status_code=400, detail='hotkey_letter must be a single character')
-    letter = stripped.lower()
-    if letter in RESERVED_HOTKEY_LETTERS:
-        raise HTTPException(
-            status_code=422,
-            detail=f"hotkey '{letter}' is reserved for a labeling action and cannot be bound "
-            'to a class',
-        )
-    for c in registry_obj.classes:
-        if c.deprecated or c.class_id == class_id:
-            continue
-        if (getattr(c, 'hotkey_letter', None) or '').lower() == letter:
-            raise HTTPException(
-                status_code=409,
-                detail=f"hotkey '{letter}' is already bound to '{c.class_name}' "
-                f'(class_id={c.class_id})',
-            )
-    return letter
 
 
 @router.get('/class_sources')
@@ -223,7 +193,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
             for c in reg.classes
         ],
         thresholds=thresholds,
-        reserved_hotkeys=sorted(RESERVED_HOTKEY_LETTERS),
+        reserved_hotkeys=await project_reserved_hotkeys(opensearch),
     )
 
 
@@ -256,7 +226,7 @@ def create_registry_class(
     """
     letter = None
     if hotkey_letter is not None:
-        letter = _validated_hotkey(hotkey_letter, class_id=None, registry_obj=reg.load())
+        letter = validated_hotkey(hotkey_letter, class_id=None, registry_obj=reg.load())
     new_id = reg.add_class(name, group=group, notes=notes)
     if letter is not None:
         registry_obj = reg.load()
@@ -291,7 +261,9 @@ async def create_class(payload: ClassCreateRequest) -> dict[str, Any]:
 
 
 @router.put('/classes/{class_id}')
-async def update_class(class_id: int, payload: ClassUpdateRequest) -> dict[str, Any]:
+async def update_class(
+    class_id: int, payload: ClassUpdateRequest, opensearch: OpenSearchDep
+) -> dict[str, Any]:
     """Rename, regroup, or assign/clear a hotkey on a class."""
     reg = get_class_registry()
     try:
@@ -302,8 +274,12 @@ async def update_class(class_id: int, payload: ClassUpdateRequest) -> dict[str, 
             registry_obj = reg.load()
             new_letter: str | None = None
             if payload.hotkey_letter is not None:
-                new_letter = _validated_hotkey(
-                    payload.hotkey_letter, class_id=class_id, registry_obj=registry_obj
+                keymap_overrides = await project_keymap_overrides(opensearch)
+                new_letter = validated_hotkey(
+                    payload.hotkey_letter,
+                    class_id=class_id,
+                    registry_obj=registry_obj,
+                    keymap_overrides=keymap_overrides,
                 )
             for c in registry_obj.classes:
                 if c.class_id == class_id:
