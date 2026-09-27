@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -72,6 +73,69 @@ def test_create_project_slug_taken() -> None:
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(lifecycle.create_project(client, slug='cars', display_name='Cars 2'))
     assert exc_info.value.detail['error'] == 'slug_taken'
+
+
+def test_create_project_concurrent_same_slug_exactly_one_wins() -> None:
+    """M1: two concurrent creates of the same slug must not both land as
+    'active'. The storage-level op_type='create' guard (not just the
+    in-memory snapshot check) must decide the race."""
+    client = FakeLifecycleOpenSearch()
+    _registry_for(client)
+
+    async def _race() -> tuple[Any, ...]:
+        return await asyncio.gather(
+            lifecycle.create_project(client, slug='zeta', display_name='First'),
+            lifecycle.create_project(client, slug='zeta', display_name='Second'),
+            return_exceptions=True,
+        )
+
+    results = asyncio.run(_race())
+    successes = [r for r in results if not isinstance(r, BaseException)]
+    failures = [r for r in results if isinstance(r, BaseException)]
+    assert len(successes) == 1, results
+    assert len(failures) == 1, results
+    assert isinstance(failures[0], HTTPException)
+    assert failures[0].detail['error'] == 'slug_taken'
+
+
+def test_write_record_create_op_type_refuses_second_writer() -> None:
+    """M1's storage-level primitive, isolated from create_project's own
+    in-memory snapshot check (which alone cannot decide a real race --
+    see the module docstring): two writes of the *same* building record
+    with ``op_type='create'`` for one slug must let exactly one through,
+    even though both pass an identical in-memory precondition check."""
+    from src.config.curation import base_curation_config
+    from src.config.projects import ProjectRecord, resources_for_new
+
+    client = FakeLifecycleOpenSearch()
+    _registry_for(client)
+    resources = resources_for_new('zeta', base_curation_config())
+    record = ProjectRecord(
+        slug='zeta',
+        display_name='First',
+        description='',
+        status='building',
+        revision=1,
+        created_at='t',
+        updated_at='t',
+        origin=None,
+        resources=resources,
+    )
+
+    async def _race() -> tuple[Any, ...]:
+        return await asyncio.gather(
+            lifecycle.write_record(client, record, op_type='create'),
+            lifecycle.write_record(client, record, op_type='create'),
+            return_exceptions=True,
+        )
+
+    results = asyncio.run(_race())
+    successes = [r for r in results if not isinstance(r, BaseException)]
+    failures = [r for r in results if isinstance(r, BaseException)]
+    assert len(successes) == 1, results
+    assert len(failures) == 1, results
+    assert isinstance(failures[0], HTTPException)
+    assert failures[0].detail['error'] == 'slug_taken'
 
 
 def test_create_project_slug_retired_after_delete() -> None:
