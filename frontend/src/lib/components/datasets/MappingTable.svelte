@@ -85,7 +85,7 @@
           <td class="px-2 py-1.5">
             {#if row.suggestion}
               <span
-                class="rounded border border-zinc-700 px-1.5 py-0.5 text-[11px] text-zinc-300"
+                class="inline-block rounded border border-zinc-700 px-1.5 py-0.5 text-[11px] whitespace-nowrap text-zinc-300"
                 data-testid="suggestion-chip"
               >
                 {matchLabel.get(row.suggestion.match) ?? row.suggestion.match}

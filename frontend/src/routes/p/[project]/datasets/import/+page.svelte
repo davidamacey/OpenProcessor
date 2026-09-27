@@ -300,9 +300,9 @@
           </button>
           {#if wizard.unmappedRows.length > 0}
             <span class="ml-2 text-xs text-amber-300">
-              {wizard.unmappedRows.length} class{wizard.unmappedRows.length === 1
-                ? ''
-                : 'es'} still need a mapping.
+              {wizard.unmappedRows.length === 1
+                ? '1 class still needs a mapping.'
+                : `${wizard.unmappedRows.length} classes still need a mapping.`}
             </span>
           {:else if wizard.preview.blocking && !wizard.canStart}
             <span class="ml-2 text-xs text-red-300"
