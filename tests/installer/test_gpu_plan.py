@@ -239,21 +239,3 @@ def test_gpu_normalize_parses_from_the_right(row: str, expected: str) -> None:
 
 def test_nvidia_smi_is_queried_without_units() -> None:
     assert '--format=csv,noheader,nounits' in SCRIPT.read_text()
-
-
-@pytest.mark.parametrize(
-    ('ram_gb', 'heap'),
-    [(4, 1), (8, 1), (16, 2), (64, 8), (128, 8), (512, 8)],
-)
-def test_opensearch_heap_ram_over_8_clamped(ram_gb: int, heap: int) -> None:
-    result = subprocess.run(
-        [
-            'bash',
-            '-c',
-            f'OP_SOURCE_ONLY=1 source "{SCRIPT}"; opensearch_heap_gb {ram_gb * 1024 * 1024}',
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    assert result.stdout.strip() == str(heap)

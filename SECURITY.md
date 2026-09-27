@@ -28,18 +28,35 @@ interface.**
 
 ### LAN access from the one-line installer
 
+**Cropwright is reachable on your LAN by default, for homelab or
+small-business use. The API itself stays bound to 127.0.0.1. There is no login
+on Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
+everything on 127.0.0.1.**
+
 `setup-openprocessor.sh` targets one computer **and** its local network
 (homelab, small office). With the `cropwright` tier, the Cropwright web UI
 is published on all interfaces (`CROPWRIGHT_BIND_ADDRESS=0.0.0.0`) so other
 computers on the LAN can open it; its nginx proxies to the API over the
 Docker network. Every backend port (API, Triton, OpenSearch, ...) stays
-bound to `127.0.0.1` unless you pass `--bind` and confirm it.
+bound to `127.0.0.1` unless you pass `--bind` and confirm it. A specific
+`--bind` address (say `10.0.0.5`) also narrows Cropwright to that one
+interface; `--local-only` always keeps it on `127.0.0.1`.
 
 The UI has **no login**, and it can reach every API route above. Use it only
-on a network you trust, never port-forward it to the internet, and put a
-reverse proxy with authentication in front for anything wider. Install with
+on a network you trust, never port-forward it to the public internet, and put
+a reverse proxy with authentication in front for anything wider. Install with
 `--local-only` (or answer "no" to the LAN question) to keep it on this
 computer.
+
+### Release checksums are integrity, not authenticity
+
+The installer checks every downloaded file against the release's
+`SHA256SUMS`, pins images by digest from `images.lock`, pins Cropwright's
+files through `cropwright.lock`, and cross-checks each `images.lock` entry's
+image repo against `scripts/lib/image_keys.sh`. These catch truncated or
+corrupted downloads and an internally inconsistent release. They do **not**
+prove who published the release: `SHA256SUMS` comes from the same origin as
+the files it covers. Release signing is follow-up work.
 
 ### Other default-open components in the shipped `docker-compose.yml`
 

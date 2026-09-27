@@ -14,8 +14,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   OpenSearch heap sizing, upgrade / rollback / uninstall, exit codes).
   `quick-start` now leads with the installer, with install-from-source below;
   `deployment/security` covers LAN access.
+- **Installer docs.** README Quick Start is now the one-line installer
+  (tiers, `--unattended`, verifying `SHA256SUMS`, the LAN/Cropwright
+  network decision), with "Install from source" below it. `INSTALLATION.md`
+  documents every installer flag and consent variable, upgrade / repair /
+  rollback / uninstall, offline `--release-dir` bundles, OpenSearch heap
+  sizing and troubleshooting by exit code. `SECURITY.md` states that release
+  checksums prove integrity, not authenticity. Static tests pin the network
+  wording and that every `--help` flag is documented.
 
 ### Changed
+- **OpenSearch heap is sized from host RAM in one place.** New
+  `scripts/lib/opensearch_heap.sh` (`opensearch_heap_for_host`: RAM/8,
+  clamped to 1-8 GB; `opensearch_shard_budget`) is used by both
+  `setup-openprocessor.sh` and `scripts/lib/config.sh`. `config.sh` no
+  longer takes the heap from the GPU profile, keeps an `OPENSEARCH_HEAP`
+  the user already set on a forced regeneration, and its compose override
+  interpolates `${OPENSEARCH_HEAP}` instead of a baked value. The
+  installer summary prints the heap and the soft shard budget (heap GB x
+  `OP_SHARDS_PER_HEAP_GB`, new advanced knob, default 20).
 - **Triton model names are env-overridable settings, not literals**
   (`TritonModelConfig` in `src/config/settings.py`): `FACE_DETECT_MODEL`,
   `ARCFACE_MODEL`, `CLIP_IMAGE_MODEL`, `CLIP_TEXT_MODEL`, `OCR_DET_MODEL`,
@@ -37,6 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inside the background task.
 
 ### Removed
+- `opensearch_heap` from the GPU profiles (`config_templates/profiles/*.json`)
+  and `PROFILE_HEAP` from `scripts/lib/gpu.sh`: the heap is a host-RAM
+  fact, not a GPU fact.
 - **COCO special-case in class-name resolution.** `class_names.py`'s
   `_STOCK_COCO_MODEL_NAMES` fallback (borrowing COCO's vocabulary for the
   stock YOLO11 detector names if `labels.txt` was ever missing) is gone —
@@ -45,6 +65,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the model's own labels, never another model's).
 
 ### Fixed
+- **Installer review round-3 follow-ups (s1-s5).**
+  - The install summary no longer claims "every port is bound to
+    127.0.0.1" when Cropwright is on the LAN; it names Cropwright as the
+    exception.
+  - A specific non-loopback `--bind <ip>` now narrows Cropwright to that
+    interface instead of leaving it on `0.0.0.0` (`--local-only` still wins).
+  - `build_deploy_bundle.sh` stages Cropwright's release files into
+    `<out>/cropwright/<tag>/` when given `CW_RELEASE_DIR` (checked against
+    `cropwright.lock`), so a `--release-dir` install of the cropwright tier
+    is offline. Without them the installer now says it is fetching Cropwright
+    from the network instead of doing so silently.
+  - An `images.lock` line whose repo differs from the one
+    `scripts/lib/image_keys.sh` names for that key is refused (exit 7, nothing
+    pulled). This is a consistency check against a release-script mistake,
+    not an authenticity check.
+  - `--rollback` restores the newest backup of a *different* version, so a
+    same-version re-run after an upgrade no longer makes rollback land on the
+    version already installed.
 - **`SegmenterClient.source_name` has no default.** The constructor no
   longer defaults to `source_name='sam3'`; every caller (the worker
   runner, tests) passes the active profile's `segmenter_name` explicitly,
