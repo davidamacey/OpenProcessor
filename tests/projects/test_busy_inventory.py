@@ -87,6 +87,51 @@ def test_train_jobs_scoped_to_its_own_dir(tmp_path, monkeypatch) -> None:
     assert _train_jobs(beta) == [JobRef(kind='train', job_id='b')]
 
 
+def test_train_job_label_and_started_at_come_from_the_real_sources(tmp_path, monkeypatch) -> None:
+    """P3F pass-3 m-b: `label` is the submitter's own `mlflow_run_name`
+    from the companion `<job_id>.job.json` spec (not the job id), and
+    `started_at` is a real, non-null ISO timestamp -- the prior pass's
+    tests only ever asserted `started_at is None`, so a `_iso_or_none`
+    that always returned None would have stayed green."""
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
+    record = _record('alpha', tmp_path)
+    jobs_dir = record.resources.train_jobs_dir
+    jobs_dir.mkdir(parents=True)
+    (jobs_dir / 'a.status.json').write_text(
+        json.dumps({'state': 'running', 'started_at': '2026-01-15T08:30:00+00:00'}),
+        encoding='utf-8',
+    )
+    (jobs_dir / 'a.job.json').write_text(
+        json.dumps({'mlflow_run_name': 'yolo26-medium-nightly-3'}), encoding='utf-8'
+    )
+
+    found = _train_jobs(record)
+    assert found == [
+        JobRef(
+            kind='train',
+            job_id='a',
+            started_at='2026-01-15T08:30:00+00:00',
+            label='yolo26-medium-nightly-3',
+        )
+    ]
+
+
+def test_train_job_label_falls_back_to_job_id_with_no_run_name(tmp_path, monkeypatch) -> None:
+    """No `job.json`, or one with no `mlflow_run_name` set -> label is
+    None, and `lifecycle.running_jobs` (tested separately) is the one
+    that falls back to the job id -- documented, not silent."""
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
+    record = _record('alpha', tmp_path)
+    jobs_dir = record.resources.train_jobs_dir
+    jobs_dir.mkdir(parents=True)
+    (jobs_dir / 'a.status.json').write_text(json.dumps({'state': 'running'}), encoding='utf-8')
+
+    assert _train_jobs(record) == [JobRef(kind='train', job_id='a', started_at=None, label=None)]
+
+    (jobs_dir / 'a.job.json').write_text(json.dumps({'mlflow_run_name': None}), encoding='utf-8')
+    assert _train_jobs(record) == [JobRef(kind='train', job_id='a', started_at=None, label=None)]
+
+
 def test_bakeoff_jobs_pending_only(tmp_path) -> None:
     record = _record('alpha', tmp_path)
     jobs_dir = record.resources.bakeoff_jobs_dir
@@ -113,6 +158,25 @@ def test_autolabel_jobs_running_only(tmp_path) -> None:
         json.dumps({'status': 'completed', 'job_id': 'al-1'}), encoding='utf-8'
     )
     assert _autolabel_jobs(record) == []
+
+
+def test_autolabel_job_started_at_from_real_epoch(tmp_path) -> None:
+    """P3F pass-3 m-b: a real (non-zero) epoch `started_at` must come
+    through as a non-null ISO timestamp -- the prior pass's tests never
+    exercised this, only the "no heartbeat yet" `0.0` sentinel case."""
+    record = _record('alpha', tmp_path)
+    state_dir = record.resources.autolabel_dir
+    state_dir.mkdir(parents=True)
+    epoch = 1768000000.0  # 2026-01-10T02:26:40Z
+    (state_dir / 'state.json').write_text(
+        json.dumps({'status': 'running', 'job_id': 'al-1', 'started_at': epoch}),
+        encoding='utf-8',
+    )
+
+    found = _autolabel_jobs(record)
+    assert len(found) == 1
+    assert found[0].started_at is not None
+    assert datetime.fromtimestamp(epoch, UTC).isoformat() == found[0].started_at
 
 
 def test_autolabel_jobs_scoped_to_its_own_dir(tmp_path) -> None:

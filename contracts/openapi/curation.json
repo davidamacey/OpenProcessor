@@ -1940,7 +1940,8 @@
               "invalid_transition",
               "export_outside_project",
               "model_not_found",
-              "path_escape"
+              "path_escape",
+              "finish_in_progress"
             ],
             "title": "Error",
             "type": "string"

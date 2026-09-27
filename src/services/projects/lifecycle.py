@@ -155,7 +155,11 @@ async def _get_mutable_record(
 
 
 async def _refetch_for_write(
-    client: Any, slug: str, **fields: Any
+    client: Any,
+    slug: str,
+    *,
+    expect_status: str | frozenset[str] | None = None,
+    **fields: Any,
 ) -> tuple[ProjectRecord, int | None, int | None]:
     """P3F m2: re-read the record fresh right before a status-transition
     write, and build the new doc FROM that fresh read -- never from a
@@ -166,10 +170,38 @@ async def _refetch_for_write(
     intervening ``await`` (e.g. ``delete_project_finish``'s up-to-60s
     drain wait) would still silently discard a concurrent PATCH's
     ``display_name``/``description`` even though the write itself
-    succeeds under a since-refreshed seq/term."""
+    succeeds under a since-refreshed seq/term.
+
+    P3F pass-3 MA1: re-reading fresh right before the write, by itself,
+    throws away the one thing OCC actually protects -- a token that is
+    ALWAYS current (because it was just read) never conflicts, no matter
+    what happened to the record between the caller's own precondition
+    checks and this write. That is exactly how a slow ``create`` could
+    resurrect a tombstoned slug through the N1 stale-``building`` escape
+    hatch: create re-reads fresh right before its ``active`` write, gets
+    a seq/term that trivially matches (nothing else is writing at that
+    exact instant), and overwrites ``deleted`` with ``active`` because
+    nothing ever checked what status the fresh read actually returned.
+    ``expect_status`` is the missing check: a caller states the ONE
+    status it still owns (e.g. ``'building'`` for create, ``'deleting'``
+    for a delete-finish rollback/tombstone), and this raises 409
+    ``invalid_transition`` instead of silently building the write from a
+    status nobody validated -- never a resurrection, never a duplicate
+    finish clobbering someone else's write."""
     stored, seq, term = await get_record_with_seq(client, slug)
     if stored is None:
         raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
+    if expect_status is not None:
+        allowed = {expect_status} if isinstance(expect_status, str) else expect_status
+        if stored.status not in allowed:
+            raise api_error(
+                409,
+                'invalid_transition',
+                f"'{slug}' is no longer '{sorted(allowed)}' (now '{stored.status}'); "
+                'refusing to overwrite a status this caller never validated',
+                project=slug,
+                project_status=stored.status,
+            )
     return replace(stored, **fields), seq, term
 
 
@@ -305,13 +337,30 @@ async def create_project(
             )
     except Exception as exc:
         logger.error('project_create_failed', slug=slug, error=str(exc))
-        _, seq, term = await get_record_with_seq(client, slug)
-        failed = replace(record, status='failed', updated_at=_now())
+        # MA1: build the 'failed' write from a FRESH read of OUR OWN
+        # 'building' status, never from the closure-captured `record`
+        # (stale since before every await above -- index creation,
+        # clone, verification). `expect_status='building'` additionally
+        # refuses to write 'failed' over a status this handler never
+        # validated (e.g. a delete that raced in and already tombstoned
+        # this slug via the N1 stale-building escape hatch) -- see
+        # MA1's exact resurrection probe in the P3 review.
+        failed, seq, term = await _refetch_for_write(
+            client, slug, expect_status='building', status='failed', updated_at=_now()
+        )
         await write_record(client, failed, if_seq_no=seq, if_primary_term=term)
         await registry.ensure_fresh()
         raise
 
-    active, seq, term = await _refetch_for_write(client, slug, status='active', updated_at=_now())
+    # MA1: same 'expect_status' guard on the success path -- without it,
+    # a re-read taken immediately before this write always has a
+    # trivially-current seq/term (nothing else was writing at that
+    # exact instant), so OCC alone never catches a slow create's final
+    # 'active' write landing after some other caller already deleted
+    # and tombstoned this slug in between. Refuse instead of resurrecting.
+    active, seq, term = await _refetch_for_write(
+        client, slug, expect_status='building', status='active', updated_at=_now()
+    )
     await write_record(client, active, if_seq_no=seq, if_primary_term=term)
     await registry.ensure_fresh()
 
@@ -361,7 +410,14 @@ async def running_jobs(record: ProjectRecord) -> list[JobRef]:
     truth for "is this project busy" across every job-producing
     subsystem (§5.4). Delete/archive never re-implement their own file
     scan; they only adapt ``busy.JobRef`` (``kind``/``job_id``) to this
-    module's wire-shaped ``JobRef`` (delta 11)."""
+    module's wire-shaped ``JobRef`` (delta 11).
+
+    P3F pass-3 m-b: ``label`` is the job source's own genuine human
+    label (``busy.JobRef.label``, e.g. a train run's submitted
+    ``mlflow_run_name``) when the source recorded one, falling back to
+    the internal ``job_id`` ONLY when it didn't -- documented here
+    rather than silently treating ``job_id`` as if it were always a
+    human-meaningful name."""
     from src.services.projects import busy
 
     return [
@@ -369,7 +425,7 @@ async def running_jobs(record: ProjectRecord) -> list[JobRef]:
             kind=j.kind,
             kind_label=_KIND_LABELS.get(j.kind, j.kind),
             id=j.job_id,
-            label=j.job_id,
+            label=j.label or j.job_id,
             started_at=j.started_at,
         )
         for j in busy.running_jobs(record)

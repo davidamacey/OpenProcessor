@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -43,6 +44,18 @@ _DELETABLE_STATUSES = frozenset({'active', 'archived', 'failed'})
 # as dead and becomes deletable; a fresh one might still be a live
 # create in progress, so it stays refused.
 _BUILDING_STALE_SECONDS = 120.0
+
+# P3F pass-3 MA1 probe 2: a re-DELETE issued while a first finish's
+# drain wait is still running must never let a SECOND finish run to
+# completion concurrently -- both would independently decide the
+# record's fate (rollback vs. tombstone) with no coordination between
+# them, and whichever writes last wins, including a finish that deletes
+# a project its own drain-timed-out sibling just rolled back to
+# 'active'. One process-wide guard, keyed by slug, makes "only one
+# delete_project_finish genuinely runs to completion per slug at a
+# time" true regardless of caller (the router's M4 retry path, a direct
+# call, ...).
+_FINISH_IN_PROGRESS: set[str] = set()
 
 
 def _is_stale_building(record: ProjectRecord) -> bool:
@@ -117,12 +130,15 @@ async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
             size = 0
         dirs.append({'path': str(path), 'bytes': size})
 
-    # M5 step 4 / delta: report the project's own promoted, shared
-    # models -- the same enumeration the real delete's in_use check and
-    # its model-unload step use (_shared_model_users; see its docstring
-    # for the known enumeration gap). Previously always [], even when
-    # the project owned promoted models.
-    promoted_models = await _shared_model_users(record)
+    # P3F pass-3 MA2: report EVERY model this project owns (private and
+    # shared alike), not just the shared subset -- the real delete's
+    # unload step (_unload_owned_models) now unloads this same full set
+    # unconditionally. `_shared_model_users` narrows to the
+    # cross-project-sharing subset the `in_use` refusal cares about;
+    # that is a strict SUBSET of ownership, not the ownership report
+    # itself. Previously this was always `[]` for a private-only
+    # project, even though those models were never unloaded either.
+    promoted_models = await _owned_models(record)
 
     return {
         'indexes': indexes,
@@ -134,14 +150,6 @@ async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
         'blocking': [b['code'] for b in blocking],
         'blocking_detail': blocking,
     }
-
-
-def _path_within(path: Path, root: Path) -> bool:
-    try:
-        path.resolve().relative_to(root.resolve())
-    except ValueError:
-        return False
-    return True
 
 
 async def _delete_indexes(client: Any, record: ProjectRecord) -> list[str]:
@@ -163,63 +171,81 @@ async def _delete_indexes(client: Any, record: ProjectRecord) -> list[str]:
     return failed
 
 
-def _rm_dir_guarded(path: Path, expected_root: Path) -> None:
-    if not _path_within(path, expected_root):
-        logger.error('project_delete_path_escape', path=str(path), expected_root=str(expected_root))
-        raise api_error(
-            500, 'internal_isolation_error', f'refusing to delete outside {expected_root}'
-        )
-    shutil.rmtree(path, ignore_errors=True)
+def _require_project_scoped_path(path: Path, shared_root: Path, slug: str) -> None:
+    """m1 / P3F pass-3 m-a: require ``path`` to resolve to
+    ``<shared_root>/<slug>`` itself, or a proper descendant of it --
+    never ``shared_root`` itself (a corrupted/hand-edited registry
+    ``resources`` record pointing straight at the multi-project root
+    would otherwise let a delete wipe every sibling project's dir), and
+    never a sibling project's own ``<shared_root>/<other_slug>`` tree.
 
-
-def _rm_project_subdir_guarded(path: Path, shared_root: Path, slug: str) -> None:
-    """m1: ``train_jobs_dir``/``autolabel_dir`` used to be guarded against
-    a root *derived from the same path being checked*
-    (``path.parent.parent``), which can never refuse anything -- by
-    construction, any path is "within" its own grandparent. Guard
-    against the real, independently-computed shared root instead
-    (``trainer_jobs_root()/projects`` / ``OP_AUTO_LABEL_STATE_DIR/projects``),
-    and require an exact ``<shared_root>/<slug>`` sub-path -- not merely
-    "somewhere under it" (``_path_within`` also used to accept
-    ``path == root``). A corrupted or hand-edited registry doc pointing
-    either field anywhere else is refused with ``path_escape``, never
-    silently "cleaned up"."""
+    The prior guard (``_rm_dir_guarded``, ``_path_within``) accepted
+    ``path == shared_root`` for 6 of the project's 8 dirs -- only
+    ``train_jobs_dir``/``autolabel_dir`` got a real per-slug check. This
+    is the one guard every dir now goes through, each with its own
+    independently-computed ``shared_root`` (never derived from the path
+    being checked), and it always raises the plan's ``path_escape``
+    code, never ``internal_isolation_error``."""
+    project_root = (shared_root / slug).resolve()
     try:
-        rel = path.resolve().relative_to(shared_root.resolve())
+        path.resolve().relative_to(project_root)
     except ValueError:
-        rel = None
-    if rel is None or rel != Path(slug):
-        logger.error('project_delete_path_escape', path=str(path), expected_root=str(shared_root))
-        raise api_error(500, 'path_escape', f'refusing to delete outside {shared_root}')
-    shutil.rmtree(path, ignore_errors=True)
+        logger.error('project_delete_path_escape', path=str(path), expected_root=str(project_root))
+        raise api_error(500, 'path_escape', f'refusing to delete outside {project_root}') from None
 
 
-async def _delete_dirs(record: ProjectRecord) -> None:
-    """Remove every per-project dir, each guarded to resolve inside its
-    expected root (§4 step 6: "a path outside refuses"). A new
-    project's dirs are siblings under ``OP_PROJECTS_DATA_ROOT``
-    (exports, class registry) or under the deployment ``state_dir``
-    (uploads, job dirs) -- never under ``default``'s own dirs, which
+def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
+    """Every one of the project's 8 own dirs, paired with the shared
+    root each must resolve strictly inside (§4 step 6: "a path outside
+    refuses"). A new project's dirs are siblings under
+    ``OP_PROJECTS_DATA_ROOT`` (exports, class registry, bakeoff eval) or
+    under the deployment ``state_dir``/jobs roots (uploads, job dirs,
+    autolabel state) -- never under ``default``'s own dirs, which
     :func:`resources_for_new` never nests anything into."""
     from src.config.curation import base_curation_config
     from src.config.projects import projects_data_root, trainer_jobs_root
 
     base = base_curation_config()
     data_root = projects_data_root()
-    _rm_dir_guarded(record.resources.export_root, data_root)
-    _rm_dir_guarded(record.resources.class_registry_path.parent, data_root)
-    _rm_dir_guarded(record.resources.bakeoff_eval_root, data_root)
-    _rm_dir_guarded(record.resources.project_state_dir, base.state_dir)
-    _rm_dir_guarded(record.resources.upload_root, base.state_dir)
-    _rm_dir_guarded(record.resources.bakeoff_jobs_dir, base.state_dir)
-    _rm_project_subdir_guarded(
-        record.resources.train_jobs_dir, trainer_jobs_root() / 'projects', record.slug
+    state_projects_root = base.state_dir / 'projects'
+    autolabel_projects_root = (
+        Path(os.environ.get('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label')) / 'projects'
     )
-    _rm_project_subdir_guarded(
-        record.resources.autolabel_dir,
-        Path(os.environ.get('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label')) / 'projects',
-        record.slug,
-    )
+    return [
+        (record.resources.export_root, data_root),
+        (record.resources.class_registry_path.parent, data_root),
+        (record.resources.bakeoff_eval_root, data_root),
+        (record.resources.project_state_dir, state_projects_root),
+        (record.resources.upload_root, state_projects_root),
+        (record.resources.bakeoff_jobs_dir, state_projects_root),
+        (record.resources.train_jobs_dir, trainer_jobs_root() / 'projects'),
+        (record.resources.autolabel_dir, autolabel_projects_root),
+    ]
+
+
+def _validate_delete_paths(record: ProjectRecord) -> None:
+    """P3F pass-3 m-a: validate every one of the project's 8 dirs BEFORE
+    any irreversible step runs. The prior ordering ran this check (for
+    the 2 dirs it covered) only from inside ``_delete_dirs``, itself
+    called AFTER ``_delete_indexes`` had already irreversibly deleted
+    the project's OpenSearch indexes -- a ``path_escape`` raised there
+    left the record wedged ``deleting`` forever (every retry hits the
+    same escape again) with the indexes already gone. Called as a
+    preflight in :func:`delete_project_finish`, before the drain wait,
+    model unload or index delete."""
+    for path, shared_root in _project_scoped_dirs(record):
+        _require_project_scoped_path(path, shared_root, record.slug)
+
+
+async def _delete_dirs(record: ProjectRecord) -> None:
+    """Remove every per-project dir. Paths are already validated by
+    :func:`_validate_delete_paths` earlier in
+    :func:`delete_project_finish`; re-validate here too (cheap, and this
+    function has its own unit-test callers) rather than trusting that
+    nothing mutated ``record.resources`` in between."""
+    _validate_delete_paths(record)
+    for path, _shared_root in _project_scoped_dirs(record):
+        shutil.rmtree(path, ignore_errors=True)
 
 
 async def _wait_for_drain(record: ProjectRecord) -> bool:
@@ -256,17 +282,29 @@ async def delete_project(
     timeout. Call :func:`delete_project_finish` to run steps 3-9; this
     function only validates and flips the status."""
     from src.services.projects.lifecycle import (
+        _get_mutable_record,
         _last_active_check,
         _now,
-        _refetch_for_write,
-        _require_found,
         _require_transition,
-        _resolve_existing,
         running_jobs,
         write_record,
     )
 
-    record = _require_found(await _resolve_existing(slug), slug)
+    # MA1: read the record ONCE, fresh (bypassing the registry's
+    # in-process cache -- ``_get_mutable_record`` is a direct
+    # get-by-id), and run every precondition check plus the write
+    # itself against that SAME read's seq/term. The prior version
+    # checked preconditions against a possibly-stale registry snapshot
+    # (``_resolve_existing``) and then re-read fresh immediately before
+    # the write -- a re-read taken right before a write always has a
+    # trivially-current seq/term, so OCC could never catch a doc that
+    # changed between the check and the write. Using ONE read for both
+    # means a real race (another writer landing in between) now
+    # genuinely conflicts (409 revision_conflict) instead of silently
+    # racing through.
+    record, seq, term = await _get_mutable_record(client, slug)
+    if record.status == 'deleted':
+        raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
 
     if record.slug == DEFAULT_SLUG:
         raise api_error(
@@ -350,18 +388,45 @@ async def delete_project(
     # in 'failed' (recoverable through the ordinary path) instead of the
     # record's real prior status.
     pre_delete_status = 'failed' if started_from_stale_building else record.status
-    deleting, seq, term = await _refetch_for_write(
-        client, slug, status='deleting', pre_delete_status=pre_delete_status, updated_at=_now()
+    deleting = replace(
+        record, status='deleting', pre_delete_status=pre_delete_status, updated_at=_now()
     )
     await write_record(client, deleting, if_seq_no=seq, if_primary_term=term)
     await get_project_registry().ensure_fresh()
     return deleting
 
 
+async def _owned_models(record: ProjectRecord) -> list[str]:
+    """Every Triton model this project owns (``promote.json.project ==
+    record.slug``), private and shared alike -- plan §4 step 4's "the
+    owned Triton models". This is the FULL ownership enumeration: a
+    project's own models are always cleaned up on a real delete
+    regardless of whether they opted into cross-project sharing.
+    :func:`_shared_model_users` narrows this to the ``shared=True``
+    subset for the ``in_use`` refusal only -- ``force`` bypasses THAT
+    refusal (a shared model another project might depend on), never
+    whether unload runs at all."""
+    from src.services.training.model_classes import model_owner_project
+    from src.services.training.triton_promote import resolve_triton_models_dir
+
+    models_dir = resolve_triton_models_dir()
+    if not models_dir.is_dir():
+        return []
+    return sorted(
+        entry.name
+        for entry in models_dir.iterdir()
+        if entry.is_dir() and model_owner_project(entry.name) == record.slug
+    )
+
+
 async def _shared_model_users(record: ProjectRecord) -> list[str]:
     """§5.5 in_use guard: which of this project's own promoted models
     have opted into cross-project sharing (``PUT /models/{name}/sharing``,
-    ``promote.json.shared``)?
+    ``promote.json.shared``)? A strict subset of :func:`_owned_models` --
+    used ONLY to decide the ``in_use`` refusal (bypassable with
+    ``force=True``), never to decide whether unload runs (see
+    :func:`_unload_owned_models`, which unloads every owned model,
+    shared or not).
 
     KNOWN GAP (flagged, not faked): this returns the *shared model
     names*, not the *dependent project slugs* the plan asks for -- P2's
@@ -380,30 +445,22 @@ async def _shared_model_users(record: ProjectRecord) -> list[str]:
     caller must read the returned names as "these models of mine are
     shared", not as consumer project slugs.
     """
-    from src.services.training.model_classes import is_model_shared, model_owner_project
-    from src.services.training.triton_promote import resolve_triton_models_dir
+    from src.services.training.model_classes import is_model_shared
 
-    models_dir = resolve_triton_models_dir()
-    if not models_dir.is_dir():
-        return []
-    return sorted(
-        entry.name
-        for entry in models_dir.iterdir()
-        if entry.is_dir()
-        and model_owner_project(entry.name) == record.slug
-        and is_model_shared(entry.name)
-    )
+    return [name for name in await _owned_models(record) if is_model_shared(name)]
 
 
 async def _unload_owned_models(record: ProjectRecord) -> list[str]:
-    """M5 step 4: unload every one of this project's own promoted,
-    shared models (the same enumeration :func:`_shared_model_users`
-    already provides -- see its docstring for the known "shared model
-    name, not consumer project" gap) from Triton and remove their model
-    repo directories, reusing P2's own unload primitive
+    """M5 step 4 / P3F pass-3 MA2: unload every one of this project's
+    own promoted models -- private and shared alike (:func:`_owned_models`,
+    the full ownership enumeration; NOT :func:`_shared_model_users`,
+    which only narrows the ``in_use`` refusal) -- from Triton and remove
+    their model repo directories, reusing P2's own unload primitive
     (``src.services.training.triton_promote.unload_triton_model``, the
     same one ``DELETE /models/{name}`` calls) rather than reimplementing
-    Triton model removal here.
+    Triton model removal here. A project's own models are ALWAYS cleaned
+    up on delete; ``force`` only bypasses the upfront ``in_use`` 409 for
+    the shared subset, never whether this step runs.
 
     Mirrors :func:`_delete_indexes`: collects (never swallows) failures
     so the caller can leave the record retryable instead of tombstoning
@@ -411,7 +468,7 @@ async def _unload_owned_models(record: ProjectRecord) -> list[str]:
     from src.services.training.triton_promote import ModelNotPromotedError, unload_triton_model
 
     failed: list[str] = []
-    for name in await _shared_model_users(record):
+    for name in await _owned_models(record):
         try:
             await unload_triton_model(name)
         except ModelNotPromotedError:
@@ -431,9 +488,16 @@ async def _unload_owned_models(record: ProjectRecord) -> list[str]:
 
 
 async def delete_project_finish(client: Any, *, slug: str) -> ProjectRecord:
-    """Steps 3-9 of the guarded delete (§4): drain wait, unload the
-    project's own promoted models, delete the exact indexes, remove the
-    dirs, soft-delete the MLflow experiment if reachable, tombstone.
+    """Steps 3-9 of the guarded delete (§4): validate every dir path,
+    drain wait, unload the project's own promoted models, delete the
+    exact indexes, remove the dirs, soft-delete the MLflow experiment if
+    reachable, tombstone.
+
+    Path validation (m-a) runs FIRST, before any irreversible step --
+    previously it ran only inside the dir-removal step, itself after
+    index deletion had already run, so a ``path_escape`` left the
+    record wedged ``deleting`` with the indexes already gone and no way
+    back (every retry hits the same escape again).
 
     Model unload runs before index deletion, not alongside or after:
     once the indexes are gone there is no cheap step back if unload then
@@ -455,66 +519,91 @@ async def delete_project_finish(client: Any, *, slug: str) -> ProjectRecord:
     if record.status == 'deleted':
         return record
 
-    drained = await _wait_for_drain(record)
-    if not drained:
-        # M3: roll back to the status delete found it in, not always
-        # 'failed'. m2: base the rollback doc on a fresh read (the drain
-        # wait can run up to _DELETE_DRAIN_TIMEOUT_SECONDS), not the
-        # possibly-stale `record` read at the top of this function.
-        rolled_back, seq, term = await _refetch_for_write(
-            client,
-            slug,
-            status=cast('ProjectStatus', record.pre_delete_status) or 'failed',
-            pre_delete_status=None,
-            updated_at=_now(),
+    if slug in _FINISH_IN_PROGRESS:
+        raise api_error(
+            409,
+            'finish_in_progress',
+            f"a delete finish is already running for '{slug}'",
+            project=slug,
         )
-        await write_record(client, rolled_back, if_seq_no=seq, if_primary_term=term)
+    _FINISH_IN_PROGRESS.add(slug)
+    try:
+        # m-a: validate every dir BEFORE any irreversible step (index
+        # deletion, below) runs.
+        _validate_delete_paths(record)
+
+        drained = await _wait_for_drain(record)
+        if not drained:
+            # M3: roll back to the status delete found it in, not always
+            # 'failed'. m2: base the rollback doc on a fresh read (the
+            # drain wait can run up to _DELETE_DRAIN_TIMEOUT_SECONDS), not
+            # the possibly-stale `record` read at the top of this
+            # function. MA1: `expect_status='deleting'` refuses the
+            # rollback if the fresh read is no longer 'deleting' (e.g.
+            # some other writer already resolved this record) instead of
+            # blindly overwriting a status this call never validated.
+            rolled_back, seq, term = await _refetch_for_write(
+                client,
+                slug,
+                expect_status='deleting',
+                status=cast('ProjectStatus', record.pre_delete_status) or 'failed',
+                pre_delete_status=None,
+                updated_at=_now(),
+            )
+            await write_record(client, rolled_back, if_seq_no=seq, if_primary_term=term)
+            await get_project_registry().ensure_fresh()
+            raise api_error(
+                409, 'project_busy', f"'{slug}' did not drain within the timeout", project=slug
+            )
+
+        failed_models = await _unload_owned_models(record)
+        if failed_models:
+            # Same M4 rule as the index-delete failure below: leave the
+            # record 'deleting' (retryable via the M4 retry path in
+            # delete_project) rather than tombstoning past a model still
+            # live in Triton.
+            raise api_error(
+                409,
+                'project_busy',
+                f"'{slug}' delete failed to unload {len(failed_models)} model(s); retry the delete",
+                project=slug,
+            )
+
+        failed_indexes = await _delete_indexes(client, record)
+        if failed_indexes:
+            # M4: never tombstone past a failed index delete -- that
+            # permanently orphans the leftover indexes (the retired slug
+            # can never re-reach them). Leave the record 'deleting' so a
+            # re-issued DELETE retries; every step here is itself
+            # idempotent.
+            raise api_error(
+                409,
+                'project_busy',
+                f"'{slug}' delete failed to remove {len(failed_indexes)} index(es); "
+                'retry the delete',
+                project=slug,
+            )
+
+        await _delete_dirs(record)
+        await _soft_delete_mlflow(record)
+
+        # MA1: expect_status='deleting' -- the same defense as the
+        # rollback above, on the write that makes the tombstone
+        # permanent.
+        tombstoned, seq, term = await _refetch_for_write(
+            client, slug, expect_status='deleting', status='deleted', updated_at=_now()
+        )
+        await write_record(client, tombstoned, if_seq_no=seq, if_primary_term=term)
         await get_project_registry().ensure_fresh()
-        raise api_error(
-            409, 'project_busy', f"'{slug}' did not drain within the timeout", project=slug
-        )
 
-    failed_models = await _unload_owned_models(record)
-    if failed_models:
-        # Same M4 rule as the index-delete failure below: leave the
-        # record 'deleting' (retryable via the M4 retry path in
-        # delete_project) rather than tombstoning past a model still
-        # live in Triton.
-        raise api_error(
-            409,
-            'project_busy',
-            f"'{slug}' delete failed to unload {len(failed_models)} model(s); retry the delete",
-            project=slug,
-        )
+        from src.services.projects.capacity import invalidate_capacity_cache
 
-    failed_indexes = await _delete_indexes(client, record)
-    if failed_indexes:
-        # M4: never tombstone past a failed index delete -- that
-        # permanently orphans the leftover indexes (the retired slug can
-        # never re-reach them). Leave the record 'deleting' so a
-        # re-issued DELETE retries; every step here is itself idempotent.
-        raise api_error(
-            409,
-            'project_busy',
-            f"'{slug}' delete failed to remove {len(failed_indexes)} index(es); retry the delete",
-            project=slug,
-        )
+        invalidate_capacity_cache()  # m7: the delete just freed this project's shards
 
-    await _delete_dirs(record)
-    await _soft_delete_mlflow(record)
-
-    tombstoned, seq, term = await _refetch_for_write(
-        client, slug, status='deleted', updated_at=_now()
-    )
-    await write_record(client, tombstoned, if_seq_no=seq, if_primary_term=term)
-    await get_project_registry().ensure_fresh()
-
-    from src.services.projects.capacity import invalidate_capacity_cache
-
-    invalidate_capacity_cache()  # m7: the delete just freed this project's shards
-
-    logger.info('project_deleted', project=slug)
-    return tombstoned
+        logger.info('project_deleted', project=slug)
+        return tombstoned
+    finally:
+        _FINISH_IN_PROGRESS.discard(slug)
 
 
 async def _soft_delete_mlflow(record: ProjectRecord) -> None:

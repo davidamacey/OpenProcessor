@@ -200,9 +200,12 @@ def test_delete_finish_publishes_project_deleted(events) -> None:
     asyncio.run(get_project_registry().ensure_fresh())
 
     async def _delete_flow():
-        before = set(projects_router._BACKGROUND_DELETE_TASKS)
         await projects_router.delete_project('cars', Response(), confirm='cars')
-        (task,) = projects_router._BACKGROUND_DELETE_TASKS - before
+        # P3F pass-3 MA1: _BACKGROUND_DELETE_TASKS is now keyed by slug
+        # (not a bare set) so a re-DELETE never double-schedules a
+        # finish for the same slug -- fetch the exact task the route
+        # registered for 'cars'.
+        task = projects_router._BACKGROUND_DELETE_TASKS['cars']
         await task
 
     asyncio.run(_delete_flow())

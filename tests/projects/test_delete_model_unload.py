@@ -58,6 +58,26 @@ def test_dry_run_reports_owned_promoted_model(tmp_path) -> None:
     asyncio.run(_run())
 
 
+def test_dry_run_reports_a_private_promoted_model_too(tmp_path) -> None:
+    """P3F pass-3 MA2: promoted_models must report EVERY model this
+    project owns, private (shared=False, the common case) included --
+    previously this enumerated only `_shared_model_users` (the
+    `is_model_shared` subset), so a private-only project always
+    reported ``[]`` here even though it owned a promoted model."""
+    _write_promote_json(tmp_path, 'cars__private_v1', project='cars', shared=False)
+
+    async def _run() -> None:
+        client = FakeLifecycleOpenSearch()
+        set_project_registry(ProjectRegistry(lambda: client))
+        await seed_default_project(client)
+        await lifecycle.create_project(client, slug='cars', display_name='Cars')
+
+        report = await lifecycle.dry_run_delete(client, slug='cars')
+        assert report['promoted_models'] == ['cars__private_v1']
+
+    asyncio.run(_run())
+
+
 def test_real_delete_unloads_owned_promoted_model(tmp_path, monkeypatch) -> None:
     """force=True bypasses the in_use block (already covered by
     test_delete_shared_model_in_use.py); this proves the finish step
@@ -94,3 +114,39 @@ def test_real_delete_unloads_owned_promoted_model(tmp_path, monkeypatch) -> None
 
     asyncio.run(_run())
     assert unload_calls == ['cars__detector_v1']
+
+
+def test_real_delete_unloads_a_private_promoted_model_with_no_force(tmp_path, monkeypatch) -> None:
+    """P3F pass-3 MA2: a project with ONLY private (non-shared)
+    promoted models must have them unloaded on a NORMAL delete (no
+    ``force`` needed -- private models never trip the ``in_use``
+    refusal in the first place, so the old
+    ``_shared_model_users``-only wiring meant unload never ran for
+    this, the common, case)."""
+    _write_promote_json(tmp_path, 'cars__private_v1', project='cars', shared=False)
+
+    unload_calls: list[str] = []
+
+    async def _fake_unload(triton_name: str, *, promoter=None):
+        unload_calls.append(triton_name)
+        return triton_promote.UnloadResult(
+            triton_name=triton_name, triton_unloaded=True, directory_removed=True
+        )
+
+    monkeypatch.setattr(triton_promote, 'unload_triton_model', AsyncMock(side_effect=_fake_unload))
+
+    async def _run() -> None:
+        client = FakeLifecycleOpenSearch()
+        set_project_registry(ProjectRegistry(lambda: client))
+        await seed_default_project(client)
+        await lifecycle.create_project(client, slug='cars', display_name='Cars')
+        await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
+
+        # No force=True: a private model must never trip `in_use`.
+        deleting = await lifecycle.delete_project(client, slug='cars', confirm='cars')
+        assert deleting.status == 'deleting'
+        finished = await lifecycle.delete_project_finish(client, slug='cars')
+        assert finished.status == 'deleted'
+
+    asyncio.run(_run())
+    assert unload_calls == ['cars__private_v1']

@@ -58,8 +58,14 @@ global_router = APIRouter(
 
 # m11: a strong reference for delete's fire-and-forget finish task, so it
 # is never garbage-collected mid-run (a documented asyncio caveat) --
-# discarded automatically once the task completes.
-_BACKGROUND_DELETE_TASKS: set[asyncio.Task[None]] = set()
+# discarded automatically once the task completes. P3F pass-3 MA1
+# probe 2: keyed by slug (not a bare set) so a re-DELETE issued while a
+# finish for the SAME slug is still running (the M4 retry path) never
+# schedules a second, redundant finish task racing the first one --
+# `delete_project_finish` itself also refuses a concurrent run for the
+# same slug (`delete._FINISH_IN_PROGRESS`), so this is belt-and-braces
+# against wasting a task, not the only guard.
+_BACKGROUND_DELETE_TASKS: dict[str, asyncio.Task[None]] = {}
 
 
 def _publish_lifecycle_event(event_type: str, record: Any) -> None:
@@ -321,12 +327,25 @@ async def delete_project(
             # retry (M3/M4 leave the record retryable with no event).
             _publish_lifecycle_event('project.deleted', finished)
 
+    # MA1 probe 2 / M11: only schedule a new finish task for this slug if
+    # none is already running -- a re-DELETE on an already-'deleting'
+    # record (the M4 retry path, just above) must not race a second
+    # finish against the first one's still-in-flight drain wait.
     # M11 (unstarted background task with no strong reference can be
     # GC'd mid-run): held on the router module so it survives until it
-    # completes, and discarded from the set once done.
-    task = asyncio.create_task(_finish())
-    _BACKGROUND_DELETE_TASKS.add(task)
-    task.add_done_callback(_BACKGROUND_DELETE_TASKS.discard)
+    # completes, and discarded from the map once done (only if this
+    # exact task is still the one mapped -- a stale done-callback must
+    # never evict a newer task that replaced it).
+    existing_task = _BACKGROUND_DELETE_TASKS.get(project)
+    if existing_task is None or existing_task.done():
+        task = asyncio.create_task(_finish())
+        _BACKGROUND_DELETE_TASKS[project] = task
+
+        def _discard(finished_task: asyncio.Task[None], *, _slug: str = project) -> None:
+            if _BACKGROUND_DELETE_TASKS.get(_slug) is finished_task:
+                _BACKGROUND_DELETE_TASKS.pop(_slug, None)
+
+        task.add_done_callback(_discard)
     response.status_code = 202
     return await _summary_response(record)
 

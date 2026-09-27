@@ -50,6 +50,10 @@ ErrorCode = Literal[
     # record's own path pointed outside its expected root -- distinct
     # from internal_isolation_error (an OpenSearch-guard refusal).
     'path_escape',
+    # P3F pass-3 MA1: a second delete_project_finish for the same slug
+    # was refused because a first finish for it is still in flight --
+    # distinct from project_busy (a step *inside* one finish failed).
+    'finish_in_progress',
 ]
 
 

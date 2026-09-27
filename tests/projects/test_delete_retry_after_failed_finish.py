@@ -50,6 +50,17 @@ class _NoBackgroundFinish:
             def add_done_callback(self, *_a: Any, **_k: Any) -> None:
                 return None
 
+            def done(self) -> bool:
+                # P3F pass-3 MA1: the router's own scheduling guard
+                # checks `.done()` on any task already registered for
+                # the slug before scheduling a new one. This stub never
+                # actually runs (its coro is closed immediately above),
+                # so it must report itself as done -- otherwise the
+                # route's own re-DELETE below would see a "still
+                # running" dummy and skip scheduling the real retry this
+                # test drives manually.
+                return True
+
         return _Dummy()
 
 

@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from src.config.projects import ProjectRecord
 
 
@@ -66,6 +68,29 @@ class JobRef:
     # P3F m5: a real ISO timestamp when the job source actually records a
     # start time, else None -- never an always-empty-string filler.
     started_at: str | None = None
+    # P3F pass-3 m-b: a genuine human-readable label when the job
+    # source actually records one (e.g. a train run's own submitted
+    # ``mlflow_run_name``), else None. ``lifecycle.running_jobs`` falls
+    # back to ``job_id`` ONLY when this is None/empty -- never silently
+    # pretends the internal job id IS a human label.
+    label: str | None = None
+
+
+def _train_job_label(jobs_dir: Path, job_id: str) -> str | None:
+    """The train run's own ``mlflow_run_name`` (P3F pass-3 m-b), read
+    from its ``<job_id>.job.json`` submit-time spec -- a genuine human
+    label when the submitter set one. ``None`` when no ``job.json`` is
+    readable, or it never set a name, so the caller falls back to the
+    internal ``job_id`` instead."""
+    import json
+
+    spec_path = jobs_dir / f'{job_id}.job.json'
+    try:
+        payload = json.loads(spec_path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    name = payload.get('mlflow_run_name')
+    return name if isinstance(name, str) and name else None
 
 
 def _train_jobs(record: ProjectRecord) -> list[JobRef]:
@@ -85,7 +110,8 @@ def _train_jobs(record: ProjectRecord) -> list[JobRef]:
         if payload.get('state') in _TRAIN_NON_TERMINAL:
             job_id = status_file.name[: -len('.status.json')]
             started_at = _iso_or_none(payload.get('started_at'))
-            out.append(JobRef(kind='train', job_id=job_id, started_at=started_at))
+            label = _train_job_label(jobs_dir, job_id)
+            out.append(JobRef(kind='train', job_id=job_id, started_at=started_at, label=label))
     return out
 
 
