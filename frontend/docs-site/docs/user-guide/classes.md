@@ -3,7 +3,7 @@ sidebar_position: 5
 title: Classes
 ---
 
-# Class management (`/classes`)
+# Class management (`/p/<project>/classes`)
 
 Add, rename, merge, deprecate and restore classes, and bind a per-class
 hotkey letter (reserved action keys are rejected server-side and

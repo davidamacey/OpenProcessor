@@ -3,7 +3,7 @@ sidebar_position: 7
 title: Train
 ---
 
-# Train cockpit (`/train`)
+# Train cockpit (`/p/<project>/train`)
 
 Submit a training job against the current export.
 

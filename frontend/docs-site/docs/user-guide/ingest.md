@@ -3,10 +3,21 @@ sidebar_position: 2
 title: Ingest
 ---
 
-# Ingest (`/ingest`)
+# Ingest (`/p/<project>/ingest`)
 
-Bring images into the pool. Absent entirely when the backend doesn't mount
-the ingest router.
+Bring images into the current project's pool. The ingest router is always
+mounted, so the nav link always appears — the page itself reads the
+backend's served ingest config before showing any upload UI.
+
+## Served on/off switches
+
+Both upload paths are switches the backend controls per project, not
+something Cropwright decides on its own:
+
+- If browser upload is disabled on the deployment, the upload panel is
+  replaced with a single line saying so.
+- Server-path batch ingest only appears when the backend both enables it
+  and has at least one configured source root.
 
 ## Browser upload
 
@@ -17,9 +28,12 @@ uploads. Each file's result — ingested, duplicate, or failed with a stable
 error code and the backend's own reason — shows in a table with pause,
 resume and cancel.
 
+An amber "uploads aren't kept" banner appears only when the backend reports
+that it doesn't persist uploaded bytes server-side. A stock deployment
+persists them (content-addressed), so this banner is normally absent.
+
 ## Server-path batch ingest
 
-Shown only when the backend advertises at least one configured source root.
 Points at a folder the backend already has mounted (for example,
 OpenProcessor's sample-data output) rather than uploading bytes through the
 browser.

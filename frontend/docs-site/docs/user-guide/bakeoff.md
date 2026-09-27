@@ -3,7 +3,7 @@ sidebar_position: 8
 title: Model comparison (bake-off)
 ---
 
-# Model comparison (`/bakeoff`)
+# Model comparison (`/p/<project>/bakeoff`)
 
 Compare trained and baseline models on evaluation datasets in one run.
 Present only when the backend mounts its bake-off router — absent, not
