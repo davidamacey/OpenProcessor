@@ -37,19 +37,19 @@ from pathlib import Path
 from typing import Any
 
 from src.services.curation.autolabel.job import (
-    _CANCEL_FLAG,
-    _EXIT_CODE_FILE,
-    _RUNNING_LOCK,
-    _STATE_FILE,
     _atomic_write,
+    _cancel_flag,
+    _exit_code_file,
     _Progress,
     _read_state,
+    _running_lock,
+    _state_file,
 )
 
 
 def _write_exit_code(code: int) -> None:
     with contextlib.suppress(OSError):
-        _EXIT_CODE_FILE.write_text(str(code))
+        _exit_code_file().write_text(str(code))
 
 
 def _resolve_pipeline_fn(pipeline_path: str):
@@ -146,9 +146,9 @@ async def _run_pipeline() -> int:
         state.finished_at = time.time()
         _atomic_write(asdict(state))
         with contextlib.suppress(FileNotFoundError):
-            _RUNNING_LOCK.unlink()
+            _running_lock().unlink()
         with contextlib.suppress(FileNotFoundError):
-            _CANCEL_FLAG.unlink()
+            _cancel_flag().unlink()
     return rc
 
 
@@ -177,7 +177,7 @@ async def _amain() -> int:
 
 def main() -> int:
     # Ensure the state directory exists (it should already; defensive).
-    Path(_STATE_FILE.parent).mkdir(parents=True, exist_ok=True)
+    Path(_state_file().parent).mkdir(parents=True, exist_ok=True)
     try:
         rc = asyncio.run(_amain())
     except KeyboardInterrupt:
