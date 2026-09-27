@@ -7,29 +7,24 @@ ongoing image ingestion. This unsticks the pipeline at HDD scale where
 the previous "ingest everything → then VLM" sequence wasted 50%+ of
 elapsed time waiting for one GPU while the other was idle.
 
-Selection criteria match ``pipeline_auto_label``'s skip logic exactly so
-behavior is consistent: process crops where the classifier was uncertain, prototype
-assignment was borderline, YOLO11 found an item the classifier didn't recognize,
-or HDBSCAN clustered the crop as residual. Skip crops where the classifier was
-confident (the VLM adds no signal there) and crops the VLM has already
-processed (asking again won't help).
-
-Operations
-----------
-- Idempotent: every successful VLM response writes one of the class_source
-  values that the worker's must_not query excludes (``vlm``,
-  ``classifier_vlm_agreement``, ``vlm_unmatched``, ``vlm_new_class_pending``),
-  so the crop drops out of the next poll's query.
-- Auto-exits when ``--idle-stop-after`` consecutive empty polls happen,
-  so it can be chained after an ingest run without a sentinel signal.
-- Stoppable with SIGINT / SIGTERM — finishes the in-flight batch then
-  exits cleanly.
+Selection matches ``pipeline_auto_label``'s skip logic. Idempotent
+(a successful VLM write drops the crop from the next poll's query),
+auto-exits after ``--idle-stop-after`` empty polls, and is stoppable
+with SIGINT/SIGTERM (finishes the in-flight batch first).
 
 Usage
 -----
     .venv/bin/python scripts/curation/vlm_worker.py
     .venv/bin/python scripts/curation/vlm_worker.py --batch-size 32 --concurrency 4
     .venv/bin/python scripts/curation/vlm_worker.py --until-empty   # one drain pass
+
+Multi-project mode (default): with no ``--project``, discovers every
+active project via the registry each cycle and round-robins a fair
+share of vlm_batch_size across them, one project advancing per cycle.
+A project with ``<project_state_dir>/pipeline_paused.flag`` is skipped
+that cycle. ``--project SLUG`` restricts to (and whole-process-binds)
+one project -- the dedicated-worker-per-project mode, using the
+original single-project streaming pipeline unchanged.
 
 Or as the long-lived compose service (G-10: there is no
 ``make curation-vlm-worker`` target -- use one of these instead):
@@ -51,20 +46,18 @@ from pathlib import Path
 
 import httpx
 
+from scripts.curation._project_worker_utils import (
+    project_api_prefix,
+    project_items_index,
+    project_paused,
+    scoped_url,
+)
 from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 DEFAULT_API = os.environ.get('OP_API', 'http://localhost:4603')
-# Same env + default as CurationConfig.api_prefix, so the worker follows the API's mount.
-API_PREFIX = os.environ.get('OP_API_PREFIX', '/curation').rstrip('/')
 DEFAULT_OS = os.environ.get('OPENSEARCH_URL', 'http://localhost:4607')
-# This script polls OpenSearch directly (bypassing yolo-api), so it needs
-# the same override the src/ modules read via
-# src.clients.curation_opensearch / src.config.CurationConfig.items_index.
-# Kept as a bare os.environ.get (no src import) so this lightweight
-# httpx-only worker doesn't pull in the full src.clients import chain.
-ITEMS_INDEX = os.environ.get('OP_ITEMS_INDEX_OVERRIDE') or 'op_items'
 # Mirrors src.config.curation.ITEM_EMBEDDING_FIELD for the same no-src-import
 # reason; tests/curation/test_item_embedding_field.py pins the two together.
 ITEM_EMBEDDING_FIELD = 'pe_embedding'
@@ -199,6 +192,7 @@ async def fetch_pending_ids(
     client: httpx.AsyncClient,
     *,
     opensearch_url: str,
+    items_index: str,
     batch_size: int,
     classifier_skip_conf: float,
     exclude_ids: list[str] | None = None,
@@ -224,7 +218,7 @@ async def fetch_pending_ids(
         'sort': [{'created_at': {'order': 'asc', 'unmapped_type': 'date'}}, {'crop_id': 'asc'}],
     }
     r = await client.post(
-        f'{opensearch_url}/{ITEMS_INDEX}/_search',
+        f'{opensearch_url}/{items_index}/_search',
         json=body,
         timeout=30.0,
     )
@@ -236,11 +230,13 @@ async def label_batch(
     client: httpx.AsyncClient,
     *,
     api: str,
+    api_prefix: str,
+    slug: str,
     crop_ids: list[str],
 ) -> dict:
-    """Call /curation/vlm/label_batch for one chunk."""
+    """Call the scoped /curation/projects/{slug}/vlm/label_batch for one chunk."""
     r = await client.post(
-        f'{api}{API_PREFIX}/vlm/label_batch',
+        scoped_url(api, api_prefix, slug, '/vlm/label_batch'),
         json={'crop_ids': crop_ids},
         timeout=300.0,
     )
@@ -248,8 +244,85 @@ async def label_batch(
     return r.json()
 
 
+async def run_multi_project(args: argparse.Namespace) -> int:
+    """Round-robin every active project, a fair share per cycle."""
+    from src.services.projects.registry import get_project_registry
+
+    stop_event = asyncio.Event()
+
+    def _on_signal(*_: object) -> None:
+        if not stop_event.is_set():
+            print('[vlm-worker] stop requested')
+            stop_event.set()
+
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, _on_signal)
+
+    registry = get_project_registry()
+    api_prefix = project_api_prefix()
+    rotation = 0
+
+    async with httpx.AsyncClient() as client:
+        while not stop_event.is_set():
+            try:
+                await registry.ensure_fresh()
+                active = registry.active_projects()
+            except Exception as exc:
+                print(f'[vlm-worker] registry unavailable: {exc}')
+                active = []
+
+            if not active:
+                await asyncio.sleep(args.poll_interval)
+                continue
+
+            rotation %= len(active)
+            order = active[rotation:] + active[:rotation]
+            share = max(1, args.vlm_batch_size // len(active))
+            dispatched = False
+
+            for record in order:
+                try:
+                    if project_paused(record):
+                        continue
+                    items_index = project_items_index(record)
+                except Exception as exc:
+                    print(f'[vlm-worker] project {record.slug} unavailable: {exc}')
+                    continue
+                try:
+                    ids = await fetch_pending_ids(
+                        client,
+                        opensearch_url=args.opensearch,
+                        items_index=items_index,
+                        batch_size=share,
+                        classifier_skip_conf=args.classifier_conf_skip,
+                    )
+                except httpx.HTTPError as exc:
+                    print(f'[vlm-worker] project {record.slug} fetch failed: {exc}')
+                    continue
+                if not ids:
+                    continue
+                dispatched = True
+                try:
+                    result = await label_batch(
+                        client, api=args.api, api_prefix=api_prefix, slug=record.slug, crop_ids=ids
+                    )
+                    print(
+                        f'[vlm-worker] project={record.slug} dispatched={len(ids)} result={result}'
+                    )
+                except httpx.HTTPError as exc:
+                    print(f'[vlm-worker] project {record.slug} label_batch failed: {exc}')
+
+            rotation += 1
+            if not dispatched:
+                if args.until_empty:
+                    return 0
+                await asyncio.sleep(args.poll_interval)
+    return 0
+
+
 async def run(args: argparse.Namespace) -> int:
-    """Streaming producer/consumer pipeline.
+    """Streaming producer/consumer pipeline (single, --project-bound project).
 
     Replaces the old burst pattern (fetch -> gather all -> repeat) with
     a continuous flow:
@@ -270,6 +343,13 @@ async def run(args: argparse.Namespace) -> int:
     Result: vLLM's ``Running:`` count stays steady at ~max-num-seqs
     instead of bursting between 0 and 60.
     """
+    from src.config.project_context import current_project
+
+    bound = current_project()
+    items_index = project_items_index(bound.record)
+    api_prefix = project_api_prefix()
+    slug = bound.record.slug
+
     stop_event = asyncio.Event()
 
     def _on_signal(*_: object) -> None:
@@ -345,6 +425,7 @@ async def run(args: argparse.Namespace) -> int:
                 ids = await fetch_pending_ids(
                     client,
                     opensearch_url=args.opensearch,
+                    items_index=items_index,
                     batch_size=fetch_n,
                     classifier_skip_conf=args.classifier_conf_skip,
                     exclude_ids=exclude_ids,
@@ -399,7 +480,9 @@ async def run(args: argparse.Namespace) -> int:
                 return
             t0 = time.monotonic()
             try:
-                result = await label_batch(client, api=args.api, crop_ids=chunk)
+                result = await label_batch(
+                    client, api=args.api, api_prefix=api_prefix, slug=slug, crop_ids=chunk
+                )
                 metrics['total_processed'] += int(result.get('predicted', 0))
                 metrics['total_updated'] += int(result.get('updated', 0))
                 metrics['total_chunks'] += 1
@@ -526,35 +609,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         '--batch-size',
         type=int,
         default=256,
-        help=(
-            'Crops fetched per poll. CRITICAL: must be >= vlm_batch_size * '
-            'concurrency, otherwise chunking yields too few chunks and the '
-            'concurrency semaphore is wasted (worker runs serial). 256 '
-            'with default vlm-batch=32 + concurrency=8 yields 8 '
-            'concurrent chunks — saturates vLLM at ~42 cps.'
-        ),
+        help='Crops fetched per poll; must be >= vlm_batch_size * concurrency.',
     )
     p.add_argument(
         '--vlm-batch-size',
         type=int,
         default=32,
-        help=(
-            'Crops per /curation/vlm/label_batch call. 32 = 8 upstream VLM calls '
-            'per HTTP roundtrip; balances per-call overhead against head-of-line '
-            'blocking on slow chunks.'
-        ),
+        help='Crops per label_batch call.',
     )
     p.add_argument(
         '--concurrency',
         type=int,
         default=8,
-        help=(
-            'Concurrent /curation/vlm/label_batch calls in flight. With '
-            'vlm-batch-size=32 + concurrency=8 we keep ~256 crop slots in '
-            'flight, which after 4-img chunking lands around 64 in-flight '
-            "upstream — close to vLLM's ~42 cps peak (max-num-seqs=64 + "
-            '--enable-prefix-caching).'
-        ),
+        help='Concurrent label_batch calls in flight (single-project mode only).',
     )
     p.add_argument(
         '--poll-interval',
@@ -566,10 +633,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         '--idle-stop-after',
         type=int,
         default=6,
-        help=(
-            'Number of consecutive empty polls before the worker exits. '
-            'At default poll-interval=5s, 6 polls ≈ 30s of idleness.'
-        ),
+        help='Consecutive empty polls before the worker exits.',
     )
     p.add_argument(
         '--until-empty',
@@ -579,11 +643,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         '--continuous',
         action='store_true',
-        help=(
-            'Run forever — never exit on idle. Use this when running as a '
-            'long-lived background service (Docker compose, systemd, tmux). '
-            'Polls every poll-interval seconds until SIGINT/SIGTERM.'
-        ),
+        help='Run forever -- never exit on idle (single-project mode only).',
     )
     p.add_argument(
         '--classifier-conf-skip',
@@ -593,19 +653,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_CLASSIFIER_CONF_SKIP,
         help='Skip the VLM for classifier-labeled crops at or above this confidence.',
     )
-    # GPU arbiter sentinel. The trainer touches this file
-    # before a single-GPU run starts; the worker pauses while it exists
-    # so we don't fight the trainer for CPU/RAM. (For dual-GPU runs the
-    # arbiter stops the whole VLM container instead, so this path
-    # never runs.) See src/services/training/gpu_arbiter.py.
-    #
-    # This literal 'vlm_worker/pause.sentinel' path must stay in
-    # sync with CurationConfig.pause_sentinel_path (src/config/curation.py),
-    # which gpu_arbiter.py and scripts/curation/worker/state.py both
-    # resolve through. Duplicated here (rather than importing
-    # src.config) deliberately — this script stays a lightweight
-    # httpx-only worker with no src import (see the module docstring's
-    # ITEMS_INDEX/ITEM_EMBEDDING_FIELD precedent above).
+    # GPU arbiter sentinel (single-project mode): pauses while the
+    # trainer holds a single-GPU run. See src/services/training/gpu_arbiter.py.
     p.add_argument(
         '--pause-sentinel',
         default=os.environ.get(
@@ -625,6 +674,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help='Seconds to sleep between sentinel checks while paused.',
     )
     add_project_argument(p)
+    # Multi-project mode is the new default (module docstring) -- override
+    # add_project_argument's usual default-to-'default'.
+    p.set_defaults(project=None)
     return p.parse_args(argv)
 
 
@@ -633,9 +685,13 @@ def main(argv: list[str] | None = None) -> int:
 
     reject_retired_env()
     args = parse_args(argv)
-    bind_script_project(args.project, opensearch_url=args.opensearch)
+    if args.project:
+        bind_script_project(args.project, opensearch_url=args.opensearch)
+        coro = run(args)
+    else:
+        coro = run_multi_project(args)
     try:
-        return asyncio.run(run(args))
+        return asyncio.run(coro)
     except KeyboardInterrupt:
         return 130
 
