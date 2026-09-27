@@ -34,6 +34,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     snapshot, not an instance that fell behind.
 
 ### Added
+- **P3 finish pass, Cropwright backend asks (2026-09-27).** `GET
+  {prefix}/models/status` now serves `owned: bool` (this route's own
+  ownership check, never inferred client-side from `project`) and
+  `sharing_revision: int | None` (only for an owned entry -- the value
+  `PUT .../sharing` needs as `expected_revision`) on every entry; a
+  foreign shared entry is served `unloadable: false`. `GET {prefix}/pause`
+  now also reports `paused_by: list[str]` (`'project'` / `'gpu_training'`)
+  and `reason: str | None` for the global GPU/training claim
+  (`gpu_arbiter.read_training_lock`); `ProjectSummary.paused` lets `GET
+  /projects` render a per-row paused chip with no extra reads.
+  Pause/resume now publish `project.paused` / `project.resumed` on the
+  global event stream (BA-P2-1, BA-P2-2, BA-P2-4, BA-P2-5, BA-P2-7).
 - **P3 finish pass, final merge.** Merged `cutover/projects-workers`
   (through `fix(projects): refresh detection-worker liveness on a
   timer`) into `cutover/projects-lifecycle`: the detection-worker
