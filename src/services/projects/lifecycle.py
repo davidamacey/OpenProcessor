@@ -354,19 +354,32 @@ async def create_project(
                 axes=clone_axes,
             )
             if clone_conflicts:
-                # M7 (create-time clone): a dropped keymap conflict is
-                # logged, not threaded through this function's return --
-                # every other caller of create_project (tests included)
-                # unpacks a plain (record, warnings) pair. The standalone
-                # POST /projects/{project}/clone_settings route (clone.py's
-                # clone_settings_into) is the one that serves the
-                # structured report.
+                # Review focus-item #5: a dropped keymap conflict used to
+                # be logged only -- `keymap_clone_conflicts` on the 201
+                # response is always `[]` for a create (that field is the
+                # standalone POST clone_settings route's, not create's),
+                # so the client had no way to know the clone-time drop
+                # happened. Surface one ProjectWarning per conflict
+                # (code `keymap_clone_conflict`) on the plain (record,
+                # warnings) pair every caller already unpacks.
                 logger.warning(
                     'project_create_keymap_clone_conflicts',
                     slug=slug,
                     from_slug=clone_settings_from,
                     conflicts=clone_conflicts,
                 )
+                for conflict in clone_conflicts:
+                    warnings.append(
+                        {
+                            'code': 'keymap_clone_conflict',
+                            'message': (
+                                f"keymap action '{conflict['action_id']}' combo "
+                                f"'{conflict['combo']}' collides with class "
+                                f"'{conflict['class_name']}' (id {conflict['class_id']}) "
+                                'and was dropped from the clone'
+                            ),
+                        }
+                    )
         # Idempotent: a clone that copied 'classes' (or _apply_clone's own
         # no-classes-copied branch) may already have seeded it, but every
         # new project gets one guaranteed call under its own binding.
