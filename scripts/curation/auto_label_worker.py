@@ -383,7 +383,7 @@ async def _main_loop(stop: asyncio.Event) -> None:
 
 def main() -> int:
     # No argument parser: the worker container selects its project with
-    # OP_PROJECT (default "default").
+    # OP_CURATION_PROJECT (default "default").
     bind_script_project_from_env()
     stop = asyncio.Event()
 

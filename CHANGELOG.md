@@ -93,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the API lifespan runs unbound and binds each active project in turn
   only for startup steps that touch project data; every
   `scripts/curation` entry point binds `--project` (default
-  `$OP_PROJECT`, else `default`) for its whole process, resolved through
+  `$OP_CURATION_PROJECT`, else `default`) for its whole process, resolved through
   the registry so the stored status applies.
 - Index names, the class registry, the index bootstrap flag, the UMAP
   reducer/projection state files, the eval-dataset roots, and the scores /

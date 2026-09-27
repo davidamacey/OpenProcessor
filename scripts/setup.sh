@@ -865,7 +865,7 @@ The steps above set up core inference only. To also get curation
      restart Triton: make restart-triton
 
   2. Seed a class registry (there is no default one):
-       Add classes via POST {API}/curation/classes, or via the
+       Add classes via POST {API}/curation/projects/default/classes, or via the
        Cropwright UI's /classes page. See docs/CURATION.md "Seed /
        bootstrap path for a fresh install" -> "Create classes from
        zero".
