@@ -122,6 +122,12 @@
     "region_source",
     "region_pairing",
     "region_skip_verify",
+    "region_boxes",
+    "region_count",
+    "region_rejected_count",
+    "region_max_score",
+    "region_set_complete",
+    "region_revision",
     "item_text_lines"
   ],
   "json_schema": {
@@ -776,6 +782,14 @@
         "default": null,
         "title": "Region Bbox Norm"
       },
+      "region_boxes": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Region Boxes",
+        "type": "array"
+      },
       "region_candidate_bbox_in_parent": {
         "anyOf": [
           {
@@ -906,6 +920,11 @@
         "default": null,
         "title": "Region Confidence"
       },
+      "region_count": {
+        "default": 0,
+        "title": "Region Count",
+        "type": "integer"
+      },
       "region_detected_at": {
         "anyOf": [
           {
@@ -969,6 +988,18 @@
         "default": null,
         "title": "Region Label Source"
       },
+      "region_max_score": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Max Score"
+      },
       "region_pairing": {
         "default": null,
         "title": "Region Pairing"
@@ -1009,6 +1040,11 @@
         "default": null,
         "title": "Region Reason"
       },
+      "region_rejected_count": {
+        "default": 0,
+        "title": "Region Rejected Count",
+        "type": "integer"
+      },
       "region_rejection_reason": {
         "anyOf": [
           {
@@ -1021,6 +1057,11 @@
         "default": null,
         "title": "Region Rejection Reason"
       },
+      "region_revision": {
+        "default": 0,
+        "title": "Region Revision",
+        "type": "integer"
+      },
       "region_score": {
         "anyOf": [
           {
@@ -1032,6 +1073,18 @@
         ],
         "default": null,
         "title": "Region Score"
+      },
+      "region_set_complete": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Set Complete"
       },
       "region_skip_verify": {
         "anyOf": [

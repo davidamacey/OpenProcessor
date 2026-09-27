@@ -196,6 +196,16 @@ class ItemDoc(BaseModel):
     region_source: str | None = None
     region_pairing: Any = None
     region_skip_verify: bool | None = None
+    # W8a: the per-item box list plus its item-level summary fields
+    # (additive alongside the legacy per-box scalars above -- see the
+    # W8a handback report for why those are not removed yet). Element
+    # keys are fixed strings, not RegionFields-indirected (W8.2).
+    region_boxes: list[dict[str, Any]] = Field(default_factory=list)
+    region_count: int = 0
+    region_rejected_count: int = 0
+    region_max_score: float | None = None
+    region_set_complete: bool | None = None
+    region_revision: int = 0
     # Every OCR line read on the item crop ([] when none / not yet read).
     item_text_lines: list[ItemTextLine] = Field(default_factory=list)
 

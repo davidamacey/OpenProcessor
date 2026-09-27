@@ -27,12 +27,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/regions/vocabulary`).
   **Not yet done** (see the handback report for the full list): the
   worker pipeline rewrite (candidate selection, numbered VLM overlay,
-  verdict-to-storage), the human edit routes (`PUT .../regions`,
-  `PATCH .../regions/{box_id}`, `batch_box_state`), removal of the old
-  scalar routes/fields, the `_items_body` mapping additions for the new
-  nested fields (explicitly excluded from the mapping-coverage and wire
-  tests this pass), embeddings, and clustering. This is a foundational
-  slice only, not the full W8 wave.
+  verdict-to-storage), removal of the old scalar routes/fields, the
+  `_items_body` mapping additions for the new nested fields (explicitly
+  excluded from the mapping-coverage and wire tests this pass),
+  embeddings, and clustering. This is a foundational slice only, not
+  the full W8 wave.
+- **W8a multi-box region human edit routes.** New, additive routes
+  alongside the existing single-scalar ones (legacy fields/routes NOT
+  removed this pass -- the worker pipeline still writes them
+  exclusively; see the handback report):
+  - `PUT /crops/{crop_id}/regions` -- sets the full per-item box list,
+    sibling-preserving (an element with only `box_id` leaves that box
+    untouched); `box_id: null` mints a new box defaulting to `accepted`
+    when `state` is omitted (W8 pin 2); `frame: "parent"` projects into
+    the source frame server-side (W8 pin 1); optional `region_status`
+    applies a whole-set status to the built list in the same write (W8
+    pin 3; Enter confirms only `proposed` boxes, never boxes already
+    settled); a stale `expected_region_revision` is 409
+    `region_conflict` (current revision + box ids + item); over
+    `region_profile.limits.max_boxes_per_write` is 422 `too_many_boxes`.
+  - `PUT /crops/batch_regions` -- same new-boxes-only semantics across
+    many crops (`box_id` must be `null`, else 422 `box_id_in_batch`).
+  - `PATCH /crops/{crop_id}/regions/{box_id}` -- per-box `state`/`text`
+    patch; every sibling box is left untouched (per-box states persist
+    independently).
+  - `POST /regions/batch_box_state` -- one state on many `{crop_id,
+    box_id}` targets across items (region-gallery triage), never
+    touching a target's sibling boxes (contrast `batch_status`, which
+    flips every box of each item).
+  - `src/services/curation/region_boxes.py` gained `apply_put_boxes`
+    (the sibling-preserving merge) and `boxes_with_status` (the W8.7
+    whole-set table: `detected` accepts every `proposed` box and 422s
+    `no_boxes`/`no_accepted_box` when empty/still-empty-of-accepted;
+    `false_positive` flips every box; `verify_rejected` rejects every
+    box with `rejection_reason: human`; `no_region_visible` clears the
+    list).
+  - `serialize_item`/`ItemDoc` now carry `region_boxes` (list) plus the
+    item-level summary fields `region_count`, `region_rejected_count`,
+    `region_max_score`, `region_set_complete`, `region_revision`,
+    additive alongside the existing per-box scalar wire keys.
+  - New module `src/routers/curation/regions_boxes_edit.py` (kept
+    separate from `regions_edit.py` to stay under the 700-LOC module
+    ceiling); added to `tests/curation/test_cross_project_leak.py`'s
+    route/body/prepare maps.
+  - **Not done** (deferred to W8b/W8c, see the handback report):
+    deleting the legacy scalar `RegionFields` attrs/mappings/routes,
+    `test_no_legacy_region_scalars.py`, and updating
+    `POST /crops/{id}/region/undo` to restore the box list (pin 4) --
+    undo still only restores the legacy scalar snapshot today.
 
 ### Fixed
 - **P3 review fix pass (2026-09-27).** Addresses the independent P3 review's

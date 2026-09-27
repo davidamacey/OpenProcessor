@@ -125,6 +125,12 @@ export interface ItemWire {
   region_source: string | null;
   region_pairing: unknown;
   region_skip_verify: boolean | null;
+  region_boxes: Record<string, unknown>[];
+  region_count: number;
+  region_rejected_count: number;
+  region_max_score: number | null;
+  region_set_complete: boolean | null;
+  region_revision: number;
   item_text_lines: ItemTextLine[];
 }
 
@@ -241,6 +247,12 @@ export const ITEM_WIRE_KEYS = [
   'region_source',
   'region_pairing',
   'region_skip_verify',
+  'region_boxes',
+  'region_count',
+  'region_rejected_count',
+  'region_max_score',
+  'region_set_complete',
+  'region_revision',
   'item_text_lines',
 ] as const satisfies readonly ItemWireKey[];
 

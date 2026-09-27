@@ -1065,6 +1065,60 @@
         "title": "BaselineModelRef",
         "type": "object"
       },
+      "BatchBoxStateRequest": {
+        "description": "Body for ``POST /regions/batch_box_state`` (W8a).",
+        "properties": {
+          "expected_region_revisions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Region Revisions"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/BatchBoxStateTarget"
+            },
+            "title": "Targets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "targets",
+          "state"
+        ],
+        "title": "BatchBoxStateRequest",
+        "type": "object"
+      },
+      "BatchBoxStateTarget": {
+        "properties": {
+          "box_id": {
+            "title": "Box Id",
+            "type": "string"
+          },
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "crop_id",
+          "box_id"
+        ],
+        "title": "BatchBoxStateTarget",
+        "type": "object"
+      },
       "BatchIngestSummaryResponse": {
         "properties": {
           "crops_indexed": {
@@ -1162,6 +1216,100 @@
           "images"
         ],
         "title": "Body_curation_ingest_upload_curation_projects__project__ingest_upload_post",
+        "type": "object"
+      },
+      "BoxPatchRequest": {
+        "description": "Body for ``PATCH /crops/{crop_id}/regions/{box_id}`` (W8a).",
+        "properties": {
+          "expected_region_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Region Revision"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "title": "BoxPatchRequest",
+        "type": "object"
+      },
+      "BoxWriteElement": {
+        "description": "One element of a ``PUT /crops/{crop_id}/regions`` boxes list.\n\n``box_id: None`` (or omitted) is a new box; a stored box referenced by\n``box_id`` alone (no other keys) is left untouched (sibling-preserving,\nany_domain_plan.md §7.7).",
+        "properties": {
+          "bbox_norm": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox Norm"
+          },
+          "box_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Box Id"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "title": "BoxWriteElement",
         "type": "object"
       },
       "CampaignRunSpec": {
@@ -4301,6 +4449,41 @@
         "title": "ItemBatchRegionRequest",
         "type": "object"
       },
+      "ItemBatchRegionsRequest": {
+        "description": "Body for ``PUT /crops/batch_regions`` (W8a).",
+        "properties": {
+          "boxes": {
+            "items": {
+              "$ref": "#/components/schemas/BoxWriteElement"
+            },
+            "title": "Boxes",
+            "type": "array"
+          },
+          "crop_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Crop Ids",
+            "type": "array"
+          },
+          "region_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Status"
+          }
+        },
+        "required": [
+          "crop_ids"
+        ],
+        "title": "ItemBatchRegionsRequest",
+        "type": "object"
+      },
       "ItemDoc": {
         "description": "The wire item every item-returning endpoint emits.\n\nDocumentation/OpenAPI model only: handlers return\n``src.services.curation.wire.serialize_item`` output directly (a test\npins this model's fields to that serializer's keys), so a stored value\nof an unexpected type never 500s a browse page. Region attributes use\nthe fixed ``region_<attr>`` wire names regardless of any\n``OP_REGION_FIELD_*`` storage override.",
         "properties": {
@@ -4852,6 +5035,14 @@
             ],
             "title": "Region Bbox Norm"
           },
+          "region_boxes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Region Boxes",
+            "type": "array"
+          },
           "region_candidate_bbox_in_parent": {
             "anyOf": [
               {
@@ -4971,6 +5162,11 @@
           "region_confidence": {
             "title": "Region Confidence"
           },
+          "region_count": {
+            "default": 0,
+            "title": "Region Count",
+            "type": "integer"
+          },
           "region_detected_at": {
             "anyOf": [
               {
@@ -5029,6 +5225,17 @@
             ],
             "title": "Region Label Source"
           },
+          "region_max_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Max Score"
+          },
           "region_pairing": {
             "title": "Region Pairing"
           },
@@ -5065,6 +5272,11 @@
             ],
             "title": "Region Reason"
           },
+          "region_rejected_count": {
+            "default": 0,
+            "title": "Region Rejected Count",
+            "type": "integer"
+          },
           "region_rejection_reason": {
             "anyOf": [
               {
@@ -5076,6 +5288,11 @@
             ],
             "title": "Region Rejection Reason"
           },
+          "region_revision": {
+            "default": 0,
+            "title": "Region Revision",
+            "type": "integer"
+          },
           "region_score": {
             "anyOf": [
               {
@@ -5086,6 +5303,17 @@
               }
             ],
             "title": "Region Score"
+          },
+          "region_set_complete": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Set Complete"
           },
           "region_skip_verify": {
             "anyOf": [
@@ -5518,6 +5746,51 @@
           "region_bbox_norm"
         ],
         "title": "ItemRegionRequest",
+        "type": "object"
+      },
+      "ItemRegionsRequest": {
+        "description": "Body for ``PUT /crops/{crop_id}/regions`` (W8a).",
+        "properties": {
+          "boxes": {
+            "items": {
+              "$ref": "#/components/schemas/BoxWriteElement"
+            },
+            "title": "Boxes",
+            "type": "array"
+          },
+          "expected_region_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Region Revision"
+          },
+          "frame": {
+            "default": "source",
+            "enum": [
+              "source",
+              "parent"
+            ],
+            "title": "Frame",
+            "type": "string"
+          },
+          "region_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Status"
+          }
+        },
+        "title": "ItemRegionsRequest",
         "type": "object"
       },
       "ItemTextLine": {
@@ -13067,6 +13340,61 @@
         ]
       }
     },
+    "/curation/projects/{project}/crops/batch_regions": {
+      "put": {
+        "description": "Replace each crop's box list with the same **new** boxes\n(typically ``boxes: []`` = \"none visible\"), W8a. Every element must\nhave ``box_id: null`` (422 ``box_id_in_batch``): ids are per item.",
+        "operationId": "batch_set_crop_regions_curation_projects__project__crops_batch_regions_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemBatchRegionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Batch Set Crop Regions Curation Projects  Project  Crops Batch Regions Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Batch Set Crop Regions",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/crops/batch_unexclude": {
       "post": {
         "description": "Reverse an exclusion (Undo path for Ignore).\n\nClears ``class_excluded`` + provenance and restores the validation\nrecorded at exclude time. A validated crop goes straight back to its\nclass cluster (``cluster_id == class_id``); an unvalidated one returns\nto the candidate cluster it was excluded from while that cluster still\nhas members, else drops to the residual pool (``cluster_id=null``) for\na fresh assignment on the next recluster. Crops that aren't excluded\nare left untouched.",
@@ -14104,6 +14432,143 @@
         "summary": "Crop Region Thumbnail",
         "tags": [
           "Curation - Crops"
+        ]
+      }
+    },
+    "/curation/projects/{project}/crops/{crop_id}/regions": {
+      "put": {
+        "description": "Set the full per-item box list (W8a).\n\nThe full list, in display order; omitting a stored box deletes it.\nAn element is ``{box_id}`` alone for an untouched box, ``{box_id,\nbbox_norm}`` for a moved box (keeps state), ``{box_id, state}`` /\n``{box_id, bbox_norm, state}`` to change state too, and ``{box_id:\nnull, bbox_norm, state?}`` for a new box (default ``accepted``, W8\npin 2). ``frame: \"parent\"`` projects into the source frame\nserver-side (W8 pin 1). Optional ``region_status`` applies a\nwhole-set status to the built list in the same write (W8 pin 3).\nA stale ``expected_region_revision`` is 409 ``region_conflict``.\nOver ``region_profile.limits.max_boxes_per_write`` is 422\n``too_many_boxes``.",
+        "operationId": "set_crop_regions_curation_projects__project__crops__crop_id__regions_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemRegionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Crop Regions Curation Projects  Project  Crops  Crop Id  Regions Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Crop Regions",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/crops/{crop_id}/regions/{box_id}": {
+      "patch": {
+        "description": "Per-box state/text patch (W8a) -- the review panel's per-box\naccept/reject action. Every other box in the item's list is left\nuntouched (per-box states persist independently).",
+        "operationId": "patch_crop_region_box_curation_projects__project__crops__crop_id__regions__box_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "box_id",
+            "required": true,
+            "schema": {
+              "title": "Box Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoxPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Crop Region Box Curation Projects  Project  Crops  Crop Id  Regions  Box Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Crop Region Box",
+        "tags": [
+          "Curation"
         ]
       }
     },
@@ -17159,6 +17624,61 @@
           }
         },
         "summary": "List Regions",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/regions/batch_box_state": {
+      "post": {
+        "description": "One state on many boxes across items (region-gallery triage,\nW8a). Flips only the named box on each targeted item -- never its\nsiblings (contrast ``POST /regions/batch_status``, which flips every\nbox of each item).",
+        "operationId": "batch_set_region_box_state_curation_projects__project__regions_batch_box_state_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchBoxStateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Batch Set Region Box State Curation Projects  Project  Regions Batch Box State Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Batch Set Region Box State",
         "tags": [
           "Curation"
         ]

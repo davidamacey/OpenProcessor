@@ -384,7 +384,28 @@ def serialize_item(
     item.update(region_to_wire(src, f))
     item['region_bbox_in_parent'] = region_bbox_in_parent(src, f)
     item['region_candidate_bbox_in_parent'] = region_candidate_bbox_in_parent(src, f)
+    item.update(region_boxes_to_wire(src, f))
     return item
+
+
+def region_boxes_to_wire(
+    src: dict[str, Any], storage: RegionFields | None = None
+) -> dict[str, Any]:
+    """The W8a per-item box list plus its item-level summary fields
+    (any_domain_plan.md §7.7 wire read). Additive alongside the legacy
+    per-box scalar wire keys above -- see the W8a handback report for
+    why those are not removed yet."""
+    from src.services.curation.region_boxes import read_boxes
+
+    f = storage or get_region_fields()
+    return {
+        'region_boxes': [b.to_doc() for b in read_boxes(src, f)],
+        'region_count': int(src.get(f.count) or 0),
+        'region_rejected_count': int(src.get(f.rejected_count) or 0),
+        'region_max_score': src.get(f.max_score),
+        'region_set_complete': src.get(f.set_complete),
+        'region_revision': int(src.get(f.revision) or 0),
+    }
 
 
 ITEM_WIRE_KEYS: frozenset[str] = frozenset(serialize_item({}, 'x', api_prefix=''))
@@ -422,6 +443,7 @@ __all__ = [
     'item_list_source_excludes',
     'item_source_excludes',
     'region_bbox_in_parent',
+    'region_boxes_to_wire',
     'region_candidate_bbox_in_parent',
     'region_event_payload',
     'region_to_wire',
