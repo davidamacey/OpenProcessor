@@ -169,6 +169,15 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         # config-store write path (`activate` + `bump_config_revision`'s
         # painless script) instead of only the generic settings-doc merge.
         ('PUT', '/settings'): {'json': {'defaults': {'prompt_pack': GENERIC_ITEM_PACK.name}}},
+        ('PUT', '/keymap'): {
+            'json': {'expected_revision': 0, 'overrides': {'cluster.ignore': ['k']}}
+        },
+        ('POST', '/keymap/validate'): {'json': {'overrides': {'cluster.ignore': ['k']}}},
+        # Runs after PUT /keymap in route-declaration order, which already
+        # bumped the doc to revision 1.
+        ('POST', '/keymap/reset'): {
+            'json': {'expected_revision': 1, 'action_ids': ['cluster.ignore']}
+        },
         ('POST', '/train/preflight'): {'json': {}},
         # force: the preflight's class-balance/disk gates are not what
         # this test is about; the job files written are.
@@ -206,6 +215,7 @@ NO_WRITE: dict[tuple[str, str], str] = {
     ('POST', '/events/publish'): 'publishes an event (checked separately), writes no data',
     ('POST', '/ingest/path_lookup'): 'read-only lookup under POST',
     ('POST', '/train/preflight'): 'read-only validation under POST',
+    ('POST', '/keymap/validate'): 'dry-run report; writes nothing',
     ('POST', '/train/reload_promoted'): 'asks Triton to load promoted models; stores nothing',
     (
         'POST',
@@ -698,11 +708,14 @@ class _FakeTransport:
             if method == 'DELETE':
                 self._write(indices[0], doc_id, None, merge=False)
             elif action == '_update':
-                # minor 7 (W2 review): `bump_config_revision`'s painless
-                # script + upsert body needs real semantics here, not the
-                # generic doc-merge below -- mirrors
+                # minor 7 (W2 review) / W2b M6: `bump_config_revision`'s
+                # painless script + upsert body needs real semantics here,
+                # not the generic doc-merge below -- mirrors
                 # tests/curation/_fake_config_opensearch.py's
-                # FakeConfigOpenSearch.update().
+                # FakeConfigOpenSearch.update(). A brand-new doc gets the
+                # upsert body verbatim (real OpenSearch never runs the
+                # script on the insert path); an existing doc gets the
+                # script's increment applied.
                 current = self.store.get(indices[0], {}).get(doc_id)
                 script_source = (payload.get('script') or {}).get('source', '')
                 if current is None and 'config_revision' in script_source:
@@ -1547,3 +1560,200 @@ def test_a_planted_unkeyed_cache_behind_a_shared_helper_is_caught(
     _, _, shapes_beta = _sweep(leak_env, 'beta', only)
     caught = _cache_parity('alpha', 'beta', shapes_alpha, shapes_beta)
     assert any('/review/' in line for line in caught), 'the planted unkeyed cache went unnoticed'
+
+
+# --------------------------------------------------------------------------
+# W2b review (w2b_review_2026-09-27.md): B1/B2/B3 + isolation gaps, through
+# the real leak_env guard.
+# --------------------------------------------------------------------------
+
+
+def test_keymap_alpha_invisible_to_beta(leak_env: LeakEnv) -> None:
+    """M7 isolation gap: alpha's keymap override never leaks into beta's
+    GET, and the reserved letter it introduces is reserved in alpha only."""
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    alpha = f'{SCOPED.format(project="alpha")}/keymap'
+    beta = f'{SCOPED.format(project="beta")}/keymap'
+
+    put = client.put(alpha, json={'expected_revision': 0, 'overrides': {'cluster.ignore': ['k']}})
+    assert put.status_code == 200, put.text
+
+    beta_get = client.get(beta).json()
+    assert beta_get['is_default'] is True
+    assert beta_get['overrides'] == {}
+    assert 'k' not in beta_get['reserved_hotkeys']
+
+    alpha_get = client.get(alpha).json()
+    assert alpha_get['is_default'] is False
+    assert 'k' in alpha_get['reserved_hotkeys']
+
+
+def test_keymap_class_hotkey_checks_use_only_the_bound_registry(leak_env: LeakEnv) -> None:
+    """M7 isolation gap: a keymap write against a class hotkey only 409s
+    against the *bound* project's class -- beta's class 'q' never blocks
+    alpha's write, and alpha's write never blocks beta's later one."""
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    alpha = SCOPED.format(project='alpha')
+    beta = SCOPED.format(project='beta')
+
+    bound_q = client.put(f'{beta}/classes/2', json={'hotkey_letter': 'q'})
+    assert bound_q.status_code == 200, bound_q.text
+
+    alpha_put = client.put(
+        f'{alpha}/keymap', json={'expected_revision': 0, 'overrides': {'cluster.move': ['q']}}
+    )
+    assert alpha_put.status_code == 200, alpha_put.text
+
+    beta_put = client.put(
+        f'{beta}/keymap', json={'expected_revision': 0, 'overrides': {'cluster.move': ['q']}}
+    )
+    assert beta_put.status_code == 409, beta_put.text
+    assert beta_put.json()['detail']['error'] == 'class_hotkey_conflict'
+
+
+def test_put_keymap_unbind_rolls_back_class_hotkey_if_save_fails(
+    leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """B1: if the keymap save fails after the class-hotkey unbind already
+    wrote, the class hotkey must be rolled back, not left cleared. Seen
+    red on the pre-fix code (409 revision_conflict + hotkey_letter -> None)."""
+    from src.routers.curation import keymap as keymap_route_module
+    from src.services.curation.keymap import RevisionConflictError
+
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    beta = SCOPED.format(project='beta')
+
+    bound = client.put(f'{beta}/classes/2', json={'hotkey_letter': 'i'})
+    assert bound.status_code == 200, bound.text
+
+    real_save = keymap_route_module.save_keymap_doc
+
+    async def _fail_save(*_args: Any, **_kwargs: Any) -> Any:
+        raise RevisionConflictError(current_revision=999)
+
+    monkeypatch.setattr(keymap_route_module, 'save_keymap_doc', _fail_save)
+    try:
+        resp = client.put(
+            f'{beta}/keymap',
+            json={
+                'expected_revision': 0,
+                'overrides': {'cluster.ignore': ['i']},
+                'unbind_conflicting_class_hotkeys': True,
+            },
+        )
+    finally:
+        monkeypatch.setattr(keymap_route_module, 'save_keymap_doc', real_save)
+
+    assert resp.status_code == 409, resp.text
+    assert resp.json()['detail']['error'] == 'revision_conflict'
+
+    entry = client.get(f'{beta}/classes/2').json()
+    assert entry['hotkey_letter'] == 'i', 'the class hotkey must survive a failed keymap save'
+
+
+def test_clone_keymap_axis_all_or_nothing_on_kept_override_collision(leak_env: LeakEnv) -> None:
+    """B2 probe 1: alpha has {cluster.ignore:['m'], cluster.move:['q']};
+    beta has a class on 'q'. cluster.move is dropped for the conflict, but
+    writing {cluster.ignore:['m']} alone would collide with cluster.move's
+    default 'm' -- the whole clone must be a no-op, not a partial write
+    that leaves an invalid keymap."""
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    alpha = SCOPED.format(project='alpha')
+    beta = SCOPED.format(project='beta')
+
+    put = client.put(
+        f'{alpha}/keymap',
+        json={
+            'expected_revision': 0,
+            'overrides': {'cluster.ignore': ['m'], 'cluster.move': ['q']},
+        },
+    )
+    assert put.status_code == 200, put.text
+
+    bound_q = client.put(f'{beta}/classes/2', json={'hotkey_letter': 'q'})
+    assert bound_q.status_code == 200, bound_q.text
+
+    before = client.get(f'{beta}/keymap').json()
+    project_record = client.get(beta).json()
+
+    resp = client.post(
+        f'{beta}/clone_settings',
+        json={
+            'from': 'alpha',
+            'axes': ['keymap'],
+            'expected_revision': project_record['revision'],
+        },
+    )
+    # clone_settings acts through the global (non-project-scoped) router
+    # under the project path, per src/routers/curation/projects.py.
+    assert resp.status_code == 200, resp.text
+    conflicts = resp.json().get('keymap_clone_conflicts', [])
+    assert any(c['action_id'] == 'cluster.move' for c in conflicts)
+
+    after = client.get(f'{beta}/keymap').json()
+    assert after['overrides'] == before['overrides'] == {}
+    assert after['revision'] == before['revision']
+
+    # The persisted state (nothing changed) must still validate clean.
+    validate = client.post(f'{beta}/keymap/validate', json={'overrides': after['overrides']})
+    assert validate.json()['ok'] is True
+
+
+def test_clone_keymap_axis_all_or_nothing_on_defaults_source_class_clash(
+    leak_env: LeakEnv,
+) -> None:
+    """B2 probe 2: the source is at defaults ({}); the target moved
+    cluster.ignore off its default 'x' to free that letter for a class.
+    Cloning an empty override map must not silently reintroduce 'x' on
+    cluster.ignore over the class -- the clone reports the conflict and
+    leaves the target's keymap unchanged."""
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    beta = SCOPED.format(project='beta')
+
+    # 'x' is the default for both cluster.ignore *and* clusters_search.ignore
+    # (different, non-overlapping active sets) -- both must move to free
+    # the letter deployment-wide.
+    moved = client.put(
+        f'{beta}/keymap',
+        json={
+            'expected_revision': 0,
+            'overrides': {'cluster.ignore': ['k'], 'clusters_search.ignore': ['k']},
+        },
+    )
+    assert moved.status_code == 200, moved.text
+
+    bound_x = client.put(f'{beta}/classes/2', json={'hotkey_letter': 'x'})
+    assert bound_x.status_code == 200, bound_x.text
+
+    before = client.get(f'{beta}/keymap').json()
+    assert before['overrides'] == {'cluster.ignore': ['k'], 'clusters_search.ignore': ['k']}
+    project_record = client.get(beta).json()
+
+    resp = client.post(
+        f'{beta}/clone_settings',
+        json={
+            'from': 'alpha',
+            'axes': ['keymap'],
+            'expected_revision': project_record['revision'],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+
+    after = client.get(f'{beta}/keymap').json()
+    assert after['overrides'] == before['overrides'], (
+        "cloning alpha's empty overrides must not reintroduce cluster.ignore's "
+        "default 'x' over beta's class"
+    )
+
+
+def test_region_actions_available_with_env_registered_profile(
+    leak_env: LeakEnv, reference_region_profile: None
+) -> None:
+    """B3: with no config-store activation but an env-registered default
+    region profile (get_active_region_profile() falls back to it), every
+    review.region.*/box_edit.* action must be available."""
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    body = client.get(f'{SCOPED.format(project="beta")}/keymap').json()
+    by_id = {a['id']: a for a in body['actions']}
+    assert by_id['review.region.accept_box']['available'] is True
+    assert by_id['box_edit.next_box']['available'] is True

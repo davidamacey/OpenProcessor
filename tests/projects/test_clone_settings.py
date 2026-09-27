@@ -4,6 +4,7 @@ non-empty target, the source stays byte-identical (read-only bind)."""
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -130,3 +131,149 @@ def test_clone_source_stays_byte_identical() -> None:
             None,
             registry.snapshot(),
         )
+
+
+def test_clone_keymap_axis_all_or_nothing_reports_class_conflicts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """B2 (W2b Opus review): ``clone_settings`` with ``axes=['keymap']``
+    validates the source's stored overrides against the *target's* class
+    registry, and is all-or-nothing -- any class conflict (or validation
+    error) leaves the target's keymap completely unchanged (not even the
+    non-conflicting actions copy) and returns a structured conflict
+    report. Dropping only the conflicting actions and writing the rest
+    used to be able to leave the target with an invalid keymap (a kept
+    override colliding with a dropped action's now-reinstated default);
+    see the review's B2 finding.
+
+    ``FakeLifecycleOpenSearch`` keeps one flat ``docs`` dict keyed only by
+    doc id (ignoring ``index``, see its docstring) -- fine for the
+    project-registry docs it was built for, but it would silently alias
+    two projects' identically-named ``keymap:default`` doc onto the same
+    slot. The keymap read/write calls are stubbed here (per bound
+    project) so this test proves the *clone logic's* per-project
+    validation and all-or-nothing behavior, not the shared fixture's
+    isolation.
+    """
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+    asyncio.run(lifecycle.create_project(client, slug='source', display_name='Source'))
+    asyncio.run(lifecycle.create_project(client, slug='target', display_name='Target'))
+    asyncio.run(registry.ensure_fresh())
+    source = registry.get('source')
+    target = registry.get('target')
+    assert source is not None
+    assert target is not None
+
+    from src.config.project_context import bind_project, try_current_project
+    from src.services.curation.keymap import KeymapDoc
+
+    source_doc = KeymapDoc(
+        overrides={'cluster.ignore': ['i'], 'review.skip': ['j']},
+        revision=1,
+        updated_at=None,
+        is_default=False,
+    )
+    target_doc = KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
+    saved: dict[str, dict[str, list[str]]] = {}
+
+    async def _fake_get(_client: Any, _index: str) -> KeymapDoc:
+        current = try_current_project()
+        return source_doc if current and current.record.slug == 'source' else target_doc
+
+    async def _fake_save(
+        _client: Any, _index: str, *, overrides: dict[str, list[str]], expected_revision: int
+    ) -> KeymapDoc:
+        current = try_current_project()
+        saved[current.record.slug if current else '?'] = overrides
+        return KeymapDoc(
+            overrides=overrides,
+            revision=expected_revision + 1,
+            updated_at=None,
+            is_default=not overrides,
+        )
+
+    monkeypatch.setattr('src.services.curation.keymap.get_keymap_doc', _fake_get)
+    monkeypatch.setattr('src.services.curation.keymap.save_keymap_doc', _fake_save)
+
+    with bind_project(target):
+        from src.routers.curation import get_class_registry
+
+        reg = get_class_registry()
+        reg.add_class('ice_cream_truck', group='vehicle')
+        loaded = reg.load()
+        for c in loaded.classes:
+            if c.class_name == 'ice_cream_truck':
+                c.hotkey_letter = 'i'
+        reg._atomic_write(loaded)
+
+    conflicts = asyncio.run(
+        lifecycle.clone_settings(client, target_record=target, from_slug='source', axes=['keymap'])
+    )
+
+    # B2: the conflict (combo 'i' is the target's ice_cream_truck hotkey)
+    # makes the whole axis a no-op -- 'review.skip' does NOT copy either,
+    # and the target's keymap is never written at all.
+    assert 'target' not in saved
+    assert conflicts == [
+        {
+            'action_id': 'cluster.ignore',
+            'combo': 'i',
+            'class_id': 0,
+            'class_name': 'ice_cream_truck',
+        }
+    ]
+
+
+def test_clone_keymap_axis_copies_overrides_when_no_conflicts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The clean counterpart to the all-or-nothing test above: with no
+    class conflict, the source's overrides copy to the target verbatim."""
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+    asyncio.run(lifecycle.create_project(client, slug='source', display_name='Source'))
+    asyncio.run(lifecycle.create_project(client, slug='target', display_name='Target'))
+    asyncio.run(registry.ensure_fresh())
+    source = registry.get('source')
+    target = registry.get('target')
+    assert source is not None
+    assert target is not None
+
+    from src.config.project_context import try_current_project
+    from src.services.curation.keymap import KeymapDoc
+
+    source_doc = KeymapDoc(
+        overrides={'cluster.ignore': ['i'], 'review.skip': ['j']},
+        revision=1,
+        updated_at=None,
+        is_default=False,
+    )
+    target_doc = KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
+    saved: dict[str, dict[str, list[str]]] = {}
+
+    async def _fake_get(_client: Any, _index: str) -> KeymapDoc:
+        current = try_current_project()
+        return source_doc if current and current.record.slug == 'source' else target_doc
+
+    async def _fake_save(
+        _client: Any, _index: str, *, overrides: dict[str, list[str]], expected_revision: int
+    ) -> KeymapDoc:
+        current = try_current_project()
+        saved[current.record.slug if current else '?'] = overrides
+        return KeymapDoc(
+            overrides=overrides,
+            revision=expected_revision + 1,
+            updated_at=None,
+            is_default=not overrides,
+        )
+
+    monkeypatch.setattr('src.services.curation.keymap.get_keymap_doc', _fake_get)
+    monkeypatch.setattr('src.services.curation.keymap.save_keymap_doc', _fake_save)
+
+    conflicts = asyncio.run(
+        lifecycle.clone_settings(client, target_record=target, from_slug='source', axes=['keymap'])
+    )
+
+    assert saved['target'] == {'cluster.ignore': ['i'], 'review.skip': ['j']}
+    assert conflicts == []
