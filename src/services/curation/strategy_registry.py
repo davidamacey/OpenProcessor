@@ -488,8 +488,10 @@ def _prompt_pack_strategies(default_id: str | None) -> list[dict[str, Any]]:
     ]
 
 
-_COVERAGE_CACHE: dict[str, int | None] | None = None
-_COVERAGE_CACHE_AT = 0.0
+# Keyed by the bound project's items index: one project's counts must
+# never answer another project's ``/methods`` (projects_plan.md §2.1).
+# Value: (fetched_at monotonic, counts).
+_COVERAGE_CACHE: dict[str, tuple[float, dict[str, int | None]]] = {}
 _COVERAGE_TTL_S = float(os.environ.get('OP_FIELD_COVERAGE_TTL_S', '60'))
 _COVERAGE_TOTAL_KEY = '__total__'
 """Sentinel key the pool-size count is cached under, alongside the
@@ -508,7 +510,7 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
     ``region_score``/``crop_area_norm``, which is exactly where the inert
     sorts live (see this module's Phase 6 note above).
 
-    TTL-cached at module scope (``_COVERAGE_CACHE`` / ``time.monotonic()``
+    TTL-cached at module scope per items index (``_COVERAGE_CACHE`` / ``time.monotonic()``
     freshness check), the same pattern the select router's ``_ORDER_CACHE``
     and ``cluster_outliers.py``'s ``_CACHE`` use -- ``GET /curation/methods``
     must stay an O(1)-per-request endpoint (its own docstring promises it
@@ -528,17 +530,16 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
     single ``_search`` (``size: 0``, ``track_total_hits: true``, one
     ``filter: {exists}`` sub-agg per field) -- same answer, one request.
     """
-    global _COVERAGE_CACHE, _COVERAGE_CACHE_AT  # noqa: PLW0603 - module-level TTL cache, same pattern as select.py
+    from src.config.curation import IndexRole, get_curation_config, index_name
 
+    index = index_name(get_curation_config(), IndexRole.ITEMS)
     now = time.monotonic()
-    cache = _COVERAGE_CACHE if (now - _COVERAGE_CACHE_AT) < _COVERAGE_TTL_S else None
+    entry = _COVERAGE_CACHE.get(index)
+    cache = entry[1] if entry is not None and (now - entry[0]) < _COVERAGE_TTL_S else None
     fresh = cache is not None
     if cache is not None and fields <= (cache.keys() - {_COVERAGE_TOTAL_KEY}):
         return cache
 
-    from src.config.curation import IndexRole, get_curation_config, index_name
-
-    index = index_name(get_curation_config(), IndexRole.ITEMS)
     # Callers ask for different field sets (GET /methods: every sort field;
     # a review tab: its own fallback chain), so a fresh cache is extended
     # rather than replaced -- otherwise they evict each other every call.
@@ -569,15 +570,16 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
         for field in missing:
             counts[field] = None
 
-    _COVERAGE_CACHE = counts
-    if not fresh:
-        _COVERAGE_CACHE_AT = now
+    _COVERAGE_CACHE[index] = (entry[0] if fresh and entry is not None else now, counts)
     return counts
 
 
 def invalidate_field_coverage() -> None:
-    """Drop cached coverage so the next lookup counts live."""
-    _reset_field_coverage_cache()
+    """Drop the bound project's cached coverage so its next lookup counts
+    live."""
+    from src.config.curation import IndexRole, get_curation_config, index_name
+
+    _COVERAGE_CACHE.pop(index_name(get_curation_config(), IndexRole.ITEMS), None)
 
 
 async def field_coverage(opensearch: Any, fields: frozenset[str]) -> dict[str, int | None]:
@@ -589,9 +591,7 @@ async def field_coverage(opensearch: Any, fields: frozenset[str]) -> dict[str, i
 def _reset_field_coverage_cache() -> None:
     """Test-only escape hatch -- the module-level TTL cache otherwise leaks
     across test cases that monkeypatch a fake OpenSearch client per-test."""
-    global _COVERAGE_CACHE, _COVERAGE_CACHE_AT  # noqa: PLW0603
-    _COVERAGE_CACHE = None
-    _COVERAGE_CACHE_AT = 0.0
+    _COVERAGE_CACHE.clear()
 
 
 async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
