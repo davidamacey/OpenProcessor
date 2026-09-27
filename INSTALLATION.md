@@ -1,18 +1,269 @@
 # Installation Guide
 
-Complete guide for setting up OpenProcessor on your system.
+Two ways to install OpenProcessor:
+
+- **The one-line installer** (`setup-openprocessor.sh`): a pinned release into
+  its own directory, no git clone, no image build, no host Python. Use this to
+  run OpenProcessor.
+- **From source** (`git clone` + `scripts/setup.sh`): for development or to
+  build the images yourself. See [Install from source](#install-from-source).
 
 ---
 
-## TL;DR - One Line Setup
+## One-line installer
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setup-openprocessor.sh | bash
+```
+
+What it does, in order:
+
+1. Resolves the release (latest, or `--version vX.Y.Z`), downloads that
+   release's `setup-openprocessor.sh` and `SHA256SUMS`, checks the checksum and
+   runs the verified copy. A truncated download is a syntax error before
+   anything runs.
+2. Downloads the release bundle and checks every file against `SHA256SUMS`.
+3. Checks Docker, Compose, the GPUs and free disk; asks which tiers you want
+   (or takes `--tiers`), and plans GPU placement.
+4. Writes `.env` (mode 600): tiers as `COMPOSE_PROFILES`, ports, image digests
+   from `images.lock`, the GPU plan and the OpenSearch heap. It never changes
+   a value you set yourself.
+5. Pulls the images and checks each one's digest against `images.lock`.
+6. Exports the TensorRT engines inside the containers, starts everything and
+   runs a health check.
+7. Prints a summary: URLs, the OpenSearch heap and shard budget, the security
+   note and the management commands.
+
+State lives in `<dir>/.install/` (`state.json`, `install.log`, mode 600).
+
+### Prerequisites
+
+- Linux with Docker Engine and Docker Compose v2.
+- An NVIDIA GPU with the
+  [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+  The installer never installs packages or changes the Docker daemon config;
+  it tells you what is missing and stops.
+- Disk for the tiers you pick, on both the install dir and Docker's data root
+  (tier sizes: [README](README.md#tiers)), plus 20 GB headroom.
+- For the `segmenter` tier: a HuggingFace token with access to SAM 3 (gated).
+  Pass it with `HF_TOKEN_FILE=<path>` (or `HF_TOKEN`), or paste it at the prompt.
+
+### Verifying the download
+
+See [README: Verify the download yourself](README.md#verify-the-download-yourself).
+`SHA256SUMS`, `images.lock` and `cropwright.lock` are **integrity** checks: they
+catch a truncated or corrupted download and a release whose files disagree
+with each other. They come from the same origin as the files they cover, so
+they do not prove **authenticity**. Signing is follow-up work.
+
+### Installer flags
+
+Every flag also has an environment variable (the flag wins).
+
+| Flag | Env var | Meaning |
+|---|---|---|
+| `--dir PATH` | `OP_INSTALL_DIR` | install directory (default `./openprocessor`) |
+| `--project NAME` | `OP_PROJECT` | compose project name and container prefix (`[a-z0-9][a-z0-9_-]*`, default `openprocessor`) |
+| `--version vX.Y.Z` | `OP_VERSION` | pinned release (default: latest published release) |
+| `--branch REF` | `OP_BRANCH` | testing install from a branch head: not checksum-verified, not reproducible |
+| `--release-dir DIR` | `OP_RELEASE_DIR` | install from release assets built locally by `scripts/release/build_deploy_bundle.sh` (still checksum-verified; needs `--version`) |
+| `--image-tag TAG` | `OP_IMAGE_TAG` | run images by tag (prefix `OP_IMAGE_REPO`) instead of `images.lock` digests; local builds only, never pulled |
+| `--tiers LIST` / `--all` | `OP_TIERS` | comma list of `core,curation,segmenter,vlm,trainer,cropwright`, or all of them |
+| `--gpu-plan K=V,...` | `OP_GPU_PLAN` | override GPU placement, e.g. `triton=1,segmenter=0,vlm=2,trainer=0` |
+| `--profile NAME` | `GPU_PROFILE` | Triton instance profile: `minimal`, `standard` or `full` |
+| `--vlm-remote URL --vlm-model NAME` | `OP_VLM_URL`, `OP_VLM_MODEL` | use a remote OpenAI-compatible VLM instead of the local one |
+| `--vlm-key-file PATH` | `OP_VLM_KEY_FILE` | API key for the remote VLM (stored in `secrets/vlm/`, never in `.env`) |
+| `--vlm-model-id ID` | `OP_VLM_CATALOG_ID` | choose a VLM catalog entry explicitly |
+| `--bind ADDR` | `OP_BIND_ADDRESS` | publish address for the API and backend ports (default `127.0.0.1`); see [Network access](#network-access) |
+| `--local-only` | | keep Cropwright on `127.0.0.1` too |
+| `--port-base N` | `OP_PORT_BASE` | move the whole 46xx port block to `N..N+12` |
+| `--with-monitoring` | `OP_WITH_MONITORING` | add Prometheus, Grafana, Loki and Alloy (default-open dashboards) |
+| `--sample-data` | `OP_SAMPLE_DATA` | fetch the public COCO sample after the install |
+| `--skip-models` | | do not export or load models (run `./openprocessor models install` later) |
+| `--no-start` | | configure and pull only; start nothing |
+| `--unattended` | `OP_UNATTENDED` | never prompt (automatic when there is no terminal) |
+| `--dry-run` | `OP_DRY_RUN` | print every state-changing command and run none |
+| `--force` | | accept a GPU plan the hardware check refused |
+| `--force-existing-dir` | | install into a non-empty directory this installer did not create (its files are backed up first) |
+| `--yes` | | confirm a destructive step (uninstall, rollback, upgrade) without a prompt; `--unattended` implies it. A missing terminal alone is never consent |
+| `--cpu [--control-plane-only]` | `OP_FORCE_CPU` | no GPU. Alone it explains why and exits 4; with `--control-plane-only` it installs OpenSearch, the API and Cropwright with no inference |
+| `--repair` | | re-verify files, re-pull missing images, re-run failed model groups, at the installed version |
+| `--rollback` | | restore the newest backup of a different version (see below) |
+| `--uninstall` | | stop and remove the containers; add `--purge-volumes`, `--purge-data`, `--remove-images` to delete more |
+| `--reset-hf-token` | | ask for a new HuggingFace token |
+
+Consent variables for unattended runs:
+
+| Variable | Allows |
+|---|---|
+| `OP_ALLOW_PUBLIC_BIND=1` | a non-loopback `--bind` |
+| `OP_ALLOW_EXTERNAL_VLM=1` | a `--vlm-remote` URL outside private address space (crops leave the host) |
+| `OP_CONFIRM_PURGE=<project>` | `--purge-volumes` / `--purge-data` |
+| `OP_CONFIRM_PURGE_SECRETS=<project>` | also deleting `secrets/` during a purge |
+
+Other variables: `OP_GH_REPO`, `CW_GH_REPO` (where to install from),
+`OP_IMAGE_NAMESPACE` (Docker Hub namespace, default `davidamacey`),
+`OP_ARTIFACT_BASE_URL` / `OP_RAW_BASE_URL` and the `CW_` equivalents (https
+mirrors), `OP_DOCS_URL`, `OP_HEALTH_TIMEOUT` (cap in seconds on each health
+wait). The header of `setup-openprocessor.sh` lists them all.
+
+### Network access
+
+**Cropwright is reachable on your LAN by default, for homelab or
+small-business use. The API itself stays bound to 127.0.0.1. There is no login
+on Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
+everything on 127.0.0.1.**
+
+- Cropwright's nginx reaches the API over the Docker network, so LAN browsers
+  never need the API port.
+- Do not port-forward any of these ports to the public internet. For access
+  beyond a trusted network, put a reverse proxy with authentication in front.
+- `--bind <ip>` publishes the API and backend ports on that address. A
+  non-loopback address asks you to type `expose` (unattended:
+  `OP_ALLOW_PUBLIC_BIND=1`).
+- A specific `--bind` address (for example `--bind 10.0.0.5`) also narrows
+  Cropwright to that interface. `--bind 0.0.0.0` leaves Cropwright on all
+  interfaces, and `--local-only` always wins.
+- A re-run keeps the Cropwright bind you chose last time.
+
+Details: [SECURITY.md](SECURITY.md).
+
+### OpenSearch heap sizing
+
+The installer sets `OPENSEARCH_HEAP` in `.env` from the host's RAM:
+`clamp(floor(RAM_GiB / 8), 1, 8)` GB. `docker-compose.yml` passes it as
+`-Xms`/`-Xmx`.
+
+| Host RAM | Heap | Soft shard budget (20 per heap GB) |
+|---|---|---|
+| under 16 GiB | 1g | 20 |
+| 16-23 GiB | 2g | 40 |
+| 24-31 GiB | 3g | 60 |
+| 32-39 GiB | 4g | 80 |
+| 40-63 GiB | 5g-7g | 100-140 |
+| 64 GiB and up | 8g (cap) | 160 |
+
+Why 1/8 with a cap of 8 GB: OpenSearch wants at most half of its memory as
+heap (the rest is page cache) and stays well below the ~31 GB
+compressed-pointer limit, and this host also runs Triton, the API and the
+model workers. A heap you set yourself in `.env` is never overwritten, on a
+re-run or by `scripts/setup.sh --force`.
+
+The **soft shard budget** is heap GB x `OP_SHARDS_PER_HEAP_GB` (advanced,
+default 20, commented out in `env.template`). It is not a cap: going past it
+only warns. The installer summary prints both, for example
+`OpenSearch  : heap 4g, soft shard budget 80 (20 shards per heap GB)`. To make
+room for more, raise `OPENSEARCH_HEAP` (about 1 GB per 20 shards) and
+`./openprocessor restart opensearch`.
+
+### Curation quick-config
+
+`env.template` has a "Curation quick-config" block with every key the
+curation tiers need: the ingest detector (`OP_INGEST_PRIMARY_*`), the
+segmenter and VLM endpoints, the feature flags, the GPU keys and the optional
+region profile. The installer writes exactly that block; with `--sample-data`
+it also points ingest at the COCO sample's classes. `./openprocessor sample
+coco` fetches the public, license-filtered COCO sample (200 images; `--full`
+for 800) into `data/samples/`. Details: [docs/CURATION.md](docs/CURATION.md).
+
+### Upgrade, repair, rollback, uninstall
+
+Run these from the install directory.
+
+```bash
+./openprocessor upgrade                   # latest release
+./openprocessor upgrade --version vX.Y.Z  # a specific release
+./setup-openprocessor.sh --repair
+./setup-openprocessor.sh --rollback
+./setup-openprocessor.sh --uninstall [--purge-volumes] [--purge-data] [--remove-images]
+```
+
+- **Upgrade** (or re-running the installer in the same dir): backs up the
+  current release files, `.env` and state to `backups/<UTC timestamp>/`,
+  installs the new release, adds new `.env` keys without touching yours,
+  updates the image pins, re-runs the model groups that need it, restarts and
+  checks health. Changing version asks once (`--yes` to skip the prompt). A
+  re-run with no `--tiers` keeps the installed tiers.
+- **Repair**: the same at the installed version. Re-verifies files,
+  re-pulls missing images, re-runs failed or missing model groups.
+- **Rollback**: restores the **newest backup of a different version** than
+  the one installed, and re-pins its images. Same-version backups (from a
+  re-run or a repair) are skipped, so after upgrading v1 to v2 and re-running
+  v2, rollback lands on v1. With no other version on record it restores the
+  newest backup (a config rollback). The files it replaces are kept in
+  `.install/rollback-undo/`. If the Triton image changed, rebuild engines
+  with `./openprocessor models install`.
+- **Uninstall**: stops and removes the containers of this install only.
+  Volumes, `data/`, models and caches are kept unless you add
+  `--purge-volumes` (the named volumes), `--purge-data` (`models/`,
+  `pytorch_models/`, `cache/`, `data/`; a source root outside the install dir
+  is never touched) or `--remove-images` (only this install's pinned images
+  that nothing else uses). Every purge makes you type the project name
+  (unattended: `OP_CONFIRM_PURGE=<project>`).
+
+All of these act only on a directory this installer created, and only on its
+own compose project; a git checkout or another install's dir is refused.
+
+### Offline installs from a local bundle
+
+`scripts/release/build_deploy_bundle.sh vX.Y.Z [SRC] [OUT]` builds the release
+assets locally; `--release-dir OUT --version vX.Y.Z` installs from them (still
+checksum-verified). For the `cropwright` tier to be offline too, stage
+Cropwright's release files into the bundle:
+
+```bash
+CW_RELEASE_DIR=/path/to/cropwright-release \
+  scripts/release/build_deploy_bundle.sh vX.Y.Z . dist/release-vX.Y.Z
+```
+
+`CW_RELEASE_DIR` holds Cropwright's `SHA256SUMS`, `docker-compose.yml` and
+`.env.example` for the tag in `cropwright.lock`; the script checks them
+against the lock and copies them to `OUT/cropwright/<tag>/`. Without them the
+installer says so and downloads Cropwright from its GitHub release (verified
+against `cropwright.lock` either way). Images still come from a registry
+unless they are already present locally (use `--image-tag` for local builds).
+
+### Troubleshooting
+
+Exit codes:
+
+| Code | Meaning | What to do |
+|---|---|---|
+| 1 | general failure | read the last `[ERROR]` line and `.install/install.log` |
+| 2 | usage | check the flags (`--help`); a port conflict you declined also exits 2: use `--port-base N` |
+| 3 | project or container-name collision | another compose project already uses the name, or the dir is a checkout / another install: pass `--project NAME` or `--dir` |
+| 4 | no usable GPU, or the GPU plan was refused | fix the driver / Container Toolkit, adjust `--gpu-plan`, or `--force` |
+| 5 | Docker unreachable | start Docker; add your user to the `docker` group |
+| 6 | HuggingFace token missing or rejected | for `segmenter`, accept the SAM 3 license on HuggingFace, then pass the token (`HF_TOKEN_FILE`) or `--reset-hf-token` |
+| 7 | verification failed | a checksum, digest or `images.lock` check failed (including a lock line whose image repo does not match its key). Re-download; if it persists the release itself is inconsistent: report it |
+| 8 | health check or model setup failed | `./openprocessor logs <service>`, fix, then `./setup-openprocessor.sh --repair` |
+| 9 | consent not given | re-run with `--yes`, or set the matching consent variable |
+
+Common cases:
+
+- **"a container cannot see GPU N"**: the NVIDIA Container Toolkit is missing or
+  not configured for Docker. On WSL2 this usually means GPU passthrough is off.
+  The installer never falls back to CPU silently.
+- **Port in use**: interactively the installer offers the next free port;
+  unattended it takes it and warns. `--port-base N` moves the whole block.
+- **No GPU**: there is no CPU inference path (every model except the text
+  encoder is a TensorRT engine). `--cpu --control-plane-only` gives you
+  OpenSearch, the API and Cropwright for browsing an existing index or using a
+  remote VLM; the API reports `degraded`.
+- **Failed model groups**: the summary lists them with
+  `./openprocessor models install --only <group>` to retry each one.
+- **Disk**: the installer warns if it cannot check free space; the Triton
+  image alone is about 30 GB.
+
+---
+
+## Install from source
+
+For development, or to build the images yourself.
 
 ```bash
 git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor && ./scripts/setup.sh
 ```
-
----
-
-## Quick Start (Recommended)
 
 ### Interactive Setup
 
@@ -43,7 +294,8 @@ The setup script will:
 3. Pull pre-built Docker images from Docker Hub (~32GB)
 4. Download required models (~500MB, ~16 seconds)
 5. Export models to TensorRT (~30-60 minutes, **one-time only**)
-6. Generate configuration files
+6. Generate configuration files (the OpenSearch heap is sized from host RAM,
+   as for the installer; see [OpenSearch heap sizing](#opensearch-heap-sizing))
 7. Start all services
 8. Run smoke tests
 

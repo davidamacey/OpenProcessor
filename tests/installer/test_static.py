@@ -6,6 +6,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SHIMS = sorted(
@@ -212,3 +214,44 @@ def test_committed_images_lock_has_a_digest_on_every_line_and_no_latest() -> Non
             continue
         assert ':latest' not in line, line
         assert '@sha256:' in line, line
+
+
+_LAN_SENTENCES = (
+    'Cropwright is reachable on your LAN by default, for homelab or\nsmall-business use.',
+    'The API itself stays bound to 127.0.0.1.',
+    'There is no login\non Cropwright',
+    'Pass `--local-only` to opt out and keep\neverything on 127.0.0.1.',
+)
+
+
+def _flat(text: str) -> str:
+    return ' '.join(text.split())
+
+
+@pytest.mark.parametrize('doc', ['README.md', 'INSTALLATION.md', 'SECURITY.md'])
+def test_docs_carry_the_lan_decision_wording(doc: str) -> None:
+    text = _flat((REPO_ROOT / doc).read_text())
+    for sentence in _LAN_SENTENCES:
+        assert _flat(sentence) in text, f'{doc} lacks: {sentence!r}'
+    assert 'port-forward' in text
+    assert 'reverse proxy with authentication' in text
+
+
+@pytest.mark.parametrize('doc', ['README.md', 'INSTALLATION.md', 'SECURITY.md'])
+def test_docs_say_checksums_are_integrity_not_authenticity(doc: str) -> None:
+    text = _flat((REPO_ROOT / doc).read_text())
+    assert 'integrity' in text
+    assert 'authenticity' in text
+
+
+def test_installation_documents_every_installer_flag() -> None:
+    usage = subprocess.run(
+        ['bash', str(REPO_ROOT / 'setup-openprocessor.sh'), '--help'],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    flags = set(re.findall(r'(?<![\w-])(--[a-z][a-z-]+)', usage)) - {'--help'}
+    doc = (REPO_ROOT / 'INSTALLATION.md').read_text()
+    missing = sorted(f for f in flags if f'`{f}' not in doc)
+    assert not missing, missing

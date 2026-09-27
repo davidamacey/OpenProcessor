@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Installer docs.** README Quick Start is now the one-line installer
+  (tiers, `--unattended`, verifying `SHA256SUMS`, the LAN/Cropwright
+  network decision), with "Install from source" below it. `INSTALLATION.md`
+  documents every installer flag and consent variable, upgrade / repair /
+  rollback / uninstall, offline `--release-dir` bundles, OpenSearch heap
+  sizing and troubleshooting by exit code. `SECURITY.md` states that release
+  checksums prove integrity, not authenticity. Static tests pin the network
+  wording and that every `--help` flag is documented.
+
 ### Changed
 - **OpenSearch heap is sized from host RAM in one place.** New
   `scripts/lib/opensearch_heap.sh` (`opensearch_heap_for_host`: RAM/8,
