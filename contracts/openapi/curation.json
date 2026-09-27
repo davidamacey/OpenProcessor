@@ -5938,9 +5938,15 @@
             "type": "integer"
           },
           "validated": {
-            "default": 0,
-            "title": "Validated",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validated"
           }
         },
         "title": "ProjectCounts",

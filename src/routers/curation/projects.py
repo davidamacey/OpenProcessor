@@ -23,7 +23,7 @@ from src.routers.curation._project_models import (
     resources_wire,
     summarize,
 )
-from src.services.projects.guard import make_curation_opensearch
+from src.services.projects.guard import bind_registry_admin, make_curation_opensearch
 from src.services.projects.registry import get_project_registry
 
 
@@ -34,9 +34,10 @@ global_router = APIRouter(tags=['Projects'])
 
 async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, ProjectCounts]:
     """One ``_cat/indices`` call covering every project's images/items
-    index (§4). ``validated`` is not computed in this pass -- it needs a
-    per-project term query on the items index and is left at 0; a
-    documented gap, not silently faked as accurate."""
+    index (§4), the one cross-project read the guard allows, inside
+    :func:`bind_registry_admin`. ``validated`` is not computed in this
+    pass (it needs a per-project term query on the items index) and is
+    served as ``null``."""
     index_names: set[str] = set()
     for record in snapshot.values():
         index_names.add(record.resources.indexes[IndexRole.IMAGES])
@@ -45,10 +46,14 @@ async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, Proj
         return {}
     pattern = ','.join(sorted(index_names))
     try:
-        rows = await client.transport.perform_request(
-            'GET', f'/_cat/indices/{pattern}', params={'h': 'index,docs.count', 'format': 'json'}
-        )
-    except Exception:
+        with bind_registry_admin():
+            rows = await client.transport.perform_request(
+                'GET',
+                f'/_cat/indices/{pattern}',
+                params={'h': 'index,docs.count', 'format': 'json'},
+            )
+    except Exception as exc:
+        logger.warning('project_counts_unavailable', error=str(exc))
         rows = []
     doc_counts = {
         row['index']: int(row.get('docs.count') or 0) for row in rows if isinstance(row, dict)
@@ -60,7 +65,6 @@ async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, Proj
         result[slug] = ProjectCounts(
             images=doc_counts.get(images_idx, 0),
             items=doc_counts.get(items_idx, 0),
-            validated=0,
         )
     return result
 
@@ -79,8 +83,13 @@ async def list_projects(
         if list_membership(record.status, include_archived=include_archived)
     }
 
-    client = await make_curation_opensearch()
-    counts = await _fetch_counts(client, listed)
+    client: Any = None
+    counts: dict[str, ProjectCounts] = {}
+    try:
+        client = await make_curation_opensearch()
+        counts = await _fetch_counts(client, listed)
+    except Exception as exc:
+        logger.warning('project_counts_unavailable', error=str(exc))
     summaries = [
         summarize(record, counts.get(slug, ProjectCounts()))
         for slug, record in sorted(listed.items())
@@ -90,8 +99,8 @@ async def list_projects(
     try:
         from src.services.projects.capacity import capacity_status
 
-        capacity_result = await capacity_status(client)
-        capacity = capacity_wire(capacity_result)
+        if client is not None:
+            capacity = capacity_wire(await capacity_status(client))
     except Exception:
         capacity = None
 

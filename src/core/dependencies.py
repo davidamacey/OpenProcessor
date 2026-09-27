@@ -148,13 +148,20 @@ async def bootstrap_opensearch_indexes() -> 'asyncio.Task[None] | None':
     try:
         from src.clients.curation_opensearch import create_curation_indexes
         from src.routers.curation._common import warm_knn_indexes
+        from src.services.projects.bootstrap import for_each_project
 
         os_client = await OpenSearchClientFactory.get_client()
         await os_client.create_all_indexes(force_recreate=False)
         logger.info('core_visual_search_indexes_bootstrapped')
-        await create_curation_indexes(os_client.client, force_recreate=False)
-        logger.info('curation_indexes_bootstrapped')
-        return asyncio.create_task(warm_knn_indexes(os_client.client))
+        for slug in for_each_project():
+            await create_curation_indexes(os_client.client, force_recreate=False)
+            logger.info(f'curation_indexes_bootstrapped project={slug}')
+
+        async def _warm_every_project() -> None:
+            for _slug in for_each_project():
+                await warm_knn_indexes(os_client.client)
+
+        return asyncio.create_task(_warm_every_project())
     except Exception as exc:
         logger.warning(f'curation_indexes_bootstrap_skipped: {exc}')
         return None

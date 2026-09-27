@@ -2,13 +2,13 @@
 
 This is the *only* "migration" P1 performs, and it touches no data
 index -- it just upserts the registry doc so ``default`` shows up in
-``GET /projects`` and ``bind_default_project`` has a record to bind.
+``GET /projects`` with its stored status.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.config.curation import base_curation_config
 from src.config.projects import DEFAULT_SLUG, ProjectRecord, resources_for_default
@@ -16,22 +16,28 @@ from src.core.logging import get_logger
 from src.services.projects.registry import REVISION_DOC_ID, projects_index, record_to_doc
 
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+
 logger = get_logger(__name__)
 
 
-def bind_default_for_lifespan() -> None:
-    """Bind ``default`` for the API lifespan task.
+def for_each_project(statuses: tuple[str, ...] = ('active',)) -> Iterator[str]:
+    """Bind each project in ``statuses`` in turn (sorted by slug) and
+    yield its slug; the binding holds for the body of the caller's loop.
 
-    Startup work and the background loops the lifespan starts (index
-    bootstrap, kNN warmup, orphaned-job reconcile, GPU arbiter) act on the
-    ``default`` project; every ``create_task`` in the lifespan inherits
-    this binding. Requests never see it: each runs in its own task and
-    binds through its route dependency. Iterating every project in these
-    loops is P2 (projects_plan.md §5)."""
-    from src.config.project_context import set_bound_project
-    from src.services.projects.registry import default_project_record
+    For startup steps that act on project data (index bootstrap, kNN
+    warmup, orphaned-job reconcile). The lifespan itself stays unbound, so
+    a global loop never silently acts on ``default``."""
+    from src.config.project_context import bind_project
+    from src.services.projects.registry import get_project_registry
 
-    set_bound_project(default_project_record())
+    for slug, record in sorted(get_project_registry().snapshot().items()):
+        if record.status not in statuses:
+            continue
+        with bind_project(record):
+            yield slug
 
 
 async def bootstrap_default_project(client: Any) -> ProjectRecord:
@@ -39,41 +45,103 @@ async def bootstrap_default_project(client: Any) -> ProjectRecord:
     return the existing one unchanged. Never overwrites an existing
     record (a later env change must not remap a live project), and never
     issues a reindex/update_by_query against any data index."""
+    from src.services.projects.guard import bind_registry_admin
+
     doc_id = f'project:{DEFAULT_SLUG}'
-    try:
-        existing = await client.get(index=projects_index(), id=doc_id)
-        if existing.get('found', True):
-            from src.services.projects.registry import doc_to_record
+    with bind_registry_admin():
+        await ensure_projects_index(client)
+        try:
+            existing = await client.get(index=projects_index(), id=doc_id)
+            if existing.get('found', True):
+                from src.services.projects.registry import doc_to_record
 
-            return doc_to_record(existing['_source'])
-    except Exception:  # nosec B110 - the client raises on a missing doc; that's first-boot, not an error
-        logger.debug('no existing default project doc; bootstrapping one')
+                return doc_to_record(existing['_source'])
+        except Exception:  # nosec B110 - the client raises on a missing doc; that's first-boot, not an error
+            logger.debug('no existing default project doc; bootstrapping one')
 
-    now = datetime.now(UTC).isoformat()
-    record = ProjectRecord(
-        slug=DEFAULT_SLUG,
-        display_name='Default',
-        description='The original, unscoped dataset workspace.',
-        status='active',
-        revision=1,
-        created_at=now,
-        updated_at=now,
-        origin=None,
-        resources=resources_for_default(base_curation_config()),
-    )
-    await client.index(index=projects_index(), id=doc_id, body=record_to_doc(record))
-    await _bump_revision(client)
+        now = datetime.now(UTC).isoformat()
+        record = ProjectRecord(
+            slug=DEFAULT_SLUG,
+            display_name='Default',
+            description='The original, unscoped dataset workspace.',
+            status='active',
+            revision=1,
+            created_at=now,
+            updated_at=now,
+            origin=None,
+            resources=resources_for_default(base_curation_config()),
+        )
+        await client.index(index=projects_index(), id=doc_id, body=record_to_doc(record))
+        await bump_revision(client)
     logger.info('bootstrapped default project record')
     return record
 
 
-async def _bump_revision(client: Any) -> None:
-    try:
-        current = await client.get(index=projects_index(), id=REVISION_DOC_ID)
-        revision = int((current.get('_source') or {}).get('revision', 0)) + 1
-    except Exception:
-        revision = 1
-    await client.index(index=projects_index(), id=REVISION_DOC_ID, body={'revision': revision})
+# ``dynamic: false``: the registry stores whole records, but only these
+# fields are ever queried; nothing a record carries can change the mapping.
+PROJECTS_INDEX_BODY: dict[str, Any] = {
+    'settings': {'index': {'number_of_shards': 1, 'number_of_replicas': 0}},
+    'mappings': {
+        'dynamic': False,
+        'properties': {
+            'slug': {'type': 'keyword'},
+            'status': {'type': 'keyword'},
+            'revision': {'type': 'long'},
+            'created_at': {'type': 'date'},
+            'updated_at': {'type': 'date'},
+        },
+    },
+}
+
+
+async def ensure_projects_index(client: Any) -> None:
+    """Create ``op_projects`` with its explicit mapping if it does not
+    exist, so the first registry write never auto-creates it with a
+    dynamic mapping. Call inside :func:`bind_registry_admin`."""
+    if await client.indices.exists(index=projects_index()):
+        return
+    await client.indices.create(index=projects_index(), body=PROJECTS_INDEX_BODY)
+
+
+_BUMP_RETRIES = 5
+
+
+async def bump_revision(client: Any) -> int:
+    """Increment the ``meta:projects_revision`` counter with optimistic
+    concurrency (``if_seq_no``/``if_primary_term``; ``op_type=create`` on
+    the first write), retrying on a conflict. Returns the new revision.
+    Call inside :func:`bind_registry_admin`."""
+    for _attempt in range(_BUMP_RETRIES):
+        try:
+            current = await client.get(index=projects_index(), id=REVISION_DOC_ID)
+        except Exception as exc:
+            if getattr(exc, 'status_code', None) != 404 and 'NotFound' not in type(exc).__name__:
+                raise
+            current = {'found': False}
+        try:
+            if current.get('found', True) and '_source' in current:
+                revision = int(current['_source'].get('revision', 0)) + 1
+                await client.index(
+                    index=projects_index(),
+                    id=REVISION_DOC_ID,
+                    body={'revision': revision},
+                    if_seq_no=current.get('_seq_no'),
+                    if_primary_term=current.get('_primary_term'),
+                )
+            else:
+                revision = 1
+                await client.index(
+                    index=projects_index(),
+                    id=REVISION_DOC_ID,
+                    body={'revision': revision},
+                    op_type='create',
+                )
+        except Exception as exc:
+            if getattr(exc, 'status_code', None) == 409 or 'Conflict' in type(exc).__name__:
+                continue
+            raise
+        return revision
+    raise RuntimeError('project registry revision kept conflicting; giving up')
 
 
 async def startup_bootstrap_project_registry() -> Any:

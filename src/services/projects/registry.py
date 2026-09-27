@@ -138,6 +138,8 @@ async def _read_revision(client: Any) -> int:
     return int((counter_doc.get('_source') or {}).get('revision', 0))
 
 
+_REFRESH_PAGE_SIZE = 500
+
 # After a failed refresh, request-path callers skip OpenSearch for this
 # long instead of paying a connection error on every bind.
 _REFRESH_FAILURE_BACKOFF_SECONDS = 5.0
@@ -160,6 +162,12 @@ class ProjectRegistry:
         self._revision: int = -1
         self._lock = asyncio.Lock()
         self._failed_at: float | None = None
+        self._refreshed = False
+
+    @property
+    def refreshed(self) -> bool:
+        """At least one :meth:`ensure_fresh` read the registry successfully."""
+        return self._refreshed
 
     def snapshot(self) -> Mapping[str, ProjectRecord]:
         """The last-refreshed view. Cheap, sync, no I/O -- callers that
@@ -192,22 +200,38 @@ class ProjectRegistry:
             current_revision = await _read_revision(client)
             if current_revision == self._revision:
                 self._failed_at = None
+                self._refreshed = True
                 return
             async with self._lock:
                 if current_revision != self._revision:
                     await self._refresh(client, current_revision)
             self._failed_at = None
+            self._refreshed = True
         except Exception as exc:
             self._failed_at = time.monotonic()
             logger.warning('project_registry_refresh_failed', error=str(exc))
 
     async def _refresh(self, client: Any, current_revision: int) -> None:
-        resp = await client.search(
-            index=projects_index(),
-            body={'query': {'prefix': {'_id': 'project:'}}, 'size': 1000},
-        )
-        hits = resp.get('hits', {}).get('hits', [])
-        self._by_slug = {hit['_source']['slug']: doc_to_record(hit['_source']) for hit in hits}
+        """Read every project doc, a page at a time (``search_after`` on
+        the ``slug`` keyword), so the registry has no size cap."""
+        by_slug: dict[str, ProjectRecord] = {}
+        after: list[Any] | None = None
+        while True:
+            body: dict[str, Any] = {
+                'query': {'prefix': {'_id': 'project:'}},
+                'size': _REFRESH_PAGE_SIZE,
+                'sort': [{'slug': 'asc'}],
+            }
+            if after is not None:
+                body['search_after'] = after
+            resp = await client.search(index=projects_index(), body=body)
+            hits = resp.get('hits', {}).get('hits', [])
+            for hit in hits:
+                by_slug[hit['_source']['slug']] = doc_to_record(hit['_source'])
+            if len(hits) < _REFRESH_PAGE_SIZE:
+                break
+            after = hits[-1].get('sort') or [hits[-1]['_source']['slug']]
+        self._by_slug = by_slug
         self._revision = current_revision
 
     async def poll_loop(self, *, interval_seconds: float = 1.0) -> None:
