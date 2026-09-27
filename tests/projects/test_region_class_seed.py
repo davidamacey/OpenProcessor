@@ -104,3 +104,19 @@ def test_label_batch_with_only_the_region_class_is_no_classes(
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['a']), object()))
     assert exc_info.value.status_code == 409
+
+
+def test_worker_class_catalog_leaves_out_the_region_class(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import src.clients.curation_opensearch as client_mod
+    from scripts.curation.worker.state import bound_class_catalog
+
+    reg = _seed(tmp_path, monkeypatch, DetectionProfile(name='p', region_class_name='wheel'))
+    reg.add_class('wheel')
+    car_id = reg.add_class('car')
+    monkeypatch.setattr(client_mod, 'get_class_registry', lambda: reg)
+
+    names, name_to_id = bound_class_catalog()
+    assert names == ['car']
+    assert name_to_id == {'car': car_id}

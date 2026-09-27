@@ -216,7 +216,10 @@ def bound_class_catalog() -> tuple[list[str], dict[str, int]]:
     except Exception as exc:
         logger.warning('class_registry_load_failed', error=str(exc))
         return [], {}
-    active = [c for c in registry.classes if not c.deprecated]
+    from src.services.curation.region_class import item_classes
+
+    # The region class only ever labels sub-boxes, never a whole item.
+    active = item_classes(registry.classes)
     return [c.class_name for c in active], {c.class_name: int(c.class_id) for c in active}
 
 
