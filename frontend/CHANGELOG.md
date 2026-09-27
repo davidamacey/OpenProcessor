@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     archived (not writable) project shows a read-only banner.
   - On a switch, every per-project cache resets (undo stack, class
     registry, vocabularies, region profile with no reload notice,
-    settings, keymap, availability probes, source-overlay cache), and a
+    settings, keymap, source-overlay cache), and a
     scoped response that lands after the switch is dropped.
   - `/projects`: the served list with a Show-archived toggle, the served
     shard capacity, and create / edit / archive / unarchive / copy
@@ -472,6 +472,56 @@ compose pull && docker compose up -d` — no `git clone` needed.
 - **Private export tool** `scripts/oss-export/` (`export.sh`,
   `leak-scan.sh`, `exclude.txt`, `leak-patterns.txt`, `overlay/`)
   replaces `scripts/debrand-export.sh`, which is deleted.
+
+### Removed
+
+- **Every client-side fallback for an older backend (#85).** Owner
+  decision: a fresh build with no users targets only the current
+  OpenProcessor wire (the vendored OpenAPI). Plan and evidence:
+  `docs/design/no-backcompat-removal-plan-2026-09-26.md`.
+  - `FALLBACK_METHODS`: `getMethods()` now rejects like every other read
+    and `strategiesStore` starts from (and on a failed load keeps)
+    `EMPTY_METHODS`, so nothing is advertised that the server didn't serve.
+  - The `/settings` "backend predates shared defaults" 404 state and the
+    Curation scores card's absent-on-404 path; a failed read shows its
+    error with a retry.
+  - The bake-off and ingest availability probes: both routers are
+    always mounted, so the nav links and pages always render.
+  - `/ingest`: the interim upload limits used when `/ingest/config`
+    404ed, the null-unknown `persists_bytes` banner and its
+    `PUBLIC_CROPWRIGHT_INGEST_UPLOAD` override, and the `image_path`
+    fallback for upload results without `source_identifier`. The page
+    shows a loading line until the served config loads.
+  - `/train`: the read-only augmentation-preset fallback (and hardcoded
+    `balanced_default`) when `/train/augmentation_presets` 404s, and the
+    pre-cutover val/test label guess for an `eval` without `split`
+    (`evalSplitLabel` labels both from the served split).
+  - Classes: the slot-registry fallback in `isSlotBoundClass` for a class
+    without `kind`, `getClasses`' legacy `id`/`name`/`count` aliases and
+    zeroed-thresholds default, and `/export`'s validated-minus-holdout and
+    local `deficient` fallbacks.
+  - `/models`: the `kind !== 'triton'` rule for an entry without
+    `unloadable`.
+  - Region profile: the `text_reader` heuristic when `reads_text` is
+    absent, and the store's per-field defaults for a profile missing
+    fields.
+  - `/review`: the second `/review/tabs` fetch for `empty_state` and the
+    per-field guards on each tab entry; one `getReviewTabs()` reads the
+    whole served response.
+  - Smaller wire fallbacks: `DatasetStats`' `by_human` region alias, the
+    `/clusters/[id]` header's registry lookup for a cluster without
+    `dominant_class_name` (kept only for a failed card load), and the
+    semantic-search `similarity_score`/`score` keys.
+  - Types now mark as required every field the current contract always
+    serves (class `kind`/`trainable`/`trainable_gap`/`adequacy`,
+    `/stats/classes` rows, holdout `deficient`/`min_test_per_class`,
+    region profile `reads_text`/`text_hint_enabled`, health
+    `region_profile`/`project`, review-tab `filters`/`filter_defaults`/
+    `description`, `eval.split`, promote cold-start flag, freeze
+    `selection`/`percent`/`min_per_class`, model `unloadable`/`optional`,
+    dataset-stats region/unlabeled counters, cluster purity fields).
+    Tests that exercised only a removed fallback are deleted; unit and e2e
+    fixtures now serve the current wire shape.
 
 ### Fixed
 
