@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **P3 finish pass, final merge.** Merged `cutover/projects-workers`
+  (through `fix(projects): refresh detection-worker liveness on a
+  timer`) into `cutover/projects-lifecycle`: the detection-worker
+  fairness scan now re-reads its liveness file on a timer instead of
+  once at process start, plus a per-project worker-runtime regression
+  test. No conflicts; `cutover/projects-foundation` had not moved past
+  what was already merged. Full suite (4287 passed, 5 skipped),
+  pre-commit, and contract generation all verified green post-merge.
 - **P3F finish pass (projects lifecycle).** `delete`/`archive`'s busy
   check now runs through `src.services.projects.busy.running_jobs`
   (§5.4's real per-project job inventory) instead of a bespoke file
