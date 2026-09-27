@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Docs site: one-line installer.** New `getting-started/installer` page
+  (tiers, `--unattended`, verifying `SHA256SUMS` with integrity-not-
+  authenticity wording, the Cropwright LAN default and `--local-only`,
+  OpenSearch heap sizing, upgrade / rollback / uninstall, exit codes).
+  `quick-start` now leads with the installer, with install-from-source below;
+  `deployment/security` covers LAN access.
 - **Installer docs.** README Quick Start is now the one-line installer
   (tiers, `--unattended`, verifying `SHA256SUMS`, the LAN/Cropwright
   network decision), with "Install from source" below it. `INSTALLATION.md`

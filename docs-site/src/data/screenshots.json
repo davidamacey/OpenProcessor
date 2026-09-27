@@ -1,0 +1,27 @@
+[
+  {
+    "name": "clusters-1600.png",
+    "alt": "Cluster cards served by GET /curation/clusters (dominant class, cohesion, size), captured from Cropwright, a frontend for this backend",
+    "caption": "Clusters: cards served by GET /curation/clusters (captured from Cropwright, a frontend for this backend)"
+  },
+  {
+    "name": "review-1600.png",
+    "alt": "Active-learning review queue served by GET /curation/review/{tab}, captured from Cropwright, a frontend for this backend",
+    "caption": "Review queue: GET /curation/review/{tab} with VLM, detector and score fields (captured from Cropwright, a frontend for this backend)"
+  },
+  {
+    "name": "review-regions-1600.png",
+    "alt": "Region review showing a detected sub-region, its detector chain and text reading, captured from Cropwright, a frontend for this backend",
+    "caption": "Region review: box, detector chain and text reading from the region cascade (captured from Cropwright, a frontend for this backend)"
+  },
+  {
+    "name": "train-1600.png",
+    "alt": "Training setup driven by /curation/train/* (dataset export, model size, profile, GPU, preflight), captured from Cropwright, a frontend for this backend",
+    "caption": "Training: /curation/train/* preflight and run setup (captured from Cropwright, a frontend for this backend)"
+  },
+  {
+    "name": "bakeoff-1600.png",
+    "alt": "Model comparison setup driven by /curation/bakeoff/* (eval datasets and trained runs), captured from Cropwright, a frontend for this backend",
+    "caption": "Bake-off: /curation/bakeoff/* eval datasets and trained runs (captured from Cropwright, a frontend for this backend)"
+  }
+]

@@ -1,0 +1,311 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Backend Module Map",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "core",
+        "label": "Core API",
+        "focus": [
+          "main",
+          "core_routers",
+          "core_services",
+          "clients"
+        ],
+        "note": "Core routers are thin adapters over the inference, search and face services."
+      },
+      {
+        "id": "curation",
+        "label": "Curation",
+        "focus": [
+          "main",
+          "curation_routers",
+          "curation_services",
+          "training",
+          "config"
+        ],
+        "note": "Curation routers sit over FastAPI-free services, configured by four dataclasses."
+      },
+      {
+        "id": "workers",
+        "label": "Workers",
+        "focus": [
+          "workers",
+          "detection",
+          "labeling",
+          "curation_services"
+        ],
+        "note": "Workers import the same services the API uses, outside the API process."
+      }
+    ],
+    "legend": {
+      "entries": {
+        "frontend": {
+          "label": "HTTP layer"
+        },
+        "backend": {
+          "label": "Services"
+        },
+        "database": {
+          "label": "Clients"
+        },
+        "security": {
+          "label": "Config"
+        },
+        "external": {
+          "label": "Workers"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "main",
+      "type": "frontend",
+      "label": "src/main.py",
+      "sublabel": "FastAPI app + lifespan",
+      "pos": [
+        40,
+        280
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "core_routers",
+      "type": "frontend",
+      "label": "Core routers",
+      "sublabel": "src/routers/*.py (+ /v1)",
+      "pos": [
+        290,
+        140
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "curation_routers",
+      "type": "frontend",
+      "label": "Curation routers",
+      "sublabel": "src/routers/curation/",
+      "pos": [
+        290,
+        420
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "core_services",
+      "type": "backend",
+      "label": "Core services",
+      "sublabel": "inference / search / faces",
+      "pos": [
+        560,
+        60
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "curation_services",
+      "type": "backend",
+      "label": "Curation services",
+      "sublabel": "src/services/curation/",
+      "pos": [
+        560,
+        280
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "training",
+      "type": "backend",
+      "label": "Training",
+      "sublabel": "jobs / arbiter / promote",
+      "pos": [
+        560,
+        500
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "detection",
+      "type": "backend",
+      "label": "Detection",
+      "sublabel": "cascade + profiles",
+      "pos": [
+        830,
+        380
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "labeling",
+      "type": "backend",
+      "label": "Labeling",
+      "sublabel": "vlm_client / labeler",
+      "pos": [
+        830,
+        560
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "clients",
+      "type": "database",
+      "label": "Clients",
+      "sublabel": "Triton pool / OpenSearch / OCC",
+      "pos": [
+        830,
+        160
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "config",
+      "type": "security",
+      "label": "src/config/",
+      "sublabel": "4 dataclasses, from_env()",
+      "pos": [
+        290,
+        620
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "workers",
+      "type": "external",
+      "label": "Workers",
+      "sublabel": "scripts/curation/",
+      "pos": [
+        1090,
+        470
+      ],
+      "size": [
+        160,
+        64
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "main-core",
+      "from": "main",
+      "to": "core_routers",
+      "label": "mount"
+    },
+    {
+      "id": "main-curation",
+      "from": "main",
+      "to": "curation_routers",
+      "label": "mount /curation"
+    },
+    {
+      "id": "core-routers-services",
+      "from": "core_routers",
+      "to": "core_services"
+    },
+    {
+      "id": "curation-routers-services",
+      "from": "curation_routers",
+      "to": "curation_services"
+    },
+    {
+      "id": "curation-routers-training",
+      "from": "curation_routers",
+      "to": "training",
+      "label": "/train/*"
+    },
+    {
+      "id": "core-services-clients",
+      "from": "core_services",
+      "to": "clients"
+    },
+    {
+      "id": "curation-services-clients",
+      "from": "curation_services",
+      "to": "clients"
+    },
+    {
+      "id": "curation-services-detection",
+      "from": "curation_services",
+      "to": "detection",
+      "label": "ingest"
+    },
+    {
+      "id": "config-curation",
+      "from": "config",
+      "to": "curation_routers",
+      "label": "prefix + indexes",
+      "variant": "dashed"
+    },
+    {
+      "id": "workers-detection",
+      "from": "workers",
+      "to": "detection",
+      "label": "import"
+    },
+    {
+      "id": "workers-labeling",
+      "from": "workers",
+      "to": "labeling",
+      "label": "import"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Services before routers",
+      "items": [
+        "src/services/ has no FastAPI dependency and is tested on its own",
+        "Routers are thin HTTP adapters"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Config, not forks",
+      "items": [
+        "CurationConfig, RegionFields, DetectionProfile and RegionStatus hold everything domain-specific",
+        "OP_* variables are read at import time"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "One wire vocabulary",
+      "items": [
+        "wire.py turns storage fields into region_*, vlm_*, classifier_* names",
+        "OCC helpers keep human labels safe from concurrent writers"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "repo": "https://github.com/davidamacey/OpenProcessor",
+  "note": "Hand-maintained, not derived from an issue tracker. 'Shipped' means it is on main today; 'Planned' items are design work that has not landed and may change after measurement. Update this file when scope actually changes; never describe work that isn't planned.",
+  "releases": [
+    {
+      "version": "v0.3.0",
+      "headline": "Core inference API plus an experimental curation backend",
+      "stage": "shipped",
+      "summary": "The Triton-backed core API (detection, faces, embeddings, OCR, search, ingest, analyze) and the opt-in /curation active-learning subsystem with its reference workers, trainer, evaluator, segmenter and VLM compose profiles.",
+      "items": [
+        "YOLO11 (end2end, GPU NMS) and YOLO26 (NMS-free) served side by side; per-request model selection and runtime load/unload",
+        "SCRFD + ArcFace faces, MobileCLIP embeddings, PP-OCRv5 OCR pipeline, OpenSearch k-NN search",
+        "/curation: 145 method routes in the generated OpenAPI contract, covering ingest, clustering, review queues, VLM labeling, region cascade, export, training, bake-off and promote",
+        "Opt-in compose profiles: curation, segmenter, vlm, training, monitoring, benchmark",
+        "Generated OpenAPI contract for /curation under contracts/, checked for drift in pre-commit",
+        "Public, license-filtered sample data (make sample-coco, make sample-plates); nothing proprietary bundled"
+      ]
+    },
+    {
+      "version": "Next",
+      "headline": "Triton throughput: keep images on the GPU",
+      "stage": "next",
+      "summary": "A measured, wave-by-wave optimization plan for the inference and ingest pipeline. The goal is to decode each image once on the GPU and keep it resident across the models that need it, with every change behind a flag, a parity gate against today's outputs, and a p50/p99 benchmark gate. None of this has shipped.",
+      "items": [
+        "CPU-side fixes first: decode once, stop blocking the event loop, shorter Triton queue delays",
+        "Smaller model outputs (end2end secondary detector, in-graph OCR argmax) and a GPU-resident OCR BLS",
+        "GPU JPEG decode (DALI or nvJPEG, chosen by bake-off) and static Triton ensembles for /detect and /embed",
+        "A GPU-resident curation ingest pipeline (BLS) that cuts crops and embeddings from the full-resolution frame",
+        "Faces from original resolution via a face_pipeline BLS",
+        "The SAM 3 segmenter served from Triton as TensorRT engines instead of a PyTorch process",
+        "A final tuning pass over instances, batch sizes, memory pools and CUDA graphs"
+      ]
+    },
+    {
+      "version": "Later",
+      "headline": "Known gaps in the curation subsystem",
+      "stage": "later",
+      "summary": "Gaps stated in docs/CURATION.md and docs/ARCHITECTURE.md that are expected follow-ups once the subsystem graduates out of experimental status.",
+      "items": [
+        "Optional API authentication (today there is none on any route)",
+        "More than one active region detection profile per process",
+        "An ingest decode path for promoted YOLO26 engines, so a promoted model can serve as the ingest detector"
+      ]
+    }
+  ]
+}

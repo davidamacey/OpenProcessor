@@ -1,0 +1,278 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Training and Promote",
+    "locale": "en",
+    "viewBox": [
+      900,
+      1000
+    ],
+    "column_fit": "spread",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "start",
+        "label": "Preflight and start",
+        "focus": [
+          "client",
+          "api",
+          "arbiter",
+          "jobs"
+        ],
+        "note": "The API checks the spec, claims GPUs and writes job.json. It never calls the trainer."
+      },
+      {
+        "id": "train",
+        "label": "The trainer runs",
+        "focus": [
+          "trainer",
+          "jobs",
+          "api"
+        ],
+        "note": "The trainer owns the run; the API only reads the files it writes."
+      },
+      {
+        "id": "promote",
+        "label": "Gated promote",
+        "focus": [
+          "client",
+          "api",
+          "jobs",
+          "triton"
+        ],
+        "note": "Promote checks the eval block, writes the model repository and loads the model."
+      }
+    ]
+  },
+  "participants": [
+    {
+      "id": "client",
+      "type": "external",
+      "label": "Client",
+      "sublabel": "curl / labeling UI"
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "yolo-api",
+      "sublabel": "/curation/train/*"
+    },
+    {
+      "id": "arbiter",
+      "type": "security",
+      "label": "GPU arbiter",
+      "sublabel": "in the API process"
+    },
+    {
+      "id": "jobs",
+      "type": "database",
+      "label": "/jobs volume",
+      "sublabel": "shared files"
+    },
+    {
+      "id": "trainer",
+      "type": "backend",
+      "label": "curation-trainer",
+      "sublabel": "Ultralytics"
+    },
+    {
+      "id": "triton",
+      "type": "cloud",
+      "label": "triton-server",
+      "sublabel": "model repository"
+    }
+  ],
+  "segments": [
+    {
+      "from": 150,
+      "to": 400,
+      "label": "Preflight + start"
+    },
+    {
+      "from": 420,
+      "to": 640,
+      "label": "Train"
+    },
+    {
+      "from": 660,
+      "to": 880,
+      "label": "Promote"
+    }
+  ],
+  "messages": [
+    {
+      "from": "client",
+      "to": "api",
+      "y": 180,
+      "label": "POST /train/preflight"
+    },
+    {
+      "from": "api",
+      "to": "client",
+      "y": 216,
+      "label": "blocking + warning checks",
+      "variant": "return"
+    },
+    {
+      "from": "client",
+      "to": "api",
+      "y": 260,
+      "label": "POST /train/start",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "arbiter",
+      "y": 300,
+      "label": "claim GPUs",
+      "variant": "security"
+    },
+    {
+      "from": "api",
+      "to": "jobs",
+      "y": 340,
+      "label": "write job.json",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "client",
+      "y": 378,
+      "label": "job_id",
+      "variant": "return"
+    },
+    {
+      "from": "trainer",
+      "to": "jobs",
+      "y": 450,
+      "label": "claim job.json",
+      "variant": "emphasis"
+    },
+    {
+      "from": "trainer",
+      "to": "jobs",
+      "y": 490,
+      "label": "status.json every ~5 s",
+      "variant": "dashed"
+    },
+    {
+      "from": "client",
+      "to": "api",
+      "y": 530,
+      "label": "GET /train/status/{id}"
+    },
+    {
+      "from": "api",
+      "to": "jobs",
+      "y": 566,
+      "label": "read status.json"
+    },
+    {
+      "from": "trainer",
+      "to": "jobs",
+      "y": 604,
+      "label": "manifest + ONNX",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "arbiter",
+      "y": 630,
+      "label": "reconcile: release",
+      "variant": "security"
+    },
+    {
+      "from": "client",
+      "to": "api",
+      "y": 690,
+      "label": "POST /train/promote/{id}",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "jobs",
+      "y": 730,
+      "label": "eval gate + ONNX"
+    },
+    {
+      "from": "api",
+      "to": "triton",
+      "y": 772,
+      "label": "write repo + load",
+      "variant": "emphasis"
+    },
+    {
+      "from": "triton",
+      "to": "api",
+      "y": 812,
+      "label": "READY",
+      "variant": "return"
+    },
+    {
+      "from": "api",
+      "to": "client",
+      "y": 852,
+      "label": "promoted (or 422)",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "api",
+      "from": 174,
+      "to": 386,
+      "type": "backend"
+    },
+    {
+      "participant": "trainer",
+      "from": 444,
+      "to": 612,
+      "type": "backend"
+    },
+    {
+      "participant": "api",
+      "from": 524,
+      "to": 574,
+      "type": "backend"
+    },
+    {
+      "participant": "api",
+      "from": 684,
+      "to": 860,
+      "type": "backend"
+    },
+    {
+      "participant": "triton",
+      "from": 766,
+      "to": 820,
+      "type": "cloud"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Files, not RPC",
+      "items": [
+        "job.json in; status.json, run.log and manifest.json out",
+        "Any trainer speaking this protocol can replace the shipped one"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "GPU arbiter",
+      "items": [
+        "Claims GPUs on start: pauses a paired worker or stops configured containers",
+        "A reconcile loop releases them once no run is active"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Promote gate",
+      "items": [
+        "mAP50 >= 0.65, per-class precision >= 0.50, support >= 5",
+        "force=true bypasses; a subset run's class remap is applied to labels.txt"
+      ]
+    }
+  ]
+}

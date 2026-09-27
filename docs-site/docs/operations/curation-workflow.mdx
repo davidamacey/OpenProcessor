@@ -1,0 +1,142 @@
+---
+sidebar_position: 1
+title: Curation workflow, end to end
+---
+
+# Curation workflow, end to end
+
+The whole active-learning loop over the `/curation` API, in order. Every
+step works from `curl`; a frontend such as Cropwright drives the same
+routes. `API=http://localhost:4603` below.
+
+## 0. Prerequisites
+
+1. Core stack up and the PE-Core encoders built (`make export-pe`).
+   Without `pe_image_encoder`, ingest writes no `pe_embedding`, and
+   semantic search, near-duplicate detection and clustering have nothing
+   to work on.
+2. OpenSearch indexes are created automatically at API startup.
+3. You bring the models: an item detector (a stock COCO YOLO works to
+   start), and optionally a VLM, a region detector and a segmenter. See
+   [Models you must supply](#models-you-must-supply).
+
+## 1. Classes
+
+The registry is a JSON file at `OP_REGISTRY_PATH`. Start from zero with
+`POST /curation/classes` (see the [Quick start](../getting-started/quick-start.mdx)),
+copy `data/class_registry.example.json` (a small warehouse example) and
+edit it, or seed every class a detector knows with
+`scripts/curation/seed_class_registry.py --model <detector.onnx>` so class
+ids can't drift from the model's order. Names must match `^[a-z0-9_]+$`;
+some single-key hotkeys are reserved for labeling actions.
+
+## 2. Ingest
+
+| Source | Tool |
+|---|---|
+| Images on storage the API container mounts | `POST /curation/ingest/image`, or `scripts/curation/ingest_walker.py` for a resumable bulk walk |
+| Images only on your machine | `scripts/curation/ingest_upload.py` (uploads bytes to `POST /curation/ingest/upload`; resuming relies on server-side content dedup) |
+| An already-labeled YOLO dataset | `scripts/curation/import_labeled_dataset.py` (checks class names against the registry first, writes a disagreement report) |
+
+Ingest runs the item detector (`OP_INGEST_PRIMARY_*`), crops each
+detection into an item, embeds it with PE-Core, rejects duplicates and
+low-quality crops, and indexes items in bulk. Human labels already on an
+item survive re-ingest. With a region profile active, each **new** item
+is also seeded `pending_detection` for the detection worker.
+
+## 3. Cluster
+
+<Screenshot
+  name="clusters-1600.png"
+  alt="Cluster cards served by GET /curation/clusters, captured from Cropwright, a frontend for this backend"
+  caption="Cluster cards from GET /curation/clusters (captured from Cropwright, a frontend for this backend)"
+/>
+
+```bash
+docker compose --profile curation up -d
+curl -s -X POST "$API/curation/pipeline/auto_label/start?train_clusters=true"
+curl -s "$API/curation/pipeline/auto_label/status"     # poll until terminal
+curl -s "$API/curation/clusters" | jq '.clusters[0]'
+```
+
+Clustering groups items by embedding (residual clustering reduces
+`pe_embedding` by default). Cluster ids have fixed ranges: below 0 is
+unassigned/noise, `0..N` mirrors class ids, and ids from 10000 up are
+**candidate** clusters that still need a class. Each card carries
+`cluster_kind`, dominant class, purity, validated count, sub-clusters
+and representatives; `POST /clusters/refine/{cluster_id}` splits one
+further, and `POST /clusters/auto_promote` validates items in
+high-purity clusters. `curation-cluster-refresh` re-runs auto-promote as
+the pool grows.
+
+## 4. Label: VLM suggestions and review queues
+
+<Screenshot
+  name="review-1600.png"
+  alt="Review queue served by GET /curation/review/{tab}, captured from Cropwright, a frontend for this backend"
+  caption="Review queue from GET /curation/review/{tab} (captured from Cropwright, a frontend for this backend)"
+/>
+
+- **VLM assist.** With `OP_VLM_URL`/`OP_VLM_MODEL` set, run
+  `auto_label/start?run_vlm=true`, label one cluster with
+  `POST /vlm/label_cluster/{cluster_id}`, or let `curation-vlm-worker`
+  suggest classes continuously. VLM answers that name no registry class
+  surface as new-class proposals rather than being forced into a class.
+- **Review queues.** `GET /review/tabs` lists them; the main ones are
+  `all`, `mismatches` (VLM answer didn't match the registry),
+  `vlm_low_conf`, `outliers`, `uncertainty` and `model_disagreements`
+  (both fed by the probe), `primary_low_conf`, `classifier_blind_spots`,
+  `new_class_proposals`, and `regions`.
+- **Label writes.** `PUT /crops/{crop_id}/label`, `PUT /crops/batch_label`,
+  `POST /crops/move`, exclude/discard, and undo for each. Every write is
+  recorded in `GET /crops/{crop_id}/history`.
+- **Semantic search** (`GET /search/text`, with
+  `OP_SEMANTIC_SEARCH_ENABLED=1`) finds items by description, e.g. "blurry
+  close-up".
+
+## 5. Regions of interest (optional)
+
+<Screenshot
+  name="review-regions-1600.png"
+  alt="Region review showing a detected region, its detector chain and text reading, captured from Cropwright, a frontend for this backend"
+  caption="Region review: box, detector chain and text reading (captured from Cropwright, a frontend for this backend)"
+/>
+
+A region profile describes a sub-region to find inside each item (a
+label, a tag, a defect) and which models find, verify and read it. The
+detection worker's cascade tries the region detector, falls back to the
+segmenter leg, asks the VLM to verify, and reads any text by VLM and/or
+OCR. Every write records its provenance in `region_detector_chain`.
+Humans confirm, correct, reject or mark false positives through
+`/crops/{crop_id}/region*` and `/regions/batch_status`. Watch progress on
+`GET /ingest/region_drain`, and see
+[Health and stall reasons](./health-and-stalls.mdx) when it stops moving.
+
+## 6. Freeze, export, train, compare, promote
+
+1. `POST /test_holdout/freeze` once.
+2. `POST /export/yolo` (or `/export/single_class`). See
+   [Exports and retention](./exports-and-retention.mdx).
+3. `POST /train/preflight`, then `POST /train/start`.
+4. `POST /bakeoff/run` to compare against earlier runs and baselines.
+5. `POST /train/promote/{job_id}` to serve the winner from Triton.
+6. `POST /probe/run`, then work `model_disagreements`, and loop back to
+   step 4 of this page.
+
+Details: [Training, bake-off and promote](./training-and-promote.mdx).
+
+## Models you must supply
+
+Nothing in the curation subsystem ships a pretrained region detector,
+VLM or trained dataset. A deployment provides:
+
+| What | Required? | How |
+|---|---|---|
+| PE-Core-L14-336 image and text encoders | Yes | `make export-pe`; the Triton names `pe_image_encoder` / `pe_text_encoder` are fixed |
+| Item detector | Yes, for ingest | Any end2end Triton model via `OP_INGEST_PRIMARY_DETECTOR_MODEL` |
+| Secondary detector | No | Raw-output model via `OP_INGEST_SECONDARY_DETECTOR_MODEL`; also the source of `backbone_embedding` when exported with `make export-dual-head` |
+| Region profile + region detector | No | `OP_REGION_PROFILE_PATH` or `OP_REGION_PROFILE`; see [advanced configuration](../configuration/advanced.mdx#region-detection-profile) |
+| OCR recognition model | Only if regions carry text | `DetectionProfile.ocr_rec_model` |
+| Segmenter | No | `--profile segmenter` (SAM 3, needs `HF_TOKEN`) or any service speaking the same protocol at `OP_SEGMENTER_URL` |
+| VLM | No | `--profile vlm`, a VLM on the host (`http://host.docker.internal:<port>/v1`), or anywhere on the network |
+| Training data and base weights | For training | Your exports; the trainer fetches base checkpoints unless `hyperparameters.model` is a local path |
