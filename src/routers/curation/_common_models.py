@@ -220,25 +220,25 @@ class CropBatchStatusRequest(BaseModel):
 
 
 class ItemRegionMetaRequest(BaseModel):
-    """Patch region metadata without touching ``region_bbox_norm``.
+    """Patch region metadata without touching any box geometry.
 
-    Use this for operator corrections like fixing a region's text (text-reading
-    profiles only; a text-free profile answers 422 ``region_text_disabled``) or
-    changing the status to ``verify_rejected``. To set or clear the bbox
-    itself, use ``PUT /crops/{crop_id}/region``.
+    Use this for operator corrections like changing the status to
+    ``verify_rejected``. To edit a box's text, use ``PATCH
+    /crops/{crop_id}/regions/{box_id}`` (per-box, W8.8) -- ``region_text``
+    is REMOVED from this request (D decision, 2026-09-26): it was a
+    per-box value on an item-level route. A stale client sending it gets
+    422 (``extra='forbid'``). To set or clear a box's geometry, use ``PUT
+    /crops/{crop_id}/regions``.
 
     Every field is optional; only the provided ones are written. ``None``
-    on ``region_text`` clears the text, on ``region_rejection_reason``
-    clears the reason. ``region_status`` must be one of
-    ``HUMAN_REGION_STATUS_VALUES`` when present.
+    on ``region_rejection_reason`` clears the reason. ``region_status``
+    must be one of ``HUMAN_REGION_STATUS_VALUES`` when present.
     """
 
-    # extra='forbid' so a stale key 422s instead of silently no-opping;
-    # model_fields_set distinguishes ``region_text=None`` (clear) from
-    # "not in payload".
+    # extra='forbid' so a stale key (incl. the removed region_text) 422s
+    # instead of silently no-opping.
     model_config = {'extra': 'forbid'}
 
-    region_text: str | None = None
     region_status: str | None = None
     region_rejection_reason: str | None = None
     region_label_source: str = 'human'

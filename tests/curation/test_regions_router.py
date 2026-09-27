@@ -274,17 +274,23 @@ def test_patch_region_meta_false_positive_routes_to_fp_bucket(
     assert written[F.cluster_subid] is None
 
 
-def test_patch_region_meta_text_only_does_not_touch_cluster_fields(
+def test_patch_region_box_text_only_does_not_touch_cluster_fields(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
+    """``region_text`` moved off ``region_meta`` onto the per-box PATCH
+    route (W8, D decision, 2026-09-26)."""
+    fake_os._docs['crop-1'][F.boxes] = [
+        {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}
+    ]
     resp = app_client.patch(
-        '/curation/projects/default/crops/crop-1/region_meta',
-        json={'region_text': 'ABC123'},
+        '/curation/projects/default/crops/crop-1/regions/b1',
+        json={'text': 'ABC123'},
     )
     assert resp.status_code == 200, resp.text
     written = fake_os._docs['crop-1']
-    assert written[F.text] == 'ABC123'
-    assert written[F.text_source] == 'human'
+    box = written[F.boxes][0]
+    assert box['text'] == 'ABC123'
+    assert box['text_source'] == 'human'
     assert F.cluster_id not in written
 
 
@@ -297,14 +303,15 @@ def test_patch_region_meta_response_reports_wire_names(
     app_client: TestClient,
 ) -> None:
     """``updated_fields`` echoes the fixed ``region_*`` wire names, never
-    storage keys (docs/design/curation_api_contract.md)."""
+    storage keys (docs/design/curation_api_contract.md). ``region_text``
+    is gone from this route (W8, D decision) -- ``region_status`` alone."""
     resp = app_client.patch(
         '/curation/projects/default/crops/crop-1/region_meta',
-        json={'region_text': 'ABC123', 'region_status': 'detected', 'region_label_source': 'human'},
+        json={'region_status': 'detected', 'region_label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
     updated_fields = resp.json()['updated_fields']
-    assert updated_fields == ['region_status', 'region_text']
+    assert updated_fields == ['region_status']
 
 
 def test_get_crop_returns_shared_wire_item(app_client: TestClient, fake_os: _FakeRegionOS) -> None:
@@ -312,12 +319,11 @@ def test_get_crop_returns_shared_wire_item(app_client: TestClient, fake_os: _Fak
     OpenSearch ``_source``."""
     app_client.patch(
         '/curation/projects/default/crops/crop-1/region_meta',
-        json={'region_text': 'ABC123', 'region_status': 'detected', 'region_label_source': 'human'},
+        json={'region_status': 'detected', 'region_label_source': 'human'},
     )
     resp = app_client.get('/curation/projects/default/crops/crop-1')
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body['region_text'] == 'ABC123'
     assert body['region_status'] == 'detected'
     assert set(body) == ITEM_WIRE_KEYS
 

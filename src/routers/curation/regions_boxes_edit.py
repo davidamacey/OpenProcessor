@@ -39,6 +39,7 @@ from src.services.curation.region_writes import (
     parent_to_source_bbox,
     post_write_item,
 )
+from src.services.detection.region_text import TEXT_CHOICE_HUMAN
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +117,15 @@ class RegionConflictError(Exception):
         self.current = current
 
 
+def _check_text_allowed(elements: list[BoxWriteElement] | list[Any], profile: Any) -> None:
+    """422 ``region_text_disabled`` when any element sets ``text`` on a
+    profile that doesn't read text (W8.8; moved off ``region_meta``)."""
+    if profile.reads_text:
+        return
+    if any(getattr(e, 'text', None) is not None for e in elements):
+        raise HTTPException(status_code=422, detail={'error': 'region_text_disabled'})
+
+
 def _too_many_boxes_check(n_boxes: int) -> None:
     limit = get_curation_config().region_max_boxes_per_write
     if n_boxes > limit:
@@ -169,8 +179,9 @@ async def _write_one_boxes(opensearch: Any, crop_id: str, rec: _Recorder, writer
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
 
 
-def _regions_put_build(payload: ItemRegionsRequest) -> Any:
+def _regions_put_build(payload: ItemRegionsRequest, profile: Any) -> Any:
     _too_many_boxes_check(len(payload.boxes))
+    _check_text_allowed(payload.boxes, profile)
 
     def _build(current: dict[str, Any]) -> dict[str, Any]:
         F = get_region_fields()
@@ -205,7 +216,7 @@ async def set_crop_regions(
     crop_id: str,
     payload: ItemRegionsRequest,
     opensearch: OpenSearchDep,
-    _profile: RegionProfileDep,
+    profile: RegionProfileDep,
 ) -> dict[str, Any]:
     """Set the full per-item box list (W8a).
 
@@ -219,9 +230,10 @@ async def set_crop_regions(
     whole-set status to the built list in the same write (W8 pin 3).
     A stale ``expected_region_revision`` is 409 ``region_conflict``.
     Over ``region_profile.limits.max_boxes_per_write`` is 422
-    ``too_many_boxes``.
+    ``too_many_boxes``. A ``text`` element on a text-free profile is 422
+    ``region_text_disabled``.
     """
-    rec = _Recorder(_regions_put_build(payload), 'human:set_crop_regions')
+    rec = _Recorder(_regions_put_build(payload, profile), 'human:set_crop_regions')
     await _write_one_boxes(opensearch, crop_id, rec, 'human:set_crop_regions')
     return {'crop_id': crop_id, 'item': rec.item(crop_id)}
 
@@ -230,14 +242,17 @@ async def set_crop_regions(
 async def batch_set_crop_regions(
     payload: ItemBatchRegionsRequest,
     opensearch: OpenSearchDep,
-    _profile: RegionProfileDep,
+    profile: RegionProfileDep,
 ) -> dict[str, Any]:
     """Replace each crop's box list with the same **new** boxes
     (typically ``boxes: []`` = "none visible"), W8a. Every element must
-    have ``box_id: null`` (422 ``box_id_in_batch``): ids are per item."""
+    have ``box_id: null`` (422 ``box_id_in_batch``): ids are per item. A
+    ``text`` element on a text-free profile is 422 ``region_text_disabled``.
+    """
     if not payload.crop_ids:
         return {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
     _too_many_boxes_check(len(payload.boxes))
+    _check_text_allowed(payload.boxes, profile)
 
     def _build(current: dict[str, Any]) -> dict[str, Any]:
         F = get_region_fields()
@@ -267,13 +282,15 @@ async def patch_crop_region_box(
     box_id: str,
     payload: BoxPatchRequest,
     opensearch: OpenSearchDep,
-    _profile: RegionProfileDep,
+    profile: RegionProfileDep,
 ) -> dict[str, Any]:
     """Per-box state/text patch (W8a) -- the review panel's per-box
     accept/reject action. Every other box in the item's list is left
-    untouched (per-box states persist independently)."""
+    untouched (per-box states persist independently). ``text`` on a
+    text-free profile is 422 ``region_text_disabled``."""
     if payload.state is None and payload.text is None:
         raise HTTPException(status_code=400, detail='at least one of state, text is required')
+    _check_text_allowed([payload], profile)
 
     def _build(current: dict[str, Any]) -> dict[str, Any]:
         F = get_region_fields()
@@ -286,7 +303,13 @@ async def patch_crop_region_box(
         if payload.state is not None:
             patch['state'] = payload.state
         if payload.text is not None:
+            # Human-typed text is the ground truth; mark the source so the
+            # text readers know not to overwrite it (same rule as the
+            # pre-W8 item-level region_meta write).
             patch['text'] = payload.text
+            patch['text_source'] = 'human'
+            patch['text_confidence'] = 1.0 if payload.text else None
+            patch['text_choice'] = TEXT_CHOICE_HUMAN
         new_boxes = [dataclasses.replace(b, **patch) if b.box_id == box_id else b for b in boxes]
         doc = boxes_write_fields(new_boxes, current_src=current, F=F)
         doc[F.label_source] = 'human:patch_crop_region_box'

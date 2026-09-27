@@ -248,6 +248,10 @@ class TestWriters:
 
 @pytest.mark.usefixtures('reference_region_profile')
 def test_human_typed_text_records_the_human_choice() -> None:
+    """``region_text`` moved off the item-level ``region_meta`` route onto
+    the per-box ``PATCH /crops/{crop_id}/regions/{box_id}`` route (W8, D
+    decision, 2026-09-26): human-typed text still records ``text_source``
+    / ``text_choice`` == human, now per box."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
@@ -257,7 +261,23 @@ def test_human_typed_text_records_the_human_choice() -> None:
 
     index = get_curation_config().items_index
     fake = QueryFakeOpenSearch(
-        {index: {'c1': {'crop_id': 'c1', F.text: 'ABC123', F.text_choice: 'vlm_only'}}}
+        {
+            index: {
+                'c1': {
+                    'crop_id': 'c1',
+                    F.boxes: [
+                        {
+                            'box_id': 'b1',
+                            'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+                            'state': 'accepted',
+                            'text': 'ABC123',
+                            'text_choice': 'vlm_only',
+                        }
+                    ],
+                    F.count: 1,
+                }
+            }
+        }
     )
     app = FastAPI()
     from _curation_app import mount_curation_routers
@@ -266,8 +286,9 @@ def test_human_typed_text_records_the_human_choice() -> None:
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as client:
         resp = client.patch(
-            '/curation/projects/default/crops/c1/region_meta', json={'region_text': 'VWY7977'}
+            '/curation/projects/default/crops/c1/regions/b1', json={'text': 'VWY7977'}
         )
     assert resp.status_code == 200, resp.text
     doc = fake.docs(index)['c1']
-    assert (doc[F.text], doc[F.text_source], doc[F.text_choice]) == ('VWY7977', 'human', 'human')
+    box = doc[F.boxes][0]
+    assert (box['text'], box['text_source'], box['text_choice']) == ('VWY7977', 'human', 'human')

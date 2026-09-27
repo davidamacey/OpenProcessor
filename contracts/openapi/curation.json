@@ -5659,7 +5659,7 @@
       },
       "ItemRegionMetaRequest": {
         "additionalProperties": false,
-        "description": "Patch region metadata without touching ``region_bbox_norm``.\n\nUse this for operator corrections like fixing a region's text (text-reading\nprofiles only; a text-free profile answers 422 ``region_text_disabled``) or\nchanging the status to ``verify_rejected``. To set or clear the bbox\nitself, use ``PUT /crops/{crop_id}/region``.\n\nEvery field is optional; only the provided ones are written. ``None``\non ``region_text`` clears the text, on ``region_rejection_reason``\nclears the reason. ``region_status`` must be one of\n``HUMAN_REGION_STATUS_VALUES`` when present.",
+        "description": "Patch region metadata without touching any box geometry.\n\nUse this for operator corrections like changing the status to\n``verify_rejected``. To edit a box's text, use ``PATCH\n/crops/{crop_id}/regions/{box_id}`` (per-box, W8.8) -- ``region_text``\nis REMOVED from this request (D decision, 2026-09-26): it was a\nper-box value on an item-level route. A stale client sending it gets\n422 (``extra='forbid'``). To set or clear a box's geometry, use ``PUT\n/crops/{crop_id}/regions``.\n\nEvery field is optional; only the provided ones are written. ``None``\non ``region_rejection_reason`` clears the reason. ``region_status``\nmust be one of ``HUMAN_REGION_STATUS_VALUES`` when present.",
         "properties": {
           "region_label_source": {
             "default": "human",
@@ -5687,17 +5687,6 @@
               }
             ],
             "title": "Region Status"
-          },
-          "region_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text"
           }
         },
         "title": "ItemRegionMetaRequest",
@@ -13385,7 +13374,7 @@
     },
     "/curation/projects/{project}/crops/batch_regions": {
       "put": {
-        "description": "Replace each crop's box list with the same **new** boxes\n(typically ``boxes: []`` = \"none visible\"), W8a. Every element must\nhave ``box_id: null`` (422 ``box_id_in_batch``): ids are per item.",
+        "description": "Replace each crop's box list with the same **new** boxes\n(typically ``boxes: []`` = \"none visible\"), W8a. Every element must\nhave ``box_id: null`` (422 ``box_id_in_batch``): ids are per item. A\n``text`` element on a text-free profile is 422 ``region_text_disabled``.",
         "operationId": "batch_set_crop_regions_curation_projects__project__crops_batch_regions_put",
         "parameters": [
           {
@@ -14352,7 +14341,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/region_meta": {
       "patch": {
-        "description": "Patch region metadata (text / status / rejection reason).\n\nBbox edits go through ``PUT /crops/{crop_id}/region``. Only the fields\npresent in the payload are written; a status write applies the\nlifecycle invariants (see :mod:`src.services.curation.region_writes`).\nReturns ``updated_fields`` (wire names) and ``item`` (post-write).\n``region_text`` is accepted on a text-reading profile only; a\ntext-free profile answers 422 ``region_text_disabled`` and writes\nnothing.",
+        "description": "Patch region metadata (status / rejection reason).\n\nBox edits (geometry, per-box text) go through ``PUT\n/crops/{crop_id}/regions`` / ``PATCH /crops/{crop_id}/regions/{box_id}``\n(W8.8) -- ``region_text`` is no longer accepted here (D decision,\n2026-09-26). Only the fields present in the payload are written; a\nstatus write applies the lifecycle invariants (see\n:mod:`src.services.curation.region_writes`). Returns\n``updated_fields`` (wire names) and ``item`` (post-write).",
         "operationId": "patch_crop_region_meta_curation_projects__project__crops__crop_id__region_meta_patch",
         "parameters": [
           {
@@ -14480,7 +14469,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/regions": {
       "put": {
-        "description": "Set the full per-item box list (W8a).\n\nThe full list, in display order; omitting a stored box deletes it.\nAn element is ``{box_id}`` alone for an untouched box, ``{box_id,\nbbox_norm}`` for a moved box (keeps state), ``{box_id, state}`` /\n``{box_id, bbox_norm, state}`` to change state too, and ``{box_id:\nnull, bbox_norm, state?}`` for a new box (default ``accepted``, W8\npin 2). ``frame: \"parent\"`` projects into the source frame\nserver-side (W8 pin 1). Optional ``region_status`` applies a\nwhole-set status to the built list in the same write (W8 pin 3).\nA stale ``expected_region_revision`` is 409 ``region_conflict``.\nOver ``region_profile.limits.max_boxes_per_write`` is 422\n``too_many_boxes``.",
+        "description": "Set the full per-item box list (W8a).\n\nThe full list, in display order; omitting a stored box deletes it.\nAn element is ``{box_id}`` alone for an untouched box, ``{box_id,\nbbox_norm}`` for a moved box (keeps state), ``{box_id, state}`` /\n``{box_id, bbox_norm, state}`` to change state too, and ``{box_id:\nnull, bbox_norm, state?}`` for a new box (default ``accepted``, W8\npin 2). ``frame: \"parent\"`` projects into the source frame\nserver-side (W8 pin 1). Optional ``region_status`` applies a\nwhole-set status to the built list in the same write (W8 pin 3).\nA stale ``expected_region_revision`` is 409 ``region_conflict``.\nOver ``region_profile.limits.max_boxes_per_write`` is 422\n``too_many_boxes``. A ``text`` element on a text-free profile is 422\n``region_text_disabled``.",
         "operationId": "set_crop_regions_curation_projects__project__crops__crop_id__regions_put",
         "parameters": [
           {
@@ -14544,7 +14533,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/regions/{box_id}": {
       "patch": {
-        "description": "Per-box state/text patch (W8a) -- the review panel's per-box\naccept/reject action. Every other box in the item's list is left\nuntouched (per-box states persist independently).",
+        "description": "Per-box state/text patch (W8a) -- the review panel's per-box\naccept/reject action. Every other box in the item's list is left\nuntouched (per-box states persist independently). ``text`` on a\ntext-free profile is 422 ``region_text_disabled``.",
         "operationId": "patch_crop_region_box_curation_projects__project__crops__crop_id__regions__box_id__patch",
         "parameters": [
           {

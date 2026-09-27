@@ -1,6 +1,12 @@
-"""``PATCH /crops/{id}/region_meta`` on a text-free region profile: a
-``region_text`` edit is rejected (422 ``region_text_disabled``) before
-anything is written; other region metadata still patches."""
+"""Text-free region profile: a per-box ``text`` edit is rejected (422
+``region_text_disabled``) before anything is written; other region
+metadata still patches.
+
+``region_text`` moved off ``PATCH /crops/{id}/region_meta`` in W8 (D
+decision, 2026-09-26) onto the per-box routes -- this test now exercises
+``PATCH /crops/{crop_id}/regions/{box_id}`` instead of the old item-level
+``region_text`` key (``region_meta`` no longer accepts it at all;
+``extra='forbid'`` 422s a stale client that still sends it)."""
 
 from __future__ import annotations
 
@@ -36,6 +42,8 @@ def fake_os() -> _FakeRegionOS:
                 'crop_id': 'crop-1',
                 F.status: 'detected',
                 F.bbox_norm: [0.1, 0.1, 0.2, 0.2],
+                F.boxes: [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}],
+                F.count: 1,
             }
         }
     )
@@ -54,9 +62,12 @@ def app_client(fake_os: _FakeRegionOS, text_free: Any) -> Any:
         yield client
 
 
-def test_region_text_edit_is_rejected_without_a_write(
+def test_region_meta_rejects_the_removed_region_text_key(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
+    """``region_text`` is removed from ``ItemRegionMetaRequest`` entirely
+    (D decision) -- ``extra='forbid'`` 422s a stale client regardless of
+    whether the profile reads text."""
     before = dict(fake_os._docs['crop-1'])
     resp = app_client.patch(
         '/curation/projects/default/crops/crop-1/region_meta',
@@ -65,6 +76,20 @@ def test_region_text_edit_is_rejected_without_a_write(
             'region_status': 'detected',
             'region_label_source': 'human',
         },
+    )
+    assert resp.status_code == 422, resp.text
+    assert fake_os.update_calls == []
+    assert fake_os.bulk_calls == []
+    assert fake_os._docs['crop-1'] == before
+
+
+def test_per_box_text_edit_is_rejected_without_a_write(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    before = dict(fake_os._docs['crop-1'])
+    resp = app_client.patch(
+        '/curation/projects/default/crops/crop-1/regions/b1',
+        json={'text': 'ABC1234', 'region_label_source': 'human'},
     )
     assert resp.status_code == 422, resp.text
     assert resp.json()['detail'] == {'error': 'region_text_disabled'}

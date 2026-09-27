@@ -41,7 +41,6 @@ from src.services.curation.region_writes import (
     validate_bbox_norm,
 )
 from src.services.curation.wire import region_wire_key
-from src.services.detection.region_text import TEXT_CHOICE_HUMAN
 
 
 def _write_error(exc: RegionWriteError) -> HTTPException:
@@ -154,27 +153,24 @@ async def patch_crop_region_meta(
     crop_id: str,
     payload: ItemRegionMetaRequest,
     opensearch: OpenSearchDep,
-    profile: RegionProfileDep,
+    _profile: RegionProfileDep,
 ) -> dict[str, Any]:
-    """Patch region metadata (text / status / rejection reason).
+    """Patch region metadata (status / rejection reason).
 
-    Bbox edits go through ``PUT /crops/{crop_id}/region``. Only the fields
-    present in the payload are written; a status write applies the
-    lifecycle invariants (see :mod:`src.services.curation.region_writes`).
-    Returns ``updated_fields`` (wire names) and ``item`` (post-write).
-    ``region_text`` is accepted on a text-reading profile only; a
-    text-free profile answers 422 ``region_text_disabled`` and writes
-    nothing.
+    Box edits (geometry, per-box text) go through ``PUT
+    /crops/{crop_id}/regions`` / ``PATCH /crops/{crop_id}/regions/{box_id}``
+    (W8.8) -- ``region_text`` is no longer accepted here (D decision,
+    2026-09-26). Only the fields present in the payload are written; a
+    status write applies the lifecycle invariants (see
+    :mod:`src.services.curation.region_writes`). Returns
+    ``updated_fields`` (wire names) and ``item`` (post-write).
     """
     F = get_region_fields()
     fields_set = payload.model_fields_set
-    if 'region_text' in fields_set and not profile.reads_text:
-        raise HTTPException(status_code=422, detail={'error': 'region_text_disabled'})
     if not (fields_set - {'region_label_source'}):
         raise HTTPException(
             status_code=400,
-            detail='at least one of region_text, region_status, '
-            'region_rejection_reason must be provided',
+            detail='at least one of region_status, region_rejection_reason must be provided',
         )
     if 'region_status' in fields_set:
         _validate_status(payload.region_status)
@@ -183,15 +179,6 @@ async def patch_crop_region_meta(
     # Wire names of the fields this request changed — never `doc.keys()`,
     # which are RegionFields storage keys.
     wire_fields: list[str] = []
-    if 'region_text' in fields_set:
-        # Human-typed text is the ground truth; mark the source so the
-        # text readers know not to overwrite it. Human-typed text is 1.0
-        # confidence — null would read as "unknown".
-        base[F.text] = payload.region_text
-        base[F.text_source] = 'human'
-        base[F.text_confidence] = 1.0 if payload.region_text else None
-        base[F.text_choice] = TEXT_CHOICE_HUMAN
-        wire_fields.append('region_text')
     if 'region_status' in fields_set:
         base[F.label_source] = payload.region_label_source
         wire_fields.append('region_status')
