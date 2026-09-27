@@ -1130,10 +1130,15 @@ regions/{box_id}` — the per-box accept/reject keys, `y`/`r`), and
   backend leaves Add unbounded.
 - `GET /regions/statuses`' `box_states` vocabulary
   (`regionStatusesStore.boxStates`/`boxStateInfo`/`boxStateByRole`)
-  supplies box labels and the `dashed` flag when loaded; there is no
-  served color for a box state (a documented backend-ask gap), so the
-  accepted/proposed/rejected/false_positive ring colors stay a small
-  client palette.
+  supplies box labels and the `dashed` flag when loaded. Each entry also
+  serves `tone` (`'accepted' | 'proposed' | 'rejected' | 'neutral'`,
+  2026-09-26 backend follow-up) — `regionStatusesStore.boxStateTone(state)`
+  resolves it (falling back to `'neutral'` on a pre-tone backend or an
+  unrecognized value), and `toneRingRgb`/`toneBorderClass`/`toneChipClass`
+  (`regionStatuses.svelte.ts`) map a tone to the theme's colors for every
+  ring/chip surface (`/review`, `SlotBboxEditor.svelte`,
+  `SourceImageOverlay.svelte`, `CropMetaPanel.svelte`) — never a client
+  role→color guess when a tone is served.
 
 ## Plate provenance + OCR (Wave 1 + Wave 2b, 2026-05-11)
 

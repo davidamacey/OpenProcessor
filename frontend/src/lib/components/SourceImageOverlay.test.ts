@@ -17,6 +17,7 @@ import {
   resetDeploymentSlots,
 } from '$lib/annotations/registeredSlots';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
+import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
 vi.mock('$lib/api', () => ({
   getCropContext: vi.fn(),
@@ -298,5 +299,81 @@ describe('SourceImageOverlay', () => {
 
     expect(getCropContext).not.toHaveBeenCalled();
     expect(el.querySelectorAll('[data-testid="overlay-box"]').length).toBe(1);
+  });
+
+  it('draws a W8 multi-box region ring in the served box_states tone, not the client role fallback', async () => {
+    // Backend follow-up to W8.7 (feat/w8-multibox-lockstep,
+    // docs/design/w8-multibox-frontend-plan-2026-09-26.md): each
+    // box_states entry now serves `tone`. A served `rejected` tone must
+    // win over the role→color guess this file used before (which mapped
+    // a `rejected` box to the same neutral zinc as `false_positive`).
+    regionStatusesStore.boxStates = [
+      {
+        value: 'rejected',
+        label: 'rejected',
+        role: 'rejected',
+        human_writable: true,
+        exported: false,
+        dashed: true,
+        dim: false,
+        badge: null,
+        tone: 'rejected',
+      },
+    ];
+
+    const ctx: CropContextResponse = {
+      image: {
+        image_id: 'i',
+        image_path: '/i.jpg',
+        width: 100,
+        height: 100,
+        source: null,
+        indexed_at: null,
+      },
+      items: [
+        {
+          ...item({
+            id: 'region-mb',
+            class_name: 'widget_a',
+            bbox_norm: { cx: 0.5, cy: 0.5, w: 0.4, h: 0.4 },
+          }),
+          slots: {
+            widget_tag: {
+              key: 'widget_tag',
+              subBoxes: [
+                {
+                  boxId: 'b1',
+                  state: 'rejected',
+                  parent: { cx: 0.25, cy: 0.25, w: 0.2, h: 0.2 },
+                  rawXyxy: null,
+                  score: null,
+                  detector: null,
+                  detectorVersion: null,
+                  source: null,
+                  bboxCorrect: null,
+                  confidence: null,
+                  rejectionReason: null,
+                  text: null,
+                  clusterId: null,
+                  thumbnailUrl: null,
+                },
+              ],
+            },
+          },
+        } as unknown as Crop,
+      ],
+    };
+    vi.mocked(getCropContext).mockResolvedValue(ctx);
+
+    const el = await render({ cropId: 'region-mb' });
+
+    const box = el.querySelector(
+      '[data-testid="overlay-box"][data-kind="region-box"]',
+    ) as HTMLElement;
+    expect(box).toBeTruthy();
+    expect(box.className).toContain('border-red-400');
+    expect(box.className).not.toContain('border-zinc-500');
+
+    regionStatusesStore.boxStates = [];
   });
 });

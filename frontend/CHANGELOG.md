@@ -97,10 +97,25 @@ null, bbox_norm}`) plus the owner-decided Enter semantics
     `region_profile.limits.max_boxes_per_write` now gates the Add-box
     action in both canvases and renders as "N / max" — never a
     client-guessed cap. `GET /regions/statuses`' `box_states` vocabulary
-    (label/dashed/dim/badge, no color — a documented backend-ask gap) is
-    now loaded and preferred over the hardcoded label/dash palette. See
-    the plan doc's third-pass section for the full test list (unit +
-    e2e, each mutation-checked).
+    (label/dashed/dim/badge) is now loaded and preferred over the
+    hardcoded label/dash palette. See the plan doc's third-pass section
+    for the full test list (unit + e2e, each mutation-checked).
+  - **Follow-up (2026-09-26): served `box_states[].tone`.** The backend
+    approved a color signal for `box_states` — `BoxStateEntry.tone`
+    (`'accepted' | 'proposed' | 'rejected' | 'neutral'`, optional).
+    `regionStatusesStore.boxStateTone()` resolves it (falling back to
+    `'neutral'` on a pre-tone backend or an unrecognized state); new
+    `toneRingRgb`/`toneBorderClass`/`toneChipClass` helpers
+    (`regionStatuses.svelte.ts`) are the one place per output shape that
+    maps a tone to a color, replacing the client role→color guess in
+    `+page.svelte`, `SlotBboxEditor.svelte`, `SourceImageOverlay.svelte`
+    and `CropMetaPanel.svelte`. **Fixed a real bug found while adding the
+    mount test**: `SourceImageOverlay.svelte` skipped drawing every
+    region box on a real W8 (list-only) backend — its per-item loop's
+    `if (!sub) continue` guard never ran for a capability that only ever
+    populates `subBoxes`, not the legacy singular `subBox`. Mutation-
+    checked twice (the tone-color mapping and the loop guard fix each
+    independently fail the new test when reverted).
 - **Configurable keyboard shortcuts — editor + served keymap (K2 of
   `docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md`).**
   Built ahead of OpenProcessor W2b's `GET/PUT {prefix}/keymap`,

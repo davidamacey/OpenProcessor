@@ -89,7 +89,7 @@
   import { keymapStore } from '$stores/keymap.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
-  import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+  import { regionStatusesStore, toneRingRgb } from '$stores/regionStatuses.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
@@ -1200,20 +1200,14 @@
   const undoHint = () =>
     `Press ${kg('review.undo')} to undo, step back with ${kg('review.region.back')}.`;
 
-  // W8 multi-box: per-box state → ring color/dash, mirroring the served
-  // box_states roles (proposed/accepted/rejected/false_positive) with the
-  // same palette the single-box ring uses (confirmed=green, proposed=
-  // amber, rejected/FP=neutral). No served box_states vocabulary fetch
-  // yet in this pass — see the plan doc's out-of-scope list.
-  // W8.7 serves box_states' label/dashed/dim/badge, but not a color — the
-  // ring color stays a client role→color mapping (there is nothing served
-  // to prefer). `regionStatusesStore.boxStateInfo` wins for label/dashed
-  // when loaded (a W8 backend); the literal fallback covers a pre-W8
-  // backend or a value the served vocabulary doesn't (yet) know.
+  // W8 multi-box: per-box state → ring color/dash. The ring color now
+  // reads the served box_states `tone` (backend follow-up to W8.7,
+  // feat/w8-multibox-lockstep) via `toneRingRgb(boxStateTone(state))` —
+  // `boxStateTone` returns 'neutral' on a pre-tone backend or an
+  // unrecognized state, so this never invents a color the server didn't
+  // choose.
   function multiBoxRingColor(state: string): string {
-    if (state === 'accepted') return 'rgb(74, 222, 128)'; // green-400
-    if (state === 'proposed') return 'rgb(250, 204, 21)'; // yellow-400
-    return 'rgb(113, 113, 122)'; // zinc-500 — rejected / false_positive
+    return toneRingRgb(regionStatusesStore.boxStateTone(state));
   }
   function multiBoxDashed(state: string): boolean {
     return (

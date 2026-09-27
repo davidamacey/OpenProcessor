@@ -42,7 +42,7 @@
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
   import { projectFromParent } from '$lib/annotations/readSlot';
   import type { BBoxNormLike, XYXY } from '$lib/annotations/types';
-  import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+  import { regionStatusesStore, toneBorderClass } from '$stores/regionStatuses.svelte';
 
   interface Props {
     /** Which crop's context (source image + every item cropped from it) to draw. */
@@ -125,14 +125,13 @@
   }
 
   /** W8 multi-box (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
-   *  per-box state -> ring color/dash, same palette as the review page's
-   *  multiBoxRingColor/multiBoxDashed. `box_states` serves a dash flag
-   *  (no color) — `regionStatusesStore.boxStateInfo` wins for `dashed`
-   *  when loaded; the literal fallback covers a pre-W8 backend. */
+   *  per-box state -> ring color/dash. The ring color reads the served
+   *  box_states `tone` (backend follow-up to W8.7) via
+   *  `toneBorderClass(boxStateTone(state))` — 'neutral' on a pre-tone
+   *  backend or an unrecognized state, matching `+page.svelte`'s
+   *  `multiBoxRingColor`. */
   function multiBoxRingColorClass(state: string): string {
-    if (state === 'accepted') return 'border-green-400';
-    if (state === 'proposed') return 'border-yellow-400';
-    return 'border-zinc-500'; // rejected / false_positive
+    return toneBorderClass(regionStatusesStore.boxStateTone(state));
   }
   function multiBoxDashed(state: string): boolean {
     return (
@@ -189,10 +188,17 @@
       if (!slot?.capabilities.subBox) continue;
       const data = slotOf(item, slot);
       const sub = data?.subBox;
-      if (!sub) continue;
+      const boxList = data?.subBoxes ?? [];
+      // A W8 (listField) capability never populates `sub` — only
+      // `subBoxes` (readSlot.ts). This bug hid every region box on a
+      // real W8 backend: the old `if (!sub) continue` skipped the whole
+      // per-item block, including the multi-box loop below, whenever
+      // there was no legacy single-box `subBox` to draw. Continue only
+      // when there is truly nothing to draw for this item.
+      if (!sub && boxList.length === 0) continue;
       const ring = slot.capabilities.subBox.ring;
 
-      if (sub.parent) {
+      if (sub?.parent) {
         const regionXyxy = projectFromParent(
           sub.parent as BBoxNormLike,
           itemXyxy,
@@ -210,7 +216,7 @@
           clickable: false,
         });
       }
-      if (sub.candidate?.parent) {
+      if (sub?.candidate?.parent) {
         const candidateXyxy = projectFromParent(
           sub.candidate.parent as BBoxNormLike,
           itemXyxy,
@@ -237,7 +243,6 @@
       // Additive to the single-box block above — a real W8 payload
       // serves subBoxes and leaves the legacy sub/candidate fields null,
       // so the two loops never double-draw in practice.
-      const boxList = data?.subBoxes ?? [];
       boxList.forEach((b, i) => {
         if (!b.parent) return;
         const boxXyxy = projectFromParent(b.parent, itemXyxy, 'source');

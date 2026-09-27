@@ -37,7 +37,7 @@
   import type { BBoxNorm, Crop } from '$lib/types';
   import MultiBoxCanvas from './MultiBoxCanvas.svelte';
   import { createMultiBoxRegionController } from '$lib/review/multiBoxRegionController.svelte';
-  import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+  import { regionStatusesStore, toneRingRgb } from '$stores/regionStatuses.svelte';
 
   const kg = (id: string) => keymapStore.compactGlyph(id);
 
@@ -77,9 +77,7 @@
   });
 
   function multiBoxRingColor(state: string): string {
-    if (state === 'accepted') return 'rgb(74, 222, 128)';
-    if (state === 'proposed') return 'rgb(250, 204, 21)';
-    return 'rgb(113, 113, 122)';
+    return toneRingRgb(regionStatusesStore.boxStateTone(state));
   }
   function multiBoxDashed(state: string): boolean {
     return (

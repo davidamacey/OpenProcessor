@@ -2561,6 +2561,8 @@ export interface RegionStatusEntry {
  *  `RegionStatusEntry` vocabulary above — a box's `state` is
  *  `proposed`/`accepted`/`rejected`/`false_positive`, never one of the
  *  item's `region_status` values. */
+export type BoxStateTone = 'accepted' | 'proposed' | 'rejected' | 'neutral';
+
 export interface BoxStateEntry {
   value: string;
   label: string;
@@ -2570,6 +2572,20 @@ export interface BoxStateEntry {
   dashed: boolean;
   dim: boolean;
   badge: string | null;
+  /**
+   * PENDING_BACKEND_W8 (feat/w8-multibox-lockstep, docs/design/
+   * w8-multibox-frontend-plan-2026-09-26.md): the backend approved this
+   * as a follow-up to the W8.7 `box_states` vocabulary — the served
+   * color/theme mapping for a box state, since `box_states` itself only
+   * ever served `dashed`/`dim`/`badge` (styling flags, no color). Not in
+   * the vendored OpenAPI snapshot yet (no `box_states` schema exists
+   * there at all — `box_states` predates any contract-sync coverage);
+   * remove this note (not widen it) once `npm run contract:sync` picks
+   * it up. Optional so a pre-tone backend (or one that serves an
+   * unrecognized value) renders neutral — see
+   * `regionStatusesStore.boxStateTone()`.
+   */
+  tone?: BoxStateTone;
 }
 
 export interface RegionStatusesResponse {

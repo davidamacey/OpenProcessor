@@ -13,7 +13,7 @@
   import { slotIsPresent } from '$lib/annotations/types';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
-  import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+  import { regionStatusesStore, toneChipClass } from '$stores/regionStatuses.svelte';
   import { humanizeId } from '$lib/humanizeId';
   import { formatTimestamp } from '$lib/formatDate';
 
@@ -362,11 +362,9 @@
               <div class="flex flex-wrap items-center gap-1.5">
                 <span class="font-mono text-[10px] text-zinc-500">#{i + 1}</span>
                 <span
-                  class="rounded border px-1 py-0.5 text-[10px] {b.state === 'accepted'
-                    ? 'border-green-500/40 bg-green-500/15 text-green-200'
-                    : b.state === 'proposed'
-                      ? 'border-yellow-500/40 bg-yellow-500/15 text-yellow-200'
-                      : 'border-zinc-600/40 bg-zinc-700/20 text-zinc-300'}"
+                  class="rounded border px-1 py-0.5 text-[10px] {toneChipClass(
+                    regionStatusesStore.boxStateTone(b.state),
+                  )}"
                 >
                   {regionStatusesStore.boxStateInfo(b.state)?.label ?? b.state}
                 </span>
