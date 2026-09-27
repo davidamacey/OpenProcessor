@@ -100,6 +100,9 @@ class _FakeLifecycleIndices:
         self._outer.indexes[index] = self._outer.indexes.get(index, [])
         return {'acknowledged': True}
 
+    async def exists(self, *, index: str) -> bool:
+        return index in self._outer.indexes
+
 
 class _FakeTransport:
     """Faked ``/_cluster/health`` etc. so :func:`capacity_status` always
@@ -198,3 +201,13 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
 @pytest.fixture
 def fake_lifecycle_client() -> FakeLifecycleOpenSearch:
     return FakeLifecycleOpenSearch()
+
+
+async def seed_default_project(client: Any) -> Any:
+    """``default`` is now an ordinary project record (no env-synthesis
+    fallback in ``lifecycle._get_mutable_record``); tests that need to
+    archive/delete/protect it must first bootstrap it exactly like
+    ``src.main``'s startup lifespan does."""
+    from src.services.projects.bootstrap import bootstrap_default_project
+
+    return await bootstrap_default_project(client)

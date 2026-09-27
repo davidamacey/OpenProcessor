@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
-from .conftest import FakeLifecycleOpenSearch
+from .conftest import FakeLifecycleOpenSearch, seed_default_project
 
 
 @pytest.fixture(autouse=True)
@@ -196,6 +196,7 @@ def test_archive_last_active_project_refused() -> None:
     default next, with nothing else active, is the refusal case."""
     client = FakeLifecycleOpenSearch()
     registry = _registry_for(client)
+    asyncio.run(seed_default_project(client))
     record, _ = asyncio.run(lifecycle.create_project(client, slug='only', display_name='Only'))
     asyncio.run(lifecycle.archive_project(client, slug='only', expected_revision=record.revision))
     asyncio.run(registry.ensure_fresh())

@@ -13,7 +13,7 @@ from fastapi import HTTPException
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
-from .conftest import FakeLifecycleOpenSearch
+from .conftest import FakeLifecycleOpenSearch, seed_default_project
 
 
 @pytest.fixture(autouse=True)
@@ -61,6 +61,7 @@ def test_dry_run_lists_report_and_writes_nothing() -> None:
 def test_delete_default_is_protected() -> None:
     client = FakeLifecycleOpenSearch()
     _registry_for(client)
+    asyncio.run(seed_default_project(client))
     asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
 
     with pytest.raises(HTTPException) as exc_info:
@@ -84,8 +85,11 @@ def test_delete_confirm_mismatch() -> None:
 def test_delete_last_active_project_refused() -> None:
     client = FakeLifecycleOpenSearch()
     registry = _registry_for(client)
+    default_record = asyncio.run(seed_default_project(client))
     asyncio.run(lifecycle.create_project(client, slug='only', display_name='Only'))
-    asyncio.run(lifecycle.archive_project(client, slug='default', expected_revision=0))
+    asyncio.run(
+        lifecycle.archive_project(client, slug='default', expected_revision=default_record.revision)
+    )
     asyncio.run(registry.ensure_fresh())
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(lifecycle.delete_project(client, slug='only', confirm='only'))
