@@ -274,6 +274,7 @@ def test_regions_vocabulary_serves_the_region_text_rules(client: TestClient) -> 
 @pytest.mark.usefixtures('reference_region_profile')
 def test_regions_vocabulary_serves_the_rejection_reasons(client: TestClient) -> None:
     from src.config.region_rejection import (
+        REJECT_REASON_HUMAN,
         REJECT_REASON_NO_VERDICT,
         REJECT_REASON_SANITY_PREFIX,
         REJECT_REASON_VERIFIER,
@@ -287,6 +288,7 @@ def test_regions_vocabulary_serves_the_rejection_reasons(client: TestClient) -> 
         REJECT_REASON_VERIFIER,
         REJECT_REASON_SANITY_PREFIX,
         REJECT_REASON_NO_VERDICT,
+        REJECT_REASON_HUMAN,
     }
     assert by_id[REJECT_REASON_VERIFIER] == {
         'id': 'region_visible_elsewhere',
@@ -298,6 +300,7 @@ def test_regions_vocabulary_serves_the_rejection_reasons(client: TestClient) -> 
     assert by_id[REJECT_REASON_SANITY_PREFIX]['match'] == 'prefix'
     assert by_id[REJECT_REASON_SANITY_PREFIX]['kind'] == 'automatic'
     assert by_id[REJECT_REASON_NO_VERDICT]['kind'] == 'needs_human'
+    assert by_id[REJECT_REASON_HUMAN]['kind'] == 'human'
 
 
 def test_regions_vocabulary_response_is_typed_in_openapi(client: TestClient) -> None:

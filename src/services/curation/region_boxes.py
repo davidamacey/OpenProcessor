@@ -19,9 +19,10 @@ handback report for the full list of what remains.
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from src.config.region_fields import RegionFields, get_region_fields
+from src.config.region_rejection import REJECT_REASON_HUMAN
 from src.config.region_state import RegionStatus
 
 
@@ -98,7 +99,22 @@ def accepted(boxes: Sequence[RegionBox]) -> list[RegionBox]:
     return [b for b in boxes if b.state == 'accepted']
 
 
-def next_box_id(existing: Iterable[RegionBox], *, seq: int) -> str:
+class _HasBoxId(Protocol):
+    """Structural type for :func:`next_box_id` -- anything naming a
+    ``box_id`` (a real :class:`RegionBox`, or a lightweight id-only stand-in
+    a caller builds while assigning ids to a batch of fresh candidates).
+
+    ``box_id`` is a ``@property`` (not a plain attribute) so a concrete
+    class's ``box_id: str`` field satisfies it covariantly -- mypy checks
+    a plain Protocol attribute invariantly, which a `list[Concrete]` built
+    from several concrete classes never satisfies.
+    """
+
+    @property
+    def box_id(self) -> str: ...
+
+
+def next_box_id(existing: Iterable[_HasBoxId], *, seq: int) -> str:
     """``b{max(region_box_seq, max existing id) + 1}``.
 
     Never reused within an item, including after deletes — the
@@ -266,7 +282,7 @@ def boxes_with_status(status: str, boxes: Sequence[RegionBox]) -> list[RegionBox
     if status == RegionStatus.FALSE_POSITIVE.value:
         return [_replace(b, state=RegionStatus.FALSE_POSITIVE.value) for b in boxes]
     if status == RegionStatus.VERIFY_REJECTED.value:
-        return [_replace(b, state='rejected', rejection_reason='human') for b in boxes]
+        return [_replace(b, state='rejected', rejection_reason=REJECT_REASON_HUMAN) for b in boxes]
     if status == RegionStatus.NO_REGION_VISIBLE.value:
         return []
     msg = f'unsupported whole-set status: {status!r}'

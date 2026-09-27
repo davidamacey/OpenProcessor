@@ -32,10 +32,11 @@ class RejectionReasonEntry(BaseModel):
 
     id: str = Field(description='The stored value (match=exact) or its prefix (match=prefix).')
     label: str
-    kind: Literal['model_verdict', 'automatic', 'needs_human'] = Field(
+    kind: Literal['model_verdict', 'automatic', 'needs_human', 'human'] = Field(
         description=(
             'model_verdict: the verifier judged the box wrong; automatic: a '
-            'geometry check rejected it; needs_human: no verdict was given.'
+            'geometry check rejected it; needs_human: no verdict was given; '
+            'human: a reviewer rejected it by hand.'
         )
     )
     match: Literal['exact', 'prefix']

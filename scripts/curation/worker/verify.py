@@ -8,12 +8,18 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from scripts.curation.worker.state import _ItemTask, region_profile
 from src.config import get_region_fields
+from src.config.region_rejection import (
+    REJECT_REASON_NO_VERDICT,
+    REJECT_REASON_SANITY_PREFIX,
+    REJECT_REASON_VERIFIER,
+)
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
+from src.services.curation.region_boxes import RegionBox, derive_status, next_box_id
 from src.services.curation.vlm_class_attempt import (
     class_attempt_fields,
     empty_answer_reason_for_index,
@@ -29,6 +35,10 @@ from src.services.detection.region_text import TEXT_CHOICE_NONE, TEXT_CHOICE_VLM
 from src.services.detection.region_text_rules import region_text_rules
 from src.services.labeling.vlm_client import DEFAULT_MODEL as VLM_MODEL_ID
 from src.services.labeling.vlm_labeler import RegionCrop, VlmCombinedReply, VlmLabeler
+
+
+if TYPE_CHECKING:
+    from src.services.labeling.region_overlay import VlmBoxVerdict
 
 
 logger = get_logger('curation_worker')
@@ -474,3 +484,124 @@ async def _auto_confirm_or_pending(
     if not _bbox_shape_is_plausible(bbox_in_crop):
         return False
     return sam_score >= _SKIP_VLM_VERIFY_SECONDARY_SCORE
+
+
+# =============================================================================
+# W8.5: verdict -> box-list storage (verdicts_to_boxes)
+# =============================================================================
+#
+# NOT YET wired into the streaming runner's stage consumers (stage_a_*,
+# stage_b_combined in runner.py) -- those still build the single legacy
+# scalar write via _region_write_doc / candidate_reject_doc /
+# _combined_write_doc above. This is standalone, tested infrastructure
+# for the eventual multi-candidate rewrite; see the W8 handback report.
+
+
+@dataclass(frozen=True)
+class _IdOnly:
+    """Structural stand-in satisfying ``region_boxes._HasBoxId`` -- lets
+    :func:`next_box_id` walk ids already spoken for (stored boxes plus
+    ones assigned earlier in this same call) without needing a full
+    :class:`RegionBox`."""
+
+    box_id: str
+
+
+@dataclass(frozen=True)
+class TaskBoxInput:
+    """One candidate box going into a verify call (a bounded stand-in for
+    the eventual worker ``TaskBox`` -- see W8.5). ``box_id`` is set for a
+    box read back from storage (``pending_verification``); ``None`` for a
+    fresh candidate, which gets the next id in :func:`verdicts_to_boxes`.
+    """
+
+    bbox_in_crop: tuple[float, float, float, float]
+    bbox_in_source: tuple[float, float, float, float]
+    score: float
+    detector: str
+    detector_version: str
+    source: str
+    box_id: str | None = None
+    hint_text: str | None = None
+    hint_text_confidence: float | None = None
+
+
+def verdicts_to_boxes(
+    candidates: list[TaskBoxInput],
+    verdicts: list[VlmBoxVerdict],
+    *,
+    seq: int,
+    item_bbox_norm: tuple[float, float, float, float] | None = None,
+    now: str | None = None,
+    force_resolve: bool = False,
+) -> tuple[list[RegionBox], RegionStatus | None, dict[str, Any]]:
+    """Map a combined VLM reply's per-box verdicts onto stored boxes (W8.5).
+
+    ``candidates`` and ``verdicts`` are aligned by position (both length
+    N; ``verdicts[i].box == i + 1``). Every entry in the returned list
+    carries its own ``box_id`` (Cropwright C3/Q15).
+
+    Returns ``(boxes, status, extra)``:
+
+    - Every verdict ``bbox_correct is None`` (no box got a verdict at
+      all) and ``force_resolve`` is False: ``([], None, {'no_verdict':
+      True})`` -- the caller retries (the no-verdict cap), same as
+      today's single-box no-verdict path. ``force_resolve=True`` (the cap
+      reached) resolves every no-verdict box as ``rejected`` /
+      ``REJECT_REASON_NO_VERDICT`` instead of signalling a retry.
+    - Otherwise: one :class:`RegionBox` per candidate --
+      ``bbox_correct=True`` and the box passes the sanity gate ->
+      ``accepted``; ``True`` but sanity fails -> ``rejected`` /
+      ``sanity_reject:<reason>``; ``False`` -> ``rejected`` /
+      ``region_visible_elsewhere``; ``None`` -> ``rejected`` /
+      ``verifier_no_verdict`` (this box specifically got no verdict, but
+      at least one sibling did). ``status = derive_status(boxes,
+      empty_status=RegionStatus.NO_REGION_BOX)``.
+    """
+    now = now or _now_iso()
+    any_verdict = any(v.bbox_correct is not None for v in verdicts)
+    if not any_verdict and not force_resolve:
+        return [], None, {'no_verdict': True}
+
+    assigned_ids = [_IdOnly(box_id=c.box_id) for c in candidates if c.box_id]
+    boxes: list[RegionBox] = []
+    for cand, verdict in zip(candidates, verdicts, strict=True):
+        box_id = cand.box_id
+        if box_id is None:
+            box_id = next_box_id([*assigned_ids, *(_IdOnly(b.box_id) for b in boxes)], seq=seq)
+            assigned_ids.append(_IdOnly(box_id=box_id))
+        state: str
+        rejection_reason: str | None = None
+        bbox_correct = verdict.bbox_correct
+        if bbox_correct is True:
+            gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_in_crop, item_bbox_norm)
+            if gate_ok:
+                state = 'accepted'
+            else:
+                state = 'rejected'
+                rejection_reason = f'{REJECT_REASON_SANITY_PREFIX}{gate_reason}'
+        elif bbox_correct is False:
+            state = 'rejected'
+            rejection_reason = REJECT_REASON_VERIFIER
+        else:
+            state = 'rejected'
+            rejection_reason = REJECT_REASON_NO_VERDICT
+        boxes.append(
+            RegionBox(
+                box_id=box_id,
+                bbox_norm=cand.bbox_in_source,
+                state=state,
+                score=cand.score,
+                detector=cand.detector,
+                detector_version=cand.detector_version,
+                source=cand.source,
+                bbox_correct=bbox_correct,
+                confidence=verdict.confidence,
+                rejection_reason=rejection_reason,
+                text=verdict.text_reply or cand.hint_text,
+                detected_at=now,
+            )
+        )
+
+    status = derive_status(boxes, empty_status=RegionStatus.NO_REGION_BOX)
+    return boxes, status, {}

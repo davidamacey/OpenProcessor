@@ -8212,11 +8212,12 @@
             "type": "string"
           },
           "kind": {
-            "description": "model_verdict: the verifier judged the box wrong; automatic: a geometry check rejected it; needs_human: no verdict was given.",
+            "description": "model_verdict: the verifier judged the box wrong; automatic: a geometry check rejected it; needs_human: no verdict was given; human: a reviewer rejected it by hand.",
             "enum": [
               "model_verdict",
               "automatic",
-              "needs_human"
+              "needs_human",
+              "human"
             ],
             "title": "Kind",
             "type": "string"
