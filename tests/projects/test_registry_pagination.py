@@ -60,6 +60,7 @@ def test_refresh_returns_more_than_the_1000_hit_default_window() -> None:
         # Bump the counter doc so ensure_fresh() sees a change and refreshes.
         client.docs['meta:projects_revision'] = {'revision': 1}
         client.seq['meta:projects_revision'] = 0
+        client._refresh_all()  # test seeds client.docs directly, bypassing index()
 
         registry = ProjectRegistry(lambda: client)
         await registry.refresh_strict()

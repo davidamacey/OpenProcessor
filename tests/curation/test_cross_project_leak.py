@@ -996,7 +996,19 @@ def leak_env(
     registry._revision = 1
 
     async def _fresh(self: Any) -> None:
-        return None
+        """A real (if simplified) refresh instead of a hard no-op: syncs
+        ``_by_slug`` from the seeded ``op_projects`` store so a project
+        created mid-sweep (e.g. B2's create-then-write-own-indexes path)
+        is visible to the guard on its very next check, the way a real
+        ``ensure_fresh`` would pick it up after B2's ``refresh='wait_for'``.
+        Frozen otherwise: no revision-counter churn, so the sweep's own
+        three seeded projects never move under it."""
+        from src.services.projects.registry import doc_to_record
+
+        docs = fake.store.get(registry_mod.projects_index(), {})
+        for doc_id, doc in docs.items():
+            if doc_id.startswith('project:'):
+                self._by_slug[doc['slug']] = doc_to_record(doc)
 
     monkeypatch.setattr(ProjectRegistry, 'ensure_fresh', _fresh)
     registry_mod.set_project_registry(registry)

@@ -13,8 +13,9 @@ import pytest
 
 
 class _FakeIndices:
-    def __init__(self) -> None:
+    def __init__(self, owner: FakeRegistryOpenSearch | None = None) -> None:
         self.created: dict[str, dict[str, Any]] = {}
+        self._owner = owner
 
     async def exists(self, *, index: str) -> bool:
         return index in self.created
@@ -23,16 +24,33 @@ class _FakeIndices:
         self.created[index] = body
         return {'acknowledged': True}
 
+    async def refresh(self, *, index: str | None = None) -> dict[str, Any]:  # noqa: ARG002
+        if self._owner is not None:
+            self._owner._refresh_all()
+        return {'_shards': {'total': 0, 'successful': 0, 'failed': 0}}
+
 
 class FakeRegistryOpenSearch:
     """Just enough of AsyncOpenSearch for ``ProjectRegistry``/
     ``bootstrap_default_project``: ``get``/``index``/``search`` on one
-    flat doc store, keyed by id, with seq_no OCC like the real thing."""
+    flat doc store, keyed by id, with seq_no OCC like the real thing.
+
+    B2: models near-real-time search visibility -- a doc written without
+    ``refresh='wait_for'``/``'true'`` is gettable by id immediately (like
+    real OpenSearch) but invisible to ``search()`` until an explicit
+    ``indices.refresh()`` or a subsequent ``wait_for``/``true`` write.
+    Without this, a test using the fake could never have caught B2's live
+    bug: ``ensure_fresh()``'s ``_search`` seeing the pre-write registry
+    snapshot even though the write it's racing already returned."""
 
     def __init__(self) -> None:
         self.docs: dict[str, dict[str, Any]] = {}
         self.seq: dict[str, int] = {}
-        self.indices = _FakeIndices()
+        self._visible: set[str] = set()
+        self.indices = _FakeIndices(self)
+
+    def _refresh_all(self) -> None:
+        self._visible = set(self.docs.keys())
 
     async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
         await asyncio.sleep(0)  # a real read yields; lets concurrent writers interleave
@@ -55,6 +73,7 @@ class FakeRegistryOpenSearch:
         op_type: str | None = None,
         if_seq_no: int | None = None,
         if_primary_term: int | None = None,  # noqa: ARG002 - one term in the fake
+        refresh: str | bool | None = None,
     ) -> dict[str, Any]:
         from opensearchpy.exceptions import ConflictError
 
@@ -64,6 +83,10 @@ class FakeRegistryOpenSearch:
             raise ConflictError(409, 'version_conflict_engine_exception', {})
         self.docs[id] = body
         self.seq[id] = self.seq.get(id, 0) + 1
+        if refresh in ('wait_for', 'true', True):
+            self._visible.add(id)
+        else:
+            self._visible.discard(id)
         return {'_id': id, 'result': 'created'}
 
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
@@ -79,7 +102,7 @@ class FakeRegistryOpenSearch:
         hits: list[dict[str, Any]] = [
             {'_id': doc_id, '_source': doc}
             for doc_id, doc in sorted(self.docs.items())
-            if exists_field is None or exists_field in doc
+            if doc_id in self._visible and (exists_field is None or exists_field in doc)
         ]
         after = body.get('search_after')
         if after:
@@ -112,6 +135,7 @@ class _FakeLifecycleIndices:
         return index in self._outer.indexes
 
     async def refresh(self, *, index: str) -> dict[str, Any]:  # noqa: ARG002
+        self._outer._refresh_all()
         return {'_shards': {'total': 0, 'successful': 0, 'failed': 0}}
 
 
@@ -178,6 +202,7 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
         op_type: str | None = None,
         if_seq_no: int | None = None,
         if_primary_term: int | None = None,  # noqa: ARG002
+        refresh: str | bool | None = None,
     ) -> dict[str, Any]:
         if op_type == 'create' and id in self.docs:
             raise VersionConflictError(f'doc already exists for {id}')
@@ -185,6 +210,10 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
             raise VersionConflictError(f'seq_no mismatch for {id}')
         self.docs[id] = body
         self._seq[id] = self._seq.get(id, 0) + 1
+        if refresh in ('wait_for', 'true', True):
+            self._visible.add(id)
+        else:
+            self._visible.discard(id)
         return {'_id': id, 'result': 'updated', '_seq_no': self._seq[id]}
 
     async def update(

@@ -58,8 +58,15 @@ def test_registry_snapshot_refreshes_on_revision_change(fake_registry_client) ->
             origin=None,
             resources=resources_for_new('alpha', base_curation_config()),
         )
-        await client.index(index='op_projects', id='project:alpha', body=record_to_doc(record))
-        await client.index(index='op_projects', id='meta:projects_revision', body={'revision': 2})
+        await client.index(
+            index='op_projects', id='project:alpha', body=record_to_doc(record), refresh='wait_for'
+        )
+        await client.index(
+            index='op_projects',
+            id='meta:projects_revision',
+            body={'revision': 2},
+            refresh='wait_for',
+        )
 
         await registry.ensure_fresh()
         assert set(registry.snapshot()) == {'default', 'alpha'}
@@ -249,6 +256,7 @@ def test_refresh_reads_every_project_past_one_page(fake_registry_client) -> None
         client.seq[f'project:{slug}'] = 1
     client.docs['meta:projects_revision'] = {'revision': 7}
     client.seq['meta:projects_revision'] = 1
+    client._refresh_all()  # test seeds client.docs directly, bypassing index()
 
     registry = ProjectRegistry(lambda: client)
     asyncio.run(registry.ensure_fresh())
