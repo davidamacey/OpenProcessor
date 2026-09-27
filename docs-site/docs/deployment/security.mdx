@@ -31,6 +31,24 @@ roots (`OP_SOURCE_ROOT`, `OP_SOURCE_PATH_ALIASES`, the upload root) and
 fail anything else as `unservable_path`; `/curation/images/*` rejects path
 traversal and root escapes with a `400`.
 
+## LAN access from the one-line installer
+
+Cropwright is reachable on your LAN by default, for homelab or small-business
+use. The API itself stays bound to 127.0.0.1. There is no login on
+Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
+everything on 127.0.0.1.
+
+Cropwright's nginx reaches the API over the Docker network, so LAN browsers
+never need the API port. The UI can reach every route above: use it only on a
+network you trust, never port-forward it to the public internet, and put a
+reverse proxy with authentication in front for anything wider. A specific
+`--bind` address also narrows Cropwright to that interface. See the
+[installer page](../getting-started/installer.mdx#network-access).
+
+Release checksums (`SHA256SUMS`, `images.lock`, `cropwright.lock`) prove
+integrity, not authenticity: they come from the same origin as the files they
+cover.
+
 ## Other default-open components
 
 - **Grafana** (monitoring profile) ships with `admin` / `admin`. Change

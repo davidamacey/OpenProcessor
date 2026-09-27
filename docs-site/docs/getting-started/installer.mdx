@@ -1,0 +1,171 @@
+---
+sidebar_position: 3
+title: One-line installer
+---
+
+# One-line installer
+
+`setup-openprocessor.sh` installs a pinned OpenProcessor release into its own
+directory: no git clone, no local image build, no host Python.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setup-openprocessor.sh | bash
+```
+
+The script you pipe in only resolves the release, downloads that release's own
+`setup-openprocessor.sh` and `SHA256SUMS`, checks the checksum and runs the
+verified copy. A truncated download is a syntax error before anything runs.
+The installer then:
+
+1. downloads the release bundle and checks every file against `SHA256SUMS`;
+2. checks Docker, Compose, the GPUs and free disk, asks which tiers you want
+   (or takes `--tiers`) and plans GPU placement;
+3. writes `.env` (mode 600): tiers as `COMPOSE_PROFILES`, ports, image
+   digests from `images.lock`, the GPU plan and the OpenSearch heap. It never
+   changes a value you set yourself;
+4. pulls the images and checks each digest against `images.lock`;
+5. exports the TensorRT engines inside the containers, starts everything and
+   runs a health check;
+6. prints a summary with the URLs, the OpenSearch heap and shard budget, the
+   security note and the management commands.
+
+**Needs:** Linux, Docker with Compose v2, an NVIDIA GPU with the NVIDIA
+Container Toolkit, and disk for the tiers you pick. The installer never
+installs packages or changes the Docker daemon config: it tells you what is
+missing and stops.
+
+## Tiers
+
+| Tier | What you get | Extra images | Needs |
+|---|---|---|---|
+| `core` | Triton, the API (port 4603), OpenSearch | ~53 GB | ~16 GB VRAM (`--profile minimal` for 6-8 GB cards) |
+| `curation` | curation workers, PE-Core embeddings, evaluator | + ~15 GB | + ~2 GB VRAM; implies `core` |
+| `segmenter` | SAM 3 segmenter | + ~7 GB | 2-8 GB VRAM; a HuggingFace token with SAM 3 access (gated); implies `curation` |
+| `vlm` | local vLLM serving a model from the VLM catalog | + ~19 GB | ~23 GB VRAM for the default; implies `curation` |
+| `trainer` | training service + MLflow | + ~9 GB | at least 16 GB free VRAM while training; implies `curation` |
+| `cropwright` | the Cropwright web UI (separate compose project) | + ~65 MB | implies `curation` |
+
+Monitoring (Prometheus, Grafana, Loki, Alloy) is not a tier: add
+`--with-monitoring`. Its dashboards are default-open, so it is off unless you
+ask. See [Compose profiles](./compose-profiles.mdx) for what each profile
+starts.
+
+## Unattended install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setup-openprocessor.sh \
+  | bash -s -- --tiers core,curation,cropwright --unattended
+```
+
+`--unattended` never prompts. A step that needs consent fails unless its
+consent variable is set:
+
+| Variable | Allows |
+|---|---|
+| `OP_ALLOW_PUBLIC_BIND=1` | a non-loopback `--bind` |
+| `OP_ALLOW_EXTERNAL_VLM=1` | a `--vlm-remote` URL outside private address space |
+| `OP_CONFIRM_PURGE=<project>` | `--purge-volumes` / `--purge-data` |
+
+Other common flags: `--all` (every tier), `--version vX.Y.Z` (pin a release),
+`--dir PATH`, `--project NAME`, `--port-base N`, `--sample-data`,
+`--no-start`, `--dry-run` (print every state-changing command, run none).
+`INSTALLATION.md` in the repository lists every flag.
+
+## Verify the download yourself
+
+```bash
+V=v0.3.0   # the release you want
+curl -fsSLO https://github.com/davidamacey/OpenProcessor/releases/download/$V/setup-openprocessor.sh
+curl -fsSLO https://github.com/davidamacey/OpenProcessor/releases/download/$V/SHA256SUMS
+grep ' setup-openprocessor.sh$' SHA256SUMS | sha256sum -c -
+bash setup-openprocessor.sh --version "$V"
+```
+
+`SHA256SUMS` comes from the same place as the files it covers. It proves
+**integrity** (the download is complete and uncorrupted), **not
+authenticity**. The same holds for `images.lock` and `cropwright.lock`, which
+pin exact digests and are covered by `SHA256SUMS`; the installer also checks
+that each `images.lock` entry names the image repo expected for its key.
+Signed releases are follow-up work.
+
+## Network access
+
+:::warning[Cropwright on your LAN]
+
+Cropwright is reachable on your LAN by default, for homelab or small-business
+use. The API itself stays bound to 127.0.0.1. There is no login on
+Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
+everything on 127.0.0.1.
+
+:::
+
+- Do not port-forward Cropwright, or any OpenProcessor port, to the public
+  internet. For access beyond a trusted network, put a reverse proxy with
+  authentication in front.
+- `--bind <ip>` publishes the API and backend ports on that address, after a
+  warning and a typed `expose`. A specific address (for example
+  `--bind 10.0.0.5`) also narrows Cropwright to that interface;
+  `--local-only` always wins.
+- A re-run keeps the Cropwright bind you chose last time.
+
+See [Security](../deployment/security.mdx).
+
+## OpenSearch heap sizing
+
+The installer sets `OPENSEARCH_HEAP` from host RAM:
+`clamp(floor(RAM_GiB / 8), 1, 8)` GB.
+
+| Host RAM | Heap | Soft shard budget (20 per heap GB) |
+|---|---|---|
+| under 16 GiB | 1g | 20 |
+| 16-23 GiB | 2g | 40 |
+| 24-31 GiB | 3g | 60 |
+| 32-39 GiB | 4g | 80 |
+| 40-63 GiB | 5g-7g | 100-140 |
+| 64 GiB and up | 8g (cap) | 160 |
+
+A heap you set in `.env` is never overwritten. The soft shard budget is heap
+GB times `OP_SHARDS_PER_HEAP_GB` (advanced, default 20); going past it only
+warns. The installer summary prints both. For more room, raise
+`OPENSEARCH_HEAP` (about 1 GB per 20 shards) and restart `opensearch`.
+
+## Upgrade, repair, rollback, uninstall
+
+Run these from the install directory:
+
+```bash
+./openprocessor upgrade                   # latest release (backs up first)
+./openprocessor upgrade --version vX.Y.Z
+./setup-openprocessor.sh --repair         # re-verify, re-pull, re-run failed model groups
+./setup-openprocessor.sh --rollback       # newest backup of a different version
+./setup-openprocessor.sh --uninstall [--purge-volumes] [--purge-data] [--remove-images]
+```
+
+- **Upgrade** backs up the release files, `.env` and state to
+  `backups/<UTC timestamp>/`, adds new `.env` keys without touching yours,
+  updates the image pins and keeps the installed tiers.
+- **Rollback** skips backups of the version already installed, so after
+  upgrading v1 to v2 and re-running v2 it lands on v1. With no other version
+  on record it restores the newest backup.
+- **Uninstall** keeps volumes, data, models and caches unless you add a purge
+  flag, and every purge asks you to type the project name.
+
+These act only on a directory this installer created and on its own compose
+project.
+
+## Troubleshooting
+
+| Exit code | Meaning |
+|---|---|
+| 2 | usage error (or a port conflict you declined: use `--port-base N`) |
+| 3 | project or container-name collision: pass `--project NAME` or another `--dir` |
+| 4 | no usable GPU, or the GPU plan was refused |
+| 5 | Docker unreachable |
+| 6 | HuggingFace token missing or rejected (accept the SAM 3 license first) |
+| 7 | checksum, digest or `images.lock` verification failed |
+| 8 | health check or model setup failed: check `./openprocessor logs`, then `--repair` |
+| 9 | consent not given: re-run with `--yes` or the consent variable |
+
+There is no CPU inference path: `--cpu --control-plane-only` installs
+OpenSearch, the API and Cropwright without inference, and the API reports
+`degraded`.

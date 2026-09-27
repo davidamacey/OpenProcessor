@@ -8,6 +8,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'getting-started/introduction',
         'getting-started/quick-start',
+        'getting-started/installer',
         'getting-started/model-export',
         'getting-started/compose-profiles',
         'getting-started/second-stack',

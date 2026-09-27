@@ -5,10 +5,66 @@ title: Quick start
 
 # Quick start
 
-Two paths: the **core inference API** (one script), then, optionally, the
+Two paths: the **core inference API** (one command), then, optionally, the
 **curation subsystem** seeded with public sample data.
 
 ## 1. Core inference API
+
+### One-line install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setup-openprocessor.sh | bash
+```
+
+This installs the latest published release into `./openprocessor/` with no
+git clone, no image build and no host Python. It asks which **tiers** you want,
+picks GPUs, pulls digest-pinned images, exports the TensorRT engines inside
+the containers, starts everything and runs a health check. First install
+takes 30-60 minutes, mostly image pulls and TensorRT export.
+
+| Tier | What you get |
+|---|---|
+| `core` | Triton, the API (port 4603), OpenSearch |
+| `curation` | curation workers, PE-Core embeddings, evaluator (implies `core`) |
+| `segmenter` | SAM 3 segmenter (gated HuggingFace token) |
+| `vlm` | local vLLM serving a catalog model |
+| `trainer` | training service + MLflow |
+| `cropwright` | the Cropwright web UI |
+
+Monitoring is a flag (`--with-monitoring`), not a tier. For no prompts:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setup-openprocessor.sh \
+  | bash -s -- --tiers core,curation,cropwright --unattended
+```
+
+The installer checks every file against the release's `SHA256SUMS` (integrity,
+not authenticity) and sizes the OpenSearch heap from your RAM (RAM/8, 1-8 GB).
+Cropwright is reachable on your LAN by default, for homelab or small-business
+use. The API itself stays bound to 127.0.0.1. There is no login on
+Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
+everything on 127.0.0.1.
+
+Tier sizes, every flag, verifying the download by hand, network access, heap
+sizing, upgrade, rollback and troubleshooting: [One-line installer](./installer.mdx).
+
+Verify and manage:
+
+```bash
+cd openprocessor
+curl http://127.0.0.1:4603/health          # readiness: Triton + OpenSearch reachable
+curl -X POST http://127.0.0.1:4603/detect -F "image=@your-image.jpg"
+./openprocessor status                     # service health
+./openprocessor logs yolo-api -f           # live logs
+./openprocessor sample coco                # public COCO sample (200 images)
+```
+
+Detection coordinates are normalized to `0.0-1.0`; multiply by the image
+width/height for pixels.
+
+### Install from source
+
+For development, or to build the images yourself:
 
 ```bash
 git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor
@@ -17,10 +73,10 @@ git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor
 
 `scripts/setup.sh` pulls the pre-built images, detects your GPU and picks a
 profile (`minimal`, `standard`, `full`), writes `.env` from `env.template`
-(it never overwrites an existing `.env` unless you pass `--force`),
-downloads the base weights, runs the one-time TensorRT export, starts the
-core services and runs smoke tests. First run is dominated by TensorRT
-compilation (about 30-60 minutes); later starts take seconds.
+(it never overwrites an existing `.env` unless you pass `--force`, and a
+forced rewrite keeps your `OPENSEARCH_HEAP`), downloads the base weights,
+runs the one-time TensorRT export, starts the core services and runs smoke
+tests.
 
 Useful flags (all from `./scripts/setup.sh --help`):
 
@@ -33,15 +89,7 @@ Useful flags (all from `./scripts/setup.sh --help`):
 | `--force` | Overwrite an existing `.env` |
 | `--curation` | Print the curation next steps at the end |
 
-Verify:
-
-```bash
-curl http://localhost:4603/health          # readiness: Triton + OpenSearch reachable
-curl -X POST http://localhost:4603/detect -F "image=@your-image.jpg"
-```
-
-Detection coordinates are normalized to `0.0-1.0`; multiply by the image
-width/height for pixels. Day-to-day management:
+Day-to-day management of a checkout:
 
 ```bash
 ./scripts/openprocessor.sh status     # service health
