@@ -24,9 +24,9 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
-    d = tmp_path / 'region_drain'
-    monkeypatch.setenv('OP_REGION_DRAIN_STATE_DIR', str(d))
-    yield d
+    monkeypatch.setenv('OP_REGION_DRAIN_STATE_DIR', str(tmp_path / 'region_drain'))
+    # The bound project's own dir (nested per project under the root).
+    yield region_drain._state_dir()
     region_drain._reset_for_tests()
 
 

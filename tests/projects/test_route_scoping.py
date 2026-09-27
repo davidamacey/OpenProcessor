@@ -205,3 +205,30 @@ def test_a_failed_project_does_not_bind(client: TestClient) -> None:
     response = client.get(f'{API}/projects/broken/classes')
     assert response.status_code == 409
     assert response.json()['detail']['error'] == 'project_failed'
+
+
+def test_shell_and_cli_callers_use_scoped_curation_paths() -> None:
+    """Re-review R4: the installer, deploy CLI, model-setup lib and the
+    Makefile call only global or project-scoped curation paths."""
+    import re
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[2]
+    files = [
+        *sorted((repo / 'scripts' / 'lib').glob('*.sh')),
+        *sorted((repo / 'scripts').glob('*.sh')),
+        repo / 'openprocessor',
+        repo / 'setup-openprocessor.sh',
+        repo / 'Makefile',
+    ]
+    allowed = re.compile(r'/curation/(projects(/|\b)|health\b|events\b)')
+    offenders = [
+        f'{path.relative_to(repo)}:{lineno}: {line.strip()}'
+        for path in files
+        if path.is_file()
+        for lineno, line in enumerate(path.read_text(encoding='utf-8').splitlines(), start=1)
+        for match in re.finditer(r'/curation/[A-Za-z_]', line)
+        if not allowed.match(line[match.start() :])
+        and 'scripts/curation/' not in line[max(0, match.start() - 8) : match.end() + 1]
+    ]
+    assert offenders == []

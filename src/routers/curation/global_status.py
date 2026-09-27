@@ -80,9 +80,10 @@ async def global_events(
     topic: str | None = Query(default=None, description='Optional topic filter.'),
 ) -> StreamingResponse:
     """SSE stream of global events only (``project: null``): project
-    lifecycle (``project.*``), VLM-registry ``config.changed`` and
-    ``combine.*``. A ``combine.*`` event names the project it builds in
-    ``target``. No project's own events are ever delivered here."""
+    lifecycle (``project.*``) and ``combine.*`` (``GLOBAL_EVENT_PREFIXES``).
+    A ``combine.*`` event names the project it builds in ``target``. No
+    project's own events are ever delivered here; a project's config
+    changes (``config.changed``) ride that project's own stream."""
     hub = get_event_hub()
     sub = await hub.subscribe(project=GLOBAL_STREAM, topic=topic)
     return sse_response(hub, sub)

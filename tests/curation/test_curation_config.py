@@ -35,11 +35,14 @@ def test_defaults_use_path_types() -> None:
     assert isinstance(cfg.bakeoff_eval_root, Path)
 
 
-def test_bakeoff_eval_root_default_is_relative_not_a_private_path() -> None:
+def test_bakeoff_eval_root_default_is_relative_not_a_private_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The bake-off harness used to default to owner-private
     absolute paths (one of which named a licensed proprietary image
     corpus). The default must be a repo-relative path, never an
     absolute filesystem path baked into the source."""
+    monkeypatch.delenv('OP_PROJECTS_DATA_ROOT', raising=False)
     cfg = CurationConfig()
     assert not cfg.bakeoff_eval_root.is_absolute()
 

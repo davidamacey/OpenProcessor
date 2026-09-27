@@ -456,7 +456,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     if args.project:
-        # Fails fast on an unknown/unbindable slug.
+        # Fails fast on an unknown/unbindable slug. add_project_argument's
+        # own default already reads $OP_CURATION_PROJECT (P1R R9); no
+        # project given here means every active project (multi-project
+        # mode, §5.2), not a single-project env-var bind.
         bind_script_project(args.project)
 
     stop = asyncio.Event()

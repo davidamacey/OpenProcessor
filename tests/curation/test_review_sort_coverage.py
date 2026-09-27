@@ -9,7 +9,7 @@ tab's next sensible sort and say so (``sort_fallback_reason``), and
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -30,22 +30,13 @@ def test_classifier_blind_spots_default_label_has_no_stale_coco_name() -> None:
     assert 'classifier' in label.lower()
 
 
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
-
 ITEMS = base_curation_config().items_index
 
 
 @pytest.fixture(autouse=True)
-def _fresh_coverage(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    from src.services.curation.strategy_registry import _reset_field_coverage_cache
-
+def _scores_flags_off(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv('OP_SCORES_ENABLED', raising=False)
     monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
-    _reset_field_coverage_cache()
-    yield
-    _reset_field_coverage_cache()
 
 
 def _item(crop_id: str, **fields: Any) -> dict[str, Any]:

@@ -43,7 +43,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import tempfile
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1457,10 +1456,19 @@ async def refine_region_cluster(
 # regions scrolls hundreds of MB + writes every assignment (~7-8 min), far
 # too long to hold an HTTP request — so the endpoint fires it and the UI
 # polls this file.
-_JOB_FILE = Path(
-    os.getenv('OP_REGION_CLUSTER_JOB_FILE')
-    or str(Path(tempfile.gettempdir()) / 'region_cluster_job.json')
-)
+def _region_state_dir() -> Path:
+    """The bound project's region-clustering state dir: the job files and
+    TTL markers below are per project (one project's refine must never
+    suppress another's re-partition, nor its job show on another's status)."""
+    from src.config.curation import get_curation_config
+
+    return Path(get_curation_config().project_state_dir) / 'region_cluster'
+
+
+def _job_file() -> Path:
+    return _region_state_dir() / 'job.json'
+
+
 _JOB_STALE_S = 1800.0  # a 'running' flag older than this is treated as dead
 _DEFAULT_JOB: dict[str, Any] = {
     'running': False,
@@ -1474,7 +1482,7 @@ _job_tasks: set[asyncio.Task[None]] = set()
 
 def _read_region_cluster_job() -> dict[str, Any]:
     try:
-        state: dict[str, Any] = json.loads(_JOB_FILE.read_text())
+        state: dict[str, Any] = json.loads(_job_file().read_text())
     except Exception:
         return dict(_DEFAULT_JOB)
     # Stale-guard: a worker that died mid-run would otherwise leave the flag
@@ -1492,10 +1500,10 @@ def _read_region_cluster_job() -> dict[str, Any]:
 
 def _write_region_cluster_job(state: dict[str, Any]) -> None:
     try:
-        _JOB_FILE.parent.mkdir(parents=True, exist_ok=True)
-        tmp = _JOB_FILE.with_suffix('.tmp')
+        _job_file().parent.mkdir(parents=True, exist_ok=True)
+        tmp = _job_file().with_suffix('.tmp')
         tmp.write_text(json.dumps(state))
-        tmp.replace(_JOB_FILE)  # atomic rename
+        tmp.replace(_job_file())  # atomic rename
     except Exception as exc:
         logger.warning('curation_region_cluster_job_write_failed', error=str(exc))
 
@@ -1513,32 +1521,32 @@ def region_cluster_job_status() -> dict[str, Any]:
 # (which busts the TTL — the good-region pool changed enough to be worth it).
 REGION_REPARTITION_REFINE_TTL_S = 600.0  # 10 min — short; just protects in-progress refines
 FP_REPARTITION_BUST_DELTA = 200  # this many new FPs since last partition busts the TTL
-_REGION_REFINE_MARKER = Path(
-    os.getenv('OP_REGION_REFINE_MARKER')
-    or str(Path(tempfile.gettempdir()) / 'region_refine_marker.json')
-)
-_REGION_PARTITION_MARKER = Path(
-    os.getenv('OP_REGION_PARTITION_MARKER')
-    or str(Path(tempfile.gettempdir()) / 'region_partition_marker.json')
-)
+
+
+def _refine_marker() -> Path:
+    return _region_state_dir() / 'refine_marker.json'
+
+
+def _partition_marker() -> Path:
+    return _region_state_dir() / 'partition_marker.json'
 
 
 def mark_region_refine(cluster_id: int) -> None:
     """Record that a good region bucket was just manually refined (TTL anchor)."""
     try:
-        _REGION_REFINE_MARKER.parent.mkdir(parents=True, exist_ok=True)
-        tmp = _REGION_REFINE_MARKER.with_suffix('.tmp')
+        _refine_marker().parent.mkdir(parents=True, exist_ok=True)
+        tmp = _refine_marker().with_suffix('.tmp')
         tmp.write_text(
             json.dumps({'last_refine_at': datetime.now(UTC).isoformat(), 'cluster_id': cluster_id})
         )
-        tmp.replace(_REGION_REFINE_MARKER)
+        tmp.replace(_refine_marker())
     except Exception as exc:
         logger.warning('curation_region_refine_marker_write_failed', error=str(exc))
 
 
 def _read_region_refine_marker() -> dict[str, Any]:
     try:
-        data: dict[str, Any] = json.loads(_REGION_REFINE_MARKER.read_text())
+        data: dict[str, Any] = json.loads(_refine_marker().read_text())
         return data
     except Exception:
         return {}
@@ -1546,19 +1554,19 @@ def _read_region_refine_marker() -> dict[str, Any]:
 
 def _write_region_partition_marker(fp_count: int) -> None:
     try:
-        _REGION_PARTITION_MARKER.parent.mkdir(parents=True, exist_ok=True)
-        tmp = _REGION_PARTITION_MARKER.with_suffix('.tmp')
+        _partition_marker().parent.mkdir(parents=True, exist_ok=True)
+        tmp = _partition_marker().with_suffix('.tmp')
         tmp.write_text(
             json.dumps({'last_partition_at': datetime.now(UTC).isoformat(), 'fp_count': fp_count})
         )
-        tmp.replace(_REGION_PARTITION_MARKER)
+        tmp.replace(_partition_marker())
     except Exception as exc:
         logger.warning('curation_region_partition_marker_write_failed', error=str(exc))
 
 
 def _read_region_partition_marker() -> dict[str, Any]:
     try:
-        data: dict[str, Any] = json.loads(_REGION_PARTITION_MARKER.read_text())
+        data: dict[str, Any] = json.loads(_partition_marker().read_text())
         return data
     except Exception:
         return {}
@@ -1926,14 +1934,13 @@ async def auto_assign_fp_from_centroids(
 
 # Background FP-centroid job state — same cross-worker file pattern as the
 # region-clustering job above (own file so the two can run independently).
-_FP_JOB_FILE = Path(
-    os.getenv('OP_REGION_FP_JOB_FILE') or str(Path(tempfile.gettempdir()) / 'region_fp_job.json')
-)
+def _fp_job_file() -> Path:
+    return _region_state_dir() / 'fp_job.json'
 
 
 def _read_region_fp_job() -> dict[str, Any]:
     try:
-        state: dict[str, Any] = json.loads(_FP_JOB_FILE.read_text())
+        state: dict[str, Any] = json.loads(_fp_job_file().read_text())
     except Exception:
         return dict(_DEFAULT_JOB)
     if state.get('running') and state.get('started_at'):
@@ -1949,10 +1956,10 @@ def _read_region_fp_job() -> dict[str, Any]:
 
 def _write_region_fp_job(state: dict[str, Any]) -> None:
     try:
-        _FP_JOB_FILE.parent.mkdir(parents=True, exist_ok=True)
-        tmp = _FP_JOB_FILE.with_suffix('.tmp')
+        _fp_job_file().parent.mkdir(parents=True, exist_ok=True)
+        tmp = _fp_job_file().with_suffix('.tmp')
         tmp.write_text(json.dumps(state))
-        tmp.replace(_FP_JOB_FILE)
+        tmp.replace(_fp_job_file())
     except Exception as exc:
         logger.warning('curation_region_fp_job_write_failed', error=str(exc))
 

@@ -1,6 +1,6 @@
 """Project binding for script and worker entry points (projects_plan.md
 §3.3: "every script entry point binds from ``--project`` (default
-``default``) or ``OP_PROJECT``").
+``default``) or ``OP_CURATION_PROJECT``").
 
 A script binds its whole process (:func:`bind_process_project`), because
 ContextVars do not follow it into the threads it starts. Every slug,
@@ -33,11 +33,11 @@ _BINDABLE = frozenset({'active', 'archived'})
 
 
 def add_project_argument(parser: argparse.ArgumentParser) -> None:
-    """``--project SLUG`` (default ``$OP_PROJECT`` or ``default``)."""
+    """``--project SLUG`` (default ``$OP_CURATION_PROJECT`` or ``default``)."""
     parser.add_argument(
         '--project',
-        default=os.environ.get('OP_PROJECT', DEFAULT_SLUG),
-        help='Project slug to act on (default: $OP_PROJECT, else "default").',
+        default=os.environ.get('OP_CURATION_PROJECT', DEFAULT_SLUG),
+        help='Project slug to act on (default: $OP_CURATION_PROJECT, else "default").',
     )
 
 
@@ -91,8 +91,8 @@ async def abind_script_project(slug: str, *, opensearch_url: str | None = None) 
 
 def bind_script_project_from_env() -> ProjectRecord:
     """For entry points with no argument parser (long-running workers):
-    bind ``$OP_PROJECT``, else ``default``."""
-    return bind_script_project(os.environ.get('OP_PROJECT', DEFAULT_SLUG))
+    bind ``$OP_CURATION_PROJECT``, else ``default``."""
+    return bind_script_project(os.environ.get('OP_CURATION_PROJECT', DEFAULT_SLUG))
 
 
 def script_project_registry(opensearch_url: str | None = None) -> ProjectRegistry:
