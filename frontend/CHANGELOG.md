@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **The `/clusters` region gallery picks the false-positive bucket by
+  served `cluster_kind`, not a client id constant.** `SlotGallery.svelte`
+  and `slotGalleryController.svelte.ts` deleted
+  `FALSE_POSITIVE_REGION_CLUSTER_ID` (`-100`) — the FP-only styling (red
+  border, "✗ False positives"/"✗ False-positive cluster" badges) now keys
+  off the selected cluster's own served `cluster_kind === 'false_positive'`
+  (`GET {API_PREFIX}/regions/clusters`), via the controller's new
+  `selectedClusterIsFalsePositive`. A cluster's id sent back to the
+  backend (`region_cluster_id`, refine, etc.) was always the served id
+  and is unchanged; only the FP-detection comparison moved off the id.
 - **`e2e/live/` is project-aware (following the projects cutover).** The
   live read-only tier now reads a session-scoped `live_project` fixture
   (`{slug, prefix}`) off the GLOBAL `GET {API_PREFIX}/projects`

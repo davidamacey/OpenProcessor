@@ -1457,10 +1457,11 @@ audit are done; its status section records the deviations.
   only `builtinDetectors.ts`; domain profiles live under `examples/`.
   `createSlotGalleryController(slot)` reads browse path, lifecycle
   states and slot key from its `SlotSpec` (served `/regions/statuses`
-  first). The false-positive bucket id is one constant,
-  `FALSE_POSITIVE_REGION_CLUSTER_ID` (TODO: the served
-  `cluster_kind === 'false_positive'`, which OpenProcessor now serves on
-  `/regions/clusters` cards). `CropCard` picks its sub-box slot by the
+  first). The permanent false-positive bucket is identified solely by the
+  served `cluster_kind === 'false_positive'` on the selected region
+  cluster's own card (`GET {API_PREFIX}/regions/clusters`) — never by a
+  client-side id constant; a selected cluster whose id happens to collide
+  with a past reserved id is unaffected. `CropCard` picks its sub-box slot by the
   crop's region evidence (`subBoxSlotFor`, `cropSlots.ts`) and renders ✎
   only when there is one. `SlotCard` / `SlotBboxEditor` require their
   `slot` prop.
