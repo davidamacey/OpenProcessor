@@ -1635,7 +1635,12 @@ scale for a file already in `stryker.config.json`'s `mutate` list.
 (never installed on the host), installs `e2e/requirements.txt` and a
 chromium browser if missing (`scripts/run-e2e.mjs`), then runs
 `e2e/stubbed/` (`npm run build` + `vite preview`, driven by pytest +
-Playwright). Covers the flows a plain `npm test` (jsdom, no real
+Playwright). The runner builds and serves once, then runs the suite in
+parallel with pytest-xdist (`--dist loadfile`; workers default to half the
+CPUs, capped at 6; override with `E2E_WORKERS`), which takes about 40 s
+instead of about 160 s. Tests must wait on real conditions such as a
+selector or `page.expect_request`, not fixed sleeps, because a sleep that
+works serially flakes under parallel load. Covers the flows a plain `npm test` (jsdom, no real
 browser) can't: keyboard-driven `/review` assign/undo, `/clusters/[id]`
 drag/hotkey/discard, the `/settings` and dashboard assist-scope
 wire-composition round trips, tier-2 annotation-profile loading, and

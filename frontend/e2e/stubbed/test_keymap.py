@@ -223,9 +223,14 @@ def test_keymap_absent_when_404(stub, page, app_url):
 
     page.goto(f"{app_url}/review", wait_until="domcontentloaded")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(200)
-    page.keyboard.press("d")
-    page.wait_for_timeout(200)
+    # The hint strip renders from the same registrations the key handler
+    # uses, so once it shows the discard hint the key is live.
+    page.wait_for_selector("text=discard", timeout=ACTION_TIMEOUT_MS)
+    with page.expect_request(
+        lambda r: r.method == "POST" and "/review_dismiss" in r.url,
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press("d")
     assert len(dismiss_calls) == 1
 
     stub.assert_fail_closed()

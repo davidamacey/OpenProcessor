@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Faster test runs.** `npm run test:e2e` now builds and serves the app
+  once, then runs the stubbed Playwright suite across parallel pytest-xdist
+  workers. That's about 40 s instead of about 160 s for 101 tests, and the
+  worker count is set with `E2E_WORKERS`. The pre-push unit-test hook no
+  longer caps vitest at 4 workers, which cut it from about 1 min 44 s to
+  about 31 s. `test_keymap_absent_when_404` now waits on the real key and
+  request instead of fixed sleeps; it flaked under parallel load.
+
 ### Added
 
 - **Configurable keyboard shortcuts — editor + served keymap (K2 of
