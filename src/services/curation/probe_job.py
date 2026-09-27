@@ -306,8 +306,17 @@ async def start_probe_job(
     module docstring / :mod:`src.services.curation.job_lock`). If ``gpu``
     is set, claims it via the training GPU arbiter first -- a
     :class:`~src.services.training.gpu_arbiter.GpuArbiterStopFailedError`
-    propagates (never silently ignored)."""
+    propagates (never silently ignored). Raises ``ValueError`` immediately
+    (before claiming the lock or a GPU) for an ``architecture`` outside
+    :data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`, rather
+    than letting the background task fail after the caller already got a
+    200."""
     from src.services.curation.job_lock import exclusive_start_lock
+    from src.services.curation.probe_models import PROBE_ARCHITECTURES
+
+    if architecture not in PROBE_ARCHITECTURES:
+        msg = f'unknown probe architecture {architecture!r} (expected one of {PROBE_ARCHITECTURES})'
+        raise ValueError(msg)
 
     global _active_task  # noqa: PLW0603 - singleton task handle, mirrors item_scores.job
 

@@ -1,0 +1,34 @@
+# images.lock -- key=image@sha256:digest for every image this
+# release uses (installer plan section 3.1). CI-generated at tag time from
+# the pushed digests (owner answer 11.1 #2: a local release script does
+# this, no CI image builds -- see Wave 4).
+#
+# This committed copy is a development placeholder: every value is a
+# syntactically valid but unresolvable placeholder digest so
+# tests/installer/test_static.py can assert the *shape* (no ":latest", a
+# digest is present) without requiring real pushed images. A real release
+# overwrites this file entirely (scripts/release/build_deploy_bundle.sh
+# refuses to bundle it otherwise).
+#
+# setup-openprocessor.sh refuses these placeholders (they are not 64-hex
+# digests): a release installs only from a real lock. Before images are
+# published, test with local-only tags instead:
+#   setup-openprocessor.sh --release-dir <assets> --version vX.Y.Z --image-tag <tag>
+# with OP_IMAGE_REPO=<local repo prefix>.
+# Keys: scripts/lib/image_keys.sh (shared with the release script).
+api=davidamacey/openprocessor@sha256:000000000000000000000000000000000000000000000000000000000000dev0
+triton=davidamacey/openprocessor-triton@sha256:000000000000000000000000000000000000000000000000000000000000dev1
+evaluator=davidamacey/openprocessor-evaluator@sha256:000000000000000000000000000000000000000000000000000000000000dev2
+segmenter=davidamacey/openprocessor-segmenter@sha256:000000000000000000000000000000000000000000000000000000000000dev3
+trainer=davidamacey/openprocessor-trainer@sha256:000000000000000000000000000000000000000000000000000000000000dev4
+vlm_gemma4=vllm/vllm-openai:gemma4-cu130@sha256:000000000000000000000000000000000000000000000000000000000000dev5
+vlm_generic=vllm/vllm-openai:gemma4-cu130@sha256:000000000000000000000000000000000000000000000000000000000000dev6
+opensearch=opensearchproject/opensearch:3.6.0@sha256:000000000000000000000000000000000000000000000000000000000000dev7
+opensearch_dashboards=opensearchproject/opensearch-dashboards:3.6.0@sha256:000000000000000000000000000000000000000000000000000000000000dev8
+mlflow=ghcr.io/mlflow/mlflow:v2.19.0@sha256:000000000000000000000000000000000000000000000000000000000000dev9
+prometheus=prom/prometheus:v3.12.0@sha256:000000000000000000000000000000000000000000000000000000000000deva
+grafana=grafana/grafana:13.1.0@sha256:000000000000000000000000000000000000000000000000000000000000devb
+loki=grafana/loki:3.6.12@sha256:000000000000000000000000000000000000000000000000000000000000devc
+alloy=grafana/alloy:v1.17.1@sha256:000000000000000000000000000000000000000000000000000000000000devd
+node_exporter=prom/node-exporter:v1.10.2@sha256:000000000000000000000000000000000000000000000000000000000000deve
+dcgm_exporter=nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04@sha256:000000000000000000000000000000000000000000000000000000000000devf
