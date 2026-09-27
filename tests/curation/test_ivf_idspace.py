@@ -101,22 +101,22 @@ def _bulk_calls_to_cluster_ids(client: Any) -> dict[str, int]:
 
 @pytest.fixture
 def ivf_store_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Redirect the IVF centroid store to a tmp dir for every code path.
+    """Redirect every bare ``IVFCentroidStore()`` call to a tmp dir.
 
-    ``ivf_store.py``'s module-level ``IVF_STORE_DIR``/``CENTROIDS_PATH``/
-    ``METADATA_PATH``/``GATE_PATH`` are read by name at call time inside
-    ``IVFCentroidStore.__init__`` (for ``IVF_STORE_DIR``) and re-imported by
-    value elsewhere (a future ingest pipeline's IVF-assign helper would
-    import ``CENTROIDS_PATH`` fresh each call) -- patching the module
-    attributes covers both.
+    ``IVFCentroidStore.__init__`` resolves its directory from
+    ``get_curation_config().project_state_dir`` at call time (never a
+    frozen module constant, so two calls under different bound projects
+    resolve differently) -- patch that resolution instead of a deleted
+    module-level path constant.
     """
     from src.services.curation.clustering.methods import ivf_store as ivf_store_mod
 
     store_dir = tmp_path / 'ivf_residuals'
-    monkeypatch.setattr(ivf_store_mod, 'IVF_STORE_DIR', store_dir)
-    monkeypatch.setattr(ivf_store_mod, 'CENTROIDS_PATH', store_dir / 'centroids.faiss')
-    monkeypatch.setattr(ivf_store_mod, 'METADATA_PATH', store_dir / 'metadata.json')
-    monkeypatch.setattr(ivf_store_mod, 'GATE_PATH', store_dir / 'gate.json')
+
+    class _FakeCurationConfig:
+        project_state_dir = tmp_path
+
+    monkeypatch.setattr(ivf_store_mod, 'get_curation_config', lambda: _FakeCurationConfig())
     return store_dir
 
 

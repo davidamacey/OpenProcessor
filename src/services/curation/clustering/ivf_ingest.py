@@ -25,7 +25,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.core.logging import get_logger
-from src.services.curation.clustering.methods.ivf_store import CENTROIDS_PATH, IVFCentroidStore
+from src.services.curation.clustering.methods.ivf_store import IVFCentroidStore
 
 
 logger = get_logger(__name__)
@@ -47,24 +47,33 @@ def get_ivf_ingest_store() -> IVFCentroidStore | None:
     caches ``None`` for that mtime so a broken file isn't repeatedly
     retried within the same generation.
     """
+    # Construct first so the store resolves the CURRENTLY bound project's
+    # directory (see IVFCentroidStore.__init__), then stat that project's
+    # own centroids file -- never a frozen, cross-project-shared path.
+    store = IVFCentroidStore()
+
     try:
-        mtime = CENTROIDS_PATH.stat().st_mtime
+        mtime = store.centroids_path.stat().st_mtime
     except OSError:
-        # No centroids persisted yet (fresh deploy). Cache the miss.
+        # No centroids persisted yet for this project (fresh deploy).
+        # Cache the miss.
         _ivf_ingest_cache['mtime'] = None
         _ivf_ingest_cache['store'] = None
         _ivf_ingest_cache['gate'] = {}
         return None
 
-    if _ivf_ingest_cache['mtime'] == mtime:
+    # The project a cached generation belongs to must match, or a
+    # coincidentally-equal mtime across two projects' distinct centroid
+    # files would serve one project's stale cached store to the other.
+    cache_key = (str(store.centroids_path), mtime)
+    if _ivf_ingest_cache['mtime'] == cache_key:
         return _ivf_ingest_cache['store']
 
     # mtime changed (or first load) — (re)load the centroids + gate
     # policy together, since a gated full recluster always rewrites the
     # centroids alongside the gate it was trained under.
-    _ivf_ingest_cache['mtime'] = mtime
+    _ivf_ingest_cache['mtime'] = cache_key
     try:
-        store = IVFCentroidStore()
         loaded = store.load()
         _ivf_ingest_cache['store'] = store if loaded else None
         _ivf_ingest_cache['gate'] = store.load_gate() if loaded else {}

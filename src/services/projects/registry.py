@@ -191,6 +191,20 @@ class ProjectRegistry:
     def get(self, slug: str) -> ProjectRecord | None:
         return self._by_slug.get(slug)
 
+    def active_projects(self) -> list[ProjectRecord]:
+        """Every ``active`` project (``default`` included), for workers
+        that must discover the whole fleet instead of binding one slug.
+        Archived/deleting/building/failed projects are excluded -- a
+        worker skips them entirely, the same way a request to their
+        indexes would 404/409 at the route layer."""
+        return [record for record in self.snapshot().values() if record.status == 'active']
+
+    def archived_projects(self) -> list[ProjectRecord]:
+        """Every ``archived`` project, for maintenance scripts
+        (``prune_exports.py``, ``prune_training_runs.py``) that must still
+        clean up a project's own files after it stops taking traffic."""
+        return [record for record in self.snapshot().values() if record.status == 'archived']
+
     async def ensure_fresh(self) -> None:
         """One GET of the revision counter; a ``_search`` over every
         project doc only when the counter moved.
@@ -220,6 +234,17 @@ class ProjectRegistry:
         except Exception as exc:
             self._failed_at = time.monotonic()
             logger.warning('project_registry_refresh_failed', error=str(exc))
+
+    async def refresh_strict(self) -> None:
+        """Reload every project doc now, raising on any failure. For
+        one-shot maintenance scripts, where silently falling back to a
+        stale or ``default``-only view would skip projects unnoticed."""
+        client = self._client_factory()
+        if asyncio.iscoroutine(client):
+            client = await client
+        async with self._lock:
+            await self._refresh(client, await _read_revision(client))
+        self._failed_at = None
 
     async def _refresh(self, client: Any, current_revision: int) -> None:
         """Read every project doc, a page at a time (``search_after`` on

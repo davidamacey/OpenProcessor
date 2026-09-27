@@ -173,6 +173,51 @@ class _ItemTask:
     item_text_update: dict[str, Any] = field(default_factory=dict)
     # Final outcome to write back. Empty dict means "no update for this crop".
     update_doc: dict[str, Any] = field(default_factory=dict)
+    # Which project this item belongs to (projects_plan.md §5.1). Every
+    # downstream call for this task -- Triton/segmenter/VLM config reads,
+    # OpenSearch reads/writes -- must run inside ``with
+    # bind_project(task.project):`` so it resolves this item's own
+    # project, not whatever project a sibling task on another consumer
+    # happens to be processing. The producer always stamps it; a task
+    # without one is a bug and :func:`bind_task_project` refuses it.
+    project: Any = None
+
+
+def bind_task_project(task: _ItemTask) -> None:
+    """Bind ``task``'s project for the rest of the calling consumer task.
+
+    Each pipeline consumer is its own asyncio task, so its contextvars
+    binding is private to it; rebinding on every dequeue means per-item
+    work always resolves the item's own project.
+    """
+    from src.config.project_context import set_bound_project
+
+    if task.project is None:
+        msg = f'item task {task.crop_id!r} has no project'
+        raise ValueError(msg)
+    set_bound_project(task.project)
+
+
+def bound_class_catalog() -> tuple[list[str], dict[str, int]]:
+    """The bound project's VLM class catalog: the non-deprecated class
+    names (the list sent in the prompt; a reply's ``class_id`` indexes it)
+    and ``name -> registry class_id``.
+
+    Resolved per call from the bound project's class registry (cached per
+    project, mtime-invalidated), never from a process-wide list: items of
+    different projects must be classified against their own registry.
+    An unreadable registry yields an empty catalog, which every caller
+    already treats as "do not classify".
+    """
+    from src.clients.curation_opensearch import get_class_registry
+
+    try:
+        registry = get_class_registry().load()
+    except Exception as exc:
+        logger.warning('class_registry_load_failed', error=str(exc))
+        return [], {}
+    active = [c for c in registry.classes if not c.deprecated]
+    return [c.class_name for c in active], {c.class_name: int(c.class_id) for c in active}
 
 
 # =============================================================================

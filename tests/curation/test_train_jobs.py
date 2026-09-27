@@ -10,6 +10,7 @@ nothing escapes into a real ``/jobs/`` volume.
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path  # used at runtime (jobs_dir fixture, registry-pin tests)
 
@@ -686,9 +687,19 @@ async def test_tail_run_log_missing_file_returns_empty(jobs_dir: Path) -> None:
 
 
 class _FakeCurationConfig:
-    def __init__(self, mlflow_public_url: str | None = None, api_prefix: str = '/curation') -> None:
+    def __init__(
+        self,
+        mlflow_public_url: str | None = None,
+        api_prefix: str = '/curation',
+        train_jobs_dir: Path | None = None,
+    ) -> None:
         self.mlflow_public_url = mlflow_public_url
         self.api_prefix = api_prefix
+        # _resolve_jobs_dir() reads this (projects_plan.md §5.3); these
+        # tests only care about mlflow_public_url/api_prefix, so default
+        # to OP_TRAIN_JOBS_DIR/'/jobs' -- whatever _resolve_jobs_dir used
+        # before it became project-scoped.
+        self.train_jobs_dir = train_jobs_dir or Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
 
 
 def test_public_mlflow_url_builds_from_configured_base(monkeypatch: pytest.MonkeyPatch) -> None:

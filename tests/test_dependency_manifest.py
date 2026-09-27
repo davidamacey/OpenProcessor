@@ -179,9 +179,6 @@ _ALLOWLIST = {
     # returns None on any failure, falling back to the sentinel-only path.
     # The GPU arbiter is a documented no-op on main.
     'docker': 'optional docker-SDK path with a graceful None fallback (GPU arbiter, currently a no-op)',
-    # src/services/curation/autolabel/job.py falls back to polling
-    # (_watch_state_file_poll) inside a try/except ImportError.
-    'inotify_simple': 'optional inotify-based watch with a polling fallback on ImportError',
     # perception_models (top-level `core`): its own requirements exact-pin
     # timm==1.0.15, which conflicts with open-clip-torch>=3.2, so it is
     # declared as pyproject's `pe` extra and installed --no-deps at a pinned

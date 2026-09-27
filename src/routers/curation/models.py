@@ -23,6 +23,7 @@ from fastapi import HTTPException, Query
 from pydantic import BaseModel
 
 from src.clients.pe_encoder import PE_IMAGE_MODEL
+from src.config.curation import get_curation_config
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
 from src.routers.curation._common import logger, router
@@ -252,6 +253,14 @@ def _discover_promoted_models(
         return out
     for entry in entries:
         if not entry.is_dir() or entry.name in fixed_names:
+            continue
+        # Project scoping (docs/design/openprocessor_internal/
+        # projects_plan.md §5.3, D1): the shared Triton repo holds every
+        # project's promoted models side by side; §5.5 opt-in cross-project
+        # sharing is out of scope here, so /models/status never lists a
+        # model this project doesn't own, with or without
+        # include_other_projects.
+        if not _project_owns_model(entry.name):
             continue
         promote_json = entry / 'promote.json'
         if not promote_json.is_file():
@@ -502,6 +511,30 @@ async def models_status() -> dict[str, Any]:
 # re-derive them.)
 
 
+def _project_owns_model(model_name: str) -> bool:
+    """True if ``model_name`` (a ``triton_name``) belongs to the bound
+    project's namespace (docs/design/openprocessor_internal/projects_plan.md
+    §5.3: ``triton_name = model_prefix + requested``).
+
+    ``default`` is an ordinary project (P1: no special-casing) and gets a
+    real ``model_prefix`` (``'default__'``) like any other. A namespaced
+    name (contains ``'__'``) that isn't ours belongs to some other
+    project -- registered or not, since only a project's own prefix ever
+    produces one. An *unprefixed* name (no ``'__'`` at all -- every core
+    pipeline model, plus every model promoted before projects existed)
+    carries no project's namespace, so it is owned by ``default`` alone,
+    exactly as before P1 gave every project a real prefix.
+    """
+    from src.config.projects import DEFAULT_SLUG
+
+    cfg = get_curation_config()
+    if model_name.startswith(cfg.model_prefix):
+        return True
+    if '__' in model_name:
+        return False
+    return cfg.project_slug == DEFAULT_SLUG
+
+
 class UnloadModelResponse(BaseModel):
     triton_name: str
     triton_unloaded: bool
@@ -533,6 +566,12 @@ async def unload_model(
       loud explanation. Unloading any of them breaks live serving until
       something else is loaded.
     """
+    if not _project_owns_model(model_name):
+        raise HTTPException(
+            status_code=404,
+            detail=f'{model_name!r} is not a model owned by this project',
+        )
+
     if model_name in _external_service_model_names():
         raise HTTPException(
             status_code=400,

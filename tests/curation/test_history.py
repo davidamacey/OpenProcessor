@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from src.config.project_context import current_project
 from src.services.curation.history import (
     MAX_HISTORY_ENTRIES,
     MAX_REGION_CHAIN_ENTRIES,
@@ -360,6 +361,7 @@ async def _run_curation_worker_case() -> list[dict[str, Any]]:
 
     F = get_region_fields()
     t = _ItemTask(
+        project=current_project().record,
         crop_id='crop-1',
         image_path='/dev/null/never-read',
         item_bbox_norm=(0.1, 0.1, 0.5, 0.5),

@@ -27,6 +27,7 @@ from PIL import Image
 import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import runner as runner_mod
 from src.config import get_region_fields
+from src.config.project_context import current_project
 from src.services.detection.cascade_detect import RegionCandidate
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.labeling.vlm_labeler import (
@@ -594,6 +595,7 @@ class TestOnePassPerItem:
             {'c1': {**_item(), F.status: 'detected'}}, search_delay=0.0, lag_searches=0
         )
         task = worker._ItemTask(
+            project=current_project().record,
             crop_id='c1',
             image_path='',
             item_bbox_norm=(0.1, 0.1, 0.9, 0.9),

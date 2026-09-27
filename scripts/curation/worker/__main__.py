@@ -96,6 +96,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         'until SIGINT/SIGTERM. Without this flag, exits on the first empty poll.',
     )
     add_project_argument(p)
+    # Default: every active project (projects_plan.md §5.1); --project
+    # restricts the worker to that one project.
+    p.set_defaults(project=None)
     return p.parse_args(argv)
 
 
@@ -104,7 +107,8 @@ def main(argv: list[str] | None = None) -> int:
 
     reject_retired_env()
     args = parse_args(argv)
-    bind_script_project(args.project, opensearch_url=args.opensearch)
+    if args.project:
+        bind_script_project(args.project, opensearch_url=args.opensearch)
     try:
         return asyncio.run(run(args))
     except KeyboardInterrupt:

@@ -48,10 +48,23 @@ import trainer  # noqa: E402
 
 @pytest.fixture
 def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A shared /jobs volume both halves of the protocol point at."""
+    """A shared /jobs volume both halves of the protocol point at.
+
+    Also points ``default``'s ``export_root`` (and so its stamped
+    ``project_export_root``, projects_plan.md §5.3) at ``tmp_path`` --
+    every fixture's ``export_dir`` lives under it, so the trainer's
+    export-containment check never rejects these fixtures' export dirs
+    as escaping the project. Resets the cached ``CurationConfig``
+    singleton (the codebase's existing pattern, e.g.
+    ``test_export_datasets.py``) so the env var actually takes.
+    """
+    import src.config.curation as curation_config_mod
+
     d = tmp_path / 'jobs'
     d.mkdir()
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(d))
+    monkeypatch.setenv('OP_EXPORT_ROOT', str(tmp_path))
+    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     return d
 
 

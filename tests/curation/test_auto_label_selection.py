@@ -50,16 +50,11 @@ def job_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     from src.services.curation.autolabel import job
 
     state_dir = tmp_path / 'auto_label'
-    monkeypatch.setattr(job, '_STATE_DIR', state_dir)
-    for attr, name in (
-        ('_STATE_FILE', 'state.json'),
-        ('_CANCEL_FLAG', 'cancel.flag'),
-        ('_RUNNING_LOCK', 'running.lock'),
-        ('_EXIT_CODE_FILE', 'exit_code'),
-        ('_TRIGGER_FILE', 'trigger.json'),
-        ('_HEARTBEAT_FILE', 'heartbeat'),
-    ):
-        monkeypatch.setattr(job, attr, state_dir / name)
+    # Every other path helper (_state_file/_cancel_flag/etc.) calls
+    # _state_dir() internally, so patching just this one function
+    # (looked up fresh from job's module namespace at call time)
+    # redirects all of them.
+    monkeypatch.setattr(job, '_state_dir', lambda: state_dir)
     return state_dir
 
 

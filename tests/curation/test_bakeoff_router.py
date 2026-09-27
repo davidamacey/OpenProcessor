@@ -153,8 +153,11 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Path]:
     monkeypatch.setattr(eval_datasets, 'export_root', lambda: dirs['exports'])
     monkeypatch.setattr(eval_datasets, 'external_root', lambda: dirs['external'])
     monkeypatch.setattr(bakeoff_jobs, 'RUNS_HOST_ROOT', dirs['runs'])
-    monkeypatch.setattr(bakeoff, 'JOBS_DIR', dirs['jobs'])
-    monkeypatch.setattr(bakeoff, 'OUT_DIR', dirs['out'])
+    # bakeoff.JOBS_DIR/OUT_DIR are now _jobs_dir()/_out_dir() -- resolved
+    # per-project at call time (projects_plan.md §5.3) instead of module-
+    # level constants -- so tests patch the functions themselves.
+    monkeypatch.setattr(bakeoff, '_jobs_dir', lambda: dirs['jobs'])
+    monkeypatch.setattr(bakeoff, '_out_dir', lambda: dirs['out'])
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(dirs['train_jobs']))
     for key in [k for k in __import__('os').environ if k.startswith('OP_BAKEOFF_PROFILE')]:
         monkeypatch.delenv(key)
