@@ -75,6 +75,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `test_no_legacy_region_scalars.py`, and updating
     `POST /crops/{id}/region/undo` to restore the box list (pin 4) --
     undo still only restores the legacy scalar snapshot today.
+- **W8b multi-box region infrastructure (candidate selection, VLM
+  overlay, verdict-to-box mapping) — standalone, NOT yet wired into the
+  worker's streaming pipeline.** `src/services/detection/
+  region_candidates.py` (new): `select_region_candidates()` — floor /
+  deterministic tie-break / greedy class-agnostic NMS / cap over a list
+  of `RegionCandidate`, the one function every candidate leg (detector,
+  segmenter, text-hint re-pass) and `POST /region_profiles/test` will
+  use once wired. `src/services/labeling/region_overlay.py` (new):
+  `draw_region_overlay` (numbered red-rectangle tags, 1-based, one code
+  path for N=1..N), `overlay_description`, `render_region_block`,
+  `VlmBoxVerdict`, `box_verdicts`. **D-B (owner decision, 2026-09-26):**
+  the pre-W8 flat VLM reply shape is dropped — list shape only (N=1 is a
+  list of one); a reply lacking the list key raises
+  `MultiRegionKeysMissingError` (`code=pack_multi_region_keys_missing`),
+  not a flat-shape fallback. `scripts/curation/worker/verify.py` gains
+  `TaskBoxInput` and `verdicts_to_boxes` — maps a combined reply's
+  per-box verdicts onto a `list[RegionBox]` (every entry carries its own
+  `box_id`, Cropwright C3/Q15), applying the sanity gate per box and the
+  no-verdict retry/force-resolve split from the single-box cascade.
+  **Not done this pass:** these are pure, fully tested functions not yet
+  called from `runner.py`'s streaming stage consumers
+  (`stage_a_*`/`stage_b_combined`), which still build the single legacy-
+  scalar write end to end — the worker still never selects more than one
+  candidate per item. See the handback report for the full remaining
+  scope. `src/config/region_rejection.py` gains `REJECT_REASON_HUMAN`
+  (a human reviewer's per-box rejection is now a labelled catalog
+  entry); `src/config/region_state.py` gains `BOX_STATE_ROUTES`, served
+  as `box_state_routes` on `GET /regions/statuses`.
+- **W8: explicit OpenSearch mapping for `region_boxes` /
+  `region_box_embeddings`.** `_items_body()` now maps the W8 nested list
+  and its sibling per-box-embedding field explicitly (fixed element-key
+  properties, not dynamic-inferred), plus the item-level summary fields.
+  No separate `ensure_items_*` step (stacks are re-created).
+- **W8: `RegionBoxWire` gains `bbox_in_parent` and `thumbnail_url` per
+  box** on the item wire (`region_boxes_to_wire`), so a client can render
+  and link a box without a second geometry projection or an extra
+  `crop_id` round-trip.
 - **`op_global_configs`: the global (non-project-scoped) config store
   (W2 review M3, 2026-09-27).** `src/services/config_store/store.py`
   gains a sibling to the per-project `ConfigStore`: `global_configs_index()`
@@ -110,6 +147,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `op_projects` case. `tests/curation/_fake_config_opensearch.py`'s
   `_FakeIndices` gained `exists`/`create` for the new index-bootstrap
   test.
+
+### Changed
+- **W8 (breaking): `region_text` removed from `PATCH
+  /crops/{id}/region_meta`.** D decision (owner, 2026-09-26): it was
+  always a per-box value riding on an item-level route.
+  `ItemRegionMetaRequest` no longer has the field at all
+  (`extra='forbid'` 422s a stale client that still sends it, whether or
+  not the profile reads text) — per-box text now goes through `PUT
+  /crops/{crop_id}/regions` / `PATCH /crops/{crop_id}/regions/{box_id}`
+  (W8a), which gained the same text-free-profile guard (422
+  `region_text_disabled`) and human-provenance stamp
+  (`text_source='human'`, `text_confidence=1.0`,
+  `text_choice='human'`) per box that `region_meta` used to apply at the
+  item level. No back-compat window.
+- **W8 pin 4: `POST /crops/{id}/region/undo` restores the box-list
+  snapshot, not just the legacy scalar.** `edit_history.py`'s snapshot
+  set gained the per-item box-list fields alongside the pre-W8 per-box
+  scalars (additive, not a replacement — the worker still writes only
+  the legacy scalars this pass).
 
 ### Fixed
 - **W2-finish review fix-on-fix pass (2026-09-27), including a
