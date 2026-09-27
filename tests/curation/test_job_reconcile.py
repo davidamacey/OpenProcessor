@@ -284,39 +284,39 @@ def test_autolabel_job_reconciles_orphaned_running_state(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'auto_label'))
-    import importlib
-
+    from src.config.project_context import bind_project
     from src.services.curation.autolabel import job
+    from src.services.projects.registry import default_project_record
 
-    importlib.reload(job)
+    with bind_project(default_project_record()):
+        job._state_dir().mkdir(parents=True, exist_ok=True)
+        job._state_file().write_text(
+            json.dumps({'job_id': 'j4', 'status': 'running', 'stage': 'vlm'})
+        )
+        job._heartbeat_file().touch()
+        old = time.time() - 120
+        os.utime(job._heartbeat_file(), (old, old))
 
-    job._STATE_DIR.mkdir(parents=True, exist_ok=True)
-    job._STATE_FILE.write_text(json.dumps({'job_id': 'j4', 'status': 'running', 'stage': 'vlm'}))
-    job._HEARTBEAT_FILE.touch()
-    old = time.time() - 120
-    os.utime(job._HEARTBEAT_FILE, (old, old))
-
-    assert job.reconcile_orphaned_jobs() is True
-    on_disk = json.loads(job._STATE_FILE.read_text())
-    assert on_disk['status'] == 'interrupted'
+        assert job.reconcile_orphaned_jobs() is True
+        on_disk = json.loads(job._state_file().read_text())
+        assert on_disk['status'] == 'interrupted'
 
 
 def test_autolabel_job_leaves_fresh_running_state_alone(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'auto_label'))
-    import importlib
-
+    from src.config.project_context import bind_project
     from src.services.curation.autolabel import job
+    from src.services.projects.registry import default_project_record
 
-    importlib.reload(job)
+    with bind_project(default_project_record()):
+        job._state_dir().mkdir(parents=True, exist_ok=True)
+        job._state_file().write_text(json.dumps({'job_id': 'j4', 'status': 'running'}))
+        job._heartbeat_file().touch()
 
-    job._STATE_DIR.mkdir(parents=True, exist_ok=True)
-    job._STATE_FILE.write_text(json.dumps({'job_id': 'j4', 'status': 'running'}))
-    job._HEARTBEAT_FILE.touch()
-
-    assert job.reconcile_orphaned_jobs() is False
-    assert json.loads(job._STATE_FILE.read_text())['status'] == 'running'
+        assert job.reconcile_orphaned_jobs() is False
+        assert json.loads(job._state_file().read_text())['status'] == 'running'
 
 
 def test_autolabel_job_ignores_pending_unclaimed_trigger(
@@ -326,15 +326,14 @@ def test_autolabel_job_ignores_pending_unclaimed_trigger(
     orphaned run -- the worker container has its own independent
     lifecycle and may simply not have gotten to it."""
     monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'auto_label'))
-    import importlib
-
+    from src.config.project_context import bind_project
     from src.services.curation.autolabel import job
+    from src.services.projects.registry import default_project_record
 
-    importlib.reload(job)
+    with bind_project(default_project_record()):
+        job._state_dir().mkdir(parents=True, exist_ok=True)
+        job._state_file().write_text(json.dumps({'job_id': 'j5', 'status': 'queued'}))
+        job._trigger_file().write_text(json.dumps({'job_id': 'j5'}))
 
-    job._STATE_DIR.mkdir(parents=True, exist_ok=True)
-    job._STATE_FILE.write_text(json.dumps({'job_id': 'j5', 'status': 'queued'}))
-    job._TRIGGER_FILE.write_text(json.dumps({'job_id': 'j5'}))
-
-    assert job.reconcile_orphaned_jobs() is False
-    assert json.loads(job._STATE_FILE.read_text())['status'] == 'queued'
+        assert job.reconcile_orphaned_jobs() is False
+        assert json.loads(job._state_file().read_text())['status'] == 'queued'
