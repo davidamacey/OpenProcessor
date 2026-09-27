@@ -132,12 +132,16 @@ async def write_record(
     *,
     if_seq_no: int | None = None,
     if_primary_term: int | None = None,
+    op_type: str | None = None,
 ) -> None:
     """Write ``record`` (create or OCC-guarded overwrite) and bump the
     registry revision. Raises :class:`RevisionConflictError` when
     ``if_seq_no``/``if_primary_term`` are stale -- i.e. another writer's
     bump landed first (the storage-level race this guards against;
-    callers translate it into the API's 409 ``revision_conflict``)."""
+    callers translate it into the API's 409 ``revision_conflict``).
+    ``op_type='create'`` makes the write itself refuse a doc that already
+    exists (the storage-level create race two concurrent ``POST
+    /projects`` for the same slug would otherwise lose -- M1)."""
     from src.services.projects.bootstrap import bump_revision
     from src.services.projects.guard import bind_registry_admin
 
@@ -146,6 +150,8 @@ async def write_record(
         kwargs['if_seq_no'] = if_seq_no
     if if_primary_term is not None:
         kwargs['if_primary_term'] = if_primary_term
+    if op_type is not None:
+        kwargs['op_type'] = op_type
     # The guard only lets lifecycle code write op_projects; a create has no
     # project bound yet, so every registry write declares itself here.
     with bind_registry_admin():

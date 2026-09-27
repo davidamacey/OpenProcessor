@@ -16,6 +16,12 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+@pytest.fixture(autouse=True)
+def _writable(not_stale_registry: object) -> None:
+    """PUT is a write; M2 refuses it on the process-wide default test
+    registry, which is permanently stale by design (see the fixture)."""
+
+
 @pytest.fixture
 def app_client():
     import src.routers.curation.models as models_mod

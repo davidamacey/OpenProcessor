@@ -55,6 +55,7 @@ async def write_record(
     *,
     if_seq_no: int | None = None,
     if_primary_term: int | None = None,
+    op_type: str | None = None,
 ) -> None:
     """``registry.write_record``, with the storage-level OCC race
     (:class:`RevisionConflictError` -- another writer's bump landed between
@@ -62,12 +63,27 @@ async def write_record(
     ``revision_conflict``, exactly like a stale ``expected_revision``
     would be (:func:`_require_revision`). Every lifecycle mutation
     writes through here, never the raw registry function, so a losing
-    concurrent writer never silently clobbers or 500s."""
+    concurrent writer never silently clobbers or 500s.
+
+    ``op_type='create'`` (M1) is the create path's storage-level guard:
+    two concurrent ``POST /projects`` for the same slug race the raw
+    ``index`` call itself, not just this process's in-memory snapshot
+    check, and the loser gets :class:`RevisionConflictError` here too --
+    translated below into 409 ``slug_taken`` rather than
+    ``revision_conflict``, since there is no prior revision to conflict
+    with."""
     try:
         await _raw_write_record(
-            client, record, if_seq_no=if_seq_no, if_primary_term=if_primary_term
+            client, record, if_seq_no=if_seq_no, if_primary_term=if_primary_term, op_type=op_type
         )
     except RevisionConflictError as exc:
+        if op_type == 'create':
+            raise api_error(
+                409,
+                'slug_taken',
+                f"a project named '{record.slug}' already exists",
+                project=record.slug,
+            ) from exc
         raise api_error(
             409,
             'revision_conflict',
@@ -176,6 +192,19 @@ async def create_project(
             )
         raise api_error(409, 'slug_taken', f"a project named '{slug}' already exists", project=slug)
 
+    if clone_settings_from:
+        # M7: every refusal a clone can raise -- unknown axis, clone into
+        # itself, a source that does not exist or is not ready -- runs
+        # BEFORE the first write. A refused clone must burn no slug, hold
+        # no shards and leave no dirs (it used to leave the record
+        # 'failed' with gamma's indexes already created -- see the P3
+        # review's M7/m9).
+        from src.services.projects.clone import _validate_clone_source
+
+        await _validate_clone_source(
+            client, target_slug=slug, from_slug=clone_settings_from, axes=clone_axes
+        )
+
     warnings = await _capacity_error_or_warning(client)
 
     now = _now()
@@ -191,7 +220,7 @@ async def create_project(
         origin=None,
         resources=resources,
     )
-    await write_record(client, record)
+    await write_record(client, record, op_type='create')
     registry = get_project_registry()
     await registry.ensure_fresh()
 

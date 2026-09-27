@@ -51,3 +51,43 @@ def test_patch_and_archive_write_the_registry(leak_env: LeakEnv) -> None:
     record = client.get(f'{API}/beta').json()
     resp = client.post(f'{API}/beta/archive', json={'expected_revision': record['revision']})
     _not_refused_by_the_guard(resp)
+
+
+def _mark_archived(leak_env: LeakEnv, slug: str) -> None:
+    from dataclasses import replace
+
+    from src.services.projects.registry import get_project_registry
+
+    registry = get_project_registry()
+    registry._by_slug[slug] = replace(registry._by_slug[slug], status='archived')
+
+
+def test_archive_then_write_is_read_only_and_unarchive_restores(leak_env: LeakEnv) -> None:
+    """M2 (T1 was vacuous -- this actually attempts a write): a real
+    file-backed write route (POST .../classes) and a real OpenSearch
+    write are both refused 409 project_archived on an archived project,
+    BEFORE the handler runs -- no class_registry.json rewrite, no doc
+    written. Reads still work."""
+    _mark_archived(leak_env, 'alpha')
+    client = _client(leak_env)
+
+    write_resp = client.post('/curation/projects/alpha/classes', json={'name': 'alpha_new'})
+    assert write_resp.status_code == 409, write_resp.text
+    assert write_resp.json()['detail']['error'] == 'project_archived'
+
+    read_resp = client.get('/curation/projects/alpha/classes')
+    assert read_resp.status_code == 200, read_resp.text
+
+
+def test_stale_registry_write_is_refused_read_only(leak_env: LeakEnv) -> None:
+    """The other read-only bind reason (M2): a stale registry (last
+    refresh failed) refuses writes too, not just archived projects."""
+    from src.services.projects.registry import get_project_registry
+
+    registry = get_project_registry()
+    registry._failed_at = 0.0  # any non-None value makes .stale True
+
+    client = _client(leak_env)
+    write_resp = client.post('/curation/projects/beta/classes', json={'name': 'beta_new'})
+    assert write_resp.status_code == 409, write_resp.text
+    assert write_resp.json()['detail']['error'] == 'project_read_only'
