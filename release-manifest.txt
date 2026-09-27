@@ -13,6 +13,7 @@ scripts/lib/download.sh
 scripts/lib/export.sh
 scripts/lib/model_setup.sh
 scripts/lib/vlm_catalog.sh
+scripts/lib/image_keys.sh
 examples/vlm/catalog.tsv
 export/build_pe_trt.sh	exec
 monitoring/**	optional
