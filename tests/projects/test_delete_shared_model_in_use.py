@@ -53,10 +53,13 @@ def test_delete_refuses_when_project_owns_a_shared_model(tmp_path) -> None:
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
+        # P3F item 3 (B2(a) residual): create_project's registry
+        # refresh_strict() needs a real, reachable registry bound during
+        # the create itself -- set it before create_project runs.
+        set_project_registry(ProjectRegistry(lambda: client))
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
-        set_project_registry(ProjectRegistry(lambda: client))
 
         with pytest.raises(HTTPException) as exc_info:
             await lifecycle.delete_project(client, slug='cars', confirm='cars')
@@ -79,10 +82,13 @@ def test_delete_force_bypasses_shared_model_block_and_logs(tmp_path, monkeypatch
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
+        # P3F item 3 (B2(a) residual): create_project's registry
+        # refresh_strict() needs a real, reachable registry bound during
+        # the create itself -- set it before create_project runs.
+        set_project_registry(ProjectRegistry(lambda: client))
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
-        set_project_registry(ProjectRegistry(lambda: client))
 
         record = await lifecycle.delete_project(client, slug='cars', confirm='cars', force=True)
         assert record.status == 'deleting'
@@ -101,10 +107,13 @@ def test_delete_allowed_when_project_has_no_shared_models(tmp_path) -> None:
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
+        # P3F item 3 (B2(a) residual): create_project's registry
+        # refresh_strict() needs a real, reachable registry bound during
+        # the create itself -- set it before create_project runs.
+        set_project_registry(ProjectRegistry(lambda: client))
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
-        set_project_registry(ProjectRegistry(lambda: client))
 
         record = await lifecycle.delete_project(client, slug='cars', confirm='cars')
         assert record.status == 'deleting'

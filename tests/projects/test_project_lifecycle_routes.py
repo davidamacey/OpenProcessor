@@ -19,7 +19,7 @@ from src.routers.curation._project_models import (
 )
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
-from .conftest import FakeLifecycleOpenSearch
+from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +40,10 @@ def _env(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _noop_ensure_indexes():
-    with patch('src.routers.curation._common._ensure_indexes', new=AsyncMock()):
+    with patch(
+        'src.routers.curation._common._ensure_indexes',
+        new=AsyncMock(side_effect=fake_ensure_indexes),
+    ):
         yield
 
 

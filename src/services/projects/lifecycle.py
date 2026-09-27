@@ -17,6 +17,8 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
 
+from fastapi import HTTPException
+
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, is_valid_slug, resources_for_new
 from src.core.logging import get_logger
@@ -89,7 +91,7 @@ class JobRef:
     kind_label: str
     id: str
     label: str
-    started_at: str
+    started_at: str | None
 
     def to_wire(self) -> dict[str, Any]:
         return {
@@ -152,6 +154,25 @@ async def _get_mutable_record(
     raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
 
 
+async def _refetch_for_write(
+    client: Any, slug: str, **fields: Any
+) -> tuple[ProjectRecord, int | None, int | None]:
+    """P3F m2: re-read the record fresh right before a status-transition
+    write, and build the new doc FROM that fresh read -- never from a
+    closure-captured snapshot taken earlier in the same call. The OCC
+    ``if_seq_no``/``if_primary_term`` guard alone does not fix the bug
+    this closes: it protects the *write* from a stale token (so a real
+    race still 409s), but a snapshot record built from before an
+    intervening ``await`` (e.g. ``delete_project_finish``'s up-to-60s
+    drain wait) would still silently discard a concurrent PATCH's
+    ``display_name``/``description`` even though the write itself
+    succeeds under a since-refreshed seq/term."""
+    stored, seq, term = await get_record_with_seq(client, slug)
+    if stored is None:
+        raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
+    return replace(stored, **fields), seq, term
+
+
 async def create_project(
     client: Any,
     *,
@@ -209,11 +230,40 @@ async def create_project(
         origin=None,
         resources=resources,
     )
-    await write_record(client, record, op_type='create')
+    try:
+        await write_record(client, record, op_type='create')
+    except HTTPException:
+        # lifecycle.write_record already translated a genuine
+        # storage-level create conflict (RevisionConflictError, i.e.
+        # this exact slug really was taken by someone else) into this
+        # 409 -- propagate untouched, never touch a record that isn't
+        # ours.
+        raise
+    except Exception:
+        # N1: anything else here can only mean the storage-level
+        # index() call for OUR OWN doc either never landed (nothing to
+        # clean up, the slug is simply free again) or landed but the
+        # registry's revision bump afterward failed: our own doc now
+        # exists, wedged in 'building' with no failure path having run.
+        # If it's there, flip it to 'failed' ourselves so a re-create
+        # (slug_retired only fires on 'deleted') or an explicit DELETE
+        # (the delete.py stale-building escape hatch) can recover it.
+        existing, seq, term = await get_record_with_seq(client, slug)
+        if existing is not None and existing.status == 'building':
+            failed_doc = replace(existing, status='failed', updated_at=_now())
+            await write_record(client, failed_doc, if_seq_no=seq, if_primary_term=term)
+        raise
+
     registry = get_project_registry()
-    await registry.ensure_fresh()
 
     try:
+        # B2(a) residual: refresh_strict() raises on any failure (unlike
+        # ensure_fresh's swallow-and-log), so a registry that can't see
+        # this project yet aborts the create cleanly through the except
+        # handler below, instead of proceeding to index creation while
+        # the guard still doesn't recognize the new slug.
+        await registry.refresh_strict()
+
         with bind_project(record):
             from src.routers.curation._common import _ensure_indexes
 
@@ -234,6 +284,25 @@ async def create_project(
 
         with bind_project(record):
             ensure_region_class()
+
+        # B2(a) residual: _ensure_indexes is itself fail-open (every
+        # create/migration failure inside it is logged and swallowed, so
+        # it never raises) -- verify every index this record claims to
+        # own actually exists before ever calling the project 'active'.
+        # Without this, a registry that caught up mid-create without
+        # this project (e.g. a transient refresh right after the
+        # 'building' write) could let create return 'active' with zero
+        # real indexes underneath it -- the exact live B2 symptom.
+        with bind_project(record, read_only=True):
+            missing_indexes = [
+                name
+                for name in sorted(set(record.resources.indexes.values()))
+                if not await client.indices.exists(index=name)
+            ]
+        if missing_indexes:
+            raise RuntimeError(
+                f"'{slug}' create verification found missing indexes: {missing_indexes}"
+            )
     except Exception as exc:
         logger.error('project_create_failed', slug=slug, error=str(exc))
         _, seq, term = await get_record_with_seq(client, slug)
@@ -242,10 +311,13 @@ async def create_project(
         await registry.ensure_fresh()
         raise
 
-    _, seq, term = await get_record_with_seq(client, slug)
-    active = replace(record, status='active', updated_at=_now())
+    active, seq, term = await _refetch_for_write(client, slug, status='active', updated_at=_now())
     await write_record(client, active, if_seq_no=seq, if_primary_term=term)
     await registry.ensure_fresh()
+
+    from src.services.projects.capacity import invalidate_capacity_cache
+
+    invalidate_capacity_cache()  # m7: a create just changed this cluster's shard count
     return active, warnings
 
 
@@ -298,7 +370,7 @@ async def running_jobs(record: ProjectRecord) -> list[JobRef]:
             kind_label=_KIND_LABELS.get(j.kind, j.kind),
             id=j.job_id,
             label=j.job_id,
-            started_at='',
+            started_at=j.started_at,
         )
         for j in busy.running_jobs(record)
     ]
@@ -316,7 +388,18 @@ _LAST_ACTIVE_MESSAGE = 'this is the only active project; leave at least one'
 
 
 async def _last_active_check(record: ProjectRecord) -> None:
-    """Refuse an archive or delete that would leave no active project."""
+    """Refuse an archive or delete that would leave no active project.
+
+    P3F m4 (documented, not fixed): this reads the registry snapshot and
+    the caller's own OCC write happens later, so two concurrent
+    archives/deletes of the last two active projects can both pass this
+    check and both succeed -- the same class of race as two concurrent
+    creates racing the capacity check. A real fix needs a single
+    serialization point (a lock doc with its own OCC, or a distributed
+    lock) this codebase has no infra for yet; every other OCC guard here
+    protects one document's own read-modify-write, not an invariant
+    spanning every document in the registry. Left as documented
+    best-effort until that infra exists."""
     registry = get_project_registry()
     await registry.ensure_fresh()
     if not _other_active_slugs(dict(registry.snapshot()), record.slug):

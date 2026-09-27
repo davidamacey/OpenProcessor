@@ -106,6 +106,16 @@ async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, Proj
         row['index']: int(row.get('docs.count') or 0) for row in rows if isinstance(row, dict)
     }
     result: dict[str, ProjectCounts] = {}
+    # TODO(P3F m12): one validated_count `count` query per project here
+    # is N+1 on top of the single `_cat` call above. A real fix batches
+    # it into one aggregation query (bucket by `_index`, term-filtered
+    # on class_validated) across every project's items index, the same
+    # `_cat` pattern already builds -- deferred this pass: it needs a
+    # cross-index terms aggregation the existing fakes (FakeLifecycleOpenSearch
+    # and the leak sweep's _FakeTransport) don't model, so verifying it
+    # wouldn't be a real red->green fix in the time this pass allows.
+    # Acceptable per finish-pass input 6; low severity (project counts
+    # are small-cardinality, cached-adjacent reads, not a hot path).
     for slug, record in snapshot.items():
         images_idx = record.resources.indexes[IndexRole.IMAGES]
         items_idx = record.resources.indexes[IndexRole.ITEMS]

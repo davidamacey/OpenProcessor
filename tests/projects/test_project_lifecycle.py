@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
-from .conftest import FakeLifecycleOpenSearch, seed_default_project
+from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes, seed_default_project
 
 
 @pytest.fixture(autouse=True)
@@ -43,7 +43,10 @@ def _noop_ensure_indexes():
     machinery P1 already owns and tests -- stub the (heavy, already
     covered elsewhere) index bootstrap so these tests exercise only
     lifecycle.py's own decisions."""
-    with patch('src.routers.curation._common._ensure_indexes', new=AsyncMock()):
+    with patch(
+        'src.routers.curation._common._ensure_indexes',
+        new=AsyncMock(side_effect=fake_ensure_indexes),
+    ):
         yield
 
 

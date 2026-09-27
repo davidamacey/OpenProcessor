@@ -113,6 +113,24 @@ class FakeRegistryOpenSearch:
         return {'hits': {'hits': hits}}
 
 
+@pytest.fixture(autouse=True)
+def _reset_ensure_indexes_bootstrap_cache() -> Any:
+    """``_common._INDEXES_BOOTSTRAPPED`` is a process-wide cache keyed
+    only by slug. Two test functions in this package that happen to
+    reuse the same slug (``cars``, ``zeta``, ...) in the same
+    pytest-xdist worker would otherwise have the second call skip real
+    index creation against ITS OWN brand-new fake client, silently
+    leaving it with zero indexes -- invisible until P3F item 3's
+    post-create existence check made it observable. Reset it around
+    every test here, the same way ``tests/curation``'s ``leak_env``
+    already does."""
+    from src.routers.curation import _common
+
+    _common._INDEXES_BOOTSTRAPPED.clear()
+    yield
+    _common._INDEXES_BOOTSTRAPPED.clear()
+
+
 @pytest.fixture
 def fake_registry_client() -> FakeRegistryOpenSearch:
     return FakeRegistryOpenSearch()
@@ -253,6 +271,22 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
 @pytest.fixture
 def fake_lifecycle_client() -> FakeLifecycleOpenSearch:
     return FakeLifecycleOpenSearch()
+
+
+async def fake_ensure_indexes(opensearch: Any) -> None:
+    """A lightweight stand-in for the real (heavy, already covered
+    elsewhere) index bootstrap: creates just the bound project's own
+    index names in the fake client, so ``create_project``'s post-create
+    index-existence check (P3F item 3, the B2(a) residual) finds real
+    entries to verify -- without pulling in every ``ensure_items_*``
+    mapping migration the tests that stub this out intentionally skip.
+    Use as ``AsyncMock(side_effect=fake_ensure_indexes)`` in place of a
+    bare ``AsyncMock()``."""
+    from src.config.curation import IndexRole, get_curation_config, index_name
+
+    cfg = get_curation_config()
+    for role in IndexRole:
+        await opensearch.indices.create(index=index_name(cfg, role))
 
 
 async def seed_default_project(client: Any) -> Any:

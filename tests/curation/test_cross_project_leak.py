@@ -1017,6 +1017,13 @@ def leak_env(
                 self._by_slug[doc['slug']] = doc_to_record(doc)
 
     monkeypatch.setattr(ProjectRegistry, 'ensure_fresh', _fresh)
+    # P3F item 3 (B2(a) residual): create_project now also calls
+    # refresh_strict() (raises instead of swallowing). This registry's
+    # client_factory is `lambda: None` -- fine for the patched
+    # ensure_fresh above (never touches it), but the real
+    # refresh_strict would call client.get(...) on that None and blow up
+    # with an AttributeError. Give it the same sync-from-store behavior.
+    monkeypatch.setattr(ProjectRegistry, 'refresh_strict', _fresh)
     registry_mod.set_project_registry(registry)
 
     accesses: list[tuple[str | None, str, str, str]] = []
