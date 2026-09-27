@@ -43,11 +43,15 @@ import dataclasses
 import json
 import time
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config, get_gpu_arbiter_config
 from src.core.logging import get_logger
+from src.services.training.project_job_dirs import all_train_jobs_dirs, bakeoff_active
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 logger = get_logger(__name__)
@@ -96,23 +100,6 @@ TRAINER_TERMINAL_STATES = frozenset({'finished', 'failed', 'cancelled', 'skipped
 # ``LOCK_GRACE_SECONDS`` (a short race-closer window, NOT the run duration)
 # and ages out + is cleared after that.
 LOCK_GRACE_SECONDS = 90.0
-
-
-def bakeoff_active(*, jobs_dir: Path | None = None) -> bool:
-    """True if a bake-off job is queued or running (job.json still present).
-
-    ``jobs_dir`` defaults to ``GpuArbiterConfig.bakeoff_jobs_dir`` (always
-    set: ``OP_BAKEOFF_JOBS_DIR`` or ``<state_dir>/bakeoff_jobs``, the same
-    dir the bake-off router writes into). A missing dir means nothing queued.
-    """
-    configured = jobs_dir if jobs_dir is not None else get_gpu_arbiter_config().bakeoff_jobs_dir
-    if not configured:
-        return False
-    target = Path(configured)
-    try:
-        return any(target.glob('*.job.json'))
-    except OSError:
-        return False
 
 
 # =============================================================================
@@ -509,40 +496,10 @@ async def release_gpus_after_training(
 # ---- recovery on API startup -------------------------------------------
 
 
-def _resolve_train_jobs_dir() -> Path:
-    """The ``default`` project's jobs dir (ordinary project record, no
-    env-synthesis fallback); falls back to a freshly computed record
-    when the registry hasn't refreshed yet."""
-    from src.config.curation import base_curation_config
-    from src.config.project_context import bind_project
-    from src.config.projects import DEFAULT_SLUG, new_project_record
-    from src.services.projects.registry import get_project_registry
-    from src.services.training.jobs import _resolve_jobs_dir
-
-    record = get_project_registry().get(DEFAULT_SLUG) or new_project_record(
-        DEFAULT_SLUG, base_curation_config()
-    )
-    with bind_project(record):
-        return _resolve_jobs_dir()
-
-
-def all_train_jobs_dirs() -> dict[str, Path]:
-    """``{project_slug: train_jobs_dir}`` for the default dir plus every
-    active/archived project -- the arbiter's active-run scan must see
-    every project's dir. Reads the registry snapshot; no I/O here."""
-    from src.config.projects import DEFAULT_SLUG
-    from src.services.projects.registry import get_project_registry
-
-    dirs: dict[str, Path] = {DEFAULT_SLUG: _resolve_train_jobs_dir()}
-    for slug, record in get_project_registry().snapshot().items():
-        if slug != DEFAULT_SLUG and record.status in ('active', 'archived'):
-            dirs[slug] = record.resources.train_jobs_dir
-    return dirs
-
-
 async def reconcile_on_startup(
     *,
     train_jobs_dir: Path | None = None,
+    bakeoff_jobs_dir: Path | None = None,
     sentinel: Path | None = None,
 ) -> ArbiterAction:
     """Enforce the desired GPU-service state -- both directions.
@@ -551,6 +508,8 @@ async def reconcile_on_startup(
     dir + every active/archived project's own dir, §5.3), so a run
     started in any project keeps the GPUs claimed. An explicit path
     (test fixtures) scans only that one dir, attributed to no project.
+    ``bakeoff_jobs_dir`` likewise defaults to every project's own
+    bake-off queue (:func:`all_bakeoff_jobs_dirs`).
 
     Runs once at API startup *and* on a periodic loop (every uvicorn
     worker); idempotent re-enforcement, not a race.
@@ -621,7 +580,7 @@ async def reconcile_on_startup(
     # A queued bake-off claims every configured container unless
     # OP_BAKEOFF_HOST_GPUS scopes it to the evaluator's host GPUs (then
     # only an intersecting container stays stopped).
-    if bakeoff_active():
+    if bakeoff_active(jobs_dir=bakeoff_jobs_dir):
         active_stems.add('__bakeoff__')
         scope = get_gpu_arbiter_config().bakeoff_host_gpus
         stop_names.update(containers_to_stop(scope) if scope else all_configured)
@@ -677,8 +636,6 @@ __all__ = [
     'TRAINER_TERMINAL_STATES',
     'ArbiterAction',
     'GpuArbiterStopFailedError',
-    'all_train_jobs_dirs',
-    'bakeoff_active',
     'claim_gpus_for_training',
     'clear_training_lock',
     'containers_to_stop',

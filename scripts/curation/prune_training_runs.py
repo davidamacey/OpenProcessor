@@ -6,7 +6,7 @@ Two independent prunes, both dry-run by default:
 * training-run job state under ``OP_TRAIN_JOBS_DIR`` -- never a
   non-terminal run, a promoted run, or one a queued/running bake-off job
   still references (see ``src.services.training.run_retention``);
-* bake-off comparison output under ``OP_BAKEOFF_OUT_DIR`` -- pure
+* bake-off comparison output under each project's ``<bakeoff_jobs_dir>/out`` -- pure
   keep-last, no pin logic (scored output, not a training artifact).
 
 Neither touches MLflow runs.
@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import sys
 from pathlib import Path
 
@@ -52,6 +51,7 @@ from src.services.projects.script_binding import (
 from src.services.training.run_retention import (
     apply_bakeoff_out_prune,
     apply_run_prune,
+    bakeoff_out_dir,
     plan_bakeoff_out_prune,
     plan_run_prune,
 )
@@ -67,9 +67,7 @@ def _run_one_project(args: argparse.Namespace) -> int:
     jobs_dir = config.train_jobs_dir
     model_repo = resolve_triton_models_dir()
     bakeoff_jobs_dir = config.bakeoff_jobs_dir
-    bakeoff_out_dir = Path(
-        os.environ.get('OP_BAKEOFF_OUT_DIR', str(config.state_dir / 'bakeoff_out'))
-    )
+    out_dir = bakeoff_out_dir(Path(bakeoff_jobs_dir))
 
     run_plan = plan_run_prune(
         jobs_dir=jobs_dir,
@@ -77,7 +75,7 @@ def _run_one_project(args: argparse.Namespace) -> int:
         bakeoff_jobs_dir=bakeoff_jobs_dir,
         keep_last=args.keep_last,
     )
-    out_plan = plan_bakeoff_out_prune(bakeoff_out_dir, args.bakeoff_out_keep_last)
+    out_plan = plan_bakeoff_out_prune(out_dir, args.bakeoff_out_keep_last)
 
     print(f'{len(run_plan)} training run(s) planned for removal (keep_last={args.keep_last}):')
     for job_id in run_plan:

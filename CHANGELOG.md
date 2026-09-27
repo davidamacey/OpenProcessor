@@ -54,6 +54,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the model's own labels, never another model's).
 
 ### Fixed
+- **Trainer capabilities are read from the trainer volume root.** The
+  trainer writes `.trainer_capabilities.json` once at `OP_TRAIN_JOBS_DIR`
+  (it serves every project), but preflight's `trainer_gpus` check and the
+  heartbeat-based reachability probe read it from the bound project's
+  `train_jobs_dir` (`.../projects/<slug>/`), so every project saw "no
+  capabilities file" and GPU-scoping could never block. Both now read
+  `src.config.projects.trainer_jobs_root()`.
+- **Bake-offs are per project end to end.** The GPU arbiter only watched a
+  flat `<state_dir>/bakeoff_jobs` (`GpuArbiterConfig.bakeoff_jobs_dir`)
+  while the router enqueues into each project's own
+  `projects/<slug>/bakeoff_jobs`, so a queued bake-off never kept GPU
+  containers stopped. `bakeoff_active()` now scans every project's queue
+  (`gpu_arbiter.all_bakeoff_jobs_dirs()`); `GpuArbiterConfig.bakeoff_jobs_dir`
+  and the `OP_BAKEOFF_JOBS_DIR` / `OP_BAKEOFF_OUT_DIR` settings are
+  removed. Results live in `<project bakeoff_jobs_dir>/out` for every
+  project (`default` included), and `prune_training_runs.py` prunes only
+  the bound project's results instead of every project pruning the one
+  shared `bakeoff_out` dir. The post-export prune pins exports from the
+  project's own training/bake-off job dirs, not flat env roots no job is
+  written to, so a queued training run's export is never pruned.
 - **`SegmenterClient.source_name` has no default.** The constructor no
   longer defaults to `source_name='sam3'`; every caller (the worker
   runner, tests) passes the active profile's `segmenter_name` explicitly,

@@ -41,7 +41,6 @@ bake-off harness").
 from __future__ import annotations
 
 import json
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, NoReturn
@@ -70,37 +69,25 @@ from src.routers.curation._bakeoff_models import (
 )
 from src.routers.curation._common import router
 from src.services.curation import bakeoff_jobs, eval_datasets
+from src.services.training.run_retention import bakeoff_out_dir
 
 
 logger = get_logger(__name__)
 
 
 # Project-scoped (docs/design/openprocessor_internal/projects_plan.md
-# §5.3): each project's bake-off jobs/outputs live under its own
-# ``CurationConfig.bakeoff_jobs_dir`` (a PROJECT_SCOPED_FIELDS entry), not
-# a single global dir, so no project's queue or results leak into
-# another's. Resolved at call time (never a module-level constant) so a
-# later bind_project is always picked up.
-#
-# ``default``'s ``CurationConfig.bakeoff_jobs_dir`` already resolves via
-# the same ``OP_BAKEOFF_JOBS_DIR`` env var as ``GpuArbiterConfig``'s copy
-# (``src.config.projects.resources_for_new('default', ...)``), so
-# ``_jobs_dir()`` is byte-for-byte the old module-level ``JOBS_DIR`` for
-# ``default``.
-# ``_out_dir()`` keeps
-# ``default``'s exact old path/env var (``OP_BAKEOFF_OUT_DIR`` / a sibling
-# ``bakeoff_out`` dir, NOT nested under ``bakeoff_jobs``) and only nests a
-# project's outputs under its own ``bakeoff_jobs_dir`` for a non-default
-# project (which has no ``OP_BAKEOFF_OUT_DIR`` precedent to preserve).
+# §5.3): each project's bake-off jobs and results live under its own
+# ``CurationConfig.bakeoff_jobs_dir`` (a PROJECT_SCOPED_FIELDS entry), so
+# no project's queue or results leak into another's -- ``default``
+# included. Resolved at call time (never a module-level constant) so a
+# later bind_project is always picked up. The GPU arbiter scans the same
+# per-project dirs (project_job_dirs.all_bakeoff_jobs_dirs).
 def _jobs_dir() -> Path:
     return Path(get_curation_config().bakeoff_jobs_dir)
 
 
 def _out_dir() -> Path:
-    cfg = get_curation_config()
-    if cfg.project_slug == 'default':
-        return Path(os.environ.get('OP_BAKEOFF_OUT_DIR', str(cfg.state_dir / 'bakeoff_out')))
-    return Path(cfg.bakeoff_jobs_dir) / 'out'
+    return bakeoff_out_dir(_jobs_dir())
 
 
 def _raise(exc: bakeoff_jobs.BakeoffRequestError) -> NoReturn:

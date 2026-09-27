@@ -170,7 +170,7 @@ def test_mlflow_experiment_read_from_spec(tmp_path) -> None:
 
 def test_arbiter_sees_a_run_in_a_project_dir(tmp_path, monkeypatch) -> None:
     from src.services.projects.registry import ProjectRegistry, set_project_registry
-    from src.services.training import gpu_arbiter
+    from src.services.training import project_job_dirs
 
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path / 'jobs'))
     alpha = _record('alpha')
@@ -179,7 +179,7 @@ def test_arbiter_sees_a_run_in_a_project_dir(tmp_path, monkeypatch) -> None:
     registry._revision = 0
     set_project_registry(registry)
     try:
-        dirs = gpu_arbiter.all_train_jobs_dirs()
+        dirs = project_job_dirs.all_train_jobs_dirs()
         assert dirs['alpha'] == alpha.resources.train_jobs_dir
         assert DEFAULT_SLUG in dirs
     finally:

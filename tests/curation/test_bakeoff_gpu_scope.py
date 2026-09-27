@@ -155,12 +155,13 @@ async def test_reconcile_restarts_service_outside_bakeoff_host_gpu_scope(
         containers=('svc',),
         container_gpus=(('svc', frozenset({2})),),
         bakeoff_host_gpus='0',
-        bakeoff_jobs_dir=str(bakeoff_jobs_dir),
     )
     _set_config(monkeypatch, cfg)
 
     sentinel = tmp_path / 'pause.sentinel'
-    res = await ga.reconcile_on_startup(train_jobs_dir=jobs_dir, sentinel=sentinel)
+    res = await ga.reconcile_on_startup(
+        train_jobs_dir=jobs_dir, bakeoff_jobs_dir=bakeoff_jobs_dir, sentinel=sentinel
+    )
     assert res.action == 'gpu_services_started'
     assert registry['svc'].status == 'running'
 
@@ -184,11 +185,12 @@ async def test_reconcile_keeps_intersecting_service_down_during_bakeoff(
         containers=('svc',),
         container_gpus=(('svc', frozenset({2})),),
         bakeoff_host_gpus='2',
-        bakeoff_jobs_dir=str(bakeoff_jobs_dir),
     )
     _set_config(monkeypatch, cfg)
 
     sentinel = tmp_path / 'pause.sentinel'
-    res = await ga.reconcile_on_startup(train_jobs_dir=jobs_dir, sentinel=sentinel)
+    res = await ga.reconcile_on_startup(
+        train_jobs_dir=jobs_dir, bakeoff_jobs_dir=bakeoff_jobs_dir, sentinel=sentinel
+    )
     assert res.action == 'gpu_services_stopped'
     assert registry['svc'].status == 'exited'

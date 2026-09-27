@@ -912,7 +912,6 @@ def leak_env(
         'REGION_DRAIN_STATE_DIR': 'jobs/region_drain',
         'HEARTBEAT_DIR': 'state/heartbeats',
         'TRAIN_RUNS_ROOT': 'state/training_runs',
-        'BAKEOFF_OUT_DIR': 'state/bakeoff_out',
         'SOURCE_ROOT': 'images',
         'TRITON_MODEL_REPO': 'models',
     }.items():
