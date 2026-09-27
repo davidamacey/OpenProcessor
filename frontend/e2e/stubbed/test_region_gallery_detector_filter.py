@@ -14,11 +14,12 @@ from fixtures.wire import REGION_CLASS
 
 CLASSES = [
     {
-        "id": 1,
-        "name": REGION_CLASS,
+        "class_id": 1,
+        "class_name": REGION_CLASS,
+        "kind": "region",
         "group": "widgets",
         "hotkey_letter": "l",
-        "count": 40,
+        "sample_count": 40,
         "validated_count": 12,
         "cluster_size": 44,
         "deprecated": False,

@@ -15,11 +15,12 @@ import re
 
 CLASSES = [
     {
-        "id": 67,
-        "name": "suv",
+        "class_id": 67,
+        "class_name": "suv",
+        "kind": "item",
         "group": "vehicle",
         "hotkey_letter": "s",
-        "count": 10,
+        "sample_count": 10,
         "validated_count": 5,
         "cluster_size": 12,
         "deprecated": False,
@@ -130,7 +131,11 @@ def test_classes_table_fits_800px(stub, page, app_url):
     stub.on(
         "GET",
         r"/test_holdout/stats(\?|$)",
-        {"total": 5, "by_class": [{"key": CLASSES[0]["id"], "doc_count": 5}]},
+        {
+            "total": 5,
+            "by_class": [{"key": CLASSES[0]["class_id"], "doc_count": 5, "deficient": False}],
+            "min_test_per_class": 5,
+        },
     )
     page.set_viewport_size({"width": 800, "height": 1000})
     page.goto(f"{app_url}/p/default/classes")

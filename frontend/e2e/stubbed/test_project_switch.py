@@ -25,11 +25,12 @@ GLOBAL_EXACT_PATHS = {f"{API_PREFIX}/projects", f"{API_PREFIX}/health", f"{API_P
 
 CLASSES = [
     {
-        "id": 1,
-        "name": "widget",
+        "class_id": 1,
+        "class_name": "widget",
+        "kind": "item",
         "group": "g",
         "hotkey_letter": "k",
-        "count": 10,
+        "sample_count": 10,
         "validated_count": 5,
         "cluster_size": 12,
         "deprecated": False,
@@ -74,7 +75,7 @@ def test_switching_moves_requests_to_the_other_prefix_and_resets_undo(stub, page
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on(
         "GET",
-        r"/review/",
+        r"/review/(?!tabs)",
         lambda *_: (200, {"items": [review_item(i) for i in range(3)], "total": 3, "page": 1, "page_size": 30}),
     )
 

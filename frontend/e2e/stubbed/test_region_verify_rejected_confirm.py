@@ -23,11 +23,12 @@ from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
 CLASSES = [
     {
-        "id": 1,
-        "name": REGION_CLASS,
+        "class_id": 1,
+        "class_name": REGION_CLASS,
+        "kind": "region",
         "group": "widgets",
         "hotkey_letter": "l",
-        "count": 40,
+        "sample_count": 40,
         "validated_count": 12,
         "cluster_size": 44,
         "deprecated": False,
@@ -78,7 +79,7 @@ def test_confirming_a_verify_rejected_item_promotes_the_candidate_via_status_pat
             {"items": [rejected_tag_item()], "total": 1, "page": 1, "page_size": 30},
         )
 
-    stub.on("GET", r"/review/", review_handler)
+    stub.on("GET", r"/review/(?!tabs)", review_handler)
 
     def region_handler(request, match):
         region_calls.append((request.method, match.string, request.post_data_json or {}))

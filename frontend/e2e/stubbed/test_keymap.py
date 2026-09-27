@@ -24,11 +24,12 @@ from fixtures.wire import make_item
 
 CLASSES = [
     {
-        "id": 1,
-        "name": "widget",
+        "class_id": 1,
+        "class_name": "widget",
+        "kind": "item",
         "group": None,
         "hotkey_letter": None,
-        "count": 10,
+        "sample_count": 10,
         "validated_count": 5,
         "cluster_size": 12,
         "deprecated": False,

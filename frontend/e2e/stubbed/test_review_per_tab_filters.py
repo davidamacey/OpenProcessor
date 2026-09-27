@@ -15,11 +15,12 @@ from fixtures.wire import make_item, review_tab, review_tabs
 
 CLASSES = [
     {
-        "id": 1,
-        "name": "ducati",
+        "class_id": 1,
+        "class_name": "ducati",
+        "kind": "item",
         "group": "moto",
         "hotkey_letter": "k",
-        "count": 10,
+        "sample_count": 10,
         "validated_count": 5,
         "cluster_size": 12,
         "deprecated": False,
@@ -65,11 +66,7 @@ def test_review_filter_bar_hides_controls_the_active_tab_does_not_serve(stub, pa
         items = [review_item(i) for i in range(2)]
         return (200, {"items": items, "total": 2, "page": 1, "page_size": 30})
 
-    # Registered BEFORE _stub_common so /review/tabs (a more specific,
-    # later-registered pattern) wins over this broader /review/ regex —
-    # dispatch checks the most-recently-registered handler first, and
-    # r"/review/" also matches the /review/tabs path.
-    stub.on("GET", r"/review/", review_handler)
+    stub.on("GET", r"/review/(?!tabs)", review_handler)
     _stub_common(stub)
 
     page.goto(f"{app_url}/p/default/review?tab=all")
@@ -91,7 +88,7 @@ def test_review_subject_toggle_label_reflects_served_max_rank_default(stub, page
         items = [review_item(i) for i in range(2)]
         return (200, {"items": items, "total": 2, "page": 1, "page_size": 30})
 
-    stub.on("GET", r"/review/", review_handler)
+    stub.on("GET", r"/review/(?!tabs)", review_handler)
     _stub_common(stub)
 
     page.goto(f"{app_url}/p/default/review?tab=all&preset=primary_low_conf")

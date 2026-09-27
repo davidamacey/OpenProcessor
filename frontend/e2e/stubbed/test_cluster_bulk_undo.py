@@ -13,7 +13,7 @@ from conftest import ACTION_TIMEOUT_MS
 from fixtures.wire import make_item
 
 CLASSES = [
-    {"id": 1, "name": "ducati", "group": "moto", "hotkey_letter": "k", "count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
+    {"class_id": 1, "class_name": "ducati", "kind": "item", "group": "moto", "hotkey_letter": "k", "sample_count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
 ]
 
 CLUSTERS = {

@@ -46,11 +46,13 @@ CORE_TABS = [
 REGION_ROUTE = re.compile(r"/curation/(regions(/|$)|crops/[^/]+/region|ingest/region_drain)")
 
 REGION_CLASS_ROW = {
-    "id": 9,
-    "name": REGION_CLASS,
+    "class_id": 9,
+    "class_name": REGION_CLASS,
+    # No profile: the backend tags nothing as a region class.
+    "kind": "item",
     "group": "widgets",
     "hotkey_letter": None,
-    "count": 40,
+    "sample_count": 40,
     "validated_count": 12,
     "cluster_size": 44,
     "deprecated": False,

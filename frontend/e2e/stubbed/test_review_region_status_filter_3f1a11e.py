@@ -24,11 +24,12 @@ from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_LABEL, REGION_TAB_
 
 CLASSES = [
     {
-        "id": 1,
-        "name": REGION_CLASS,
+        "class_id": 1,
+        "class_name": REGION_CLASS,
+        "kind": "region",
         "group": "widgets",
         "hotkey_letter": "l",
-        "count": 40,
+        "sample_count": 40,
         "validated_count": 12,
         "cluster_size": 44,
         "deprecated": False,
@@ -36,10 +37,12 @@ CLASSES = [
 ]
 
 REVIEW_TABS = {
+    "empty_state": {"has_probe_predictions": True, "has_item_scores": True},
     "tabs": [
         {
             "id": "regions",
             "label": REGION_TAB_LABEL,
+            "description": "",
             "filters": ["text", "region_status"],
             "filter_defaults": {"region_status": "all"},
             "filter_specs": [

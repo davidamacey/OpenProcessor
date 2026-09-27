@@ -14,7 +14,7 @@ from conftest import ACTION_TIMEOUT_MS
 from fixtures.wire import make_item
 
 CLASSES = [
-    {"id": 1, "name": "widget_a", "group": "widgets", "hotkey_letter": "w", "count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
+    {"class_id": 1, "class_name": "widget_a", "kind": "item", "group": "widgets", "hotkey_letter": "w", "sample_count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
 ]
 
 METHODS = {"strategies": [], "flags": {}}
@@ -55,7 +55,7 @@ def test_review_source_panel_draws_client_side_boxes(stub, page, app_url):
         items = [review_item(i) for i in range(3)]
         return (200, {"items": items, "total": 3, "page": 1, "page_size": 30})
 
-    stub.on("GET", r"/review/", review_handler)
+    stub.on("GET", r"/review/(?!tabs)", review_handler)
 
     def context_handler(request, match):
         context_calls.append(match.string)

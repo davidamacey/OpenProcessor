@@ -24,11 +24,12 @@ from fixtures.wire import make_item
 
 CLASSES = [
     {
-        "id": 1,
-        "name": "ducati",
+        "class_id": 1,
+        "class_name": "ducati",
+        "kind": "item",
         "group": "moto",
         "hotkey_letter": "k",
-        "count": 10,
+        "sample_count": 10,
         "validated_count": 5,
         "cluster_size": 12,
         "deprecated": False,
@@ -75,7 +76,7 @@ def test_review_actions_stay_within_1280x720_viewport(stub, page, app_url):
         items = [review_item(i) for i in range(3)]
         return (200, {"items": items, "total": 3, "page": 1, "page_size": 30})
 
-    stub.on("GET", r"/review/", review_handler)
+    stub.on("GET", r"/review/(?!tabs)", review_handler)
 
     page.goto(f"{app_url}/p/default/review")
 
@@ -115,7 +116,7 @@ def _stub_review(stub) -> None:
     )
     stub.on(
         "GET",
-        r"/review/",
+        r"/review/(?!tabs)",
         lambda _r, _m: (
             200,
             {"items": [review_item(i) for i in range(3)], "total": 3, "page": 1, "page_size": 30},

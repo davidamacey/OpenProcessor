@@ -24,11 +24,12 @@ from conftest import ACTION_TIMEOUT_MS
 
 CLASSES = [
     {
-        "id": 44,
-        "name": "mustang",
+        "class_id": 44,
+        "class_name": "mustang",
+        "kind": "item",
         "group": "car",
         "hotkey_letter": "m",
-        "count": 161,
+        "sample_count": 161,
         "validated_count": 34,
         "cluster_size": 161,
         "deprecated": False,

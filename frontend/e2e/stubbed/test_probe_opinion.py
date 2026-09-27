@@ -14,10 +14,10 @@ from conftest import ACTION_TIMEOUT_MS
 from fixtures.wire import make_item
 
 CLASSES = [
-    {"id": 1, "name": "widget_a", "group": "widgets", "hotkey_letter": None,
-     "count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
-    {"id": 2, "name": "widget_b", "group": "widgets", "hotkey_letter": None,
-     "count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
+    {"class_id": 1, "class_name": "widget_a", "kind": "item", "group": "widgets", "hotkey_letter": None,
+     "sample_count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
+    {"class_id": 2, "class_name": "widget_b", "kind": "item", "group": "widgets", "hotkey_letter": None,
+     "sample_count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
 ]
 
 
@@ -45,7 +45,7 @@ def _open(stub, page, app_url, item) -> None:
     stub.on("GET", r"/methods(\?|$)", {"strategies": [], "flags": {}})
     stub.on(
         "GET",
-        r"/review/",
+        r"/review/(?!tabs)",
         lambda _r, _m: (200, {"items": [item], "total": 1, "page": 1, "page_size": 30}),
     )
     page.goto(f"{app_url}/p/default/review?tab=model_disagreements")

@@ -15,10 +15,10 @@ NARROW = {"width": 800, "height": 1000}
 CLUSTER_ID = 64
 
 CLASSES = [
-    {"id": CLUSTER_ID, "name": "class_b", "group": "moto", "hotkey_letter": None,
-     "count": 641, "validated_count": 0, "cluster_size": 616, "deprecated": False},
-    {"id": 80, "name": REGION_CLASS, "group": "widgets", "hotkey_letter": None,
-     "count": 40, "validated_count": 0, "cluster_size": 44, "deprecated": False},
+    {"class_id": CLUSTER_ID, "class_name": "class_b", "kind": "item", "group": "moto", "hotkey_letter": None,
+     "sample_count": 641, "validated_count": 0, "cluster_size": 616, "deprecated": False},
+    {"class_id": 80, "class_name": REGION_CLASS, "kind": "region", "group": "widgets", "hotkey_letter": None,
+     "sample_count": 40, "validated_count": 0, "cluster_size": 44, "deprecated": False},
 ]
 
 CLUSTERS = {

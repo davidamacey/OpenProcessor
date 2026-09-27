@@ -16,11 +16,12 @@ from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item
 
 CLASSES = [
     {
-        "id": 1,
-        "name": REGION_CLASS,
+        "class_id": 1,
+        "class_name": REGION_CLASS,
+        "kind": "region",
         "group": "widgets",
         "hotkey_letter": "l",
-        "count": 40,
+        "sample_count": 40,
         "validated_count": 12,
         "cluster_size": 44,
         "deprecated": False,
@@ -49,7 +50,7 @@ def test_nudges_stay_in_edit_mode_and_save_to_the_edited_crop(stub, page, app_ur
     stub.on("GET", r"/crops/[^/]+/image$", (200, b"", "image/jpeg"))
     stub.on(
         "GET",
-        r"/review/",
+        r"/review/(?!tabs)",
         lambda _r, _m: (
             200,
             {"items": [tag_item(i) for i in range(1, 4)], "total": 3, "page": 1, "page_size": 30},

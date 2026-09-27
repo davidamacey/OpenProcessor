@@ -32,21 +32,23 @@ ROUTES = [
 
 CLASSES = [
     {
-        "id": 1,
-        "name": "ducati",
+        "class_id": 1,
+        "class_name": "ducati",
+        "kind": "item",
         "group": "moto",
         "hotkey_letter": "k",
-        "count": 10,
+        "sample_count": 10,
         "validated_count": 5,
         "cluster_size": 12,
         "deprecated": False,
     },
     {
-        "id": 2,
-        "name": "brand_a",
+        "class_id": 2,
+        "class_name": "brand_a",
+        "kind": "item",
         "group": "moto",
         "hotkey_letter": "j",
-        "count": 8,
+        "sample_count": 8,
         "validated_count": 3,
         "cluster_size": 9,
         "deprecated": False,
@@ -157,7 +159,7 @@ def register_base(stub, *, fail_put_label: bool = False) -> None:
             items.append(c)
         return (200, {"items": items, "total": 3, "page": 1, "page_size": 30})
 
-    stub.on("GET", r"/review/", review_handler)
+    stub.on("GET", r"/review/(?!tabs)", review_handler)
 
 
 def _json(request):
