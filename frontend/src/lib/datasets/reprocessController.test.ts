@@ -92,4 +92,27 @@ describe('ReprocessFlow', () => {
     });
     expect(f.canApply).toBe(false);
   });
+
+  it('a served request (W4 suggested_reprocess) is sent exactly as served, dry run first', async () => {
+    const d = deps();
+    d.reprocessBatch.mockResolvedValue(reprocessFixture());
+    const request = {
+      targets: { filter: { profile_not: 'widget_tag', include_detected: true } },
+      scopes: ['region'],
+      region_mode: 'redetect',
+      dry_run: true,
+    };
+    const f = new ReprocessFlow({ kind: 'request', request }, d);
+    expect(f.isBatch).toBe(true);
+    expect(f.scopes).toEqual(['region']);
+    f.toggleScope('embed', true);
+    f.setRegionMode('reverify');
+    expect(f.scopes).toEqual(['region']);
+    expect(f.canApply).toBe(false);
+    await f.preview();
+    expect(d.reprocessBatch).toHaveBeenLastCalledWith({ ...request, dry_run: true });
+    expect(f.canApply).toBe(true);
+    await f.apply();
+    expect(d.reprocessBatch).toHaveBeenLastCalledWith({ ...request, dry_run: false });
+  });
 });

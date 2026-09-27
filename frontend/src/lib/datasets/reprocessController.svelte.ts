@@ -9,6 +9,10 @@
  *   per-scope `selected` / `locked_skipped` / `breakdown` / `message`),
  *   then the same request with `dry_run: false`. A served `job` is
  *   followed at `GET /reprocess/jobs/{job_id}`.
+ * - A served request (W4's activation `impact.suggested_reprocess`,
+ *   docs/design/w4-profile-editor-ui-plan-2026-09-27.md §5): the same
+ *   dry-run-then-apply, sending the request exactly as served; its scopes
+ *   and region mode can't be changed.
  *
  * Human and imported labels are locked server-side; the client never
  * words an outcome itself — the served `message` and counts are shown.
@@ -21,10 +25,16 @@ import {
   reprocessCrop,
 } from '$lib/api';
 import type { Crop } from '$lib/types';
-import type { ReprocessJob, ReprocessResponse } from '$lib/types_import';
+import type {
+  ReprocessJob,
+  ReprocessRequest,
+  ReprocessResponse,
+} from '$lib/types_import';
 
 export type ReprocessTarget =
-  { kind: 'crop'; cropId: string } | { kind: 'crops'; cropIds: string[] };
+  | { kind: 'crop'; cropId: string }
+  | { kind: 'crops'; cropIds: string[] }
+  | { kind: 'request'; request: ReprocessRequest };
 
 export interface ReprocessDeps {
   reprocessBatch: typeof reprocessBatch;
@@ -59,17 +69,23 @@ export class ReprocessFlow {
   constructor(target: ReprocessTarget, deps: Partial<ReprocessDeps> = {}) {
     this.target = target;
     this.#deps = { ...defaultDeps(), ...deps };
+    if (target.kind === 'request') this.scopes = [...target.request.scopes];
   }
 
   get isBatch(): boolean {
-    return this.target.kind === 'crops';
+    return this.target.kind !== 'crop';
   }
 
+  /** The number of crops targeted; 0 for a served request, whose size is
+   *  only known from its dry run. */
   get count(): number {
-    return this.target.kind === 'crop' ? 1 : this.target.cropIds.length;
+    if (this.target.kind === 'crop') return 1;
+    if (this.target.kind === 'crops') return this.target.cropIds.length;
+    return 0;
   }
 
   toggleScope(id: string, on: boolean): void {
+    if (this.target.kind === 'request') return;
     this.scopes = on
       ? [...this.scopes.filter((s) => s !== id), id]
       : this.scopes.filter((s) => s !== id);
@@ -77,6 +93,7 @@ export class ReprocessFlow {
   }
 
   setRegionMode(mode: string): void {
+    if (this.target.kind === 'request') return;
     this.regionMode = mode;
     this.#invalidate();
   }
@@ -93,18 +110,27 @@ export class ReprocessFlow {
       : {};
   }
 
+  /** The batch request: a served one as served, else the chosen crops. */
+  #batchRequest(dryRun: boolean): ReprocessRequest | null {
+    if (this.target.kind === 'request')
+      return { ...this.target.request, dry_run: dryRun };
+    if (this.target.kind !== 'crops') return null;
+    return {
+      targets: { crop_ids: this.target.cropIds },
+      scopes: this.scopes,
+      ...this.#regionMode(),
+      dry_run: dryRun,
+    };
+  }
+
   /** Batch only: what would run, as served. Writes nothing. */
   async preview(): Promise<void> {
-    if (this.target.kind !== 'crops' || this.scopes.length === 0 || this.busy) return;
+    const body = this.#batchRequest(true);
+    if (!body || this.scopes.length === 0 || this.busy) return;
     this.busy = true;
     this.error = null;
     try {
-      this.dryRun = await this.#deps.reprocessBatch({
-        targets: { crop_ids: this.target.cropIds },
-        scopes: this.scopes,
-        ...this.#regionMode(),
-        dry_run: true,
-      });
+      this.dryRun = await this.#deps.reprocessBatch(body);
     } catch (e) {
       this.error = datasetErrorText(e);
     } finally {
@@ -132,12 +158,7 @@ export class ReprocessFlow {
         this.result = res;
         return res.items;
       }
-      const res = await this.#deps.reprocessBatch({
-        targets: { crop_ids: this.target.cropIds },
-        scopes: this.scopes,
-        ...this.#regionMode(),
-        dry_run: false,
-      });
+      const res = await this.#deps.reprocessBatch(this.#batchRequest(false)!);
       this.result = res;
       if (res.job) this.#follow(res.job);
       return [];

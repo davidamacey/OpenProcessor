@@ -264,26 +264,26 @@ def test_edit_validate_save_and_resolve_a_conflict(stub, page, app_url):
     assert validated[-1] == {"name": None, "body": {**BODY, "class_user_template": "Pick one class."}}
 
     with page.expect_request(lambda r: r.method == "PUT"):
-        page.get_by_test_id("pack-save").click()
+        page.get_by_test_id("config-save").click()
     assert puts[0] == {
         "expected_revision": 2,
         "description": "Tags on widgets",
         "body": {**BODY, "class_user_template": "Pick one class."},
     }, puts[0]
-    expect(page.get_by_test_id("pack-meta")).to_contain_text("revision 3", timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id("config-meta")).to_contain_text("revision 3", timeout=ACTION_TIMEOUT_MS)
 
     page.locator('[data-field="class_system"] textarea').fill("You classify widgets and gadgets.")
     with page.expect_request(lambda r: r.method == "PUT"):
-        page.get_by_test_id("pack-save").click()
+        page.get_by_test_id("config-save").click()
     conflict = page.get_by_test_id("save-conflict")
     expect(conflict).to_contain_text("Revision 4 was saved after you opened this pack.")
     assert puts[1]["expected_revision"] == 3
     conflict.get_by_test_id("keep-mine").click()
     with page.expect_request(lambda r: r.method == "PUT"):
-        page.get_by_test_id("pack-save").click()
+        page.get_by_test_id("config-save").click()
     assert puts[2]["expected_revision"] == 4
     assert puts[2]["body"]["class_system"] == "You classify widgets and gadgets."
-    expect(page.get_by_test_id("pack-meta")).to_contain_text("revision 5", timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id("config-meta")).to_contain_text("revision 5", timeout=ACTION_TIMEOUT_MS)
 
 
 def test_activate_needs_force_only_when_the_server_allows_it(stub, page, app_url):
@@ -324,7 +324,7 @@ def test_activate_needs_force_only_when_the_server_allows_it(stub, page, app_url
     stub.on("POST", r"/prompt_packs/widget_tag/activate$", activate)
 
     open_editor(page, app_url)
-    page.get_by_test_id("pack-activate").click()
+    page.get_by_test_id("config-activate").click()
     dialog = page.get_by_role("dialog", name="Activate widget_tag revision 2")
     expect(dialog.get_by_test_id("activate-from-to")).to_contain_text("widget_tag r1")
     expect(dialog.get_by_test_id("activate-force")).to_have_count(0)

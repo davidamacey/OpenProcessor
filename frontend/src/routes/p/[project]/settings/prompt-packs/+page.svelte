@@ -9,7 +9,7 @@
   import { resolve } from '$app/paths';
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import PackActivePanel from '$components/packs/PackActivePanel.svelte';
-  import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
+  import ConfigCloneDialog from '$components/config/ConfigCloneDialog.svelte';
   import ConfigGate from '$components/config/ConfigGate.svelte';
   import { formatTimestamp } from '$lib/formatDate';
   import { packsAvailability } from '$lib/packs/packsAvailability.svelte';
@@ -33,20 +33,16 @@
   });
 
   let cloneFrom = $state<CloneSource | null>(null);
-  let cloneName = $state('');
-  let cloneDescription = $state('');
   let deleting = $state<PromptPackSummary | null>(null);
 
   function openClone(from: CloneSource): void {
     list.clearClone();
     cloneFrom = from;
-    cloneName = '';
-    cloneDescription = '';
   }
 
-  async function doClone(): Promise<void> {
+  async function doClone(name: string, description: string): Promise<void> {
     if (!cloneFrom) return;
-    const doc = await list.clone(cloneFrom, cloneName, cloneDescription);
+    const doc = await list.clone(cloneFrom, name, description);
     if (!doc) return;
     cloneFrom = null;
     toastStore.success(`Created ${doc.name}`);
@@ -193,36 +189,16 @@
 </div>
 
 {#if cloneFrom}
-  <ConfirmDialog
+  <ConfigCloneDialog
     title="Clone {cloneFrom.name}{cloneFrom.source === 'template' ? ' (template)' : ''}"
-    confirmLabel="Clone"
+    nameLabel="New pack name"
+    withDescription
     busy={list.busy}
-    confirmDisabled={cloneName.trim() === ''}
-    onconfirm={() => void doClone()}
+    error={list.cloneError}
+    report={list.cloneReport}
+    onconfirm={(name, description) => void doClone(name, description)}
     oncancel={() => (cloneFrom = null)}
-  >
-    <label class="flex flex-col gap-1 text-xs text-zinc-400">
-      New pack name
-      <input
-        class="input input-sm font-mono"
-        bind:value={cloneName}
-        data-testid="clone-name"
-      />
-    </label>
-    <label class="flex flex-col gap-1 text-xs text-zinc-400">
-      Description (optional)
-      <input class="input input-sm" bind:value={cloneDescription} />
-    </label>
-    {#if list.cloneError}
-      <p class="text-red-300" data-testid="clone-error">{list.cloneError}</p>
-    {/if}
-    {#if list.cloneReport}
-      <ConfigIssueList
-        issues={[...list.cloneReport.errors, ...list.cloneReport.warnings]}
-        showField
-      />
-    {/if}
-  </ConfirmDialog>
+  />
 {/if}
 
 {#if deleting}

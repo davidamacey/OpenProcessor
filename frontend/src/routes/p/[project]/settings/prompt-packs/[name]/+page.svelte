@@ -9,19 +9,24 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import ConfirmDialog from '$components/ConfirmDialog.svelte';
+  import ConfigActivateDialog from '$components/config/ConfigActivateDialog.svelte';
+  import ConfigCloneDialog from '$components/config/ConfigCloneDialog.svelte';
+  import ConfigGate from '$components/config/ConfigGate.svelte';
+  import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
+  import ConfigRestoreDialog from '$components/config/ConfigRestoreDialog.svelte';
+  import ConfigRevisions from '$components/config/ConfigRevisions.svelte';
+  import ConfigSavePanel from '$components/config/ConfigSavePanel.svelte';
+  import ConfigViewingBanner from '$components/config/ConfigViewingBanner.svelte';
   import PackActivePanel from '$components/packs/PackActivePanel.svelte';
   import PackFieldEditor from '$components/packs/PackFieldEditor.svelte';
-  import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
   import PackTestPanel from '$components/packs/PackTestPanel.svelte';
-  import ConfigGate from '$components/config/ConfigGate.svelte';
-  import { formatTimestamp } from '$lib/formatDate';
   import { issuesForField, unplacedIssues } from '$lib/config/validationIssues';
   import { createPackEditor } from '$lib/packs/packEditorController.svelte';
   import { createPackList } from '$lib/packs/packListController.svelte';
   import { packsAvailability } from '$lib/packs/packsAvailability.svelte';
   import { projectHref } from '$lib/projectPaths';
-  import type { PackSchemaField, PromptPackDoc } from '$lib/types_packs';
+  import type { ConfigDocBase } from '$lib/types_config';
+  import type { PackSchemaField } from '$lib/types_packs';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
@@ -68,53 +73,21 @@
     return out;
   });
 
-  const counts = $derived({
-    errors: shownReport?.errors.length ?? 0,
-    warnings: (shownReport?.warnings ?? []).filter((i) => i.severity === 'warning')
-      .length,
-    info: (shownReport?.warnings ?? []).filter((i) => i.severity === 'info').length,
-  });
-
-  let activating = $state<PromptPackDoc | null>(null);
-  let force = $state(false);
+  let activating = $state<ConfigDocBase<unknown> | null>(null);
   let restoring = $state(false);
   let cloning = $state(false);
-  let cloneName = $state('');
 
-  function openActivate(target: PromptPackDoc): void {
+  function openActivate(target: ConfigDocBase<unknown>): void {
     ed.active.clearAction();
-    force = false;
     activating = target;
-  }
-
-  async function doActivate(): Promise<void> {
-    const target = activating;
-    if (!target) return;
-    const ok = await ed.active.activate(target.name, target.revision, force);
-    if (ok) {
-      activating = null;
-      toastStore.success(
-        `Activated ${target.name}${target.revision == null ? '' : ` r${target.revision}`}`,
-      );
-    } else if (!ed.active.activateReport?.force_allowed) {
-      force = false;
-    }
   }
 
   async function doSave(): Promise<void> {
     if (await ed.save()) toastStore.success(`Saved revision ${ed.doc?.revision}`);
   }
 
-  async function doRestore(): Promise<void> {
-    const rev = ed.viewing?.revision;
-    if (await ed.restoreViewed()) {
-      restoring = false;
-      toastStore.success(`Restored revision ${rev} as revision ${ed.doc?.revision}`);
-    }
-  }
-
-  async function doClone(): Promise<void> {
-    const doc = await cloner.clone({ name: packName, source: null }, cloneName, '');
+  async function doClone(name: string): Promise<void> {
+    const doc = await cloner.clone({ name: packName, source: null }, name, '');
     if (!doc) return;
     cloning = false;
     toastStore.success(`Created ${doc.name}`);
@@ -129,7 +102,7 @@
     <h1 class="font-mono text-2xl font-semibold tracking-tight">{packName}</h1>
     {#if ed.doc}
       {@const d = ed.doc}
-      <span class="text-sm text-zinc-400" data-testid="pack-meta">
+      <span class="text-sm text-zinc-400" data-testid="config-meta">
         {d.source}{d.revision != null ? ` · revision ${d.revision}` : ''}{d.read_only
           ? ' · read-only'
           : ''}
@@ -164,33 +137,11 @@
 
       <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section class="surface flex min-w-0 flex-col gap-4 p-4" aria-label="Pack fields">
-          {#if ed.viewing}
-            {@const v = ed.viewing}
-            <div
-              class="flex flex-wrap items-center gap-2 rounded border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-sm text-sky-100"
-              data-testid="viewing-banner"
-            >
-              <span>Viewing revision {v.revision} (read-only)</span>
-              <span class="grow"></span>
-              <button type="button" class="btn btn-sm" onclick={() => ed.closeRevision()}
-                >Back to latest</button
-              >
-              {#if !d.read_only}
-                <button
-                  type="button"
-                  class="btn btn-sm"
-                  onclick={() => (restoring = true)}
-                  data-testid="restore-revision">Restore as new revision</button
-                >
-              {/if}
-              <button
-                type="button"
-                class="btn btn-sm"
-                onclick={() => openActivate(v)}
-                data-testid="activate-viewed">Activate revision {v.revision}</button
-              >
-            </div>
-          {/if}
+          <ConfigViewingBanner
+            {ed}
+            onrestore={() => (restoring = true)}
+            onactivate={() => ed.viewing && openActivate(ed.viewing)}
+          />
 
           {#if d.read_only}
             <div class="flex flex-wrap items-center gap-2 text-sm text-zinc-400">
@@ -200,7 +151,6 @@
                 class="btn btn-sm"
                 onclick={() => {
                   cloner.clearClone();
-                  cloneName = '';
                   cloning = true;
                 }}>Clone to edit</button
               >
@@ -260,145 +210,14 @@
         <aside
           class="order-first flex min-w-0 flex-col gap-4 lg:sticky lg:top-4 lg:order-none lg:self-start"
         >
-          <section class="surface flex flex-col gap-2 p-4 text-sm" aria-label="Save">
-            <div
-              class="flex flex-wrap items-center gap-2 text-xs"
-              data-testid="report-counts"
-            >
-              <span class={counts.errors > 0 ? 'text-red-300' : 'text-zinc-400'}
-                >{counts.errors} error{counts.errors === 1 ? '' : 's'}</span
-              >
-              <span class={counts.warnings > 0 ? 'text-amber-300' : 'text-zinc-400'}
-                >{counts.warnings} warning{counts.warnings === 1 ? '' : 's'}</span
-              >
-              <span class="text-zinc-400"
-                >{counts.info} note{counts.info === 1 ? '' : 's'}</span
-              >
-              {#if ed.validating}<span class="text-zinc-500">checking…</span>{/if}
-            </div>
-            {#if ed.validateError}
-              <p class="text-xs text-red-300">
-                Could not check the draft: {ed.validateError}
-              </p>
-            {/if}
-            {#if ed.editable}
-              <div class="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  class="btn btn-primary btn-sm"
-                  disabled={!ed.canSave}
-                  onclick={() => void doSave()}
-                  data-testid="pack-save">{ed.saving ? 'Saving…' : 'Save'}</button
-                >
-                <button
-                  type="button"
-                  class="btn btn-sm"
-                  disabled={!ed.dirty || ed.saving}
-                  onclick={() => void ed.reloadLatest()}>Discard edits</button
-                >
-              </div>
-              <p class="text-xs text-zinc-500">
-                {ed.dirty ? 'Unsaved edits.' : 'No unsaved edits.'} Saving writes a new revision;
-                it doesn't change the active pack.
-              </p>
-            {/if}
-            {#if ed.saveError}
-              <p class="text-xs text-red-300" data-testid="save-error">{ed.saveError}</p>
-            {/if}
-            {#if ed.conflict}
-              <div
-                class="space-y-2 rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-100"
-                data-testid="save-conflict"
-              >
-                <p>{ed.conflict.message}</p>
-                <div class="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    class="btn btn-sm"
-                    onclick={() => void ed.reloadLatest()}
-                    >Reload{ed.conflict.currentRevision != null
-                      ? ` revision ${ed.conflict.currentRevision}`
-                      : ''} (discard my edits)</button
-                  >
-                  {#if ed.conflict.currentRevision != null}
-                    <button
-                      type="button"
-                      class="btn btn-sm"
-                      onclick={() => ed.keepMine()}
-                      data-testid="keep-mine">Keep my edits</button
-                    >
-                  {/if}
-                </div>
-              </div>
-            {/if}
-            {#if ed.remoteChanged}
-              <div
-                class="space-y-2 rounded border border-sky-500/40 bg-sky-500/10 p-2 text-xs text-sky-100"
-                data-testid="remote-changed"
-              >
-                <p>This pack changed on the server while you were editing.</p>
-                <button
-                  type="button"
-                  class="btn btn-sm"
-                  onclick={() => void ed.reloadLatest()}
-                  >Load it (discard my edits)</button
-                >
-              </div>
-            {/if}
-            <div class="border-t border-zinc-800 pt-2">
-              <button
-                type="button"
-                class="btn btn-sm"
-                onclick={() => openActivate(d)}
-                data-testid="pack-activate"
-                >Activate{d.revision != null ? ` revision ${d.revision}` : ''}</button
-              >
-            </div>
-          </section>
-
-          {#if ed.revisions}
-            <section
-              class="surface flex flex-col gap-2 p-4 text-sm"
-              aria-label="Revisions"
-            >
-              <h2 class="text-sm font-semibold">Revisions</h2>
-              {#if ed.revisionError}<p class="text-xs text-red-300">
-                  {ed.revisionError}
-                </p>{/if}
-              <ul class="space-y-1" data-testid="revisions">
-                {#each ed.revisions as r (r.revision)}
-                  <li
-                    class="flex flex-wrap items-center gap-2 text-xs"
-                    data-testid="revision-row"
-                    data-revision={r.revision}
-                  >
-                    <span class="font-mono">r{r.revision}</span>
-                    <span class="text-zinc-500" title={r.saved_at}
-                      >{formatTimestamp(r.saved_at)}</span
-                    >
-                    {#if r.revision === d.revision}<span class="text-zinc-400"
-                        >latest</span
-                      >{/if}
-                    <span class="grow"></span>
-                    <button
-                      type="button"
-                      class="btn btn-sm"
-                      disabled={ed.viewing?.revision === r.revision}
-                      onclick={() => void ed.viewRevision(r.revision)}>View</button
-                    >
-                    {#if r.description}
-                      <span class="w-full text-zinc-400">{r.description}</span>
-                    {/if}
-                    {#if r.cloned_from}
-                      <span class="w-full font-mono text-zinc-500"
-                        >cloned from {r.cloned_from}</span
-                      >
-                    {/if}
-                  </li>
-                {/each}
-              </ul>
-            </section>
-          {/if}
+          <ConfigSavePanel
+            {ed}
+            report={shownReport}
+            noun="pack"
+            onsave={() => void doSave()}
+            onactivate={() => openActivate(d)}
+          />
+          <ConfigRevisions {ed} />
         </aside>
       </div>
 
@@ -416,95 +235,36 @@
 </div>
 
 {#if activating}
-  {@const target = activating}
-  {@const rep = ed.active.activateReport ?? target.validation}
-  <ConfirmDialog
-    title="Activate {target.name}{target.revision != null
-      ? ` revision ${target.revision}`
-      : ''}"
-    confirmLabel={force ? 'Activate anyway' : 'Activate'}
-    danger={force}
-    busy={ed.active.busy}
-    onconfirm={() => void doActivate()}
-    oncancel={() => {
-      activating = null;
-      ed.active.clearAction();
-    }}
-  >
-    <p data-testid="activate-from-to">
-      <span class="font-mono"
-        >{ed.active.active?.active.name ?? 'none'}{ed.active.active?.active.revision !=
-        null
-          ? ` r${ed.active.active.active.revision}`
-          : ''}</span
-      >
-      →
-      <strong class="font-mono"
-        >{target.name}{target.revision != null ? ` r${target.revision}` : ''}</strong
-      >
-    </p>
-    <p class="text-xs text-zinc-400">
-      Every VLM step that doesn't pick its own pack uses the active pack.
-    </p>
-    {#if ed.dirty && !ed.viewing}
-      <p class="text-xs text-amber-300" data-testid="activate-unsaved-note">
-        This activates the saved revision; your unsaved edits are not included.
-      </p>
-    {/if}
-    {#if rep}
-      <ConfigIssueList issues={[...rep.errors, ...rep.warnings]} showField />
-    {/if}
-    {#if ed.active.actionError}
-      <p class="text-red-300" data-testid="activate-error">{ed.active.actionError}</p>
-    {/if}
-    {#if ed.active.activateReport?.force_allowed}
-      <label class="flex items-center gap-2 text-xs text-amber-200">
-        <input type="checkbox" bind:checked={force} data-testid="activate-force" />
-        Activate anyway (the server allows overriding these errors)
-      </label>
-    {/if}
-  </ConfirmDialog>
+  <ConfigActivateDialog
+    {ed}
+    target={activating}
+    blurb="Every VLM step that doesn't pick its own pack uses the active pack."
+    onclose={() => (activating = null)}
+    onactivated={(t) =>
+      toastStore.success(
+        `Activated ${t.name}${t.revision == null ? '' : ` r${t.revision}`}`,
+      )}
+  />
 {/if}
 
-{#if restoring && ed.viewing}
-  <ConfirmDialog
-    title="Restore revision {ed.viewing.revision}"
-    confirmLabel="Restore"
-    busy={ed.saving}
-    onconfirm={() => void doRestore()}
-    oncancel={() => (restoring = false)}
-  >
-    <p>
-      Saves revision {ed.viewing.revision}'s text as a new revision. It doesn't change the
-      active pack.
-    </p>
-    {#if ed.dirty}
-      <p class="text-xs text-amber-300">Your unsaved edits are replaced.</p>
-    {/if}
-    {#if ed.saveError}<p class="text-red-300">{ed.saveError}</p>{/if}
-    {#if ed.conflict}<p class="text-red-300">{ed.conflict.message}</p>{/if}
-  </ConfirmDialog>
+{#if restoring}
+  <ConfigRestoreDialog
+    {ed}
+    noun="pack"
+    onclose={() => (restoring = false)}
+    onrestored={(from, to) =>
+      toastStore.success(`Restored revision ${from} as revision ${to}`)}
+  />
 {/if}
 
 {#if cloning}
-  <ConfirmDialog
+  <ConfigCloneDialog
     title="Clone {packName}"
-    confirmLabel="Clone"
+    nameLabel="New pack name"
     busy={cloner.busy}
-    confirmDisabled={cloneName.trim() === ''}
-    onconfirm={() => void doClone()}
+    error={cloner.cloneError}
+    report={cloner.cloneReport}
+    onconfirm={(name) => void doClone(name)}
     oncancel={() => (cloning = false)}
-  >
-    <label class="flex flex-col gap-1 text-xs text-zinc-400">
-      New pack name
-      <input class="input input-sm font-mono" bind:value={cloneName} />
-    </label>
-    {#if cloner.cloneError}<p class="text-red-300">{cloner.cloneError}</p>{/if}
-    {#if cloner.cloneReport}
-      <ConfigIssueList
-        issues={[...cloner.cloneReport.errors, ...cloner.cloneReport.warnings]}
-        showField
-      />
-    {/if}
-  </ConfirmDialog>
+  />
 {/if}

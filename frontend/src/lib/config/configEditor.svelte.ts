@@ -16,6 +16,7 @@
 import { configErrorDetail, configErrorText } from '$lib/api';
 import type { CurationEvent } from '$lib/sse';
 import type {
+  ActiveConfigResponse,
   ConfigDocBase,
   ConfigRevision,
   ConfigRevisionList,
@@ -47,6 +48,33 @@ export interface ConfigEditorBackend<
   subscribe: (onEvent: (e: CurationEvent) => void) => { close(): void };
   /** True for the `config.changed` events this resource follows. */
   isEvent: (e: CurationEvent) => boolean;
+}
+
+/** What the shared editor components (save panel, revisions, activate and
+ *  restore dialogs) read and call, whatever the resource. */
+export interface ConfigEditorView {
+  readonly name: string;
+  readonly active: ConfigActive<ActiveConfigResponse>;
+  readonly doc: ConfigDocBase<unknown> | null;
+  readonly viewing: ConfigDocBase<unknown> | null;
+  readonly revisions: ConfigRevision[] | null;
+  readonly revisionError: string | null;
+  readonly report: ValidationReport | null;
+  readonly validating: boolean;
+  readonly validateError: string | null;
+  readonly saving: boolean;
+  readonly saveError: string | null;
+  readonly conflict: { message: string; currentRevision: number | null } | null;
+  readonly remoteChanged: boolean;
+  readonly dirty: boolean;
+  readonly editable: boolean;
+  readonly canSave: boolean;
+  save(): Promise<boolean>;
+  reloadLatest(): Promise<void>;
+  keepMine(): void;
+  viewRevision(revision: number): Promise<void>;
+  closeRevision(): void;
+  restoreViewed(): Promise<boolean>;
 }
 
 /** A deep copy, so edits never touch the served doc. */
