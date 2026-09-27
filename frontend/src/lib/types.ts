@@ -710,6 +710,13 @@ export interface ServedRegionProfile {
    *  enabled for this profile. Optional/undefined on a pre-W1 backend;
    *  informational only today — no UI reads it yet (see CLAUDE.md). */
   text_hint_enabled?: boolean;
+  /** W8.8/W8.9: request-size guards on region box writes — never a
+   *  labeling rule. `max_boxes_per_write` gates the Add-box action;
+   *  optional/undefined on a pre-W8 backend (no client-guessed cap in
+   *  that case — Add stays unbounded). */
+  limits?: {
+    max_boxes_per_write?: number;
+  };
 }
 
 // 'outliers' was retired from the UI in the 2026-09 tab consolidation

@@ -11,13 +11,19 @@
  * vocabulary — so a missing endpoint never breaks the review panel.
  */
 
-import { getRegionStatuses, type RegionStatusEntry } from '$lib/api';
+import { getRegionStatuses, type BoxStateEntry, type RegionStatusEntry } from '$lib/api';
 
 class RegionStatusesStore {
   list = $state<RegionStatusEntry[]>([]);
   confirmStatus = $state<string | null>(null);
   rejectStatus = $state<string | null>(null);
   falsePositiveStatus = $state<string | null>(null);
+  /** W8.7: served per-box state vocabulary — distinct from `list` above
+   *  (item-level `region_status`). Empty on a pre-W8 backend; every
+   *  caller falls back to a hardcoded palette (see `multiBoxRingColor`/
+   *  `multiBoxStateLabel` in `/review`, `SourceImageOverlay.svelte`,
+   *  `CropMetaPanel.svelte`) when a value isn't found here. */
+  boxStates = $state<BoxStateEntry[]>([]);
   loaded = $state<boolean>(false);
   #inflight: Promise<void> | null = null;
 
@@ -27,6 +33,22 @@ class RegionStatusesStore {
   labelFor(value: string | null | undefined): string | null {
     if (!value) return null;
     return this.list.find((s) => s.value === value)?.label ?? null;
+  }
+
+  /** The served `box_states` entry for a box `state` value, or `null`
+   *  when unloaded/unknown. */
+  boxStateInfo(value: string | null | undefined): BoxStateEntry | null {
+    if (!value) return null;
+    return this.boxStates.find((s) => s.value === value) ?? null;
+  }
+
+  /** The box-state value (not the item-level `region_status`) whose
+   *  served `role` is `role` — e.g. `boxStateByRole('accepted')` for the
+   *  cluster-triage "Verify" action. `null` when `box_states` hasn't
+   *  loaded (pre-W8 backend); callers fall back to the literal role
+   *  string, which is the fixed W8.7 wire vocabulary, not a guess. */
+  boxStateByRole(role: string): string | null {
+    return this.boxStates.find((s) => s.role === role)?.value ?? null;
   }
 
   async init(): Promise<void> {
@@ -39,11 +61,13 @@ class RegionStatusesStore {
         this.confirmStatus = res.confirm_status ?? null;
         this.rejectStatus = res.reject_status ?? null;
         this.falsePositiveStatus = res.false_positive_status ?? null;
+        this.boxStates = res.box_states ?? [];
       } catch {
         this.list = [];
         this.confirmStatus = null;
         this.rejectStatus = null;
         this.falsePositiveStatus = null;
+        this.boxStates = [];
       } finally {
         this.loaded = true;
         this.#inflight = null;

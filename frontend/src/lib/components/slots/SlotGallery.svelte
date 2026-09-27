@@ -278,13 +278,25 @@
         class="flex flex-wrap items-center gap-2 rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs"
       >
         <span class="font-medium text-blue-200">{gallery.sel.size} selected</span>
+        {#if gallery.selectedCluster != null}
+          <!-- W8: triage from a cluster is per-box (batch_box_state), never
+               the item-level batch_status, which would flip every sibling
+               box on a multi-box item (docs/design/
+               w8-multibox-frontend-plan-2026-09-26.md, §7.7). -->
+          <span class="text-[11px] text-zinc-500">(per-box)</span>
+        {/if}
         <span class="grow"></span>
         <button
           type="button"
           disabled={gallery.busy}
           class="btn-sm border border-red-500/50 bg-red-500/20 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
           onclick={() =>
-            gallery.applyStatus([...gallery.sel.ids], gallery.falsePositiveState())}
+            gallery.selectedCluster != null
+              ? gallery.applyBoxState(
+                  [...gallery.sel.ids],
+                  gallery.falsePositiveBoxState(),
+                )
+              : gallery.applyStatus([...gallery.sel.ids], gallery.falsePositiveState())}
         >
           ✗ Mark false positive
         </button>
@@ -292,7 +304,10 @@
           type="button"
           disabled={gallery.busy}
           class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
-          onclick={() => gallery.applyStatus([...gallery.sel.ids], gallery.rejectState())}
+          onclick={() =>
+            gallery.selectedCluster != null
+              ? gallery.applyBoxState([...gallery.sel.ids], gallery.rejectBoxState())
+              : gallery.applyStatus([...gallery.sel.ids], gallery.rejectState())}
         >
           No {label.singular}
         </button>
@@ -301,7 +316,9 @@
           disabled={gallery.busy}
           class="btn-sm border border-green-500/50 bg-green-500/20 text-green-200 hover:bg-green-500/30 disabled:opacity-50"
           onclick={() =>
-            gallery.applyStatus([...gallery.sel.ids], gallery.confirmState())}
+            gallery.selectedCluster != null
+              ? gallery.applyBoxState([...gallery.sel.ids], gallery.confirmBoxState())
+              : gallery.applyStatus([...gallery.sel.ids], gallery.confirmState())}
         >
           ✓ Verify
         </button>
@@ -433,7 +450,9 @@
             onclick={gallery.toggleSelect}
             onedit={gallery.openEditor}
             onmarkfp={(c) =>
-              gallery.applyStatus([c.crop_id], gallery.falsePositiveState())}
+              gallery.selectedCluster != null
+                ? gallery.applyBoxState([c.crop_id], gallery.falsePositiveBoxState())
+                : gallery.applyStatus([c.crop_id], gallery.falsePositiveState())}
           />
         {/each}
       </div>

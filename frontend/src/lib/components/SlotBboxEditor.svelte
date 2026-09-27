@@ -35,6 +35,9 @@
   import { keymapStore } from '$stores/keymap.svelte';
   import { runBoxEditKey } from '$lib/boxEditKeys';
   import type { BBoxNorm, Crop } from '$lib/types';
+  import MultiBoxCanvas from './MultiBoxCanvas.svelte';
+  import { createMultiBoxRegionController } from '$lib/review/multiBoxRegionController.svelte';
+  import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
   const kg = (id: string) => keymapStore.compactGlyph(id);
 
@@ -59,6 +62,42 @@
   const editorThumbSize = $derived(
     thumbSize ?? activeSlot?.capabilities.subBox?.editor.thumbSize ?? 512,
   );
+
+  // -- W8 multi-box path (docs/design/w8-multibox-frontend-plan-2026-09-26.md) --
+  // A capability declares EITHER `bboxField` (single-box, tier-2 slot) OR
+  // `listField` (W8 region) — never both (types.ts). This modal reuses the
+  // same `MultiBoxCanvas`/`multiBoxRegionController` the review page's
+  // region tab uses, rather than a second implementation, so the
+  // CropCard pencil (previously unreachable for region — the served
+  // region slot has no `bboxField` at all) works again.
+  const isMultiBoxSlot = $derived(activeSlot.capabilities.subBox?.listField != null);
+  const multiBox = createMultiBoxRegionController(() => activeSlot);
+  $effect(() => {
+    if (isMultiBoxSlot) multiBox.seedFrom(crop);
+  });
+
+  function multiBoxRingColor(state: string): string {
+    if (state === 'accepted') return 'rgb(74, 222, 128)';
+    if (state === 'proposed') return 'rgb(250, 204, 21)';
+    return 'rgb(113, 113, 122)';
+  }
+  function multiBoxDashed(state: string): boolean {
+    return (
+      regionStatusesStore.boxStateInfo(state)?.dashed ??
+      (state === 'rejected' || state === 'false_positive')
+    );
+  }
+  function multiBoxStateLabel(state: string): string {
+    return regionStatusesStore.boxStateInfo(state)?.label ?? state;
+  }
+
+  async function saveMultiBox(): Promise<void> {
+    const { ok, item } = await multiBox.saveEdits(crop.id);
+    if (ok && item) {
+      toastStore.success(`${activeSlot.label.title} saved.`);
+      onsave?.(item);
+    }
+  }
 
   // -- state ------------------------------------------------------------
   // Sub-box in the crop's local (parent) frame ([0, 1]^4). null means "no
@@ -310,7 +349,27 @@
     });
   }
 
+  let multiBoxCanvasEl = $state<MultiBoxCanvas | null>(null);
+
   function onKeyDown(e: KeyboardEvent): void {
+    if (isMultiBoxSlot) {
+      if (multiBox.busy) return;
+      // Reuse the review page's own key handling (Tab/Backspace/arrows);
+      // Enter/Escape map to Save/Cancel here, matching the single-box
+      // modal's convention, not the review queue's "confirm" semantics.
+      if (multiBoxCanvasEl?.handleKey(e)) {
+        e.preventDefault();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        void saveMultiBox();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        onclose();
+      }
+      return;
+    }
     if (busy) return;
     const handled = runBoxEditKey(
       e,
@@ -403,149 +462,247 @@
       <span class="font-mono text-[11px] text-zinc-500">{crop.id}</span>
     </header>
 
-    <!-- Canvas -->
-    <div
-      bind:this={canvasEl}
-      class="relative aspect-square w-full overflow-hidden rounded-md border border-zinc-800 bg-zinc-900 select-none touch-none"
-      onpointerdown={onPointerDownCanvas}
-      onpointermove={onPointerMove}
-      onpointerup={onPointerUp}
-      onpointercancel={onPointerUp}
-      role="application"
-      aria-label="{activeSlot?.label.title ?? 'Box'} bbox canvas"
-    >
-      <img
-        src={getThumbUrl(crop.id, editorThumbSize)}
-        alt="crop preview"
-        draggable="false"
-        onload={onImgLoad}
-        class="pointer-events-none h-full w-full object-contain"
+    {#if isMultiBoxSlot}
+      <!-- W8 multi-box: same canvas/controller as /review's region tab. -->
+      <MultiBoxCanvas
+        bind:this={multiBoxCanvasEl}
+        cropId={crop.id}
+        boxes={multiBox.boxes
+          .filter((b) => b.box != null)
+          .map((b) => ({
+            box: b.box!,
+            state: b.state,
+            label: `${activeSlot.label.title} (${multiBoxStateLabel(b.state)})`,
+          }))}
+        selectedIndex={multiBox.selectedIndex}
+        busy={multiBox.busy}
+        maxBoxes={multiBox.maxBoxes}
+        ringColorFor={multiBoxRingColor}
+        dashedFor={multiBoxDashed}
+        thumbSize={editorThumbSize}
+        onselect={(i) => multiBox.select(i)}
+        onnext={() => multiBox.next()}
+        onmove={(_i, box) => multiBox.moveSelected(box)}
+        onadd={(box) => multiBox.addBox(box)}
+        ondelete={() => multiBox.deleteSelected()}
       />
+      <div class="mt-1 flex flex-wrap gap-1">
+        {#each multiBox.boxes as b, i (b.boxId ?? `new-${i}`)}
+          <button
+            type="button"
+            class="rounded border px-1.5 py-0.5 text-[10px] {i === multiBox.selectedIndex
+              ? 'border-sky-500/60 bg-sky-500/15 text-sky-100'
+              : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}"
+            onclick={() => multiBox.select(i)}
+          >
+            #{i + 1}
+            {multiBoxStateLabel(b.state)}
+          </button>
+        {/each}
+        {#if multiBox.boxes.length === 0}
+          <span class="text-[11px] text-zinc-500">no boxes — drag to draw one</span>
+        {/if}
+        {#if multiBox.maxBoxes != null}
+          <span class="text-[11px] text-zinc-500"
+            >{multiBox.boxes.length} / {multiBox.maxBoxes} max</span
+          >
+        {/if}
+      </div>
+    {:else}
+      <!-- Canvas -->
+      <div
+        bind:this={canvasEl}
+        class="relative aspect-square w-full overflow-hidden rounded-md border border-zinc-800 bg-zinc-900 select-none touch-none"
+        onpointerdown={onPointerDownCanvas}
+        onpointermove={onPointerMove}
+        onpointerup={onPointerUp}
+        onpointercancel={onPointerUp}
+        role="application"
+        aria-label="{activeSlot?.label.title ?? 'Box'} bbox canvas"
+      >
+        <img
+          src={getThumbUrl(crop.id, editorThumbSize)}
+          alt="crop preview"
+          draggable="false"
+          onload={onImgLoad}
+          class="pointer-events-none h-full w-full object-contain"
+        />
 
-      {#if boxLocal}
-        <!-- Sub-box ring + drag handles -->
-        <div
-          class="absolute border-2 border-yellow-400 bg-yellow-400/10"
-          style={ringStyle}
-        >
-          <!-- body grab area: covers the full ring interior so onpointerdown on the box body initiates a move -->
+        {#if boxLocal}
+          <!-- Sub-box ring + drag handles -->
           <div
-            class="absolute inset-0 cursor-move"
-            onpointerdown={(e) => onPointerDownHandle(e, 'move')}
-            role="presentation"
-          ></div>
-          <!-- 4 corner handles -->
-          <div
-            class="absolute -top-1.5 -left-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'nw')}
-            role="presentation"
-          ></div>
-          <div
-            class="absolute -top-1.5 -right-1.5 h-3 w-3 cursor-nesw-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'ne')}
-            role="presentation"
-          ></div>
-          <div
-            class="absolute -bottom-1.5 -left-1.5 h-3 w-3 cursor-nesw-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'sw')}
-            role="presentation"
-          ></div>
-          <div
-            class="absolute -right-1.5 -bottom-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'se')}
-            role="presentation"
-          ></div>
-          <!-- 4 edge handles -->
-          <div
-            class="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 cursor-ns-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'n')}
-            role="presentation"
-          ></div>
-          <div
-            class="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 cursor-ns-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 's')}
-            role="presentation"
-          ></div>
-          <div
-            class="absolute top-1/2 -left-1.5 h-3 w-3 -translate-y-1/2 cursor-ew-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'w')}
-            role="presentation"
-          ></div>
-          <div
-            class="absolute top-1/2 -right-1.5 h-3 w-3 -translate-y-1/2 cursor-ew-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'e')}
-            role="presentation"
-          ></div>
+            class="absolute border-2 border-yellow-400 bg-yellow-400/10"
+            style={ringStyle}
+          >
+            <!-- body grab area: covers the full ring interior so onpointerdown on the box body initiates a move -->
+            <div
+              class="absolute inset-0 cursor-move"
+              onpointerdown={(e) => onPointerDownHandle(e, 'move')}
+              role="presentation"
+            ></div>
+            <!-- 4 corner handles -->
+            <div
+              class="absolute -top-1.5 -left-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-yellow-300 bg-yellow-500"
+              onpointerdown={(e) => onPointerDownHandle(e, 'nw')}
+              role="presentation"
+            ></div>
+            <div
+              class="absolute -top-1.5 -right-1.5 h-3 w-3 cursor-nesw-resize rounded-sm border border-yellow-300 bg-yellow-500"
+              onpointerdown={(e) => onPointerDownHandle(e, 'ne')}
+              role="presentation"
+            ></div>
+            <div
+              class="absolute -bottom-1.5 -left-1.5 h-3 w-3 cursor-nesw-resize rounded-sm border border-yellow-300 bg-yellow-500"
+              onpointerdown={(e) => onPointerDownHandle(e, 'sw')}
+              role="presentation"
+            ></div>
+            <div
+              class="absolute -right-1.5 -bottom-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-yellow-300 bg-yellow-500"
+              onpointerdown={(e) => onPointerDownHandle(e, 'se')}
+              role="presentation"
+            ></div>
+            <!-- 4 edge handles -->
+            <div
+              class="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 cursor-ns-resize rounded-sm border border-yellow-300 bg-yellow-500"
+              onpointerdown={(e) => onPointerDownHandle(e, 'n')}
+              role="presentation"
+            ></div>
+            <div
+              class="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 cursor-ns-resize rounded-sm border border-yellow-300 bg-yellow-500"
+              onpointerdown={(e) => onPointerDownHandle(e, 's')}
+              role="presentation"
+            ></div>
+            <div
+              class="absolute top-1/2 -left-1.5 h-3 w-3 -translate-y-1/2 cursor-ew-resize rounded-sm border border-yellow-300 bg-yellow-500"
+              onpointerdown={(e) => onPointerDownHandle(e, 'w')}
+              role="presentation"
+            ></div>
+            <div
+              class="absolute top-1/2 -right-1.5 h-3 w-3 -translate-y-1/2 cursor-ew-resize rounded-sm border border-yellow-300 bg-yellow-500"
+              onpointerdown={(e) => onPointerDownHandle(e, 'e')}
+              role="presentation"
+            ></div>
+          </div>
+        {:else}
+          <span
+            class="absolute top-2 left-2 rounded-sm border border-zinc-700 bg-zinc-900/80 px-1.5 py-0.5 text-[11px] text-zinc-300"
+          >
+            drag to draw a {activeSlot?.label.singular ?? 'box'} box
+          </span>
+        {/if}
+      </div>
+    {/if}
+
+    {#if isMultiBoxSlot}
+      <!-- Footer: hotkey reference for the multi-box path. -->
+      <footer class="flex flex-col gap-1 text-[11px] text-zinc-400">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono">
+          <span
+            ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.next_box')}</kbd> next box</span
+          >
+          <span
+            ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.delete_box')}</kbd> delete
+            selected</span
+          >
+          <span
+            ><kbd class="rounded bg-zinc-800 px-1"
+              >{kg('box_edit.nudge_left')}{kg('box_edit.nudge_up')}{kg(
+                'box_edit.nudge_down',
+              )}{kg('box_edit.nudge_right')}</kbd
+            > nudge selected</span
+          >
+          <span
+            ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.save')}</kbd> save</span
+          >
+          <span
+            ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.cancel')}</kbd> cancel</span
+          >
         </div>
-      {:else}
-        <span
-          class="absolute top-2 left-2 rounded-sm border border-zinc-700 bg-zinc-900/80 px-1.5 py-0.5 text-[11px] text-zinc-300"
+        {#if errorText}
+          <div class="text-red-300">{errorText}</div>
+        {/if}
+      </footer>
+      <div class="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          class="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800"
+          onclick={onclose}
+          disabled={multiBox.busy}
         >
-          drag to draw a {activeSlot?.label.singular ?? 'box'} box
-        </span>
-      {/if}
-    </div>
-
-    <!-- Footer: hotkey reference + coord summary -->
-    <footer class="flex flex-col gap-1 text-[11px] text-zinc-400">
-      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono">
-        <span
-          ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.shrink_right')}</kbd>/<kbd
-            class="rounded bg-zinc-800 px-1">{kg('box_edit.grow_right')}</kbd
-          > right edge</span
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="rounded-md border border-blue-500/60 bg-blue-500/20 px-3 py-1.5 text-sm font-medium text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
+          onclick={saveMultiBox}
+          disabled={multiBox.busy}
         >
-        <span
-          ><kbd class="rounded bg-zinc-800 px-1"
-            >{kg('box_edit.nudge_left')}{kg('box_edit.nudge_up')}{kg(
-              'box_edit.nudge_down',
-            )}{kg('box_edit.nudge_right')}</kbd
-          > move</span
-        >
-        <span
-          ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.delete_box')}</kbd> clear</span
-        >
-        <span><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.save')}</kbd> save</span
-        >
-        <span
-          ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.cancel')}</kbd> cancel</span
-        >
+          {multiBox.busy ? 'Saving…' : 'Save'}
+        </button>
       </div>
-      <div class="font-mono text-[11px] text-zinc-500">
-        {sourceFrameSummary}
-      </div>
-      {#if cropFrameSummary}
-        <div class="font-mono text-[11px] text-zinc-600">{cropFrameSummary}</div>
-      {/if}
-      {#if errorText}
-        <div class="text-red-300">{errorText}</div>
-      {/if}
-    </footer>
+    {:else}
+      <!-- Footer: hotkey reference + coord summary -->
+      <footer class="flex flex-col gap-1 text-[11px] text-zinc-400">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono">
+          <span
+            ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.shrink_right')}</kbd
+            >/<kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.grow_right')}</kbd> right
+            edge</span
+          >
+          <span
+            ><kbd class="rounded bg-zinc-800 px-1"
+              >{kg('box_edit.nudge_left')}{kg('box_edit.nudge_up')}{kg(
+                'box_edit.nudge_down',
+              )}{kg('box_edit.nudge_right')}</kbd
+            > move</span
+          >
+          <span
+            ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.delete_box')}</kbd> clear</span
+          >
+          <span
+            ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.save')}</kbd> save</span
+          >
+          <span
+            ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.cancel')}</kbd> cancel</span
+          >
+        </div>
+        <div class="font-mono text-[11px] text-zinc-500">
+          {sourceFrameSummary}
+        </div>
+        {#if cropFrameSummary}
+          <div class="font-mono text-[11px] text-zinc-600">{cropFrameSummary}</div>
+        {/if}
+        {#if errorText}
+          <div class="text-red-300">{errorText}</div>
+        {/if}
+      </footer>
 
-    <div class="flex items-center justify-end gap-2">
-      <button
-        type="button"
-        class="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800"
-        onclick={() => (boxLocal = null)}
-        disabled={busy || boxLocal == null}
-      >
-        Clear
-      </button>
-      <button
-        type="button"
-        class="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800"
-        onclick={onclose}
-        disabled={busy}
-      >
-        Cancel
-      </button>
-      <button
-        type="button"
-        class="rounded-md border border-blue-500/60 bg-blue-500/20 px-3 py-1.5 text-sm font-medium text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
-        onclick={save}
-        disabled={busy}
-      >
-        {busy ? 'Saving…' : 'Save'}
-      </button>
-    </div>
+      <div class="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          class="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800"
+          onclick={() => (boxLocal = null)}
+          disabled={busy || boxLocal == null}
+        >
+          Clear
+        </button>
+        <button
+          type="button"
+          class="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800"
+          onclick={onclose}
+          disabled={busy}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="rounded-md border border-blue-500/60 bg-blue-500/20 px-3 py-1.5 text-sm font-medium text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
+          onclick={save}
+          disabled={busy}
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    {/if}
   </div>
 </div>

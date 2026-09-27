@@ -1110,7 +1110,30 @@ regions/{box_id}` — the per-box accept/reject keys, `y`/`r`), and
   the item count when they differ, and region cluster cards show
   `box_count` beside `size`; the `has_rejected_box` region-status filter
   option needs no frontend code (it's one more value in the existing
-  served-enum `region_status` filter).
+  served-enum `region_status` filter). Bulk triage from an open cluster
+  bucket (`gallery.selectedCluster != null`) goes through
+  `applyBoxState()`/`POST /regions/batch_box_state` (per-box targets from
+  each row's `region_box_id`) — never the item-level `batch_status`,
+  which would flip every sibling box; outside a cluster the toolbar is
+  unchanged.
+- `SlotBboxEditor.svelte` (the `CropCard` pencil ✎) is multi-box too —
+  it reuses `MultiBoxCanvas`/`multiBoxRegionController` (a new
+  `saveEdits()` method: a plain `PUT .../regions` with no `region_status`,
+  since this modal has no confirm concept) rather than a second
+  implementation. The legacy single-box canvas/drag-handles/Clear button
+  are unchanged, in an `{:else}` branch, for a genuine tier-2 single-box
+  slot.
+- The served `region_profile.limits.max_boxes_per_write`
+  (`ServedRegionProfile.limits`, `SubBoxCapability.maxBoxesPerWrite`)
+  gates Add in both `MultiBoxCanvas` instances (`/review`,
+  `SlotBboxEditor`) — never a client-guessed cap; absent on a pre-W8.8
+  backend leaves Add unbounded.
+- `GET /regions/statuses`' `box_states` vocabulary
+  (`regionStatusesStore.boxStates`/`boxStateInfo`/`boxStateByRole`)
+  supplies box labels and the `dashed` flag when loaded; there is no
+  served color for a box state (a documented backend-ask gap), so the
+  accepted/proposed/rejected/false_positive ring colors stay a small
+  client palette.
 
 ## Plate provenance + OCR (Wave 1 + Wave 2b, 2026-05-11)
 

@@ -25,6 +25,7 @@ import {
   getRegions,
   getRegionThumbUrl,
   getSuspectedFalsePositives,
+  postBatchBoxState,
   refineRegionCluster,
   type RegionBrowseItem,
   type SuspectedFpItem,
@@ -57,6 +58,19 @@ export function createSlotGalleryController(slot: SlotSpec) {
   const falsePositiveState = (): string | undefined =>
     regionStatusesStore.falsePositiveStatus ??
     slot.capabilities.lifecycle?.falsePositiveState;
+
+  // W8.7: per-box `state` triage, a different vocabulary from the
+  // item-level region_status above (`accepted`/`rejected`/
+  // `false_positive`/`proposed`, keyed here by the served `box_states`
+  // entry's `role`). Falls back to the literal role string — the fixed
+  // W8.7 wire vocabulary, not a client guess — for a pre-W8 backend that
+  // hasn't served `box_states` yet.
+  const confirmBoxState = (): string =>
+    regionStatusesStore.boxStateByRole('accepted') ?? 'accepted';
+  const rejectBoxState = (): string =>
+    regionStatusesStore.boxStateByRole('rejected') ?? 'rejected';
+  const falsePositiveBoxState = (): string =>
+    regionStatusesStore.boxStateByRole('false_positive') ?? 'false_positive';
 
   const browsePath = slot.capabilities.queue?.browsePath;
   // W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): total_rows
@@ -476,6 +490,71 @@ export function createSlotGalleryController(slot: SlotSpec) {
   }
 
   /**
+   * W8: per-box triage over the selected rows (region gallery triage — a
+   * cluster is a set of boxes, W8.8/§7.7). Unlike `applyStatus` above
+   * (whole-item `region_status`, `PATCH region_meta` / `POST
+   * batch_status`), this goes through `POST /regions/batch_box_state`,
+   * which flips only the targeted box on each item, never its siblings —
+   * exactly the spec's rule for triage from a cluster ("never the
+   * item-level batch_status, which would flip every sibling box").
+   * Targets are built from the row's own served `region_box_id`
+   * (`RegionBrowseItem`, W8.10) — a pre-W8 row without one is skipped
+   * rather than silently flipping a whole item.
+   */
+  async function applyBoxState(cropIds: string[], state: string): Promise<void> {
+    if (cropIds.length === 0 || busy) return;
+    const idSet = new Set(cropIds);
+    const targets = pager.items
+      .filter((p) => idSet.has(p.crop_id) && p.region_box_id != null)
+      .map((p) => ({ cropId: p.crop_id, boxId: p.region_box_id! }));
+    const skipped = cropIds.length - targets.length;
+    if (targets.length === 0) {
+      toastStore.error(
+        `Cannot triage by box: this row has no served box id (pre-W8 backend?).`,
+      );
+      return;
+    }
+    busy = true;
+    sel.clear();
+    try {
+      const res = await postBatchBoxState(targets, state);
+      // A box-state write returns full items (Crop), not gallery rows —
+      // the row grid re-fetches its own page rather than patching rows
+      // in place from a shape the gallery doesn't render (RegionBrowseItem
+      // vs Crop): the triaged boxes typically leave the current bucket
+      // anyway (their state changed), so a refetch is the correct result,
+      // not a shortcut.
+      undoStore.recordRegionWrites(res.items.map((c) => c.id));
+      const invalid = res.invalid ?? [];
+      const conflicts = res.conflicts ?? [];
+      if (invalid.length > 0 || conflicts.length > 0) {
+        const conflictDetail = conflicts.find((c) => c.message)?.message;
+        const parts = [
+          conflicts.length > 0
+            ? `${conflicts.length} conflicted${conflictDetail ? ` (${conflictDetail})` : ''}`
+            : null,
+          invalid.length > 0
+            ? `${invalid.length} invalid (${invalid.map((i) => i.message).join('; ')})`
+            : null,
+          skipped > 0 ? `${skipped} skipped (no box id)` : null,
+        ].filter((s): s is string => s != null);
+        toastStore.error(
+          `${state.replace('_', ' ')}: ${res.updated} updated, ${parts.join(', ')}`,
+        );
+      } else {
+        toastStore.success(
+          `${state.replace('_', ' ')}: ${res.updated} box(es)${skipped > 0 ? `, ${skipped} skipped (no box id)` : ''}`,
+        );
+      }
+      await pager.loadPage(pager.firstPage);
+    } catch (err) {
+      toastStore.error(`Bulk box triage failed: ${(err as Error).message}`);
+    } finally {
+      busy = false;
+    }
+  }
+
+  /**
    * `onsave` for `SlotBboxEditor` — the editor has ALREADY performed the
    * write via `setSlotBox` by the time this fires, and passes back the
    * server's own returned item. This function only patches the matching
@@ -549,6 +628,9 @@ export function createSlotGalleryController(slot: SlotSpec) {
     confirmState,
     rejectState,
     falsePositiveState,
+    confirmBoxState,
+    rejectBoxState,
+    falsePositiveBoxState,
     get pager() {
       return pager;
     },
@@ -656,6 +738,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
     selectAll,
     openEditor,
     applyStatus,
+    applyBoxState,
     saveBox,
     undoLastAction,
   };

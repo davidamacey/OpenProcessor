@@ -368,7 +368,7 @@
                       ? 'border-yellow-500/40 bg-yellow-500/15 text-yellow-200'
                       : 'border-zinc-600/40 bg-zinc-700/20 text-zinc-300'}"
                 >
-                  {b.state}
+                  {regionStatusesStore.boxStateInfo(b.state)?.label ?? b.state}
                 </span>
                 {#if b.score != null}
                   <span class="font-mono text-[10px] text-zinc-500">{pct(b.score)}</span>

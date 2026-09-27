@@ -42,6 +42,7 @@
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
   import { projectFromParent } from '$lib/annotations/readSlot';
   import type { BBoxNormLike, XYXY } from '$lib/annotations/types';
+  import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
   interface Props {
     /** Which crop's context (source image + every item cropped from it) to draw. */
@@ -125,15 +126,19 @@
 
   /** W8 multi-box (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
    *  per-box state -> ring color/dash, same palette as the review page's
-   *  multiBoxRingColor/multiBoxDashed. No served box_states vocabulary
-   *  fetch yet in this pass. */
+   *  multiBoxRingColor/multiBoxDashed. `box_states` serves a dash flag
+   *  (no color) — `regionStatusesStore.boxStateInfo` wins for `dashed`
+   *  when loaded; the literal fallback covers a pre-W8 backend. */
   function multiBoxRingColorClass(state: string): string {
     if (state === 'accepted') return 'border-green-400';
     if (state === 'proposed') return 'border-yellow-400';
     return 'border-zinc-500'; // rejected / false_positive
   }
   function multiBoxDashed(state: string): boolean {
-    return state === 'rejected' || state === 'false_positive';
+    return (
+      regionStatusesStore.boxStateInfo(state)?.dashed ??
+      (state === 'rejected' || state === 'false_positive')
+    );
   }
 
   interface DrawBox {

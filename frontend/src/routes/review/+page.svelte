@@ -1205,15 +1205,25 @@
   // same palette the single-box ring uses (confirmed=green, proposed=
   // amber, rejected/FP=neutral). No served box_states vocabulary fetch
   // yet in this pass — see the plan doc's out-of-scope list.
+  // W8.7 serves box_states' label/dashed/dim/badge, but not a color — the
+  // ring color stays a client role→color mapping (there is nothing served
+  // to prefer). `regionStatusesStore.boxStateInfo` wins for label/dashed
+  // when loaded (a W8 backend); the literal fallback covers a pre-W8
+  // backend or a value the served vocabulary doesn't (yet) know.
   function multiBoxRingColor(state: string): string {
     if (state === 'accepted') return 'rgb(74, 222, 128)'; // green-400
     if (state === 'proposed') return 'rgb(250, 204, 21)'; // yellow-400
     return 'rgb(113, 113, 122)'; // zinc-500 — rejected / false_positive
   }
   function multiBoxDashed(state: string): boolean {
-    return state === 'rejected' || state === 'false_positive';
+    return (
+      regionStatusesStore.boxStateInfo(state)?.dashed ??
+      (state === 'rejected' || state === 'false_positive')
+    );
   }
   function multiBoxStateLabel(state: string): string {
+    const served = regionStatusesStore.boxStateInfo(state)?.label;
+    if (served) return served;
     if (state === 'accepted') return 'accepted';
     if (state === 'proposed') return 'awaiting verification';
     if (state === 'false_positive') return 'false positive';
@@ -2306,6 +2316,7 @@
               selectedIndex={multiBox.selectedIndex}
               busy={multiBox.busy}
               readonly={!editMode}
+              maxBoxes={multiBox.maxBoxes}
               ringColorFor={multiBoxRingColor}
               dashedFor={multiBoxDashed}
               onselect={(i) => multiBox.select(i)}
@@ -2402,6 +2413,16 @@
             {/each}
             {#if multiBox.boxes.length === 0}
               <span class="text-[11px] text-zinc-500">no boxes</span>
+            {/if}
+            {#if multiBox.maxBoxes != null}
+              <!-- W8.8: the served region_profile.limits.max_boxes_per_write —
+                   never a client-guessed cap. -->
+              <span
+                class="text-[11px] text-zinc-500"
+                title="Served limit on boxes per write (region_profile.limits.max_boxes_per_write)"
+              >
+                {multiBox.boxes.length} / {multiBox.maxBoxes} max
+              </span>
             {/if}
           </div>
         {/if}

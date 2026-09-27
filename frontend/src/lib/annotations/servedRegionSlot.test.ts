@@ -83,7 +83,13 @@ describe('regionSlotFromServedProfile', () => {
     expect(slot.endpoints.clearBox).toBeUndefined();
     expect(slot.endpoints.patchMeta!('a')).toBe('/crops/a/region_meta');
     expect(slot.endpoints.batchStatus!()).toBe('/regions/batch_status');
-    expect(slot.capabilities.subBox).toBe(REGION_WIRE_CAPABILITIES.subBox);
+    // W8.8: subBox is rebuilt per profile (spread over REGION_SUB_BOX) to
+    // carry the served region_profile.limits.max_boxes_per_write, so it's
+    // no longer the same object identity — compare structurally instead.
+    expect(slot.capabilities.subBox).toEqual({
+      ...REGION_WIRE_CAPABILITIES.subBox,
+      maxBoxesPerWrite: undefined,
+    });
   });
 
   it('declares no client-side training cohorts (the backend serves them)', () => {

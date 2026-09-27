@@ -11,7 +11,11 @@
    * empty canvas draws a new one; Backspace/Delete removes the selected
    * box; Tab cycles the selection; arrow keys nudge the selected box.
    *
-   * No client box cap (owner decision) — `boxes` is unbounded. `onadd` /
+   * No client-GUESSED box cap (owner decision) — `boxes` is unbounded by
+   * default. The only real limit is the served
+   * `region_profile.limits.max_boxes_per_write` (`maxBoxes` prop, W8.8);
+   * when set, drag-create is disabled once `boxes.length >= maxBoxes`
+   * (never on a pre-W8.8 backend, which passes `null`). `onadd` /
    * `ondelete` / `onmove` / `onselect` let the parent own the actual
    * `EditableBox[]` state (via `annotations/multiBox.ts`'s pure helpers)
    * so this component stays presentation-only.
@@ -36,6 +40,9 @@
      *  keyboard actions (Tab/y/r) still work. Matches BboxCanvas's
      *  readonly convention. */
     readonly?: boolean;
+    /** Served `region_profile.limits.max_boxes_per_write`, or `null`/
+     *  `undefined` when unknown (no client-guessed default). */
+    maxBoxes?: number | null;
     ringColorFor?: (state: string) => string;
     dashedFor?: (state: string) => boolean;
     onselect?: (index: number) => void;
@@ -53,6 +60,7 @@
     class: containerClass = 'aspect-square w-full',
     busy = false,
     readonly = false,
+    maxBoxes = null,
     ringColorFor = () => 'rgb(80, 200, 255)',
     dashedFor = () => false,
     onselect,
@@ -98,8 +106,10 @@
     };
   }
 
+  const atBoxCap = $derived(maxBoxes != null && boxes.length >= maxBoxes);
+
   function onPointerDownCanvas(e: PointerEvent): void {
-    if (busy || readonly) return;
+    if (busy || readonly || atBoxCap) return;
     e.preventDefault();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const p = clientToNorm(e);

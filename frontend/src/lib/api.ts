@@ -2557,11 +2557,29 @@ export interface RegionStatusEntry {
   wants_reason: boolean;
 }
 
+/** W8.7: per-box state styling/labels, distinct from the item-level
+ *  `RegionStatusEntry` vocabulary above — a box's `state` is
+ *  `proposed`/`accepted`/`rejected`/`false_positive`, never one of the
+ *  item's `region_status` values. */
+export interface BoxStateEntry {
+  value: string;
+  label: string;
+  role: string;
+  human_writable: boolean;
+  exported: boolean;
+  dashed: boolean;
+  dim: boolean;
+  badge: string | null;
+}
+
 export interface RegionStatusesResponse {
   statuses: RegionStatusEntry[];
   confirm_status: string;
   reject_status: string;
   false_positive_status: string;
+  /** W8.7: served box-state vocabulary (`GET /regions/statuses`), absent
+   *  on a pre-W8 backend. */
+  box_states?: BoxStateEntry[];
 }
 
 /** The deployment's region-status vocabulary (`GET {API_PREFIX}/regions/statuses`),

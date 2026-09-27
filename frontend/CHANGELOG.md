@@ -82,10 +82,25 @@ null, bbox_norm}`) plus the owner-decided Enter semantics
     rewritten for the real new semantics (confirm-only-proposed, per-box
     accept/reject, add+confirm in one write, on-screen button parity, Z
     restoring the whole list via the backend-confirmed one-step undo
-    contract). Remaining gap: region-cluster bulk triage still calls the
-    item-level `batch_status` route, not the per-box `batch_box_state`
-    (declared and unit-tested in `api.ts`, not yet wired into the gallery
-    UI) — see the plan doc's updated status section for the full list.
+    contract).
+  - **Third pass (2026-09-26): closed every remaining gap.**
+    Region-cluster bulk triage now uses the per-box `batch_box_state`
+    route (`applyBoxState`, `slotGalleryController.svelte.ts`) whenever a
+    cluster bucket is open, instead of the item-level `batch_status` —
+    never the item-level route, which would flip every sibling box.
+    `SlotBboxEditor.svelte` (the `CropCard` pencil ✎) now reuses
+    `MultiBoxCanvas`/`multiBoxRegionController` for the region slot (a new
+    `saveEdits()` controller method — a plain PUT with no `region_status`,
+    since this modal has no confirm concept) instead of being
+    single-box-only/unreachable for region; the single-box path is kept,
+    byte for byte, for a genuine tier-2 single-box slot. The served
+    `region_profile.limits.max_boxes_per_write` now gates the Add-box
+    action in both canvases and renders as "N / max" — never a
+    client-guessed cap. `GET /regions/statuses`' `box_states` vocabulary
+    (label/dashed/dim/badge, no color — a documented backend-ask gap) is
+    now loaded and preferred over the hardcoded label/dash palette. See
+    the plan doc's third-pass section for the full test list (unit +
+    e2e, each mutation-checked).
 - **Configurable keyboard shortcuts — editor + served keymap (K2 of
   `docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md`).**
   Built ahead of OpenProcessor W2b's `GET/PUT {prefix}/keymap`,

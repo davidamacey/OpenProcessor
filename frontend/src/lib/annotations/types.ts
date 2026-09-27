@@ -187,6 +187,11 @@ export interface SubBoxCapability {
     viewPadding: number;
     nudgeStep: number;
   };
+  /** W8.8: the served `region_profile.limits.max_boxes_per_write` for a
+   *  `listField` capability — the only real limit on adding a box (no
+   *  client-guessed cap). `undefined` on a pre-W8.8 backend or a
+   *  non-region (single-box) slot. */
+  maxBoxesPerWrite?: number;
 }
 
 /* ------------------------------------------------------------------ */

@@ -53,6 +53,15 @@ function normalize(
     reads_text: typeof p.reads_text === 'boolean' ? p.reads_text : undefined,
     text_hint_enabled:
       typeof p.text_hint_enabled === 'boolean' ? p.text_hint_enabled : undefined,
+    limits:
+      p.limits && typeof p.limits === 'object'
+        ? {
+            max_boxes_per_write:
+              typeof p.limits.max_boxes_per_write === 'number'
+                ? p.limits.max_boxes_per_write
+                : undefined,
+          }
+        : undefined,
   };
 }
 
@@ -65,7 +74,8 @@ function same(a: ServedRegionProfile | null, b: ServedRegionProfile | null): boo
     a.region_class_name === b.region_class_name &&
     a.text_reader === b.text_reader &&
     a.reads_text === b.reads_text &&
-    a.text_hint_enabled === b.text_hint_enabled
+    a.text_hint_enabled === b.text_hint_enabled &&
+    a.limits?.max_boxes_per_write === b.limits?.max_boxes_per_write
   );
 }
 

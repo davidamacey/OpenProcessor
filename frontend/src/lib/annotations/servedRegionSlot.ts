@@ -208,6 +208,7 @@ export function regionSlotFromServedProfile(p: ServedRegionProfile): SlotSpec {
     },
     capabilities: {
       ...REGION_WIRE_CAPABILITIES,
+      subBox: { ...REGION_SUB_BOX, maxBoxesPerWrite: p.limits?.max_boxes_per_write },
       text: hasText ? REGION_TEXT : undefined,
       queue: {
         endpointId: REGION_TAB_ID,

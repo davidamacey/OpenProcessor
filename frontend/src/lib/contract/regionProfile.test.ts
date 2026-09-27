@@ -21,17 +21,26 @@ const FRONTEND_KEYS = {
   text_reader: true,
   reads_text: true,
   text_hint_enabled: true,
+  limits: true,
 } satisfies Record<keyof ServedRegionProfile, true>;
+
+// W8.9 (feat/w8-multibox-lockstep, docs/design/
+// w8-multibox-frontend-plan-2026-09-26.md): `limits` is new in the
+// backend's W8 wave and isn't in the vendored pre-W8 OpenAPI snapshot yet.
+// Remove this allow-list entry (not widen it) the moment `npm run
+// contract:sync` picks up the backend's W8 addition to
+// `RegionProfileSummary` — same pattern as endpointCatalog.test.ts's
+// PENDING_BACKEND.
+const PENDING_BACKEND_W8_KEYS = new Set(['limits']);
 
 describe('RegionProfileSummary', () => {
   it('ServedRegionProfile has exactly the served keys, all required', () => {
     const summary = schemas.RegionProfileSummary;
-    expect(Object.keys(summary.properties ?? {}).sort()).toEqual(
-      Object.keys(FRONTEND_KEYS).sort(),
+    const frontendKeys = Object.keys(FRONTEND_KEYS).filter(
+      (k) => !PENDING_BACKEND_W8_KEYS.has(k),
     );
-    expect([...(summary.required ?? [])].sort()).toEqual(
-      Object.keys(FRONTEND_KEYS).sort(),
-    );
+    expect(Object.keys(summary.properties ?? {}).sort()).toEqual(frontendKeys.sort());
+    expect([...(summary.required ?? [])].sort()).toEqual(frontendKeys.sort());
   });
 
   it.each(['HealthResponse', 'RegionVocabularyResponse'])(

@@ -170,4 +170,77 @@ describe('createMultiBoxRegionController', () => {
     expect(result.ok).toBe(false);
     expect(toastSpy).toHaveBeenCalled();
   });
+
+  describe('saveEdits (SlotBboxEditor modal — no confirm semantics)', () => {
+    it('sends the geometry diff with no region_status key, unlike confirmAndSave', async () => {
+      const returned = cropWithBoxes('c1', [{ ...boxA, state: 'proposed' }]);
+      vi.mocked(putRegionBoxes).mockResolvedValue(returned);
+      const c = createMultiBoxRegionController(() => widgetTagSlot);
+      c.seedFrom(cropWithBoxes('c1', [boxA]));
+      c.moveSelected({ cx: 0.3, cy: 0.3, w: 0.1, h: 0.1 });
+      await c.saveEdits('c1');
+      expect(putRegionBoxes).toHaveBeenCalledTimes(1);
+      const [cropId, body, opts] = vi.mocked(putRegionBoxes).mock.calls[0];
+      expect(cropId).toBe('c1');
+      expect(body[0]).toMatchObject({ box_id: 'b1' });
+      // The key differentiator from confirmAndSave: no region_status.
+      expect(opts).toBeUndefined();
+    });
+
+    it('never promotes a proposed box to accepted (no confirm semantics)', async () => {
+      const returned = cropWithBoxes('c1', [{ ...boxA, state: 'proposed' }]);
+      vi.mocked(putRegionBoxes).mockResolvedValue(returned);
+      const c = createMultiBoxRegionController(() => widgetTagSlot);
+      c.seedFrom(cropWithBoxes('c1', [boxA]));
+      c.moveSelected({ cx: 0.3, cy: 0.3, w: 0.1, h: 0.1 });
+      await c.saveEdits('c1');
+      const [, body] = vi.mocked(putRegionBoxes).mock.calls[0];
+      expect(body[0]).not.toHaveProperty('state');
+    });
+
+    it('records a region undo entry and reports the new item on success', async () => {
+      const returned = cropWithBoxes('c1', [{ ...boxA, state: 'proposed' }]);
+      vi.mocked(putRegionBoxes).mockResolvedValue(returned);
+      const spy = vi.spyOn(undoStore, 'recordRegionWrites');
+      const c = createMultiBoxRegionController(() => widgetTagSlot);
+      c.seedFrom(cropWithBoxes('c1', [boxA]));
+      c.moveSelected({ cx: 0.3, cy: 0.3, w: 0.1, h: 0.1 });
+      const result = await c.saveEdits('c1');
+      expect(spy).toHaveBeenCalledWith(['c1']);
+      expect(result.ok).toBe(true);
+      expect(result.item).toBe(returned);
+    });
+
+    it('surfaces a server failure without throwing', async () => {
+      vi.mocked(putRegionBoxes).mockRejectedValue(new Error('region_conflict'));
+      const toastSpy = vi.spyOn(toastStore, 'error');
+      const c = createMultiBoxRegionController(() => widgetTagSlot);
+      c.seedFrom(cropWithBoxes('c1', [boxA]));
+      const result = await c.saveEdits('c1');
+      expect(result.ok).toBe(false);
+      expect(toastSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('maxBoxes', () => {
+    it('reads the served subBox.maxBoxesPerWrite, or null when absent (pre-W8.8 backend)', () => {
+      const c = createMultiBoxRegionController(() => widgetTagSlot);
+      expect(c.maxBoxes).toBeNull();
+
+      const limited = {
+        ...widgetTagSlot,
+        capabilities: {
+          ...widgetTagSlot.capabilities,
+          subBox: { ...widgetTagSlot.capabilities.subBox!, maxBoxesPerWrite: 5 },
+        },
+      };
+      const c2 = createMultiBoxRegionController(() => limited);
+      expect(c2.maxBoxes).toBe(5);
+    });
+
+    it('returns null when there is no active slot', () => {
+      const c = createMultiBoxRegionController(() => null);
+      expect(c.maxBoxes).toBeNull();
+    });
+  });
 });

@@ -73,6 +73,19 @@ export interface MultiBoxRegionController {
    *  e.g. 422 no_accepted_box, so the crop stays in view for another
    *  per-box decision). */
   confirmAndSave(cropId: string): Promise<{ ok: boolean; item: Crop | null }>;
+  /** Plain "Save" (no confirm semantics) — sends the accumulated geometry/
+   *  delete/add diff as one `PUT /crops/{id}/regions`, with no
+   *  `region_status` key, so every box's own state is preserved exactly
+   *  as edited. Used by the standalone bbox-editor modal
+   *  (`SlotBboxEditor.svelte`), which has no "confirm proposed" concept —
+   *  unlike `confirmAndSave`, a no-op edit (nothing dirty, same box
+   *  count) still round-trips through the server so `onsave` always
+   *  fires with a real item. */
+  saveEdits(cropId: string): Promise<{ ok: boolean; item: Crop | null }>;
+  /** The served `region_profile.limits.max_boxes_per_write` for the
+   *  active slot, or `null` when the slot has no limit declared (a
+   *  pre-W8.8 backend, or a non-region slot). Never a client guess. */
+  readonly maxBoxes: number | null;
 }
 
 export function createMultiBoxRegionController(
@@ -187,6 +200,24 @@ export function createMultiBoxRegionController(
     }
   }
 
+  async function saveEdits(cropId: string): Promise<{ ok: boolean; item: Crop | null }> {
+    if (busy) return { ok: false, item: null };
+    busy = true;
+    try {
+      const body = buildRegionsPutBoxes(original, boxes);
+      const crop = await putRegionBoxes(cropId, body);
+      reseedFromWrittenCrop(crop);
+      undoStore.recordRegionWrites([cropId]);
+      return { ok: true, item: crop };
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : (e as Error).message;
+      toastStore.error(`Save failed: ${msg}`);
+      return { ok: false, item: null };
+    } finally {
+      busy = false;
+    }
+  }
+
   return {
     get boxes() {
       return boxes;
@@ -200,6 +231,9 @@ export function createMultiBoxRegionController(
     get dirty() {
       return dirty;
     },
+    get maxBoxes() {
+      return slot()?.capabilities.subBox?.maxBoxesPerWrite ?? null;
+    },
     seedFrom,
     select,
     next,
@@ -209,5 +243,6 @@ export function createMultiBoxRegionController(
     acceptSelected,
     rejectSelected,
     confirmAndSave,
+    saveEdits,
   };
 }
