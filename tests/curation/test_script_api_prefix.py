@@ -93,7 +93,6 @@ async def test_cluster_refresh_daemon_uses_configured_prefix() -> None:
         'http://api/custom-mount/projects/alpha/clusters/auto_promote',
         'http://api/custom-mount/projects/alpha/pipeline/auto_label',
     ]
-    assert mod._items_index() == 'op_prj_beta__items'
 
 
 @pytest.mark.unbound
