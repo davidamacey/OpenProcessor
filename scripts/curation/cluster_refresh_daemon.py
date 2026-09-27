@@ -18,6 +18,12 @@ Defaults match the design discussion in Task #92:
 Designed to run as a long-lived process (``python -m
 scripts.curation.cluster_refresh_daemon``) or as a cron job invoking
 ``--once``.
+
+Multi-project mode (default): with no ``--project``, each iteration
+discovers every active project and refreshes one of them (rotating one
+per iteration), skipping a project whose ``pipeline_paused.flag`` is
+set. ``--project SLUG`` restricts to (and whole-process-binds) one
+project -- the original single-project growth-tracking loop, unchanged.
 """
 
 from __future__ import annotations
@@ -25,7 +31,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
-import os
 import signal
 import sys
 import time
@@ -40,6 +45,12 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
+from scripts.curation._project_worker_utils import (
+    project_api_prefix,
+    project_items_index,
+    project_paused,
+    scoped_url,
+)
 from src.services.curation.worker_liveness import write_heartbeat
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
@@ -52,12 +63,7 @@ _LIVENESS_TICK_S = 15.0
 
 
 DEFAULT_API = 'http://localhost:4603'
-# Same env + default as CurationConfig.api_prefix, so the worker follows the API's mount.
-API_PREFIX = os.environ.get('OP_API_PREFIX', '/curation').rstrip('/')
 DEFAULT_OS = 'http://localhost:4607'
-# curation items index — see vlm_worker.py's
-# identical constant for the full explanation.
-ITEMS_INDEX = os.environ.get('OP_ITEMS_INDEX_OVERRIDE') or 'op_items'
 
 
 def _parse_args() -> argparse.Namespace:
@@ -92,18 +98,21 @@ def _parse_args() -> argparse.Namespace:
         help='Run a single iteration and exit (cron-friendly).',
     )
     add_project_argument(p)
+    p.set_defaults(project=None)  # multi-project mode is the new default
     return p.parse_args()
 
 
-async def _crop_count(client: httpx.AsyncClient, opensearch: str) -> int:
-    r = await client.get(f'{opensearch}/{ITEMS_INDEX}/_count', timeout=10.0)
+async def _crop_count(client: httpx.AsyncClient, opensearch: str, items_index: str) -> int:
+    r = await client.get(f'{opensearch}/{items_index}/_count', timeout=10.0)
     r.raise_for_status()
     return int(r.json().get('count', 0))
 
 
-async def _trigger_auto_promote(client: httpx.AsyncClient, api: str) -> dict[str, Any]:
+async def _trigger_auto_promote(
+    client: httpx.AsyncClient, api: str, api_prefix: str, slug: str
+) -> dict[str, Any]:
     r = await client.post(
-        f'{api}{API_PREFIX}/clusters/auto_promote',
+        scoped_url(api, api_prefix, slug, '/clusters/auto_promote'),
         json={},
         # A cold-start pass (daemon restart resets in-process last_count to
         # 0, so the very next poll always re-triggers over the *full* pool,
@@ -118,9 +127,11 @@ async def _trigger_auto_promote(client: httpx.AsyncClient, api: str) -> dict[str
     return r.json()
 
 
-async def _trigger_auto_label(client: httpx.AsyncClient, api: str) -> dict[str, Any]:
+async def _trigger_auto_label(
+    client: httpx.AsyncClient, api: str, api_prefix: str, slug: str
+) -> dict[str, Any]:
     r = await client.post(
-        f'{api}{API_PREFIX}/pipeline/auto_label',
+        scoped_url(api, api_prefix, slug, '/pipeline/auto_label'),
         json={},
         timeout=900.0,
     )
@@ -132,20 +143,24 @@ async def _iteration(
     client: httpx.AsyncClient,
     *,
     api: str,
+    api_prefix: str,
+    slug: str,
     opensearch: str,
+    items_index: str,
     last_count: int,
     threshold: int,
     auto_label: bool,
 ) -> int:
     """One poll + (maybe) refresh. Returns the new ``last_count``."""
     try:
-        count = await _crop_count(client, opensearch)
+        count = await _crop_count(client, opensearch, items_index)
     except httpx.HTTPError as exc:
-        print(f'[cluster-refresh] crop_count failed: {exc}', flush=True)
+        print(f'[cluster-refresh] project={slug} crop_count failed: {exc}', flush=True)
         return last_count
     growth = count - last_count
     print(
-        f'[cluster-refresh] crops={count} growth_since_last={growth} threshold={threshold}',
+        f'[cluster-refresh] project={slug} crops={count} growth_since_last={growth} '
+        f'threshold={threshold}',
         flush=True,
     )
     if last_count > 0 and growth < threshold:
@@ -153,24 +168,24 @@ async def _iteration(
     # First iteration (last_count == 0) always triggers — we want a
     # fresh promote on daemon startup so the user sees the current
     # state reflected in /clusters.
-    print('[cluster-refresh] triggering auto_promote', flush=True)
+    print(f'[cluster-refresh] project={slug} triggering auto_promote', flush=True)
     try:
-        promo = await _trigger_auto_promote(client, api)
-        print(f'[cluster-refresh] auto_promote result: {promo}', flush=True)
+        promo = await _trigger_auto_promote(client, api, api_prefix, slug)
+        print(f'[cluster-refresh] project={slug} auto_promote result: {promo}', flush=True)
     except httpx.HTTPError as exc:
-        print(f'[cluster-refresh] auto_promote failed: {exc}', flush=True)
+        print(f'[cluster-refresh] project={slug} auto_promote failed: {exc}', flush=True)
         return last_count
     if auto_label:
-        print('[cluster-refresh] triggering auto_label', flush=True)
+        print(f'[cluster-refresh] project={slug} triggering auto_label', flush=True)
         try:
-            lab = await _trigger_auto_label(client, api)
-            print(f'[cluster-refresh] auto_label result: {lab}', flush=True)
+            lab = await _trigger_auto_label(client, api, api_prefix, slug)
+            print(f'[cluster-refresh] project={slug} auto_label result: {lab}', flush=True)
         except httpx.HTTPError as exc:
-            print(f'[cluster-refresh] auto_label failed: {exc}', flush=True)
+            print(f'[cluster-refresh] project={slug} auto_label failed: {exc}', flush=True)
     return count
 
 
-async def run(args: argparse.Namespace) -> int:
+def _make_signal_stop() -> tuple[asyncio.Event, None]:
     stop = asyncio.Event()
 
     def _on_signal(*_: object) -> None:
@@ -181,7 +196,31 @@ async def run(args: argparse.Namespace) -> int:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, _on_signal)
+    return stop, None
 
+
+async def _sleep_with_heartbeat(stop: asyncio.Event, sleep_s: float) -> None:
+    # Slice the inter-iteration wait into <=_LIVENESS_TICK_S chunks so
+    # the container heartbeat stays fresh across a multi-minute wait.
+    remaining = sleep_s
+    while remaining > 0 and not stop.is_set():
+        chunk = min(remaining, _LIVENESS_TICK_S)
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(stop.wait(), timeout=chunk)
+        remaining -= chunk
+        write_heartbeat('cluster_refresh', {'loop': True})
+
+
+async def run(args: argparse.Namespace) -> int:
+    # Single, --project-bound project: the original growth-tracking loop.
+    from src.config.project_context import current_project
+
+    bound = current_project()
+    items_index = project_items_index(bound.record)
+    api_prefix = project_api_prefix()
+    slug = bound.record.slug
+
+    stop, _ = _make_signal_stop()
     last_count = 0
     write_heartbeat('cluster_refresh', {'loop': True})
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -190,7 +229,10 @@ async def run(args: argparse.Namespace) -> int:
             last_count = await _iteration(
                 client,
                 api=args.api,
+                api_prefix=api_prefix,
+                slug=slug,
                 opensearch=args.opensearch,
+                items_index=items_index,
                 last_count=last_count,
                 threshold=args.growth_threshold,
                 auto_label=args.auto_label,
@@ -198,25 +240,72 @@ async def run(args: argparse.Namespace) -> int:
             write_heartbeat('cluster_refresh', {'loop': True})
             if args.once:
                 break
-            elapsed = time.monotonic() - t0
-            sleep_s = max(args.interval_seconds - elapsed, 1.0)
-            # Slice the wait into <=_LIVENESS_TICK_S chunks so the
-            # container heartbeat stays fresh across a multi-minute
-            # inter-iteration wait, not just once per iteration.
-            remaining = sleep_s
-            while remaining > 0 and not stop.is_set():
-                chunk = min(remaining, _LIVENESS_TICK_S)
-                with contextlib.suppress(TimeoutError):
-                    await asyncio.wait_for(stop.wait(), timeout=chunk)
-                remaining -= chunk
-                write_heartbeat('cluster_refresh', {'loop': True})
+            await _sleep_with_heartbeat(
+                stop, max(args.interval_seconds - (time.monotonic() - t0), 1.0)
+            )
+    return 0
+
+
+async def run_multi_project(args: argparse.Namespace) -> int:
+    # Round-robins every active project, one at a time per iteration.
+    from src.services.projects.registry import get_project_registry
+
+    stop, _ = _make_signal_stop()
+    registry = get_project_registry()
+    api_prefix = project_api_prefix()
+    last_counts: dict[str, int] = {}
+    rotation = 0
+    write_heartbeat('cluster_refresh', {'loop': True})
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        while not stop.is_set():
+            t0 = time.monotonic()
+            try:
+                await registry.ensure_fresh()
+                active = registry.active_projects()
+            except Exception as exc:
+                print(f'[cluster-refresh] registry unavailable: {exc}', flush=True)
+                active = []
+
+            if active:
+                rotation %= len(active)
+                record = active[rotation]
+                rotation += 1
+                try:
+                    paused = project_paused(record)
+                    items_index = project_items_index(record) if not paused else ''
+                except Exception as exc:
+                    print(f'[cluster-refresh] project {record.slug} unavailable: {exc}', flush=True)
+                    paused, items_index = True, ''
+                if paused:
+                    print(f'[cluster-refresh] project={record.slug} paused, skipping', flush=True)
+                else:
+                    last_counts[record.slug] = await _iteration(
+                        client,
+                        api=args.api,
+                        api_prefix=api_prefix,
+                        slug=record.slug,
+                        opensearch=args.opensearch,
+                        items_index=items_index,
+                        last_count=last_counts.get(record.slug, 0),
+                        threshold=args.growth_threshold,
+                        auto_label=args.auto_label,
+                    )
+
+            write_heartbeat('cluster_refresh', {'loop': True})
+            if args.once:
+                break
+            await _sleep_with_heartbeat(
+                stop, max(args.interval_seconds - (time.monotonic() - t0), 1.0)
+            )
     return 0
 
 
 def main() -> int:
     args = _parse_args()
-    bind_script_project(args.project, opensearch_url=args.opensearch)
-    return asyncio.run(run(args))
+    if args.project:
+        bind_script_project(args.project, opensearch_url=args.opensearch)
+        return asyncio.run(run(args))
+    return asyncio.run(run_multi_project(args))
 
 
 if __name__ == '__main__':
