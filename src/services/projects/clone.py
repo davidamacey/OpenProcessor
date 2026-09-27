@@ -162,28 +162,20 @@ async def _apply_clone(
                 }
                 for c in get_class_registry().load().classes
             ]
-            report, class_conflicts, _resolved = validate_keymap(
+            report, class_conflicts, _resolved, _issues = validate_keymap(
                 source_keymap.overrides,
                 project=target_record.slug,
                 classes=target_classes,
                 previous_overrides=target_keymap.overrides,
             )
-            # A clash is a report, not a silent unbind (CW-K §0 clause 1):
-            # a conflicting action override is simply dropped from the
-            # copy rather than clearing the target's class hotkey.
-            dropped = {c.action_id for c in class_conflicts}
-            overrides_to_write = (
-                source_keymap.overrides
-                if report.ok
-                else {
-                    aid: combos
-                    for aid, combos in source_keymap.overrides.items()
-                    if not any(issue.field == f'overrides.{aid}' for issue in report.errors)
-                }
-            )
-            overrides_to_write = {
-                aid: combos for aid, combos in overrides_to_write.items() if aid not in dropped
-            }
+            # B2: all-or-nothing. Dropping the conflicting actions and
+            # writing the rest used to leave those actions on their
+            # *defaults*, which can themselves collide with a kept
+            # override or with the same class -- an invalid keymap could
+            # get written with no error and no GET issue reporting it.
+            # A clash is a report, never a silent partial write (CW-K §0
+            # clause 1): on any error or class conflict, the target's
+            # keymap is left exactly as it was.
             conflicts = [
                 {
                     'action_id': c.action_id,
@@ -195,24 +187,31 @@ async def _apply_clone(
             ]
             if class_conflicts or not report.ok:
                 logger.warning(
-                    'keymap_clone_conflicts_dropped',
+                    'keymap_clone_conflicts_left_unchanged',
                     target=target_record.slug,
                     from_slug=source.slug,
-                    dropped_actions=sorted(
-                        dropped
-                        | {
-                            i.field.removeprefix('overrides.')
-                            for i in report.errors
-                            if i.field is not None
-                        }
-                    ),
+                    conflicts=conflicts,
+                    errors=[i.code for i in report.errors],
                 )
-            await save_keymap_doc(
-                client,
-                target_cfg.configs_index,
-                overrides=overrides_to_write,
-                expected_revision=target_keymap.revision,
-            )
+            else:
+                new_target_doc = await save_keymap_doc(
+                    client,
+                    target_cfg.configs_index,
+                    overrides=source_keymap.overrides,
+                    expected_revision=target_keymap.revision,
+                )
+                # Minor: tabs already open on the target should refresh.
+                from src.services.curation.event_hub import get_event_hub
+
+                get_event_hub().publish(
+                    {
+                        'type': 'config.changed',
+                        'topic': 'config',
+                        'axis': 'keymap',
+                        'name': None,
+                        'keymap_revision': new_target_doc.revision,
+                    }
+                )
 
     if 'activations' in axes:
         await _clone_activations(client, target_record=target_record, source=source)

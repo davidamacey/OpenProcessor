@@ -62,6 +62,48 @@ def test_grammar_rejects_unrecognized_combo() -> None:
     assert combo_grammar_error('gg') is not None
 
 
+def test_grammar_rejects_non_canonical_modifier_order_and_duplicates() -> None:
+    """M2: [ctrl+][meta+][alt+][shift+]<key>, in exactly that order, no
+    repeated modifier -- otherwise the combo is a dead binding that also
+    evades collision/browser-reserved detection."""
+    assert combo_grammar_error('shift+ctrl+z') is not None
+    assert combo_grammar_error('ctrl+ctrl+z') is not None
+    assert combo_grammar_error('alt+meta+x') is not None
+    assert combo_grammar_error('ctrl+meta+alt+shift+z') is None
+
+
+def test_validator_rejects_combo_invalid() -> None:
+    report, _, _, _issues = validate_keymap(
+        {'review.skip': ['shift+ctrl+z']}, project='default', classes=[], previous_overrides={}
+    )
+    assert not report.ok
+    assert report.errors[0].code == 'keymap_combo_invalid'
+
+
+def test_validator_rejects_duplicate_combo_in_one_action() -> None:
+    report, _, _, _issues = validate_keymap(
+        {'cluster.ignore': ['q', 'q']}, project='default', classes=[], previous_overrides={}
+    )
+    assert not report.ok
+    assert report.errors[0].code == 'keymap_combo_invalid'
+
+
+def test_validator_warns_focus_key() -> None:
+    report, _, _, _issues = validate_keymap(
+        {'cluster.select_all': ['tab']}, project='default', classes=[], previous_overrides={}
+    )
+    assert report.ok
+    assert any(w.code == 'keymap_focus_key' for w in report.warnings)
+
+
+# keymap_context_no_confirm has no reachable test with the real registry:
+# every confirm-group action's default owns 'enter' as a locked key, so
+# emptying its keys is caught earlier as keymap_key_locked (dropping an
+# owned locked key), before the no-confirm check ever runs. The warning
+# path stays implemented for a future confirm-group action with no
+# locked default.
+
+
 # ------------------------------------------------------- reserved_hotkeys
 
 
@@ -93,7 +135,7 @@ def _classes(
 
 
 def test_unknown_action_is_422() -> None:
-    report, conflicts, _ = validate_keymap(
+    report, conflicts, _, _issues = validate_keymap(
         {'nope.nope': ['x']}, project='default', classes=[], previous_overrides={}
     )
     assert not report.ok
@@ -102,7 +144,7 @@ def test_unknown_action_is_422() -> None:
 
 
 def test_locked_action_cannot_be_overridden() -> None:
-    report, _, _ = validate_keymap(
+    report, _, _, _issues = validate_keymap(
         {'global.close_overlay': ['x']}, project='default', classes=[], previous_overrides={}
     )
     assert not report.ok
@@ -110,7 +152,7 @@ def test_locked_action_cannot_be_overridden() -> None:
 
 
 def test_too_many_combos() -> None:
-    report, _, _ = validate_keymap(
+    report, _, _, _issues = validate_keymap(
         {'cluster.ignore': ['k', 'l', 'p', 'o']},
         project='default',
         classes=[],
@@ -121,7 +163,7 @@ def test_too_many_combos() -> None:
 
 
 def test_locked_key_cannot_move_to_another_action() -> None:
-    report, _, _ = validate_keymap(
+    report, _, _, _issues = validate_keymap(
         {'cluster.ignore': ['escape']}, project='default', classes=[], previous_overrides={}
     )
     assert not report.ok
@@ -132,7 +174,7 @@ def test_modifiable_action_can_extend_but_keeps_its_own_locked_key() -> None:
     """review.queue.confirm's default (['enter']) includes a locked key
     but the action itself is modifiable=true -- it may add extra combos
     as long as 'enter' stays."""
-    report, _, resolved = validate_keymap(
+    report, _, resolved, _issues = validate_keymap(
         {'review.queue.confirm': ['enter', 'c']},
         project='default',
         classes=[],
@@ -143,7 +185,7 @@ def test_modifiable_action_can_extend_but_keeps_its_own_locked_key() -> None:
 
 
 def test_modifiable_action_cannot_drop_its_own_locked_key() -> None:
-    report, _, _ = validate_keymap(
+    report, _, _, _issues = validate_keymap(
         {'review.queue.confirm': ['c']}, project='default', classes=[], previous_overrides={}
     )
     assert not report.ok
@@ -151,7 +193,7 @@ def test_modifiable_action_cannot_drop_its_own_locked_key() -> None:
 
 
 def test_browser_reserved_combo_rejected() -> None:
-    report, _, _ = validate_keymap(
+    report, _, _, _issues = validate_keymap(
         {'review.skip': ['ctrl+w']}, project='default', classes=[], previous_overrides={}
     )
     assert not report.ok
@@ -162,7 +204,7 @@ def test_context_collision_within_active_set() -> None:
     # cluster.move (default 'm') and cluster.ignore (default 'x') don't
     # collide; moving cluster.move onto cluster.ignore's 'x' does, since
     # both share the 'cluster' active set.
-    report, _, _ = validate_keymap(
+    report, _, _, _issues = validate_keymap(
         {'cluster.move': ['x']}, project='default', classes=[], previous_overrides={}
     )
     assert not report.ok
@@ -171,7 +213,7 @@ def test_context_collision_within_active_set() -> None:
 
 
 def test_overlay_cannot_be_left_with_no_key() -> None:
-    report, _, _ = validate_keymap(
+    report, _, _, _issues = validate_keymap(
         {'global.shortcuts_overlay': []}, project='default', classes=[], previous_overrides={}
     )
     assert not report.ok
@@ -179,17 +221,22 @@ def test_overlay_cannot_be_left_with_no_key() -> None:
 
 
 def test_class_hotkey_conflict_is_reported_separately_from_422_errors() -> None:
-    report, conflicts, _ = validate_keymap(
+    report, conflicts, _, class_conflict_issues = validate_keymap(
         {'cluster.ignore': ['i']},
         project='default',
         classes=_classes(letter='i', class_id=33, name='ice_cream_truck'),
         previous_overrides={},
     )
-    assert report.ok  # not a body-internal error
+    assert report.ok  # not a body-internal (422) error
     assert len(conflicts) == 1
     assert conflicts[0].class_id == 33
     assert conflicts[0].combo == 'i'
     assert conflicts[0].action_id == 'cluster.ignore'
+    # M3: the conflict is still a real ValidationIssue -- POST
+    # /keymap/validate folds it into ok:false, and the 409's report
+    # carries it.
+    assert len(class_conflict_issues) == 1
+    assert class_conflict_issues[0].code == 'keymap_class_hotkey_conflict'
 
 
 def test_preexisting_class_conflict_is_grandfathered_as_warning() -> None:
@@ -197,7 +244,7 @@ def test_preexisting_class_conflict_is_grandfathered_as_warning() -> None:
     already used) produces a warning, not a blocking conflict."""
     previous: dict[str, list[str]] = {}
     classes = _classes(letter='b', class_id=12, name='bmw')
-    report, conflicts, _ = validate_keymap(
+    report, conflicts, _, _issues = validate_keymap(
         {'review.region.back': ['arrowleft', 'b']},
         project='default',
         classes=classes,
@@ -301,10 +348,6 @@ def test_put_keymap_occ_success_then_stale_conflict(client: TestClient) -> None:
     assert stale.status_code == 409, stale.text
     assert stale.json()['detail']['error'] == 'revision_conflict'
     assert stale.json()['detail']['current_revision'] == 1
-
-
-def test_put_keymap_422_on_collision() -> None:
-    pass  # covered at the validator level; route-level 422 below
 
 
 def test_put_keymap_422_body_internal(client: TestClient) -> None:

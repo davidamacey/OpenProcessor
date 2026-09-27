@@ -6,7 +6,10 @@ there is no unscoped/global keymap route (owner, 2026-09-26).
 
 from __future__ import annotations
 
+import re
 from typing import Any
+
+from fastapi import Header
 
 from src.routers.curation._common import OpenSearchDep, get_class_registry, logger, router
 from src.routers.curation._config_common_models import api_error
@@ -38,6 +41,43 @@ from src.services.curation.keymap import (
 # import (the package imports this module for its route side effects).
 # Deferred to call sites instead.
 
+_IF_MATCH_RE = re.compile(r'^"?keymap:(\d+)"?$')
+
+
+def _resolve_expected_revision(body_revision: int | None, if_match: str | None) -> int:
+    """M5: ``If-Match: "keymap:N"`` is also accepted (CW-K §4.3). Either
+    source may supply the revision; if both do, they must agree; if
+    neither does, 422 -- there is nothing to OCC against."""
+    header_revision: int | None = None
+    if if_match:
+        match = _IF_MATCH_RE.match(if_match.strip())
+        if match is None:
+            raise api_error(
+                422,
+                'validation_failed',
+                f"If-Match {if_match!r} is not a 'keymap:<revision>' etag.",
+            )
+        header_revision = int(match.group(1))
+
+    if (
+        body_revision is not None
+        and header_revision is not None
+        and body_revision != header_revision
+    ):
+        raise api_error(
+            422,
+            'validation_failed',
+            f'expected_revision ({body_revision}) disagrees with If-Match ({header_revision}).',
+        )
+    resolved = body_revision if body_revision is not None else header_revision
+    if resolved is None:
+        raise api_error(
+            422,
+            'validation_failed',
+            'expected_revision or an If-Match header is required.',
+        )
+    return resolved
+
 
 def _classes_payload() -> list[dict[str, Any]]:
     reg = get_class_registry().load()
@@ -53,11 +93,13 @@ def _classes_payload() -> list[dict[str, Any]]:
 
 
 def _region_profile_available() -> bool:
-    from src.services.config_store.store import get_config_store
+    """The canonical resolver (B3): a config-store activation wins, but
+    with none recorded this also picks up an env-registered default
+    profile (``OP_REGION_PROFILE_PATH``) -- reading the store's
+    ``active_profile`` directly missed that case entirely."""
+    from src.services.detection.profile_registry import get_active_region_profile
 
-    store = get_config_store()
-    ref = store.current.active_profile
-    return bool(ref) and ref != 'off'
+    return get_active_region_profile() is not None
 
 
 def _build_response(
@@ -131,24 +173,30 @@ async def get_keymap(opensearch: OpenSearchDep) -> KeymapGetResponse:
 async def validate_keymap_route(
     body: KeymapValidateRequest, opensearch: OpenSearchDep
 ) -> KeymapValidateResponse:
+    """Dry-run, always 200. M4: uses the *same replace semantics as PUT*
+    -- ``body.overrides`` is the whole proposed map, not a merge over the
+    stored one, so a body that validates clean here validates clean on
+    the real PUT too."""
     from src.config import get_curation_config
 
     cfg = get_curation_config()
     current = await get_keymap_doc(opensearch, cfg.configs_index)
-    merged = {**current.overrides, **body.overrides}
+    proposed = dict(body.overrides)
     classes = _classes_payload()
     from src.services.curation.keymap_validator import validate_keymap
 
-    report, class_conflicts, resolved = validate_keymap(
-        merged, project=cfg.project_slug, classes=classes, previous_overrides=current.overrides
+    report, class_conflicts, resolved, class_conflict_issues = validate_keymap(
+        proposed, project=cfg.project_slug, classes=classes, previous_overrides=current.overrides
     )
+    # M3: a class-hotkey conflict makes ok:false too, with the issue
+    # listed in errors -- validate never 409s, it only reports.
     return KeymapValidateResponse(
-        ok=report.ok,
-        errors=report.errors,
+        ok=report.ok and not class_conflict_issues,
+        errors=[*report.errors, *class_conflict_issues],
         warnings=report.warnings,
         force_allowed=report.force_allowed,
         resolved=resolved,
-        reserved_hotkeys=reserved_hotkeys(merged),
+        reserved_hotkeys=reserved_hotkeys(proposed),
         class_conflicts=[
             {
                 'project': c.project,
@@ -162,14 +210,18 @@ async def validate_keymap_route(
     )
 
 
-async def _unbind_classes(class_conflicts: list[Any]) -> list[dict[str, Any]]:
+async def _unbind_classes(class_conflicts: list[Any]) -> tuple[list[dict[str, Any]], Any]:
     """Clear each conflicting class's ``hotkey_letter`` in one operation
-    (CW-K §3.2) and re-sync the registry. Returns the echoed
-    ``unbound_class_hotkeys``."""
+    (CW-K §3.2). Returns ``(unbound, snapshot)`` where ``snapshot`` is a
+    deep copy of the registry *before* mutation, for the caller to
+    restore with :func:`_restore_classes` if the keymap save that must
+    follow this fails (B1) -- ``_atomic_write`` here is not undone by
+    itself."""
     if not class_conflicts:
-        return []
+        return [], None
     registry_obj = get_class_registry()
     reg = registry_obj.load()
+    snapshot = reg.model_copy(deep=True)
     unbound: list[dict[str, Any]] = []
     seen_ids: set[int] = set()
     for conflict in class_conflicts:
@@ -191,36 +243,159 @@ async def _unbind_classes(class_conflicts: list[Any]) -> list[dict[str, Any]]:
                 break
     if unbound:
         registry_obj._atomic_write(reg)
-        try:
-            from src.services.curation.event_hub import get_event_hub
-
-            get_event_hub().publish({'type': 'classes.changed', 'topic': 'classes'})
-        except Exception as exc:  # pragma: no cover - advisory only
-            logger.warning('classes_changed_publish_failed', error=str(exc))
-    return unbound
+    return unbound, snapshot
 
 
-async def _publish_keymap_changed(doc: KeymapDoc) -> None:
+def _restore_classes(snapshot: Any) -> None:
+    """B1 rollback: put the class registry back exactly as it was before
+    ``_unbind_classes`` mutated it, because the keymap save that was
+    supposed to follow it failed."""
+    if snapshot is None:
+        return
+    registry_obj = get_class_registry()
+    registry_obj._atomic_write(snapshot)
+    logger.warning('keymap_unbind_rolled_back', class_ids=[c.class_id for c in snapshot.classes])
+
+
+async def _publish_classes_changed() -> None:
+    try:
+        from src.services.curation.event_hub import get_event_hub
+
+        get_event_hub().publish({'type': 'classes.changed', 'topic': 'classes'})
+    except Exception as exc:  # pragma: no cover - advisory only
+        logger.warning('classes_changed_publish_failed', error=str(exc))
+
+
+async def _publish_keymap_changed(doc: KeymapDoc, cfg: Any, opensearch: Any) -> None:
+    from src.services.config_store.index import get_config_revision
     from src.services.curation.event_hub import get_event_hub
 
+    config_revision = await get_config_revision(opensearch, cfg.configs_index)
     get_event_hub().publish(
         {
             'type': 'config.changed',
             'topic': 'config',
             'axis': 'keymap',
             'name': None,
+            # M6 minor: CW-K §4.4 also serves the deployment-wide
+            # config_revision counter this doc's write bumped, not just
+            # the keymap doc's own per-project revision.
+            'config_revision': config_revision,
             'keymap_revision': doc.revision,
         }
     )
 
 
+def _class_hotkey_conflict_error(
+    class_conflicts: list[Any], class_conflict_issues: list[Any], current_revision: int
+) -> Exception:
+    """M3: the 409's ``report`` now carries the ``keymap_class_hotkey_conflict``
+    issues too, not just the bare structured ``class_conflicts`` list."""
+    from src.routers.curation._config_common_models import ValidationReport
+
+    conflict = class_conflicts[0]
+    return api_error(
+        409,
+        'class_hotkey_conflict',
+        f"'{conflict.combo}' is bound to class '{conflict.class_name}' in project "
+        f'{conflict.project}.',
+        current_revision=current_revision,
+        report=ValidationReport(
+            ok=False, errors=class_conflict_issues, warnings=[], force_allowed=False
+        ),
+        class_conflicts=[
+            {
+                'project': c.project,
+                'class_id': c.class_id,
+                'class_name': c.class_name,
+                'combo': c.combo,
+                'action_id': c.action_id,
+            }
+            for c in class_conflicts
+        ],
+    )
+
+
+async def _write_keymap(
+    *,
+    cfg: Any,
+    opensearch: Any,
+    merged: dict[str, list[str]],
+    previous_overrides: dict[str, list[str]],
+    expected_revision: int,
+    current_revision: int,
+    unbind_conflicting_class_hotkeys: bool,
+    event: str,
+) -> KeymapPutResponse:
+    """Shared validate-then-write path for PUT and reset: 422 on a
+    body-internal error, 409 on an un-opted-in class conflict, else an
+    atomic unbind-and-save (B1) -- if the save fails after an unbind, the
+    class registry is rolled back to its pre-unbind state before the
+    error propagates, so an operator never loses a class hotkey to a
+    keymap write that didn't actually happen."""
+    classes = _classes_payload()
+    from src.services.curation.keymap_validator import validate_keymap
+
+    report, class_conflicts, _resolved, class_conflict_issues = validate_keymap(
+        merged, project=cfg.project_slug, classes=classes, previous_overrides=previous_overrides
+    )
+    if not report.ok:
+        raise api_error(
+            422,
+            'validation_failed',
+            f'The keymap has {len(report.errors)} error(s).',
+            current_revision=current_revision,
+            report=report,
+        )
+    if class_conflicts and not unbind_conflicting_class_hotkeys:
+        raise _class_hotkey_conflict_error(class_conflicts, class_conflict_issues, current_revision)
+
+    unbound: list[dict[str, Any]] = []
+    snapshot: Any = None
+    if unbind_conflicting_class_hotkeys and class_conflicts:
+        unbound, snapshot = await _unbind_classes(class_conflicts)
+
+    try:
+        new_doc = await save_keymap_doc(
+            opensearch,
+            cfg.configs_index,
+            overrides=merged,
+            expected_revision=expected_revision,
+        )
+    except RevisionConflictError as exc:
+        if snapshot is not None:
+            _restore_classes(snapshot)
+        raise api_error(
+            409,
+            'revision_conflict',
+            'The keymap changed since you loaded it.',
+            current_revision=exc.current_revision,
+        ) from exc
+    except Exception:
+        if snapshot is not None:
+            _restore_classes(snapshot)
+        raise
+
+    if unbound:
+        await _publish_classes_changed()
+    await _publish_keymap_changed(new_doc, cfg, opensearch)
+    logger.info(event, project=cfg.project_slug, revision=new_doc.revision)
+    response = _build_response(new_doc, project=cfg.project_slug)
+    return KeymapPutResponse(**response.model_dump(), unbound_class_hotkeys=unbound)
+
+
 @router.put('/keymap', response_model=KeymapPutResponse)
-async def put_keymap(body: KeymapPutRequest, opensearch: OpenSearchDep) -> KeymapPutResponse:
+async def put_keymap(
+    body: KeymapPutRequest,
+    opensearch: OpenSearchDep,
+    if_match: str | None = Header(default=None, alias='If-Match'),
+) -> KeymapPutResponse:
     from src.config import get_curation_config
 
     cfg = get_curation_config()
+    expected_revision = _resolve_expected_revision(body.expected_revision, if_match)
     current = await get_keymap_doc(opensearch, cfg.configs_index)
-    if body.expected_revision != current.revision:
+    if expected_revision != current.revision:
         raise api_error(
             409,
             'revision_conflict',
@@ -232,73 +407,30 @@ async def put_keymap(body: KeymapPutRequest, opensearch: OpenSearchDep) -> Keyma
     # absent from ``body.overrides`` takes its default, not its prior
     # override.
     merged = dict(body.overrides)
-
-    classes = _classes_payload()
-    from src.services.curation.keymap_validator import validate_keymap
-
-    report, class_conflicts, _resolved = validate_keymap(
-        merged, project=cfg.project_slug, classes=classes, previous_overrides=current.overrides
+    return await _write_keymap(
+        cfg=cfg,
+        opensearch=opensearch,
+        merged=merged,
+        previous_overrides=current.overrides,
+        expected_revision=expected_revision,
+        current_revision=current.revision,
+        unbind_conflicting_class_hotkeys=body.unbind_conflicting_class_hotkeys,
+        event='keymap_updated',
     )
-    if not report.ok:
-        raise api_error(
-            422,
-            'validation_failed',
-            f'The keymap has {len(report.errors)} error(s).',
-            current_revision=current.revision,
-            report=report,
-        )
-    if class_conflicts and not body.unbind_conflicting_class_hotkeys:
-        conflict = class_conflicts[0]
-        raise api_error(
-            409,
-            'class_hotkey_conflict',
-            f"'{conflict.combo}' is bound to class '{conflict.class_name}' in project "
-            f'{conflict.project}.',
-            current_revision=current.revision,
-            class_conflicts=[
-                {
-                    'project': c.project,
-                    'class_id': c.class_id,
-                    'class_name': c.class_name,
-                    'combo': c.combo,
-                    'action_id': c.action_id,
-                }
-                for c in class_conflicts
-            ],
-        )
-
-    unbound = (
-        await _unbind_classes(class_conflicts) if body.unbind_conflicting_class_hotkeys else []
-    )
-
-    try:
-        new_doc = await save_keymap_doc(
-            opensearch,
-            cfg.configs_index,
-            overrides=merged,
-            expected_revision=body.expected_revision,
-        )
-    except RevisionConflictError as exc:
-        raise api_error(
-            409,
-            'revision_conflict',
-            'The keymap changed since you loaded it.',
-            current_revision=exc.current_revision,
-        ) from exc
-
-    await _publish_keymap_changed(new_doc)
-    logger.info('keymap_updated', project=cfg.project_slug, revision=new_doc.revision)
-    response = _build_response(new_doc, project=cfg.project_slug)
-    return KeymapPutResponse(**response.model_dump(), unbound_class_hotkeys=unbound)
 
 
 @router.post('/keymap/reset', response_model=KeymapPutResponse)
-async def reset_keymap(body: KeymapResetRequest, opensearch: OpenSearchDep) -> KeymapPutResponse:
+async def reset_keymap(
+    body: KeymapResetRequest,
+    opensearch: OpenSearchDep,
+    if_match: str | None = Header(default=None, alias='If-Match'),
+) -> KeymapPutResponse:
     from src.config import get_curation_config
 
     cfg = get_curation_config()
+    expected_revision = _resolve_expected_revision(body.expected_revision, if_match)
     current = await get_keymap_doc(opensearch, cfg.configs_index)
-    if body.expected_revision != current.revision:
+    if expected_revision != current.revision:
         raise api_error(
             409,
             'revision_conflict',
@@ -313,60 +445,13 @@ async def reset_keymap(body: KeymapResetRequest, opensearch: OpenSearchDep) -> K
             aid: combos for aid, combos in current.overrides.items() if aid not in body.action_ids
         }
 
-    classes = _classes_payload()
-    from src.services.curation.keymap_validator import validate_keymap
-
-    report, class_conflicts, _resolved = validate_keymap(
-        merged, project=cfg.project_slug, classes=classes, previous_overrides=current.overrides
+    return await _write_keymap(
+        cfg=cfg,
+        opensearch=opensearch,
+        merged=merged,
+        previous_overrides=current.overrides,
+        expected_revision=expected_revision,
+        current_revision=current.revision,
+        unbind_conflicting_class_hotkeys=body.unbind_conflicting_class_hotkeys,
+        event='keymap_reset',
     )
-    if not report.ok:
-        raise api_error(
-            422,
-            'validation_failed',
-            f'The keymap has {len(report.errors)} error(s).',
-            current_revision=current.revision,
-            report=report,
-        )
-    if class_conflicts and not body.unbind_conflicting_class_hotkeys:
-        conflict = class_conflicts[0]
-        raise api_error(
-            409,
-            'class_hotkey_conflict',
-            f"'{conflict.combo}' is bound to class '{conflict.class_name}' in project "
-            f'{conflict.project}.',
-            current_revision=current.revision,
-            class_conflicts=[
-                {
-                    'project': c.project,
-                    'class_id': c.class_id,
-                    'class_name': c.class_name,
-                    'combo': c.combo,
-                    'action_id': c.action_id,
-                }
-                for c in class_conflicts
-            ],
-        )
-
-    unbound = (
-        await _unbind_classes(class_conflicts) if body.unbind_conflicting_class_hotkeys else []
-    )
-
-    try:
-        new_doc = await save_keymap_doc(
-            opensearch,
-            cfg.configs_index,
-            overrides=merged,
-            expected_revision=body.expected_revision,
-        )
-    except RevisionConflictError as exc:
-        raise api_error(
-            409,
-            'revision_conflict',
-            'The keymap changed since you loaded it.',
-            current_revision=exc.current_revision,
-        ) from exc
-
-    await _publish_keymap_changed(new_doc)
-    logger.info('keymap_reset', project=cfg.project_slug, revision=new_doc.revision)
-    response = _build_response(new_doc, project=cfg.project_slug)
-    return KeymapPutResponse(**response.model_dump(), unbound_class_hotkeys=unbound)

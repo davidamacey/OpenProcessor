@@ -46,13 +46,17 @@ def validate_keymap(
     project: str,
     classes: list[dict[str, Any]],
     previous_overrides: dict[str, list[str]] | None = None,
-) -> tuple[ValidationReport, list[ClassConflict], dict[str, list[str]]]:
+) -> tuple[ValidationReport, list[ClassConflict], dict[str, list[str]], list[ValidationIssue]]:
     """Validate a proposed override map.
 
-    Returns ``(report, class_conflicts, resolved)`` where ``resolved`` is
-    the effective keymap the write would produce. ``report.errors`` only
-    ever holds the body-internal (422) codes; a class-hotkey conflict is
-    returned separately in ``class_conflicts`` (409), per CW-K §3.1.
+    Returns ``(report, class_conflicts, resolved, class_conflict_issues)``.
+    ``report.errors`` only ever holds the body-internal (422) codes, so a
+    PUT/reset caller can still tell "422 validation_failed" apart from
+    "409 class_hotkey_conflict". ``class_conflict_issues`` carries the
+    same conflicts as ``keymap_class_hotkey_conflict``
+    :class:`ValidationIssue` objects (CW-K §3.1/M3) -- ``POST
+    /keymap/validate`` folds them into its own ``ok``/``errors`` (it
+    never 409s), and the 409 error body's ``report`` carries them too.
     """
     registry = load_registry()
     errors: list[ValidationIssue] = []
@@ -85,37 +89,17 @@ def validate_keymap(
                 )
             )
             continue
-        # An action whose default already includes a locked key keeps
-        # that key forever (owner rule): it may still be rebound/extended
-        # otherwise, but dropping its own locked key or another action
-        # claiming that key is always an error.
         own_locked = registry.locked_action_default(action)
-        if own_locked and not own_locked.issubset(set(combos)):
-            errors.append(
-                ValidationIssue(
-                    code='keymap_key_locked',
-                    severity='error',
-                    field=field,
-                    message=(f"'{action_id}' cannot lose its locked key(s) {sorted(own_locked)}."),
-                    detail={'combo': sorted(own_locked)},
-                )
-            )
 
-        # 3: grammar.
-        if len(combos) > registry.grammar.max_combos_per_action:
+        # 3: grammar -- checked before too_many_combos, per §3.1's order.
+        if len(set(combos)) != len(combos):
             errors.append(
                 ValidationIssue(
-                    code='keymap_too_many_combos',
+                    code='keymap_combo_invalid',
                     severity='error',
                     field=field,
-                    message=(
-                        f"'{action_id}' has {len(combos)} combos; "
-                        f'max is {registry.grammar.max_combos_per_action}.'
-                    ),
-                    detail={
-                        'limit': registry.grammar.max_combos_per_action,
-                        'requested': len(combos),
-                    },
+                    message=f"'{action_id}' repeats a combo.",
+                    detail={'combo': combos, 'reason': 'duplicate combo'},
                 )
             )
         for combo in combos:
@@ -162,6 +146,39 @@ def validate_keymap(
                     )
                 )
 
+        if len(combos) > registry.grammar.max_combos_per_action:
+            errors.append(
+                ValidationIssue(
+                    code='keymap_too_many_combos',
+                    severity='error',
+                    field=field,
+                    message=(
+                        f"'{action_id}' has {len(combos)} combos; "
+                        f'max is {registry.grammar.max_combos_per_action}.'
+                    ),
+                    detail={
+                        'limit': registry.grammar.max_combos_per_action,
+                        'requested': len(combos),
+                    },
+                )
+            )
+
+        # An action whose default already includes a locked key keeps
+        # that key forever (owner rule): it may still be rebound/extended
+        # otherwise, but dropping its own locked key is always an error.
+        # One issue per lost key (minor: keep `detail.combo` a string in
+        # every keymap_key_locked issue, not a list in this one case).
+        errors.extend(
+            ValidationIssue(
+                code='keymap_key_locked',
+                severity='error',
+                field=field,
+                message=f"'{action_id}' cannot lose its locked key '{lost}'.",
+                detail={'combo': lost},
+            )
+            for lost in sorted(own_locked - set(combos))
+        )
+
     if errors:
         # Body-internal errors already found -- still compute resolved
         # for the caller's convenience, but skip collision/overlay
@@ -171,6 +188,7 @@ def validate_keymap(
             ValidationReport(ok=False, errors=errors, warnings=warnings, force_allowed=False),
             [],
             resolved,
+            [],
         )
 
     resolved = {aid: effective_keys(a, overrides) for aid, a in registry.actions.items()}
@@ -233,6 +251,7 @@ def validate_keymap(
             ValidationReport(ok=False, errors=errors, warnings=warnings, force_allowed=False),
             [],
             resolved,
+            [],
         )
 
     # 7: class-hotkey conflicts (409, separate from the 422 report) --
@@ -240,6 +259,7 @@ def validate_keymap(
     # can collide with a class hotkey (§3.4/§2.3).
     by_letter = _class_by_letter(classes)
     class_conflicts: list[ClassConflict] = []
+    class_conflict_issues: list[ValidationIssue] = []
     for action in registry.actions.values():
         if not registry.contexts[action.context].class_hotkeys_live:
             continue
@@ -284,9 +304,37 @@ def validate_keymap(
                     action_id=action.id,
                 )
             )
+            # M3: a class-hotkey conflict is a real issue, not just a
+            # separate structured field -- POST /keymap/validate must
+            # answer ok:false with it listed, and the 409's report must
+            # carry it too. Kept OUT of `errors` (which stays
+            # body-internal-only) so PUT/reset can still tell "422
+            # validation_failed" apart from "409 class_hotkey_conflict"
+            # -- see class_conflict_issues below.
+            class_conflict_issues.append(
+                ValidationIssue(
+                    code='keymap_class_hotkey_conflict',
+                    severity='error',
+                    field=f'overrides.{action.id}',
+                    message=(
+                        f"'{letter}' is bound to class '{cls['class_name']}' in project {project}."
+                    ),
+                    detail={
+                        'combo': letter,
+                        'action_id': action.id,
+                        'conflicts': [
+                            {
+                                'project': project,
+                                'class_id': cls['class_id'],
+                                'class_name': cls['class_name'],
+                            }
+                        ],
+                    },
+                )
+            )
 
     report = ValidationReport(ok=not errors, errors=errors, warnings=warnings, force_allowed=False)
-    return report, class_conflicts, resolved
+    return report, class_conflicts, resolved, class_conflict_issues
 
 
 def shadowed_conflicts(

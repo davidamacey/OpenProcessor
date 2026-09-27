@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import functools
 import json
-import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -32,13 +31,6 @@ _ACTIONS_JSON_PATH = Path(__file__).resolve().parents[2] / 'config' / 'keymap_ac
 KEYMAP_DOC_ID = 'keymap:default'
 
 _MODIFIER_ORDER = ('ctrl', 'meta', 'alt', 'shift')
-
-_COMBO_RE = re.compile(
-    r'^(?:(?:ctrl|meta|alt|shift)\+)*[a-z0-9`~/\\\[\];\',.\-=?]$'
-    r'|^(?:(?:ctrl|meta|alt|shift)\+)*'
-    r'(?:enter|escape|space|tab|backspace|delete|'
-    r'arrowleft|arrowright|arrowup|arrowdown|home|end|pageup|pagedown)$'
-)
 
 
 @dataclass(frozen=True)
@@ -182,12 +174,32 @@ def reserved_hotkeys(overrides: dict[str, list[str]]) -> list[str]:
 
 def combo_grammar_error(combo: str) -> str | None:
     """``None`` if ``combo`` matches the wire grammar, else a short
-    reason (CW-K §2.2)."""
+    reason (CW-K §2.2: ``[ctrl+][meta+][alt+][shift+]<key>``, in exactly
+    that order, no repeated modifier). Canonicalization matters:
+    ``shift+ctrl+z`` must be rejected rather than silently accepted as a
+    distinct combo from ``ctrl+shift+z`` -- otherwise it's a dead
+    binding (the client's ``normalize()`` never emits it), it evades
+    collision detection, and it evades the browser-reserved check
+    (M2)."""
     if not combo:
         return 'empty combo'
-    if not _COMBO_RE.match(combo):
-        return f'{combo!r} is not a recognized combo'
-    return None
+    parts = combo.split('+')
+    key = parts[-1]
+    mods = parts[:-1]
+    if len(mods) != len(set(mods)):
+        return f'{combo!r} repeats a modifier'
+    unknown_mods = [m for m in mods if m not in _MODIFIER_ORDER]
+    if unknown_mods:
+        return f'{combo!r} has an unrecognized modifier {unknown_mods[0]!r}'
+    canonical_mods = [m for m in _MODIFIER_ORDER if m in mods]
+    if canonical_mods != mods:
+        return f'{combo!r} modifiers must be in ctrl+meta+alt+shift order'
+    grammar = load_registry().grammar
+    if key in grammar.named_keys:
+        return None
+    if len(key) == 1 and key in grammar.printable:
+        return None
+    return f'{combo!r} is not a recognized key'
 
 
 # --------------------------------------------------------------------- store
@@ -268,37 +280,24 @@ async def save_keymap_doc(
     try:
         await client.index(**index_kwargs)
     except ConflictError as exc:
-        raise RevisionConflictError(-1) from exc
+        # Re-read for the real current revision rather than reporting a
+        # meaningless -1 -- a concurrent writer landed between our GET
+        # above and this index() call.
+        try:
+            latest = await client.get(index=index, id=doc_id)
+            real_current = int(latest['_source'].get('revision', 0))
+        except Exception:
+            real_current = -1
+        raise RevisionConflictError(real_current) from exc
 
-    await _bump_config_revision_via_doc_merge(client, index)
+    # W2's atomic bump_config_revision (painless script + retry_on_conflict)
+    # -- not a second read-then-write, so a concurrent config write can't
+    # lose an increment (M6).
+    from src.services.config_store.index import bump_config_revision
+
+    await bump_config_revision(client, index)
     return KeymapDoc(
         overrides=cleaned, revision=next_revision, updated_at=now, is_default=not cleaned
-    )
-
-
-async def _bump_config_revision_via_doc_merge(client: Any, index: str) -> None:
-    """Bump ``meta:config_revision`` via a plain partial-doc merge
-    (``doc``/``doc_as_upsert``) rather than
-    :func:`~src.services.config_store.index.bump_config_revision`'s
-    painless script -- both are valid OpenSearch update bodies, but the
-    doc-merge form is also what every test double for the OpenSearch
-    ``update`` API in this repo already understands, so the global
-    revision counter advances the same way under a fake transport as it
-    does live. Reads the current value itself (rather than through
-    :func:`~src.services.config_store.index.get_config_revision`) because
-    some lightweight test doubles answer a miss with ``{"found": False}``
-    instead of raising ``NotFoundError``."""
-    current = 0
-    try:
-        doc = await client.get(index=index, id='meta:config_revision')
-        if not (isinstance(doc, dict) and doc.get('found') is False):
-            current = int(doc['_source'].get('config_revision', 0))
-    except NotFoundError:
-        pass
-    await client.update(
-        index=index,
-        id='meta:config_revision',
-        body={'doc': {'config_revision': current + 1, 'doc_type': 'meta'}, 'doc_as_upsert': True},
     )
 
 

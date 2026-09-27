@@ -5979,8 +5979,15 @@
       "KeymapPutRequest": {
         "properties": {
           "expected_revision": {
-            "title": "Expected Revision",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Revision"
           },
           "overrides": {
             "additionalProperties": {
@@ -5999,7 +6006,6 @@
           }
         },
         "required": [
-          "expected_revision",
           "overrides"
         ],
         "title": "KeymapPutRequest",
@@ -6122,8 +6128,15 @@
             "title": "Action Ids"
           },
           "expected_revision": {
-            "title": "Expected Revision",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Revision"
           },
           "unbind_conflicting_class_hotkeys": {
             "default": false,
@@ -6131,9 +6144,6 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "expected_revision"
-        ],
         "title": "KeymapResetRequest",
         "type": "object"
       },
@@ -16217,6 +16227,22 @@
               "title": "Project",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
           }
         ],
         "requestBody": {
@@ -16269,6 +16295,22 @@
               "title": "Project",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
           }
         ],
         "requestBody": {
@@ -16311,6 +16353,7 @@
     },
     "/curation/projects/{project}/keymap/validate": {
       "post": {
+        "description": "Dry-run, always 200. M4: uses the *same replace semantics as PUT*\n-- ``body.overrides`` is the whole proposed map, not a merge over the\nstored one, so a body that validates clean here validates clean on\nthe real PUT too.",
         "operationId": "validate_keymap_route_curation_projects__project__keymap_validate_post",
         "parameters": [
           {

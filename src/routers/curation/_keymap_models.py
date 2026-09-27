@@ -59,7 +59,10 @@ class KeymapGetResponse(BaseModel):
 
 
 class KeymapPutRequest(BaseModel):
-    expected_revision: int
+    # M5: an ``If-Match: "keymap:N"`` header is also accepted (CW-K §4.3);
+    # ``expected_revision`` is optional here so a caller may supply either.
+    # At least one of the two must resolve, else 422.
+    expected_revision: int | None = None
     overrides: dict[str, list[str]]
     unbind_conflicting_class_hotkeys: bool = False
 
@@ -83,7 +86,7 @@ class KeymapValidateResponse(BaseModel):
 
 
 class KeymapResetRequest(BaseModel):
-    expected_revision: int
+    expected_revision: int | None = None
     action_ids: list[str] | None = None
     unbind_conflicting_class_hotkeys: bool = False
 

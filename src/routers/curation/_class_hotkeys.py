@@ -33,19 +33,22 @@ async def project_reserved_hotkeys(opensearch: Any) -> list[str]:
     return reserved_hotkeys(doc.overrides)
 
 
-def reserved_hotkey_actions(letter: str) -> list[dict[str, Any]]:
-    """Every action whose effective (default -- class writes never see
-    a project's stored keymap overrides here, since this only runs to
-    explain *why* a letter is reserved) key set binds this single
-    character in a ``class_hotkeys_live`` context (CW-K §3.3)."""
-    from src.services.curation.keymap import is_single_char, load_registry
+def reserved_hotkey_actions(
+    letter: str, keymap_overrides: dict[str, list[str]] | None = None
+) -> list[dict[str, Any]]:
+    """Every action whose *effective* key set (M1: the project's stored
+    keymap overrides, not just the defaults -- the reservation itself
+    comes from those overrides, so the explanation must too) binds this
+    single character in a ``class_hotkeys_live`` context (CW-K §3.3)."""
+    from src.services.curation.keymap import effective_keys, is_single_char, load_registry
 
     registry = load_registry()
+    overrides = keymap_overrides or {}
     out = []
     for action in registry.actions.values():
         if not registry.contexts[action.context].class_hotkeys_live:
             continue
-        for combo in action.default:
+        for combo in effective_keys(action, overrides):
             if is_single_char(combo) == letter:
                 out.append(
                     {'action_id': action.id, 'context': action.context, 'label': action.label}
@@ -83,7 +86,7 @@ def validated_hotkey(
             422,
             'hotkey_reserved',
             f"'{letter}' is reserved by the active keymap.",
-            actions=reserved_hotkey_actions(letter),
+            actions=reserved_hotkey_actions(letter, keymap_overrides),
         )
     for c in registry_obj.classes:
         if c.deprecated or c.class_id == class_id:
