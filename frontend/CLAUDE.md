@@ -859,6 +859,28 @@ serve) and read through `keymapStore` (`src/lib/stores/keymap.svelte.ts`):
   a generic string. The four `/keymap*` routes are a documented
   pending-backend entry in `endpointCatalog.test.ts`'s contract check
   until OpenProcessor W2b lands and vendors them.
+- **K2b (2026-09-26): per-context overrides.** Plan §0 decision 4 — a
+  verb rebind applies on every page by default, with a per-context
+  override available. `KeymapCard.svelte` now has two sections: a
+  **Verb groups** list (one row per served `group` id shared by 2+
+  modifiable actions across contexts — `undo`, `confirm`, `discard`,
+  `skip`, `prev`, `next`, `select_all`, `ignore`, `nudge`), where
+  editing the row's keys writes every member action id at once, and a
+  **"Customize per page" disclosure** under each group listing every
+  member by its own context label with its own key chips — editing one
+  there writes only that action id and detaches it. Detachment is
+  computed each render (does this member's draft differ from the other
+  members' shared value), never a stored flag, so a "differs from the
+  group" marker + "reset to group" also surface a pre-existing
+  server-side per-context override for free. Locked keys stay locked in
+  both views; a group-level capture rejects any `grammar.locked_keys`
+  combo outright rather than checking per-member locked-key sets. The
+  per-context tables below the Verb groups section now hold only
+  ungrouped actions and locked/non-modifiable actions (the whole
+  `cancel` group has no modifiable members, so it never appears in Verb
+  groups at all). Writing is unchanged: the same `overrides` action-id
+  map, the same `PUT`/`validate`/`reset` calls — a group edit just
+  happens to populate more than one key.
 
 Reserved single-char action keys (`g n d z x u a m /`, plus `b f e` from the
 region slot's keymap — server-served today as `/abdefgmnuxz`)
