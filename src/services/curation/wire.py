@@ -35,8 +35,33 @@ WIRE_REGION_FIELDS = RegionFields()
 
 # `prefix` is not a document key; the embedding is a 1024-d vector no client
 # needs; `*_legacy` columns are rollback-only storage.
+#
+# W8 note (scope-limited this pass, see the handback report): the
+# per-item box-list summary fields and the list itself are NOT yet
+# served through this item wire model -- they're excluded here rather
+# than half-wired. ``boxes_state`` in particular is never a top-level
+# document key at all (it names the FIXED element key `state` inside one
+# ``region_boxes`` list entry, used only to build nested queries via
+# ``region_boxes.box_query``).
 _NON_WIRE_REGION_ATTRS = frozenset(
-    {'prefix', 'embedding', 'bbox_norm_legacy', 'score_legacy', 'status_legacy'}
+    {
+        'prefix',
+        'embedding',
+        'bbox_norm_legacy',
+        'score_legacy',
+        'status_legacy',
+        'boxes',
+        'boxes_state',
+        'box_embeddings',
+        'count',
+        'rejected_count',
+        'max_score',
+        'set_complete',
+        'revision',
+        'box_seq',
+        'boxes_migrated_at',
+        'legacy_scalars',
+    }
 )
 
 REGION_WIRE_ATTRS: tuple[str, ...] = tuple(

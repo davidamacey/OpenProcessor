@@ -32,8 +32,34 @@ _MUST_BE_KEYWORD = {
 }
 
 
+# W8 (multi-box regions): the per-item box-list summary fields exist on
+# RegionFields but their items-mapping additions are explicitly out of
+# scope for this pass (see the handback report) -- excluded here rather
+# than half-wired. ``boxes_state`` is never a top-level document key at
+# all: it names the FIXED element key ``state`` inside one
+# ``region_boxes`` nested-list entry, not an item-level property.
+_W8_NOT_YET_MAPPED = {
+    'boxes',
+    'boxes_state',
+    'box_embeddings',
+    'count',
+    'rejected_count',
+    'max_score',
+    'set_complete',
+    'revision',
+    'box_seq',
+    'boxes_migrated_at',
+    'legacy_scalars',
+}
+
+
 @pytest.mark.parametrize(
-    'attr', [f.name for f in dataclasses.fields(RegionFields) if f.name != 'prefix']
+    'attr',
+    [
+        f.name
+        for f in dataclasses.fields(RegionFields)
+        if f.name != 'prefix' and f.name not in _W8_NOT_YET_MAPPED
+    ],
 )
 def test_every_region_field_is_explicitly_mapped(attr: str) -> None:
     name = getattr(RegionFields(), attr)
