@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _fake_project_registry import install_static_project_registry
 from PIL import Image
 
 import scripts.curation.region_worker_main as worker
@@ -435,6 +436,9 @@ async def _drive_worker(
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
     monkeypatch.setattr(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
     monkeypatch.setattr(worker, 'make_script_opensearch', MagicMock(return_value=fake_os))
+    # The worker discovers its projects through the registry; keep that
+    # read in-memory too, never against the unresolvable --opensearch host.
+    install_static_project_registry(monkeypatch)
 
     primary_det = MagicMock()
     primary_det.detect_batch = AsyncMock(return_value=[primary])
