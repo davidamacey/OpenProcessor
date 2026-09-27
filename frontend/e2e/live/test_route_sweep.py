@@ -52,14 +52,16 @@ from fixtures.wire import REGION_TAB_URL_ID
 SCREENSHOT_VIEWPORTS: list[tuple[int, int]] = [(1600, 1000), (800, 1000)]
 
 # True once every image intersecting the viewport has finished (loaded or
-# failed); an offscreen lazy image never blocks.
+# failed); an offscreen lazy image never blocks, and neither does one inside
+# content the browser never renders (a closed <details>): it still has a
+# layout box, so checkVisibility() is what excludes it.
 _IN_VIEWPORT_IMAGES_SETTLED = """
 () => {
   const vw = window.innerWidth, vh = window.innerHeight;
   const imgs = Array.from(document.querySelectorAll('img'));
   const inViewport = imgs.filter((img) => {
     const r = img.getBoundingClientRect();
-    return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0
+    return img.checkVisibility() && r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0
       && r.top < vh && r.left < vw;
   });
   return inViewport.every((img) => img.complete);
@@ -222,7 +224,7 @@ def _assert_route_clean(gp: Any, path: str, screenshot_run_dir: Path) -> None:
           return imgs
             .filter((img) => {
               const r = img.getBoundingClientRect();
-              return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0
+              return img.checkVisibility() && r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0
                 && r.top < vh && r.left < vw;
             })
             .filter((img) => img.complete && img.naturalWidth === 0)
