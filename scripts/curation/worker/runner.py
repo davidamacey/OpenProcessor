@@ -51,9 +51,14 @@ from scripts.curation.worker import state
 from scripts.curation.worker.bulk_writer import _bulk_update
 from scripts.curation.worker.cascade import (
     SegmenterAllHostsDown,
-    _fetch_pending,
     _resegment_from_text_hint,
     _source_to_crop,
+)
+from scripts.curation.worker.fairness import (
+    FairnessScheduler,
+    fetch_pending_multi_project,
+    is_project_paused,
+    write_liveness,
 )
 from scripts.curation.worker.no_verdict import (
     NoVerdictCounter,
@@ -89,6 +94,7 @@ from scripts.curation.worker.verify import (
     _region_write_doc,
     candidate_reject_doc,
 )
+from src.config.project_context import set_bound_project
 from src.config.region_rejection import REJECT_REASON_SANITY_PREFIX, REJECT_REASON_VERIFIER
 from src.config.region_source import (
     CANDIDATE_DETECTOR,
@@ -350,6 +356,15 @@ async def run(args: argparse.Namespace) -> int:
     started_at = time.monotonic()
     sentinel = Path(args.pause_sentinel)
 
+    from src.services.projects.registry import get_project_registry
+
+    project_registry = get_project_registry()
+    fairness_scheduler = FairnessScheduler()
+    # Last cycle's per-project fetch counts, fed back into the next
+    # cycle's quota split as the "has work" / "how much work" signal
+    # (projects_plan.md §5.1 deficit round-robin).
+    last_backlog: dict[str, int] = {}
+
     in_flight: set[str] = set()
     in_flight_lock = asyncio.Lock()
     # crop_id -> monotonic time the writer released it after a successful
@@ -503,6 +518,7 @@ async def run(args: argparse.Namespace) -> int:
         96 oldest all in-flight, fresh=0) can't recur when the query
         itself already excludes in-flight ids.
         """
+        nonlocal last_backlog
         while not stop_event.is_set():
             await _wait_for_sentinel_clear(sentinel, sleep_s=args.sentinel_sleep)
             if stop_event.is_set():
@@ -517,10 +533,23 @@ async def run(args: argparse.Namespace) -> int:
             fetch_started = time.monotonic()
             async with in_flight_lock:
                 exclude_ids = list(in_flight)
+            await project_registry.ensure_fresh()
             try:
-                tasks = await _fetch_pending(
-                    opensearch, batch_size=fetch_n, exclude_ids=exclude_ids
+                tasks = await fetch_pending_multi_project(
+                    opensearch,
+                    registry=project_registry,
+                    scheduler=fairness_scheduler,
+                    fetch_n=fetch_n,
+                    queue_max=args.concurrency * 2,
+                    exclude_ids=exclude_ids,
+                    backlog_hint=last_backlog,
                 )
+                last_backlog = {
+                    p.slug: len(
+                        [t for t in tasks if t.project is not None and t.project.slug == p.slug]
+                    )
+                    for p in project_registry.active_projects()
+                }
             except Exception as exc:
                 logger.warning('producer_fetch_error', error=str(exc))
                 await asyncio.sleep(args.poll_interval)
@@ -563,6 +592,28 @@ async def run(args: argparse.Namespace) -> int:
             for t in fresh[: args.batch_size]:
                 await in_q.put(t)
 
+            # Liveness (§5.1.8): one doc/file per active project, per
+            # cycle. Per-project in_flight is the count of this
+            # project's crops currently in ``in_flight`` -- cheap to
+            # derive from the just-queued batch plus scheduler state.
+            per_project_inflight: dict[str, int] = {}
+            for t in fresh[: args.batch_size]:
+                if t.project is not None:
+                    per_project_inflight[t.project.slug] = (
+                        per_project_inflight.get(t.project.slug, 0) + 1
+                    )
+            for p in project_registry.active_projects():
+                prior = fairness_scheduler.in_flight(p.slug)
+                count = prior + per_project_inflight.get(p.slug, 0)
+                fairness_scheduler.set_in_flight(p.slug, count)
+                with contextlib.suppress(OSError):
+                    write_liveness(
+                        p,
+                        inflight=count,
+                        applied=True,
+                        paused=is_project_paused(p),
+                    )
+
     async def stage_a_consumer(consumer_id: int) -> None:
         """Stage A.primary: load JPEG + primary/pending_verify routing only.
 
@@ -584,6 +635,14 @@ async def run(args: argparse.Namespace) -> int:
             if t is None:
                 in_q.task_done()
                 return
+            # §5.1.5: bind this item's own project for the duration of
+            # its processing on this consumer, so every downstream
+            # config/OpenSearch/registry read below resolves against
+            # the item's project, not whatever project a previous item
+            # on this consumer happened to be. No-op (stays unbound)
+            # for legacy single-project tasks with ``project is None``.
+            if t.project is not None:
+                set_bound_project(t.project)
             # Bind request_id so every structlog event in this iteration
             # carries it (Phase 4a). Cleared in finally so the next task
             # on this consumer task doesn't inherit the previous id.
@@ -786,6 +845,12 @@ async def run(args: argparse.Namespace) -> int:
                 drain_timeout=VLM_CHUNK_DRAIN_TIMEOUT,
             )
             if chunk:
+                # Batched VLM call; bind the chunk's first task's
+                # project (documented simplification: a mixed-project
+                # chunk resolves config against one project for the
+                # shared call -- see final report).
+                if chunk[0].project is not None:
+                    set_bound_project(chunk[0].project)
                 batch_request_ids = [t.request_id for t in chunk]
                 region_crops: list[RegionCrop] = []
                 bad_indices: list[int] = []
@@ -888,6 +953,8 @@ async def run(args: argparse.Namespace) -> int:
             if t is None:
                 sam_q.task_done()
                 return
+            if t.project is not None:
+                set_bound_project(t.project)
             structlog.contextvars.bind_contextvars(request_id=t.request_id)
             try:
                 if t.crop_jpeg is None:
@@ -1110,6 +1177,10 @@ async def run(args: argparse.Namespace) -> int:
                 drain_timeout=VLM_CHUNK_DRAIN_TIMEOUT,
             )
             if chunk:
+                # Same chunk-level binding simplification as
+                # stage_a_vlm_visible above.
+                if chunk[0].project is not None:
+                    set_bound_project(chunk[0].project)
                 batch_request_ids = [t.request_id for t in chunk]
                 class_names = list(getattr(vlm, 'class_names', None) or [])
                 registry_loaded = bool(class_names)
