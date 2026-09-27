@@ -20,7 +20,10 @@
   import RegionDrainPanel from '$lib/components/ingest/RegionDrainPanel.svelte';
   import ClusteringHandoff from '$lib/components/ingest/ClusteringHandoff.svelte';
   import IngestBatchPanel from '$lib/components/ingest/IngestBatchPanel.svelte';
+  import { resolve } from '$app/paths';
   import { getIngestConfig } from '$lib/api';
+  import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
+  import { projectHref } from '$lib/projectPaths';
   import {
     resolveIngestConfig,
     serverPathIngestAvailable,
@@ -29,6 +32,12 @@
   import type { IngestFile } from '$lib/ingest/fileSource';
   import type { IngestRunState } from '$lib/ingest/ingestRunController.svelte';
   import type { IngestConfig, RegionDrain } from '$lib/types';
+
+  // W10: the labeled-dataset import lives under /datasets; the link shows
+  // only when the backend serves it (a one-shot probe per project).
+  $effect(() => {
+    void datasetsAvailability.init();
+  });
 
   let servedConfig = $state<IngestConfig | null>(null);
   let configError = $state<string | null>(null);
@@ -63,7 +72,16 @@
      width and wraps badly in anything narrower (caught by the piece-9
      live-build screenshot review). -->
 <div class="mx-auto max-w-7xl space-y-6 p-6">
-  <h1 class="text-lg font-semibold text-zinc-100">Ingest</h1>
+  <div class="flex flex-wrap items-baseline justify-between gap-2">
+    <h1 class="text-lg font-semibold text-zinc-100">Ingest</h1>
+    {#if datasetsAvailability.available === true}
+      <a
+        class="text-sm text-blue-300 hover:underline"
+        data-testid="ingest-dataset-import-link"
+        href={resolve(projectHref('/datasets/import'))}>Import a labeled dataset</a
+      >
+    {/if}
+  </div>
 
   {#if configError}
     <p class="text-sm text-red-300">Could not load the ingest config: {configError}</p>

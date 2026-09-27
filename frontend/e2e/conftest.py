@@ -350,6 +350,12 @@ class Stub:
         # every existing test stays green without editing each one;
         # `test_keymap.py` overrides this per-test with a served document.
         self.on("GET", r"/keymap(\?|$)", (404, {"detail": "not found"}))
+        # W10 (dataset import + Reprocess): /ingest, the item-detail panel
+        # and the cluster toolbar probe `GET {prefix}/datasets/formats`
+        # once per project. Defaults to a 404 — a backend without W10,
+        # where every W10 surface is absent — so existing tests stay
+        # green; test_dataset_import.py overrides it with served formats.
+        self.on("GET", r"/datasets/formats(\?|$)", (404, {"detail": "Not Found"}))
 
         page.route(f"**{api_prefix}/**", self._dispatch)
 
