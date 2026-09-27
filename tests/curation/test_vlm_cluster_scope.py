@@ -22,6 +22,7 @@ from curation.query_fakes import QueryFakeOpenSearch
 from curation.test_auto_label_selection import client, job_dir, packs  # noqa: F401 - fixtures
 from curation.test_pipeline import _FakeClassEntry, _FakeRegistry
 from src.config.curation import base_curation_config
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 if TYPE_CHECKING:
@@ -57,7 +58,7 @@ def _docs() -> dict[str, dict[str, Any]]:
 
 class _Labeler:
     model = 'fake-vlm'
-    _pack = None
+    _pack = GENERIC_ITEM_PACK
 
     def __init__(self) -> None:
         self.sent: list[str] = []
@@ -75,8 +76,8 @@ def pipeline_env(monkeypatch: pytest.MonkeyPatch) -> _Labeler:
     monkeypatch.setattr(selection, 'classifier_class_sources', lambda: frozenset({'det_model'}))
 
     labeler = _Labeler()
-    monkeypatch.setattr(pipeline, '_get_vlm_labeler', lambda _pack=None: labeler)
-    monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', AsyncMock(return_value=None))
+    monkeypatch.setattr(pipeline, '_get_vlm_labeler', lambda _pack=None, _rev=None: labeler)
+    monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None)))
     monkeypatch.setattr(pipeline_health, 'pipeline_health_snapshot', AsyncMock(return_value={}))
     monkeypatch.setattr(
         'src.routers.curation.get_class_registry',

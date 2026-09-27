@@ -82,7 +82,7 @@ async def pipeline_auto_label_start(
 
     # Resolved here (422 before queueing) so the job args echo what runs.
     reject_detection_profile(detection_profile)
-    prompt_pack = await resolve_run_prompt_pack(opensearch, prompt_pack)
+    prompt_pack, prompt_pack_revision = await resolve_run_prompt_pack(opensearch, prompt_pack)
     try:
         return auto_label_job.start_job(
             pipeline_auto_label,
@@ -106,6 +106,7 @@ async def pipeline_auto_label_start(
                 'class_id': class_id,
                 'cluster_id': cluster_id,
                 'prompt_pack': prompt_pack,
+                'prompt_pack_revision': prompt_pack_revision,
             },
         )
     except RuntimeError as exc:
@@ -176,12 +177,13 @@ async def pipeline_auto_label(
     from src.services.labeling.vlm_labeler import ItemCrop
 
     reject_detection_profile(detection_profile)
-    prompt_pack = await resolve_run_prompt_pack(opensearch, prompt_pack)
+    prompt_pack, prompt_pack_revision = await resolve_run_prompt_pack(opensearch, prompt_pack)
     summary: dict[str, Any] = {
         'stages': {},
         'class_id': class_id,
         'cluster_id': cluster_id,
         'prompt_pack': prompt_pack,
+        'prompt_pack_revision': prompt_pack_revision,
     }
 
     # Snapshot counts at entry for a real before/after.
@@ -388,8 +390,12 @@ async def pipeline_auto_label(
         {'class_name': c.class_name, 'group': getattr(c, 'group', None)} for c in labelable
     ]
     # The run's selected pack (resolve_prompt_pack() default when unset).
-    labeler = _get_vlm_labeler(prompt_pack)
+    labeler = _get_vlm_labeler(prompt_pack, prompt_pack_revision)
     class_catalog = format_class_catalog(class_dicts, labeler._pack)
+
+    from src.services.labeling.vlm_prompts import prompt_pack_stamp
+
+    _pack_stamp = prompt_pack_stamp(labeler._pack)
 
     # Count how many crops bypass the synonym/fuzzy force-fit because the
     # VLM's confidence is low — those route straight to the raw-label
@@ -488,6 +494,7 @@ async def pipeline_auto_label(
             )
             if update is None:
                 continue
+            update['vlm_prompt_pack'] = _pack_stamp
             if proposal is not None:
                 proposals.append(proposal)
             updates_by_id[p.img_id] = update

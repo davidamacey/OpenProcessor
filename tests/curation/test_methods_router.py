@@ -258,7 +258,8 @@ def test_detection_profile_axis_advertises_the_selected_profile(
     assert r.status_code == 200
     body = r.json()
     profile_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'detection_profile'}
-    assert set(profile_entries) == {REFERENCE_LICENSE_PLATE_PROFILE.name}
+    # W2: an explicit 'off' choice is offered once there is a profile to turn off.
+    assert set(profile_entries) == {REFERENCE_LICENSE_PLATE_PROFILE.name, 'off'}
     entry = profile_entries[REFERENCE_LICENSE_PLATE_PROFILE.name]
     assert entry['status'] == 'stable'
     assert entry['default'] is True
@@ -280,16 +281,17 @@ def test_detection_profile_registry_supports_more_than_one_profile() -> None:
         profile_registry.register_profile(first, default=True)
         profile_registry.register_profile(second)
 
-        from src.services.curation.strategy_registry import _detection_profile_strategies
+        from src.services.curation.axis_copy import detection_profile_strategies
 
         # No shared-settings override configured for this test -- pass the
         # registry's own hardcoded default straight through, same as
         # resolve_effective_default('detection_profile', opensearch=None).
         entries = {
             e['id']: e
-            for e in _detection_profile_strategies(profile_registry.get_default_profile_name())
+            for e in detection_profile_strategies(profile_registry.get_default_profile_name())
         }
-        assert set(entries) == {'license_plate', 'shipping_label'}
+        # W2: an explicit 'off' choice is offered once there is a profile to turn off.
+        assert set(entries) == {'license_plate', 'shipping_label', 'off'}
         assert entries['license_plate']['default'] is True
         assert entries['shipping_label']['default'] is False
         assert all(e['axis'] == 'detection_profile' for e in entries.values())

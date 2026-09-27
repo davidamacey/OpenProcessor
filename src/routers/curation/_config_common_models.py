@@ -1,10 +1,13 @@
-"""Shared structured-error model for the projects surface (P1 creates
-this module now, ahead of W2, because P1 lands first in the merge order
--- see docs/design/openprocessor_internal/projects_plan.md §7 and its
-note that W2 was originally going to create it).
+"""Shared structured-error and validation models for the config-store /
+projects surface (P1 creates this module ahead of W2, because P1 lands
+first in the merge order -- see
+docs/design/openprocessor_internal/projects_plan.md §7 and
+any_domain_plan.md §7.1/§9 W2). W2 extends the Literals and adds the
+validation-report shapes and ``ActiveRef``/``ActiveConfigResponse``;
+W3/W4/W8/W9 extend the Literals further as their routes land.
 
-Every project route raises through :func:`api_error`, never a bare
-string ``detail`` -- gives Cropwright one stable shape
+Every project or config route raises through :func:`api_error`, never a
+bare string ``detail`` -- gives Cropwright one stable shape
 (``{"detail": ConfigErrorDetail}``) to parse everywhere.
 """
 
@@ -16,10 +19,10 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 
 
-# P1 seeds only the project-related codes it actually raises, plus
-# revision_conflict (P1 doesn't implement PATCH, but the plan's review
-# calls out seeding it now since P3's PATCH row already names it and it
-# costs nothing to add early).
+# P1 seeded the project-related codes it raises. W2 adds the codes its
+# own low-level primitives (``src.services.config_store``) and the
+# ``PUT /settings`` bridge raise; W3/W4/W8/W9 add the rest as their
+# routes land (see any_domain_plan.md §7.1's full table).
 ErrorCode = Literal[
     'project_not_found',
     'project_archived',
@@ -43,6 +46,18 @@ ErrorCode = Literal[
     'model_name_reserved',
     'internal_isolation_error',
     'revision_conflict',
+    # W2
+    'not_found',
+    'unknown_revision',
+    'active_conflict',
+    'no_previous',
+    'no_active_profile',
+    'unknown_pack',
+    'unknown_profile',
+    'validation_failed',
+    'config_store_unavailable',
+    'read_only',
+    'name_conflict',
     'invalid_transition',
     'export_outside_project',
     'model_not_found',
@@ -55,6 +70,11 @@ ErrorCode = Literal[
     # distinct from project_busy (a step *inside* one finish failed).
     'finish_in_progress',
 ]
+
+# Seeded with the codes W2 raises (none yet -- W2 has no validated
+# writes of its own, only the low-level OCC primitives). W3/W4 add the
+# pack/profile validation codes; W8/W9 add theirs.
+ValidationCode = Literal['name_conflict']
 
 
 class ProjectCapacityWire(BaseModel):
@@ -91,7 +111,7 @@ class JobRefWire(BaseModel):
 
 
 class ConfigErrorDetail(BaseModel):
-    """The ``detail`` body of every project-route 4xx/5xx.
+    """The ``detail`` body of every project/config-store route's 4xx/5xx.
 
     Optional fields are code-specific and ``None``/absent otherwise; kept
     typed so OpenAPI documents them rather than leaving ``detail`` as an
@@ -110,6 +130,11 @@ class ConfigErrorDetail(BaseModel):
     hard_limit: int | None = None
     heap_max_bytes: int | None = None
     current_revision: int | None = None
+    # W2 (activation OCC / validation reports)
+    report: ValidationReport | None = None
+    current: ActiveRef | None = None
+    axis: str | None = None
+    valid_ids: list[str] | None = None
     # Delta 12: the full capacity object on shard_budget_exceeded (and in
     # the shard_budget_high warning), so a create form re-renders from
     # one response instead of a second GET /projects.
@@ -129,3 +154,84 @@ def api_error(status: int, code: ErrorCode, message: str, **fields: Any) -> HTTP
     """Build ``HTTPException(status, {"detail": ConfigErrorDetail})``."""
     detail = ConfigErrorDetail(error=code, message=message, **fields)
     return HTTPException(status_code=status, detail=detail.model_dump(exclude_none=False))
+
+
+class ValidationIssue(BaseModel):
+    """One error/warning/info from a config validator (§3.3/§4.3)."""
+
+    code: ValidationCode
+    severity: Literal['error', 'warning', 'info']
+    field: str | None = None
+    message: str
+    detail: dict[str, Any] = {}
+    bypassable: bool = False
+
+
+class ValidationReport(BaseModel):
+    """The result of running a config validator (``/validate``, create,
+    clone, PUT, activate). ``force_allowed`` is true only when every
+    error present is individually bypassable -- the GUI's "activate
+    anyway" affordance."""
+
+    ok: bool
+    errors: list[ValidationIssue] = []
+    warnings: list[ValidationIssue] = []
+    force_allowed: bool = False
+
+
+class ActiveRef(BaseModel):
+    """``{name, revision}`` for the currently-active config on one axis.
+    ``name=None`` means the axis is off/unconfigured."""
+
+    name: str | None = None
+    revision: int | None = None
+
+
+class AppliedRuntime(BaseModel):
+    """One worker process's "what did I actually apply" record (any_domain_plan.md
+    §4.5/§7.3), served under ``ActiveConfigResponse.applied[]`` from
+    ``runtime:<process>:<host>`` docs (``upsert_project_runtime_doc``,
+    W2). ``lagging`` is ``true`` when ``applied_config_revision`` is
+    behind the axis's current ``config_revision`` for longer than the
+    drain-plus-poll grace period (§4.5) -- a stuck/slow worker, not a
+    momentary swap in progress."""
+
+    process: str
+    host: str
+    applied_config_revision: int
+    profile: ActiveRef
+    pack: ActiveRef
+    applied_at: str | None = None
+    lagging: bool = False
+
+
+class ActiveConfigResponse(BaseModel):
+    """``GET /prompt_packs/active`` / ``GET /region_profiles/active`` (W3/W4);
+    also the activation-mutation response shape used by W2's settings
+    bridge and by ``store.activate``'s callers.
+
+    ``source`` (Cropwright W3 UI, C2/Q5): where ``active`` came from --
+    ``'stored'`` (an activation doc names a saved pack/profile),
+    ``'env'`` (never activated through the store; the env/file default
+    applies), or ``'off'`` (explicitly deactivated -- ``active.name`` is
+    ``None``, distinct from ``'env'``'s ``None`` activation doc). Never
+    guessed from ``active`` alone: ``'env'`` and ``'off'`` both may
+    carry ``active.name=None`` in the profile axis's off state, but only
+    an explicit deactivation is ``'off'``.
+    ``activated_at`` is the activation doc's own timestamp -- ``None``
+    for ``'env'`` (there was no activation write). ``applied`` is every
+    live ``runtime:*`` doc for this axis (§4.5) -- empty when no worker
+    has ever applied anything, e.g. an API-only deployment.
+    """
+
+    axis: Literal['prompt_pack', 'detection_profile']
+    active: ActiveRef
+    source: Literal['stored', 'env', 'off']
+    activated_at: str | None = None
+    previous: ActiveRef | None = None
+    config_revision: int
+    stale: bool = False
+    applied: list[AppliedRuntime] = []
+
+
+ConfigErrorDetail.model_rebuild()

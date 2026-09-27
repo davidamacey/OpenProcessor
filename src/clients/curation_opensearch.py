@@ -295,6 +295,15 @@ def _items_body() -> dict[str, Any]:
                 'class_id': {'type': 'integer'},
                 'class_name': {'type': 'keyword'},
                 'class_source': {'type': 'keyword'},
+                # Config-store stamps (W2): which activated region profile /
+                # revision produced this item's region write, and which
+                # prompt pack / revision the VLM used for its most recent
+                # write. Null for an item never touched by either. No
+                # back-compat migration for a pre-W2 index: stacks are
+                # re-created (execution_schedule.md §4.0 NON-NEGOTIABLE 4).
+                'region_profile': {'type': 'keyword'},
+                'region_profile_revision': {'type': 'integer'},
+                'vlm_prompt_pack': {'type': 'keyword'},
                 # VLM's raw answer for every classification call (whether or
                 # not it resolved against the registry). Aggregating this field
                 # via terms agg surfaces the long-tail labels that should grow
@@ -622,6 +631,62 @@ def _umap_viz_state_body() -> dict[str, Any]:
     }
 
 
+def _configs_body() -> dict[str, Any]:
+    """The config store (W2, any_domain_plan.md §3.1): prompt packs,
+    region profiles, activations, activation history and the
+    cross-process revision counter -- one doc per row, ``doc_type``
+    discriminates the shape (``config`` | ``revision`` | ``activation``
+    | ``activation_event`` | ``meta`` | ``runtime``).
+
+    For a project created after this wave, ``resources_for_new`` also
+    points the ``SETTINGS`` and ``UMAP_VIZ_STATE`` roles at this same
+    index name (shard folding, owner D4, projects_plan.md §2.3), so this
+    mapping carries their properties too (``_settings_body()`` /
+    ``_umap_viz_state_body()``, field-for-field identical types --
+    verified conflict-free in ``test_configs_mapping_union.py``). Those
+    two roles are read/written by fixed doc id only (``default`` /
+    ``current``), never searched, and every config-store doc has a
+    ``doc_type`` while the folded docs have none, so a
+    ``doc_type``-filtered config-store query never sees them (see
+    ``test_folded_roles_by_id_only.py``).
+    """
+    return {
+        'settings': _plain_settings(),
+        'mappings': {
+            'dynamic': False,
+            'properties': {
+                # -- config-store rows --
+                'doc_type': {'type': 'keyword'},
+                'kind': {'type': 'keyword'},
+                'name': {'type': 'keyword'},
+                'revision': {'type': 'integer'},
+                'body': {'type': 'object', 'enabled': False},
+                'description': {'type': 'keyword', 'ignore_above': 512, 'index': False},
+                'created_at': {'type': 'date'},
+                'updated_at': {'type': 'date'},
+                'updated_by': {'type': 'keyword'},
+                'cloned_from': {'type': 'keyword'},
+                'axis': {'type': 'keyword'},
+                'previous': {'type': 'object', 'enabled': False},
+                'config_revision': {'type': 'long'},
+                'process': {'type': 'keyword'},
+                'applied_at': {'type': 'date'},
+                # -- folded SETTINGS (op_curation_settings doc `default`) --
+                'defaults': {'type': 'object', 'enabled': False},
+                # -- folded UMAP_VIZ_STATE (doc `current`) --
+                'state_id': {'type': 'keyword'},
+                'projection_version': {'type': 'keyword'},
+                'scope': {'type': 'keyword'},
+                'cluster_id': {'type': 'integer'},
+                'n_points': {'type': 'integer'},
+                'fitted_at': {'type': 'date'},
+                'n_components': {'type': 'integer'},
+                'metric': {'type': 'keyword'},
+            },
+        },
+    }
+
+
 INDEX_BODIES: dict[IndexRole, dict[str, Any]] = {
     IndexRole.IMAGES: _images_body(),
     IndexRole.ITEMS: _items_body(),
@@ -630,6 +695,7 @@ INDEX_BODIES: dict[IndexRole, dict[str, Any]] = {
     IndexRole.SETTINGS: _settings_body(),
     IndexRole.UMAP_STATE: _umap_state_body(),
     IndexRole.UMAP_VIZ_STATE: _umap_viz_state_body(),
+    IndexRole.CONFIGS: _configs_body(),
 }
 
 
@@ -1770,11 +1836,41 @@ async def create_curation_indexes(
         Dict of index name -> creation success.
     """
     active_cfg = cfg or config
-    results: dict[str, bool] = {}
+    # A project may fold several roles onto one index name (shard folding,
+    # owner D4 -- SETTINGS / UMAP_VIZ_STATE onto CONFIGS for a project
+    # created after W2). Merge their mapping properties into one body per
+    # distinct name rather than creating the name once with only
+    # whichever role's body happened to be seen first.
+    bodies_by_name: dict[str, dict[str, Any]] = {}
     for role, body in INDEX_BODIES.items():
         name = index_name(active_cfg, role)
+        if name in bodies_by_name:
+            bodies_by_name[name] = _merge_index_bodies(bodies_by_name[name], body)
+        else:
+            bodies_by_name[name] = body
+    results: dict[str, bool] = {}
+    for name, body in bodies_by_name.items():
         results[name] = await _create_one(client, name, body, force_recreate)
     return results
+
+
+def _merge_index_bodies(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:
+    """Union two index bodies' mapping properties (settings/shard config
+    taken from ``first``) -- used when shard folding maps more than one
+    ``IndexRole`` onto the same index name."""
+    merged_properties = {
+        **first.get('mappings', {}).get('properties', {}),
+        **second.get('mappings', {}).get('properties', {}),
+    }
+    return {
+        'settings': first.get('settings', {}),
+        'mappings': {
+            'dynamic': first.get('mappings', {}).get(
+                'dynamic', second.get('mappings', {}).get('dynamic')
+            ),
+            'properties': merged_properties,
+        },
+    }
 
 
 # =============================================================================

@@ -34,6 +34,7 @@ from src.services.curation.class_write_guard import (
     class_state_token,
 )
 from src.services.labeling.vlm_labeler import VlmClassPrediction
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 if TYPE_CHECKING:
@@ -133,11 +134,13 @@ async def test_label_batch_skips_item_restored_during_vlm_call(
     reg = ClassRegistry(path=tmp_path / 'class_registry.json')
     reg.add_class('sportscar')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
-    monkeypatch.setattr(vlm_mod, '_default_pack_name', AsyncMock(return_value=None))
+    monkeypatch.setattr(vlm_mod, '_default_pack_name', AsyncMock(return_value=(None, None)))
 
     fake = QueryFakeOpenSearch({ITEMS: {'undone': _discarded('undone'), 'plain': _plain('plain')}})
 
     class _Labeler:
+        _pack = GENERIC_ITEM_PACK
+
         async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
             _restored_by_undo(fake.docs(ITEMS)['undone'])
             return [
@@ -172,7 +175,7 @@ async def test_pipeline_vlm_stage_skips_item_restored_during_vlm_call(
 
     class _Labeler:
         model = 'fake-vlm'
-        _pack = None
+        _pack = GENERIC_ITEM_PACK
 
         async def label_or_propose_batch(self, crops: list[Any], *_a: Any, **_k: Any) -> list[Any]:
             _restored_by_undo(fake.docs(ITEMS)['undone'])
@@ -182,8 +185,8 @@ async def test_pipeline_vlm_stage_skips_item_restored_during_vlm_call(
             ]
 
     monkeypatch.setattr(selection, 'classifier_class_sources', lambda: frozenset({'det_model'}))
-    monkeypatch.setattr(pipeline, '_get_vlm_labeler', lambda _pack=None: _Labeler())
-    monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', AsyncMock(return_value=None))
+    monkeypatch.setattr(pipeline, '_get_vlm_labeler', lambda _pack=None, _rev=None: _Labeler())
+    monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None)))
     monkeypatch.setattr(pipeline_health, 'pipeline_health_snapshot', AsyncMock(return_value={}))
     monkeypatch.setattr(
         'src.routers.curation.get_class_registry',

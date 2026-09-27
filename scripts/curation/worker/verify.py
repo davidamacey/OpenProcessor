@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from scripts.curation.worker.state import region_profile
+from scripts.curation.worker.state import _ItemTask, region_profile
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
@@ -52,7 +52,7 @@ class _VerifyOutcome:
 
 
 async def _verify_with_vlm(
-    vlm: VlmLabeler, crop_id: str, region_jpeg: bytes
+    vlm: VlmLabeler, task: _ItemTask, region_jpeg: bytes
 ) -> _VerifyOutcome | None:
     """Verify and read a region in one VLM call.
 
@@ -69,10 +69,15 @@ async def _verify_with_vlm(
     rejection and falling through to the next detector. Raises
     :class:`VlmTransportError` when the call itself failed, so an outage
     is never counted as a no-verdict reply.
+
+    Sets ``task.vlm_called`` (minor 5, W2 review): the round trip
+    happened, whatever the verdict, so any write this task ends up
+    producing this pass may be stamped ``vlm_prompt_pack``.
     """
     verdict = await vlm.verify_region(
-        RegionCrop(crop_id=crop_id, jpeg_bytes=region_jpeg), raise_on_transport=True
+        RegionCrop(crop_id=task.crop_id, jpeg_bytes=region_jpeg), raise_on_transport=True
     )
+    task.vlm_called = True
     if verdict is None:
         return None
     accepted = bool(verdict.is_region) and verdict.confidence != 'low'

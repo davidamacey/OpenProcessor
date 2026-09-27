@@ -278,8 +278,15 @@ def test_default_is_an_ordinary_bootstrapped_project(fake_registry_client) -> No
 
     record = asyncio.run(_run()).get('default')
     assert record is not None
+    # SETTINGS and UMAP_VIZ_STATE fold onto CONFIGS's name (shard folding,
+    # owner D4) -- `default` is an ordinary project (D-A) and gets the
+    # same folding as any other slug: 6 distinct names, not 8.
+    from src.config.curation import IndexRole
+
     assert set(record.resources.indexes.values()) == {
-        f'op_prj_default__{role.value}' for role in record.resources.indexes
+        f'op_prj_default__{role.value}'
+        for role in IndexRole
+        if role not in (IndexRole.SETTINGS, IndexRole.UMAP_VIZ_STATE)
     }
     assert record.resources.class_registry_path.parts[-2:] == ('default', 'class_registry.json')
     # projects_plan.md sec5.3/sec5.5 (owner D1): model_prefix is the one

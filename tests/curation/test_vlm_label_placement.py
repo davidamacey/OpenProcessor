@@ -21,6 +21,7 @@ from src.clients.curation_opensearch import ClassRegistry
 from src.config.curation import base_curation_config
 from src.services.curation.clustering.id_normalize import class_cluster_placement
 from src.services.labeling.vlm_labeler import VlmClassPrediction
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 if TYPE_CHECKING:
@@ -76,6 +77,8 @@ async def test_label_batch_moves_labelled_items_into_their_class_cluster(
     )
 
     class _Labeler:
+        _pack = GENERIC_ITEM_PACK
+
         async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
             return [
                 VlmClassPrediction(img_id=c.img_id, class_name=answers[c.img_id], confidence='high')

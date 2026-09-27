@@ -84,8 +84,17 @@ def test_transient_registry_refresh_failure_after_building_write_ends_failed(mon
 def test_one_missing_index_after_ensure_indexes_ends_failed_not_active() -> None:
     """_ensure_indexes is itself fail-open (every create/migration
     failure inside it is logged and swallowed) -- simulate it silently
-    creating only 6 of 7 indexes, and assert create still ends 'failed',
-    never 'active' with a missing index."""
+    creating only 5 of 6 distinct indexes, and assert create still ends
+    'failed', never 'active' with a missing index.
+
+    Post-W2 (config store), a project's 8 IndexRole members resolve to
+    only 6 distinct index names: SETTINGS and UMAP_VIZ_STATE both fold
+    onto the CONFIGS index name (resources_for_new, "shard folding"). A
+    role that shares its name with another role is the wrong one to skip
+    here -- skipping only its own creation call still leaves the shared
+    index created via the other role(s) that map to the same name, so
+    nothing would actually be missing. CLASSES owns a name no other role
+    shares, so skipping it is a genuine single-index omission."""
     client = FakeLifecycleOpenSearch()
     _registry_for(client)
     asyncio.run(seed_default_project(client))
@@ -95,7 +104,7 @@ def test_one_missing_index_after_ensure_indexes_ends_failed_not_active() -> None
     async def _ensure_indexes_missing_one(opensearch) -> None:
         cfg = get_curation_config()
         for role in IndexRole:
-            if role == IndexRole.UMAP_VIZ_STATE:
+            if role == IndexRole.CLASSES:
                 continue  # simulate this one silently failing to create
             await opensearch.indices.create(index=index_name(cfg, role))
 

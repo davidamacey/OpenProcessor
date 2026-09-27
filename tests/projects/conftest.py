@@ -10,6 +10,7 @@ import asyncio
 from typing import Any
 
 import pytest
+from opensearchpy.exceptions import NotFoundError
 
 
 class _FakeIndices:
@@ -200,9 +201,19 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
         self.indices: Any = _FakeLifecycleIndices(self)
         self.transport = _FakeTransport()
 
-    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002
+        # Minor 3 (W2 review): a real ``client.get()`` with no ``id`` raises
+        # ``NotFoundError`` -- it never returns a ``found: False`` body.
+        # Every production caller (``registry.get_record_with_seq``,
+        # ``bootstrap._get_or_none``/``bump_revision``) already handles
+        # BOTH shapes defensively, so matching the real client here needed
+        # no caller changes; it only let ``clone.py`` drop its
+        # test-double-only ``except ... KeyError`` (the fake used to
+        # answer with a shape that made ``get_activation``'s
+        # ``doc['_source']`` raise ``KeyError`` instead of the real
+        # ``NotFoundError`` its ``except`` was written for).
         if id not in self.docs:
-            return {'found': False, '_id': id}
+            raise NotFoundError(404, f'[404] not found: {index}/{id}', {})
         return {
             'found': True,
             '_id': id,

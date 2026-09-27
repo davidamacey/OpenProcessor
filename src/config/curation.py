@@ -70,6 +70,13 @@ class IndexRole(str, Enum):
     # index.
     UMAP_STATE = 'umap_state'
     UMAP_VIZ_STATE = 'umap_viz_state'
+    # The config store (W2, docs/design/openprocessor_internal/any_domain_plan.md
+    # §3.1): prompt packs, region profiles, activations and the
+    # cross-process revision counter. For a project created after W2,
+    # ``resources_for_new`` also folds SETTINGS and UMAP_VIZ_STATE onto
+    # this index's name (projects_plan.md §2.3, owner D4) -- ``default``
+    # keeps its own separate settings/umap-viz-state indexes.
+    CONFIGS = 'configs'
 
 
 # Identity sentinel: "derive this path from ``state_dir``" (compared with
@@ -108,15 +115,21 @@ class CurationConfig:
     # doc, not a full index of many rows. See
     # ``src.clients.curation_opensearch.CURATION_SETTINGS_DOC_ID`` for the
     # fixed doc id this index always addresses.
+    # Shard folding (owner D4, projects_plan.md §2.3): SETTINGS folds onto
+    # CONFIGS's name for every project, ``default`` included --
+    # ``resources_for_new`` (via __post_init__ below) resolves the folded
+    # name; there is no second naming path.
     settings_index: str = _FROM_DEFAULT_PROJECT
     # Two deliberately distinct UMAP-state indexes (see
     # ``src/services/curation/embedding_viz.py`` module docstring):
     # the retired clustering reducer's fitted-manifold cache
     # (``clustering/embedding_reduce.py``) and the visualization-only
-    # projection's own metadata slot. They must never share a name or
-    # state, so they get separate fields rather than one shared role.
+    # projection's own metadata slot. UMAP_STATE keeps its own index;
+    # UMAP_VIZ_STATE folds onto CONFIGS's name (shard folding, owner D4).
     umap_state_index: str = _FROM_DEFAULT_PROJECT
     umap_viz_state_index: str = _FROM_DEFAULT_PROJECT
+    # Prompt packs, region profiles, activations, revision counter (W2).
+    configs_index: str = _FROM_DEFAULT_PROJECT
 
     class_registry_path: Path = _FROM_DEFAULT_PROJECT_PATH
     # Optional deployment-supplied VLM PromptPack (see
@@ -425,6 +438,7 @@ _INDEX_ROLE_ATTR: dict[IndexRole, str] = {
     IndexRole.SETTINGS: 'settings_index',
     IndexRole.UMAP_STATE: 'umap_state_index',
     IndexRole.UMAP_VIZ_STATE: 'umap_viz_state_index',
+    IndexRole.CONFIGS: 'configs_index',
 }
 
 
@@ -454,6 +468,7 @@ PROJECT_SCOPED_FIELDS: frozenset[str] = frozenset(
         'settings_index',
         'umap_state_index',
         'umap_viz_state_index',
+        'configs_index',
         'class_registry_path',
         'export_root',
         'upload_root',

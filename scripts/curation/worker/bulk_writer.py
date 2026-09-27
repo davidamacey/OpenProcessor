@@ -33,6 +33,38 @@ if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
 
+def _current_config_stamp() -> tuple[str | None, int | None, str | None]:
+    """``(profile_name, profile_revision, pack_stamp)`` for whatever
+    project is currently bound -- called from inside ``_bulk_update``'s
+    ``with bind_project(...):`` block, so this resolves the *task's own*
+    project's config store (W2 sec 4.5 "item stamping"), never a
+    process-wide default. ``profile_revision`` is ``None`` for an
+    env/file-registered profile never activated through the store."""
+    from src.services.config_store import get_config_store
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    profile = get_active_region_profile()
+    if profile is None:
+        return None, None, None
+    profile_revision: int | None = None
+    try:
+        ref = get_config_store().current.active_profile
+    except Exception:  # pragma: no cover - config_store always importable
+        ref = None
+    if isinstance(ref, tuple) and ref[0] == profile.name:
+        profile_revision = ref[1]
+
+    pack_stamp: str | None = None
+    try:
+        from src.services.labeling.vlm_prompts import active_prompt_pack, prompt_pack_stamp
+
+        pack_stamp = prompt_pack_stamp(active_prompt_pack())
+    except Exception as exc:  # pragma: no cover - defensive, never blocks a region write
+        logger.warning('vlm_prompt_pack_stamp_failed', error=str(exc))
+
+    return profile.name, profile_revision, pack_stamp
+
+
 async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> tuple[int, int]:
     """Group ``tasks`` by their own project and flush one ``_bulk`` call
     per project, each issued while bound to that project (projects_plan.md
@@ -88,6 +120,7 @@ async def _bulk_update_one_project(
     tasks with empty ``update_doc`` and tasks that lost an OCC race.
     """
     F = get_region_fields()
+    profile_name, profile_revision, pack_stamp = _current_config_stamp()
     eligible: list[_ItemTask] = []
     n_skipped_empty = 0
     by_id: dict[str, _ItemTask] = {}
@@ -157,6 +190,30 @@ async def _bulk_update_one_project(
             update[F.detector_chain] = merge_region_chain(
                 current.get(F.detector_chain), new_entries
             )
+        # Config-store provenance (W2 sec 4.5): every worker region write
+        # stamps the profile that produced it. Read once per bulk call
+        # (all `eligible` tasks share one bound project), not per task --
+        # by the time this runs, the producer's quiesce-and-swap has
+        # already drained every in-flight item onto the *old* runtime's
+        # queues, so the store's current active refs always match
+        # whatever pass actually processed this batch. Only stamp when
+        # something is actually being written -- an update that stripped
+        # down to empty (a documented noop, e.g. a stale/locked
+        # class-only write) must stay empty, never turn into a real
+        # write just because of the stamp.
+        if update:
+            if profile_name is not None:
+                update[F.profile] = profile_name
+                update[F.profile_revision] = profile_revision
+            # Minor 5 (W2 review): `vlm_prompt_pack` is a per-TASK stamp,
+            # not a per-batch one -- a batch's pack may be configured and
+            # resolvable even when this particular task's write never
+            # actually involved a VLM call (no VLM configured at all, or a
+            # write path that skipped it, e.g. the high-confidence
+            # secondary-segmenter auto-skip). Stamping unconditionally
+            # would claim a VLM ran when it didn't.
+            if pack_stamp is not None and task.vlm_called:
+                update['vlm_prompt_pack'] = pack_stamp
         return update
 
     result = await occ_skip_on_conflict_bulk(

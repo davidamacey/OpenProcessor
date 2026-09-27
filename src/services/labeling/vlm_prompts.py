@@ -457,11 +457,18 @@ def available_prompt_packs(cfg: Any | None = None) -> dict[str, PromptPack]:
 
     Always includes the built-in packs (:data:`GENERIC_ITEM_PACK`, and the
     text-free :data:`GENERIC_REGION_PACK`), plus each
-    loadable file in ``OP_PROMPT_PACK_PATHS`` and the default
-    ``OP_PROMPT_PACK_PATH`` pack. Unloadable files are skipped with a
-    logged warning (same degrade-not-crash contract as
-    :func:`resolve_prompt_pack`). On a name collision the default pack
-    wins, then the earlier ``OP_PROMPT_PACK_PATHS`` entry.
+    loadable file in ``OP_PROMPT_PACK_PATHS``, the default
+    ``OP_PROMPT_PACK_PATH`` pack, and every stored pack in the bound
+    project's config-store snapshot (W2; empty until W3 CRUD exists, or
+    on any process whose snapshot hasn't refreshed yet -- callers that
+    need the latest cross-process state should
+    ``await store.ensure_fresh(...)`` first). Unloadable files are
+    skipped with a logged warning (same degrade-not-crash contract as
+    :func:`resolve_prompt_pack`). On a name collision: stored packs
+    cannot collide by construction (name uniqueness is enforced at
+    save-time, W3); a file/default pack colliding with a built-in name
+    is skipped; otherwise the default pack wins, then the earlier
+    ``OP_PROMPT_PACK_PATHS`` entry.
     """
     config = _config(cfg)
     packs: dict[str, PromptPack] = {p.name: p for p in BUILT_IN_PACKS}
@@ -475,12 +482,89 @@ def available_prompt_packs(cfg: Any | None = None) -> dict[str, PromptPack]:
             continue
         packs[pack.name] = pack
     packs[default.name] = default
+    packs.update(_stored_packs())
     return packs
 
 
-def get_prompt_pack(name: str, cfg: Any | None = None) -> PromptPack | None:
-    """The selectable pack called ``name``, or ``None`` if not configured."""
+def _stored_packs() -> dict[str, PromptPack]:
+    """The bound project's stored packs from the process-local config-store
+    snapshot (no I/O -- this reads whatever the last ``refresh``/
+    ``ensure_fresh`` cached). Malformed stored bodies are skipped with a
+    logged warning rather than raised, same degrade-not-crash contract as
+    the file-pack loaders."""
+    try:
+        from src.services.config_store import get_config_store
+    except Exception:  # pragma: no cover - config_store always importable
+        return {}
+    snapshot = get_config_store().current
+    packs: dict[str, PromptPack] = {}
+    for name, stored in snapshot.packs.items():
+        try:
+            packs[name] = PromptPack.from_dict({**stored.body, 'name': name})
+        except Exception as exc:
+            logger.warning('stored_prompt_pack_invalid', name=name, error=str(exc))
+    return packs
+
+
+def active_prompt_pack(cfg: Any | None = None) -> PromptPack:
+    """The config-store's *active* pack (§3.6) if one is activated and
+    still present, else the env/file process default
+    (:func:`resolve_prompt_pack`) -- unchanged behavior for a deployment
+    that never activates anything through the store.
+    """
+    try:
+        from src.services.config_store import get_config_store
+    except Exception:  # pragma: no cover - config_store always importable
+        return resolve_prompt_pack(cfg)
+    snapshot = get_config_store().current
+    ref = snapshot.active_pack
+    # 'off' has no meaning for a required axis (the VLM always needs some
+    # pack) -- treat it the same as "never activated": fall back to the
+    # env/file default, same as clearing a legacy settings override did.
+    if ref is None or ref == 'off':
+        return resolve_prompt_pack(cfg)
+    name, _revision = ref
+    pack = available_prompt_packs(cfg).get(name)
+    return pack if pack is not None else resolve_prompt_pack(cfg)
+
+
+def get_prompt_pack(
+    name: str, cfg: Any | None = None, *, revision: int | None = None
+) -> PromptPack | None:
+    """The selectable pack called ``name``, or ``None`` if not configured.
+
+    ``revision=None`` (the default) means "latest saved" -- W2 has no
+    CRUD to save more than one revision yet, so this is currently
+    equivalent to the un-revisioned lookup; W3 makes it exact once a
+    pack can have more than one revision.
+    """
+    del revision  # W3 resolves a specific past revision from history docs
     return available_prompt_packs(cfg).get(name)
+
+
+def prompt_pack_stamp(pack: PromptPack) -> str:
+    """``"<name>@<revision|sha12>"`` provenance stamp for ``vlm_prompt_pack``
+    (any_domain_plan.md §3.7/§9 W2) -- every VLM write site stamps this
+    onto the item it wrote so a later audit can tell which pack produced
+    the write. When ``pack`` is the store's currently *activated* pack,
+    the stamp uses its exact saved revision; otherwise (a file/built-in
+    pack the store never activated) a content hash distinguishes two
+    edits of the same name.
+    """
+    try:
+        from src.services.config_store import get_config_store
+
+        ref = get_config_store().current.active_pack
+    except Exception:  # pragma: no cover - config_store always importable
+        ref = None
+    if isinstance(ref, tuple):
+        name, revision = ref
+        if name == pack.name and revision is not None:
+            return f'{pack.name}@{revision}'
+    import hashlib
+
+    digest = hashlib.sha256(json.dumps(pack.to_dict(), sort_keys=True).encode()).hexdigest()[:12]
+    return f'{pack.name}@{digest}'
 
 
 __all__ = [
@@ -488,8 +572,10 @@ __all__ = [
     'GENERIC_ITEM_PACK',
     'GENERIC_REGION_PACK',
     'PromptPack',
+    'active_prompt_pack',
     'available_prompt_packs',
     'get_prompt_pack',
+    'prompt_pack_stamp',
     'prompt_text_examples',
     'resolve_prompt_pack',
 ]

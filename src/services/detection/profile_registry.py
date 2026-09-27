@@ -43,6 +43,11 @@ import os
 import threading
 from typing import TYPE_CHECKING, Any
 
+from src.core.logging import get_logger
+
+
+logger = get_logger(__name__)
+
 
 if TYPE_CHECKING:
     from src.config import DetectionProfile
@@ -173,16 +178,37 @@ def ensure_env_region_profile() -> None:
         _ENV_RESOLVED = True
 
 
+def _stored_profiles() -> dict[str, DetectionProfile]:
+    """The bound project's stored region profiles from the process-local
+    config-store snapshot (W2; empty until W4 CRUD exists). No I/O --
+    reads whatever the last refresh cached. Malformed stored bodies are
+    skipped with a logged warning."""
+    try:
+        from src.services.config_store import get_config_store
+    except Exception:  # pragma: no cover - config_store always importable
+        return {}
+    snapshot = get_config_store().current
+    profiles: dict[str, DetectionProfile] = {}
+    for name, stored in snapshot.profiles.items():
+        try:
+            profiles[name] = region_profile_from_dict({**stored.body, 'name': name}, source=name)
+        except Exception as exc:
+            logger.warning('stored_region_profile_invalid', name=name, error=str(exc))
+    return profiles
+
+
 def get_profiles() -> dict[str, DetectionProfile]:
-    """Every registered profile, keyed by ``name``."""
+    """Every registered profile, keyed by ``name`` -- env/file-registered
+    plus every stored profile in the bound project's config-store
+    snapshot (W2)."""
     ensure_env_region_profile()
-    return dict(_REGISTRY)
+    return {**_REGISTRY, **_stored_profiles()}
 
 
 def get_profile(name: str) -> DetectionProfile | None:
     """The registered profile called ``name``, or ``None``."""
     ensure_env_region_profile()
-    return _REGISTRY.get(name)
+    return get_profiles().get(name)
 
 
 def get_default_profile_name() -> str | None:
@@ -192,9 +218,32 @@ def get_default_profile_name() -> str | None:
 
 
 def get_active_region_profile() -> DetectionProfile | None:
-    """The deployment's active region profile, or ``None`` when region
-    detection is not configured (the neutral default)."""
+    """The deployment's active region profile.
+
+    The config store's activation (§3.6/§4.4, W2) wins when set:
+    ``'off'`` (explicit deactivation) returns ``None`` even if an
+    env-registered default exists; a ``(name, revision)`` activation
+    resolves against :func:`get_profiles` (env-registered or stored).
+    With no activation recorded at all, falls back to the env-resolved
+    default -- unchanged behavior for a deployment that never activates
+    anything through the store.
+    """
     ensure_env_region_profile()
+    try:
+        from src.services.config_store import get_config_store
+
+        ref = get_config_store().current.active_profile
+    except Exception:  # pragma: no cover - config_store always importable
+        ref = None
+    if ref == 'off':
+        return None
+    if ref is not None:
+        name, _revision = ref
+        profile = get_profiles().get(name)
+        if profile is not None:
+            return profile
+        # Activated id no longer exists (deleted stored profile) -- fall
+        # through to the env default rather than silently going dark.
     return _REGISTRY.get(_DEFAULT_NAME) if _DEFAULT_NAME is not None else None
 
 

@@ -83,6 +83,7 @@ class AppResources:
     arbiter_task: asyncio.Task[None] | None = None
     curation_knn_warmup_task: asyncio.Task[None] | None = None
     project_registry_poll_task: asyncio.Task[None] | None = None
+    config_store_poll_task: asyncio.Task[None] | None = None
     event_bus_started: bool = False
 
 
@@ -160,31 +161,26 @@ async def lifespan(app: FastAPI):
     # =========================================================================
     logger.info('startup_begin', phase='initialization')
 
-    # Fail loudly on any retired env-var name before
-    # anything else initializes.
+    # Fail loudly on any retired env-var name before anything else initializes.
     from src.config.retired_env import reject_retired_env
 
     reject_retired_env()
 
-    # The lifespan runs unbound: a global loop never acts on a project by
-    # default. Startup steps that touch project data bind each project in
-    # turn (src.services.projects.bootstrap).
-    # Resolve the region profile before serving: a bad profile file fails
-    # startup, and no request ever races its first-use resolution.
+    # The lifespan runs unbound; steps that touch project data bind each
+    # project in turn (src.services.projects.bootstrap). Resolve the region
+    # profile before serving: a bad profile file fails startup up front.
     from src.services.detection.profile_registry import ensure_env_region_profile
 
     ensure_env_region_profile()
 
-    # Create shared ThreadPoolExecutor for CPU-bound tasks
-    # (JPEG decode, resize, preprocessing)
+    # Shared ThreadPoolExecutor for CPU-bound tasks (JPEG decode, resize).
     AppResources.shared_executor = ThreadPoolExecutor(
         max_workers=64,
         thread_name_prefix='ingest-worker-',
     )
     logger.info('executor_initialized', workers=64, type='ThreadPoolExecutor')
 
-    # Create high-throughput async Triton connection pool
-    # 4 gRPC channels with different user-agents = separate TCP connections
+    # High-throughput async Triton pool: 4 gRPC channels = 4 TCP connections.
     AppResources.async_triton_pool = AsyncTritonPool(
         url=settings.triton_url,
         pool_size=4,
@@ -199,17 +195,18 @@ async def lifespan(app: FastAPI):
 
     AppResources.project_registry_poll_task = await startup_bootstrap_project_registry_safe()
 
-    # Best-effort: create the core + every project's curation OpenSearch
-    # indexes (F-25) and kick off the background kNN-warmup task. See
-    # dependencies.bootstrap_opensearch_indexes for the full rationale.
+    # Best-effort: create each project's curation indexes (F-25) + kNN-warmup.
     from src.core.dependencies import bootstrap_opensearch_indexes
 
     AppResources.curation_knn_warmup_task = await bootstrap_opensearch_indexes()
 
+    # Config store poll task (W2): fans out per active project, not `default`.
+    from src.services.config_store import startup_bootstrap_config_store_safe
+
+    AppResources.config_store_poll_task = await startup_bootstrap_config_store_safe()
+
     # S-3: tail the shared cross-process event log so this uvicorn
-    # worker's SSE clients see events published by any other worker or
-    # background job. No-op on the `process` bus; best-effort so a bad
-    # state dir degrades to in-process-only delivery, not a crash.
+    # worker's SSE clients see events from any other worker/job. Best-effort.
     try:
         from src.services.curation.event_hub import get_event_hub
 
@@ -219,11 +216,9 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning('event_bus_tail_start_skipped', error=str(exc))
 
-    # Reconcile job state.json files left at status='running' by a process
-    # that was killed mid-job — see docs/design/curation_design_rationale.md
-    # and each module's reconcile_orphaned_jobs() docstring. Best-effort and
-    # isolated per module so one misconfigured state dir can't block startup
-    # or the other checks.
+    # Reconcile job state.json files left at status='running' by a killed
+    # process; best-effort and isolated per module (see each module's
+    # reconcile_orphaned_jobs() docstring).
     from src.services.curation import embedding_viz, probe_job
     from src.services.curation.autolabel import job as autolabel_job
     from src.services.curation.item_scores import job as item_scores_job
@@ -373,6 +368,11 @@ async def lifespan(app: FastAPI):
 
     await shutdown_project_registry(AppResources.project_registry_poll_task)
     AppResources.project_registry_poll_task = None
+
+    from src.services.config_store import shutdown_config_store_poll
+
+    await shutdown_config_store_poll(AppResources.config_store_poll_task)
+    AppResources.config_store_poll_task = None
 
     # Stop the event-bus tail task.
     if AppResources.event_bus_started:

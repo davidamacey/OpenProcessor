@@ -102,6 +102,35 @@
         "title": "AcceptedModel",
         "type": "object"
       },
+      "ActiveRef": {
+        "description": "``{name, revision}`` for the currently-active config on one axis.\n``name=None`` means the axis is off/unconfigured.",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "title": "ActiveRef",
+        "type": "object"
+      },
       "ApiErrorResponse": {
         "description": "The body of every error :func:`api_error` raises.",
         "properties": {
@@ -1868,7 +1897,7 @@
         "type": "object"
       },
       "ConfigErrorDetail": {
-        "description": "The ``detail`` body of every project-route 4xx/5xx.\n\nOptional fields are code-specific and ``None``/absent otherwise; kept\ntyped so OpenAPI documents them rather than leaving ``detail`` as an\nopaque blob.",
+        "description": "The ``detail`` body of every project/config-store route's 4xx/5xx.\n\nOptional fields are code-specific and ``None``/absent otherwise; kept\ntyped so OpenAPI documents them rather than leaving ``detail`` as an\nopaque blob.",
         "properties": {
           "action": {
             "anyOf": [
@@ -1892,10 +1921,31 @@
             ],
             "title": "Active Shards"
           },
+          "axis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Axis"
+          },
           "capacity": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ProjectCapacityWire"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
               },
               {
                 "type": "null"
@@ -1937,6 +1987,17 @@
               "model_name_reserved",
               "internal_isolation_error",
               "revision_conflict",
+              "not_found",
+              "unknown_revision",
+              "active_conflict",
+              "no_previous",
+              "no_active_profile",
+              "unknown_pack",
+              "unknown_profile",
+              "validation_failed",
+              "config_store_unavailable",
+              "read_only",
+              "name_conflict",
               "invalid_transition",
               "export_outside_project",
               "model_not_found",
@@ -2033,6 +2094,16 @@
             ],
             "title": "Projects"
           },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "soft_limit": {
             "anyOf": [
               {
@@ -2043,6 +2114,20 @@
               }
             ],
             "title": "Soft Limit"
+          },
+          "valid_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Ids"
           }
         },
         "required": [
@@ -4954,6 +5039,28 @@
           "region_pairing": {
             "title": "Region Pairing"
           },
+          "region_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Profile"
+          },
+          "region_profile_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Profile Revision"
+          },
           "region_reason": {
             "anyOf": [
               {
@@ -5784,9 +5891,41 @@
         "title": "MatrixModel",
         "type": "object"
       },
+      "MethodAxis": {
+        "description": "One axis's served copy (W2, any_domain_plan.md §7.6 item 7):\nCropwright's dropdown/blurb text for an axis, instead of a\nclient-side hardcoded string per axis id.",
+        "properties": {
+          "axis": {
+            "title": "Axis",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "axis",
+          "label",
+          "description"
+        ],
+        "title": "MethodAxis",
+        "type": "object"
+      },
       "MethodsResponse": {
         "description": "``GET /curation/methods`` response: every strategy across every axis\nplus the feature flags that gated each entry's status.",
         "properties": {
+          "axes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MethodAxis"
+            },
+            "title": "Axes",
+            "type": "array"
+          },
           "flags": {
             "additionalProperties": {
               "type": "boolean"
@@ -6829,7 +6968,8 @@
           "cloneable_axes": {
             "default": [
               "settings_defaults",
-              "classes"
+              "classes",
+              "activations"
             ],
             "items": {
               "type": "string"
@@ -9640,6 +9780,93 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "ValidationIssue": {
+        "description": "One error/warning/info from a config validator (§3.3/§4.3).",
+        "properties": {
+          "bypassable": {
+            "default": false,
+            "title": "Bypassable",
+            "type": "boolean"
+          },
+          "code": {
+            "const": "name_conflict",
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Detail",
+            "type": "object"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ],
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "title": "ValidationIssue",
+        "type": "object"
+      },
+      "ValidationReport": {
+        "description": "The result of running a config validator (``/validate``, create,\nclone, PUT, activate). ``force_allowed`` is true only when every\nerror present is individually bypassable -- the GUI's \"activate\nanyway\" affordance.",
+        "properties": {
+          "errors": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ValidationIssue"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "force_allowed": {
+            "default": false,
+            "title": "Force Allowed",
+            "type": "boolean"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ValidationIssue"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "ValidationReport",
         "type": "object"
       },
       "VlmLabelBatchRequest": {
@@ -19154,7 +19381,7 @@
     },
     "/curation/projects/{project}/settings": {
       "get": {
-        "description": "Current shared curation-strategy defaults.\n\nNo document yet (nothing has ever been ``PUT``) is not an error --\nit means \"no shared override for any axis,\" reported as\n``defaults: {}``, ``updated_at: null``, ``updated_by: null``.",
+        "description": "Current shared curation-strategy defaults.\n\nNo document yet (nothing has ever been ``PUT``) is not an error --\nit means \"no shared override for any axis,\" reported as\n``defaults: {}``, ``updated_at: null``, ``updated_by: null``.\n\n``prompt_pack`` / ``detection_profile`` are reported from the config\nstore's activation (W2), not this settings document -- see\n:func:`_config_store_axis_defaults`.",
         "operationId": "get_curation_settings_route_curation_projects__project__settings_get",
         "parameters": [
           {
@@ -19195,7 +19422,7 @@
         ]
       },
       "put": {
-        "description": "Partially update the shared curation-strategy defaults.\n\nOnly the axes present in ``body.defaults`` are validated and merged;\naxes already stored (and not mentioned here) are left untouched. Each\naxis must be one of\n:data:`~src.services.curation.strategy_defaults.SETTABLE_DEFAULT_AXES`\nand each id must be currently advertised for that axis on\n``GET /methods`` — otherwise this returns ``422`` listing the valid\naxes/ids. A value of ``null`` clears that axis's shared override\n(see ``CurationSettingsUpdateRequest``'s docstring) — the axis simply\nwon't appear in the next ``GET``'s ``defaults`` map. ``updated_by`` is\nalways ``None`` — no user-account system exists yet.",
+        "description": "Partially update the shared curation-strategy defaults.\n\n``prompt_pack`` / ``detection_profile`` in ``body.defaults`` delegate\nto the config store's activation (W2, any_domain_plan.md §3.7): the\nid must be currently advertised for the axis (or ``off`` for\n``detection_profile``), else ``422``; ``null`` deactivates the axis\nthrough the store rather than clearing a settings-doc override. Every\nother axis keeps the prior behavior: it must be one of\n:data:`~src.services.curation.strategy_defaults.SETTABLE_DEFAULT_AXES`\nand each id must be currently advertised for that axis on\n``GET /methods``. ``updated_by`` is always ``None`` — no user-account\nsystem exists yet.",
         "operationId": "update_curation_settings_route_curation_projects__project__settings_put",
         "parameters": [
           {

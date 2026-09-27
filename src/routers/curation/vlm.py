@@ -54,28 +54,35 @@ from src.services.curation.vlm_class_attempt import prediction_class_update, wit
 _F = get_region_fields()
 
 
-def _get_vlm_labeler(pack_name: str | None = None) -> Any:
-    """Lazy per-pack ``VlmLabeler`` cache — imported so VLM routes don't
-    pull httpx for the whole router on cold start.
+def _get_vlm_labeler(pack_name: str | None = None, revision: int | None = None) -> Any:
+    """Lazy per-``(pack, revision)`` ``VlmLabeler`` cache (W2, §3.6) —
+    imported so VLM routes don't pull httpx for the whole router on cold
+    start.
 
-    ``pack_name=None`` uses the process default pack
-    (:func:`~src.services.labeling.vlm_prompts.resolve_prompt_pack` — the
-    ``OP_PROMPT_PACK_PATH`` pack, or the built-in generic pack). A name
-    selects any pack :func:`~src.services.labeling.vlm_prompts.
-    available_prompt_packs` advertises; an unknown name raises
-    ``ValueError``. One labeler instance is cached per pack name.
+    ``pack_name=None`` uses the config store's *active* pack
+    (:func:`~src.services.labeling.vlm_prompts.active_prompt_pack` — the
+    activated pack if one is set, else the ``OP_PROMPT_PACK_PATH`` pack
+    or the built-in generic pack). A name selects any pack
+    :func:`~src.services.labeling.vlm_prompts.available_prompt_packs`
+    advertises; an unknown name raises ``ValueError``. ``revision`` pins
+    an exact saved revision (a per-run ``name@rev``, §3.7) -- ``None``
+    means "latest." One labeler instance is cached per
+    ``(name, revision-or-sha)``.
     """
     from src.services.labeling.vlm_labeler import VlmLabeler
-    from src.services.labeling.vlm_prompts import get_prompt_pack, resolve_prompt_pack
+    from src.services.labeling.vlm_prompts import active_prompt_pack, get_prompt_pack
 
-    pack = resolve_prompt_pack() if pack_name is None else get_prompt_pack(pack_name)
+    pack = (
+        active_prompt_pack() if pack_name is None else get_prompt_pack(pack_name, revision=revision)
+    )
     if pack is None:
         msg = f'unknown prompt pack {pack_name!r}'
         raise ValueError(msg)
-    cache: dict[str, Any] = _get_vlm_labeler.__dict__.setdefault('_insts', {})
-    inst = cache.get(pack.name)
+    cache_key = (pack.name, revision)
+    cache: dict[tuple[str, int | None], Any] = _get_vlm_labeler.__dict__.setdefault('_insts', {})
+    inst = cache.get(cache_key)
     if inst is None or inst._pack != pack:
-        inst = cache[pack.name] = VlmLabeler(pack=pack)
+        inst = cache[cache_key] = VlmLabeler(pack=pack)
     return inst
 
 
@@ -339,8 +346,10 @@ async def vlm_label_batch(
         return {'predicted': 0, 'updated': 0}
 
     from src.services.labeling.vlm_labeler import resolve_class_name as _resolve_class_name_fn
+    from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
+    _pack_stamp = prompt_pack_stamp(labeler._pack)
     # Use the open-vocabulary path so the VLM can flag genuinely-unknown
     # items instead of silently snapping them to the wrong class.
     predictions = await labeler.label_or_propose_batch(crops, class_names)
@@ -377,6 +386,7 @@ async def vlm_label_batch(
             continue
         if 'class_source' not in update:
             empty_answers += 1
+        update['vlm_prompt_pack'] = _pack_stamp
         if proposal is not None:
             proposals.append(proposal)
         updates_by_id[p.img_id] = update
@@ -448,8 +458,10 @@ async def vlm_verify_regions(
         raise HTTPException(status_code=400, detail='maximum 64 crop_ids per call')
 
     from src.services.labeling.vlm_labeler import RegionCrop
+    from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
+    _pack_stamp = prompt_pack_stamp(labeler._pack)
     n_verified = 0
     # Keyed by crop_id rather than written straight to a plain bulk
     # body -- the actual write goes through occ_skip_on_conflict_bulk
@@ -496,6 +508,7 @@ async def vlm_verify_regions(
             _F.verified: verdict.is_region,
             _F.reason: verdict.reason,
             'updated_at': now,
+            'vlm_prompt_pack': _pack_stamp,
         }
     if updates_by_id:
 

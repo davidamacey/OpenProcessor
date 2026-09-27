@@ -76,18 +76,36 @@ def reject_detection_profile(detection_profile: Any) -> None:
         )
 
 
-async def resolve_run_prompt_pack(opensearch: Any, prompt_pack: Any) -> str | None:
-    """Resolve the per-run ``prompt_pack`` id.
+async def resolve_run_prompt_pack(
+    opensearch: Any, prompt_pack: Any
+) -> tuple[str | None, int | None]:
+    """Resolve the per-run ``prompt_pack`` id, and PIN a revision (W2,
+    any_domain_plan.md §3.7): ``"name@<revision>"`` pins that exact
+    revision; a bare ``"name"`` resolves to ``(name, None)`` -- "latest
+    saved" at the time the job reads the labeler, unaffected by an edit
+    made after the job starts (the job dict stores the returned revision
+    so ``resolve_prompt_pack``/``get_prompt_pack`` calls made later in the
+    same job pass it explicitly).
 
     Non-``str`` values (``None``, or an unfilled FastAPI ``Query`` default
     when the endpoint function is called directly) mean "omitted" and
-    resolve to the settings-doc default. An unknown id is a 422 listing
+    resolve to the settings default. An unknown id is a 422 listing
     the valid ids — never a silent fallback.
     """
+    requested = prompt_pack if isinstance(prompt_pack, str) else None
+    revision: int | None = None
+    name_only = requested
+    if requested is not None and '@' in requested:
+        name_only, _, rev_str = requested.rpartition('@')
+        try:
+            revision = int(rev_str)
+        except ValueError:
+            raise HTTPException(
+                status_code=422,
+                detail={'error': f'invalid revision in {requested!r}', 'axis': 'prompt_pack'},
+            ) from None
     try:
-        return await resolve_strategy_selection(
-            'prompt_pack', prompt_pack if isinstance(prompt_pack, str) else None, opensearch
-        )
+        resolved = await resolve_strategy_selection('prompt_pack', name_only, opensearch)
     except UnknownStrategyError as exc:
         raise HTTPException(
             status_code=422,
@@ -98,3 +116,4 @@ async def resolve_run_prompt_pack(opensearch: Any, prompt_pack: Any) -> str | No
                 'valid_ids': exc.valid,
             },
         ) from exc
+    return resolved, revision

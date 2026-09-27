@@ -19,6 +19,7 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
 from src.config.curation import base_curation_config
 from src.services.labeling.vlm_labeler import VlmClassPrediction
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 if TYPE_CHECKING:
@@ -84,6 +85,8 @@ async def test_label_batch_never_overwrites_validated_class(
     sent: list[str] = []
 
     class _Labeler:
+        _pack = GENERIC_ITEM_PACK
+
         async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
             sent.extend(c.img_id for c in crops)
             # A concurrent auto-promote validates 'raced' after it was

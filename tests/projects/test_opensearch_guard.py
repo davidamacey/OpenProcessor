@@ -10,6 +10,7 @@ import pytest
 from src.config.curation import base_curation_config
 from src.config.project_context import ProjectNotBound, bind_project
 from src.config.projects import ProjectRecord, resources_for_new
+from src.services.config_store.store import global_configs_index
 from src.services.projects.guard import (
     CrossProjectAccess,
     ProjectGuardedTransport,
@@ -68,6 +69,26 @@ def test_all_rejected(snapshot) -> None:
 def test_unowned_index_passes_unbound(snapshot) -> None:
     check_request('GET', '/visual_search_global/_search', None, snapshot)
     check_request('GET', '/op_projects/_doc/project:default', None, snapshot)
+
+
+def test_global_configs_index_is_a_legitimate_unowned_index(snapshot) -> None:
+    """M3: ``op_global_configs`` (the one config-store index scoped to no
+    project -- sibling to ``op_projects``, ``visual_search_*``) is
+    readable and writable unbound, same as any other unowned index -- the
+    shape its future global-router routes (W9) will use. A request
+    already bound to a project has no business touching it, so it is
+    refused there exactly like any other unowned index (fail-closed).
+
+    m1 (W2-finish review): built from the real ``global_configs_index()``
+    resolver, not a hardcoded literal -- so this test would catch the
+    index resolving into a project's own namespace, not just prove the
+    generic unowned-index rule against a string that happens to match
+    today's default."""
+    index = global_configs_index()
+    check_request('GET', f'/{index}/_doc/pack:local_vlm', None, snapshot)
+    check_request('PUT', f'/{index}/_doc/pack:local_vlm', {'a': 1}, snapshot)
+    with bind_project(snapshot['alpha']), pytest.raises(CrossProjectAccess):
+        check_request('GET', f'/{index}/_doc/pack:local_vlm', None, snapshot)
 
 
 def test_unbound_plus_project_index_raises_not_bound(snapshot) -> None:

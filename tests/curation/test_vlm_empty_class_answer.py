@@ -36,6 +36,7 @@ from src.services.curation.vlm_class_attempt import (
     VLM_CLASS_EMPTY_REASON_FIELD as REASON,
 )
 from src.services.labeling.vlm_labeler import VlmClassPrediction, VlmCombinedReply
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 if TYPE_CHECKING:
@@ -205,11 +206,13 @@ async def _run_label_batch(
     reg.add_class('widget')
     reg.add_class('gadget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
-    monkeypatch.setattr(vlm_mod, '_default_pack_name', AsyncMock(return_value=None))
+    monkeypatch.setattr(vlm_mod, '_default_pack_name', AsyncMock(return_value=(None, None)))
     docs = {cid: (_proposal(cid) if cid.startswith('p') else _item(cid)) for cid in preds}
     fake = QueryFakeOpenSearch({ITEMS: docs})
 
     class _Labeler:
+        _pack = GENERIC_ITEM_PACK
+
         async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
             return [preds[c.img_id] for c in crops]
 
@@ -315,14 +318,14 @@ async def test_pipeline_vlm_stage_empty_answer_keeps_class(
 
     class _Labeler:
         model = 'fake-vlm'
-        _pack = None
+        _pack = GENERIC_ITEM_PACK
 
         async def label_or_propose_batch(self, crops: list[Any], *_a: Any, **_k: Any) -> list[Any]:
             return [answers[c.img_id] for c in crops]
 
     monkeypatch.setattr(selection, 'classifier_class_sources', lambda: frozenset({'det_model'}))
-    monkeypatch.setattr(pipeline, '_get_vlm_labeler', lambda _pack=None: _Labeler())
-    monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', AsyncMock(return_value=None))
+    monkeypatch.setattr(pipeline, '_get_vlm_labeler', lambda _pack=None, _rev=None: _Labeler())
+    monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None)))
     monkeypatch.setattr(pipeline_health, 'pipeline_health_snapshot', AsyncMock(return_value={}))
     monkeypatch.setattr(
         'src.routers.curation.get_class_registry',
