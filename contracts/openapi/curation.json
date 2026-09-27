@@ -1967,7 +1967,7 @@
             "anyOf": [
               {
                 "items": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/JobRefWire"
                 },
                 "type": "array"
               },
@@ -5480,6 +5480,40 @@
           "total"
         ],
         "title": "JobProgress",
+        "type": "object"
+      },
+      "JobRefWire": {
+        "description": "One running job blocking a lifecycle action (Cropwright rev-3\ndelta 11): typed, not a raw id string, so a caller can render\n\"cars has 2 running jobs: Training run run-7, Bake-off run-42\"\nwithout a second lookup.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "kind_label": {
+            "title": "Kind Label",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "kind_label",
+          "id",
+          "label",
+          "started_at"
+        ],
+        "title": "JobRefWire",
         "type": "object"
       },
       "LatencyStats": {

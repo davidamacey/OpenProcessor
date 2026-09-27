@@ -23,13 +23,14 @@ from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG, ProjectRecord, is_valid_slug, resources_for_new
 from src.core.logging import get_logger
 from src.routers.curation._config_common_models import api_error
-from src.routers.curation._project_models import (
-    ARCHIVABLE_STATUSES,
-    CLONEABLE_AXES,
-    UNARCHIVABLE_STATUSES,
-)
+from src.routers.curation._project_models import ARCHIVABLE_STATUSES, UNARCHIVABLE_STATUSES
 from src.services.projects.capacity import capacity_status
-from src.services.projects.registry import get_project_registry, get_record_with_seq, write_record
+from src.services.projects.registry import (
+    RevisionConflictError,
+    get_project_registry,
+    get_record_with_seq,
+    write_record as _raw_write_record,
+)
 
 
 if TYPE_CHECKING:
@@ -46,6 +47,33 @@ _DELETE_DRAIN_POLL_SECONDS = 1.0
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+async def write_record(
+    client: Any,
+    record: ProjectRecord,
+    *,
+    if_seq_no: int | None = None,
+    if_primary_term: int | None = None,
+) -> None:
+    """``registry.write_record``, with the storage-level OCC race
+    (:class:`RevisionConflictError` -- another writer's bump landed between
+    this caller's read and its write) translated into the API's 409
+    ``revision_conflict``, exactly like a stale ``expected_revision``
+    would be (:func:`_require_revision`). Every lifecycle mutation
+    writes through here, never the raw registry function, so a losing
+    concurrent writer never silently clobbers or 500s."""
+    try:
+        await _raw_write_record(
+            client, record, if_seq_no=if_seq_no, if_primary_term=if_primary_term
+        )
+    except RevisionConflictError as exc:
+        raise api_error(
+            409,
+            'revision_conflict',
+            f"'{record.slug}' was modified by another request; refresh and retry",
+            project=record.slug,
+        ) from exc
 
 
 @dataclass(frozen=True)
@@ -221,45 +249,34 @@ async def patch_project(
     return updated
 
 
-async def running_jobs(record: ProjectRecord) -> list[JobRef]:
-    """Best-effort job inventory for this project (train jobs, auto-label
-    triggers, bake-off jobs). P2 (workers/jobs) owns the authoritative
-    per-worker ``runtime`` docs this will eventually also read; until
-    that lands, this checks the file-backed job dirs P1's
-    ``ProjectResources`` already names, so archive/delete guards degrade
-    to "no known job dirs" rather than silently skipping the check."""
-    jobs: list[JobRef] = []
-    for job_dir, kind, kind_label in (
-        (record.resources.train_jobs_dir, 'train', 'Training run'),
-        (record.resources.bakeoff_jobs_dir, 'bakeoff', 'Bake-off'),
-    ):
-        try:
-            if not job_dir.exists():
-                continue
-            for job_file in sorted(job_dir.glob('*.job.json')):
-                status_file = job_file.with_name(job_file.name.replace('.job.json', '.status.json'))
-                if status_file.exists():
-                    import json
+_KIND_LABELS = {
+    'train': 'Training run',
+    'bakeoff': 'Bake-off',
+    'autolabel': 'Auto-label',
+    'export': 'Export',
+    'detection_worker': 'Detection worker',
+}
 
-                    try:
-                        status_doc = json.loads(status_file.read_text())
-                    except (OSError, ValueError):
-                        continue
-                    if status_doc.get('status') in ('running', 'queued'):
-                        jobs.append(
-                            JobRef(
-                                kind=kind,
-                                kind_label=kind_label,
-                                id=job_file.stem.removesuffix('.job'),
-                                label=status_doc.get('label', job_file.stem),
-                                started_at=status_doc.get('started_at', ''),
-                            )
-                        )
-        except OSError as exc:
-            logger.warning(
-                'project_job_scan_failed', project=record.slug, dir=str(job_dir), error=str(exc)
-            )
-    return jobs
+
+async def running_jobs(record: ProjectRecord) -> list[JobRef]:
+    """The project's real running-job inventory, via
+    ``src.services.projects.busy.running_jobs`` -- the single source of
+    truth for "is this project busy" across every job-producing
+    subsystem (§5.4). Delete/archive never re-implement their own file
+    scan; they only adapt ``busy.JobRef`` (``kind``/``job_id``) to this
+    module's wire-shaped ``JobRef`` (delta 11)."""
+    from src.services.projects import busy
+
+    return [
+        JobRef(
+            kind=j.kind,
+            kind_label=_KIND_LABELS.get(j.kind, j.kind),
+            id=j.job_id,
+            label=j.job_id,
+            started_at='',
+        )
+        for j in busy.running_jobs(record)
+    ]
 
 
 def _other_active_slugs(snapshot: dict[str, ProjectRecord], slug: str) -> list[str]:
@@ -317,7 +334,7 @@ async def archive_project(client: Any, *, slug: str, expected_revision: int) -> 
             'project_busy',
             f"'{slug}' has {len(jobs)} running job(s)",
             project=slug,
-            jobs=[j.id for j in jobs],
+            jobs=[j.to_wire() for j in jobs],
         )
     await _last_active_check(record)
     updated = replace(record, status='archived', revision=record.revision + 1, updated_at=_now())
@@ -337,105 +354,10 @@ async def unarchive_project(client: Any, *, slug: str, expected_revision: int) -
     return updated
 
 
-async def _validate_clone(
-    client: Any,
-    *,
-    target_record: ProjectRecord,
-    from_slug: str,
-    axes: list[str] | None,
-) -> tuple[ProjectRecord, list[str]]:
-    """Every refusal a clone can hit, checked before anything is written:
-    unknown axis (422 ``combine_invalid``), unknown source (404), and
-    ``classes`` into a target that already has items (409
-    ``target_not_empty`` -- a clone is always a byte-identical starting
-    point, never a merge). Returns the source record and resolved axes."""
-    resolved_axes = axes if axes else list(CLONEABLE_AXES)
-    for axis in resolved_axes:
-        if axis not in CLONEABLE_AXES:
-            raise api_error(422, 'combine_invalid', f"unknown clone axis '{axis}'")
-
-    source = _require_found(await _resolve_existing(from_slug), from_slug)
-
-    if 'classes' in resolved_axes:
-        with bind_project(target_record):
-            from src.config.curation import items_index
-
-            count_resp = await client.count(index=items_index())
-        if (count_resp.get('count') or 0) > 0:
-            raise api_error(
-                409,
-                'target_not_empty',
-                f"'{target_record.slug}' already has items; classes cannot be cloned",
-                project=target_record.slug,
-            )
-    return source, resolved_axes
-
-
-async def _apply_clone(
-    client: Any, *, target_record: ProjectRecord, source: ProjectRecord, axes: list[str]
-) -> None:
-    """Copy the validated axes. Reads the source under a read-only bind so
-    the guard rejects any accidental write to it."""
-    from src.clients.curation_opensearch import get_curation_settings, update_curation_settings
-
-    if 'settings_defaults' in axes:
-        with bind_project(source, read_only=True):
-            source_settings = await get_curation_settings(client)
-        with bind_project(target_record):
-            await update_curation_settings(client, dict(source_settings.get('defaults', {})))
-
-    if 'classes' in axes:
-        src_path = source.resources.class_registry_path
-        dst_path = target_record.resources.class_registry_path
-        if src_path.exists():
-            dst_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src_path, dst_path)
-        with bind_project(target_record):
-            from src.clients.curation_opensearch import ClassRegistry
-
-            registry = ClassRegistry(dst_path)
-            await registry.sync_to_opensearch(client)
-
-
-async def clone_settings(
-    client: Any,
-    *,
-    target_record: ProjectRecord,
-    from_slug: str,
-    axes: list[str] | None,
-) -> None:
-    """§4 ``clone_settings`` into a project being created: validate every
-    refusal first, then copy."""
-    source, resolved_axes = await _validate_clone(
-        client, target_record=target_record, from_slug=from_slug, axes=axes
-    )
-    await _apply_clone(client, target_record=target_record, source=source, axes=resolved_axes)
-
-
-async def clone_settings_into(
-    client: Any,
-    *,
-    slug: str,
-    from_slug: str,
-    axes: list[str] | None,
-    expected_revision: int,
-) -> ProjectRecord:
-    """§4 ``POST /projects/{project}/clone_settings`` into an existing
-    ``active`` project. Every check (status, revision, axes, source,
-    target emptiness) runs before anything is written, and the revision
-    is bumped only after the copy succeeded -- a refused clone never
-    changes the target's revision."""
-    record, seq, term = await _get_mutable_record(client, slug)
-    _require_transition(record, 'clone settings into', frozenset({'active'}))
-    _require_revision(record, expected_revision)
-    source, resolved_axes = await _validate_clone(
-        client, target_record=record, from_slug=from_slug, axes=axes
-    )
-    await _apply_clone(client, target_record=record, source=source, axes=resolved_axes)
-    updated = replace(record, revision=record.revision + 1, updated_at=_now())
-    await write_record(client, updated, if_seq_no=seq, if_primary_term=term)
-    await get_project_registry().ensure_fresh()
-    return updated
+# clone_settings / clone_settings_into live in clone.py (700-LOC
+# ratchet); re-exported here so `lifecycle.clone_settings(...)` keeps
+# working for every existing caller.
+from src.services.projects.clone import clone_settings, clone_settings_into  # noqa: E402,F401
 
 
 async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
@@ -589,19 +511,28 @@ async def delete_project(
             'project_busy',
             f"'{slug}' has {len(jobs)} running job(s)",
             project=slug,
-            jobs=[j.id for j in jobs],
+            jobs=[j.to_wire() for j in jobs],
         )
     await _last_active_check(record)
 
     if not force:
-        in_use = await _shared_model_users(record)
-        if in_use:
+        shared_models = await _shared_model_users(record)
+        if shared_models:
             raise api_error(
                 409,
                 'in_use',
-                f"a promoted model from '{slug}' is used by another project's active profile",
+                f"'{slug}' has {len(shared_models)} model(s) opted into cross-project "
+                'sharing; deleting could break another project that depends on them',
                 project=slug,
-                projects=in_use,
+                projects=shared_models,
+            )
+    else:
+        shared_models = await _shared_model_users(record)
+        if shared_models:
+            logger.warning(
+                'project_delete_forced_past_shared_models',
+                project=slug,
+                shared_models=shared_models,
             )
 
     _, seq, term = await get_record_with_seq(client, slug)
@@ -611,11 +542,41 @@ async def delete_project(
     return deleting
 
 
-async def _shared_model_users(record: ProjectRecord) -> list[str]:  # noqa: ARG001
-    """P2/§5.5 (shared promoted models) is not in this wave's scope; there
-    is no shared-model registry to query yet, so this always returns
-    "no users" rather than fabricating an answer."""
-    return []
+async def _shared_model_users(record: ProjectRecord) -> list[str]:
+    """§5.5 in_use guard: which of this project's own promoted models
+    have opted into cross-project sharing (``PUT /models/{name}/sharing``,
+    ``promote.json.shared``)?
+
+    KNOWN GAP (flagged, not faked): this returns the *shared model
+    names*, not the *dependent project slugs* the plan asks for -- P2's
+    model-sharing plumbing (``src.services.training.model_classes``,
+    ``src.routers.curation._models_sharing``) has no reverse index of
+    "which projects actually reference model X as their active
+    detector". That scan needs each project's own bound
+    ``DetectionProfile`` read, which is explicitly the not-yet-landed W4
+    profile-CRUD wave's job (see the ``TODO(W4/profile_validation)`` in
+    ``_models_sharing.py``, which even ``PUT .../sharing`` itself defers
+    on). Until W4 lands there is no way to name which projects would
+    actually break, so a project with any ``shared=True`` promoted model
+    is still refused (``in_use``) unless ``force=True`` -- "opted into
+    sharing" is itself evidence someone may depend on it, and silently
+    allowing the delete would be the worse failure mode -- but the
+    caller must read the returned names as "these models of mine are
+    shared", not as consumer project slugs.
+    """
+    from src.services.training.model_classes import is_model_shared, model_owner_project
+    from src.services.training.triton_promote import resolve_triton_models_dir
+
+    models_dir = resolve_triton_models_dir()
+    if not models_dir.is_dir():
+        return []
+    return sorted(
+        entry.name
+        for entry in models_dir.iterdir()
+        if entry.is_dir()
+        and model_owner_project(entry.name) == record.slug
+        and is_model_shared(entry.name)
+    )
 
 
 async def delete_project_finish(client: Any, *, slug: str) -> ProjectRecord:

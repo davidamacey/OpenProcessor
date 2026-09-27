@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **P3F finish pass (projects lifecycle).** `delete`/`archive`'s busy
+  check now runs through `src.services.projects.busy.running_jobs`
+  (§5.4's real per-project job inventory) instead of a bespoke file
+  scan; the 409 `project_busy` body carries typed `JobRef` objects
+  (`kind`, `kind_label`, `id`, `label`, `started_at` -- Cropwright rev-3
+  delta 11), not raw ids. `ConfigErrorDetail.jobs` is now
+  `list[JobRefWire] | None`.
+- Delete's §5.5 shared-promoted-model guard: a project that owns a
+  model opted into cross-project sharing (`promote.json.shared`) is
+  refused (409 `in_use`) unless `force=true`, which proceeds and logs
+  `project_delete_forced_past_shared_models` distinctly. **Known gap**:
+  the *dependent project* list this returns is the project's own shared
+  model names, not consumer slugs -- there is no reverse index of
+  "which project actually uses model X" yet (needs the not-yet-landed
+  W4 profile-CRUD wave; see the `TODO(W4/profile_validation)` already in
+  `_models_sharing.py`).
+- `registry.write_record` raises `RevisionConflictError` on a losing
+  OCC race (`if_seq_no`/`if_primary_term` stale); `lifecycle.write_record`
+  translates that into the API's 409 `revision_conflict`, so a second
+  concurrent writer never silently clobbers the first.
+- `ProjectRegistry.stale`: true right after the most recent
+  `ensure_fresh()` failed. The request binder (`_project_deps.py`) now
+  binds read-only whenever the registry is stale, not just when the
+  cached status is `archived` (P1R minor 10: a project flipped to
+  `deleting` while OpenSearch is flaky must not bind writable off a
+  stale snapshot).
+- `src/services/projects/clone.py`: `clone_settings`/`clone_settings_into`
+  split out of `lifecycle.py` (700-LOC ratchet); re-exported from
+  `lifecycle` for existing callers.
+- Confirmed already-correct and covered with new regression tests:
+  delete's 202/background-completing shape (delta 10), and the
+  registry's `search_after` pagination past OpenSearch's 1000-hit
+  default result window (P1R minor 4).
 - **Cross-project model sharing (§5.5, owner D1).** New
   `src/services/training/model_classes.py`: `model_classes()` reads a
   model's own classes from `promote.json.classes` (model order), else

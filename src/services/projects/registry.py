@@ -112,6 +112,20 @@ async def get_record_with_seq(
     return doc_to_record(doc['_source']), doc.get('_seq_no'), doc.get('_primary_term')
 
 
+class RevisionConflictError(Exception):
+    """Raised by :func:`write_record` when the ``if_seq_no``/
+    ``if_primary_term`` OCC guard lost a race against another writer --
+    i.e. a second bump landed between this caller's read and its write.
+    Callers translate this into the API's 409 ``revision_conflict``
+    (never a silent overwrite; never a bare 500)."""
+
+
+def _is_conflict_exception(exc: Exception) -> bool:
+    if getattr(exc, 'status_code', None) == 409:
+        return True
+    return 'Conflict' in type(exc).__name__
+
+
 async def write_record(
     client: Any,
     record: ProjectRecord,
@@ -120,9 +134,10 @@ async def write_record(
     if_primary_term: int | None = None,
 ) -> None:
     """Write ``record`` (create or OCC-guarded overwrite) and bump the
-    registry revision. Raises the client's version-conflict exception
-    (409-shaped) when ``if_seq_no``/``if_primary_term`` are stale --
-    callers translate that into ``revision_conflict``."""
+    registry revision. Raises :class:`RevisionConflictError` when
+    ``if_seq_no``/``if_primary_term`` are stale -- i.e. another writer's
+    bump landed first (the storage-level race this guards against;
+    callers translate it into the API's 409 ``revision_conflict``)."""
     from src.services.projects.bootstrap import bump_revision
 
     kwargs: dict[str, Any] = {}
@@ -130,12 +145,17 @@ async def write_record(
         kwargs['if_seq_no'] = if_seq_no
     if if_primary_term is not None:
         kwargs['if_primary_term'] = if_primary_term
-    await client.index(
-        index=projects_index(),
-        id=_project_doc_id(record.slug),
-        body=record_to_doc(record),
-        **kwargs,
-    )
+    try:
+        await client.index(
+            index=projects_index(),
+            id=_project_doc_id(record.slug),
+            body=record_to_doc(record),
+            **kwargs,
+        )
+    except Exception as exc:
+        if _is_conflict_exception(exc):
+            raise RevisionConflictError(f'revision conflict writing {record.slug!r}') from exc
+        raise
     await bump_revision(client)
 
 
@@ -182,6 +202,17 @@ class ProjectRegistry:
     def refreshed(self) -> bool:
         """At least one :meth:`ensure_fresh` read the registry successfully."""
         return self._refreshed
+
+    @property
+    def stale(self) -> bool:
+        """True right after the most recent :meth:`ensure_fresh` failed
+        (P1R minor 10): the snapshot's ``status`` for any project may be
+        out of date -- e.g. a project flipped ``active`` -> ``deleting``
+        by another API instance between this instance's last successful
+        refresh and now. A binder that trusts a stale ``active`` here
+        would let writes through against a project mid-delete. Cleared
+        by the next successful refresh."""
+        return self._failed_at is not None
 
     def snapshot(self) -> Mapping[str, ProjectRecord]:
         """The last-refreshed view. Cheap, sync, no I/O -- callers that

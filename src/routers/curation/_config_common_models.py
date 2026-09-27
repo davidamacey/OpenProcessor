@@ -64,6 +64,19 @@ class ProjectCapacityWire(BaseModel):
     labels: dict[str, str]
 
 
+class JobRefWire(BaseModel):
+    """One running job blocking a lifecycle action (Cropwright rev-3
+    delta 11): typed, not a raw id string, so a caller can render
+    "cars has 2 running jobs: Training run run-7, Bake-off run-42"
+    without a second lookup."""
+
+    kind: str
+    kind_label: str
+    id: str
+    label: str
+    started_at: str
+
+
 class ConfigErrorDetail(BaseModel):
     """The ``detail`` body of every project-route 4xx/5xx.
 
@@ -75,7 +88,8 @@ class ConfigErrorDetail(BaseModel):
     error: ErrorCode
     message: str
     project: str | None = None
-    jobs: list[str] | None = None
+    # delta 11: 409 project_busy carries typed JobRef objects, not raw ids.
+    jobs: list[JobRefWire] | None = None
     projects: list[str] | None = None
     active_shards: int | None = None
     needed: int | None = None
