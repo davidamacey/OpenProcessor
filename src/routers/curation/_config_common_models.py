@@ -63,6 +63,10 @@ class ConfigErrorDetail(BaseModel):
     hard_limit: int | None = None
     heap_max_bytes: int | None = None
     current_revision: int | None = None
+    # Delta 12: the full capacity object on shard_budget_exceeded (and in
+    # the shard_budget_high warning), so a create form re-renders from
+    # one response instead of a second GET /projects.
+    capacity: dict[str, Any] | None = None
 
 
 def api_error(status: int, code: ErrorCode, message: str, **fields: Any) -> HTTPException:

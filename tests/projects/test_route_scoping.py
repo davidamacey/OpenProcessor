@@ -16,10 +16,24 @@ API = '/curation'
 SCOPED = f'{API}/projects/{{project}}'
 
 # Unscoped curation paths that are global by nature (served in OpenAPI).
+# The P3 lifecycle mutations (create/patch/archive/unarchive/
+# clone_settings/delete) act *on* a project, not *within* one, so they
+# stay on global_router like the P1 reads. ``/stats`` is conceptually
+# scoped (delta 9c: it reads the bound project's own counts) but is
+# registered directly on global_router with its own `bind_path_project`
+# dependency rather than through the `{SCOPED}` double-mount, since
+# lifecycle routes never go through the scoped/alias split.
 GLOBAL_ROUTES = frozenset(
     {
         ('GET', f'{API}/projects'),
+        ('POST', f'{API}/projects'),
         ('GET', f'{API}/projects/{{project}}'),
+        ('PATCH', f'{API}/projects/{{project}}'),
+        ('DELETE', f'{API}/projects/{{project}}'),
+        ('POST', f'{API}/projects/{{project}}/archive'),
+        ('POST', f'{API}/projects/{{project}}/unarchive'),
+        ('POST', f'{API}/projects/{{project}}/clone_settings'),
+        ('GET', f'{API}/projects/{{project}}/stats'),
         ('GET', f'{API}/health'),
         ('GET', f'{API}/events'),
     }
@@ -52,11 +66,17 @@ def test_every_curation_route_is_scoped_global_or_hidden_alias() -> None:
 
 def test_alias_mirrors_every_scoped_route_hidden_from_openapi() -> None:
     routes = _curation_routes()
+    # P3's lifecycle mutations (archive/unarchive/clone_settings/stats)
+    # textually start with the SCOPED prefix (their path *is*
+    # `/projects/{project}/...`) but are global_router routes, not
+    # part of the scoped/alias double-mount -- exclude anything already
+    # named in GLOBAL_ROUTES before comparing the two mount points.
     scoped = {
         (m, r.path[len(SCOPED) :])
         for r in routes
         if r.path.startswith(f'{SCOPED}/')
         for m in r.methods
+        if (m, r.path) not in GLOBAL_ROUTES
     }
     alias = {
         (m, r.path[len(API) :])

@@ -164,6 +164,86 @@ class ProjectRecordResponse(ProjectSummary):
     error: ProjectError | None = None
 
 
+class CreateProjectRequest(BaseModel):
+    """``POST /projects`` (P3)."""
+
+    slug: str
+    display_name: str
+    description: str = ''
+    clone_settings_from: str | None = None
+    clone_axes: list[str] | None = None
+
+
+class PatchProjectRequest(BaseModel):
+    """``PATCH {prefix}`` (P3). The slug is immutable."""
+
+    display_name: str | None = None
+    description: str | None = None
+    expected_revision: int
+
+
+class ArchiveRequest(BaseModel):
+    expected_revision: int
+
+
+class CloneSettingsRequest(BaseModel):
+    """``POST {prefix}/clone_settings`` (P3)."""
+
+    from_: str = Field(alias='from')
+    axes: list[str] | None = None
+    expected_revision: int
+
+    model_config = {'populate_by_name': True}
+
+
+class DeleteBlockingIssue(BaseModel):
+    """One reason a delete is refused (delta 11: structured, not bare
+    codes)."""
+
+    code: str
+    message: str
+
+
+class DryRunIndexReport(BaseModel):
+    name: str
+    docs: int
+    store_bytes: int | None = None
+
+
+class DryRunDirReport(BaseModel):
+    path: str
+    bytes: int
+
+
+class DeleteDryRunResponse(BaseModel):
+    indexes: list[DryRunIndexReport]
+    dirs: list[DryRunDirReport]
+    promoted_models: list[str] = Field(default_factory=list)
+    mlflow_experiment: str
+    running_jobs: list[dict[str, Any]] = Field(default_factory=list)
+    referenced_by: list[dict[str, Any]] = Field(default_factory=list)
+    blocking: list[str]
+    blocking_detail: list[DeleteBlockingIssue]
+
+
+class ProjectStatsCounts(BaseModel):
+    images: int
+    items: int
+    validated: int
+    pending_detection: int
+    holdout_items: int
+    classes: int
+    promoted_models: int
+
+
+class ProjectStatsResponse(BaseModel):
+    counts: ProjectStatsCounts
+    indexes: list[dict[str, Any]]
+    disk: dict[str, Any]
+    jobs: dict[str, Any]
+    last_ingest_at: str | None = None
+
+
 def resources_wire(resources: Any) -> dict[str, Any]:
     return {
         'indexes': {role.value: name for role, name in resources.indexes.items()},

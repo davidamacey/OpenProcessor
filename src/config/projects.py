@@ -103,7 +103,7 @@ def _project_index_prefix() -> str:
     return os.environ.get('OP_PROJECT_INDEX_PREFIX', 'op_prj_')
 
 
-def _projects_data_root() -> Path:
+def projects_data_root() -> Path:
     return Path(os.environ.get('OP_PROJECTS_DATA_ROOT', './data/projects'))
 
 
@@ -138,7 +138,7 @@ def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
     from src.config.curation import IndexRole
 
     prefix = _project_index_prefix()
-    data_root = _projects_data_root() / slug
+    data_root = projects_data_root() / slug
     indexes = {role: f'{prefix}{slug}__{role.value}' for role in IndexRole}
     return ProjectResources(
         indexes=indexes,

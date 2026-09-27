@@ -192,6 +192,11 @@ _ALLOWLIST = {
     # handlers. The API image ships scripts/ (Dockerfile COPY) and the router
     # already reads scripts/curation/bakeoff/baselines.json from it.
     'scripts': 'first-party repo package shipped in the API image (bake-off profiles)',
+    # src/services/projects/lifecycle.py's _soft_delete_mlflow() wraps the
+    # import (and every MLflow call) in a try/except Exception, logging
+    # and continuing -- a guarded delete never fails just because MLflow
+    # is unreachable or not installed in a given deployment.
+    'mlflow': 'optional MLflow soft-delete on project delete, with a logged skip on failure',
 }
 
 # Files whose dependency lists are legitimately out of scope for the

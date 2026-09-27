@@ -13,7 +13,7 @@ from typing import Any
 from src.config.curation import base_curation_config
 from src.config.projects import DEFAULT_SLUG, ProjectRecord, resources_for_default
 from src.core.logging import get_logger
-from src.services.projects.registry import REVISION_DOC_ID, projects_index, record_to_doc
+from src.services.projects.registry import bump_revision, projects_index, record_to_doc
 
 
 logger = get_logger(__name__)
@@ -62,18 +62,9 @@ async def bootstrap_default_project(client: Any) -> ProjectRecord:
         resources=resources_for_default(base_curation_config()),
     )
     await client.index(index=projects_index(), id=doc_id, body=record_to_doc(record))
-    await _bump_revision(client)
+    await bump_revision(client)
     logger.info('bootstrapped default project record')
     return record
-
-
-async def _bump_revision(client: Any) -> None:
-    try:
-        current = await client.get(index=projects_index(), id=REVISION_DOC_ID)
-        revision = int((current.get('_source') or {}).get('revision', 0)) + 1
-    except Exception:
-        revision = 1
-    await client.index(index=projects_index(), id=REVISION_DOC_ID, body={'revision': revision})
 
 
 async def startup_bootstrap_project_registry() -> Any:

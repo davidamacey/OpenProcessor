@@ -126,6 +126,62 @@ def default_project_record(stored: ProjectRecord | None = None) -> ProjectRecord
     )
 
 
+async def bump_revision(client: Any) -> int:
+    """Increment ``meta:projects_revision`` and return the new value.
+    Every lifecycle mutation calls this after writing a project doc, so
+    every process's next :meth:`ProjectRegistry.ensure_fresh` picks up
+    the change within ~1s."""
+    try:
+        current = await client.get(index=projects_index(), id=REVISION_DOC_ID)
+        revision = int((current.get('_source') or {}).get('revision', 0)) + 1
+    except Exception:
+        revision = 1
+    await client.index(index=projects_index(), id=REVISION_DOC_ID, body={'revision': revision})
+    return revision
+
+
+async def get_record_with_seq(
+    client: Any, slug: str
+) -> tuple[ProjectRecord | None, int | None, int | None]:
+    """The stored record plus its ``_seq_no``/``_primary_term``, for an
+    OCC-guarded write. ``None`` (with no seq/term) when the doc does not
+    exist yet."""
+    try:
+        doc = await client.get(index=projects_index(), id=_project_doc_id(slug))
+    except Exception as exc:
+        if getattr(exc, 'status_code', None) == 404 or 'NotFound' in type(exc).__name__:
+            return None, None, None
+        raise
+    if not doc.get('found', True):
+        return None, None, None
+    return doc_to_record(doc['_source']), doc.get('_seq_no'), doc.get('_primary_term')
+
+
+async def write_record(
+    client: Any,
+    record: ProjectRecord,
+    *,
+    if_seq_no: int | None = None,
+    if_primary_term: int | None = None,
+) -> None:
+    """Write ``record`` (create or OCC-guarded overwrite) and bump the
+    registry revision. Raises the client's version-conflict exception
+    (409-shaped) when ``if_seq_no``/``if_primary_term`` are stale --
+    callers translate that into ``revision_conflict``."""
+    kwargs: dict[str, Any] = {}
+    if if_seq_no is not None:
+        kwargs['if_seq_no'] = if_seq_no
+    if if_primary_term is not None:
+        kwargs['if_primary_term'] = if_primary_term
+    await client.index(
+        index=projects_index(),
+        id=_project_doc_id(record.slug),
+        body=record_to_doc(record),
+        **kwargs,
+    )
+    await bump_revision(client)
+
+
 async def _read_revision(client: Any) -> int:
     """The ``meta:projects_revision`` counter; 0 when the doc (or the whole
     index) does not exist yet. Any other failure propagates."""

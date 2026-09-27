@@ -462,6 +462,13 @@ def test_unscoped_alias_serves_the_default_project(isolated_app: Any) -> None:
         scoped = client.get(f'{API}/projects/default{suffix}')
         alias = client.get(f'{API}{suffix}')
         assert all(bound == 'default' for bound, *_ in accesses[before:]), suffix
+        if suffix == '/stats':
+            # P3: /stats is a global_router route (its own bind_path_project
+            # dependency, per projects_plan.md §4) rather than part of the
+            # scoped/alias double-mount, so the (P1, soon-removed per the
+            # no-back-compat owner decision) alias never serves it.
+            assert alias.status_code == 404, suffix
+            continue
         assert alias.status_code == scoped.status_code, suffix
         if suffix in ('/health', '/events'):
             continue  # the global routes deliberately win at these two paths
