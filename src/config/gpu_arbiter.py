@@ -96,15 +96,24 @@ def _parse_container_gpus(raw: str) -> tuple[tuple[str, frozenset[int] | None], 
 
 
 def _default_bakeoff_jobs_dir() -> str:
-    """The bound project's own ``bakeoff_jobs_dir`` (a PROJECT_SCOPED_FIELDS
-    entry, ``resources_for_new``) -- the one default the router and arbiter
-    share. P1R §6.1/D-A: ``default`` nests under
-    ``state_dir/projects/default/bakeoff_jobs`` like every other project;
-    reading the field directly (never reconstructing ``state_dir /
-    'bakeoff_jobs'``) is what keeps the two in sync for any project."""
-    from src.config.curation import get_curation_config
+    """The ``default`` project's own ``bakeoff_jobs_dir`` (a
+    PROJECT_SCOPED_FIELDS entry, ``resources_for_new``) -- the one
+    default the router and arbiter share. P1R §6.1/D-A: ``default``
+    nests under ``state_dir/projects/default/bakeoff_jobs`` like every
+    other project.
 
-    return str(get_curation_config().bakeoff_jobs_dir)
+    Computed directly from ``resources_for_new('default', ...)``, never
+    ``get_curation_config()``: this is a dataclass ``default_factory``,
+    evaluated whenever ``GpuArbiterConfig()``/``.from_env()`` is
+    constructed -- including at API startup, before any project is
+    bound. Reading the *bound* project's config here would raise
+    ``ProjectNotBound`` and take the startup reconcile loop down with
+    it (this arbiter is process-global per projects_plan.md §5.3, not
+    itself project-scoped)."""
+    from src.config.curation import base_curation_config
+    from src.config.projects import DEFAULT_SLUG, resources_for_new
+
+    return str(resources_for_new(DEFAULT_SLUG, base_curation_config()).bakeoff_jobs_dir)
 
 
 def _parse_gpu_labels(raw: str) -> dict[int, str]:
