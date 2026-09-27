@@ -22,30 +22,13 @@ export function isTerminalTrainState(state: TrainState | string): boolean {
 }
 
 /**
- * Label for `TrainEval`'s overall figures (`map50`/`map50_95`/
- * `precision`/`recall`) — this is the run's headline number, labelled
- * by the backend's own `eval.split` (OpenProcessor 5595474). A run
- * whose `eval` predates that field (no `split` served) falls back to
- * the pre-cutover guess: the overall figures are the last VAL epoch's
- * numbers on that shape.
+ * Label for `TrainEval`'s figures (`map50`/`map50_95`/`precision`/
+ * `recall` and `per_class`) — the run's headline number, labelled
+ * by the backend's own `eval.split`.
  */
-export function evalOverallLabel(ev: TrainEval | null | undefined): string {
+export function evalSplitLabel(ev: TrainEval | null | undefined): string {
   if (!ev) return '';
-  if (ev.split === 'test') return 'test split (frozen holdout)';
-  if (ev.split === 'val') return 'validation';
-  return 'validation (last epoch)';
-}
-
-/**
- * Label for `TrainEval.per_class` — on today's split-less shape this
- * really is computed over the frozen test holdout (unlike the overall
- * figures above), so it gets a different label from the same object.
- */
-export function evalPerClassLabel(ev: TrainEval | null | undefined): string {
-  if (!ev) return '';
-  if (ev.split === 'test') return 'test split (frozen holdout)';
-  if (ev.split === 'val') return 'validation';
-  return 'test split (frozen holdout)';
+  return ev.split === 'test' ? 'test split (frozen holdout)' : 'validation';
 }
 
 /** A metric value (map/precision/recall/f1/ap50 — a 0-1 score, not a

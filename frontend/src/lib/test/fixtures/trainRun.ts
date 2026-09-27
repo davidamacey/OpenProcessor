@@ -19,8 +19,8 @@
  * back-fill. This fixture is hand-corrected to that post-fix shape
  * (nulls) rather than the live buggy response, so tests exercise the
  * real fixed behavior, not a bug being adopted on purpose. `eval` is
- * otherwise served verbatim (unaffected by the fix) and predates the
- * `split`/`head` fields too — the genuinely oldest captured shape.
+ * otherwise served verbatim, plus the `split: 'test'` the current trainer
+ * writes on every eval block (the captured run predates that field).
  */
 import type { TrainJobStatus, TrainManifest } from '$lib/types_train';
 
@@ -42,6 +42,7 @@ export const trainStatusFixture: TrainJobStatus = {
     '/var/lib/openprocessor/training_runs/2026-09-24T23-47-55_yolo26n/weights/best.pt',
   gpu: [{ index: 0, util_pct: 2, mem_used_mb: 18155, mem_total_mb: 49140 }],
   eval: {
+    split: 'test',
     map50: 0.9191,
     map50_95: 0.85096,
     per_class: [
@@ -141,6 +142,7 @@ export const trainManifestFixture: TrainManifest = {
     checkpoint_sha256: 'cc5ffb75e020b54d87df6f534de2a7a74eaa02519c69658a9504e2fe42d15e81',
     compare: null,
     eval: {
+      split: 'test',
       confusion_matrix_path:
         '/var/lib/openprocessor/training_runs/2026-09-24T23-47-55_yolo26n/confusion_matrix.png',
       map50: 0.9191,

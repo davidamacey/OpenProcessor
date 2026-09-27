@@ -16,8 +16,7 @@
   import { untrack } from 'svelte';
   import { getTrainManifest, resolveApiUrl } from '$lib/api';
   import {
-    evalOverallLabel,
-    evalPerClassLabel,
+    evalSplitLabel,
     formatMetric,
     formatScalar,
     isTerminalTrainState,
@@ -209,7 +208,7 @@
         <h3 class="mb-1 text-[11px] uppercase tracking-wide text-zinc-500">Evaluation</h3>
         {#if evalData}
           <p class="mb-2 text-zinc-400">
-            overall: <span class="text-zinc-200">{evalOverallLabel(evalData)}</span>
+            overall: <span class="text-zinc-200">{evalSplitLabel(evalData)}</span>
             <span
               class="ml-1 text-[10px] text-zinc-500"
               data-testid="eval-protocol"
@@ -249,7 +248,7 @@
           {/if}
           {#if perClass.length > 0}
             <p class="mb-1 text-zinc-400">
-              per-class: <span class="text-zinc-200">{evalPerClassLabel(evalData)}</span>
+              per-class: <span class="text-zinc-200">{evalSplitLabel(evalData)}</span>
             </p>
             <div class="overflow-auto rounded border border-zinc-800">
               <table class="w-full text-xs">

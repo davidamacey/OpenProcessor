@@ -307,11 +307,9 @@
     freezeBusy = true;
     try {
       const res = await freezeTestHoldout({ percent: freezePercent });
-      const selectionNote = res.selection ? ` via ${res.selection}` : '';
-      const floorNote =
-        res.min_per_class != null ? ` (min ${res.min_per_class}/class)` : '';
       toastStore.success(
-        `Frozen: ${res.n_frozen} crops across ${res.n_classes_covered} classes${selectionNote}${floorNote}.`,
+        `Frozen: ${res.n_frozen} crops across ${res.n_classes_covered} classes via ` +
+          `${res.selection} (min ${res.min_per_class}/class).`,
       );
       freezeOpen = false;
       await loadAll();

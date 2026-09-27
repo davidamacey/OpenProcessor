@@ -117,12 +117,8 @@ export interface GpuInfo {
  * Which pass produced `TrainEval`'s overall figures — `'test'` when the
  * post-training re-validation against the frozen holdout succeeded,
  * `'val'` when it didn't run or produced no usable box metrics (falls
- * back to the training-time validation numbers). Served on every run
- * whose trainer build includes the eval-split cutover; absent only on a
- * run whose `eval` predates it (see `TrainEval`'s doc comment) — treat
- * that case the same as `'val'` labelling for the overall figures, but
- * `'test'` for `per_class` (the per-class table has always been
- * test-split-only, split field or not).
+ * back to the training-time validation numbers). The trainer writes it
+ * on every `eval` block.
  */
 export type TrainEvalSplit = 'test' | 'val';
 
@@ -148,12 +144,6 @@ export interface TrainEvalPerClass {
  * `evalPerClassLabel`); never `TrainJobStatus.best_checkpoint_metric`,
  * which is a per-epoch training-time figure, not this holdout pass.
  *
- * `split` is absent only on a run whose `eval` predates the eval-split
- * cutover (OpenProcessor 5595474) — `evalOverallLabel`/
- * `evalPerClassLabel` fall back to the pre-cutover guess for that case
- * (val for the overall figures, test for per-class, since per-class has
- * always been test-split-only).
- *
  * `head` (OpenProcessor #34 W1) names the detection head that test-split
  * pass scored, e.g. `'end2end'` when the loaded checkpoint's NMS-free
  * one-to-one head was explicitly forced to match what's actually served
@@ -169,8 +159,7 @@ export interface TrainEval {
   map50_95?: number | null;
   precision?: number | null;
   recall?: number | null;
-  /** Absent on runs from before OpenProcessor 5595474 — see doc comment above. */
-  split?: TrainEvalSplit | null;
+  split: TrainEvalSplit;
   /** The last validation epoch's numbers, served separately from the
    *  overall figures since 5595474. */
   val_last?: { map50?: number | null; map50_95?: number | null } | null;
@@ -212,9 +201,7 @@ export interface TrainJobStatus {
   /** The true last TRAINING epoch's own metrics (OpenProcessor #34 W1) —
    *  distinct from `best_checkpoint_metric` because Ultralytics
    *  re-validates the best checkpoint once more after training and that
-   *  pass doesn't advance the epoch counter. `best_metric`/`last_metric`
-   *  are gone — never read them, even if a rolling-deploy backend still
-   *  echoes them on the wire. */
+   *  pass doesn't advance the epoch counter. */
   last_epoch_metric?: TrainEpochMetric | null;
   /** The best checkpoint's (best.pt) own re-validation metrics, as one
    *  coherent row. Never the run's headline number — that's `eval.map50`
@@ -282,9 +269,7 @@ export interface TrainManifestCodeVersions {
   api_sha?: string | null;
   /** The trainer container's own build identity (#34 W1) — its baked
    *  `OP_BUILD_SHA` when present, else the API's stamped
-   *  `trainer_image_revision` observed at submit time. Replaces the old
-   *  `trainer_image` field name; a rolling-deploy backend may still echo
-   *  that legacy key too, but never read it. */
+   *  `trainer_image_revision` observed at submit time. */
   trainer_sha?: string | null;
   /** The trainer image's own id (#34 W1), independent of `trainer_sha`'s
    *  revision label. */
@@ -405,9 +390,7 @@ export interface AugmentationPresetOption {
   orientation_sensitive: boolean;
 }
 
-/** `GET {API_PREFIX}/train/augmentation_presets` response. Absent on a
- *  pre-df01309 backend (404) — `AugmentationPanel` falls back to a
- *  read-only display of the current value when this fails to load. */
+/** `GET {API_PREFIX}/train/augmentation_presets` response. */
 export interface AugmentationPresetsResponse {
   presets: AugmentationPresetOption[];
   /** Preset used when a job omits `augmentation.preset`. */
@@ -433,7 +416,7 @@ export interface PromoteResponse {
   config_path: string;
   labels_path: string;
   triton_loaded: boolean;
-  /** OpenProcessor ffb88b8: the first inference after a promote builds the
-   *  TensorRT engine and is slow. Absent on older backends. */
-  cold_start_expected_on_first_inference?: boolean;
+  /** The first inference after a promote builds the TensorRT engine and
+   *  is slow. */
+  cold_start_expected_on_first_inference: boolean;
 }

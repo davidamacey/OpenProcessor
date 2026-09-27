@@ -336,22 +336,19 @@ export interface ExportDatasetList {
  * Server response from `POST {API_PREFIX}/test_holdout/freeze`. As of
  * OpenProcessor df01309 the request body is `{percent}` only — no
  * `seed` (selection is deterministic, SHA1-of-`crop_id` per class; an
- * unknown field like `seed` is now a 422, not silently ignored) — and
- * the response gained `selection`/`min_per_class` (both required on
- * df01309; optional here so a pre-df01309 backend's response, which
- * doesn't serve them, still type-checks and renders without them).
+ * unknown field like `seed` is now a 422, not silently ignored).
  */
 export interface TestHoldoutFreezeResult {
   n_frozen: number;
   n_classes_covered: number;
   test_holdout_sha: string;
   per_class_counts: Record<string, number>;
-  /** Selection method name — `'sha1_per_class'` on df01309. */
-  selection?: string;
+  /** Selection method name — `'sha1_per_class'`. */
+  selection: string;
   /** Target holdout percent per class, echoed from the request. */
-  percent?: number;
+  percent: number;
   /** Floor per class — all of a class smaller than this is frozen. */
-  min_per_class?: number;
+  min_per_class: number;
 }
 
 /** Server response from `GET {API_PREFIX}/test_holdout/stats`. */

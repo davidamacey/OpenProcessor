@@ -163,9 +163,9 @@
   // multi-class export — `class_split_counts`/`split_counts`/
   // `image_count`/`class_count` drive the dataset card's "current
   // export" numbers below, in place of the classesStore-wide validated
-  // total (which double-counted holdout crops). `null`/missing fields
-  // on a pre-df01309 backend fall back to the labelled global-pool
-  // numbers — see the card markup.
+  // total (which double-counted holdout crops). It describes only the
+  // current export, so a picked past version falls back to the labelled
+  // global-pool numbers — see the card markup.
   let multiClassExportState = $state<ExportStatus | null>(null);
   let singleClassExportDir = $state<string>('');
   // All materialized dataset versions on disk (both kinds), newest first.
@@ -1140,10 +1140,10 @@
           </div>
         </details>
       {:else}
-        <!-- Fallback: no per-export split data (older backend, or the
-             operator picked a specific past export version this endpoint
-             can't describe) — clearly labelled as the dataset-wide global
-             pool, not this export's own contents. -->
+        <!-- No per-export split data: the operator picked a past export
+             version /export/status can't describe (or no export has run
+             yet) — clearly labelled as the dataset-wide global pool, not
+             this export's own contents. -->
         <p class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
           <span class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5">
             {classesStore.classes.filter((c) => !c.deprecated).length} classes (global pool)

@@ -12,11 +12,6 @@ describe('bestMapDisplay', () => {
     expect(bestMapDisplay(r)).toEqual({ value: 0.812, source: 'val' });
   });
 
-  it('renders a null source when eval.split is absent (a run predating the eval-split cutover)', () => {
-    const r = { eval: { map50: 0.812 } };
-    expect(bestMapDisplay(r)).toEqual({ value: 0.812, source: null });
-  });
-
   it('renders null when eval itself is absent', () => {
     expect(bestMapDisplay({ eval: null })).toEqual({ value: null, source: null });
     expect(bestMapDisplay({})).toEqual({ value: null, source: null });

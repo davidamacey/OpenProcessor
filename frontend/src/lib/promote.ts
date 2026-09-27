@@ -77,7 +77,7 @@ export function promoteSuccessMessage(
   res: Pick<PromoteResponse, 'triton_name' | 'cold_start_expected_on_first_inference'>,
 ): string {
   const base = `Promoted ${res.triton_name} → Triton`;
-  return res.cold_start_expected_on_first_inference === true
+  return res.cold_start_expected_on_first_inference
     ? `${base}. The first prediction will be slow while its engine builds.`
     : base;
 }

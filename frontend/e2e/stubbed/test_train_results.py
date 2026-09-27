@@ -36,6 +36,7 @@ FINISHED_STATUS = {
     "checkpoint_path": "/var/lib/openprocessor/training_runs/2026-09-24T23-47-55_yolo26n/weights/best.pt",
     "gpu": [{"index": 0, "util_pct": 2, "mem_used_mb": 18155, "mem_total_mb": 49140}],
     "eval": {
+        "split": "test",
         "map50": 0.9191,
         "map50_95": 0.85096,
         "per_class": [
@@ -129,9 +130,8 @@ def test_finished_run_results_render(stub, page, app_url):
 
     page.get_by_text("Loading manifest", exact=False).wait_for(state="hidden", timeout=10000)
 
-    # Overall (val, today's split-less shape) vs per-class (test) labels.
-    page.get_by_text("validation (last epoch)", exact=False).wait_for(timeout=10000)
-    assert page.get_by_text("test split (frozen holdout)", exact=False).count() > 0
+    # Overall and per-class figures, both labelled by the served eval.split.
+    page.get_by_text("test split (frozen holdout)", exact=False).first.wait_for(timeout=10000)
 
     # Per-class table row.
     assert page.get_by_text("miata", exact=False).count() > 0

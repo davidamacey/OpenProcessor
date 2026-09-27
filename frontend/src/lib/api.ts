@@ -4343,8 +4343,6 @@ export function getTrainPresets(signal?: AbortSignal): Promise<PresetsResponse> 
 /**
  * `GET {API_PREFIX}/train/augmentation_presets` (OpenProcessor df01309) —
  * the trainer's real preset catalog, for `AugmentationPanel`'s picker.
- * 404s on a pre-df01309 backend; callers must catch and degrade to a
- * read-only display rather than a hardcoded id list.
  */
 export function getAugmentationPresets(
   signal?: AbortSignal,
