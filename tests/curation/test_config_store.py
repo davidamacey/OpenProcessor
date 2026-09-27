@@ -457,3 +457,100 @@ async def test_startup_bootstrap_config_store_safe_starts_poll_task_unbound(
         await shutdown_config_store_poll(task)
         reset_config_stores()
         reset_global_config_store()
+
+
+@pytest.mark.asyncio
+async def test_startup_bootstrap_config_store_safe_retries_until_opensearch_reachable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """MJ3 (W2-finish review, 2026-09-27, fix-on-fix): reproduces the
+    reviewer's exact probe P2/P3 -- ``indices.exists`` raises
+    (OpenSearch unreachable at startup, or the same shape as a lost
+    index-create race) on the first few calls, then succeeds. The old
+    code ran ``ensure_global_configs_index`` inline before
+    ``create_task``, inside a broad ``except`` that just logged and
+    returned ``None`` -- no task at all, for that worker's entire
+    lifetime, on every cold stack start. This asserts the returned value
+    is a real, still-running task that keeps retrying with backoff and
+    eventually enters the poll loop once OpenSearch becomes reachable."""
+    from curation._fake_config_opensearch import TwoProjectOpenSearch
+    from src.services.config_store import store as store_module
+    from src.services.config_store.store import (
+        get_config_store,
+        reset_config_stores,
+        reset_global_config_store,
+        shutdown_config_store_poll,
+        startup_bootstrap_config_store_safe,
+    )
+    from src.services.projects import guard
+    from src.services.projects.registry import record_to_doc
+
+    reset_config_stores()
+    reset_global_config_store()
+
+    class _FlakyIndices:
+        """Delegates to the real fake ``indices``, except ``exists``
+        raises a connection error the first ``fail_count`` calls --
+        modelling OpenSearch being unreachable (or, equally, a lost
+        create-race: either way ``exists`` is what fails first here)."""
+
+        def __init__(self, inner: Any, fail_count: int) -> None:
+            self._inner = inner
+            self._fail_count = fail_count
+            self.calls = 0
+
+        async def exists(self, index: str) -> bool:
+            self.calls += 1
+            if self.calls <= self._fail_count:
+                raise ConnectionError('mock: opensearch unreachable')
+            return await self._inner.exists(index=index)
+
+        async def create(self, index: str, body: dict[str, Any]) -> dict[str, Any]:
+            return await self._inner.create(index=index, body=body)
+
+        async def refresh(self, index: str) -> dict[str, Any]:
+            return await self._inner.refresh(index=index)
+
+    client = TwoProjectOpenSearch()
+    flaky = _FlakyIndices(client.indices, fail_count=3)
+    client.indices = flaky
+    projects_index = 'op_projects'
+    client._docs.setdefault(projects_index, {})
+    client._docs[projects_index]['project:alpha'] = {
+        '_source': record_to_doc(_record('alpha')),
+        '_seq_no': 0,
+    }
+
+    async def _fake_make_curation_opensearch() -> Any:
+        return client
+
+    monkeypatch.setattr(guard, 'make_curation_opensearch', _fake_make_curation_opensearch)
+    monkeypatch.setenv('OP_CONFIG_POLL_S', '0.01')
+    # Fast, bounded backoff so the test doesn't wait out the real 1s/30s
+    # production schedule while still exercising the retry loop.
+    monkeypatch.setattr(store_module, '_CONFIG_STORE_BOOTSTRAP_RETRY_INITIAL_S', 0.01)
+    monkeypatch.setattr(store_module, '_CONFIG_STORE_BOOTSTRAP_RETRY_MAX_S', 0.01)
+
+    task = await startup_bootstrap_config_store_safe()
+    assert task is not None  # MJ3: used to be None whenever OpenSearch was unreachable
+    try:
+        for _ in range(500):
+            if task.done():
+                break
+            with bind_project(_record('alpha')):
+                alpha_store = get_config_store(mode='live')
+            if alpha_store.current.loaded_at > 0:
+                break
+            await asyncio.sleep(0.01)
+        # The task must still be alive and retrying/polling, not finished
+        # (crashed or returned) -- a task that already completed is just
+        # as useless in production as `None` was.
+        assert not task.done()
+        assert flaky.calls > flaky._fail_count  # actually retried past the failures
+        with bind_project(_record('alpha')):
+            alpha_store = get_config_store(mode='live')
+        assert alpha_store.current.loaded_at > 0
+    finally:
+        await shutdown_config_store_poll(task)
+        reset_config_stores()
+        reset_global_config_store()

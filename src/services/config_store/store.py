@@ -359,14 +359,41 @@ async def _poll_all_active_projects(client: Any, interval: float) -> None:
         await asyncio.sleep(interval)
 
 
-async def startup_bootstrap_config_store_safe() -> Any | None:
+_CONFIG_STORE_BOOTSTRAP_RETRY_INITIAL_S = 1.0
+_CONFIG_STORE_BOOTSTRAP_RETRY_MAX_S = 30.0
+
+
+async def _bootstrap_config_store_once() -> tuple[Any, float]:
+    """Ensure ``op_global_configs`` exists (M3) and resolve the poll
+    interval. Raises while OpenSearch is unreachable, or while a lost
+    index-create race (``resource_already_exists_exception`` from
+    ``indices.create``, another worker having just won it) hasn't yet
+    resolved into ``indices.exists`` seeing the winner's index -- the
+    caller retries until it doesn't."""
+    from src.services.projects.guard import make_curation_opensearch
+
+    client = await make_curation_opensearch()
+    # M3: needs no project bound (this index belongs to none) -- runs
+    # first, so a later failure below never skips it.
+    await ensure_global_configs_index(client)
+    interval = float(os.environ.get('OP_CONFIG_POLL_S', str(OP_CONFIG_POLL_S_DEFAULT)))
+    return client, interval
+
+
+async def startup_bootstrap_config_store_safe() -> Any:
     """``src.main``'s lifespan hook: create ``op_global_configs`` (M3) if
     it does not exist yet, then return a background poll task -- fanned
     out over every ACTIVE project (M4), not just the one bound at
     lifespan startup -- that the caller owns cancelling at shutdown.
-    Never raises -- a startup-time OpenSearch hiccup here must not block
-    the rest of the app from starting; ``_poll_all_active_projects``'s
-    own first tick still runs once OpenSearch recovers.
+
+    Never raises, and always returns a real, running task. If OpenSearch
+    is unreachable, or a lost index-create race surfaces as
+    ``resource_already_exists_exception`` before ``indices.exists`` sees
+    the winner's index, the task keeps retrying
+    :func:`_bootstrap_config_store_once` with backoff instead of giving
+    up, then enters :func:`_poll_all_active_projects` once it succeeds --
+    so that first tick genuinely does eventually run, on every worker,
+    every time.
 
     MJ1 (W2-finish review, 2026-09-27): this used to also call
     ``get_config_store(mode='live')`` + ``store.refresh(client)`` to warm
@@ -378,21 +405,41 @@ async def startup_bootstrap_config_store_safe() -> Any | None:
     started at all. There is no bound project to warm here;
     ``_poll_all_active_projects`` binds and refreshes every active
     project on its own first tick.
+
+    MJ3 (W2-finish review, 2026-09-27, fix-on-fix): MJ1's fix still ran
+    ``ensure_global_configs_index`` inline before ``create_task``, inside
+    a broad ``except`` that returned ``None`` on any failure there --
+    including a plain unreachable-OpenSearch startup or a lost
+    index-create race, both realistic at cold-stack-start (production
+    ``yolo-api`` has no ``opensearch: service_healthy`` gate and runs 32
+    workers). Nothing then ever retried, so that worker had no poll task
+    for its entire lifetime (M4 inert), contrary to what this docstring
+    used to claim. Fixed by mirroring
+    ``src.services.projects.bootstrap.startup_bootstrap_project_registry_safe``'s
+    retry-then-poll shape: try once inline, and if that fails, hand off
+    to a task that keeps retrying with backoff until it succeeds, then
+    runs the poll loop forever.
     """
-    import asyncio
-
     try:
-        from src.services.projects.guard import make_curation_opensearch
-
-        client = await make_curation_opensearch()
-        # M3: needs no project bound (this index belongs to none) --
-        # runs first, so a later failure below never skips it.
-        await ensure_global_configs_index(client)
-        interval = float(os.environ.get('OP_CONFIG_POLL_S', str(OP_CONFIG_POLL_S_DEFAULT)))
+        client, interval = await _bootstrap_config_store_once()
         return asyncio.create_task(_poll_all_active_projects(client, interval))
     except Exception as exc:
-        logger.warning('config_store_bootstrap_skipped', error=str(exc))
-        return None
+        logger.warning('config_store_bootstrap_deferred', error=str(exc))
+
+    async def _retry_then_poll() -> None:
+        delay = _CONFIG_STORE_BOOTSTRAP_RETRY_INITIAL_S
+        while True:
+            await asyncio.sleep(delay)
+            try:
+                client, interval = await _bootstrap_config_store_once()
+            except Exception as exc:
+                logger.warning('config_store_bootstrap_retry_failed', error=str(exc))
+                delay = min(delay * 2, _CONFIG_STORE_BOOTSTRAP_RETRY_MAX_S)
+                continue
+            logger.info('config_store_bootstrap_recovered')
+            await _poll_all_active_projects(client, interval)
+
+    return asyncio.create_task(_retry_then_poll())
 
 
 async def shutdown_config_store_poll(task: Any | None) -> None:
