@@ -657,8 +657,24 @@ export interface StatsSummary {
   thresholds?: ClassThresholds;
 }
 
-/** `GET {API_PREFIX}/health`. `degraded` means a non-critical
- *  dependency (e.g. the VLM) is down; labeling still works. */
+/** `GET {globalApi()}/health` (P1 projects cutover) — unscoped, has no
+ *  project bound. Feeds only the top-bar API status chip; every
+ *  project-scoped fact (region profile, queue counts, …) comes from the
+ *  scoped `ApiHealth` below. */
+export interface GlobalHealth {
+  status: 'ok' | 'degraded' | 'down';
+  triton?: { reachable: boolean; detail?: string };
+  opensearch?: { reachable: boolean; indexes?: Record<string, boolean> };
+  vlm?: { reachable: boolean; model?: string | null };
+  mlflow_public_url?: string | null;
+  version?: string;
+  api_version?: string;
+}
+
+/** `GET {scoped()}/health` — today's project-scoped shape (P1 projects
+ *  cutover) plus the bound `project` slug. `degraded` means a
+ *  non-critical dependency (e.g. the VLM) is down; labeling still
+ *  works. */
 export interface ApiHealth {
   status: 'ok' | 'degraded' | 'down';
   triton?: { reachable: boolean; detail?: string };
@@ -670,6 +686,8 @@ export interface ApiHealth {
    *  backend older than OpenProcessor naming-w2, which the UI treats the
    *  same as `null`. The only signal region features key on. */
   region_profile?: ServedRegionProfile | null;
+  /** The project this scoped health was read from. */
+  project?: string;
 }
 
 /** `RegionProfileSummary` on `GET {API_PREFIX}/health` and

@@ -55,6 +55,7 @@ import type {
   ExportResult,
   ExportStatus,
   ApiHealth,
+  GlobalHealth,
   ServedRegionProfile,
   SingleClassExportResult,
   SingleClassExportStatus,
@@ -107,6 +108,7 @@ import type {
   EvalDatasetList,
   TrainedModelList,
 } from './types_bakeoff';
+import type { ProjectsResponse } from './types_projects';
 
 // Vite exposes only PUBLIC_-prefixed env vars to the client. SvelteKit uses
 // `$env/dynamic/public` but importing that here would force every consumer
@@ -151,24 +153,32 @@ export function normalizeApiPrefix(raw: string): string {
 export const API_PREFIX: string = normalizeApiPrefix(RAW_API_PREFIX);
 
 /**
- * Groundwork for multi-project support (`docs/design/
- * any-domain-rev3-and-projects-contract-review-2026-09-26.md` §7). The
- * backend is moving every scoped route under `{API_PREFIX}/projects/
- * {project}/...`, with a project's served `prefix` coming from a future
- * `GET {API_PREFIX}/projects`; the unscoped routes stay as an alias bound
- * to the `default` project. Every existing call site already builds its
- * URL from this one module-level holder via `scoped()` — flipping the
- * holder later (when a project switcher lands) changes every request
- * with no call-site edits. Today it's pinned to `API_PREFIX` itself, so
- * every built URL is byte-identical to before this groundwork landed.
+ * Multi-project scoping (P1, `docs/design/
+ * any-domain-rev3-and-projects-contract-review-2026-09-26.md` §7;
+ * OWNER DECISION: no backward compatibility with the retired unscoped
+ * `{API_PREFIX}/...` alias). Every route except the GLOBAL ones below
+ * lives under a project's own served `prefix`
+ * (`/curation/projects/{project}/...`, from `GET {globalApi()}/projects`).
+ * There is no `default` fallback prefix baked in here — the active
+ * project is set by `setScopedPrefix()` once `projectsStore.load()`
+ * resolves the default project, and every scoped call made before that
+ * throws (fails closed, matching the backend's `ProjectNotBound`).
  */
-const scopeHolder: { prefix: string } = { prefix: API_PREFIX };
+const scopeHolder: { prefix: string | null } = { prefix: null };
+
+export class ProjectNotSelectedError extends Error {
+  constructor() {
+    super('no active project selected yet');
+    this.name = 'ProjectNotSelectedError';
+  }
+}
 
 /**
  * Sets the active project's scoped prefix (e.g. `/curation/projects/
- * acme`). Not called anywhere yet — reserved for the future project
- * switcher. Never persisted (no localStorage): the active project is
- * always live UI state, seeded fresh from the served project list.
+ * default`), as served by `GET {globalApi()}/projects`. Called once by
+ * `projectsStore.load()` at boot; never persisted (no localStorage) —
+ * the active project is always live UI state, seeded fresh from the
+ * served project list every load.
  */
 export function setScopedPrefix(prefix: string): void {
   scopeHolder.prefix = prefix;
@@ -176,12 +186,14 @@ export function setScopedPrefix(prefix: string): void {
 
 /**
  * The one function every scoped backend call builds its URL through,
- * e.g. `` `${scoped()}/health` ``. Returns the active project's prefix —
- * today always `API_PREFIX`, so every URL is unchanged. Distinct from
- * `globalApi()` below for the (today nonexistent) handful of endpoints
- * that will stay global once projects land.
+ * e.g. `` `${scoped()}/health` ``. Throws `ProjectNotSelectedError` if
+ * no project has been selected yet — every scoped call site should only
+ * ever run after the root layout's project bootstrap has resolved.
+ * Distinct from `globalApi()` below for the small set of routes that
+ * are never project-scoped (`/projects`, the global `/health`/`/events`).
  */
 export function scoped(): string {
+  if (scopeHolder.prefix === null) throw new ProjectNotSelectedError();
   return scopeHolder.prefix;
 }
 
@@ -194,16 +206,14 @@ export function scoped(): string {
  * for a second, independently-settable holder.
  */
 export function activeProjectKey(): string {
-  return scopeHolder.prefix;
+  return scoped();
 }
 
 /**
- * Builder for endpoints that will stay global (not project-scoped) once
- * projects land — e.g. the future `/projects` list itself. No call site
- * uses this yet: the backend hasn't shipped the split, and guessing
- * which endpoints are global ahead of that would be wrong more often
- * than not. Kept separate from `scoped()` purely so a future call
- * site's intent reads directly off which builder it uses.
+ * Builder for the handful of routes that stay global (never
+ * project-scoped): `/projects` (list/CRUD), the global `/health` and
+ * the global `/events` stream. No call site here builds a scoped URL
+ * from this — it is always `API_PREFIX` itself.
  */
 export function globalApi(): string {
   return API_PREFIX;
@@ -480,6 +490,19 @@ function qs(params: Record<string, unknown>): string {
 
 export function getHealth(signal?: AbortSignal): Promise<ApiHealth> {
   return apiFetch<ApiHealth>(`${scoped()}/health`, {}, signal);
+}
+
+/** `GET {globalApi()}/health` — unscoped, no project bound. Feeds only
+ *  the top-bar API status chip. */
+export function getGlobalHealth(signal?: AbortSignal): Promise<GlobalHealth> {
+  return apiFetch<GlobalHealth>(`${globalApi()}/health`, {}, signal);
+}
+
+/** `GET {globalApi()}/projects` — the switcher vocabulary, global
+ *  (unscoped). The one read every project-scoped call depends on: a
+ *  project's `prefix` here is what `setScopedPrefix()` is seeded with. */
+export function getProjects(signal?: AbortSignal): Promise<ProjectsResponse> {
+  return apiFetch<ProjectsResponse>(`${globalApi()}/projects`, {}, signal);
 }
 
 /**

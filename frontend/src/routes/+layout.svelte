@@ -20,7 +20,8 @@
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { keymapAvailability, loadKeymap } from '$stores/keymap.svelte';
-  import { subscribeCurationEvents } from '$lib/sse';
+  import { subscribeCurationEvents, subscribeGlobalEvents } from '$lib/sse';
+  import { projectsStore } from '$stores/projects.svelte';
   import { regionProfileStore } from '$stores/regionProfile.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
@@ -30,7 +31,7 @@
 
   interface Props {
     children?: Snippet;
-    data: { apiBase: string };
+    data: { apiBase: string; projectsError?: string | null };
   }
   let { children, data }: Props = $props();
 
@@ -43,7 +44,11 @@
   let aboutOpen = $state<boolean>(false);
 
   // Acquire singleton-store subscriptions for the lifetime of the layout.
+  // Skipped entirely on a blocking projectsError: every one of these
+  // fires a scoped() call, which throws ProjectNotSelectedError with no
+  // active project.
   $effect(() => {
+    if (data.projectsError) return;
     const releaseHealth = healthStore.acquire();
     const releaseClasses = classesStore.acquire();
     void classSourcesStore.init();
@@ -65,12 +70,14 @@
   // for why a probe is safe here (idempotent read, unambiguous 404 vs.
   // "no runs yet") and why this whole mechanism is provisional.
   $effect(() => {
+    if (data.projectsError) return;
     void bakeoffAvailability.init();
   });
 
   // Same probe pattern as bakeoffAvailability above, for the /ingest
   // nav link — see ingestAvailability.svelte.ts's doc comment.
   $effect(() => {
+    if (data.projectsError) return;
     void ingestAvailability.init();
   });
 
@@ -162,7 +169,7 @@
   // known to exist (`available !== false`) — a pre-W2b backend has no
   // `config.changed axis=keymap` event to wait for anyway.
   $effect(() => {
-    if (keymapAvailability.available === false) return;
+    if (data.projectsError || keymapAvailability.available === false) return;
     const sub = subscribeCurationEvents({
       topic: 'config',
       onEvent: (ev) => {
@@ -171,6 +178,21 @@
         void loadKeymap().then(() => {
           toastStore.info('Keyboard shortcuts updated');
         });
+      },
+    });
+    return () => sub.close();
+  });
+
+  // P1 projects cutover: the global `project.*` stream is held open so
+  // the (future) switcher's list stays fresh; today it just re-reads
+  // the project list on any project event. Only subscribed once
+  // bootstrap succeeded — a blocking projectsError never opens it.
+  $effect(() => {
+    if (data.projectsError) return;
+    const sub = subscribeGlobalEvents({
+      onEvent: () => {
+        projectsStore.loaded = false;
+        void projectsStore.load();
       },
     });
     return () => sub.close();
@@ -269,166 +291,189 @@
   );
 </script>
 
-<div class="flex h-screen flex-col bg-zinc-950 text-zinc-100">
-  <!-- Top bar -->
-  <header
-    class="flex h-12 shrink-0 items-center gap-4 border-b border-zinc-800 bg-zinc-950 px-4"
+{#if data.projectsError}
+  <!-- P1 projects cutover: no scoped call can succeed without an active
+       project, so a failed `GET {globalApi()}/projects` is a full
+       blocking error state — never a half-rendered app with every
+       scoped request throwing ProjectNotSelectedError. -->
+  <div
+    class="flex h-screen flex-col items-center justify-center gap-3 bg-zinc-950 px-6 text-center text-zinc-100"
+    data-testid="projects-blocking-error"
   >
-    <div class="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight">
-      <button
-        type="button"
-        class="flex shrink-0 items-center justify-center rounded border border-zinc-700 transition-transform duration-150 hover:scale-110 hover:border-zinc-500"
-        onclick={() => (aboutOpen = true)}
-        aria-label="About {appName}"
-        title="About {appName}"
-      >
-        <svg viewBox="0 0 128 128" class="h-6 w-6" role="img" aria-label={appBadge}>
-          <rect width="128" height="128" rx="24" fill="#09090b" />
-          <rect x="26" y="70" width="30" height="30" rx="5" fill="#3f3f46" />
-          <rect x="60" y="70" width="30" height="30" rx="5" fill="#3f3f46" />
-          <rect x="26" y="34" width="30" height="30" rx="5" fill="#60a5fa" />
-          <rect x="60" y="34" width="30" height="30" rx="5" fill="#f59e0b" />
-          <path
-            d="M33 49 l6 6 l12 -12"
-            fill="none"
-            stroke="#09090b"
-            stroke-width="4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </button>
-      <a href="/dashboard" class="hover:text-white">{appName}</a>
-    </div>
+    <p class="text-lg font-semibold">Can't reach the backend's project list</p>
+    <p class="max-w-md text-sm text-zinc-400">{data.projectsError}</p>
+    <button
+      type="button"
+      class="rounded border border-zinc-700 px-3 py-1.5 text-sm hover:border-zinc-500"
+      onclick={() => window.location.reload()}
+    >
+      Retry
+    </button>
+  </div>
+{:else}
+  <div class="flex h-screen flex-col bg-zinc-950 text-zinc-100">
+    <!-- Top bar -->
+    <header
+      class="flex h-12 shrink-0 items-center gap-4 border-b border-zinc-800 bg-zinc-950 px-4"
+    >
+      <div class="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight">
+        <button
+          type="button"
+          class="flex shrink-0 items-center justify-center rounded border border-zinc-700 transition-transform duration-150 hover:scale-110 hover:border-zinc-500"
+          onclick={() => (aboutOpen = true)}
+          aria-label="About {appName}"
+          title="About {appName}"
+        >
+          <svg viewBox="0 0 128 128" class="h-6 w-6" role="img" aria-label={appBadge}>
+            <rect width="128" height="128" rx="24" fill="#09090b" />
+            <rect x="26" y="70" width="30" height="30" rx="5" fill="#3f3f46" />
+            <rect x="60" y="70" width="30" height="30" rx="5" fill="#3f3f46" />
+            <rect x="26" y="34" width="30" height="30" rx="5" fill="#60a5fa" />
+            <rect x="60" y="34" width="30" height="30" rx="5" fill="#f59e0b" />
+            <path
+              d="M33 49 l6 6 l12 -12"
+              fill="none"
+              stroke="#09090b"
+              stroke-width="4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <a href="/dashboard" class="hover:text-white">{appName}</a>
+      </div>
 
-    <AboutModal open={aboutOpen} onclose={() => (aboutOpen = false)} {appName} />
+      <AboutModal open={aboutOpen} onclose={() => (aboutOpen = false)} {appName} />
 
-    <!-- F8 D10 / F-51: the crumb never shrinks (it truncated to "reviev" /
+      <!-- F8 D10 / F-51: the crumb never shrinks (it truncated to "reviev" /
          "classe" at 800px); the primary nav strip to its right scrolls
          with a chevron instead. -->
-    <nav
-      class="flex shrink-0 items-center gap-1 whitespace-nowrap text-sm"
-      aria-label="Breadcrumb"
-      data-testid="breadcrumb"
-    >
-      {#each crumbs as c, i (c.href)}
-        {#if i > 0}
-          <span class="shrink-0 text-zinc-600">/</span>
-        {/if}
-        <a
-          href={c.href}
-          class="shrink-0 rounded px-1.5 py-0.5 text-zinc-300 hover:bg-zinc-900 hover:text-white"
-          aria-current={i === crumbs.length - 1 ? 'page' : undefined}
-        >
-          {c.label}
-        </a>
-      {/each}
-    </nav>
+      <nav
+        class="flex shrink-0 items-center gap-1 whitespace-nowrap text-sm"
+        aria-label="Breadcrumb"
+        data-testid="breadcrumb"
+      >
+        {#each crumbs as c, i (c.href)}
+          {#if i > 0}
+            <span class="shrink-0 text-zinc-600">/</span>
+          {/if}
+          <a
+            href={c.href}
+            class="shrink-0 rounded px-1.5 py-0.5 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+            aria-current={i === crumbs.length - 1 ? 'page' : undefined}
+          >
+            {c.label}
+          </a>
+        {/each}
+      </nav>
 
-    <span class="grow"></span>
+      <span class="grow"></span>
 
-    <!-- Narrow widths (~800px and below): this used to be a plain
+      <!-- Narrow widths (~800px and below): this used to be a plain
          `flex` row with no shrink/overflow control, so "Bake-off"
          wrapped onto two lines and pushed the "API OK" chip past the
          viewport edge (clipped, and forcing horizontal page overflow).
          Scrolls horizontally within its own box instead of ever
          wrapping link text or growing past its flex slot. -->
-    <!-- Visual audit 2026-09-24: the scrolling strip alone gave no hint
+      <!-- Visual audit 2026-09-24: the scrolling strip alone gave no hint
          that links sat off-screen at 800px — ScrollStrip adds a chevron
          on the side with hidden links and scrolls the current page's link
          into view. -->
-    <ScrollStrip
-      navLabel="Primary"
-      activeKey={path}
-      class="gap-3 text-sm text-zinc-300"
-      testId="primary-nav"
-    >
-      <a
-        href="/dashboard"
-        class={navLinkClass('/dashboard')}
-        aria-current={navCurrent('/dashboard')}>Dashboard</a
+      <ScrollStrip
+        navLabel="Primary"
+        activeKey={path}
+        class="gap-3 text-sm text-zinc-300"
+        testId="primary-nav"
       >
-      {#if ingestAvailability.available !== false}
         <a
-          href="/ingest"
-          class={navLinkClass('/ingest')}
-          aria-current={navCurrent('/ingest')}>Ingest</a
+          href="/dashboard"
+          class={navLinkClass('/dashboard')}
+          aria-current={navCurrent('/dashboard')}>Dashboard</a
         >
-      {/if}
-      <a
-        href="/clusters"
-        class={navLinkClass('/clusters')}
-        aria-current={navCurrent('/clusters')}>Clusters</a
-      >
-      <a
-        href="/review"
-        class={navLinkClass('/review')}
-        aria-current={navCurrent('/review')}>Review</a
-      >
-      <a
-        href="/classes"
-        class={navLinkClass('/classes')}
-        aria-current={navCurrent('/classes')}>Classes</a
-      >
-      <a
-        href="/export"
-        class={navLinkClass('/export')}
-        aria-current={navCurrent('/export')}>Export</a
-      >
-      <a
-        href="/models"
-        class={navLinkClass('/models')}
-        aria-current={navCurrent('/models')}>Models</a
-      >
-      <a href="/train" class={navLinkClass('/train')} aria-current={navCurrent('/train')}
-        >Train</a
-      >
-      {#if bakeoffAvailability.available !== false}
+        {#if ingestAvailability.available !== false}
+          <a
+            href="/ingest"
+            class={navLinkClass('/ingest')}
+            aria-current={navCurrent('/ingest')}>Ingest</a
+          >
+        {/if}
         <a
-          href="/bakeoff"
-          class={navLinkClass('/bakeoff')}
-          aria-current={navCurrent('/bakeoff')}>Bake-off</a
+          href="/clusters"
+          class={navLinkClass('/clusters')}
+          aria-current={navCurrent('/clusters')}>Clusters</a
         >
-      {/if}
-      <a
-        href="/settings"
-        class={navLinkClass('/settings')}
-        aria-current={navCurrent('/settings')}>Settings</a
-      >
-    </ScrollStrip>
+        <a
+          href="/review"
+          class={navLinkClass('/review')}
+          aria-current={navCurrent('/review')}>Review</a
+        >
+        <a
+          href="/classes"
+          class={navLinkClass('/classes')}
+          aria-current={navCurrent('/classes')}>Classes</a
+        >
+        <a
+          href="/export"
+          class={navLinkClass('/export')}
+          aria-current={navCurrent('/export')}>Export</a
+        >
+        <a
+          href="/models"
+          class={navLinkClass('/models')}
+          aria-current={navCurrent('/models')}>Models</a
+        >
+        <a
+          href="/train"
+          class={navLinkClass('/train')}
+          aria-current={navCurrent('/train')}>Train</a
+        >
+        {#if bakeoffAvailability.available !== false}
+          <a
+            href="/bakeoff"
+            class={navLinkClass('/bakeoff')}
+            aria-current={navCurrent('/bakeoff')}>Bake-off</a
+          >
+        {/if}
+        <a
+          href="/settings"
+          class={navLinkClass('/settings')}
+          aria-current={navCurrent('/settings')}>Settings</a
+        >
+      </ScrollStrip>
 
-    <span
-      class="chip shrink-0 gap-1.5 rounded-full border-zinc-700 bg-zinc-900 text-zinc-300"
-      title={dotTitle}
-    >
-      <span class="h-2 w-2 rounded-full {dotClass}"></span>
-      <span class="font-mono" data-testid="api-health-chip"
-        >{HEALTH_CHIP_TEXT[chipState]}</span
+      <span
+        class="chip shrink-0 gap-1.5 rounded-full border-zinc-700 bg-zinc-900 text-zinc-300"
+        title={dotTitle}
       >
-    </span>
-  </header>
+        <span class="h-2 w-2 rounded-full {dotClass}"></span>
+        <span class="font-mono" data-testid="api-health-chip"
+          >{HEALTH_CHIP_TEXT[chipState]}</span
+        >
+      </span>
+    </header>
 
-  <!-- Content. Keyed on the region profile's seedVersion (F-78): the
+    <!-- Content. Keyed on the region profile's seedVersion (F-78): the
        slot registry is a plain module binding, so when a slow boot left
        the profile unknown and a later /health poll seeds it, re-mounting
        the page is what makes the region tab and other region surfaces
        appear without a reload. A normal boot seeds before first render,
        so this never re-mounts in the common case. -->
-  {#key regionProfileStore.seedVersion}
-    <div class="flex min-h-0 flex-1">
-      {#if showSidebar}
-        <ClassSidebar
-          selectedId={selectedClassId}
-          onselect={selectClass}
-          ondrop={(cls, ids) => void dropOnClassStore.dispatch(cls, ids)}
-        />
-      {/if}
-      <main class="min-h-0 flex-1 overflow-auto">
-        {@render children?.()}
-      </main>
-    </div>
-  {/key}
-</div>
+    {#key regionProfileStore.seedVersion}
+      <div class="flex min-h-0 flex-1">
+        {#if showSidebar}
+          <ClassSidebar
+            selectedId={selectedClassId}
+            onselect={selectClass}
+            ondrop={(cls, ids) => void dropOnClassStore.dispatch(cls, ids)}
+          />
+        {/if}
+        <main class="min-h-0 flex-1 overflow-auto">
+          {@render children?.()}
+        </main>
+      </div>
+    {/key}
+  </div>
 
-<ShortcutOverlay />
-<Toast />
+  <ShortcutOverlay />
+  <Toast />
+{/if}
