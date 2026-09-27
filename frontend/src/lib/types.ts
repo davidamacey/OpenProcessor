@@ -150,8 +150,8 @@ export interface ExportClassSplitCounts {
  * synchronous `ExportResult` response (a different endpoint, still
  * `running`/`failed`/`success`-capable) and assigns it to the same
  * `exportState` variable. Every field below `status` is optional/nullable
- * so a pre-df01309 backend's GET response (missing all of them) renders
- * exactly as it did before — no page break on a missing field.
+ * because the served `ExportStatusResponse` requires only `status` (an
+ * idle status, with no export yet, carries none of them).
  */
 export interface ExportStatus {
   status: string;
@@ -181,8 +181,7 @@ export interface ExportStatus {
   object_count?: number | null;
   class_count?: number | null;
   /** Of `class_count` registry classes, how many have >=1 object (#36
-   *  item 6). `null` for an export written before it was recorded, or a
-   *  backend that predates the field entirely. */
+   *  item 6). `null` for an export written before it was recorded. */
   classes_with_objects?: number | null;
   /** Images per split. */
   split_counts?: ExportSplitCounts | null;
@@ -555,7 +554,7 @@ export interface Cluster {
    *  LABELLED members. Not the geometry `purity`. */
   dominant_pct: number | null;
   /** Served member counts behind `dominant_pct` (cluster-scoped, include
-   *  any test-holdout members). Optional: absent on older responses. */
+   *  any test-holdout members). */
   dominant_count?: number | null;
   labelled_count?: number | null;
   /** DQ-M2 fix (dq-queues cutover, 2026-09-24): nearest-centroid geometry
@@ -600,8 +599,6 @@ export interface Cluster {
   has_subclusters: boolean;
   /** Distinct cluster_subid count from the backend. */
   n_subclusters: number;
-  /** Legacy alias for n_subclusters — kept until callers migrate. */
-  sub_clusters?: number;
   centroid_sha?: string;
   updated_at: string | null;
   /** Set only on the client-built region inventory entry pinned
@@ -804,7 +801,7 @@ export interface PaginatedResponse<T> {
    *  own explanation for why this queue is empty right now (e.g. "no
    *  probe predictions — run a probe"), distinct from and more direct
    *  than `sort_fallback_reason` (OpenProcessor #36 item 9). Absent when
-   *  the queue isn't empty, or on a backend that predates the field. */
+   *  the queue isn't empty. */
   empty_reason?: string | null;
   /** Provenance for a pool-scale overlay ordering (curation-strategy plan
    *  Phase 4 — currently only `{API_PREFIX}/crops?order=diverse`): which

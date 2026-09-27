@@ -700,10 +700,9 @@
       <!-- Image/object counts + per-class table (OpenProcessor 4c9499a's
            `GET {API_PREFIX}/export/status`, ExportStatusResponse — one
            image + one label file per source image, one line per object).
-           `image_count`/`object_count` null on an export written before
-           df01309/4c9499a render "—", never 0 (formatCount). Absent on a
-           pre-df01309 backend entirely, so this whole block just doesn't
-           render rather than showing blanks. -->
+           A null `image_count`/`object_count` renders "—", never 0
+           (formatCount); with none of them served (no export yet) this
+           whole block doesn't render rather than showing blanks. -->
       {#if exportState.image_count != null || exportState.object_count != null || exportState.class_count != null || exportState.split_counts}
         <div class="mt-3 flex flex-wrap gap-2 text-xs">
           {#if exportState.image_count != null || exportState.object_count != null}

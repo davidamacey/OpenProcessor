@@ -491,11 +491,9 @@ export function isPromptPackAvailable(packs: PromptPackInfo[]): boolean {
  *
  * Gated on the `prompt_pack` axis: it arrived in the same backend
  * change that made `class_id` on `POST {API_PREFIX}/pipeline/auto_label/start`
- * real, and `class_id` has no capability signal of its own. An unknown
- * query param used to be silently ignored, so an un-gated class picker
- * against an older backend would start a full-pool, hours-long run while
- * the UI claimed it was scoped. Hiding the control until the server
- * advertises the axis is the safe default. (`detection_profile` is not a
+ * real, and `class_id` has no capability signal of its own. Without a
+ * usable pack the scope has nothing to steer, so the control stays
+ * hidden until the server advertises the axis. (`detection_profile` is not a
  * gate: OpenProcessor rejects it per run — region detection is startup
  * config — so it is display-only, on /settings.)
  */

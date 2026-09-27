@@ -1798,7 +1798,6 @@ function _rawClusterToCluster(
     representative_crop_ids: (c.representatives ?? []).map((r) => r.crop_id),
     has_subclusters: c.n_subclusters > 0,
     n_subclusters: c.n_subclusters,
-    sub_clusters: c.n_subclusters,
     updated_at: c.updated_at,
   };
 }
@@ -3407,12 +3406,8 @@ function parseScoresCoverage(raw: unknown): ScoresCoverage {
 }
 
 /**
- * Per-scorer coverage. **Rejects** on failure (mirrors
- * `getCurationSettings`, not `getMethods`'s swallow-everything
- * contract) — the one caller, the `/settings` scores card, must tell a
- * 404 ("this backend predates `/scores/*`, render no card at all") apart
- * from a transient failure, exactly the three-way split
- * `curationSettingsStore` already draws for the same reason.
+ * Per-scorer coverage. Rejects on failure; the one caller, the
+ * `/settings` scores card, shows the error with a retry.
  */
 export async function getScoresCoverage(signal?: AbortSignal): Promise<ScoresCoverage> {
   const raw = await apiFetch<unknown>(`${scoped()}/scores/coverage`, {}, signal);
