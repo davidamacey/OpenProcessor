@@ -233,18 +233,31 @@ async def fetch_pending_ids(
     return [h['_id'] for h in r.json().get('hits', {}).get('hits', [])]
 
 
+def _error_code(response: httpx.Response) -> str | None:
+    try:
+        detail = response.json().get('detail')
+    except ValueError:
+        return None
+    return detail.get('error') if isinstance(detail, dict) else None
+
+
 async def label_batch(
     client: httpx.AsyncClient,
     *,
     api: str,
     crop_ids: list[str],
 ) -> dict:
-    """Call /curation/vlm/label_batch for one chunk."""
+    """Call /curation/vlm/label_batch for one chunk.
+
+    Returns ``{'no_classes': True}`` when the project has no classes yet,
+    so the caller backs off instead of logging a failure per chunk."""
     r = await client.post(
         f'{api}{project_api_base()}/vlm/label_batch',
         json={'crop_ids': crop_ids},
         timeout=300.0,
     )
+    if r.status_code == 409 and _error_code(r) == 'no_classes':
+        return {'no_classes': True}
     r.raise_for_status()
     return r.json()
 
@@ -401,6 +414,13 @@ async def run(args: argparse.Namespace) -> int:
             t0 = time.monotonic()
             try:
                 result = await label_batch(client, api=args.api, crop_ids=chunk)
+                if result.get('no_classes'):
+                    if not metrics.get('no_classes_logged'):
+                        print('[vlm-worker] project has no classes yet; idling until some exist')
+                        metrics['no_classes_logged'] = 1
+                    await asyncio.sleep(args.poll_interval)
+                    continue
+                metrics['no_classes_logged'] = 0
                 metrics['total_processed'] += int(result.get('predicted', 0))
                 metrics['total_updated'] += int(result.get('updated', 0))
                 metrics['total_chunks'] += 1

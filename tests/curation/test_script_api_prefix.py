@@ -55,6 +55,8 @@ class _RecordingClient:
         self.urls.append(url)
 
         class _Resp:
+            status_code = 200
+
             def raise_for_status(self) -> None:
                 return None
 
