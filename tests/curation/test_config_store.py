@@ -398,3 +398,62 @@ async def test_poll_all_active_projects_refreshes_every_project_not_just_one() -
     assert alpha_store.current.active_profile == ('wheel', doc['revision'])
     # beta was polled too (its own, unrelated, empty store).
     assert beta_store.current.loaded_at > 0
+
+
+@pytest.mark.asyncio
+async def test_startup_bootstrap_config_store_safe_starts_poll_task_unbound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """MJ1 (W2-finish review, 2026-09-27): ``src.main``'s lifespan runs
+    unbound -- no project is EVER bound at process startup -- so the old
+    code's ``get_config_store(mode='live')`` + ``store.refresh(client)``
+    "warm the bound project's store" step always raised
+    ``ProjectNotBound``. The function's own broad ``except`` swallowed
+    that and returned ``None``, so the poll task never started in any
+    real deployment. Reproduces the reviewer's exact probe: call the
+    real function with no project bound, a fake client, and assert it
+    returns a task whose first tick refreshes an active project's store."""
+    from curation._fake_config_opensearch import TwoProjectOpenSearch
+    from src.services.config_store.store import (
+        get_config_store,
+        reset_config_stores,
+        reset_global_config_store,
+        shutdown_config_store_poll,
+        startup_bootstrap_config_store_safe,
+    )
+    from src.services.projects import guard
+    from src.services.projects.registry import record_to_doc
+
+    reset_config_stores()
+    reset_global_config_store()
+
+    client = TwoProjectOpenSearch()
+    projects_index = 'op_projects'
+    client._docs.setdefault(projects_index, {})
+    client._docs[projects_index]['project:alpha'] = {
+        '_source': record_to_doc(_record('alpha')),
+        '_seq_no': 0,
+    }
+
+    async def _fake_make_curation_opensearch() -> Any:
+        return client
+
+    monkeypatch.setattr(guard, 'make_curation_opensearch', _fake_make_curation_opensearch)
+    monkeypatch.setenv('OP_CONFIG_POLL_S', '0.01')
+
+    task = await startup_bootstrap_config_store_safe()
+    assert task is not None  # MJ1: used to be None -- no poll task at all
+    try:
+        for _ in range(200):
+            with bind_project(_record('alpha')):
+                alpha_store = get_config_store(mode='live')
+            if alpha_store.current.loaded_at > 0:
+                break
+            await asyncio.sleep(0.01)
+        with bind_project(_record('alpha')):
+            alpha_store = get_config_store(mode='live')
+        assert alpha_store.current.loaded_at > 0
+    finally:
+        await shutdown_config_store_poll(task)
+        reset_config_stores()
+        reset_global_config_store()

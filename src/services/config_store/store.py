@@ -361,13 +361,23 @@ async def _poll_all_active_projects(client: Any, interval: float) -> None:
 
 async def startup_bootstrap_config_store_safe() -> Any | None:
     """``src.main``'s lifespan hook: create ``op_global_configs`` (M3) if
-    it does not exist yet, refresh the bound project's store once (so the
-    very first request-time read is warm), then return a background poll
-    task -- fanned out over every ACTIVE project (M4), not just the one
-    bound at lifespan startup -- that the caller owns cancelling at
-    shutdown. Never raises -- a startup-time OpenSearch hiccup here must
-    not block the rest of the app from starting; the next request-time
-    ``ensure_fresh()`` call still runs.
+    it does not exist yet, then return a background poll task -- fanned
+    out over every ACTIVE project (M4), not just the one bound at
+    lifespan startup -- that the caller owns cancelling at shutdown.
+    Never raises -- a startup-time OpenSearch hiccup here must not block
+    the rest of the app from starting; ``_poll_all_active_projects``'s
+    own first tick still runs once OpenSearch recovers.
+
+    MJ1 (W2-finish review, 2026-09-27): this used to also call
+    ``get_config_store(mode='live')`` + ``store.refresh(client)`` to warm
+    "the bound project's store" -- but the lifespan runs unbound by
+    design (``src.main``'s startup binds each project in turn only for
+    the steps that need it), so that call always raised
+    ``ProjectNotBound``. The broad ``except`` below then swallowed it and
+    returned ``None`` on every real deployment, so the poll task never
+    started at all. There is no bound project to warm here;
+    ``_poll_all_active_projects`` binds and refreshes every active
+    project on its own first tick.
     """
     import asyncio
 
@@ -376,11 +386,8 @@ async def startup_bootstrap_config_store_safe() -> Any | None:
 
         client = await make_curation_opensearch()
         # M3: needs no project bound (this index belongs to none) --
-        # runs first, so a later failure below (e.g. no project bound yet
-        # at this point in the lifespan) never skips it.
+        # runs first, so a later failure below never skips it.
         await ensure_global_configs_index(client)
-        store = get_config_store(mode='live')
-        await store.refresh(client)
         interval = float(os.environ.get('OP_CONFIG_POLL_S', str(OP_CONFIG_POLL_S_DEFAULT)))
         return asyncio.create_task(_poll_all_active_projects(client, interval))
     except Exception as exc:
@@ -526,6 +533,17 @@ def get_global_config_store(*, mode: Literal['live', 'pinned'] = 'live') -> Conf
     :func:`~src.config.project_context.current_project` at all -- it
     requires no project binding, and calling it while a project happens
     to be bound has no effect on which store it returns.
+
+    That binding-independence is about which *store object* comes back,
+    not its I/O: the object returned here still needs an unbound client
+    to actually read/write (m2, W2-finish review) -- calling
+    :meth:`ConfigStore.refresh` on it while a project is bound gets
+    refused by the project guard (this index is unowned, so a bound
+    request has no business touching it) and silently degrades to a
+    stale, empty snapshot, the same as any other refresh failure. W9
+    (the first real consumer with project-bound call sites) must decide
+    the read-while-bound rule -- an unbound-read helper, or a guard
+    exception allowing read-only access the way ``op_projects`` gets it.
     """
     with _GLOBAL_STORE_LOCK:
         store = _GLOBAL_STORE.get(_GLOBAL_STORE_KEY)
