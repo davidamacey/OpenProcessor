@@ -74,6 +74,10 @@ Edit `.env` and set, at minimum:
   (`docker network ls`; defaults to OpenProcessor's own default network
   name).
 - `CROPWRIGHT_PORT` — host port to publish (default `5184`).
+- `CROPWRIGHT_BIND_ADDRESS` — host address the port is published on
+  (default `0.0.0.0`: this machine and the local network). Set `127.0.0.1`
+  for this machine only. The API has no authentication, so keep it on a
+  trusted network.
 - `CROPWRIGHT_TAG` — pin a version, e.g. `CROPWRIGHT_TAG=0.2.0` in
   `.env`. Defaults to `latest`.
 
@@ -195,6 +199,7 @@ key a registered region slot's own keymap declares.
 | `API_UPSTREAM`                         | `http://op-api:8000`       | Docker        | Where nginx proxies `PUBLIC_API_PREFIX/*` to, by container name over the shared docker network.                                                                             |
 | `OP_DOCKER_NETWORK`                    | `openprocessor_triton_net` | Docker        | The OpenProcessor backend's docker network name (must already exist).                                                                                                       |
 | `CROPWRIGHT_PORT`                      | `5184`                     | Docker        | Host port nginx is published on.                                                                                                                                            |
+| `CROPWRIGHT_BIND_ADDRESS`              | `0.0.0.0`                  | Docker        | Host address the port is published on: this machine and the local network. `127.0.0.1` limits it to this machine. Keep it on a trusted network.                             |
 | `CROPWRIGHT_CONTAINER_NAME`            | `cropwright`               | Docker        | Container name — set uniquely for a second instance (see above).                                                                                                            |
 | `CROPWRIGHT_INGEST_MAX_REQUEST_MB`     | `256`                      | Docker        | Upload cap for `/ingest` (nginx `client_max_body_size`); kept in lockstep with the client-side chunk planner.                                                               |
 | `PUBLIC_APP_NAME` / `PUBLIC_APP_BADGE` | `Cropwright` / `CW`        | build time    | Top-bar wordmark/badge, for a white-labeled deployment.                                                                                                                     |

@@ -1,9 +1,25 @@
 <script lang="ts">
   /**
-   * "Keyboard shortcuts" card — `/settings#keyboard` (K2,
+   * "Keyboard shortcuts" card — `/settings#keyboard` (K2 + K2b,
    * docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md §5.4).
    *
-   * Renders one table per keymap context, grouped by the served `group`.
+   * Two sections:
+   *  - **Verb groups** (K2b) — one row per served `group` id shared by
+   *    modifiable actions across contexts (e.g. `undo` spans `review`,
+   *    `cluster`, `clusters_search`, `region_gallery`). Editing the group
+   *    row writes every member action id at once — "rebind Undo" changes
+   *    it everywhere. A "Customize per page" disclosure lists each
+   *    member's own action under its context label with its own key
+   *    chips; editing one there only writes that action id, detaching it
+   *    from the group. Detachment is never a stored flag — it's computed
+   *    each render as "does this member's draft differ from the other
+   *    members' shared value", so it also surfaces a pre-existing
+   *    server-side per-context override with no extra bookkeeping.
+   *  - **Per-context tables** (K2, unchanged) — every ungrouped action,
+   *    plus every locked/non-modifiable action regardless of group (the
+   *    `cancel` group is entirely non-modifiable and never appears in the
+   *    Verb groups section at all).
+   *
    * Every save first calls `POST /keymap/validate` (debounced) and
    * renders the served report verbatim — this component never computes a
    * collision itself, only the grammar-level checks (max combos per
@@ -12,15 +28,6 @@
    * Absent, not disabled, when `keymapAvailability.available !== true` —
    * `/settings/+page.svelte` gates on that, mirroring `ScoresCard`'s own
    * "absent on a pre-route backend" rule.
-   *
-   * Deviation from the plan's §5.4 sketch, recorded here rather than in a
-   * separate doc: verb `group`s rebind together by default (every action
-   * sharing a `group` within the SAME context gets the same combos when
-   * one member changes), but this pass does not implement the "customize
-   * per context" disclosure that lets an operator break a group apart —
-   * every group member across every context still updates together. A
-   * later pass can add the per-context override without changing this
-   * component's save/validate/conflict plumbing.
    */
 
   import {
@@ -51,6 +58,7 @@
   let validating = $state(false);
   let saving = $state(false);
   let capturingActionId = $state<string | null>(null);
+  let capturingGroupId = $state<string | null>(null);
   let confirmOpen = $state(false);
   let conflictClasses = $state<KeymapClassConflict[] | null>(null);
   let revisionConflictMessage = $state<string | null>(null);
@@ -71,13 +79,67 @@
     return keymapStore.document.actions.filter((a) => a.context === contextId);
   }
 
-  function groupsFor(contextId: string): (string | null)[] {
-    const out: (string | null)[] = [];
-    for (const a of actionsFor(contextId)) {
-      if (out.includes(a.group)) continue;
-      out.push(a.group);
+  /**
+   * Actions still rendered inline in a context's own table: ungrouped
+   * actions, plus every locked/non-modifiable action regardless of
+   * group (a grouped-and-modifiable action moves to the Verb groups
+   * section below instead).
+   */
+  function contextRowActions(contextId: string): KeymapAction[] {
+    return actionsFor(contextId).filter((a) => a.group === null || !a.modifiable);
+  }
+
+  function contextLabel(contextId: string): string {
+    return contexts.find((c) => c.id === contextId)?.label ?? contextId;
+  }
+
+  /** Group ids shared by 2+... actually any modifiable actions, in first-seen order. */
+  function namedGroups(): string[] {
+    const out: string[] = [];
+    for (const a of keymapStore.document.actions) {
+      if (a.group && a.modifiable && !out.includes(a.group)) out.push(a.group);
     }
     return out;
+  }
+
+  function groupMembers(groupId: string): KeymapAction[] {
+    return keymapStore.document.actions.filter(
+      (a) => a.group === groupId && a.modifiable,
+    );
+  }
+
+  function groupLabel(groupId: string): string {
+    const words = groupId.replace(/_/g, ' ');
+    return words.charAt(0).toUpperCase() + words.slice(1);
+  }
+
+  /** The most common draft value among a group's members (ties: first). */
+  function groupCanonicalKeys(groupId: string): string[] {
+    const members = groupMembers(groupId);
+    if (members.length === 0) return [];
+    const counts = new Map<string, number>();
+    for (const m of members) {
+      const json = JSON.stringify(keysOf(m.id));
+      counts.set(json, (counts.get(json) ?? 0) + 1);
+    }
+    let bestJson = JSON.stringify(keysOf(members[0].id));
+    let bestCount = 0;
+    for (const [json, count] of counts) {
+      if (count > bestCount) {
+        bestCount = count;
+        bestJson = json;
+      }
+    }
+    return JSON.parse(bestJson) as string[];
+  }
+
+  /** Computed, not stored: does this member's draft differ from the group? */
+  function memberDetached(actionId: string): boolean {
+    const a = keymapStore.action(actionId);
+    if (!a?.group) return false;
+    return (
+      JSON.stringify(keysOf(actionId)) !== JSON.stringify(groupCanonicalKeys(a.group))
+    );
   }
 
   function keysOf(actionId: string): string[] {
@@ -157,14 +219,40 @@
     scheduleValidate();
   }
 
+  /** Reset a detached member back to its group's current shared value. */
+  function resetMemberToGroup(actionId: string): void {
+    const a = keymapStore.action(actionId);
+    if (!a?.group) return;
+    draft[actionId] = [...groupCanonicalKeys(a.group)];
+    draft = { ...draft };
+    scheduleValidate();
+  }
+
+  /** Remove a key from every member of a verb group at once. */
+  function removeGroupKey(groupId: string, key: string): void {
+    for (const m of groupMembers(groupId)) {
+      draft[m.id] = keysOf(m.id).filter((k) => k !== key);
+    }
+    draft = { ...draft };
+    scheduleValidate();
+  }
+
   function startCapture(actionId: string): void {
     keyboardStore.suspend();
     capturingActionId = actionId;
+    capturingGroupId = null;
+  }
+
+  function startCaptureGroup(groupId: string): void {
+    keyboardStore.suspend();
+    capturingGroupId = groupId;
+    capturingActionId = null;
   }
 
   function cancelCapture(): void {
     keyboardStore.resume();
     capturingActionId = null;
+    capturingGroupId = null;
   }
 
   function onCaptureKeydown(e: KeyboardEvent): void {
@@ -177,6 +265,12 @@
     // Ignore a bare modifier press — it isn't a combo by itself.
     if (['Control', 'Meta', 'Alt', 'Shift'].includes(e.key)) return;
     const combo = normalize(e);
+
+    if (capturingGroupId) {
+      captureForGroup(capturingGroupId, combo);
+      return;
+    }
+
     const actionId = capturingActionId;
     if (!actionId) return;
     if (grammar.locked_keys.includes(combo)) {
@@ -200,6 +294,32 @@
       return;
     }
     draft[actionId] = [...cur, combo];
+    draft = { ...draft };
+    cancelCapture();
+    scheduleValidate();
+  }
+
+  /**
+   * Apply a captured combo to every member of a verb group at once.
+   * Locked-key combos are always rejected at group level, conservatively
+   * — a group can span members whose locked-key sets differ, and this
+   * component never leaves a locked key unlocked.
+   */
+  function captureForGroup(groupId: string, combo: string): void {
+    if (grammar.locked_keys.includes(combo)) {
+      toastStore.error(
+        `'${formatShortcutKey(combo)}' is locked and can't be reassigned.`,
+      );
+      cancelCapture();
+      return;
+    }
+    const members = groupMembers(groupId);
+    for (const m of members) {
+      const cur = keysOf(m.id);
+      if (cur.includes(combo)) continue;
+      if (cur.length >= grammar.max_combos_per_action) continue;
+      draft[m.id] = [...cur, combo];
+    }
     draft = { ...draft };
     cancelCapture();
     scheduleValidate();
@@ -292,7 +412,7 @@
   <div class="mb-3 flex items-center justify-between">
     <div>
       <h2 class="text-sm font-semibold text-white">Keyboard shortcuts</h2>
-      <p class="text-xs text-zinc-500">Applies to every project and every browser.</p>
+      <p class="text-xs text-zinc-500">Applies to this project, in every browser.</p>
     </div>
     {#if !keymapStore.isDefault}
       <span
@@ -339,25 +459,75 @@
     </div>
   {/if}
 
-  {#each contexts as ctx (ctx.id)}
-    <details class="mb-3 rounded border border-zinc-800" open>
+  {#each namedGroups() as g (g)}
+    {@const members = groupMembers(g)}
+    {@const canonical = groupCanonicalKeys(g)}
+    <details class="mb-3 rounded border border-zinc-800" open data-testid={`group-${g}`}>
       <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-zinc-300">
-        {ctx.label}
-        <span class="ml-1 font-normal text-zinc-600">{ctx.description}</span>
+        {groupLabel(g)}
+        <span class="ml-1 font-normal text-zinc-600">applies on every page</span>
       </summary>
       <table class="w-full text-xs">
         <tbody>
-          {#each groupsFor(ctx.id) as group (group ?? '__none__')}
-            {#each actionsFor(ctx.id).filter((a) => a.group === group) as action (action.id)}
+          <tr class="border-t border-zinc-900">
+            <td class="px-3 py-1.5 text-zinc-300">{groupLabel(g)} (every page)</td>
+            <td class="px-3 py-1.5">
+              <div class="flex flex-wrap items-center gap-1">
+                {#each canonical as k (k)}
+                  <span
+                    class="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-blue-300"
+                  >
+                    {formatShortcutKey(k)}
+                    <button
+                      class="text-zinc-500 hover:text-red-400"
+                      aria-label={`remove ${k}`}
+                      onclick={() => removeGroupKey(g, k)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                {/each}
+                {#if capturingGroupId === g}
+                  <button
+                    data-capture
+                    use:focusOnMount
+                    class="rounded border border-blue-600 bg-blue-950/40 px-1.5 py-0.5 text-blue-300"
+                    onkeydown={onCaptureKeydown}
+                    onblur={cancelCapture}
+                  >
+                    press a key…
+                  </button>
+                {:else}
+                  <button
+                    class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-400 hover:text-white"
+                    onclick={() => startCaptureGroup(g)}
+                  >
+                    Change
+                  </button>
+                {/if}
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <details class="border-t border-zinc-900 px-3 py-1.5">
+        <summary class="cursor-pointer text-xs text-zinc-500">Customize per page</summary>
+        <table class="w-full text-xs">
+          <tbody>
+            {#each members as action (action.id)}
               {@const field = `overrides.${action.id}`}
               {@const fieldIssues = issuesForField(field)}
-              <tr class="border-t border-zinc-900">
+              {@const detached = memberDetached(action.id)}
+              <tr class="border-t border-zinc-900" data-testid={`member-${action.id}`}>
                 <td class="px-3 py-1.5 text-zinc-300">
-                  {action.label}
-                  {#if !action.available}
-                    <span class="ml-1 text-zinc-600"
-                      >(no region profile in this project)</span
+                  {contextLabel(action.context)}
+                  {#if detached}
+                    <span
+                      class="ml-1 text-amber-400"
+                      data-testid={`detached-${action.id}`}
                     >
+                      differs from the group
+                    </span>
                   {/if}
                   {#if fieldIssues.errors.length > 0}
                     <div class="text-red-400">{fieldIssues.errors.join('; ')}</div>
@@ -367,59 +537,136 @@
                   {/if}
                 </td>
                 <td class="px-3 py-1.5">
-                  {#if !action.modifiable}
-                    <span
-                      class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-500"
-                    >
-                      🔒 {keysOf(action.id).map(formatShortcutKey).join(' / ') || '—'}
-                    </span>
-                  {:else}
-                    <div class="flex flex-wrap items-center gap-1">
-                      {#each keysOf(action.id) as k (k)}
-                        <span
-                          class="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-blue-300"
-                        >
-                          {formatShortcutKey(k)}
-                          <button
-                            class="text-zinc-500 hover:text-red-400"
-                            aria-label={`remove ${k}`}
-                            onclick={() => removeKey(action.id, k)}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      {/each}
-                      {#if capturingActionId === action.id}
+                  <div class="flex flex-wrap items-center gap-1">
+                    {#each keysOf(action.id) as k (k)}
+                      <span
+                        class="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-blue-300"
+                      >
+                        {formatShortcutKey(k)}
                         <button
-                          data-capture
-                          use:focusOnMount
-                          class="rounded border border-blue-600 bg-blue-950/40 px-1.5 py-0.5 text-blue-300"
-                          onkeydown={onCaptureKeydown}
-                          onblur={cancelCapture}
+                          class="text-zinc-500 hover:text-red-400"
+                          aria-label={`remove ${k}`}
+                          onclick={() => removeKey(action.id, k)}
                         >
-                          press a key…
+                          ×
                         </button>
-                      {:else}
-                        <button
-                          class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-400 hover:text-white"
-                          onclick={() => startCapture(action.id)}
-                        >
-                          Change
-                        </button>
-                      {/if}
-                      {#if isChanged(action.id)}
-                        <button
-                          class="text-zinc-500 underline hover:text-zinc-300"
-                          onclick={() => resetOneLocal(action.id)}
-                        >
-                          reset
-                        </button>
-                      {/if}
-                    </div>
-                  {/if}
+                      </span>
+                    {/each}
+                    {#if capturingActionId === action.id}
+                      <button
+                        data-capture
+                        use:focusOnMount
+                        class="rounded border border-blue-600 bg-blue-950/40 px-1.5 py-0.5 text-blue-300"
+                        onkeydown={onCaptureKeydown}
+                        onblur={cancelCapture}
+                      >
+                        press a key…
+                      </button>
+                    {:else}
+                      <button
+                        class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-400 hover:text-white"
+                        onclick={() => startCapture(action.id)}
+                      >
+                        Change
+                      </button>
+                    {/if}
+                    {#if detached}
+                      <button
+                        class="text-amber-500 underline hover:text-amber-300"
+                        onclick={() => resetMemberToGroup(action.id)}
+                      >
+                        reset to group
+                      </button>
+                    {/if}
+                  </div>
                 </td>
               </tr>
             {/each}
+          </tbody>
+        </table>
+      </details>
+    </details>
+  {/each}
+
+  {#each contexts as ctx (ctx.id)}
+    <details class="mb-3 rounded border border-zinc-800" open>
+      <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-zinc-300">
+        {ctx.label}
+        <span class="ml-1 font-normal text-zinc-600">{ctx.description}</span>
+      </summary>
+      <table class="w-full text-xs">
+        <tbody>
+          {#each contextRowActions(ctx.id) as action (action.id)}
+            {@const field = `overrides.${action.id}`}
+            {@const fieldIssues = issuesForField(field)}
+            <tr class="border-t border-zinc-900">
+              <td class="px-3 py-1.5 text-zinc-300">
+                {action.label}
+                {#if !action.available}
+                  <span class="ml-1 text-zinc-600"
+                    >(no region profile in this project)</span
+                  >
+                {/if}
+                {#if fieldIssues.errors.length > 0}
+                  <div class="text-red-400">{fieldIssues.errors.join('; ')}</div>
+                {/if}
+                {#if fieldIssues.warnings.length > 0}
+                  <div class="text-amber-400">{fieldIssues.warnings.join('; ')}</div>
+                {/if}
+              </td>
+              <td class="px-3 py-1.5">
+                {#if !action.modifiable}
+                  <span
+                    class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-500"
+                  >
+                    🔒 {keysOf(action.id).map(formatShortcutKey).join(' / ') || '—'}
+                  </span>
+                {:else}
+                  <div class="flex flex-wrap items-center gap-1">
+                    {#each keysOf(action.id) as k (k)}
+                      <span
+                        class="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-blue-300"
+                      >
+                        {formatShortcutKey(k)}
+                        <button
+                          class="text-zinc-500 hover:text-red-400"
+                          aria-label={`remove ${k}`}
+                          onclick={() => removeKey(action.id, k)}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    {/each}
+                    {#if capturingActionId === action.id}
+                      <button
+                        data-capture
+                        use:focusOnMount
+                        class="rounded border border-blue-600 bg-blue-950/40 px-1.5 py-0.5 text-blue-300"
+                        onkeydown={onCaptureKeydown}
+                        onblur={cancelCapture}
+                      >
+                        press a key…
+                      </button>
+                    {:else}
+                      <button
+                        class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-400 hover:text-white"
+                        onclick={() => startCapture(action.id)}
+                      >
+                        Change
+                      </button>
+                    {/if}
+                    {#if isChanged(action.id)}
+                      <button
+                        class="text-zinc-500 underline hover:text-zinc-300"
+                        onclick={() => resetOneLocal(action.id)}
+                      >
+                        reset
+                      </button>
+                    {/if}
+                  </div>
+                {/if}
+              </td>
+            </tr>
           {/each}
         </tbody>
       </table>
