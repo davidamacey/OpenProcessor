@@ -67,11 +67,19 @@ class FakeRegistryOpenSearch:
         return {'_id': id, 'result': 'created'}
 
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
-        prefix = (((body.get('query') or {}).get('prefix') or {}).get('_id')) or ''
+        from opensearchpy.exceptions import RequestError
+
+        query = body.get('query') or {}
+        if '_id' in (query.get('prefix') or {}):
+            # Real OpenSearch refuses prefix queries on _id
+            # (query_shard_exception); the fake must too, or the registry's
+            # refresh query passes here and fails on a live cluster.
+            raise RequestError(400, 'query_shard_exception', {})
+        exists_field = (query.get('exists') or {}).get('field')
         hits: list[dict[str, Any]] = [
             {'_id': doc_id, '_source': doc}
             for doc_id, doc in sorted(self.docs.items())
-            if doc_id.startswith(prefix)
+            if exists_field is None or exists_field in doc
         ]
         after = body.get('search_after')
         if after:

@@ -209,7 +209,9 @@ class ProjectRegistry:
         after: list[Any] | None = None
         while True:
             body: dict[str, Any] = {
-                'query': {'prefix': {'_id': 'project:'}},
+                # OpenSearch refuses prefix queries on _id; only project
+                # docs carry `slug` (the revision counter doc does not).
+                'query': {'exists': {'field': 'slug'}},
                 'size': _REFRESH_PAGE_SIZE,
                 'sort': [{'slug': 'asc'}],
             }
