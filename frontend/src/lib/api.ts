@@ -4815,17 +4815,19 @@ export function reprocessBatch(
   );
 }
 
-/** Single-item Reprocess; returns the post-write `items` to adopt. */
-export function reprocessCrop(
+/** Single-item Reprocess; returns the post-write `items` (mapped like
+ *  every other crop) for the caller to adopt. */
+export async function reprocessCrop(
   cropId: string,
   body: ReprocessOneRequest,
   signal?: AbortSignal,
-): Promise<ReprocessResponse> {
-  return apiFetch<ReprocessResponse>(
+): Promise<ReprocessResponse<Crop>> {
+  const res = await apiFetch<ReprocessResponse<RawCrop>>(
     `${scoped()}/crops/${encodeURIComponent(cropId)}/reprocess`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
+  return { ...res, items: (res.items ?? []).map(mapRawCrop) };
 }
 
 export function getReprocessJob(

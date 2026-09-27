@@ -11,7 +11,11 @@
     onclose: () => void;
   }
 
-  let { crop, onclose }: Props = $props();
+  let { crop: given, onclose }: Props = $props();
+  // A Reprocess answers with the served post-write crop; show it in place
+  // of the one the modal was opened with.
+  let adopted = $state<Crop | null>(null);
+  const crop = $derived(adopted?.id === given.id ? adopted : given);
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -67,7 +71,7 @@
     </div>
 
     <div class="min-h-0 min-w-0 overflow-y-auto pr-6">
-      <CropMetaPanel {crop} />
+      <CropMetaPanel {crop} onreprocessed={(c) => (adopted = c)} />
     </div>
 
     <button

@@ -390,12 +390,13 @@ export interface ReprocessJob {
   labels?: { status?: Record<string, string> };
 }
 
-export interface ReprocessResponse {
+export interface ReprocessResponse<T = unknown> {
   dry_run: boolean;
   scopes: ReprocessScopeResult[];
   job: ReprocessJob | null;
-  /** Post-write item docs (single-target routes), raw wire shape. */
-  items: unknown[];
+  /** Post-write item docs (single-target routes); `reprocessCrop` maps
+   *  them through `mapRawCrop`. */
+  items: T[];
   /** delta 20 (question 2): served summary copy. */
   message?: string | null;
 }
