@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import Annotated, Any
 
-from fastapi import HTTPException, Query
+from fastapi import Query
 from pydantic import BaseModel
 
 from src.config.curation import get_curation_config
@@ -57,10 +57,13 @@ async def set_model_sharing(
     every other ownership check in this router."""
     from src.routers.curation.models import _project_owns_model
 
+    project = get_curation_config().project_slug
     if not _project_owns_model(model_name):
-        raise HTTPException(
-            status_code=404,
-            detail=f'{model_name!r} is not a model owned by this project',
+        raise api_error(
+            404,
+            'model_not_found',
+            f'{model_name!r} is not a model owned by this project',
+            project=project,
         )
 
     # Unsharing while another project's active detector profile still
@@ -101,16 +104,16 @@ async def set_model_sharing(
             current_revision=exc.current_revision,
         ) from exc
     except (OSError, ValueError) as exc:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                f'{model_name!r} has no promote.json to share (not promoted through this pipeline)'
-            ),
+        raise api_error(
+            404,
+            'model_not_found',
+            f'{model_name!r} has no promote.json to share (not promoted through this pipeline)',
+            project=project,
         ) from exc
 
     return ModelSharingResponse(
         name=model_name,
-        project=get_curation_config().project_slug,
+        project=project,
         shared=payload.shared,
         revision=revision,
         used_by=used_by,

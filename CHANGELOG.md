@@ -45,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-promote) and `class_remap_source`.
 
 ### Fixed
+- `PUT .../models/{name}/sharing` answers its 404s through `api_error`
+  (`{"detail": {"error": "model_not_found", "message", "project", ...}}`)
+  instead of a bare string detail.
 - `PUT .../models/{name}/sharing`'s revision check is atomic: the
   read-compare-write of `promote.json` holds a per-model `flock`
   (`job_lock.exclusive_file_lock`, new blocking sibling of

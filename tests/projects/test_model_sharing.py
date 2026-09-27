@@ -92,6 +92,8 @@ def test_sharing_on_a_model_this_project_does_not_own_404s(
         json={'shared': True, 'expected_revision': 1},
     )
     assert r.status_code == 404
+    assert r.json()['detail']['error'] == 'model_not_found'
+    assert r.json()['detail']['project'] == 'default'
 
 
 def test_sharing_a_model_with_no_promote_json_404s(
@@ -104,6 +106,7 @@ def test_sharing_a_model_with_no_promote_json_404s(
         json={'shared': True, 'expected_revision': 1},
     )
     assert r.status_code == 404
+    assert r.json()['detail']['error'] == 'model_not_found'
     assert not (tmp_path / 'never_promoted').exists()
 
 
