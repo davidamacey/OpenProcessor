@@ -49,6 +49,9 @@ def app_client(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
+    # P1R sec6.1/D-A: project_jobs_dir() always nests /projects/<slug>,
+    # default included.
+    (tmp_path / 'projects' / 'default').mkdir(parents=True, exist_ok=True)
 
     from src.routers.curation._common import _raw_opensearch_dep
     from src.routers.curation_train import router as curation_train_router
@@ -104,7 +107,7 @@ def test_labels_txt_uses_pinned_registry_not_live(
     )
 
     # 2. job.json carries the pin's location, as write_job would have written it.
-    (tmp_path / f'{job_id}.job.json').write_text(
+    (tmp_path / 'projects' / 'default' / f'{job_id}.job.json').write_text(
         json.dumps(
             {
                 'job_id': job_id,
@@ -180,7 +183,7 @@ def test_labels_txt_falls_back_to_live_registry_without_a_pin(
     registry_snapshot_path — promote must still work, falling back to the
     live registry rather than erroring."""
     job_id = 'no-pin-job'
-    (tmp_path / f'{job_id}.job.json').write_text(
+    (tmp_path / 'projects' / 'default' / f'{job_id}.job.json').write_text(
         json.dumps({'job_id': job_id, 'dataset_export_dir': '/data/exports/x'})
     )
 

@@ -73,8 +73,11 @@ async def test_trained_models_reports_the_eval_score_with_its_split(
     ckpt.parent.mkdir(parents=True)
     ckpt.write_bytes(b'pt')
     jobs_dir = tmp_path / 'jobs'
-    jobs_dir.mkdir()
-    (jobs_dir / 'run-3.status.json').write_text(
+    # P1R sec6.1/D-A: project_jobs_dir() always nests /projects/<slug>,
+    # default included.
+    default_jobs_dir = jobs_dir / 'projects' / 'default'
+    default_jobs_dir.mkdir(parents=True)
+    (default_jobs_dir / 'run-3.status.json').write_text(
         json.dumps(
             {
                 'job_id': 'run-3',
