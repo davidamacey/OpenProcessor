@@ -5,6 +5,7 @@ slug retirement."""
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -13,7 +14,7 @@ from fastapi import HTTPException
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
-from .conftest import FakeLifecycleOpenSearch, seed_default_project
+from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes, seed_default_project
 
 
 @pytest.fixture(autouse=True)
@@ -34,7 +35,10 @@ def _env(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _noop_ensure_indexes():
-    with patch('src.routers.curation._common._ensure_indexes', new=AsyncMock()):
+    with patch(
+        'src.routers.curation._common._ensure_indexes',
+        new=AsyncMock(side_effect=fake_ensure_indexes),
+    ):
         yield
 
 
@@ -240,3 +244,82 @@ def test_delete_finish_index_failure_leaves_record_retryable_not_tombstoned() ->
     client.indices.delete = real_delete  # type: ignore[method-assign]
     tombstoned = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
     assert tombstoned.status == 'deleted'
+
+
+def test_dry_run_index_count_failure_reports_docs_null_not_zero() -> None:
+    """m10: an uncountable index reports docs: null, the same rule
+    ProjectCounts.validated already follows -- never a made-up 0 that
+    looks like "confirmed empty"."""
+    client = FakeLifecycleOpenSearch()
+    _registry_for(client)
+    asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
+
+    async def _boom(*, index, body=None):
+        raise RuntimeError('simulated count failure')
+
+    client.count = _boom  # type: ignore[method-assign]
+
+    report = asyncio.run(lifecycle.dry_run_delete(client, slug='alpha'))
+    assert report['indexes']
+    assert all(entry['docs'] is None for entry in report['indexes'])
+
+
+def test_drain_timeout_rollback_preserves_a_concurrent_patch(monkeypatch) -> None:
+    """m2: delete_project_finish's rollback (on a drain timeout) must be
+    built from a FRESH read, not the stale record snapshot it captured
+    at its own top -- otherwise a write that lands *during* the (up to
+    60s) drain wait is silently discarded even though the write itself
+    succeeded. The PATCH here genuinely races the drain wait (via
+    asyncio.gather), landing after delete_project_finish's own initial
+    read but before its timeout fires."""
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+    asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
+    asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
+    asyncio.run(registry.ensure_fresh())
+
+    deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    assert deleting.status == 'deleting'
+
+    from src.services.projects import busy, delete as delete_mod
+
+    monkeypatch.setattr(delete_mod, '_DELETE_DRAIN_TIMEOUT_SECONDS', 0.2)
+    monkeypatch.setattr(delete_mod, '_DELETE_DRAIN_POLL_SECONDS', 0.02)
+    monkeypatch.setattr(
+        busy,
+        '_detection_worker_inflight',
+        lambda record: [busy.JobRef(kind='detection_worker', job_id='still-busy')],  # noqa: ARG005
+    )
+
+    async def _finish_expect_busy():
+        try:
+            await lifecycle.delete_project_finish(client, slug='alpha')
+        except HTTPException as exc:
+            return exc
+        raise AssertionError('expected delete_project_finish to raise project_busy')
+
+    async def _patch_mid_drain():
+        await asyncio.sleep(0.06)  # after finish's initial read, before its timeout
+        return await lifecycle.patch_project(
+            client,
+            slug='alpha',
+            display_name='Renamed mid-drain',
+            description=None,
+            expected_revision=deleting.revision,
+        )
+
+    async def _run() -> tuple[Any, Any]:
+        return await asyncio.gather(_finish_expect_busy(), _patch_mid_drain())
+
+    finish_result, patch_result = asyncio.run(_run())
+    assert isinstance(finish_result, HTTPException)
+    assert finish_result.detail['error'] == 'project_busy'
+    assert patch_result.display_name == 'Renamed mid-drain'
+
+    asyncio.run(registry.ensure_fresh())
+    rolled_back = registry.get('alpha')
+    assert rolled_back is not None
+    assert rolled_back.status == 'active'
+    assert rolled_back.display_name == 'Renamed mid-drain', (
+        'm2: the concurrent PATCH must not be silently discarded by the rollback'
+    )
