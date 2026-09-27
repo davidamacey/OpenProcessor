@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Merged the three projects-lifecycle branches (checkpoint 1: merges +
+  adapt only).** `cutover/projects-foundation` (P1, default-is-an-
+  ordinary-project + no unscoped alias) and `cutover/projects-workers`
+  (P2, multi-project workers/busy.py/fairness runner) merged into
+  `cutover/projects-lifecycle` (P3, project lifecycle API). Re-added
+  `registry.get_record_with_seq`/`write_record` (P1 dropped them with
+  `default_project_record`; P3's lifecycle.py still needs OCC-guarded
+  writes, now delegating `bump_revision` to `bootstrap.py`'s OCC
+  version). `lifecycle._get_mutable_record` no longer synthesizes a
+  default record from env -- a missing registry doc is a genuine 404.
+  `_project_owns_model` (model unload/status) no longer assumes
+  `default`'s `model_prefix` is `''`; it's `'default__'` like any
+  project's, so an unprefixed name (core pipeline models, pre-project
+  promotes) is owned by `default` specifically rather than by every
+  project. Registered P3's five lifecycle mutations (archive/unarchive/
+  clone_settings/PATCH/DELETE) in the cross-project leak sweep's
+  request-body and unbound-by-design tables.
 - **Triton model names are env-overridable settings, not literals**
   (`TritonModelConfig` in `src/config/settings.py`): `FACE_DETECT_MODEL`,
   `ARCFACE_MODEL`, `CLIP_IMAGE_MODEL`, `CLIP_TEXT_MODEL`, `OCR_DET_MODEL`,
