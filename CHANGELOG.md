@@ -58,6 +58,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   actual (already per-project-function, no module constants)
   `autolabel/job.py`, and registered `preflight_scan._scan_cache` with
   the sweep's process-cache-clearing fixture.
+- P2 review fixes (`projects_p2_review_2026-09-27.md`): the GPU arbiter's
+  `bakeoff_active()` now sees a bake-off queued in any project (it only
+  watched `default`'s dir and restarted the GPU services under another
+  project's running bake-off); the API reads `.trainer_capabilities.json`
+  from the trainer's watch root, not the bound project's nested jobs dir
+  (where nothing writes it); `_project_owns_model` refuses a model whose
+  `promote.json` names another project, so `default` cannot inherit a
+  project's models when it drops out of the registry snapshot. The route
+  sweep no longer exempts 14 routes from its isolation checks.
 
 ### Changed
 - **Triton model names are env-overridable settings, not literals**
