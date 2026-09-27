@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **`e2e/live/` is project-aware (following the projects cutover).** The
+  live read-only tier now reads a session-scoped `live_project` fixture
+  (`{slug, prefix}`) off the GLOBAL `GET {API_PREFIX}/projects`
+  response's `default_slug` — every direct API read goes through
+  `api_get(live_url, live_project, path)` against that project's own
+  served `prefix`, and every page navigation goes through
+  `page_path(live_project, path)` (`/p/<slug>/...`). The health preflight
+  stays on the GLOBAL `GET {API_PREFIX}/health`; `live_region_profile`
+  now reads the region profile from the project's own scoped `/health`.
+  `test_route_sweep.py` gained `test_global_route_mounts_cleanly` for the
+  one page that stays unscoped, `/projects`. The write guard's
+  read-only-POST allowance now matches `/train/preflight` by path suffix
+  (the scoped prefix varies per project) and `ALLOWED_4XX_5XX` gained a
+  documented entry for `GET .../keymap` 404ing against a
+  pre-OpenProcessor-W2b deployment.
+
 ### Fixed
 
 - **Lint debt (#83): `svelte/prefer-svelte-reactivity` and

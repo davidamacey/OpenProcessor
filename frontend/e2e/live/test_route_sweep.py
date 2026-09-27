@@ -43,7 +43,7 @@ from typing import Any
 
 import pytest
 
-from conftest import is_allowlisted_bad_response
+from conftest import is_allowlisted_bad_response, page_path
 from fixtures.wire import REGION_TAB_URL_ID
 
 # Viewport widths every route is screenshotted at; height is fixed so a
@@ -95,6 +95,12 @@ ROUTES: list[tuple[str, str]] = [
     ("/settings", 'h1:has-text("Deployment defaults")'),
 ]
 
+# The one global (non-project-scoped) page this tier also sweeps —
+# `/projects`, never `/p/<slug>/...`.
+GLOBAL_ROUTES: list[tuple[str, str]] = [
+    ("/projects", 'h1:has-text("Projects")'),
+]
+
 
 def _bad_responses(gp: Any) -> list[tuple[str, str, int]]:
     """Collected as (method, path, status) for every `**/curation/**`
@@ -102,21 +108,7 @@ def _bad_responses(gp: Any) -> list[tuple[str, str, int]]:
     return gp.bad_responses
 
 
-@pytest.mark.parametrize("path,ready_selector", ROUTES, ids=[r[0] for r in ROUTES])
-def test_route_mounts_cleanly(
-    guarded_page: Any,
-    live_url: str,
-    live_region_profile: dict[str, Any] | None,
-    path: str,
-    ready_selector: str,
-    screenshot_run_dir: Path,
-) -> None:
-    needs_region = "{region_class}" in path or path == f"/review?tab={REGION_TAB_URL_ID}"
-    if needs_region and live_region_profile is None:
-        pytest.skip("this deployment serves no region profile")
-    if live_region_profile is not None:
-        path = path.replace("{region_class}", live_region_profile["region_class_name"])
-    gp = guarded_page
+def _wire_response_recorder(gp: Any) -> None:
     page = gp.page
 
     def _record_response(response: Any) -> None:
@@ -136,8 +128,40 @@ def test_route_mounts_cleanly(
 
     page.on("response", _record_response)
 
-    page.goto(f"{live_url}{path}", wait_until="domcontentloaded")
+
+@pytest.mark.parametrize("path,ready_selector", ROUTES, ids=[r[0] for r in ROUTES])
+def test_route_mounts_cleanly(
+    guarded_page: Any,
+    live_url: str,
+    live_project: dict[str, Any],
+    live_region_profile: dict[str, Any] | None,
+    path: str,
+    ready_selector: str,
+    screenshot_run_dir: Path,
+) -> None:
+    needs_region = "{region_class}" in path or path == f"/review?tab={REGION_TAB_URL_ID}"
+    if needs_region and live_region_profile is None:
+        pytest.skip("this deployment serves no region profile")
+    if live_region_profile is not None:
+        path = path.replace("{region_class}", live_region_profile["region_class_name"])
+    gp = guarded_page
+    page = gp.page
+
+    _wire_response_recorder(gp)
+
+    page.goto(f"{live_url}{page_path(live_project, path)}", wait_until="domcontentloaded")
     page.wait_for_selector(ready_selector, timeout=15_000)
+
+    _assert_route_clean(gp, path, screenshot_run_dir)
+
+
+def _assert_route_clean(gp: Any, path: str, screenshot_run_dir: Path) -> None:
+    """Shared post-navigation assertions/screenshots for a route that has
+    already been navigated to and whose ready selector has resolved —
+    used by both the project-scoped sweep and the global `/projects` page
+    sweep below. `path` is only used for screenshot slugging and error
+    messages."""
+    page = gp.page
 
     # Full-page screenshots at both viewports, saved unconditionally
     # (before any assertion below can fail) — see the module docstring
@@ -206,3 +230,24 @@ def test_route_mounts_cleanly(
         f"{path}: unexpected >=400 {{API_PREFIX}} response(s) (not on the "
         f"allow-list): {gp.bad_responses}"
     )
+
+
+@pytest.mark.parametrize("path,ready_selector", GLOBAL_ROUTES, ids=[r[0] for r in GLOBAL_ROUTES])
+def test_global_route_mounts_cleanly(
+    guarded_page: Any,
+    live_url: str,
+    path: str,
+    ready_selector: str,
+    screenshot_run_dir: Path,
+) -> None:
+    """`/projects` is global, not project-scoped — navigated to directly,
+    never under `/p/<slug>/...`."""
+    gp = guarded_page
+    page = gp.page
+
+    _wire_response_recorder(gp)
+
+    page.goto(f"{live_url}{path}", wait_until="domcontentloaded")
+    page.wait_for_selector(ready_selector, timeout=15_000)
+
+    _assert_route_clean(gp, path, screenshot_run_dir)
