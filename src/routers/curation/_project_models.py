@@ -39,7 +39,7 @@ _STATUS_LABELS: dict[str, str] = {
 _ALWAYS_LISTED_STATUSES = frozenset({'active', 'building', 'failed', 'deleting'})
 _ARCHIVED_STATUS = 'archived'
 
-CLONEABLE_AXES: tuple[str, ...] = ('settings_defaults', 'classes', 'keymap')
+CLONEABLE_AXES: tuple[str, ...] = ('settings_defaults', 'classes', 'activations', 'keymap')
 
 # The only statuses archive / unarchive act on (lifecycle.py enforces them).
 ARCHIVABLE_STATUSES = frozenset({'active'})

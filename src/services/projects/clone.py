@@ -26,6 +26,52 @@ if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
 
 
+_CLONE_SOURCE_READY_STATUSES = frozenset({'active', 'archived'})
+
+
+async def _validate_clone_source(
+    client: Any,  # noqa: ARG001 - kept for signature symmetry with _validate_clone
+    *,
+    target_slug: str,
+    from_slug: str,
+    axes: list[str] | None,
+) -> tuple[ProjectRecord, list[str]]:
+    """Every clone refusal that does not depend on the target already
+    existing, checked before the *first* write on either caller's path
+    (M7): unknown axis (422 ``combine_invalid``), a clone into itself
+    (422 ``combine_invalid`` -- was a 500 ``SameFileError``, m9), and a
+    source that does not exist or is not ``active``/``archived`` (m9 --
+    ``building``/``failed``/``deleting`` sources are refused, 409
+    ``clone_source_not_ready``). Returns the source record and resolved
+    axes; callers still run their own target-shaped checks (target
+    emptiness) afterwards."""
+    from src.services.projects.lifecycle import _require_found, _resolve_existing
+
+    resolved_axes = axes if axes else list(CLONEABLE_AXES)
+    for axis in resolved_axes:
+        if axis not in CLONEABLE_AXES:
+            raise api_error(422, 'combine_invalid', f"unknown clone axis '{axis}'")
+
+    if from_slug == target_slug:
+        raise api_error(
+            422,
+            'combine_invalid',
+            f"'{target_slug}' cannot be cloned into itself",
+            project=target_slug,
+        )
+
+    source = _require_found(await _resolve_existing(from_slug), from_slug)
+    if source.status not in _CLONE_SOURCE_READY_STATUSES:
+        raise api_error(
+            409,
+            'clone_source_not_ready',
+            f"'{from_slug}' is {source.status}; only an active or archived project can be cloned",
+            project=from_slug,
+            project_status=source.status,
+        )
+    return source, resolved_axes
+
+
 async def _validate_clone(
     client: Any,
     *,
@@ -34,18 +80,13 @@ async def _validate_clone(
     axes: list[str] | None,
 ) -> tuple[ProjectRecord, list[str]]:
     """Every refusal a clone can hit, checked before anything is written:
-    unknown axis (422 ``combine_invalid``), unknown source (404), and
+    the source-shaped checks in :func:`_validate_clone_source`, plus
     ``classes`` into a target that already has items (409
     ``target_not_empty`` -- a clone is always a byte-identical starting
     point, never a merge). Returns the source record and resolved axes."""
-    from src.services.projects.lifecycle import _require_found, _resolve_existing
-
-    resolved_axes = axes if axes else list(CLONEABLE_AXES)
-    for axis in resolved_axes:
-        if axis not in CLONEABLE_AXES:
-            raise api_error(422, 'combine_invalid', f"unknown clone axis '{axis}'")
-
-    source = _require_found(await _resolve_existing(from_slug), from_slug)
+    source, resolved_axes = await _validate_clone_source(
+        client, target_slug=target_record.slug, from_slug=from_slug, axes=axes
+    )
 
     if 'classes' in resolved_axes:
         with bind_project(target_record):
@@ -159,6 +200,81 @@ async def _apply_clone(
                 target_cfg.configs_index,
                 overrides=overrides_to_write,
                 expected_revision=target_keymap.revision,
+            )
+
+    if 'activations' in axes:
+        await _clone_activations(client, target_record=target_record, source=source)
+
+
+async def _clone_activations(
+    client: Any, *, target_record: ProjectRecord, source: ProjectRecord
+) -> None:
+    """Glue G1 (projects_plan.md §11 W2): copy the source's active
+    ``prompt_pack``/``detection_profile`` -- the stored config body plus
+    the activation itself -- into the target. A source axis that is
+    ``off``, unset, or resolves to an env/file-registered profile (never
+    written to the store) is skipped for that axis; the target simply
+    keeps whatever it already had, which is empty for a brand-new
+    project. Never raises on "nothing to clone" -- only on a genuine
+    write failure."""
+    from opensearchpy.exceptions import NotFoundError
+
+    from src.services.config_store.index import (
+        ConfigAxis,
+        ConfigKind,
+        activate,
+        config_doc_id,
+        get_activation,
+        save_config,
+    )
+
+    axis_kinds: tuple[tuple[ConfigAxis, ConfigKind], ...] = (
+        ('prompt_pack', 'prompt_pack'),
+        ('detection_profile', 'region_profile'),
+    )
+    for axis, kind in axis_kinds:
+        with bind_project(source, read_only=True):
+            from src.config import get_curation_config as _get_cfg
+
+            source_index = _get_cfg().configs_index
+            try:
+                activation = await get_activation(client, source_index, axis)
+            except (NotFoundError, KeyError):
+                # A low-fidelity test double that answers a missing doc
+                # with a "found: false" shape instead of raising -- same
+                # "nothing to clone" outcome as a real 404.
+                activation = None
+            if not activation or not activation.get('name'):
+                continue
+            name = activation['name']
+            try:
+                stored = await client.get(index=source_index, id=config_doc_id(kind, name))
+            except (NotFoundError, KeyError):
+                continue
+            body = (stored.get('_source') or {}).get('body')
+            if body is None:
+                continue
+
+        with bind_project(target_record):
+            from src.config import get_curation_config as _get_cfg
+
+            target_index = _get_cfg().configs_index
+            doc = await save_config(
+                client,
+                target_index,
+                kind=kind,
+                name=name,
+                body=body,
+                expected_revision=None,
+                cloned_from=source.slug,
+            )
+            await activate(
+                client,
+                target_index,
+                axis=axis,
+                name=name,
+                revision=doc['revision'],
+                expected_active=None,
             )
 
 

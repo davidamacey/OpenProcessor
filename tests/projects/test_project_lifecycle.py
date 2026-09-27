@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -72,6 +73,69 @@ def test_create_project_slug_taken() -> None:
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(lifecycle.create_project(client, slug='cars', display_name='Cars 2'))
     assert exc_info.value.detail['error'] == 'slug_taken'
+
+
+def test_create_project_concurrent_same_slug_exactly_one_wins() -> None:
+    """M1: two concurrent creates of the same slug must not both land as
+    'active'. The storage-level op_type='create' guard (not just the
+    in-memory snapshot check) must decide the race."""
+    client = FakeLifecycleOpenSearch()
+    _registry_for(client)
+
+    async def _race() -> tuple[Any, ...]:
+        return await asyncio.gather(
+            lifecycle.create_project(client, slug='zeta', display_name='First'),
+            lifecycle.create_project(client, slug='zeta', display_name='Second'),
+            return_exceptions=True,
+        )
+
+    results = asyncio.run(_race())
+    successes = [r for r in results if not isinstance(r, BaseException)]
+    failures = [r for r in results if isinstance(r, BaseException)]
+    assert len(successes) == 1, results
+    assert len(failures) == 1, results
+    assert isinstance(failures[0], HTTPException)
+    assert failures[0].detail['error'] == 'slug_taken'
+
+
+def test_write_record_create_op_type_refuses_second_writer() -> None:
+    """M1's storage-level primitive, isolated from create_project's own
+    in-memory snapshot check (which alone cannot decide a real race --
+    see the module docstring): two writes of the *same* building record
+    with ``op_type='create'`` for one slug must let exactly one through,
+    even though both pass an identical in-memory precondition check."""
+    from src.config.curation import base_curation_config
+    from src.config.projects import ProjectRecord, resources_for_new
+
+    client = FakeLifecycleOpenSearch()
+    _registry_for(client)
+    resources = resources_for_new('zeta', base_curation_config())
+    record = ProjectRecord(
+        slug='zeta',
+        display_name='First',
+        description='',
+        status='building',
+        revision=1,
+        created_at='t',
+        updated_at='t',
+        origin=None,
+        resources=resources,
+    )
+
+    async def _race() -> tuple[Any, ...]:
+        return await asyncio.gather(
+            lifecycle.write_record(client, record, op_type='create'),
+            lifecycle.write_record(client, record, op_type='create'),
+            return_exceptions=True,
+        )
+
+    results = asyncio.run(_race())
+    successes = [r for r in results if not isinstance(r, BaseException)]
+    failures = [r for r in results if isinstance(r, BaseException)]
+    assert len(successes) == 1, results
+    assert len(failures) == 1, results
+    assert isinstance(failures[0], HTTPException)
+    assert failures[0].detail['error'] == 'slug_taken'
 
 
 def test_create_project_slug_retired_after_delete() -> None:
@@ -209,3 +273,98 @@ def test_archive_last_active_project_refused() -> None:
             )
         )
     assert exc_info.value.detail['error'] == 'last_active_project'
+
+
+def test_create_with_bad_clone_source_burns_no_slug_and_leaves_no_indexes() -> None:
+    """M7/m9: a refused clone (typo'd source) must run before the first
+    write -- no record, no indexes, no retired slug. Previously the
+    'building' record and indexes were created first, the clone check
+    ran last, and the slug was left permanently 'failed'."""
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            lifecycle.create_project(
+                client, slug='gamma', display_name='Gamma', clone_settings_from='alpah'
+            )
+        )
+    assert exc_info.value.detail['error'] == 'project_not_found'
+
+    asyncio.run(registry.ensure_fresh())
+    assert registry.get('gamma') is None
+    assert client.indexes == {}
+
+    # The slug is free to try again, cleanly, with the typo fixed.
+    asyncio.run(lifecycle.create_project(client, slug='alpah', display_name='Alpah'))
+    record, _ = asyncio.run(
+        lifecycle.create_project(
+            client, slug='gamma', display_name='Gamma', clone_settings_from='alpah'
+        )
+    )
+    assert record.status == 'active'
+
+
+def test_create_with_bad_clone_axis_burns_no_slug() -> None:
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            lifecycle.create_project(
+                client,
+                slug='gamma',
+                display_name='Gamma',
+                clone_settings_from='default',
+                clone_axes=['bogus'],
+            )
+        )
+    assert exc_info.value.detail['error'] == 'combine_invalid'
+    asyncio.run(registry.ensure_fresh())
+    assert registry.get('gamma') is None
+
+
+def test_create_cloning_into_itself_is_a_clean_4xx_not_500() -> None:
+    """m9: previously a 500 SameFileError from shutil.copy2."""
+    client = FakeLifecycleOpenSearch()
+    _registry_for(client)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            lifecycle.create_project(
+                client, slug='gamma', display_name='Gamma', clone_settings_from='gamma'
+            )
+        )
+    assert exc_info.value.detail['error'] == 'combine_invalid'
+    assert exc_info.value.status_code < 500
+
+
+def test_create_cloning_from_a_building_source_is_refused() -> None:
+    """m9: only active/archived projects can be cloned from."""
+    client = FakeLifecycleOpenSearch()
+    _registry_for(client)
+    from src.config.curation import base_curation_config
+    from src.config.projects import ProjectRecord, resources_for_new
+    from src.services.projects.registry import write_record as raw_write_record
+
+    resources = resources_for_new('building_src', base_curation_config())
+    record = ProjectRecord(
+        slug='building_src',
+        display_name='Building',
+        description='',
+        status='building',
+        revision=1,
+        created_at='t',
+        updated_at='t',
+        origin=None,
+        resources=resources,
+    )
+    asyncio.run(raw_write_record(client, record, op_type='create'))
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            lifecycle.create_project(
+                client, slug='gamma', display_name='Gamma', clone_settings_from='building_src'
+            )
+        )
+    assert exc_info.value.detail['error'] == 'clone_source_not_ready'
