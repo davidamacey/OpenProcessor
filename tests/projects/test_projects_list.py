@@ -265,10 +265,17 @@ def test_get_project_exact_key_set(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_lifecycle_envelope_shape() -> None:
     """P3's create/patch/archive/unarchive/clone_settings all answer
-    ``{project: ProjectSummary, warnings: [{code, message}]}``."""
+    ``{project: ProjectSummary, warnings: [{code, message}],
+    keymap_clone_conflicts: [...]}`` -- the last one (W2b) is only ever
+    non-empty on a ``clone_settings`` response whose ``keymap`` axis
+    dropped a conflicting action."""
     from src.routers.curation._project_models import ProjectLifecycleResponse, ProjectWarning
 
-    assert set(ProjectLifecycleResponse.model_fields) == {'project', 'warnings'}
+    assert set(ProjectLifecycleResponse.model_fields) == {
+        'project',
+        'warnings',
+        'keymap_clone_conflicts',
+    }
     assert set(ProjectWarning.model_fields) == {'code', 'message'}
 
 
