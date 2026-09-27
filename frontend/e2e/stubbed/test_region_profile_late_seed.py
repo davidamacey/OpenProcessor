@@ -11,13 +11,13 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
 
-from fixtures.wire import REGION_PROFILE, REGION_TAB_LABEL
+from fixtures.wire import REGION_PROFILE, REGION_TAB_LABEL, review_tabs
 from test_labeling_flow import register_base
 
 
 def test_failed_boot_health_then_success_shows_region_tab_without_toast(stub, page, app_url):
     register_base(stub)
-    stub.on("GET", r"/review/tabs(\?|$)", {"tabs": []})
+    stub.on("GET", r"/review/tabs(\?|$)", review_tabs())
     stub.on(
         "GET",
         r"/review/",

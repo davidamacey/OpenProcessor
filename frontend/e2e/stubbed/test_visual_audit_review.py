@@ -18,7 +18,14 @@ from conftest import ACTION_TIMEOUT_MS
 import struct
 import zlib
 
-from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL, REGION_TAB_URL_ID, make_item
+from fixtures.wire import (
+    REGION_CLASS,
+    REGION_TAB_LABEL,
+    REGION_TAB_URL_ID,
+    make_item,
+    review_tab,
+    review_tabs,
+)
 
 CLASSES = [
     {
@@ -63,17 +70,15 @@ CLASSES = [
     },
 ]
 
-TABS = {
-    "tabs": [
-        {"id": "regions", "label": REGION_TAB_LABEL},
-        {
-            "id": "uncertainty",
-            "label": "Uncertainty",
-            "description": "High active-learning probe entropy",
-        },
-        {"id": "new_class_proposals", "label": "New class proposals"},
-    ]
-}
+TABS = review_tabs(
+    review_tab("regions", REGION_TAB_LABEL),
+    review_tab(
+        "uncertainty",
+        "Uncertainty",
+        description="High active-learning probe entropy",
+    ),
+    review_tab("new_class_proposals", "New class proposals"),
+)
 
 
 def review_item(i: int, **over) -> dict:
@@ -345,7 +350,7 @@ def test_subject_toggle_default_explains_itself(stub, page, app_url):
     stub.on(
         "GET",
         r"/review/tabs(\?|$)",
-        {"tabs": [{"id": "all", "label": "All", "filter_defaults": {"max_rank": 2}}]},
+        review_tabs(review_tab("all", "All", filter_defaults={"max_rank": 2})),
     )
     page.set_viewport_size({"width": 1600, "height": 1000})
     page.goto(f"{app_url}/p/default/review")

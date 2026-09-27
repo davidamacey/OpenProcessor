@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
 
-from fixtures.wire import make_item
+from fixtures.wire import make_item, review_tab, review_tabs
 
 CLASSES = [
     {
@@ -30,22 +30,15 @@ CLASSES = [
 # conf_min/conf_max. `primary_low_conf`: the full list, with a served
 # max_rank default of 2 (so its subject-toggle "unset" label should read
 # "Top 2").
-REVIEW_TABS = {
-    "tabs": [
-        {
-            "id": "all",
-            "label": "All",
-            "filters": ["class_id", "source"],
-            "filter_defaults": {},
-        },
-        {
-            "id": "primary_low_conf",
-            "label": "Primary low-conf",
-            "filters": ["class_id", "source", "max_rank", "min_blur_ratio", "conf_min", "conf_max"],
-            "filter_defaults": {"max_rank": 2},
-        },
-    ]
-}
+REVIEW_TABS = review_tabs(
+    review_tab("all", "All", filters=["class_id", "source"]),
+    review_tab(
+        "primary_low_conf",
+        "Primary low-conf",
+        filters=["class_id", "source", "max_rank", "min_blur_ratio", "conf_min", "conf_max"],
+        filter_defaults={"max_rank": 2},
+    ),
+)
 
 
 def review_item(i: int) -> dict:

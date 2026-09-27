@@ -29,12 +29,28 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** A full served `ReviewTab` entry. */
+function tab(id: string, label: string, over: Record<string, unknown> = {}) {
+  return {
+    id,
+    label,
+    description: '',
+    filters: [],
+    filter_defaults: {},
+    filter_specs: [],
+    ...over,
+  };
+}
+
+const EMPTY_STATE = { has_probe_predictions: false, has_item_scores: true };
+
 const PAYLOAD = {
   tabs: [
-    { id: 'all', label: 'All crops', description: 'Every crop in the pool' },
-    { id: 'regions', label: 'Widget tags', description: 'Region review queue' },
-    { id: 'mismatches', label: 'VLM disagreements' },
+    tab('all', 'All crops', { description: 'Every crop in the pool' }),
+    tab('regions', 'Widget tags', { description: 'Region review queue' }),
+    tab('mismatches', 'VLM disagreements'),
   ],
+  empty_state: EMPTY_STATE,
 };
 
 describe('reviewTabsVocabularyStore.init', () => {
@@ -43,9 +59,7 @@ describe('reviewTabsVocabularyStore.init', () => {
 
     await reviewTabsVocabularyStore.init();
 
-    expect(reviewTabsVocabularyStore.list).toEqual(
-      PAYLOAD.tabs.map((t) => ({ ...t, filter_specs: [] })),
-    );
+    expect(reviewTabsVocabularyStore.list).toEqual(PAYLOAD.tabs);
     expect(reviewTabsVocabularyStore.loaded).toBe(true);
   });
 
@@ -73,7 +87,7 @@ describe('reviewTabsVocabularyStore.init', () => {
     expect(reviewTabsVocabularyStore.descriptionFor('all')).toBe(
       'Every crop in the pool',
     );
-    // Present but no description field.
+    // Present with an empty description.
     expect(reviewTabsVocabularyStore.descriptionFor('mismatches')).toBeNull();
     expect(reviewTabsVocabularyStore.descriptionFor('uncertainty')).toBeNull();
   });
@@ -104,37 +118,14 @@ describe('reviewTabsVocabularyStore.init', () => {
 });
 
 // #36 item 9: GET {API_PREFIX}/review/tabs also carries a top-level
-// empty_state, read via a sibling getReviewEmptyState() call so the tabs
-// array's own shape/tests are untouched.
-const PAYLOAD_WITH_EMPTY_STATE = {
-  ...PAYLOAD,
-  empty_state: { has_probe_predictions: false, has_item_scores: true },
-};
-
+// empty_state.
 describe('reviewTabsVocabularyStore.emptyState', () => {
   it('populates emptyState from the served empty_state', async () => {
-    // A fresh Response per call: init() fires two GETs of the same URL
-    // (the tabs array and the empty_state sibling read) concurrently, and
-    // a Response body can only be consumed once.
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockImplementation(() => jsonResponse(200, PAYLOAD_WITH_EMPTY_STATE)),
-    );
-
-    await reviewTabsVocabularyStore.init();
-
-    expect(reviewTabsVocabularyStore.emptyState).toEqual({
-      has_probe_predictions: false,
-      has_item_scores: true,
-    });
-  });
-
-  it('stays null when the served response omits empty_state', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, PAYLOAD)));
 
     await reviewTabsVocabularyStore.init();
 
-    expect(reviewTabsVocabularyStore.emptyState).toBeNull();
+    expect(reviewTabsVocabularyStore.emptyState).toEqual(EMPTY_STATE);
   });
 });
 
@@ -144,21 +135,13 @@ describe('reviewTabsVocabularyStore.emptyState', () => {
 // `filter_defaults`.
 const FILTERS_PAYLOAD = {
   tabs: [
-    {
-      id: 'primary_low_conf',
-      label: 'Primary low-conf',
+    tab('primary_low_conf', 'Primary low-conf', {
       filters: ['class_id', 'source', 'max_rank'],
       filter_defaults: { max_rank: 2 },
-    },
-    {
-      id: 'regions',
-      label: 'Regions',
-      filters: ['class_id', 'source', 'text'],
-      filter_defaults: {},
-    },
-    // No `filters` at all — an older backend response shape.
-    { id: 'all', label: 'All' },
+    }),
+    tab('regions', 'Regions', { filters: ['class_id', 'source', 'text'] }),
   ],
+  empty_state: EMPTY_STATE,
 };
 
 describe('reviewTabsVocabularyStore.filterSupported / filtersFor / filterDefault', () => {
@@ -181,11 +164,10 @@ describe('reviewTabsVocabularyStore.filterSupported / filtersFor / filterDefault
     expect(reviewTabsVocabularyStore.filterSupported('regions', 'max_rank')).toBe(false);
   });
 
-  it('filterSupported defaults to true (unknown) when the tab has no served filters list', async () => {
+  it('filterSupported defaults to true (unknown) for a tab with no served entry', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, FILTERS_PAYLOAD)));
     await reviewTabsVocabularyStore.init();
 
-    expect(reviewTabsVocabularyStore.filterSupported('all', 'max_rank')).toBe(true);
     expect(reviewTabsVocabularyStore.filterSupported('nonexistent_tab', 'max_rank')).toBe(
       true,
     );
@@ -208,9 +190,7 @@ describe('reviewTabsVocabularyStore.filterSupported / filtersFor / filterDefault
 // param-specific code.
 const FILTER_SPECS_PAYLOAD = {
   tabs: [
-    {
-      id: 'regions',
-      label: 'Regions',
+    tab('regions', 'Regions', {
       filters: ['text', 'region_status'],
       filter_defaults: { region_status: 'all' },
       filter_specs: [
@@ -225,10 +205,11 @@ const FILTER_SPECS_PAYLOAD = {
           ],
         },
       ],
-    },
-    // No filter_specs at all — every other tab today.
-    { id: 'all', label: 'All' },
+    }),
+    // No filter_specs — every other tab today.
+    tab('all', 'All'),
   ],
+  empty_state: EMPTY_STATE,
 };
 
 describe('reviewTabsVocabularyStore.filterSpecsFor', () => {

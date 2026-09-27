@@ -2719,76 +2719,20 @@ export interface ReviewFilterSpec {
 export interface ReviewTabVocabularyEntry {
   id: string;
   label: string;
-  description?: string;
-  /** Query parameters this tab honours (dq-queues cutover, 2026-09-24) —
-   *  a parameter not listed is accepted and ignored server-side. Drives
-   *  which filter-bar controls render for the active tab. Absent/empty
-   *  means "unknown" — the frontend then shows every control, same as
-   *  before this endpoint carried the field. */
-  filters?: string[];
+  description: string;
+  /** Query parameters this tab honours — a parameter not listed is
+   *  accepted and ignored server-side. Drives which filter-bar controls
+   *  render for the active tab. */
+  filters: string[];
   /** Values the tab applies when a filter is omitted, e.g.
    *  `{max_rank: 2}` for the two primary-subject tabs. */
-  filter_defaults?: Record<string, unknown>;
-  /** Self-describing enum filters this tab honours (3f1a11e adoption) —
-   *  empty for a tab with none, or on an older backend that doesn't
-   *  serve the field yet. */
+  filter_defaults: Record<string, unknown>;
+  /** Self-describing enum filters this tab honours (empty for none). */
   filter_specs: ReviewFilterSpec[];
 }
 
-/** Every review tab's served `id`/`label`/`description`, in `KNOWN_TABS`
- *  order. The frontend keeps its own tab structure/ids (`reviewTabs.ts`)
- *  and only overlays the served label/description on top, falling back to
- *  the static label when the endpoint is absent. */
-export async function getReviewTabsVocabulary(
-  signal?: AbortSignal,
-): Promise<ReviewTabVocabularyEntry[]> {
-  const res = await apiFetch<{ tabs?: ReviewTabVocabularyEntry[] }>(
-    `${scoped()}/review/tabs`,
-    {},
-    signal,
-  );
-  return (res.tabs ?? [])
-    .filter(
-      (t) => typeof t?.id === 'string' && t.id.length > 0 && typeof t.label === 'string',
-    )
-    .map((t) => ({
-      id: t.id,
-      label: t.label,
-      description: t.description,
-      filters: Array.isArray(t.filters)
-        ? t.filters.filter((f): f is string => typeof f === 'string')
-        : undefined,
-      filter_defaults:
-        t.filter_defaults && typeof t.filter_defaults === 'object'
-          ? t.filter_defaults
-          : undefined,
-      filter_specs: Array.isArray(t.filter_specs)
-        ? t.filter_specs
-            .filter(
-              (s): s is ReviewFilterSpec =>
-                !!s &&
-                typeof s.param === 'string' &&
-                s.kind === 'enum' &&
-                typeof s.label === 'string' &&
-                Array.isArray(s.options),
-            )
-            .map((s) => ({
-              param: s.param,
-              kind: 'enum' as const,
-              label: s.label,
-              options: s.options
-                .filter(
-                  (o): o is ReviewFilterOption =>
-                    !!o && typeof o.value === 'string' && typeof o.label === 'string',
-                )
-                .map((o) => ({ value: o.value, label: o.label })),
-            }))
-        : [],
-    }));
-}
-
-/** `empty_state` on `GET {API_PREFIX}/review/tabs` (#36 item 9) — whether
- *  the deployment has ANY probe predictions or item scores at all, so an
+/** `empty_state` on `GET {API_PREFIX}/review/tabs` — whether the
+ *  deployment has ANY probe predictions or item scores at all, so an
  *  empty Uncertainty/Model-disagreements/score-sorted queue can point at
  *  the missing prerequisite (run a probe, compute scores) instead of just
  *  saying "empty". */
@@ -2797,31 +2741,18 @@ export interface ReviewEmptyState {
   has_item_scores: boolean;
 }
 
-/** Sibling read of `GET {API_PREFIX}/review/tabs`'s top-level `empty_state` —
- *  kept as its own call (rather than changing `getReviewTabsVocabulary`'s
- *  return shape) so every existing caller/test of the tabs array is
- *  unaffected; `reviewTabsVocabularyStore.init()` fires both once. `null`
- *  when absent (an older backend) — never invented client-side. */
-export async function getReviewEmptyState(
-  signal?: AbortSignal,
-): Promise<ReviewEmptyState | null> {
-  const res = await apiFetch<{ empty_state?: Partial<ReviewEmptyState> | null }>(
-    `${scoped()}/review/tabs`,
-    {},
-    signal,
-  );
-  const es = res.empty_state;
-  if (!es || typeof es !== 'object') return null;
-  if (
-    typeof es.has_probe_predictions !== 'boolean' ||
-    typeof es.has_item_scores !== 'boolean'
-  ) {
-    return null;
-  }
-  return {
-    has_probe_predictions: es.has_probe_predictions,
-    has_item_scores: es.has_item_scores,
-  };
+/** `GET {API_PREFIX}/review/tabs`. */
+export interface ReviewTabsResponse {
+  tabs: ReviewTabVocabularyEntry[];
+  empty_state: ReviewEmptyState;
+}
+
+/** Every review tab's served vocabulary, in served order, plus the
+ *  deployment-wide `empty_state`. The frontend keeps its own tab
+ *  structure/ids (`reviewTabs.ts`) and only overlays the served
+ *  label/description/filters on top. */
+export function getReviewTabs(signal?: AbortSignal): Promise<ReviewTabsResponse> {
+  return apiFetch<ReviewTabsResponse>(`${scoped()}/review/tabs`, {}, signal);
 }
 
 /**

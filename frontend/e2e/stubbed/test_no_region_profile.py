@@ -14,7 +14,7 @@ from conftest import ACTION_TIMEOUT_MS
 
 import re
 
-from fixtures.wire import REGION_CLASS, REGION_PROFILE, make_item
+from fixtures.wire import REGION_CLASS, REGION_PROFILE, make_item, review_tabs
 from test_labeling_flow import CLASSES as ITEM_CLASSES
 from test_labeling_flow import register_base
 
@@ -70,9 +70,10 @@ def register_no_profile(stub) -> None:
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": [*ITEM_CLASSES, REGION_CLASS_ROW]})
     stub.on("GET", r"/health$", {"status": "ok", "region_profile": None})
     # The backend omits the region tab without a profile.
-    stub.on("GET", r"/review/tabs(\?|$)", {"tabs": []})
+    stub.on("GET", r"/review/tabs(\?|$)", review_tabs())
     stub.on("GET", r"/settings(\?|$)", {"settings": {}, "defaults": {}})
-    stub.on("GET", r"/scores/coverage(\?|$)", (404, {"detail": "not found"}))
+    stub.on("GET", r"/scores/coverage(\?|$)", {"coverage": {}})
+    stub.on("GET", r"/scores/status(\?|$)", {"status": "idle"})
     stub.on("GET", r"/ingest/status(\?|$)", {"total": 0, "by_source": [], "by_day": []})
 
     # Every item carries region_* values on the wire (the item wire keeps
@@ -158,7 +159,7 @@ def test_served_display_name_labels_the_region_tab(stub, page, app_url):
     register_base(stub)
     # No served label for the region tab: the label must come from the
     # profile's display_name alone.
-    stub.on("GET", r"/review/tabs(\?|$)", {"tabs": []})
+    stub.on("GET", r"/review/tabs(\?|$)", review_tabs())
     stub.on("GET", r"/regions/statuses(\?|$)", {"statuses": []})
     page.goto(f"{app_url}/p/default/review")
     labels = tab_labels(page)

@@ -297,3 +297,36 @@ def make_item(**overrides: Any) -> dict[str, Any]:
     item = dict(DEFAULT_ITEM)
     item.update(overrides)
     return item
+
+
+# `GET {API_PREFIX}/review/tabs` (ReviewTabsResponse). Every filter-bar
+# param /review knows; a stubbed tab honours all of them unless a test
+# narrows `filters`.
+REVIEW_FILTER_PARAMS = [
+    "class_id",
+    "source",
+    "conf_min",
+    "conf_max",
+    "text",
+    "max_rank",
+    "min_blur_ratio",
+]
+REVIEW_EMPTY_STATE = {"has_probe_predictions": True, "has_item_scores": True}
+
+
+def review_tab(tab_id: str, label: str, **over: Any) -> dict[str, Any]:
+    """One served `ReviewTab`, every required field present."""
+    return {
+        "id": tab_id,
+        "label": label,
+        "description": "",
+        "filters": list(REVIEW_FILTER_PARAMS),
+        "filter_defaults": {},
+        "filter_specs": [],
+        **over,
+    }
+
+
+def review_tabs(*tabs: dict[str, Any], empty_state: dict[str, bool] | None = None) -> dict[str, Any]:
+    """A full `ReviewTabsResponse` body."""
+    return {"tabs": list(tabs), "empty_state": empty_state or dict(REVIEW_EMPTY_STATE)}

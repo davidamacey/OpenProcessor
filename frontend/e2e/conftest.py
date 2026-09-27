@@ -33,7 +33,13 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
-from fixtures.wire import REGION_PROFILE, REGION_TAB_LABEL, projects_response
+from fixtures.wire import (
+    REGION_PROFILE,
+    REGION_TAB_LABEL,
+    projects_response,
+    review_tab,
+    review_tabs,
+)
 
 import pytest
 
@@ -297,7 +303,7 @@ class Stub:
         self.on(
             "GET",
             r"/review/tabs(\?|$)",
-            {"tabs": [{"id": "regions", "label": REGION_TAB_LABEL}]},
+            review_tabs(review_tab("regions", REGION_TAB_LABEL)),
         )
         self.on("GET", r"/bakeoff/runs(\?|$)", {"runs": []})
         # /ingest's own page reads its status table and its config on

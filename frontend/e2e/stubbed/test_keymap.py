@@ -192,7 +192,8 @@ def served_keymap_doc(revision: int = 1) -> dict:
 def register_common(stub) -> None:
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on("GET", r"/methods(\?|$)", METHODS)
-    stub.on("GET", r"/scores/coverage(\?|$)", (404, {"detail": "not found"}))
+    stub.on("GET", r"/scores/coverage(\?|$)", {"coverage": {}})
+    stub.on("GET", r"/scores/status(\?|$)", {"status": "idle"})
 
 
 def test_keymap_absent_when_404(stub, page, app_url):
