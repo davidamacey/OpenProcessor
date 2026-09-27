@@ -14,8 +14,12 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from src.config.project_context import bind_project
+from src.core.logging import get_logger
 from src.routers.curation._config_common_models import api_error
 from src.routers.curation._project_models import CLONEABLE_AXES
+
+
+logger = get_logger(__name__)
 
 
 if TYPE_CHECKING:
@@ -132,9 +136,12 @@ async def _validate_clone(
 
 async def _apply_clone(
     client: Any, *, target_record: ProjectRecord, source: ProjectRecord, axes: list[str]
-) -> None:
+) -> list[dict[str, Any]]:
     """Copy the validated axes. Reads the source under a read-only bind so
-    the guard rejects any accidental write to it."""
+    the guard rejects any accidental write to it. Returns the ``keymap``
+    axis's dropped-action conflicts (``[]`` for every other axis/outcome)
+    -- a structured report, never a silent unbind."""
+    conflicts: list[dict[str, Any]] = []
     from src.clients.curation_opensearch import get_curation_settings, update_curation_settings
 
     if 'settings_defaults' in axes:
@@ -164,8 +171,83 @@ async def _apply_clone(
         with bind_project(target_record):
             ensure_region_class()
 
+    if 'keymap' in axes:
+        from src.config import get_curation_config
+        from src.services.curation.keymap import get_keymap_doc, save_keymap_doc
+        from src.services.curation.keymap_validator import validate_keymap
+
+        with bind_project(source, read_only=True):
+            src_cfg = get_curation_config()
+            source_keymap = await get_keymap_doc(client, src_cfg.configs_index)
+        with bind_project(target_record):
+            target_cfg = get_curation_config()
+            target_keymap = await get_keymap_doc(client, target_cfg.configs_index)
+            from src.routers.curation import get_class_registry
+
+            target_classes = [
+                {
+                    'class_id': c.class_id,
+                    'class_name': c.class_name,
+                    'hotkey_letter': c.hotkey_letter,
+                    'deprecated': c.deprecated,
+                }
+                for c in get_class_registry().load().classes
+            ]
+            report, class_conflicts, _resolved, _issues = validate_keymap(
+                source_keymap.overrides,
+                project=target_record.slug,
+                classes=target_classes,
+                previous_overrides=target_keymap.overrides,
+            )
+            # B2: all-or-nothing. Dropping the conflicting actions and
+            # writing the rest used to leave those actions on their
+            # *defaults*, which can themselves collide with a kept
+            # override or with the same class -- an invalid keymap could
+            # get written with no error and no GET issue reporting it.
+            # A clash is a report, never a silent partial write (CW-K §0
+            # clause 1): on any error or class conflict, the target's
+            # keymap is left exactly as it was.
+            conflicts = [
+                {
+                    'action_id': c.action_id,
+                    'combo': c.combo,
+                    'class_id': c.class_id,
+                    'class_name': c.class_name,
+                }
+                for c in class_conflicts
+            ]
+            if class_conflicts or not report.ok:
+                logger.warning(
+                    'keymap_clone_conflicts_left_unchanged',
+                    target=target_record.slug,
+                    from_slug=source.slug,
+                    conflicts=conflicts,
+                    errors=[i.code for i in report.errors],
+                )
+            else:
+                new_target_doc = await save_keymap_doc(
+                    client,
+                    target_cfg.configs_index,
+                    overrides=source_keymap.overrides,
+                    expected_revision=target_keymap.revision,
+                )
+                # Minor: tabs already open on the target should refresh.
+                from src.services.curation.event_hub import get_event_hub
+
+                get_event_hub().publish(
+                    {
+                        'type': 'config.changed',
+                        'topic': 'config',
+                        'axis': 'keymap',
+                        'name': None,
+                        'keymap_revision': new_target_doc.revision,
+                    }
+                )
+
     if 'activations' in axes:
         await _clone_activations(client, target_record=target_record, source=source)
+
+    return conflicts
 
 
 async def _clone_activations(
@@ -278,13 +360,19 @@ async def clone_settings(
     target_record: ProjectRecord,
     from_slug: str,
     axes: list[str] | None,
-) -> None:
+) -> list[dict[str, Any]]:
     """§4 ``clone_settings`` into a project being created: validate every
-    refusal first, then copy."""
+    refusal first, then copy. Returns the ``keymap`` axis's dropped-action
+    conflicts (a structured report, never a silent unbind) -- ``[]`` for
+    every other axis/outcome. ``create_project`` (M7) logs these today
+    rather than threading them through its own return shape, which every
+    other project-lifecycle test call site also unpacks."""
     source, resolved_axes = await _validate_clone(
         client, target_record=target_record, from_slug=from_slug, axes=axes
     )
-    await _apply_clone(client, target_record=target_record, source=source, axes=resolved_axes)
+    return await _apply_clone(
+        client, target_record=target_record, source=source, axes=resolved_axes
+    )
 
 
 async def clone_settings_into(
@@ -294,7 +382,7 @@ async def clone_settings_into(
     from_slug: str,
     axes: list[str] | None,
     expected_revision: int,
-) -> ProjectRecord:
+) -> tuple[ProjectRecord, list[dict[str, Any]]]:
     """§4 ``POST /projects/{project}/clone_settings`` into an existing
     ``active`` project. Every check (status, revision, axes, source,
     target emptiness) runs before anything is written, and the revision
@@ -315,11 +403,11 @@ async def clone_settings_into(
     source, resolved_axes = await _validate_clone(
         client, target_record=record, from_slug=from_slug, axes=axes
     )
-    await _apply_clone(client, target_record=record, source=source, axes=resolved_axes)
+    conflicts = await _apply_clone(client, target_record=record, source=source, axes=resolved_axes)
     updated = replace(record, revision=record.revision + 1, updated_at=_now())
     await write_record(client, updated, if_seq_no=seq, if_primary_term=term)
     await get_project_registry().ensure_fresh()
-    return updated
+    return updated, conflicts
 
 
 __all__ = ['clone_settings', 'clone_settings_into']

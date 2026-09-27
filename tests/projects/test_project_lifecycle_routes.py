@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from src.routers.curation import projects as projects_router
 from src.routers.curation._project_models import (
     ArchiveRequest,
+    CloneSettingsRequest,
     CreateProjectRequest,
     PatchProjectRequest,
 )
@@ -114,6 +115,167 @@ def test_archive_unarchive_route_envelope() -> None:
         )
     )
     assert unarchived.project.status == 'active'
+
+
+def test_clone_settings_route_serves_keymap_conflicts_structured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """W2b: a dropped keymap-clone conflict is served on the route
+    response as a structured ``keymap_clone_conflicts`` list (action_id,
+    combo, class), never silently swallowed."""
+    from src.config.project_context import try_current_project
+    from src.services.curation.keymap import KeymapDoc
+
+    source = asyncio.run(
+        projects_router.create_project(CreateProjectRequest(slug='source', display_name='Source'))
+    )
+    target = asyncio.run(
+        projects_router.create_project(CreateProjectRequest(slug='target', display_name='Target'))
+    )
+
+    source_doc = KeymapDoc(
+        overrides={'cluster.ignore': ['i']}, revision=1, updated_at=None, is_default=False
+    )
+    target_doc = KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
+
+    async def _fake_get(_client, _index) -> KeymapDoc:
+        current = try_current_project()
+        return source_doc if current and current.record.slug == 'source' else target_doc
+
+    async def _fake_save(_client, _index, *, overrides, expected_revision) -> KeymapDoc:
+        return KeymapDoc(
+            overrides=overrides,
+            revision=expected_revision + 1,
+            updated_at=None,
+            is_default=not overrides,
+        )
+
+    monkeypatch.setattr('src.services.curation.keymap.get_keymap_doc', _fake_get)
+    monkeypatch.setattr('src.services.curation.keymap.save_keymap_doc', _fake_save)
+
+    from src.config.project_context import bind_project
+    from src.services.projects.registry import get_project_registry
+
+    registry = get_project_registry()
+    asyncio.run(registry.ensure_fresh())
+    target_record = registry.get('target')
+    assert target_record is not None
+    with bind_project(target_record):
+        from src.routers.curation import get_class_registry
+
+        reg = get_class_registry()
+        reg.add_class('ice_cream_truck', group='vehicle')
+        loaded = reg.load()
+        for c in loaded.classes:
+            if c.class_name == 'ice_cream_truck':
+                c.hotkey_letter = 'i'
+        reg._atomic_write(loaded)
+
+    response = asyncio.run(
+        projects_router.clone_settings_route(
+            'target',
+            CloneSettingsRequest(
+                **{'from': 'source'}, axes=['keymap'], expected_revision=target.project.revision
+            ),
+        )
+    )
+    assert [c.model_dump() for c in response.keymap_clone_conflicts] == [
+        {
+            'action_id': 'cluster.ignore',
+            'combo': 'i',
+            'class_id': 0,
+            'class_name': 'ice_cream_truck',
+        }
+    ]
+    assert source.project.slug == 'source'
+
+
+def test_create_project_surfaces_keymap_clone_conflicts_as_warnings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Focus-item answer #5: ``create_project`` used to log a create-time
+    keymap clone conflict and never surface it -- ``keymap_clone_conflicts``
+    on the 201 is always ``[]`` there (that field is the standalone
+    ``POST clone_settings`` route's). ``create_project`` already returns
+    ``(record, warnings)``, so one ``ProjectWarning`` (code
+    ``keymap_clone_conflict``) per dropped conflict must appear in the
+    create response's ``warnings`` instead of only the log line."""
+    from src.config.project_context import bind_project, try_current_project
+    from src.services.curation.keymap import KeymapDoc
+    from src.services.projects.registry import get_project_registry
+
+    source = asyncio.run(
+        projects_router.create_project(CreateProjectRequest(slug='source', display_name='Source'))
+    )
+    assert source.project.slug == 'source'
+
+    registry = get_project_registry()
+    asyncio.run(registry.ensure_fresh())
+    source_record = registry.get('source')
+    assert source_record is not None
+    with bind_project(source_record):
+        from src.routers.curation import get_class_registry
+
+        reg = get_class_registry()
+        reg.add_class('ice_cream_truck', group='vehicle')
+        loaded = reg.load()
+        for c in loaded.classes:
+            if c.class_name == 'ice_cream_truck':
+                c.hotkey_letter = 'i'
+        reg._atomic_write(loaded)
+
+    # Fakes the keymap store directly (as the sibling clone_settings test
+    # above does) rather than round-tripping a real PUT /keymap, which
+    # would itself 409 against the class hotkey just bound above.
+    source_doc = KeymapDoc(
+        overrides={'cluster.ignore': ['i']}, revision=1, updated_at=None, is_default=False
+    )
+    default_doc = KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
+
+    async def _fake_get(_client, _index) -> KeymapDoc:
+        current = try_current_project()
+        return source_doc if current and current.record.slug == 'source' else default_doc
+
+    async def _fake_save(_client, _index, *, overrides, expected_revision) -> KeymapDoc:
+        return KeymapDoc(
+            overrides=overrides,
+            revision=expected_revision + 1,
+            updated_at=None,
+            is_default=not overrides,
+        )
+
+    monkeypatch.setattr('src.services.curation.keymap.get_keymap_doc', _fake_get)
+    monkeypatch.setattr('src.services.curation.keymap.save_keymap_doc', _fake_save)
+
+    # 'classes' clones the source's registry (including the 'i'-bound
+    # class) into the new project verbatim, so the 'keymap' axis then
+    # validates the source's override against that just-copied class --
+    # the naturally-arising create-time conflict, not a synthesized one.
+    created = asyncio.run(
+        projects_router.create_project(
+            CreateProjectRequest(
+                slug='newproj',
+                display_name='New',
+                clone_settings_from='source',
+                clone_axes=['classes', 'keymap'],
+            )
+        )
+    )
+
+    assert created.project.status == 'active'
+    # create's own field stays empty by design (see focus-item #5) -- the
+    # conflict is a ProjectWarning, not this field, on create.
+    assert created.keymap_clone_conflicts == []
+    warnings = [w.model_dump() for w in created.warnings]
+    assert warnings == [
+        {
+            'code': 'keymap_clone_conflict',
+            'message': (
+                "keymap action 'cluster.ignore' combo 'i' collides with class "
+                "'ice_cream_truck' (id 0) and was dropped from the clone"
+            ),
+        }
+    ]
 
 
 @pytest.fixture

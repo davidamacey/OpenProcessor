@@ -51,6 +51,7 @@ ITEM_WIRE_JSON = Path('json/item_wire.json')
 ITEM_WIRE_TS = Path('ts/itemWire.ts')
 CLASS_SOURCES_TS = Path('ts/classSources.ts')
 OPENAPI_JSON = Path('openapi/curation.json')
+KEYMAP_ACTIONS_JSON = Path('json/keymap_actions.json')
 
 
 def _ts_header(source: str) -> str:
@@ -336,10 +337,25 @@ def _render_item_wire() -> dict[Path, str]:
     return {ITEM_WIRE_JSON: render_item_wire_json(facts), ITEM_WIRE_TS: render_item_wire_ts(facts)}
 
 
+def render_keymap_actions_json() -> str:
+    from src.services.curation.keymap import _ACTIONS_JSON_PATH
+
+    with _ACTIONS_JSON_PATH.open(encoding='utf-8') as f:
+        raw = json.load(f)
+    return _dump_json(
+        {
+            'generated_by': SCRIPT_REL,
+            'source': 'src/config/keymap_actions.json',
+            **raw,
+        }
+    )
+
+
 GENERATORS: dict[str, Callable[[], dict[Path, str]]] = {
     'item-wire': _render_item_wire,
     'class-sources': lambda: {CLASS_SOURCES_TS: render_class_sources_ts()},
     'openapi': lambda: {OPENAPI_JSON: render_openapi_json()},
+    'keymap-actions': lambda: {KEYMAP_ACTIONS_JSON: render_keymap_actions_json()},
 }
 
 

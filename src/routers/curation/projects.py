@@ -205,11 +205,17 @@ async def get_project(
 
 
 async def _summary_response(
-    record: Any, warnings: list[dict[str, str]] | None = None
+    record: Any,
+    warnings: list[dict[str, str]] | None = None,
+    keymap_clone_conflicts: list[dict[str, Any]] | None = None,
 ) -> ProjectLifecycleResponse:
     client = await make_curation_opensearch()
     counts = (await _fetch_counts(client, {record.slug: record})).get(record.slug, ProjectCounts())
-    return ProjectLifecycleResponse(project=summarize(record, counts), warnings=warnings or [])
+    return ProjectLifecycleResponse(
+        project=summarize(record, counts),
+        warnings=warnings or [],
+        keymap_clone_conflicts=keymap_clone_conflicts or [],
+    )
 
 
 @global_router.post('/projects', response_model=ProjectLifecycleResponse, status_code=201)
@@ -276,7 +282,7 @@ async def clone_settings_route(
     body: CloneSettingsRequest,
 ) -> ProjectLifecycleResponse:
     client = await make_curation_opensearch()
-    record = await lifecycle.clone_settings_into(
+    record, keymap_clone_conflicts = await lifecycle.clone_settings_into(
         client,
         slug=project,
         from_slug=body.from_,
@@ -284,7 +290,7 @@ async def clone_settings_route(
         expected_revision=body.expected_revision,
     )
     _publish_lifecycle_event('project.updated', record)
-    return await _summary_response(record)
+    return await _summary_response(record, keymap_clone_conflicts=keymap_clone_conflicts)
 
 
 @global_router.delete(
