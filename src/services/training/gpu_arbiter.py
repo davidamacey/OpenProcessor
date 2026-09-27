@@ -48,6 +48,7 @@ from typing import Any
 
 from src.config import get_curation_config, get_gpu_arbiter_config
 from src.core.logging import get_logger
+from src.services.training.arbiter_dirs import all_bakeoff_jobs_dirs, all_train_jobs_dirs
 
 
 logger = get_logger(__name__)
@@ -101,18 +102,20 @@ LOCK_GRACE_SECONDS = 90.0
 def bakeoff_active(*, jobs_dir: Path | None = None) -> bool:
     """True if a bake-off job is queued or running (job.json still present).
 
-    ``jobs_dir`` defaults to ``GpuArbiterConfig.bakeoff_jobs_dir`` (always
-    set: ``OP_BAKEOFF_JOBS_DIR`` or ``<state_dir>/bakeoff_jobs``, the same
-    dir the bake-off router writes into). A missing dir means nothing queued.
+    ``jobs_dir`` scans only that dir. By default every dir a bake-off can
+    be queued in is scanned (:func:`all_bakeoff_jobs_dirs`): the arbiter is
+    global, but the bake-off router writes into the bound project's own
+    ``bakeoff_jobs_dir`` (projects_plan.md §5.3). A missing dir means
+    nothing queued.
     """
-    configured = jobs_dir if jobs_dir is not None else get_gpu_arbiter_config().bakeoff_jobs_dir
-    if not configured:
-        return False
-    target = Path(configured)
-    try:
-        return any(target.glob('*.job.json'))
-    except OSError:
-        return False
+    targets = [Path(jobs_dir)] if jobs_dir is not None else all_bakeoff_jobs_dirs()
+    for target in targets:
+        try:
+            if any(target.glob('*.job.json')):
+                return True
+        except OSError:
+            continue
+    return False
 
 
 # =============================================================================
@@ -509,37 +512,6 @@ async def release_gpus_after_training(
 # ---- recovery on API startup -------------------------------------------
 
 
-def _resolve_train_jobs_dir() -> Path:
-    """The *default* project's jobs dir (P1R §6.1/D-A: an ordinary
-    registered project -- read from the registry, else build fresh)."""
-    from src.config.curation import base_curation_config
-    from src.config.project_context import bind_project
-    from src.config.projects import DEFAULT_SLUG, new_project_record
-    from src.services.projects.registry import get_project_registry
-    from src.services.training.jobs import _resolve_jobs_dir
-
-    record = get_project_registry().get(DEFAULT_SLUG) or new_project_record(
-        DEFAULT_SLUG, base_curation_config()
-    )
-    with bind_project(record):
-        return _resolve_jobs_dir()
-
-
-def all_train_jobs_dirs() -> dict[str, Path]:
-    """``{project_slug: train_jobs_dir}`` for the default dir plus every
-    active/archived project (projects_plan.md §5.3) -- the arbiter stays
-    one global process but its active-run scan must see every project's
-    dir. Reads the registry's in-process snapshot; no I/O here."""
-    from src.config.projects import DEFAULT_SLUG
-    from src.services.projects.registry import get_project_registry
-
-    dirs: dict[str, Path] = {DEFAULT_SLUG: _resolve_train_jobs_dir()}
-    for slug, record in get_project_registry().snapshot().items():
-        if slug != DEFAULT_SLUG and record.status in ('active', 'archived'):
-            dirs[slug] = record.resources.train_jobs_dir
-    return dirs
-
-
 async def reconcile_on_startup(
     *,
     train_jobs_dir: Path | None = None,
@@ -677,6 +649,7 @@ __all__ = [
     'TRAINER_TERMINAL_STATES',
     'ArbiterAction',
     'GpuArbiterStopFailedError',
+    'all_bakeoff_jobs_dirs',
     'all_train_jobs_dirs',
     'bakeoff_active',
     'claim_gpus_for_training',
