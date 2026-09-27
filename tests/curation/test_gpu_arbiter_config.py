@@ -95,7 +95,7 @@ def test_probe_trainer_reachable_ok_on_a_stock_install_with_fresh_heartbeat(
     """
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
     monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: None)
-    _write_heartbeat(tmp_path / 'projects' / 'default', age_seconds=5.0)
+    _write_heartbeat(tmp_path, age_seconds=5.0)
 
     severity, detail = asyncio.run(
         gpu_arbiter.probe_trainer_reachable(container_name='op-test-trainer')
@@ -111,10 +111,7 @@ def test_probe_trainer_reachable_warns_on_stale_heartbeat_without_docker(
     warn, never block -- "can't tell" is not the same as "definitely down"."""
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
     monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: None)
-    _write_heartbeat(
-        tmp_path / 'projects' / 'default',
-        age_seconds=gpu_arbiter.TRAINER_HEARTBEAT_STALE_SECONDS + 60.0,
-    )
+    _write_heartbeat(tmp_path, age_seconds=gpu_arbiter.TRAINER_HEARTBEAT_STALE_SECONDS + 60.0)
 
     severity, detail = asyncio.run(
         gpu_arbiter.probe_trainer_reachable(container_name='op-test-trainer')

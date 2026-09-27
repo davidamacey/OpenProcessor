@@ -57,17 +57,19 @@ logger = get_logger(__name__)
 
 
 def _resolve_jobs_dir() -> Path:
-    """Resolve the bound project's ``train_jobs_dir`` each time it's needed.
-
-    ``CurationConfig.train_jobs_dir`` is a PROJECT_SCOPED_FIELDS entry
-    (``src/config/curation.py``): for ``default`` it resolves to
-    ``OP_TRAIN_JOBS_DIR`` (default ``/jobs``), byte-for-byte the same as
-    before projects existed; for any other bound project it resolves to
-    that project's own ``<jobs_root>/projects/<slug>`` directory (see
-    ``src.config.projects.resources_for_new``), so job.json writes and run
-    listing never cross a project boundary.
-    """
+    """The bound project's ``train_jobs_dir`` (``<OP_TRAIN_JOBS_DIR>/projects/<slug>``,
+    ``default`` included; see ``src.config.projects.resources_for_new``), so
+    job.json writes and run listing never cross a project boundary."""
     return get_curation_config().train_jobs_dir
+
+
+def trainer_root_dir() -> Path:
+    """The trainer's own watch root (``OP_TRAIN_JOBS_DIR``, default ``/jobs``).
+
+    One trainer serves every project: it globs each project's dir under
+    this root, but writes its process-wide files (``.trainer_capabilities.json``)
+    here, not under any project's dir."""
+    return Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
 
 
 # Public for callers that want the default without the env override.

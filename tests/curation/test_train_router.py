@@ -191,7 +191,7 @@ def test_preflight_blocks_gpu_the_trainer_is_not_attached_to(
     """A capabilities file naming [2] and a request for host GPU 0 must
     block -- the original TR-2 failure mode (API accepts a GPU the trainer
     isn't attached to, job hangs in queued/starting forever)."""
-    _write_trainer_capabilities(tmp_path / 'projects' / 'default', [2])
+    _write_trainer_capabilities(tmp_path, [2])
     body = {
         'dataset_export_dir': '/data/exports/x',
         'profile': 'medium',
@@ -209,7 +209,7 @@ def test_preflight_blocks_gpu_the_trainer_is_not_attached_to(
 def test_preflight_ok_for_gpu_the_trainer_is_attached_to(
     app_client: TestClient, tmp_path: Any
 ) -> None:
-    _write_trainer_capabilities(tmp_path / 'projects' / 'default', [0, 2])
+    _write_trainer_capabilities(tmp_path, [0, 2])
     body = {
         'dataset_export_dir': '/data/exports/x',
         'profile': 'medium',
@@ -238,7 +238,7 @@ def test_preflight_ok_when_capabilities_file_reports_unrestricted(
 ) -> None:
     """An empty gpu_order means the trainer sees every GPU at its host
     index (OP_TRAIN_GPU_ORDER unset) -- no restriction, any id passes."""
-    _write_trainer_capabilities(tmp_path / 'projects' / 'default', [])
+    _write_trainer_capabilities(tmp_path, [])
     body = {
         'dataset_export_dir': '/data/exports/x',
         'profile': 'medium',
@@ -260,7 +260,7 @@ def test_train_gpus_intersects_with_trainer_capabilities(
     from src.config import GpuArbiterConfig
 
     _set_arbiter_config(monkeypatch, GpuArbiterConfig())
-    _write_trainer_capabilities(tmp_path / 'projects' / 'default', [2])
+    _write_trainer_capabilities(tmp_path, [2])
     r = app_client.get('/curation/projects/default/train/gpus')
     assert r.status_code == 200, r.text
     body = r.json()
