@@ -172,3 +172,81 @@ def test_group_should_skip_false_when_no_state_file(tmp_path: Path, bash) -> Non
     )
     result = bash(script)
     assert result.stdout.strip() == 'RUN'
+
+
+def test_classify_failure_ignores_a_bare_403_count(tmp_path: Path, bash) -> None:
+    log = tmp_path / 'step.log'
+    log.write_text('downloaded 403 files in 12s\n')
+    assert bash(_source(f'classify_failure "{log}"')).stdout.strip() == 'unknown'
+
+
+def test_classify_failure_http_auth_errors_are_gated(tmp_path: Path, bash) -> None:
+    for text in (
+        'urllib.error.HTTPError: HTTP Error 403: Forbidden',
+        'requests.exceptions.HTTPError: 401 Client Error: Unauthorized for url',
+        'huggingface_hub: status code 403',
+    ):
+        log = tmp_path / 'step.log'
+        log.write_text(text + '\n')
+        assert bash(_source(f'classify_failure "{log}"')).stdout.strip() == 'permanent:gated', text
+
+
+def test_retry_step_leaves_the_callers_errexit_alone(tmp_path: Path, bash) -> None:
+    off = bash(
+        f'source {LIB}; MODEL_SETUP_LOGDIR="{tmp_path}" retry_step ok 1 -- true; '
+        '[[ $- == *e* ]] && echo ON || echo OFF'
+    )
+    assert off.stdout.strip().splitlines()[-1] == 'OFF'
+    on = bash(
+        f'set -e; source {LIB}; MODEL_SETUP_LOGDIR="{tmp_path}" retry_step ok 1 -- true; '
+        '[[ $- == *e* ]] && echo ON || echo OFF'
+    )
+    assert on.stdout.strip().splitlines()[-1] == 'ON'
+
+
+def test_step_logs_are_private_and_redacted(tmp_path: Path, bash) -> None:
+    secret = 'hf_ABCDEFGHIJKLMNOP'  # gitleaks:allow
+    result = bash(
+        f'source {LIB}; OP_DIR="{tmp_path}" retry_step leaky 1 -- '
+        f'bash -c \'echo "token {secret}"; echo "Authorization: Bearer abc"; echo "X_API_KEY=zzz"\''
+    )
+    assert result.returncode == 0, result.stderr
+    log = tmp_path / '.install' / 'logs' / 'leaky.log'
+    text = log.read_text()
+    assert secret not in text
+    assert 'Bearer abc' not in text
+    assert 'zzz' not in text
+    assert (log.stat().st_mode & 0o777) == 0o600
+    assert (log.parent.stat().st_mode & 0o777) == 0o700
+
+
+def test_step_logs_never_default_to_the_working_directory(tmp_path: Path, bash) -> None:
+    result = bash(
+        f'cd "{tmp_path}"; source {LIB}; unset OP_DIR MODEL_SETUP_LOGDIR; retry_step x 1 -- true'
+    )
+    assert result.returncode != 0
+    assert not (tmp_path / 'x.log').exists()
+
+
+def test_groups_follow_the_tiers(bash) -> None:
+    core = bash(_source('model_setup_groups_for_tiers "core"')).stdout.split()
+    assert core == ['preflight', 'base', 'yolo', 'mobileclip', 'faces', 'ocr']
+    cur = bash(_source('model_setup_groups_for_tiers "core curation"')).stdout.split()
+    assert cur[-1] == 'pe'
+
+
+def test_a_failed_group_does_not_stop_later_groups(tmp_path: Path, bash) -> None:
+    script = (
+        f'source {LIB}; OP_DIR="{tmp_path}"; mkdir -p "{tmp_path}/.install"; sleep() {{ :; }}; '
+        'triton_load_and_wait() { return 0; }; '
+        'dc() { if [[ "$*" == *export_mobileclip_image* ]]; then echo "ModuleNotFoundError: x"; return 1; fi; return 0; }; '
+        'model_setup_run_groups "core"; echo "rc=$?"'
+    )
+    result = bash(script)
+    assert 'failed_groups=mobileclip' in result.stdout
+    assert 'rc=1' in result.stdout
+    statuses = dict(
+        ln.split('\t')[:2] for ln in (tmp_path / '.install' / 'groups.tsv').read_text().splitlines()
+    )
+    assert statuses['mobileclip'] == 'failed'
+    assert statuses['faces'] == statuses['ocr'] == 'ok'

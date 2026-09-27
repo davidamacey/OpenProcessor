@@ -34,6 +34,10 @@ scripts/codegen/check_no_literal_region_fields.py # the plate_* literal guard it
 # image that serves it.
 images.lock:gemma # public, Apache-2.0 VLM catalog entry (installer plan section 2.2), not a leak
 tests/installer/test_vlm_catalog.py # exercises examples/vlm/catalog.tsv's public gemma-4-e4b row (installer plan section 2.2), not a leak
+tests/installer/installer_harness.py:gemma # fake images.lock for the installer tests uses the release's public vlm_gemma4 image key (installer plan 3.1), not a leak
+tests/installer/shims/docker:gemma # test double echoes the compose file's public vLLM gemma4 image default, not a leak
+tests/installer/test_gpu_plan.py:gemma # asserts the public, tested gemma-4-e4b catalog entry is picked (installer plan 2.2), not a leak
+tests/installer/test_setup_dry_run.py:gemma # asserts VLM_IMAGE equals the lock's public vlm_gemma4 key (installer plan 2.2), not a leak
 
 # The retired-env guard and its test spell every retired name on purpose:
 # that IS the mechanism that makes a stale env var fail loudly instead

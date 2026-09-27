@@ -1,27 +1,25 @@
+"""Fixtures for the installer tests; the harness lives in installer_harness.py."""
+
 from __future__ import annotations
 
-import subprocess
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+from installer_harness import REPO_ROOT, Shimmed, build_fake_release, run_bash
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
-def run_bash(
-    script: str, *, cwd: Path | None = None, env: dict[str, str] | None = None
-) -> subprocess.CompletedProcess:
-    """Run a bash snippet, returning the CompletedProcess (never raises)."""
-    return subprocess.run(
-        ['bash', '-c', script],
-        check=False,
-        cwd=str(cwd or REPO_ROOT),
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+@pytest.fixture(scope='session')
+def fake_release(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return build_fake_release(tmp_path_factory.mktemp('release'))
+
+
+@pytest.fixture
+def shimmed(tmp_path: Path, fake_release: Path) -> Shimmed:
+    return Shimmed(root=tmp_path, release=fake_release)
 
 
 @pytest.fixture
