@@ -133,7 +133,7 @@ async def test_compute_diverse_order_disabled_returns_none_without_any_os_call(
 
     monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
     fake_os = _fake_scroll_client(_orthonormal_pool(5))
-    result = await compute_diverse_order(fake_os, 'op_items', {'match_all': {}})
+    result = await compute_diverse_order(fake_os, 'op_prj_default__items', {'match_all': {}})
     assert result is None
     fake_os.search.assert_not_called()
 
@@ -147,7 +147,7 @@ async def test_compute_diverse_order_returns_full_ranking_when_enabled_and_small
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     pool = _orthonormal_pool(6)
     fake_os = _fake_scroll_client(pool)
-    result = await compute_diverse_order(fake_os, 'op_items', {'match_all': {}})
+    result = await compute_diverse_order(fake_os, 'op_prj_default__items', {'match_all': {}})
     assert result is not None
     assert set(result) == {cid for cid, _ in pool}
     assert len(result) == 6
@@ -168,7 +168,7 @@ async def test_compute_diverse_order_falls_back_above_inline_cap(
     # 5 trips truncation immediately on the first (only) scroll page.
     monkeypatch.setenv('OP_SELECT_SYNC_MAX_OPS', '4')
     fake_os = _fake_scroll_client(_orthonormal_pool(5))
-    result = await compute_diverse_order(fake_os, 'op_items', {'match_all': {}})
+    result = await compute_diverse_order(fake_os, 'op_prj_default__items', {'match_all': {}})
     assert result is None
 
 
@@ -180,7 +180,7 @@ async def test_compute_diverse_order_empty_pool_returns_empty_list(
 
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     fake_os = _fake_scroll_client([])
-    result = await compute_diverse_order(fake_os, 'op_items', {'match_all': {}})
+    result = await compute_diverse_order(fake_os, 'op_prj_default__items', {'match_all': {}})
     assert result == []
 
 
@@ -199,14 +199,14 @@ async def test_compute_diverse_order_cache_hits_when_k_caps_the_order(
     fake_os = _fake_scroll_client(pool)
 
     first = await compute_diverse_order(
-        fake_os, 'op_items', {'match_all': {}}, current_count=6, k=2
+        fake_os, 'op_prj_default__items', {'match_all': {}}, current_count=6, k=2
     )
     assert first is not None
     assert len(first) == 2
     assert fake_os.search.await_count == 1
 
     second = await compute_diverse_order(
-        fake_os, 'op_items', {'match_all': {}}, current_count=6, k=2
+        fake_os, 'op_prj_default__items', {'match_all': {}}, current_count=6, k=2
     )
     assert second == first
     # Still 1 -- the second call hit the cache instead of re-scrolling.
@@ -255,7 +255,9 @@ def crops_app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # embedding-bearing pool before ranking.
     fake_os.count = AsyncMock(return_value={'count': 2})
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     client = TestClient(app)
     client.fake_os = fake_os  # type: ignore[attr-defined]
@@ -266,8 +268,12 @@ def test_get_crops_order_diverse_flag_off_behaves_like_default(
     crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
-    r_default = crops_app_client.get('/curation/crops', params={'order': 'default'})
-    r_diverse = crops_app_client.get('/curation/crops', params={'order': 'diverse'})
+    r_default = crops_app_client.get(
+        '/curation/projects/default/crops', params={'order': 'default'}
+    )
+    r_diverse = crops_app_client.get(
+        '/curation/projects/default/crops', params={'order': 'diverse'}
+    )
     assert r_default.status_code == r_diverse.status_code == 200
     assert r_default.json() == r_diverse.json()
 
@@ -279,7 +285,9 @@ def test_get_crops_order_diverse_uses_the_computed_order_when_enabled(
         'src.routers.curation.select.compute_diverse_order',
         AsyncMock(return_value=['crop-b', 'crop-a']),
     )
-    r = crops_app_client.get('/curation/crops', params={'order': 'diverse', 'page_size': 50})
+    r = crops_app_client.get(
+        '/curation/projects/default/crops', params={'order': 'diverse', 'page_size': 50}
+    )
     assert r.status_code == 200
     body = r.json()
     assert body['total'] == 2
@@ -293,8 +301,12 @@ def test_get_crops_order_diverse_falls_back_when_helper_returns_none(
         'src.routers.curation.select.compute_diverse_order',
         AsyncMock(return_value=None),
     )
-    r_default = crops_app_client.get('/curation/crops', params={'order': 'default'})
-    r_diverse = crops_app_client.get('/curation/crops', params={'order': 'diverse'})
+    r_default = crops_app_client.get(
+        '/curation/projects/default/crops', params={'order': 'default'}
+    )
+    r_diverse = crops_app_client.get(
+        '/curation/projects/default/crops', params={'order': 'diverse'}
+    )
     assert r_diverse.json() == r_default.json()
 
 
@@ -313,7 +325,9 @@ def select_app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
 
     fake_os = AsyncMock()
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     client = TestClient(app)
     client.fake_os = fake_os  # type: ignore[attr-defined]
@@ -324,14 +338,14 @@ def test_select_diverse_disabled_400(
     select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
-    r = select_app_client.post('/curation/select/diverse', json={'k': 5})
+    r = select_app_client.post('/curation/projects/default/select/diverse', json={'k': 5})
     assert r.status_code == 400
     assert 'disabled' in r.json()['detail']
 
 
 def test_select_diverse_unknown_review_tab_400(select_app_client: TestClient) -> None:
     r = select_app_client.post(
-        '/curation/select/diverse', json={'k': 5, 'scope': {'review_tab': 'nope'}}
+        '/curation/projects/default/select/diverse', json={'k': 5, 'scope': {'review_tab': 'nope'}}
     )
     assert r.status_code == 400
 
@@ -351,7 +365,7 @@ def test_select_diverse_sync_path_respects_k_and_stays_in_scope(
     select_app_client.fake_os.clear_scroll = AsyncMock(return_value=None)
 
     r = select_app_client.post(
-        '/curation/select/diverse', json={'k': 3, 'scope': {'cluster_id': 42}}
+        '/curation/projects/default/select/diverse', json={'k': 3, 'scope': {'cluster_id': 42}}
     )
     assert r.status_code == 200
     body = r.json()
@@ -382,32 +396,32 @@ def test_select_diverse_job_path_for_large_pool(
 
     monkeypatch.setattr(select_job, 'run_selection_job', _fake_run_selection_job)
 
-    r = select_app_client.post('/curation/select/diverse', json={'k': 1000})
+    r = select_app_client.post('/curation/projects/default/select/diverse', json={'k': 1000})
     assert r.status_code == 202
     body = r.json()
     assert body['status'] == 'running'
     assert body['k'] == 1000
 
-    r_status = select_app_client.get('/curation/select/status')
+    r_status = select_app_client.get('/curation/projects/default/select/status')
     assert r_status.json()['status'] == 'running'
 
-    r_double = select_app_client.post('/curation/select/diverse', json={'k': 500})
+    r_double = select_app_client.post('/curation/projects/default/select/diverse', json={'k': 500})
     assert r_double.status_code == 409
 
-    r_cancel = select_app_client.post('/curation/select/cancel')
+    r_cancel = select_app_client.post('/curation/projects/default/select/cancel')
     assert r_cancel.status_code == 200
     assert r_cancel.json()['cancelled'] is True
     assert select_job.is_cancelled()
 
 
 def test_select_status_idle_with_no_job(select_app_client: TestClient) -> None:
-    r = select_app_client.get('/curation/select/status')
+    r = select_app_client.get('/curation/projects/default/select/status')
     assert r.status_code == 200
     assert r.json()['status'] == 'idle'
 
 
 def test_select_cancel_with_no_job_running(select_app_client: TestClient) -> None:
-    r = select_app_client.post('/curation/select/cancel')
+    r = select_app_client.post('/curation/projects/default/select/cancel')
     assert r.status_code == 200
     assert r.json()['cancelled'] is False
 

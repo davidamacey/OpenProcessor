@@ -54,6 +54,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.config.region_state import RegionStatus  # noqa: E402 - needs the sys.path fix above
+from src.services.projects.guard import make_script_opensearch  # noqa: E402
+from src.services.projects.script_binding import (  # noqa: E402 - needs the sys.path fix above
+    add_project_argument,
+    bind_script_project,
+)
 
 
 RANDOM_SEED = 1337
@@ -156,14 +161,13 @@ def _assert_verify_scoped(cfg: Any) -> None:
         'items_index': cfg.items_index,
         'labels_confirmed_index': cfg.labels_confirmed_index,
         'classes_index': cfg.classes_index,
-        'clusters_index': cfg.clusters_index,
         'settings_index': cfg.settings_index,
     }
     bad = {k: v for k, v in names.items() if not v.startswith('verify_')}
     if bad:
         _fail(
             'refusing to seed: these configured index names lack the '
-            f'`verify_` prefix: {bad}. Set the OP_*_INDEX env vars first.'
+            f'`verify_` prefix: {bad}. Set OP_PROJECT_INDEX_PREFIX=verify_prj_ first.'
         )
 
 
@@ -381,8 +385,6 @@ async def _bulk(client: Any, index: str, docs: list[dict[str, Any]], id_key: str
 
 
 async def _seed(args: argparse.Namespace) -> int:
-    from opensearchpy import AsyncOpenSearch
-
     from src.clients.curation_opensearch import ClassRegistry
     from src.config import get_curation_config, get_region_fields
     from src.routers.curation._common import _ensure_indexes
@@ -391,7 +393,7 @@ async def _seed(args: argparse.Namespace) -> int:
     fields = get_region_fields()
     _assert_verify_scoped(cfg)
 
-    client = AsyncOpenSearch(hosts=[args.opensearch_url], timeout=60, max_retries=3)
+    client = make_script_opensearch([args.opensearch_url], timeout=60, max_retries=3)
     try:
         if args.wipe:
             for name in (
@@ -399,7 +401,6 @@ async def _seed(args: argparse.Namespace) -> int:
                 cfg.items_index,
                 cfg.labels_confirmed_index,
                 cfg.classes_index,
-                cfg.clusters_index,
                 cfg.settings_index,
             ):
                 try:
@@ -410,7 +411,7 @@ async def _seed(args: argparse.Namespace) -> int:
             if registry_path.parent.is_dir():
                 for stale in registry_path.parent.glob(f'{registry_path.stem}*.json'):
                     stale.unlink()
-            for sub in ('exports', 'state', 'crop_cache'):
+            for sub in ('projects', 'state', 'crop_cache'):
                 target = Path(args.data_root) / sub
                 if target.is_dir():
                     shutil.rmtree(target)
@@ -482,7 +483,9 @@ def main() -> int:
         action='store_true',
         help='Delete the verify_* indexes, registry and job files first.',
     )
+    add_project_argument(parser)
     args = parser.parse_args()
+    bind_script_project(args.project, opensearch_url=args.opensearch_url)
     if args.source_root is None:
         from src.config import get_curation_config
 

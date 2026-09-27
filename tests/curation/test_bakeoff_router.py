@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _project_paths import default_train_jobs_dir
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -143,19 +144,24 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Path]:
     dirs = {
         'exports': tmp_path / 'exports',
         'external': tmp_path / 'bakeoff_eval',
-        'train_jobs': tmp_path / 'train_jobs',
+        'train_jobs_root': tmp_path / 'train_jobs',
         'runs': tmp_path / 'runs',
         'jobs': tmp_path / 'bakeoff_jobs',
         'out': tmp_path / 'bakeoff_out',
     }
-    for key in ('exports', 'external', 'train_jobs', 'runs'):
+    for key in ('exports', 'external', 'train_jobs_root', 'runs'):
         dirs[key].mkdir()
-    monkeypatch.setattr(eval_datasets, 'EXPORT_ROOT', dirs['exports'])
-    monkeypatch.setattr(eval_datasets, 'EXTERNAL_ROOT', dirs['external'])
+    # default's train_jobs_dir nests under the OP_TRAIN_JOBS_DIR root.
+    dirs['train_jobs'] = default_train_jobs_dir(dirs['train_jobs_root'])
+    monkeypatch.setattr(eval_datasets, 'export_root', lambda: dirs['exports'])
+    monkeypatch.setattr(eval_datasets, 'external_root', lambda: dirs['external'])
     monkeypatch.setattr(bakeoff_jobs, 'RUNS_HOST_ROOT', dirs['runs'])
-    monkeypatch.setattr(bakeoff, 'JOBS_DIR', dirs['jobs'])
-    monkeypatch.setattr(bakeoff, 'OUT_DIR', dirs['out'])
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(dirs['train_jobs']))
+    # bakeoff.JOBS_DIR/OUT_DIR are now _jobs_dir()/_out_dir() -- resolved
+    # per-project at call time (projects_plan.md §5.3) instead of module-
+    # level constants -- so tests patch the functions themselves.
+    monkeypatch.setattr(bakeoff, '_jobs_dir', lambda: dirs['jobs'])
+    monkeypatch.setattr(bakeoff, '_out_dir', lambda: dirs['out'])
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(dirs['train_jobs_root']))
     for key in [k for k in __import__('os').environ if k.startswith('OP_BAKEOFF_PROFILE')]:
         monkeypatch.delenv(key)
     eval_datasets.clear_cache()
@@ -175,7 +181,9 @@ def client() -> TestClient:
     from src.routers.curation import router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     return TestClient(app)
 
 
@@ -196,7 +204,11 @@ def make_run(
     ckpt = dirs['runs'] / run_id / 'weights' / 'best.pt'
     ckpt.parent.mkdir(parents=True)
     ckpt.write_bytes(b'pt')
+    # `dirs['train_jobs']` is already default's fully-nested
+    # `OP_TRAIN_JOBS_DIR/projects/default` (see `default_train_jobs_dir`
+    # in tests/_project_paths.py) -- do not nest it again here.
     jobs = dirs['train_jobs']
+    jobs.mkdir(parents=True, exist_ok=True)
     (jobs / f'{run_id}.status.json').write_text(
         json.dumps(
             {
@@ -260,14 +272,18 @@ def _live_export(dirs: dict[str, Path], rel: str = '20260924T233203Z', **kw: Any
 def test_bakeoff_router_is_registered() -> None:
     from src.main import app
 
-    assert any(r.path == '/curation/bakeoff/runs' for r in app.routes)
-    assert any(r.path == '/curation/bakeoff/eval_datasets' for r in app.routes)
+    assert any(r.path == '/curation/projects/{project}/bakeoff/runs' for r in app.routes)
+    assert any(r.path == '/curation/projects/{project}/bakeoff/eval_datasets' for r in app.routes)
 
 
 def test_bakeoff_routes_have_typed_response_models() -> None:
     from src.main import app
 
-    routes = [r for r in app.routes if getattr(r, 'path', '').startswith('/curation/bakeoff/')]
+    routes = [
+        r
+        for r in app.routes
+        if getattr(r, 'path', '').startswith('/curation/projects/{project}/bakeoff/')
+    ]
     assert len(routes) == 9
     untyped = [r.path for r in routes if getattr(r, 'response_model', None) is None]
     assert not untyped, f'bake-off routes without response_model: {untyped}'
@@ -280,7 +296,9 @@ def test_bakeoff_routes_have_typed_response_models() -> None:
 
 def test_eval_datasets_lists_multiclass_export(env: dict[str, Path], client: TestClient) -> None:
     d = _live_export(env, background=('bg_0',))
-    body = client.get('/curation/bakeoff/eval_datasets', params={'source': 'export'}).json()
+    body = client.get(
+        '/curation/projects/default/bakeoff/eval_datasets', params={'source': 'export'}
+    ).json()
     assert body['count'] == 1
     [row] = body['datasets']
     assert row['id'] == 'export:20260924T233203Z'
@@ -346,7 +364,9 @@ def test_eval_datasets_registry_class_name_resolved_by_id_with_gaps(
     monkeypatch.setattr(eval_datasets, 'get_class_registry', lambda: _FakeRegistry())
 
     _live_export(env, background=('bg_0',))
-    body = client.get('/curation/bakeoff/eval_datasets', params={'source': 'export'}).json()
+    body = client.get(
+        '/curation/projects/default/bakeoff/eval_datasets', params={'source': 'export'}
+    ).json()
     [row] = body['datasets']
     by_registry_id = {c['registry_class_id']: c['registry_class_name'] for c in row['classes']}
     assert by_registry_id == {
@@ -366,7 +386,7 @@ def test_eval_datasets_sha_source_manifest(env: dict[str, Path], client: TestCli
         test_labels={'a': [0], 'b': [1]},
         manifest={'frozen_test_sha': 'f' * 16, 'test_label_sha': 'a' * 16},
     )
-    [row] = client.get('/curation/bakeoff/eval_datasets').json()['datasets']
+    [row] = client.get('/curation/projects/default/bakeoff/eval_datasets').json()['datasets']
     assert (row['frozen_test_sha'], row['test_label_sha'], row['sha_source']) == (
         'f' * 16,
         'a' * 16,
@@ -390,7 +410,7 @@ def test_eval_datasets_lists_single_class_export_at_depth_two(
     # A symlinked top-level "current" and a non-export dir are not listed.
     (env['exports'] / 'current').symlink_to(profile_dir / '20260924T032032Z')
     (env['exports'] / 'scratch').mkdir()
-    rows = client.get('/curation/bakeoff/eval_datasets').json()['datasets']
+    rows = client.get('/curation/projects/default/bakeoff/eval_datasets').json()['datasets']
     assert [r['id'] for r in rows] == ['export:region_widget/20260924T032032Z']
     [row] = rows
     assert row['is_current'] is True
@@ -410,7 +430,9 @@ def test_eval_datasets_external_kept_optional(env: dict[str, Path], client: Test
     lbl.write_text('0 0.1 0.1 0.1 0.1\n')
     make_export(env['external'], 'sample/unfrozen', nc=1, test_labels={'c': [0]})
 
-    body = client.get('/curation/bakeoff/eval_datasets', params={'source': 'external'}).json()
+    body = client.get(
+        '/curation/projects/default/bakeoff/eval_datasets', params={'source': 'external'}
+    ).json()
     by_id = {r['id']: r for r in body['datasets']}
     assert set(by_id) == {'external:curated/set_a', 'external:public/set_b'}
     assert by_id['external:curated/set_a']['group'] == 'curated'
@@ -420,7 +442,9 @@ def test_eval_datasets_external_kept_optional(env: dict[str, Path], client: Test
     assert by_id['external:public/set_b']['frozen_ok'] is False
     assert by_id['external:curated/set_a']['dataset_sha'] is None
     # Nothing under the export root: the export listing is empty, not an error.
-    assert client.get('/curation/bakeoff/eval_datasets', params={'source': 'export'}).json() == {
+    assert client.get(
+        '/curation/projects/default/bakeoff/eval_datasets', params={'source': 'export'}
+    ).json() == {
         'datasets': [],
         'count': 0,
     }
@@ -432,7 +456,7 @@ def test_eval_datasets_external_kept_optional(env: dict[str, Path], client: Test
 
 
 def _post_run(client: TestClient, body: dict[str, Any]) -> Any:
-    return client.post('/curation/bakeoff/run', json=body)
+    return client.post('/curation/projects/default/bakeoff/run', json=body)
 
 
 def test_dataset_id_rejects_traversal(env: dict[str, Path], client: TestClient) -> None:
@@ -727,7 +751,7 @@ def test_run_writes_queued_status(env: dict[str, Path], client: TestClient) -> N
         },
     )
     assert r.status_code == 200, r.text
-    st = client.get('/curation/bakeoff/status/jq')
+    st = client.get('/curation/projects/default/bakeoff/status/jq')
     assert st.status_code == 200
     body = st.json()
     assert body['schema_version'] == 2
@@ -735,7 +759,7 @@ def test_run_writes_queued_status(env: dict[str, Path], client: TestClient) -> N
     assert body['datasets'] == ['export:20260924T233203Z']
     assert body['models'] == ['run:run5']
     assert body['progress'] == {'done': 0, 'total': 1}
-    runs = client.get('/curation/bakeoff/runs').json()['runs']
+    runs = client.get('/curation/projects/default/bakeoff/runs').json()['runs']
     assert [(x['job_id'], x['state']) for x in runs] == [('jq', 'queued')]
     # Re-using a job id would overwrite that job's results.
     again = _post_run(
@@ -772,7 +796,7 @@ def test_run_stop_failure_returns_409_and_removes_job(
     assert 'docker socket unavailable' in r.json()['detail']
     assert not (env['jobs'] / 'jf.job.json').exists()
     assert list(env['jobs'].glob('*.job.json')) == []
-    st = client.get('/curation/bakeoff/status/jf').json()
+    st = client.get('/curation/projects/default/bakeoff/status/jf').json()
     assert st['state'] == 'error'
     assert 'docker socket unavailable' in st['error']
 
@@ -794,7 +818,8 @@ def test_trained_models_for_dataset(env: dict[str, Path], client: TestClient) ->
     )
     make_run(env, 'unfinished', export_dir=d, state='running')
     body = client.get(
-        '/curation/bakeoff/trained_models', params={'dataset_id': 'export:20260924T233203Z'}
+        '/curation/projects/default/bakeoff/trained_models',
+        params={'dataset_id': 'export:20260924T233203Z'},
     ).json()
     assert body['count'] == 1
     [m] = body['models']
@@ -811,7 +836,7 @@ def test_trained_models_for_dataset(env: dict[str, Path], client: TestClient) ->
     assert fd['n_classes_mapped'] == 5
     assert fd['train_test_overlap'] == {'n_images': 1, 'fraction': 1 / 25}
 
-    plain = client.get('/curation/bakeoff/trained_models').json()['models'][0]
+    plain = client.get('/curation/projects/default/bakeoff/trained_models').json()['models'][0]
     assert plain['for_dataset'] is None
 
 
@@ -946,18 +971,24 @@ def test_results_serves_v2_and_rejects_v1(env: dict[str, Path], client: TestClie
         json.dumps({**_v2_comparison('j2'), 'dataset': {'id': 'external:curated/x'}})
     )
 
-    r = client.get('/curation/bakeoff/results/j2')  # defaults to the job's first dataset
+    r = client.get(
+        '/curation/projects/default/bakeoff/results/j2'
+    )  # defaults to the job's first dataset
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['dataset']['id'] == 'export:e1'
     row = body['models'][0]
     assert (row['rank'], row['common']['map_50_95'], row['coverage']['n_covered']) == (1, 0.4, 1)
     assert row['coverage']['unmapped_model_classes'][0]['n_predictions'] == 4
-    r = client.get('/curation/bakeoff/results/j2', params={'dataset_id': 'external:curated/x'})
+    r = client.get(
+        '/curation/projects/default/bakeoff/results/j2', params={'dataset_id': 'external:curated/x'}
+    )
     assert r.status_code == 200
     assert r.json()['dataset']['id'] == 'external:curated/x'
     assert (
-        client.get('/curation/bakeoff/results/j2', params={'dataset_id': 'export:nope'}).status_code
+        client.get(
+            '/curation/projects/default/bakeoff/results/j2', params={'dataset_id': 'export:nope'}
+        ).status_code
         == 404
     )
 
@@ -966,7 +997,7 @@ def test_results_serves_v2_and_rejects_v1(env: dict[str, Path], client: TestClie
     (v1 / 'export__e1' / 'comparison.json').write_text(
         json.dumps({'models': [{'rank': 1, 'name': 'm', 'map_50': 0.5}], 'rank_by': 'map_50'})
     )
-    r = client.get('/curation/bakeoff/results/j1')
+    r = client.get('/curation/projects/default/bakeoff/results/j1')
     assert r.status_code == 409
     assert r.json()['detail'] == (
         'bake-off result comparison.json has an unsupported schema (schema_version != 2)'
@@ -974,13 +1005,13 @@ def test_results_serves_v2_and_rejects_v1(env: dict[str, Path], client: TestClie
 
 
 def test_results_404_when_missing(env: dict[str, Path], client: TestClient) -> None:
-    assert client.get('/curation/bakeoff/results/no-such-job').status_code == 404
-    assert client.get('/curation/bakeoff/status/no-such-job').status_code == 404
-    assert client.get('/curation/bakeoff/matrix/no-such-job').status_code == 404
+    assert client.get('/curation/projects/default/bakeoff/results/no-such-job').status_code == 404
+    assert client.get('/curation/projects/default/bakeoff/status/no-such-job').status_code == 404
+    assert client.get('/curation/projects/default/bakeoff/matrix/no-such-job').status_code == 404
 
 
 def test_runs_skip_v1_and_sort_newest_first(env: dict[str, Path], client: TestClient) -> None:
-    assert client.get('/curation/bakeoff/runs').json() == {'runs': []}
+    assert client.get('/curation/projects/default/bakeoff/runs').json() == {'runs': []}
     _write_job_out(env['out'], 'older')
     newer = _write_job_out(env['out'], 'newer')
     st = json.loads((newer / 'status.json').read_text())
@@ -989,7 +1020,7 @@ def test_runs_skip_v1_and_sort_newest_first(env: dict[str, Path], client: TestCl
     legacy = env['out'] / 'legacy'
     legacy.mkdir()
     (legacy / 'status.json').write_text(json.dumps({'state': 'done', 'models': []}))
-    runs = client.get('/curation/bakeoff/runs').json()['runs']
+    runs = client.get('/curation/projects/default/bakeoff/runs').json()['runs']
     assert [r['job_id'] for r in runs] == ['newer', 'older']
     assert runs[0]['datasets'] == ['export:e1', 'external:curated/x']
 
@@ -1029,11 +1060,11 @@ def test_matrix_serves_v2(env: dict[str, Path], client: TestClient) -> None:
             }
         )
     )
-    body = client.get('/curation/bakeoff/matrix/jm').json()
+    body = client.get('/curation/projects/default/bakeoff/matrix/jm').json()
     assert body['best'] == {'export:e1': {'map_50_95': ['run:r1']}}
     assert body['cells']['run:r1']['export:e1']['coverage'] == 1.0
     (job / 'matrix.json').write_text(json.dumps({'cells': {}, 'best': {'x': {'map_50': 'm'}}}))
-    assert client.get('/curation/bakeoff/matrix/jm').status_code == 409
+    assert client.get('/curation/projects/default/bakeoff/matrix/jm').status_code == 409
 
 
 # =============================================================================
@@ -1042,7 +1073,7 @@ def test_matrix_serves_v2(env: dict[str, Path], client: TestClient) -> None:
 
 
 def test_profiles_lists_generic_only_by_default(env: dict[str, Path], client: TestClient) -> None:
-    r = client.get('/curation/bakeoff/profiles')
+    r = client.get('/curation/projects/default/bakeoff/profiles')
     assert r.status_code == 200
     body = r.json()
     assert [p['name'] for p in body['profiles']] == ['generic']
@@ -1061,14 +1092,14 @@ def test_profiles_configured_json_default_row(
     f = tmp_path / 'widgets.json'
     f.write_text(json.dumps({'name': 'widgets', 'class_filter': ['widget']}))
     monkeypatch.setenv('OP_BAKEOFF_PROFILE', str(f))
-    body = client.get('/curation/bakeoff/profiles').json()
+    body = client.get('/curation/projects/default/bakeoff/profiles').json()
     [row] = [p for p in body['profiles'] if p['default']]
     assert (row['name'], row['kind'], row['class_filter']) == ('widgets', 'configured', ['widget'])
     assert body['count'] == len(body['profiles']) == 2
 
     monkeypatch.delenv('OP_BAKEOFF_PROFILE')
     monkeypatch.setenv('OP_BAKEOFF_PROFILE_CONTEXT_CLASS_IDS', '4')
-    body = client.get('/curation/bakeoff/profiles').json()
+    body = client.get('/curation/projects/default/bakeoff/profiles').json()
     [row] = [p for p in body['profiles'] if p['default']]
     assert (row['name'], row['kind'], row['context_class_ids']) == ('generic', 'registered', [4])
     # No registry configured in this env -- falls back to the id's string
@@ -1098,7 +1129,7 @@ def test_profiles_context_class_names_resolved_by_registry_id(
 
     monkeypatch.setattr(bakeoff, 'get_class_registry', lambda: _FakeRegistry())
     monkeypatch.setenv('OP_BAKEOFF_PROFILE_CONTEXT_CLASS_IDS', '4,7,99')
-    body = client.get('/curation/bakeoff/profiles').json()
+    body = client.get('/curation/projects/default/bakeoff/profiles').json()
     [row] = [p for p in body['profiles'] if p['default']]
     assert row['context_class_ids'] == [4, 7, 99]
     # id 99 has no registry entry -- falls back to its string form, never
@@ -1110,7 +1141,7 @@ def test_profiles_bad_default_is_reported(
     env: dict[str, Path], client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_BAKEOFF_PROFILE', 'no_such_profile')
-    body = client.get('/curation/bakeoff/profiles').json()
+    body = client.get('/curation/projects/default/bakeoff/profiles').json()
     assert body['default_profile'] is None
     assert 'unknown bake-off profile' in body['default_error']
     assert not any(p['default'] for p in body['profiles'])
@@ -1154,7 +1185,7 @@ def test_run_profile_class_filter_narrows_scored_classes(
 
 
 def test_default_baseline_registry_is_empty(env: dict[str, Path], client: TestClient) -> None:
-    body = client.get('/curation/bakeoff/baseline_models').json()
+    body = client.get('/curation/projects/default/bakeoff/baseline_models').json()
     assert body == {'baselines': [], 'count': 0}
 
 
@@ -1181,7 +1212,7 @@ def test_baseline_models_per_profile_and_run_lookup(
         )
     )
     monkeypatch.setattr(bakeoff_jobs, 'BASELINES_PATH', reg)
-    body = client.get('/curation/bakeoff/baseline_models').json()
+    body = client.get('/curation/projects/default/bakeoff/baseline_models').json()
     assert body['count'] == 1
     [b] = body['baselines']
     assert b == {
@@ -1196,12 +1227,14 @@ def test_baseline_models_per_profile_and_run_lookup(
         'triton_model': None,
     }
     for bad in ('license_plate', 'nope', '../../etc/x.json'):
-        r = client.get('/curation/bakeoff/baseline_models', params={'profile': bad})
+        r = client.get(
+            '/curation/projects/default/bakeoff/baseline_models', params={'profile': bad}
+        )
         assert r.status_code == 400, bad
     assert (
-        client.get('/curation/bakeoff/baseline_models', params={'profile': 'generic'}).json()[
-            'count'
-        ]
+        client.get(
+            '/curation/projects/default/bakeoff/baseline_models', params={'profile': 'generic'}
+        ).json()['count']
         == 1
     )
 
@@ -1326,9 +1359,9 @@ def test_api_job_spec_runs_in_the_evaluator_and_results_are_served(
     status = bakeoff_runner.run_job(spec)
     assert status['state'] == 'done', status
 
-    st = client.get('/curation/bakeoff/status/e2e').json()
+    st = client.get('/curation/projects/default/bakeoff/status/e2e').json()
     assert (st['state'], st['progress']) == ('done', {'done': 2, 'total': 2})
-    comp = client.get('/curation/bakeoff/results/e2e')
+    comp = client.get('/curation/projects/default/bakeoff/results/e2e')
     assert comp.status_code == 200, comp.text
     body = comp.json()
     assert (body['dataset']['id'], body['rank_scope'], body['common_classes']) == (
@@ -1342,6 +1375,6 @@ def test_api_job_spec_runs_in_the_evaluator_and_results_are_served(
     assert by_key['custom:dog-only']['coverage']['not_covered'] == [
         {'eval_class_id': 1, 'name': 'cat'}
     ]
-    matrix = client.get('/curation/bakeoff/matrix/e2e')
+    matrix = client.get('/curation/projects/default/bakeoff/matrix/e2e')
     assert matrix.status_code == 200, matrix.text
     assert set(matrix.json()['cells']) == {'custom:by-name', 'custom:dog-only'}

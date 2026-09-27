@@ -68,13 +68,13 @@ def test_ingest_batch_then_crops_and_status(
     Path('/tmp/roundtrip_a.jpg').write_bytes(_jpeg_bytes(1))
     Path('/tmp/roundtrip_b.jpg').write_bytes(_jpeg_bytes(2))
 
-    resp = client.post('/curation/ingest/batch', json=body)
+    resp = client.post('/curation/projects/default/ingest/batch', json=body)
     assert resp.status_code == 200, resp.text
     payload = resp.json()
     assert payload['summary']['successful'] == 2
     assert payload['summary']['crops_indexed'] == 2
 
-    crops_resp = client.get('/curation/crops')
+    crops_resp = client.get('/curation/projects/default/crops')
     assert crops_resp.status_code == 200, crops_resp.text
     crops_payload = crops_resp.json()
     items = crops_payload.get('items') or crops_payload.get('crops') or crops_payload
@@ -96,7 +96,7 @@ def test_ingest_batch_then_crops_and_status(
         assert doc.get('crop_area_norm') is not None
         assert doc.get('pe_embedding') is not None
 
-    status_resp = client.get('/curation/ingest/status')
+    status_resp = client.get('/curation/projects/default/ingest/status')
     assert status_resp.status_code == 200, status_resp.text
     status_payload = status_resp.json()
     assert status_payload['total'] == 2
@@ -120,7 +120,7 @@ def test_ingest_batch_imports_companion_labels(
     label_path.write_text('0 0.3 0.3 0.4 0.4\n')
 
     resp = client.post(
-        '/curation/ingest/batch',
+        '/curation/projects/default/ingest/batch',
         json={
             'items': [
                 {

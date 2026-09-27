@@ -55,17 +55,19 @@ def fake_os() -> _RecordingOS:
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch, fake_os: _RecordingOS) -> Any:
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', True)
+    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     with TestClient(app) as c:
         yield c
 
 
-P = _common.config.api_prefix
+P = f'{_common.config.api_prefix}/projects/default'
 
 
 def test_crops_list_excludes_class_id_history(client: TestClient, fake_os: _RecordingOS) -> None:

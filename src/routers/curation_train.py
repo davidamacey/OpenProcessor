@@ -43,17 +43,13 @@ from fastapi import APIRouter, HTTPException, Path as PathParam, Query, status
 from fastapi.responses import FileResponse, ORJSONResponse
 from pydantic import BaseModel, Field
 
-from src.config import (
-    IndexRole,
-    get_curation_config,
-    get_gpu_arbiter_config,
-    get_region_fields,
-    index_name,
-)
+from src.config import get_curation_config, get_gpu_arbiter_config, get_region_fields
+from src.config.curation import items_index
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.routers.curation import get_class_registry
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI
+from src.routers.curation._config_common_models import api_error
 from src.services.curation.dataset_thresholds import (
     HARD_MIN_CROPS_PER_CLASS,
     MIN_TEST_CROPS_PER_CLASS,
@@ -103,10 +99,9 @@ logger = get_logger(__name__)
 
 config = get_curation_config()
 F = get_region_fields()
-CURATION_ITEMS_INDEX = index_name(config, IndexRole.ITEMS)
 
 router = APIRouter(
-    prefix=f'{config.api_prefix}/train',
+    prefix='/train',
     tags=[f'{config.api_tag} - Train'],
     default_response_class=ORJSONResponse,
 )
@@ -195,7 +190,7 @@ async def _count_validated_and_test_per_class(
     }
     empty = dict.fromkeys(class_ids, 0)
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         logger.warning('train_class_count_failed', error=str(exc))
         return dict(empty), dict(empty)
@@ -234,7 +229,7 @@ async def _count_pending_ingest(opensearch: Any) -> int:
         }
     }
     try:
-        resp = await opensearch.count(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.count(index=items_index(), body=body)
     except Exception as exc:
         logger.warning('train_pending_count_failed', error=str(exc))
         return 0
@@ -323,7 +318,10 @@ def _resolve_disk_check_path(spec: TrainJobSpec) -> str:
     """
     if spec.dataset_export_dir and Path(spec.dataset_export_dir).exists():
         return str(spec.dataset_export_dir)
-    return os.environ.get('OP_TRAIN_STAGING', str(config.state_dir / 'training_staging'))
+    # P1-deferred: nested under the bound project's own state dir (rather
+    # than the global state_dir) so a fallback disk-space check never
+    # points at another project's volume.
+    return os.environ.get('OP_TRAIN_STAGING', str(config.project_state_dir / 'training_staging'))
 
 
 def _training_volume_mount_sane(path: str) -> bool:
@@ -363,7 +361,7 @@ def _read_trainer_capabilities() -> dict[str, Any] | None:
     Callers must treat that as "can't verify" (a warning), not "no GPUs
     attached" (which would incorrectly block every request).
     """
-    path = train_jobs._resolve_jobs_dir() / TRAINER_CAPABILITIES_FILENAME
+    path = train_jobs.trainer_root_dir() / TRAINER_CAPABILITIES_FILENAME
     try:
         return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError):
@@ -513,6 +511,25 @@ def _append_single_class_data_checks(
 # =============================================================================
 
 
+def _refuse_export_outside_project(dataset_export_dir: str) -> None:
+    """422 ``export_outside_project`` unless the export lives under the
+    bound project's own ``export_root``.
+
+    Runs before any check reads the export (manifest, registry, label
+    scan), so a foreign or arbitrary path is never read back into the
+    report. Not a preflight row: ``force`` must not bypass it.
+    """
+    cfg = get_curation_config()
+    export_root = Path(cfg.export_root).resolve()
+    if not Path(dataset_export_dir).resolve().is_relative_to(export_root):
+        raise api_error(
+            422,
+            'export_outside_project',
+            f"dataset_export_dir is outside the export root of project '{cfg.project_slug}'",
+            project=cfg.project_slug,
+        )
+
+
 async def _run_preflight(
     spec: TrainJobSpec,
     opensearch: Any,
@@ -556,6 +573,9 @@ async def _run_preflight(
                     message=f'defaulted to the current export: {spec.dataset_export_dir}',
                 )
             )
+
+    if spec.dataset_export_dir:
+        _refuse_export_outside_project(spec.dataset_export_dir)
 
     # ---- 1. optimizer != auto -------------------------------------------------
     optimizer = (spec.hyperparameters or {}).get('optimizer')
@@ -1087,7 +1107,7 @@ async def _run_preflight(
             'export_generation',
             export_generation_check(
                 export_manifest,
-                await items_index_generation(opensearch, CURATION_ITEMS_INDEX),
+                await items_index_generation(opensearch, items_index()),
             ),
         ),
     ):
@@ -1870,6 +1890,26 @@ async def promote_run(
         resolve_class_remap,
     )
 
+    # Project namespacing (docs/design/openprocessor_internal/
+    # projects_plan.md §5.3): the *requested* (unprefixed) name may not
+    # itself contain '__' -- that would collide with, or spoof, the
+    # namespacing separator once model_prefix is prepended (e.g. a
+    # `default` request named 'alpha__x' would resolve to the exact same
+    # triton_name as `alpha` legitimately promoting 'x'). `default`'s
+    # empty model_prefix means its promoted names are otherwise unchanged.
+    if '__' in payload.triton_name:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                'code': 'triton_name_reserved_separator',
+                'message': (
+                    f'triton_name {payload.triton_name!r} may not contain "__" -- reserved '
+                    'as the project-namespacing separator'
+                ),
+            },
+        )
+    triton_name = f'{config.model_prefix}{payload.triton_name}'
+
     job_status = await train_jobs.read_status(job_id)
     if job_status is None:
         raise HTTPException(status_code=404, detail=f'job {job_id!r} not found')
@@ -2062,13 +2102,14 @@ async def promote_run(
     try:
         result = await promote_yolo26_to_triton(
             status=job_status,
-            triton_name=payload.triton_name,
+            triton_name=triton_name,
             class_id_to_name=class_id_to_name,
             max_batch_size=payload.max_batch_size,
             input_size=payload.input_size,
             fp16=payload.fp16,
             overwrite=payload.overwrite,
             class_remap=class_remap,
+            project=config.project_slug,
         )
     except CheckpointNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

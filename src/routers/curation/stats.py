@@ -18,10 +18,10 @@ from fastapi import HTTPException
 from src.config.region_fields import RegionFields, get_region_fields
 from src.config.region_state import RegionStatus
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
     OpenSearchDep,
     _now_iso,
     get_class_registry,
+    items_index,
     router,
 )
 from src.services.curation.dataset_thresholds import adequacy, aug_target, dataset_thresholds
@@ -94,7 +94,7 @@ async def stats_classes(opensearch: OpenSearchDep) -> dict[str, Any]:
         },
     }
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
     aggs = resp.get('aggregations') or {}
@@ -480,7 +480,7 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
         # OpenSearch invalidates it on every index refresh anyway, so
         # this only helps (bursts of refresh-free polls hit cache) and
         # can't make results staler than they already are.
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body, request_cache=True)
+        resp = await opensearch.search(index=items_index(), body=body, request_cache=True)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
 

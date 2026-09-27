@@ -29,7 +29,9 @@ def _client(
     fake = AsyncMock()
     fake.search = AsyncMock(return_value=search_resp)
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app), fake
 
@@ -53,7 +55,7 @@ _RESP = {
 
 def test_ingest_status_request_tracks_total_hits(monkeypatch: pytest.MonkeyPatch) -> None:
     client, fake = _client(monkeypatch, _RESP)
-    r = client.get('/curation/ingest/status')
+    r = client.get('/curation/projects/default/ingest/status')
     assert r.status_code == 200, r.text
 
     body = fake.search.call_args.kwargs['body']
@@ -64,7 +66,7 @@ def test_ingest_status_by_day_uses_a_range_filter_not_a_python_slice(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client, fake = _client(monkeypatch, _RESP)
-    r = client.get('/curation/ingest/status')
+    r = client.get('/curation/projects/default/ingest/status')
     assert r.status_code == 200, r.text
 
     aggs = fake.search.call_args.kwargs['body']['aggs']
@@ -80,7 +82,7 @@ def test_ingest_status_response_shape_unwraps_the_filtered_buckets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client, _fake = _client(monkeypatch, _RESP)
-    r = client.get('/curation/ingest/status')
+    r = client.get('/curation/projects/default/ingest/status')
     body = r.json()
     assert body['total'] == 42
     assert body['by_source'] == [{'key': 'hd1', 'doc_count': 10}]
@@ -94,7 +96,7 @@ def test_ingest_status_without_run_id_matches_everything(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client, fake = _client(monkeypatch, _RESP)
-    r = client.get('/curation/ingest/status')
+    r = client.get('/curation/projects/default/ingest/status')
     assert r.status_code == 200, r.text
     assert fake.search.call_args.kwargs['body']['query'] == {'match_all': {}}
 
@@ -102,6 +104,6 @@ def test_ingest_status_without_run_id_matches_everything(
 def test_ingest_status_run_id_scopes_the_query(monkeypatch: pytest.MonkeyPatch) -> None:
     """BA-4: GET /ingest/status?run_id= filters to that upload run's images."""
     client, fake = _client(monkeypatch, _RESP)
-    r = client.get('/curation/ingest/status', params={'run_id': 'run-42'})
+    r = client.get('/curation/projects/default/ingest/status', params={'run_id': 'run-42'})
     assert r.status_code == 200, r.text
     assert fake.search.call_args.kwargs['body']['query'] == {'term': {'ingest_run_id': 'run-42'}}

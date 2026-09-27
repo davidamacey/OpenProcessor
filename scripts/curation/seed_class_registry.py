@@ -41,7 +41,7 @@ Drift findings:
 
 Usage::
 
-    # First-time seed from a detector export (registry path from OP_REGISTRY_PATH)
+    # First-time seed from a detector export (the bound project's registry path)
     python3 scripts/curation/seed_class_registry.py --model detector.onnx
 
     # Seed from a dataset's data.yaml and append one post-model class
@@ -70,7 +70,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from src.clients.curation_opensearch import ClassRegistry, ClassRegistryFile, RegistryClassEntry
-from src.config.curation import CurationConfig
+from src.config.curation import get_curation_config
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 logger = logging.getLogger('seed_class_registry')
@@ -297,7 +298,7 @@ def load_group_map(path: Path | None) -> dict[str, str]:
 
 
 def run(args: argparse.Namespace) -> int:
-    registry_path: Path = args.registry or CurationConfig.from_env().class_registry_path
+    registry_path: Path = args.registry or get_curation_config().class_registry_path
     try:
         model_names = read_class_names(args.model)
     except (ClassNamesError, OSError) as exc:
@@ -366,7 +367,7 @@ def build_parser() -> argparse.ArgumentParser:
         '--registry',
         type=Path,
         default=None,
-        help='class_registry.json path (default: OP_REGISTRY_PATH / CurationConfig)',
+        help='class_registry.json path (default: the --project registry path)',
     )
     p.add_argument(
         '--group-map',
@@ -389,12 +390,15 @@ def build_parser() -> argparse.ArgumentParser:
         help='Also treat registry ids beyond the model range as drift',
     )
     p.add_argument('--dry-run', action='store_true', help='Report additions without writing')
+    add_project_argument(p)
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(message)s')
-    return run(build_parser().parse_args(argv))
+    args = build_parser().parse_args(argv)
+    bind_script_project(args.project)
+    return run(args)
 
 
 if __name__ == '__main__':

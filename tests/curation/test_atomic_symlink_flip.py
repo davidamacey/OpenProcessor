@@ -2,7 +2,7 @@
 
 The ``current`` export symlink dangled on a stock install:
 ``atomic_symlink_flip`` linked to the export dir's path *verbatim*. With
-the default relative ``OP_EXPORT_ROOT=./data/exports``, the target passed
+a relative export root (then ``./data/exports``), the target passed
 in was the relative path ``data/exports/<timestamp>`` -- but a symlink
 target resolves relative to the link's own directory, not the process
 cwd, so ``data/exports/current`` pointed at
@@ -80,8 +80,8 @@ class TestAtomicSymlinkFlipRelativeExportRoot:
     def test_relative_op_export_root_does_not_produce_a_dangling_link(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Faithful repro of the reported bug: OP_EXPORT_ROOT is a relative
-        path (default './data/exports'), so ``resolved_export_dir`` --
+        """Faithful repro of the reported bug: the export root is a relative
+        path (as './data/exports' was), so ``resolved_export_dir`` --
         built as ``self.config.export_root / timestamp`` in export.py --
         is itself a *relative* ``Path``, not absolute. Before the fix,
         ``symlink_to`` wrote that relative string verbatim, and a symlink
@@ -90,7 +90,7 @@ class TestAtomicSymlinkFlipRelativeExportRoot:
         ``data/exports/data/exports/<timestamp>``, which doesn't exist.
         """
         monkeypatch.chdir(tmp_path)
-        export_root = Path('data/exports')  # exactly OP_EXPORT_ROOT's default shape
+        export_root = Path('data/exports')  # a relative export root, as the bug report had
         (tmp_path / export_root).mkdir(parents=True)
         real_export_dir = export_root / '20260925T143527Z'
         (tmp_path / real_export_dir).mkdir()

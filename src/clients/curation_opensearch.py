@@ -11,18 +11,18 @@ Indexes (logical roles resolved via :func:`src.config.index_name`
 against a :class:`~src.config.CurationConfig` instance — the actual
 index *names* are deployment data, not hardcoded here):
 
-- ``images`` (default ``op_images``) — one document per source image
+- ``images`` (``op_prj_<project>__images``) — one document per source image
   (with a global embedding).
-- ``items`` (default ``op_items``) — one document per detected item
+- ``items`` (``op_prj_<project>__items``) — one document per detected item
   crop (with embedding, class label, region-of-interest sub-bbox,
   holdout flag).
-- ``labels_confirmed`` (default ``op_labels_confirmed``) — provenance
+- ``labels_confirmed`` (``op_prj_<project>__labels_confirmed``) — provenance
   ledger of imported YOLO-style ground-truth labels (no embedding),
   written only by label import. NOT the export source: export and
   training select ``class_validated=true`` items from ``items``, which
   every labeling path (human label/move, auto-promote, label import)
   sets — see ``tests/curation/test_labels_export_roundtrip.py``.
-- ``classes`` (default ``op_classes``) — read-projection of
+- ``classes`` (``op_prj_<project>__classes``) — read-projection of
   ``class_registry.json`` for fast term filters / dashboards. The JSON
   file is the canonical source; this index is rebuilt from it via
   :py:meth:`ClassRegistry.sync_to_opensearch`.
@@ -1683,7 +1683,7 @@ async def mget_crops(
     client: AsyncOpenSearch,
     crop_ids: list[str],
     *,
-    index: str = config.items_index,
+    index: str | None = None,
     source_includes: list[str] | None = None,
     source_excludes: list[str] | None = None,
     seq_no: bool = False,  # noqa: ARG001 - documents caller intent; mget always returns seq_no/primary_term
@@ -1698,9 +1698,9 @@ async def mget_crops(
         client: AsyncOpenSearch instance.
         crop_ids: list of item ids to fetch. Missing ids are silently
             omitted from the result (no KeyError).
-        index: target index. Defaults to ``config.items_index`` to
-            preserve existing caller behavior; pass explicitly to mget
-            against a different index.
+        index: target index. Defaults to the bound project's items
+            index (resolved per call); pass explicitly to mget against a
+            different index.
         source_includes: if set, restricts the ``_source`` returned
             (keeps the response small). ``None`` returns the full doc.
         source_excludes: if set, drops these fields from ``_source``
@@ -1724,6 +1724,8 @@ async def mget_crops(
     """
     if not crop_ids:
         return {}
+    if index is None:
+        index = config.items_index
 
     source_clause: Any = None
     if source_includes is not None or source_excludes is not None:
@@ -2063,16 +2065,22 @@ class ClassRegistry:
 # =============================================================================
 
 
-_default_registry: ClassRegistry | None = None
+# One registry per (project, registry path): each project owns its own
+# ``class_registry.json``, so a class added in one project is invisible
+# in every other.
+_registries: dict[tuple[str, str], ClassRegistry] = {}
 _registry_lock = asyncio.Lock()
 
 
 def get_class_registry() -> ClassRegistry:
-    """Return a process-wide :py:class:`ClassRegistry` singleton."""
-    global _default_registry  # noqa: PLW0603 - singleton accessor
-    if _default_registry is None:
-        _default_registry = ClassRegistry()
-    return _default_registry
+    """Return the bound project's :py:class:`ClassRegistry` (one cached
+    instance per project per process)."""
+    key = (config.project_slug, str(config.class_registry_path))
+    registry = _registries.get(key)
+    if registry is None:
+        registry = ClassRegistry(config.class_registry_path)
+        _registries[key] = registry
+    return registry
 
 
 __all__ = [

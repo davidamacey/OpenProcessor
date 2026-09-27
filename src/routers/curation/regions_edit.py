@@ -19,7 +19,6 @@ from fastapi import HTTPException
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.config import get_region_fields
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
     HUMAN_REGION_STATUS_VALUES,
     CropBatchStatusRequest,
     ItemBatchRegionRequest,
@@ -28,6 +27,7 @@ from src.routers.curation._common import (
     OpenSearchDep,
     RegionProfileDep,
     _now_iso,
+    items_index,
     logger,
     router,
 )
@@ -254,7 +254,7 @@ async def _batch_write(
             docs = await mget_crops(
                 opensearch,
                 page_ids,
-                index=CURATION_ITEMS_INDEX,
+                index=items_index(),
                 source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES,
                 seq_no=True,
             )
@@ -283,7 +283,7 @@ async def _batch_write(
                 bulk_body.append(
                     {
                         'update': {
-                            '_index': CURATION_ITEMS_INDEX,
+                            '_index': items_index(),
                             '_id': crop_id,
                             'if_seq_no': doc['_seq_no'],
                             'if_primary_term': doc['_primary_term'],

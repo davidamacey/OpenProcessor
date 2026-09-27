@@ -41,6 +41,7 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 from src.clients.curation_opensearch import ClassRegistry, ClassRegistryError, RegistryClassEntry
 from src.config import get_curation_config
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 def find_broken(registry: ClassRegistry) -> list[RegistryClassEntry]:
@@ -92,11 +93,13 @@ def build_parser() -> argparse.ArgumentParser:
     g = p.add_mutually_exclusive_group()
     g.add_argument('--dry-run', action='store_true', default=True)
     g.add_argument('--apply', dest='dry_run', action='store_false')
+    add_project_argument(p)
     return p
 
 
 def main() -> int:
     args = build_parser().parse_args()
+    bind_script_project(args.project)
     registry_path = args.registry or get_curation_config().class_registry_path
     registry = ClassRegistry(registry_path)
     return run(registry, apply=not args.dry_run, verbose=args.verbose)

@@ -836,9 +836,16 @@ def run_job(spec: JobSpec) -> None:
                 'MLFLOW_TRACKING_URI', os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow:5000')
             )
             os.environ['MLFLOW_RUN'] = spec.mlflow_run_name
-            _guard_ultralytics_mlflow_artifact_root(
-                os.environ.get('MLFLOW_EXPERIMENT_NAME', 'openprocessor')
+            # The job's own project experiment (docs/design/
+            # openprocessor_internal/projects_plan.md §5.3) takes priority
+            # over any env-var-only experiment name -- one trainer process
+            # serves every project's jobs, so a stale process-wide env var
+            # must never leak one project's runs into another's experiment.
+            experiment_name = spec.mlflow_experiment or os.environ.get(
+                'MLFLOW_EXPERIMENT_NAME', 'openprocessor'
             )
+            os.environ['MLFLOW_EXPERIMENT_NAME'] = experiment_name
+            _guard_ultralytics_mlflow_artifact_root(experiment_name)
 
             train_kwargs, seed, deterministic = build_train_kwargs(
                 spec, data_yaml_path, local_device

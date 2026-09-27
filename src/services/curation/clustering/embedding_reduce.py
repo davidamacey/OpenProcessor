@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 
 from src.config import get_curation_config
+from src.config.curation import items_index, umap_state_index
 from src.core.logging import get_logger
 from src.services.curation.clustering.backend import (
     BackendInfo,
@@ -60,16 +61,16 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-UMAP_STATE_INDEX = get_curation_config().umap_state_index
-ITEMS_INDEX = get_curation_config().items_index
+# The reducer cache is project data: it lives under the bound project's
+# state dir (``project_state_dir``; ``state_dir`` itself for ``default``),
+# resolved per call.
+def umap_state_joblib_path() -> str:
+    return str(Path(get_curation_config().project_state_dir) / 'umap_state.joblib')
 
-# State dir shared with the VLM worker via the GPU arbiter pause
-# sentinel. Deployment-configurable via CurationConfig.state_dir rather
-# than a dedicated env var, so it stays consistent with every other
-# persisted-state path in the curation subsystem.
-_STATE_DIR = get_curation_config().state_dir
-UMAP_STATE_JOBLIB_PATH = str(Path(_STATE_DIR) / 'umap_state.joblib')
-UMAP_STATE_JOBLIB_PATH_CUML = str(Path(_STATE_DIR) / 'umap_state_cuml.joblib')
+
+def umap_state_joblib_path_cuml() -> str:
+    return str(Path(get_curation_config().project_state_dir) / 'umap_state_cuml.joblib')
+
 
 # UMAP hyperparameters.
 UMAP_N_COMPONENTS = 50
@@ -123,8 +124,8 @@ def _state_paths_for(backend: str) -> tuple[str, str]:
     slot; the GPU slot is ``current_cuml``.
     """
     if backend == 'gpu':
-        return UMAP_STATE_JOBLIB_PATH_CUML, 'current_cuml'
-    return UMAP_STATE_JOBLIB_PATH, 'current'
+        return umap_state_joblib_path_cuml(), 'current_cuml'
+    return umap_state_joblib_path(), 'current'
 
 
 async def fetch_residual_embeddings(
@@ -203,7 +204,7 @@ async def fetch_residual_embeddings(
     if progress is not None:
         try:
             count_resp = await client.count(
-                index=ITEMS_INDEX,
+                index=items_index(),
                 body={'query': {'bool': {'filter': filt, 'must_not': must_not}}},
             )
             total_estimate = int(count_resp.get('count', 0))
@@ -218,7 +219,7 @@ async def fetch_residual_embeddings(
     }
     ids: list[str] = []
     embs: list[np.ndarray] = []
-    resp = await client.search(index=ITEMS_INDEX, body=body, scroll='2m')
+    resp = await client.search(index=items_index(), body=body, scroll='2m')
     scroll_id = resp.get('_scroll_id')
     try:
         while True:
@@ -323,7 +324,7 @@ async def fetch_residual_embeddings_parallel(
     total_estimate = 0
     if progress is not None:
         try:
-            count_resp = await client.count(index=ITEMS_INDEX, body={'query': query})
+            count_resp = await client.count(index=items_index(), body={'query': query})
             total_estimate = int(count_resp.get('count', 0))
             progress.update(processed=0, total=total_estimate)
         except Exception as exc:
@@ -333,7 +334,7 @@ async def fetch_residual_embeddings_parallel(
     # slice -- PIT is the supported pattern for sliced parallel reads.
     try:
         pit_resp = await client.create_pit(
-            index=ITEMS_INDEX,
+            index=items_index(),
             keep_alive=PARALLEL_FETCH_PIT_KEEPALIVE,
         )
         pit_id = pit_resp.get('pit_id') or pit_resp.get('pit')
@@ -485,12 +486,12 @@ async def _save_umap_state_to_opensearch(
         'n_components': UMAP_N_COMPONENTS,
         'metric': UMAP_METRIC,
     }
-    await client.index(index=UMAP_STATE_INDEX, id=state_id, body=body, refresh=False)
+    await client.index(index=umap_state_index(), id=state_id, body=body, refresh=False)
 
 
 async def _load_umap_state_from_opensearch(client: AsyncOpenSearch, *, state_id: str) -> Any | None:
     try:
-        resp = await client.get(index=UMAP_STATE_INDEX, id=state_id)
+        resp = await client.get(index=umap_state_index(), id=state_id)
     except Exception as exc:
         logger.debug('curation_umap_state_not_found', state_id=state_id, error=str(exc))
         return None
@@ -670,17 +671,15 @@ async def umap_rebuild(client: AsyncOpenSearch) -> dict[str, Any]:
 
 
 __all__ = [
-    'ITEMS_INDEX',
     'RESIDUAL_EMBEDDING_FIELD',
     'UMAP_METRIC',
     'UMAP_MIN_DIST',
     'UMAP_N_COMPONENTS',
     'UMAP_N_NEIGHBORS',
     'UMAP_RANDOM_STATE',
-    'UMAP_STATE_INDEX',
-    'UMAP_STATE_JOBLIB_PATH',
-    'UMAP_STATE_JOBLIB_PATH_CUML',
     'fetch_residual_embeddings',
     'get_or_fit_reducer',
     'umap_rebuild',
+    'umap_state_joblib_path',
+    'umap_state_joblib_path_cuml',
 ]

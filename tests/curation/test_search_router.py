@@ -48,7 +48,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch):
     fake_encoder = _fake_pe_encoder()
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.state.pe_encoder = fake_encoder
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
 
@@ -60,14 +62,18 @@ def app_client(monkeypatch: pytest.MonkeyPatch):
 
 def test_search_text_disabled_returns_400(monkeypatch: pytest.MonkeyPatch, app_client: TestClient):
     monkeypatch.setenv('OP_SEMANTIC_SEARCH_ENABLED', 'false')
-    resp = app_client.get('/curation/search/text', params={'q': 'white pickup truck'})
+    resp = app_client.get(
+        '/curation/projects/default/search/text', params={'q': 'white pickup truck'}
+    )
     assert resp.status_code == 400
     assert 'OP_SEMANTIC_SEARCH_ENABLED' in resp.json()['detail']
 
 
 def test_search_text_encoder_not_ready_returns_503(app_client: TestClient):
     app_client.fake_encoder.text_ready = False
-    resp = app_client.get('/curation/search/text', params={'q': 'white pickup truck'})
+    resp = app_client.get(
+        '/curation/projects/default/search/text', params={'q': 'white pickup truck'}
+    )
     assert resp.status_code == 503
     assert 'pe_text' in resp.json()['detail']
 
@@ -87,7 +93,8 @@ def test_search_text_happy_path(app_client: TestClient):
         return_value={'hits': {'hits': [hit], 'total': {'value': 1}}}
     )
     resp = app_client.get(
-        '/curation/search/text', params={'q': 'white pickup truck', 'page': 1, 'page_size': 30}
+        '/curation/projects/default/search/text',
+        params={'q': 'white pickup truck', 'page': 1, 'page_size': 30},
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -136,7 +143,9 @@ def test_search_text_min_score_filters_results(app_client: TestClient):
         return {'hits': {'hits': pool[frm : frm + size], 'total': {'value': len(pool)}}}
 
     app_client.fake_os.search = AsyncMock(side_effect=_search)
-    resp = app_client.get('/curation/search/text', params={'q': 'red sedan', 'min_score': 0.5})
+    resp = app_client.get(
+        '/curation/projects/default/search/text', params={'q': 'red sedan', 'min_score': 0.5}
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body['total'] == 1
@@ -144,7 +153,7 @@ def test_search_text_min_score_filters_results(app_client: TestClient):
 
 
 def test_search_text_empty_query_string_rejected(app_client: TestClient):
-    resp = app_client.get('/curation/search/text', params={'q': ''})
+    resp = app_client.get('/curation/projects/default/search/text', params={'q': ''})
     assert resp.status_code == 422
 
 
@@ -152,7 +161,9 @@ def test_search_text_no_hits_returns_empty(app_client: TestClient):
     app_client.fake_os.search = AsyncMock(
         return_value={'hits': {'hits': [], 'total': {'value': 0}}}
     )
-    resp = app_client.get('/curation/search/text', params={'q': 'nonexistent thing'})
+    resp = app_client.get(
+        '/curation/projects/default/search/text', params={'q': 'nonexistent thing'}
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body == {'items': [], 'total': 0, 'page': 1, 'page_size': 30}

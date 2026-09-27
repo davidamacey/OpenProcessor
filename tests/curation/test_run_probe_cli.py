@@ -188,7 +188,7 @@ def test_cli_defaults_to_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _patch_client(monkeypatch, mod, fake):
-    monkeypatch.setattr(mod, 'AsyncOpenSearch', lambda **_kw: fake)
+    monkeypatch.setattr(mod, 'make_script_opensearch', lambda *_a, **_kw: fake)
 
 
 def test_cli_dry_run_counts_without_scoring(monkeypatch, tmp_path, capsys) -> None:

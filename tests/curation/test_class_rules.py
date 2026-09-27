@@ -49,7 +49,9 @@ def client(registry: ClassRegistry, fake_os: AsyncMock, monkeypatch: pytest.Monk
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     with TestClient(app) as c:
         yield c
@@ -59,24 +61,32 @@ def client(registry: ClassRegistry, fake_os: AsyncMock, monkeypatch: pytest.Monk
 def test_create_rejects_non_slug_names(
     client: TestClient, registry: ClassRegistry, name: str
 ) -> None:
-    r = client.post('/curation/classes', json={'name': name})
+    r = client.post('/curation/projects/default/classes', json={'name': name})
     assert r.status_code == 422, r.text
     assert len(registry.load().classes) == 2
 
 
 def test_rename_rejects_non_slug_names(client: TestClient, registry: ClassRegistry) -> None:
-    r = client.put('/curation/classes/0', json={'name': 'Sedan Car'})
+    r = client.put('/curation/projects/default/classes/0', json={'name': 'Sedan Car'})
     assert r.status_code == 422, r.text
     assert _entry(registry, 0).class_name == 'sedan'
 
 
 def test_create_and_rename_accept_slug_names(client: TestClient) -> None:
-    assert client.post('/curation/classes', json={'name': 'box_truck2'}).status_code == 201
-    assert client.put('/curation/classes/0', json={'name': 'sedan_car'}).status_code == 200
+    assert (
+        client.post('/curation/projects/default/classes', json={'name': 'box_truck2'}).status_code
+        == 201
+    )
+    assert (
+        client.put('/curation/projects/default/classes/0', json={'name': 'sedan_car'}).status_code
+        == 200
+    )
 
 
 def test_create_with_hotkey(client: TestClient, registry: ClassRegistry) -> None:
-    r = client.post('/curation/classes', json={'name': 'van', 'hotkey_letter': 'V'})
+    r = client.post(
+        '/curation/projects/default/classes', json={'name': 'van', 'hotkey_letter': 'V'}
+    )
     assert r.status_code == 201, r.text
     assert _entry(registry, r.json()['class_id']).hotkey_letter == 'v'
 
@@ -85,20 +95,27 @@ def test_create_with_hotkey(client: TestClient, registry: ClassRegistry) -> None
 def test_create_rejects_reserved_hotkey_without_creating(
     client: TestClient, registry: ClassRegistry, letter: str
 ) -> None:
-    r = client.post('/curation/classes', json={'name': 'van', 'hotkey_letter': letter})
+    r = client.post(
+        '/curation/projects/default/classes', json={'name': 'van', 'hotkey_letter': letter}
+    )
     assert r.status_code == 422, r.text
     assert len(registry.load().classes) == 2
 
 
 def test_create_rejects_duplicate_hotkey(client: TestClient, registry: ClassRegistry) -> None:
-    assert client.put('/curation/classes/0', json={'hotkey_letter': 's'}).status_code == 200
-    r = client.post('/curation/classes', json={'name': 'van', 'hotkey_letter': 's'})
+    assert (
+        client.put('/curation/projects/default/classes/0', json={'hotkey_letter': 's'}).status_code
+        == 200
+    )
+    r = client.post(
+        '/curation/projects/default/classes', json={'name': 'van', 'hotkey_letter': 's'}
+    )
     assert r.status_code == 409, r.text
     assert len(registry.load().classes) == 2
 
 
 def test_list_serves_reserved_hotkeys_and_added_at(client: TestClient) -> None:
-    body = client.get('/curation/classes').json()
+    body = client.get('/curation/projects/default/classes').json()
     assert body['reserved_hotkeys'] == sorted(RESERVED_HOTKEY_LETTERS)
     assert all(c['added_at'] for c in body['classes'])
 
@@ -116,7 +133,10 @@ def test_merge_dry_run_reports_counts_without_writing(
         return {'count': 40}
 
     fake_os.count = AsyncMock(side_effect=_count)
-    r = client.post('/curation/classes/merge?dry_run=true', json={'source_id': 1, 'target_id': 0})
+    r = client.post(
+        '/curation/projects/default/classes/merge?dry_run=true',
+        json={'source_id': 1, 'target_id': 0},
+    )
     assert r.status_code == 200, r.text
     assert r.json() == {
         'dry_run': True,
@@ -132,5 +152,8 @@ def test_merge_dry_run_reports_counts_without_writing(
 
 
 def test_merge_dry_run_unknown_class_is_400(client: TestClient) -> None:
-    r = client.post('/curation/classes/merge?dry_run=true', json={'source_id': 9, 'target_id': 0})
+    r = client.post(
+        '/curation/projects/default/classes/merge?dry_run=true',
+        json={'source_id': 9, 'target_id': 0},
+    )
     assert r.status_code == 400

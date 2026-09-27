@@ -3,7 +3,7 @@
 Non-negotiable design rules:
 
 1. **Own persisted state slot.** Never touches
-   ``embedding_reduce.UMAP_STATE_JOBLIB_PATH{,_CUML}`` or the
+   ``embedding_reduce.umap_state_joblib_path{,_cuml}()`` or the
    ``op_umap_state`` index — those belong to the *retired* clustering
    reducer (UMAP collapsed most of the residual pool into one
    mega-cluster and was retired for clustering). This module's state
@@ -66,6 +66,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.config import get_curation_config
+from src.config.curation import items_index, umap_viz_state_index
+from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
 
 
@@ -75,18 +77,20 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-ITEMS_INDEX = get_curation_config().items_index
 
-# Own OpenSearch index for run metadata -- deliberately NOT the retired
-# clustering reducer's index (embedding_reduce.py). Routed through
-# CurationConfig like every other index name so a deployment renaming
-# its indexes via env vars doesn't leave this one behind.
-UMAP_VIZ_STATE_INDEX = get_curation_config().umap_viz_state_index
+# Run metadata goes to its own index, ``umap_viz_state_index()`` --
+# deliberately NOT the retired clustering reducer's index
+# (embedding_reduce.py) -- routed through CurationConfig like every other
+# index name so a deployment renaming its indexes via env vars doesn't
+# leave this one behind.
 
-# State dir shared with the rest of the curation worker fleet (same
-# CurationConfig.state_dir embedding_reduce.py reads), but a distinct
-# filename -- never umap_state.joblib / umap_state_cuml.joblib.
-VIZ_STATE_JOBLIB_PATH = str(Path(get_curation_config().state_dir) / 'umap_viz_state.joblib')
+
+def viz_state_joblib_path() -> str:
+    """The bound project's state dir (same one embedding_reduce.py
+    reads), but a distinct filename -- never umap_state.joblib /
+    umap_state_cuml.joblib."""
+    return str(Path(get_curation_config().project_state_dir) / 'umap_viz_state.joblib')
+
 
 # Viz-only UMAP hyperparameters. min_dist is higher than the clustering
 # reducer's 0.0 (UMAP_MIN_DIST in embedding_reduce.py) -- a viz scatter
@@ -120,13 +124,13 @@ _HEARTBEAT_STALE_S = 30.0
 # reference internally, so an unreferenced task can be garbage-collected
 # mid-run. Kept alive per the singleton contract start_job()/_is_busy()
 # enforce via the state file.
-_active_task: asyncio.Task[None] | None = None
+_active_tasks: dict[str, asyncio.Task[None]] = {}  # per project slug
 
 
 def _jobs_dir() -> Path:
     """Resolved fresh each call so tests can override via monkeypatch
     (same convention as ``item_scores.job._state_dir``)."""
-    return Path(os.environ.get('OP_VIZ_JOBS_DIR', '/jobs/viz'))
+    return project_jobs_dir(Path(os.environ.get('OP_VIZ_JOBS_DIR', '/jobs/viz')))
 
 
 def _state_file() -> Path:
@@ -289,8 +293,7 @@ def start_job(
         started_at=time.time(),
     )
     _atomic_write(state)
-    global _active_task  # noqa: PLW0603 - singleton task handle, mirrors item_scores.job
-    _active_task = asyncio.create_task(
+    _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
         run_projection_job(job_id, opensearch, scope=scope, cluster_id=cluster_id, max_n=max_n)
     )
     return state.to_dict()
@@ -347,7 +350,7 @@ async def _fetch_pool(
             }
         }
         ids, embeddings, truncated = await fetch_pool_embeddings(
-            opensearch, ITEMS_INDEX, query, cap=max_n, embedding_field=EMBEDDING_FIELD
+            opensearch, items_index(), query, cap=max_n, embedding_field=EMBEDDING_FIELD
         )
         if truncated:
             # fetch_pool_embeddings returns an empty array when truncated
@@ -356,7 +359,7 @@ async def _fetch_pool(
             # take longer than an inline request.
             ids, embeddings, _ = await fetch_pool_embeddings(
                 opensearch,
-                ITEMS_INDEX,
+                items_index(),
                 query,
                 cap=10 * max_n,
                 embedding_field=EMBEDDING_FIELD,
@@ -407,7 +410,7 @@ def _save_reducer_to_disk(reducer: Any) -> None:
     reloads this to `.transform()` new points, so a save failure must
     never fail the job (logged, not raised)."""
     try:
-        p = Path(VIZ_STATE_JOBLIB_PATH)
+        p = Path(viz_state_joblib_path())
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(_serialize_reducer(reducer))
     except Exception as exc:
@@ -438,14 +441,14 @@ async def _save_run_metadata(
         'metric': VIZ_METRIC,
     }
     try:
-        await opensearch.index(index=UMAP_VIZ_STATE_INDEX, id='current', body=body, refresh=False)
+        await opensearch.index(index=umap_viz_state_index(), id='current', body=body, refresh=False)
     except Exception as exc:
         logger.warning('curation_umap_viz_state_metadata_save_failed', error=str(exc))
 
 
 async def _load_run_metadata(opensearch: AsyncOpenSearch) -> dict[str, Any] | None:
     try:
-        resp = await opensearch.get(index=UMAP_VIZ_STATE_INDEX, id='current')
+        resp = await opensearch.get(index=umap_viz_state_index(), id='current')
     except Exception as exc:
         logger.debug('curation_umap_viz_state_metadata_not_found', error=str(exc))
         return None
@@ -462,7 +465,7 @@ async def _bulk_write_coordinates(
     """Write ``viz_x``/``viz_y``/``viz_projection_version`` only -- never
     ``cluster_id``/``cluster_subid``/``cluster_distance`` (guarded by
     ``tests/curation/test_embedding_viz.py::test_writes_never_include_cluster_fields``)."""
-    index = ITEMS_INDEX
+    index = items_index()
     n_written = 0
     for start in range(0, len(ids), chunk_size):
         chunk_ids = ids[start : start + chunk_size]
@@ -640,7 +643,7 @@ async def get_cached_projection(
         }
         if search_after is not None:
             body['search_after'] = search_after
-        resp = await opensearch.search(index=ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
         hits = resp.get('hits', {}).get('hits') or []
         if not hits:
             break
@@ -660,7 +663,7 @@ async def get_cached_projection(
                 ],
             }
         }
-        count_resp = await opensearch.count(index=ITEMS_INDEX, body={'query': missing_query})
+        count_resp = await opensearch.count(index=items_index(), body={'query': missing_query})
         stale = int(count_resp.get('count', 0)) > 0
     except Exception as exc:
         logger.warning('curation_viz_projection_staleness_check_failed', error=str(exc))
@@ -675,14 +678,12 @@ async def get_cached_projection(
 
 __all__ = [
     'DEFAULT_MAX_N',
-    'UMAP_VIZ_STATE_INDEX',
     'VIZ_METRIC',
     'VIZ_MIN_DIST',
     'VIZ_N_COMPONENTS',
     'VIZ_N_NEIGHBORS',
     'VIZ_PROJECTION_VERSION',
     'VIZ_RANDOM_STATE',
-    'VIZ_STATE_JOBLIB_PATH',
     'cancel_job',
     'fit_projection',
     'get_cached_projection',
@@ -691,4 +692,5 @@ __all__ = [
     'reconcile_orphaned_jobs',
     'run_projection_job',
     'start_job',
+    'viz_state_joblib_path',
 ]

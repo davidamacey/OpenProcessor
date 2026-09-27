@@ -77,7 +77,7 @@ async def test_geometry_pass_records_each_members_nearest_centroid() -> None:
         'cand': {'cluster_id': RESIDUAL_CLUSTER_ID_OFFSET, 'pe_embedding': _vec(0, 0, 1)},
     }
     fake = _Fake(docs)
-    out = await write_cluster_geometry(fake, index='op_items')
+    out = await write_cluster_geometry(fake, index='op_prj_default__items')
     assert out['n_nearest_elsewhere'] == 2
     for i in range(6):
         assert fake.docs[f'a{i}'][NEAREST_FIELD] == 5

@@ -63,6 +63,7 @@ from typing import Any, Literal
 
 from src.clients.curation_opensearch import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
+from src.config.project_context import run_in_executor_bound
 from src.core.logging import get_logger
 from src.services.curation.export_images import (
     _ExportImage,
@@ -304,7 +305,9 @@ class GenericYoloExportService:
         errors: list[str] = []
         with ProcessPoolExecutor(max_workers=max_workers) as pool:
             futures = [
-                loop.run_in_executor(pool, _copy_or_resize_one, src, dest, resize_mode, image_size)
+                run_in_executor_bound(
+                    loop, pool, _copy_or_resize_one, src, dest, resize_mode, image_size
+                )
                 for src, dest in jobs
             ]
             for fut in asyncio.as_completed(futures):

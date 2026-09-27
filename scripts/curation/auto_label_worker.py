@@ -4,9 +4,9 @@
 Replaces the per-request ``subprocess.Popen`` model in
 :mod:`src.services.curation.autolabel.job` with a long-lived worker
 process. The yolo-api just drops a JSON trigger file under
-``/jobs/auto_label/trigger.json`` and returns 202; this worker picks
-it up, runs the pipeline, and writes state.json updates the SSE
-endpoint already streams to the dashboard.
+``<project's autolabel_dir>/trigger.json`` and returns 202; this
+worker picks it up, runs the pipeline, and writes state.json updates
+the SSE endpoint already streams to the dashboard.
 
 Why a dedicated container (vs. asyncio task / per-request subprocess):
 
@@ -24,27 +24,39 @@ Why a dedicated container (vs. asyncio task / per-request subprocess):
   liveness signal both the worker (writes) and the API (reads) can
   trust.
 
-Lifecycle contract with :mod:`auto_label_job`:
+Lifecycle contract with :mod:`auto_label_job`, all paths under the
+owning project's own ``autolabel_dir``:
 
-* Trigger file ``/jobs/auto_label/trigger.json`` — JSON payload
+* Trigger file ``trigger.json`` — JSON payload
   ``{job_id, pipeline, args}`` written by ``start_job``. Worker
   claims it via ``unlink`` (atomic on Linux) then runs the pipeline.
-* State file ``/jobs/auto_label/state.json`` — worker writes this as
-  it advances stages; SSE reader (yolo-api) tails it via inotify.
-* Heartbeat file ``/jobs/auto_label/heartbeat`` — worker touches
-  every 5 s while running; API uses mtime to detect a dead worker.
-* Cancel flag ``/jobs/auto_label/cancel.flag`` — operator writes via
-  POST /curation/pipeline/auto_label/cancel; checked at stage boundaries.
+* State file ``state.json`` — worker writes this as it advances
+  stages; each project's SSE stream (yolo-api) polls its mtime.
+* Heartbeat file ``heartbeat`` — worker touches every 5 s while
+  running; API uses mtime to detect a dead worker.
+* Cancel flag ``cancel.flag`` — operator writes via
+  POST /curation/projects/{slug}/pipeline/auto_label/cancel; checked
+  at stage boundaries.
+
+Projects: every poll cycle scans each active, unpaused project's own
+``autolabel_dir`` for a pending ``trigger.json`` and runs only the
+OLDEST one (by trigger mtime) -- one job at a time across all projects
+(the pipeline is GPU/CPU heavy); the rest wait their turn. When nothing
+is pending, each project's IVF centroids are checked for staleness on
+its own interval and a stale project gets a retrain run. Every run binds
+its project. ``--project SLUG`` restricts the worker to one project.
 
 Usage:
 
     python -m scripts.curation.auto_label_worker
+    python -m scripts.curation.auto_label_worker --project my-project
 
 Or via compose: ``docker compose up -d curation-auto-label-worker``.
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import contextlib
 import importlib
@@ -58,7 +70,7 @@ import traceback
 import uuid
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 
 # Make the repo root importable when run as a module from /app/ in the
@@ -68,17 +80,27 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
+from scripts.curation._project_worker_utils import unpaused_projects
 from src.services.curation.autolabel.job import (
-    _CANCEL_FLAG,
-    _RUNNING_LOCK,
-    _STATE_DIR,
-    _STATE_FILE,
     _atomic_write,
-    _ensure_dir,
+    _cancel_flag,
+    _heartbeat_file,
     _JobState,
     _Progress,
+    _running_lock,
+    _trigger_file,
 )
 from src.services.curation.worker_liveness import write_heartbeat as _write_container_heartbeat
+from src.services.projects.guard import make_script_opensearch
+from src.services.projects.script_binding import (
+    add_project_argument,
+    bind_script_project,
+    script_project_registry,
+)
+
+
+if TYPE_CHECKING:
+    from src.config.projects import ProjectRecord
 
 
 logging.basicConfig(
@@ -88,27 +110,21 @@ logging.basicConfig(
 logger = logging.getLogger('auto_label_worker')
 
 
-TRIGGER_FILE = _STATE_DIR / 'trigger.json'
-HEARTBEAT_FILE = _STATE_DIR / 'heartbeat'
-
 # How often the worker checks for new trigger files when idle. Triggers
 # are rare (operator-initiated); 1 s is responsive enough and uses no
 # meaningful CPU. inotify would shave ~500 ms of average latency but
 # add a dep we don't need.
 POLL_INTERVAL_S = 1.0
 
-# Heartbeat cadence — worker touches HEARTBEAT_FILE this often while a
-# run is active. The API's liveness check uses 3x this as the stale
-# threshold (worker considered dead if heartbeat hasn't been touched in
-# 15 s). Conservative so a brief blocking call inside the pipeline
-# doesn't false-positive a "worker is dead" verdict.
+# Heartbeat cadence — worker touches the active project's heartbeat file
+# this often while a run is active. The API's liveness check uses 3x
+# this as the stale threshold (worker considered dead if heartbeat
+# hasn't been touched in 15 s). Conservative so a brief blocking call
+# inside the pipeline doesn't false-positive a "worker is dead" verdict.
 HEARTBEAT_INTERVAL_S = 5.0
 
-# How often (seconds) the idle worker checks whether the IVF centroids
-# should be retrained. The *decision* (should_retrain_centroids) has its
-# own 24h cooldown + growth gate, so this is just how often we evaluate
-# that cheap count query — 30 min keeps it responsive to a big ingest
-# without spamming OpenSearch. 0 disables auto-retrain entirely.
+# How often (seconds) the idle worker checks whether a project's IVF
+# centroids should be retrained. 0 disables auto-retrain entirely.
 AUTO_RETRAIN_CHECK_INTERVAL_S = float(os.getenv('OP_IVF_RETRAIN_CHECK_S', '1800'))
 
 _IVF_PIPELINE_PATH = 'src.routers.curation.pipeline:pipeline_auto_label'
@@ -126,41 +142,43 @@ def _resolve_pipeline_fn(pipeline_path: str):
     return obj
 
 
-async def _build_opensearch():
-    """Async OpenSearch client.
+def _opensearch_url() -> str:
+    from src.config.settings import get_settings
 
-    The curation pipeline code talks raw search/bulk/indices — pass the
-    inner ``AsyncOpenSearch`` instance, not the project's higher-level
-    ``OpenSearchClient`` wrapper. Mirrors the same pattern
-    ``auto_label_cli._build_opensearch`` used.
-    """
-    from src.core.dependencies import OpenSearchClientFactory
+    return get_settings().opensearch_url
 
-    wrapper = await OpenSearchClientFactory.get_client()
-    return getattr(wrapper, 'client', wrapper)
+
+def _build_opensearch() -> Any:
+    """The guarded OpenSearch client the pipelines run against (raw
+    ``AsyncOpenSearch``; every run binds its project, so the guard keeps
+    each run inside its own indexes)."""
+    from src.config.settings import get_settings
+
+    return make_script_opensearch([_opensearch_url()], timeout=get_settings().opensearch_timeout)
 
 
 def _touch_heartbeat() -> None:
-    """Update HEARTBEAT_FILE mtime — used by the API to detect a dead worker.
+    """Update the bound project's heartbeat-file mtime -- used by the API
+    to detect a dead worker. Must be called with a project bound.
 
     Also writes the container-local liveness heartbeat (S-2) so the
     compose healthcheck stays fresh for the whole duration of a run, not
     just the idle poll loop.
     """
     try:
-        HEARTBEAT_FILE.touch()
+        _heartbeat_file().touch()
     except OSError as exc:
         logger.warning('heartbeat touch failed: %s', exc)
     _write_container_heartbeat('auto_label_worker', {'poll': True})
 
 
 async def _heartbeat_loop(stop: asyncio.Event) -> None:
-    """Periodically touch HEARTBEAT_FILE until ``stop`` is set.
+    """Periodically touch the heartbeat file until ``stop`` is set.
 
     Runs as a sibling task to the pipeline coroutine so a long-running
-    blocking call inside a stage doesn't stall the heartbeat (the API's
-    liveness check would otherwise false-positive 'worker dead').
-    """
+    blocking call inside a stage doesn't stall the heartbeat. Created
+    while a project is bound, so it inherits that binding (asyncio
+    tasks capture a copy of the current context at creation time)."""
     while not stop.is_set():
         _touch_heartbeat()
         try:
@@ -169,8 +187,12 @@ async def _heartbeat_loop(stop: asyncio.Event) -> None:
             continue
 
 
-async def _run_one(trigger: dict[str, Any], opensearch: Any) -> None:
-    """Drive one pipeline invocation from a trigger payload."""
+async def _run_one(record: ProjectRecord, trigger: dict[str, Any], opensearch: Any) -> None:
+    """Drive one pipeline invocation from a trigger payload, with
+    ``record`` bound for the whole run (including the sibling heartbeat
+    task, state/cancel/lock file resolution, and the pipeline itself)."""
+    from src.config.project_context import bind_project
+
     job_id = trigger.get('job_id') or uuid.uuid4().hex
     pipeline_path = trigger.get('pipeline')
     args = dict(trigger.get('args') or {})
@@ -180,111 +202,140 @@ async def _run_one(trigger: dict[str, Any], opensearch: Any) -> None:
     args.pop('progress', None)
 
     if not pipeline_path:
-        logger.error('trigger missing pipeline path: %r', trigger)
+        logger.error('project=%s trigger missing pipeline path: %r', record.slug, trigger)
         return
 
-    state = _JobState(
-        job_id=job_id,
-        status='running',
-        stage='',
-        started_at=time.time(),
-        args=args,
-        pipeline=pipeline_path,
-    )
-    _atomic_write(asdict(state))
-    # running.lock kept for backward-compat with any external tooling
-    # that inspects it. cross-container pid is meaningless here, hence
-    # the literal 'auto_label_worker' sentinel rather than os.getpid.
-    with contextlib.suppress(OSError):
-        _RUNNING_LOCK.write_text(
-            json.dumps(
-                {
-                    'pid': os.getpid(),
-                    'starttime': 0,
-                    'started_at': state.started_at,
-                    'owner': 'auto_label_worker',
-                }
-            )
+    with bind_project(record):
+        state = _JobState(
+            job_id=job_id,
+            status='running',
+            stage='',
+            started_at=time.time(),
+            args=args,
+            pipeline=pipeline_path,
         )
-
-    try:
-        pipeline_fn = _resolve_pipeline_fn(pipeline_path)
-    except (ImportError, AttributeError, ValueError) as exc:
-        state.status = 'failed'
-        state.error = f'cannot resolve pipeline {pipeline_path!r}: {exc}'
-        state.error_detail = traceback.format_exc()[:4096]
-        state.finished_at = time.time()
         _atomic_write(asdict(state))
-        logger.exception('pipeline resolve failed')
-        return
+        # running.lock kept for backward-compat with any external tooling
+        # that inspects it. cross-container pid is meaningless here, hence
+        # the literal 'auto_label_worker' sentinel rather than os.getpid.
+        with contextlib.suppress(OSError):
+            _running_lock().write_text(
+                json.dumps(
+                    {
+                        'pid': os.getpid(),
+                        'starttime': 0,
+                        'started_at': state.started_at,
+                        'owner': 'auto_label_worker',
+                        'project': record.slug,
+                    }
+                )
+            )
 
-    stop = asyncio.Event()
-    heartbeat_task = asyncio.create_task(_heartbeat_loop(stop))
-    progress = _Progress(state)
+        try:
+            pipeline_fn = _resolve_pipeline_fn(pipeline_path)
+        except (ImportError, AttributeError, ValueError) as exc:
+            state.status = 'failed'
+            state.error = f'cannot resolve pipeline {pipeline_path!r}: {exc}'
+            state.error_detail = traceback.format_exc()[:4096]
+            state.finished_at = time.time()
+            _atomic_write(asdict(state))
+            logger.exception('project=%s pipeline resolve failed', record.slug)
+            return
 
-    logger.info(
-        'run starting job_id=%s pipeline=%s args=%s',
-        job_id,
-        pipeline_path,
-        args,
-    )
-    try:
-        result = await pipeline_fn(opensearch=opensearch, progress=progress, **args)
-        state.result = result if isinstance(result, dict) else {'raw': str(result)}
-        state.status = 'completed'
-        logger.info('run completed job_id=%s', job_id)
-    except asyncio.CancelledError:
-        state.status = 'cancelled'
-        state.error = state.error or 'cancelled by operator'
-        logger.info('run cancelled job_id=%s', job_id)
-        raise
-    except BaseException as exc:
-        state.status = 'failed'
-        state.error = f'{type(exc).__name__}: {exc}'
-        state.error_detail = traceback.format_exc()[:4096]
-        logger.exception('run failed job_id=%s', job_id)
-    finally:
-        stop.set()
-        with contextlib.suppress(asyncio.CancelledError):
-            await heartbeat_task
-        # Flush the final stage's duration so the dashboard's
-        # "stage timings" expander has a complete row.
-        with contextlib.suppress(Exception):
-            progress.finalize()
-        state.finished_at = time.time()
-        _atomic_write(asdict(state))
+        stop = asyncio.Event()
+        heartbeat_task = asyncio.create_task(_heartbeat_loop(stop))
+        progress = _Progress(state)
+
+        logger.info(
+            'project=%s run starting job_id=%s pipeline=%s args=%s',
+            record.slug,
+            job_id,
+            pipeline_path,
+            args,
+        )
+        try:
+            result = await pipeline_fn(opensearch=opensearch, progress=progress, **args)
+            state.result = result if isinstance(result, dict) else {'raw': str(result)}
+            state.status = 'completed'
+            logger.info('project=%s run completed job_id=%s', record.slug, job_id)
+        except asyncio.CancelledError:
+            state.status = 'cancelled'
+            state.error = state.error or 'cancelled by operator'
+            logger.info('project=%s run cancelled job_id=%s', record.slug, job_id)
+            raise
+        except BaseException as exc:
+            state.status = 'failed'
+            state.error = f'{type(exc).__name__}: {exc}'
+            state.error_detail = traceback.format_exc()[:4096]
+            logger.exception('project=%s run failed job_id=%s', record.slug, job_id)
+        finally:
+            stop.set()
+            with contextlib.suppress(asyncio.CancelledError):
+                await heartbeat_task
+            # Flush the final stage's duration so the dashboard's
+            # "stage timings" expander has a complete row.
+            with contextlib.suppress(Exception):
+                progress.finalize()
+            state.finished_at = time.time()
+            _atomic_write(asdict(state))
+            with contextlib.suppress(FileNotFoundError):
+                _running_lock().unlink()
+            with contextlib.suppress(FileNotFoundError):
+                _cancel_flag().unlink()
+            with contextlib.suppress(FileNotFoundError):
+                _heartbeat_file().unlink()
+
+
+def _claim_trigger_for(record: ProjectRecord) -> dict[str, Any] | None:
+    """Atomically claim ``record``'s trigger file (read + unlink in one
+    critical section, project bound). Returns the parsed payload or
+    None if there's nothing pending (or it's invalid)."""
+    from src.config.project_context import bind_project
+
+    with bind_project(record):
+        trigger_path = _trigger_file()
+        if not trigger_path.exists():
+            return None
+        try:
+            raw = trigger_path.read_text()
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            logger.warning('project=%s trigger read failed: %s', record.slug, exc)
+            return None
         with contextlib.suppress(FileNotFoundError):
-            _RUNNING_LOCK.unlink()
-        with contextlib.suppress(FileNotFoundError):
-            _CANCEL_FLAG.unlink()
-        with contextlib.suppress(FileNotFoundError):
-            HEARTBEAT_FILE.unlink()
-
-
-def _claim_trigger() -> dict[str, Any] | None:
-    """Atomically claim the trigger file. Returns the parsed payload or None.
-
-    Reads + unlinks in one critical section. Multiple workers running
-    against the same volume would each see the file once at most;
-    whichever wins the unlink race processes the trigger. In production
-    we run only one worker, so this is just defense-in-depth.
-    """
-    if not TRIGGER_FILE.exists():
-        return None
-    try:
-        raw = TRIGGER_FILE.read_text()
-    except FileNotFoundError:
-        return None
-    except OSError as exc:
-        logger.warning('trigger read failed: %s', exc)
-        return None
-    with contextlib.suppress(FileNotFoundError):
-        TRIGGER_FILE.unlink()
+            trigger_path.unlink()
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
-        logger.error('trigger JSON invalid: %s; raw=%r', exc, raw[:200])
+        logger.error('project=%s trigger JSON invalid: %s; raw=%r', record.slug, exc, raw[:200])
         return None
+
+
+def _oldest_pending_trigger(
+    active: list[ProjectRecord],
+) -> tuple[ProjectRecord, float] | None:
+    """Among every active project with a pending (unclaimed)
+    ``trigger.json``, the one whose trigger is oldest by mtime. Claiming
+    is separate (:func:`_claim_trigger_for`): the file can vanish in
+    between (an API-side cancel), which the caller treats as nothing
+    pending."""
+    from src.config.project_context import bind_project
+
+    best: tuple[ProjectRecord, float] | None = None
+    for record in active:
+        try:
+            with bind_project(record):
+                trigger_path = _trigger_file()
+                mtime = trigger_path.stat().st_mtime
+        except FileNotFoundError:
+            continue
+        except Exception as exc:
+            logger.warning('project=%s trigger discovery failed: %s', record.slug, exc)
+            continue
+        if best is None or mtime < best[1]:
+            best = (record, mtime)
+    return best
 
 
 def _ivf_retrain_trigger() -> dict[str, Any]:
@@ -303,7 +354,8 @@ def _ivf_retrain_trigger() -> dict[str, Any]:
 
 
 async def _maybe_auto_retrain(opensearch: Any) -> dict[str, Any] | None:
-    """Return a retrain trigger if IVF centroids are stale, else None.
+    """Return a retrain trigger if the bound project's IVF centroids are
+    stale, else None.
 
     Cheap count query; the growth + 24h cooldown gate lives in
     should_retrain_centroids. Failures are swallowed (logged) so a
@@ -322,54 +374,68 @@ async def _maybe_auto_retrain(opensearch: Any) -> dict[str, Any] | None:
     return None
 
 
-async def _main_loop(stop: asyncio.Event) -> None:
-    """Long-lived loop: open OpenSearch client, watch trigger file, dispatch."""
-    _ensure_dir()
-    opensearch = await _build_opensearch()
+async def _next_retrain(
+    projects: list[ProjectRecord],
+    opensearch: Any,
+    last_check: dict[str, float],
+    started: float,
+) -> tuple[ProjectRecord, dict[str, Any]] | None:
+    """The first project (in ``projects`` order) whose retrain check is due
+    and whose centroids are stale, with its retrain trigger. Each project
+    is checked at most once per ``AUTO_RETRAIN_CHECK_INTERVAL_S``."""
+    from src.config.project_context import bind_project
+
+    if AUTO_RETRAIN_CHECK_INTERVAL_S <= 0:
+        return None
+    for record in projects:
+        now = time.monotonic()
+        if now - last_check.get(record.slug, started) < AUTO_RETRAIN_CHECK_INTERVAL_S:
+            continue
+        last_check[record.slug] = now
+        with bind_project(record):
+            trigger = await _maybe_auto_retrain(opensearch)
+        if trigger is not None:
+            return record, trigger
+    return None
+
+
+async def _main_loop(stop: asyncio.Event, only_slug: str | None) -> None:
+    """One job at a time across every served project: the oldest pending
+    trigger first, else a due IVF retrain."""
+    registry = script_project_registry(_opensearch_url())
+    opensearch = _build_opensearch()
     logger.info(
-        'worker ready trigger=%s state=%s heartbeat=%s poll_s=%s retrain_check_s=%s',
-        TRIGGER_FILE,
-        _STATE_FILE,
-        HEARTBEAT_FILE,
+        'worker ready project=%s poll_s=%s retrain_check_s=%s',
+        only_slug or '*',
         POLL_INTERVAL_S,
         AUTO_RETRAIN_CHECK_INTERVAL_S,
     )
-
-    # Stagger the first auto-retrain check so a worker restart during a
-    # big ingest doesn't immediately fire one. Next check after one
-    # interval.
-    last_retrain_check = time.monotonic()
-    # S-2: container healthcheck liveness — distinct from HEARTBEAT_FILE
-    # above, which only gets touched while a run is active
-    # (_heartbeat_loop is only started inside _run_one). This one fires
-    # here in the idle poll loop too, so `worker_liveness check
-    # auto_label_worker` only goes stale if this loop itself stalls.
+    started = time.monotonic()
+    last_retrain_check: dict[str, float] = {}
     last_liveness_heartbeat = 0.0
-
     try:
         while not stop.is_set():
             now_monotonic = time.monotonic()
             if now_monotonic - last_liveness_heartbeat >= 15.0:
                 last_liveness_heartbeat = now_monotonic
                 _write_container_heartbeat('auto_label_worker', {'poll': True})
-            trigger = _claim_trigger()
-            # Idle-time auto-retrain: only when no operator trigger is
-            # pending, throttled by AUTO_RETRAIN_CHECK_INTERVAL_S (the
-            # decision itself enforces the growth + cooldown gate).
-            if (
-                trigger is None
-                and AUTO_RETRAIN_CHECK_INTERVAL_S > 0
-                and time.monotonic() - last_retrain_check >= AUTO_RETRAIN_CHECK_INTERVAL_S
-            ):
-                last_retrain_check = time.monotonic()
-                trigger = await _maybe_auto_retrain(opensearch)
-            if trigger is not None:
-                try:
-                    await _run_one(trigger, opensearch)
-                except asyncio.CancelledError:
-                    # Worker shutdown — the in-flight run already
-                    # recorded 'cancelled' state in its own finally.
-                    raise
+
+            try:
+                projects = await unpaused_projects(registry, only_slug)
+            except Exception as exc:
+                logger.warning('registry unavailable: %s', exc)
+                projects = []
+
+            job: tuple[ProjectRecord, dict[str, Any]] | None = None
+            oldest = _oldest_pending_trigger(projects)
+            if oldest is not None:
+                record, _mtime = oldest
+                trigger = _claim_trigger_for(record)
+                job = (record, trigger) if trigger is not None else None
+            if job is None and oldest is None:
+                job = await _next_retrain(projects, opensearch, last_retrain_check, started)
+            if job is not None:
+                await _run_one(job[0], job[1], opensearch)
                 continue
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL_S)
@@ -380,7 +446,22 @@ async def _main_loop(stop: asyncio.Event) -> None:
             await opensearch.close()
 
 
-def main() -> int:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__)
+    add_project_argument(p)
+    p.set_defaults(project=None)  # every active project; --project restricts to one
+    return p.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    if args.project:
+        # Fails fast on an unknown/unbindable slug. add_project_argument's
+        # own default already reads $OP_CURATION_PROJECT (P1R R9); no
+        # project given here means every active project (multi-project
+        # mode, §5.2), not a single-project env-var bind.
+        bind_script_project(args.project)
+
     stop = asyncio.Event()
 
     def _on_signal(*_: object) -> None:
@@ -394,7 +475,7 @@ def main() -> int:
             with contextlib.suppress(NotImplementedError, ValueError):
                 loop.add_signal_handler(sig, _on_signal)
         with contextlib.suppress(asyncio.CancelledError):
-            await _main_loop(stop)
+            await _main_loop(stop, args.project)
         return 0
 
     try:

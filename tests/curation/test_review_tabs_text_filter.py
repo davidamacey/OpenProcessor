@@ -18,7 +18,9 @@ def client() -> Any:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     fake = AsyncMock()
     fake.count = AsyncMock(return_value={'count': 0})
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
@@ -39,7 +41,7 @@ def profile_env(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 
 def _regions_tab(client: TestClient) -> dict[str, Any]:
-    resp = client.get('/curation/review/tabs')
+    resp = client.get('/curation/projects/default/review/tabs')
     assert resp.status_code == 200, resp.text
     return next(t for t in resp.json()['tabs'] if t['id'] == 'regions')
 

@@ -10,10 +10,10 @@ from src.clients.curation_opensearch import mget_crops
 from src.config import get_region_fields
 from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
     OpenSearchDep,
     _now_iso,
     get_class_registry,
+    items_index,
     logger,
     router,
 )
@@ -268,7 +268,7 @@ async def pipeline_auto_label(
         summary['stages']['auto_promote'] = dict(CLUSTER_SCOPED_SKIP)
     else:
         try:
-            await opensearch.indices.refresh(index=CURATION_ITEMS_INDEX)
+            await opensearch.indices.refresh(index=items_index())
         except Exception as exc:
             logger.warning('pipeline_pre_promote_refresh_failed', error=str(exc))
         promote = await with_elapsed_tick(
@@ -306,7 +306,7 @@ async def pipeline_auto_label(
             progress.start_stage('finalize')
         try:
             body = {'query': unvalidated_count_query(class_id=class_id, cluster_id=cluster_id)}
-            cnt = await opensearch.count(index=CURATION_ITEMS_INDEX, body=body)
+            cnt = await opensearch.count(index=items_index(), body=body)
             summary['unvalidated_remaining'] = int(cnt.get('count', 0))
         except Exception:
             summary['unvalidated_remaining'] = -1
@@ -334,9 +334,7 @@ async def pipeline_auto_label(
     guard = ClassWriteGuard('vlm_pipeline')
     scroll_id: str | None = None
     try:
-        resp = await opensearch.search(
-            index=CURATION_ITEMS_INDEX, body=initial_body, scroll=SCROLL_TTL
-        )
+        resp = await opensearch.search(index=items_index(), body=initial_body, scroll=SCROLL_TTL)
         while True:
             scroll_id = resp.get('_scroll_id')
             hits = (resp.get('hits') or {}).get('hits') or []
@@ -372,22 +370,22 @@ async def pipeline_auto_label(
 
     # Reuse the VLM label_batch logic by calling it directly (no HTTP
     # hop). Build ItemCrops here so we can chunk.
+    from src.services.curation.region_class import item_classes
     from src.services.labeling.vlm_labeler import (
         format_class_catalog,
         resolve_class_name as _resolve_class_name_fn,
     )
 
     reg = get_class_registry().load()
-    class_names = [c.class_name for c in reg.classes if not c.deprecated]
-    name_to_id = {c.class_name: c.class_id for c in reg.classes if not c.deprecated}
+    labelable = item_classes(reg.classes)
+    class_names = [c.class_name for c in labelable]
+    name_to_id = {c.class_name: c.class_id for c in labelable}
 
     # Render the registry as a grouped+described catalog so the VLM's
     # prompt tells it what each cryptic slug actually means visually. Big
     # quality lift over the bare CSV — see ``format_class_catalog``.
     class_dicts = [
-        {'class_name': c.class_name, 'group': getattr(c, 'group', None)}
-        for c in reg.classes
-        if not c.deprecated
+        {'class_name': c.class_name, 'group': getattr(c, 'group', None)} for c in labelable
     ]
     # The run's selected pack (resolve_prompt_pack() default when unset).
     labeler = _get_vlm_labeler(prompt_pack)
@@ -445,7 +443,9 @@ async def pipeline_auto_label(
                 logger.warning('pipeline_thumb_failed', crop_id=crop_id, error=str(exc))
                 continue
             crops.append(ItemCrop(img_id=crop_id, jpeg_bytes=jpeg))
-        if not crops:
+        # No item classes yet (a fresh project, or only the region class):
+        # nothing to label items as.
+        if not crops or not class_names:
             return 0, 0, []
         preds = await labeler.label_or_propose_batch(
             crops,
@@ -509,7 +509,7 @@ async def pipeline_auto_label(
                     opensearch,
                     doc_ids=list(updates_by_id.keys()),
                     merger=_merge_pipeline,
-                    index=CURATION_ITEMS_INDEX,
+                    index=items_index(),
                     refresh=False,
                     writer_id='vlm_pipeline',
                 )
@@ -562,7 +562,7 @@ async def pipeline_auto_label(
 
     # Force a refresh so subsequent reads see the updates.
     try:
-        await opensearch.indices.refresh(index=CURATION_ITEMS_INDEX)
+        await opensearch.indices.refresh(index=items_index())
     except Exception as exc:
         logger.warning('pipeline_refresh_failed', error=str(exc))
 
@@ -589,7 +589,7 @@ async def pipeline_auto_label(
     # Re-count what's still unvalidated for the dashboard.
     try:
         cnt_resp = await opensearch.count(
-            index=CURATION_ITEMS_INDEX,
+            index=items_index(),
             body={'query': unvalidated_count_query(class_id=class_id, cluster_id=cluster_id)},
         )
         remaining = int(cnt_resp.get('count', 0))

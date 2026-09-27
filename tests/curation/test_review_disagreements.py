@@ -64,7 +64,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     )
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
 
     client = TestClient(app)
@@ -78,7 +80,7 @@ def test_disagreements_query_includes_class_validated_and_probe_exists(
     """model_disagreements filters on class_validated=True (the class-side
     flag) rather than the legacy conflated label_validated.
     """
-    r = app_client.get('/curation/review/model_disagreements')
+    r = app_client.get('/curation/projects/default/review/model_disagreements')
     assert r.status_code == 200, r.text
 
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
@@ -106,7 +108,7 @@ def test_disagreements_script_uses_keyword_subfields(app_client: TestClient) -> 
     (400 script_exception) and post-fix (real rows) before landing this
     guard.
     """
-    r = app_client.get('/curation/review/model_disagreements')
+    r = app_client.get('/curation/projects/default/review/model_disagreements')
     assert r.status_code == 200, r.text
 
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
@@ -127,7 +129,7 @@ def test_disagreements_overrides_default_must_not(app_client: TestClient) -> Non
     or region_validated (regions tab); model_disagreements wants validated
     class rows so it drops the must_not.
     """
-    r = app_client.get('/curation/review/model_disagreements')
+    r = app_client.get('/curation/projects/default/review/model_disagreements')
     assert r.status_code == 200
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must_not = body['query']['bool'].get('must_not', [])
@@ -136,7 +138,7 @@ def test_disagreements_overrides_default_must_not(app_client: TestClient) -> Non
 
 
 def test_disagreements_excludes_test_holdout_by_default(app_client: TestClient) -> None:
-    r = app_client.get('/curation/review/model_disagreements')
+    r = app_client.get('/curation/projects/default/review/model_disagreements')
     assert r.status_code == 200
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must_not = body['query']['bool'].get('must_not', [])
@@ -144,7 +146,7 @@ def test_disagreements_excludes_test_holdout_by_default(app_client: TestClient) 
 
 
 def test_disagreements_include_test_param_drops_filter(app_client: TestClient) -> None:
-    r = app_client.get('/curation/review/model_disagreements?include_test=true')
+    r = app_client.get('/curation/projects/default/review/model_disagreements?include_test=true')
     assert r.status_code == 200
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must_not = body['query']['bool'].get('must_not', [])
@@ -152,7 +154,7 @@ def test_disagreements_include_test_param_drops_filter(app_client: TestClient) -
 
 
 def test_disagreements_response_surfaces_probe_fields(app_client: TestClient) -> None:
-    r = app_client.get('/curation/review/model_disagreements')
+    r = app_client.get('/curation/projects/default/review/model_disagreements')
     assert r.status_code == 200
     out = r.json()
     assert out['total'] == 1
@@ -164,7 +166,7 @@ def test_disagreements_response_surfaces_probe_fields(app_client: TestClient) ->
 
 
 def test_unknown_tab_lists_disagreements_in_400(app_client: TestClient) -> None:
-    r = app_client.get('/curation/review/totally-not-a-tab')
+    r = app_client.get('/curation/projects/default/review/totally-not-a-tab')
     assert r.status_code == 400
     assert 'model_disagreements' in r.json()['detail']
 
@@ -175,7 +177,7 @@ def test_existing_tabs_still_exclude_validated(app_client: TestClient) -> None:
     Review tabs filter on class_validated (the class-
     side flag — the common case for the labeler /clusters view).
     """
-    r = app_client.get('/curation/review/all')
+    r = app_client.get('/curation/projects/default/review/all')
     assert r.status_code == 200
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must_not = body['query']['bool']['must_not']

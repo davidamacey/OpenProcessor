@@ -18,10 +18,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.curation import base_curation_config
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 F = get_region_fields()
 
 
@@ -34,7 +35,9 @@ def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         AsyncMock(return_value=None),
     )
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -72,7 +75,7 @@ def test_default_queue_includes_rejected_candidate_and_detected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), monkeypatch)
-    r = client.get('/curation/review/regions')
+    r = client.get('/curation/projects/default/review/regions')
     assert r.status_code == 200, r.text
     crop_ids = {i['crop_id'] for i in r.json()['items']}
     assert crop_ids == {'detected1', 'rejected1'}
@@ -82,14 +85,18 @@ def test_detected_only_filter_excludes_rejected_candidate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), monkeypatch)
-    r = client.get('/curation/review/regions', params={'region_status': 'detected'})
+    r = client.get(
+        '/curation/projects/default/review/regions', params={'region_status': 'detected'}
+    )
     assert r.status_code == 200, r.text
     assert [i['crop_id'] for i in r.json()['items']] == ['detected1']
 
 
 def test_verify_rejected_only_filter_excludes_detected(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), monkeypatch)
-    r = client.get('/curation/review/regions', params={'region_status': 'verify_rejected'})
+    r = client.get(
+        '/curation/projects/default/review/regions', params={'region_status': 'verify_rejected'}
+    )
     assert r.status_code == 200, r.text
     assert [i['crop_id'] for i in r.json()['items']] == ['rejected1']
 
@@ -99,20 +106,20 @@ def test_human_validated_items_still_excluded_in_every_mode(
 ) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), monkeypatch)
     for params in ({}, {'region_status': 'all'}, {'region_status': 'detected'}):
-        r = client.get('/curation/review/regions', params=params)
+        r = client.get('/curation/projects/default/review/regions', params=params)
         assert 'validated' not in {i['crop_id'] for i in r.json()['items']}, params
 
 
 def test_false_positive_never_appears(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), monkeypatch)
     for params in ({}, {'region_status': 'detected'}, {'region_status': 'verify_rejected'}):
-        r = client.get('/curation/review/regions', params=params)
+        r = client.get('/curation/projects/default/review/regions', params=params)
         assert 'fp' not in {i['crop_id'] for i in r.json()['items']}, params
 
 
 def test_unknown_region_status_filter_is_400(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), monkeypatch)
-    r = client.get('/curation/review/regions', params={'region_status': 'bogus'})
+    r = client.get('/curation/projects/default/review/regions', params={'region_status': 'bogus'})
     assert r.status_code == 400
     assert 'region_status' in r.json()['detail']
 
@@ -121,7 +128,7 @@ def test_rejected_item_reason_mentions_rejection(monkeypatch: pytest.MonkeyPatch
     """R10: the reason is worded from the served rejection-reason
     vocabulary label, not the raw region_rejection_reason id verbatim."""
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), monkeypatch)
-    r = client.get('/curation/review/regions')
+    r = client.get('/curation/projects/default/review/regions')
     items = {i['crop_id']: i for i in r.json()['items']}
     assert items['rejected1']['reason'] == 'rejected: the detection is wrong (region is elsewhere)'
     assert 'region_visible_elsewhere' not in items['rejected1']['reason']
@@ -159,8 +166,12 @@ def test_rejected_items_sort_by_candidate_score_not_arbitrary_tie(
     # ordering semantics directly against the clause + locate's own
     # generic before_query rather than relying on the fake's sort.
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
-    lo = client.get('/curation/review/regions/locate', params={'crop_id': 'rej_low'}).json()
-    hi = client.get('/curation/review/regions/locate', params={'crop_id': 'rej_high'}).json()
+    lo = client.get(
+        '/curation/projects/default/review/regions/locate', params={'crop_id': 'rej_low'}
+    ).json()
+    hi = client.get(
+        '/curation/projects/default/review/regions/locate', params={'crop_id': 'rej_high'}
+    ).json()
     assert lo['in_queue']
     assert hi['in_queue']
     # Higher candidate score sorts strictly before ('rank' is the count of

@@ -13,11 +13,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.routers.curation._common import (
-    CURATION_IMAGES_INDEX,
-    CURATION_ITEMS_INDEX,
-    warm_knn_indexes,
-)
+from src.routers.curation._common import images_index, items_index, warm_knn_indexes
 
 
 @pytest.mark.asyncio
@@ -32,7 +28,7 @@ async def test_warm_knn_indexes_calls_the_warmup_endpoint() -> None:
     assert os_client.transport.perform_request.await_args is not None
     method, url = os_client.transport.perform_request.await_args.args
     assert method == 'GET'
-    assert url == f'/_plugins/_knn/warmup/{CURATION_ITEMS_INDEX},{CURATION_IMAGES_INDEX}'
+    assert url == f'/_plugins/_knn/warmup/{items_index()},{images_index()}'
 
 
 @pytest.mark.asyncio

@@ -68,7 +68,6 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from opensearchpy import AsyncOpenSearch
 
 from src.config import RegionStatus, get_curation_config
 from src.services.curation.region_requeue import (
@@ -79,6 +78,8 @@ from src.services.curation.region_requeue import (
     requeue_breakdown,
 )
 from src.services.detection.profile_registry import get_active_region_profile
+from src.services.projects.guard import make_script_opensearch
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
@@ -100,7 +101,7 @@ def _print_breakdown(report: dict) -> None:
 
 async def _async_main(args: argparse.Namespace, sel: RequeueSelection) -> int:
     cfg = get_curation_config()
-    client = AsyncOpenSearch(hosts=[args.opensearch_url], use_ssl=False, timeout=300)
+    client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=300)
     try:
         report = await requeue_breakdown(client, sel, config=cfg)
         _print_breakdown(report)
@@ -171,7 +172,9 @@ def main() -> int:
     g = p.add_mutually_exclusive_group()
     g.add_argument('--dry-run', action='store_true', default=True)
     g.add_argument('--apply', dest='dry_run', action='store_false')
+    add_project_argument(p)
     args = p.parse_args()
+    bind_script_project(args.project, opensearch_url=args.opensearch_url)
 
     if args.clear_detection and args.target == RegionStatus.PENDING_VERIFICATION.value:
         p.error('--clear-detection drops the box that --to pending_verification re-verifies')

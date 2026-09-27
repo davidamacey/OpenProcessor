@@ -19,7 +19,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.curation import base_curation_config
 from src.services.detection.profile_registry import region_profile_or_neutral
 
 
@@ -29,7 +30,7 @@ pytestmark = pytest.mark.usefixtures('reference_region_profile')
 
 
 F = get_region_fields()
-INDEX = get_curation_config().items_index
+INDEX = base_curation_config().items_index
 BOX = [0.6430511474609375, 0.5797716302772215, 0.6966705322265625, 0.6243825534416916]
 PARENT = [0.2421875, 0.38985655737704916, 0.7890625, 0.8000585480093677]
 HUMAN = region_profile_or_neutral().human_detector_name
@@ -63,7 +64,9 @@ def client(fake_os: QueryFakeOpenSearch) -> Any:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     with TestClient(app) as c:
         yield c
@@ -84,7 +87,7 @@ def _assert_provenance_kept(doc: dict[str, Any]) -> None:
 def test_same_box_put_keeps_detector_and_score(
     client: TestClient, fake_os: QueryFakeOpenSearch
 ) -> None:
-    resp = client.put('/curation/crops/c1/region', json={'region_bbox_norm': BOX})
+    resp = client.put('/curation/projects/default/crops/c1/region', json={'region_bbox_norm': BOX})
     assert resp.status_code == 200, resp.text
     doc = _doc(fake_os, 'c1')
     _assert_provenance_kept(doc)
@@ -100,7 +103,9 @@ def test_same_box_put_keeps_detector_and_score(
 
 def test_same_box_within_float_noise(client: TestClient, fake_os: QueryFakeOpenSearch) -> None:
     noisy = [v + 3e-7 for v in BOX]
-    resp = client.put('/curation/crops/c1/region', json={'region_bbox_norm': noisy})
+    resp = client.put(
+        '/curation/projects/default/crops/c1/region', json={'region_bbox_norm': noisy}
+    )
     assert resp.status_code == 200, resp.text
     _assert_provenance_kept(_doc(fake_os, 'c1'))
 
@@ -115,7 +120,8 @@ def test_same_box_in_parent_frame(client: TestClient, fake_os: QueryFakeOpenSear
         (BOX[3] - py1) / h,
     ]
     resp = client.put(
-        '/curation/crops/c1/region', json={'region_bbox_norm': in_parent, 'frame': 'parent'}
+        '/curation/projects/default/crops/c1/region',
+        json={'region_bbox_norm': in_parent, 'frame': 'parent'},
     )
     assert resp.status_code == 200, resp.text
     _assert_provenance_kept(_doc(fake_os, 'c1'))
@@ -125,7 +131,8 @@ def test_same_box_batch_put_keeps_provenance(
     client: TestClient, fake_os: QueryFakeOpenSearch
 ) -> None:
     resp = client.put(
-        '/curation/crops/batch_region', json={'crop_ids': ['c1', 'c2'], 'region_bbox_norm': BOX}
+        '/curation/projects/default/crops/batch_region',
+        json={'crop_ids': ['c1', 'c2'], 'region_bbox_norm': BOX},
     )
     assert resp.status_code == 200, resp.text
     for cid in ('c1', 'c2'):
@@ -136,7 +143,7 @@ def test_same_box_confirm_of_false_positive_confirms(
     client: TestClient, fake_os: QueryFakeOpenSearch
 ) -> None:
     _doc(fake_os, 'c1').update({F.status: 'false_positive', F.verified: False, F.cluster_id: -100})
-    resp = client.put('/curation/crops/c1/region', json={'region_bbox_norm': BOX})
+    resp = client.put('/curation/projects/default/crops/c1/region', json={'region_bbox_norm': BOX})
     assert resp.status_code == 200, resp.text
     doc = _doc(fake_os, 'c1')
     _assert_provenance_kept(doc)
@@ -147,7 +154,9 @@ def test_same_box_confirm_of_false_positive_confirms(
 
 def test_moved_box_is_human_geometry(client: TestClient, fake_os: QueryFakeOpenSearch) -> None:
     moved = [BOX[0] + 0.01, BOX[1], BOX[2] + 0.01, BOX[3]]
-    resp = client.put('/curation/crops/c1/region', json={'region_bbox_norm': moved})
+    resp = client.put(
+        '/curation/projects/default/crops/c1/region', json={'region_bbox_norm': moved}
+    )
     assert resp.status_code == 200, resp.text
     doc = _doc(fake_os, 'c1')
     assert doc[F.detector] == HUMAN

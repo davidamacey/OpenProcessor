@@ -37,10 +37,16 @@ from src.config import get_curation_config
 from src.services.curation.export_support import frozen_test_sha_of
 
 
-_config = get_curation_config()
-# Module globals (not re-read per call) so tests can point them at tmp dirs.
-EXPORT_ROOT: Path = _config.export_root
-EXTERNAL_ROOT: Path = _config.bakeoff_eval_root
+def export_root() -> Path:
+    """The bound project's export root."""
+    return Path(get_curation_config().export_root)
+
+
+def external_root() -> Path:
+    """The bound project's external eval-dataset root."""
+    return Path(get_curation_config().bakeoff_eval_root)
+
+
 EXTERNAL_GROUPS: tuple[str, ...] = ('curated', 'public', 'sample')
 
 DATASET_ID_RE = re.compile(r'^(export|external):[A-Za-z0-9_.\-]+(/[A-Za-z0-9_.\-]+)?$')
@@ -331,12 +337,12 @@ def list_eval_datasets(source: str | None = None) -> list[EvalDatasetRecord]:
     exports: list[EvalDatasetRecord] = []
     external: list[EvalDatasetRecord] = []
     if source in (None, 'export'):
-        root = EXPORT_ROOT
+        root = export_root()
         exports = [_export_record(root, d, level) for d, level in _iter_export_dirs(root)]
         exports.sort(key=lambda r: r.id)
         exports.sort(key=lambda r: r.exported_at or '', reverse=True)
     if source in (None, 'external'):
-        root = EXTERNAL_ROOT
+        root = external_root()
         for group in EXTERNAL_GROUPS:
             gdir = root / group
             if not gdir.is_dir():
@@ -361,7 +367,7 @@ def resolve_dataset_id(dataset_id: str) -> EvalDatasetRecord:
     if not DATASET_ID_RE.fullmatch(dataset_id):
         raise UnknownDatasetError(f'invalid dataset id {dataset_id!r}')
     source, rel = dataset_id.split(':', 1)
-    root = EXPORT_ROOT if source == 'export' else EXTERNAL_ROOT
+    root = export_root() if source == 'export' else external_root()
     candidate = root / rel
     if not candidate.resolve().is_relative_to(root.resolve()):
         raise UnknownDatasetError(f'dataset id {dataset_id!r} is outside its root')
@@ -392,10 +398,10 @@ def export_id_for_dir(export_dir: str | Path) -> str:
     Raises :class:`UnknownDatasetError` when it is not under the export root
     at depth 1 or 2.
     """
-    root = EXPORT_ROOT.resolve()
+    root = export_root().resolve()
     resolved = Path(export_dir).resolve()
     if not resolved.is_relative_to(root):
-        raise UnknownDatasetError(f'{export_dir} is not under the export root {EXPORT_ROOT}')
+        raise UnknownDatasetError(f'{export_dir} is not under the export root {export_root()}')
     rel = resolved.relative_to(root).as_posix()
     if not rel or rel == '.' or rel.count('/') > 1:
         raise UnknownDatasetError(f'{export_dir} is not an export directory')
@@ -419,13 +425,13 @@ def train_test_overlap(train_export_dir: Path, dataset: EvalDatasetRecord) -> di
 
 __all__ = [
     'DATASET_ID_RE',
-    'EXPORT_ROOT',
-    'EXTERNAL_ROOT',
     'EvalClassCount',
     'EvalDatasetRecord',
     'UnknownDatasetError',
     'clear_cache',
     'export_id_for_dir',
+    'export_root',
+    'external_root',
     'list_eval_datasets',
     'resolve_dataset_id',
     'train_test_overlap',

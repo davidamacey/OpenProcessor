@@ -28,11 +28,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_curation_config, get_region_fields
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
     OpenSearchDep,
     RegionProfileDep,
     _now_iso,
     get_class_registry,
+    items_index,
     logger,
     router,
 )
@@ -51,7 +51,6 @@ from src.services.curation.image_serving import (
 from src.services.curation.vlm_class_attempt import prediction_class_update, with_class_snapshot
 
 
-ITEMS_INDEX = CURATION_ITEMS_INDEX
 _F = get_region_fields()
 
 
@@ -234,6 +233,22 @@ async def vlm_label_batch(
     if len(payload.crop_ids) > 64:
         raise HTTPException(status_code=400, detail='maximum 64 crop_ids per call')
 
+    reg = get_class_registry().load()
+    from src.services.curation.region_class import item_classes
+
+    labelable = item_classes(reg.classes)
+    class_names = [c.class_name for c in labelable]
+    if not class_names:
+        # A fresh project: the VLM worker already has unlabelled items to
+        # send, but there is nothing to label them as yet.
+        raise HTTPException(
+            status_code=409,
+            detail={
+                'error': 'no_classes',
+                'message': 'this project has no classes yet; add classes before VLM labeling',
+            },
+        )
+
     # Pull image_path + bbox_norm for each crop, then build ItemCrop list
     # with the LRU-thumbnail JPEG bytes (128px is enough for the VLM).
     from src.services.labeling.vlm_labeler import ItemCrop
@@ -268,8 +283,6 @@ async def vlm_label_batch(
             logger.warning('curation_vlm_thumb_failed', crop_id=crop_id, error=str(exc))
             return None
 
-    reg = get_class_registry().load()
-    class_names = [c.class_name for c in reg.classes if not c.deprecated]
     crops: list[ItemCrop] = []
     cache_hits = 0
     cache_misses = 0
@@ -281,7 +294,7 @@ async def vlm_label_batch(
     docs_by_id = await mget_crops(
         opensearch,
         list(payload.crop_ids),
-        index=ITEMS_INDEX,
+        index=items_index(),
         source_includes=sorted(
             {'class_source', 'class_validated', 'image_path', 'bbox_norm'}
             | set(CLASS_GUARD_SOURCE_FIELDS)
@@ -331,7 +344,7 @@ async def vlm_label_batch(
     # Use the open-vocabulary path so the VLM can flag genuinely-unknown
     # items instead of silently snapping them to the wrong class.
     predictions = await labeler.label_or_propose_batch(crops, class_names)
-    name_to_id = {c.class_name: c.class_id for c in reg.classes if not c.deprecated}
+    name_to_id = {c.class_name: c.class_id for c in labelable}
     # Collect per-doc updates, then dispatch via occ_skip_on_conflict_bulk
     # so a concurrent human edit always wins.
     updates_by_id: dict[str, dict[str, Any]] = {}
@@ -395,7 +408,7 @@ async def vlm_label_batch(
                 opensearch,
                 doc_ids=list(updates_by_id.keys()),
                 merger=_merge_label_batch,
-                index=ITEMS_INDEX,
+                index=items_index(),
                 refresh=False,
                 writer_id='vlm_label_batch',
             )
@@ -452,7 +465,7 @@ async def vlm_verify_regions(
     docs_by_id = await mget_crops(
         opensearch,
         list(payload.crop_ids),
-        index=ITEMS_INDEX,
+        index=items_index(),
         source_includes=[_F.bbox_norm, 'image_path'],
     )
     for crop_id in payload.crop_ids:
@@ -503,7 +516,7 @@ async def vlm_verify_regions(
                 opensearch,
                 doc_ids=list(updates_by_id.keys()),
                 merger=_merge_verify_regions,
-                index=ITEMS_INDEX,
+                index=items_index(),
                 refresh=False,
                 writer_id='vlm_verify_regions',
             )

@@ -29,7 +29,6 @@ import os
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 
@@ -37,6 +36,10 @@ if TYPE_CHECKING:
     import numpy as np
     from opensearchpy import AsyncOpenSearch
 
+from pathlib import Path
+
+from src.config.curation import get_curation_config
+from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
 
 
@@ -48,11 +51,11 @@ _HEARTBEAT_STALE_S = 30.0
 # a weak reference internally, so an unreferenced task can be
 # garbage-collected mid-run. This keeps one alive per the singleton
 # contract start_job()/_is_busy() enforce via the state file.
-_active_task: asyncio.Task[None] | None = None
+_active_tasks: dict[str, asyncio.Task[None]] = {}  # per project slug
 
 
 def _jobs_dir() -> Path:
-    return Path(os.environ.get('OP_SELECT_JOBS_DIR', '/jobs/select'))
+    return project_jobs_dir(Path(os.environ.get('OP_SELECT_JOBS_DIR', '/jobs/select')))
 
 
 def _state_file() -> Path:
@@ -189,8 +192,7 @@ def start_job(
     job_id = uuid.uuid4().hex
     state = _JobState(job_id=job_id, status='running', k=k, scope=scope, started_at=time.time())
     _atomic_write(state)
-    global _active_task  # noqa: PLW0603 - singleton task handle, mirrors crop_scores.job
-    _active_task = asyncio.create_task(
+    _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
         run_selection_job(job_id, opensearch, index, query, k, seed_crop_id, max_n)
     )
     return state.to_dict()

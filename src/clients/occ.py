@@ -32,12 +32,8 @@ import os
 from collections.abc import Callable, Collection
 from typing import TYPE_CHECKING, Any
 
-from src.config import (
-    BACKBONE_EMBEDDING_FIELD,
-    ITEM_EMBEDDING_FIELD,
-    get_curation_config,
-    get_region_fields,
-)
+from src.config import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD, get_region_fields
+from src.config.curation import items_index
 from src.core.logging import get_logger
 
 
@@ -46,7 +42,6 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-ITEMS_INDEX = get_curation_config().items_index
 
 # Backoff schedule for OCC retries on human endpoints. Workers don't
 # retry, so this only applies to ``occ_update_one`` / ``occ_update_bulk``.
@@ -117,7 +112,7 @@ async def occ_update_one(
     *,
     doc_id: str,
     merger: Merger,
-    index: str = ITEMS_INDEX,
+    index: str | None = None,
     max_retries: int = 3,
     refresh: bool | str = False,
     writer_id: str = 'unknown',
@@ -143,6 +138,8 @@ async def occ_update_one(
     Returns:
         The final update doc that was successfully written.
     """
+    if index is None:
+        index = items_index()
     last_error: Exception | None = None
     for attempt in range(max_retries + 1):
         source, seq_no, primary_term = await _fetch_with_version(client, index=index, doc_id=doc_id)
@@ -188,7 +185,7 @@ async def occ_skip_on_conflict_bulk(
     *,
     doc_ids: list[str],
     merger: Callable[[str, dict[str, Any]], dict[str, Any]],
-    index: str = ITEMS_INDEX,
+    index: str | None = None,
     refresh: bool | str = False,
     writer_id: str = 'worker',
     page_size: int | None = None,
@@ -235,6 +232,8 @@ async def occ_skip_on_conflict_bulk(
     Returns:
         ``{updated: int, skipped_due_to_conflict: int, errors: list[dict]}``
     """
+    if index is None:
+        index = items_index()
     from src.clients.curation_opensearch import mget_crops
 
     updated = 0
@@ -425,7 +424,7 @@ async def occ_upsert_bulk(
     client: AsyncOpenSearch,
     docs: list[dict[str, Any]],
     *,
-    index: str = ITEMS_INDEX,
+    index: str | None = None,
     human_field_guards: list[str],
     writer_id: str = 'ingest',
     id_field: str = 'crop_id',
@@ -485,6 +484,8 @@ async def occ_upsert_bulk(
         counts updated docs that received at least one
         ``fill_if_absent`` field.
     """
+    if index is None:
+        index = items_index()
     # Local import: metrics module imports prometheus_client at top
     # level and we keep occ.py prometheus-free for unit-test ergonomics.
     from src.services.curation.metrics import (
@@ -568,7 +569,7 @@ async def occ_upsert_bulk(
     # Phase 2: batched OCC updates — one occ_update_bulk call
     # (one mget page + one bulk, retrying 409s once) instead of one
     # client.update per doc. Local import: occ_bulk.py imports FROM this
-    # module (ITEMS_INDEX / OCC_BULK_*), so importing it back at module
+    # module (OCC_BULK_*), so importing it back at module
     # level here would cycle.
     if update_targets:
         from src.clients.occ_bulk import occ_update_bulk
@@ -690,7 +691,6 @@ def _merge_preserving_human(
 
 
 __all__ = [
-    'ITEMS_INDEX',
     'Merger',
     'OCCFinalConflictError',
     'occ_skip_on_conflict_bulk',

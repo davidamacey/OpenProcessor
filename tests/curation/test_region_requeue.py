@@ -251,7 +251,7 @@ class _Closable:
 
 def _run_cli(monkeypatch, argv: list[str], fake: QueryFakeOpenSearch) -> int:
     mod = _load_script()
-    monkeypatch.setattr(mod, 'AsyncOpenSearch', lambda **_kw: _Closable(fake))
+    monkeypatch.setattr(mod, 'make_script_opensearch', lambda *_a, **_kw: _Closable(fake))
     monkeypatch.setattr(mod, 'get_curation_config', lambda: CFG)
     monkeypatch.setattr(sys, 'argv', ['requeue_regions.py', *argv])
     return mod.main()

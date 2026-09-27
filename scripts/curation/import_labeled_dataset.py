@@ -100,6 +100,7 @@ from scripts.curation.yolo_dataset import (
     stratified_sample,
 )
 from src.config import get_curation_config
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 logger = logging.getLogger('import_labeled_dataset')
@@ -494,7 +495,11 @@ def build_parser() -> argparse.ArgumentParser:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument('--dataset', required=True, type=Path, help='data.yaml or dataset root')
-    p.add_argument('--api-base', default=f'http://localhost:4603{get_curation_config().api_prefix}')
+    p.add_argument(
+        '--api-base',
+        default=f'http://localhost:4603{get_curation_config().api_prefix}',
+        help='Curation API mount; requests go to <api-base>/projects/<--project>/...',
+    )
     p.add_argument('--splits', default=None, help='Comma-separated subset (default: all found)')
     p.add_argument(
         '--path-map',
@@ -529,6 +534,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument('--force', action='store_true', help='Redo splits that have checkpoints')
     p.add_argument('--dry-run', action='store_true', help='Discover and check only')
+    add_project_argument(p)
     return p
 
 
@@ -556,7 +562,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         splits[name] = samples
     dataset_root = args.dataset.parent if args.dataset.is_file() else args.dataset
     cfg = ImportConfig(
-        api_base=args.api_base.rstrip('/'),
+        api_base=f'{args.api_base.rstrip("/")}/projects/{args.project}',
         state_dir=args.state_dir or Path('dataset_import_state') / dataset_root.name,
         source_prefix=args.source_prefix or dataset_root.name,
         path_map=args.path_map,
@@ -594,7 +600,9 @@ async def _async_main(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
-    return asyncio.run(_async_main(build_parser().parse_args(argv)))
+    args = build_parser().parse_args(argv)
+    bind_script_project(args.project)
+    return asyncio.run(_async_main(args))
 
 
 if __name__ == '__main__':

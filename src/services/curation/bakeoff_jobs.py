@@ -235,7 +235,7 @@ async def resolve_run_model(run_id: str) -> RunModel:
         except evd.UnknownDatasetError:
             train_id = None
         else:
-            train_dir = evd.EXPORT_ROOT / train_id.split(':', 1)[1]
+            train_dir = evd.export_root() / train_id.split(':', 1)[1]
     run_eval = status.eval or {}
     hyper = spec.get('hyperparameters') or {}
     return RunModel(
@@ -445,7 +445,7 @@ async def _resolve_datasets(request: BakeoffRunRequest) -> list[EvalDatasetRecor
                     raise BakeoffRequestError(
                         400,
                         f'{ref.id}: the export that run trained on is not under the export '
-                        f'root {evd.EXPORT_ROOT}',
+                        f'root {evd.export_root()}',
                     )
                 out.append(evd.resolve_dataset_id(run.train_export_id))
             else:

@@ -22,11 +22,12 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     import pytest
-from src.config import IndexRole, get_curation_config, index_name
+from src.config import IndexRole, index_name
+from src.config.curation import base_curation_config
 from src.services.curation.wire import ITEM_WIRE_KEYS
 
 
-CFG = get_curation_config()
+CFG = base_curation_config()
 ITEMS = CFG.items_index
 IMAGES = index_name(CFG, IndexRole.IMAGES)
 
@@ -35,7 +36,9 @@ def _client(fake: Any) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -69,7 +72,7 @@ def _fake() -> QueryFakeOpenSearch:
 
 
 def test_crop_image_context() -> None:
-    r = _client(_fake()).get('/curation/crops/a1/context')
+    r = _client(_fake()).get('/curation/projects/default/crops/a1/context')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['image'] == {
@@ -118,7 +121,7 @@ def test_crop_image_context_carries_full_drawing_geometry_for_every_item() -> No
             },
         }
     )
-    body = _client(fake).get('/curation/crops/a1/context').json()
+    body = _client(fake).get('/curation/projects/default/crops/a1/context').json()
     item = body['items'][0]
     assert item['bbox_norm'] == [0.1, 0.1, 0.4, 0.4]
     assert item['region_bbox_norm'] == [0.15, 0.15, 0.2, 0.2]
@@ -161,25 +164,25 @@ def test_crop_image_context_fills_missing_pixel_size_from_the_file_header(
             },
         }
     )
-    body = _client(fake).get('/curation/crops/a1/context').json()
+    body = _client(fake).get('/curation/projects/default/crops/a1/context').json()
     assert body['image']['width'] == 321
     assert body['image']['height'] == 233
 
 
 def test_crop_image_context_unknown_crop_is_404() -> None:
-    assert _client(_fake()).get('/curation/crops/nope/context').status_code == 404
+    assert _client(_fake()).get('/curation/projects/default/crops/nope/context').status_code == 404
 
 
 def test_dismissed_list_and_undismiss() -> None:
     fake = _fake()
     client = _client(fake)
-    r = client.get('/curation/crops', params={'review_dismissed': 'true'})
+    r = client.get('/curation/projects/default/crops', params={'review_dismissed': 'true'})
     assert [c['crop_id'] for c in r.json()['crops']] == ['b1']
     assert r.json()['crops'][0]['review_dismissed_at'] == '2026-09-01T00:00:00+00:00'
 
-    r = client.post('/curation/crops/b1/review_undismiss')
+    r = client.post('/curation/projects/default/crops/b1/review_undismiss')
     assert r.status_code == 200, r.text
     assert r.json()['review_dismissed_at'] is None
     assert fake.docs(ITEMS)['b1'].get('review_dismissed_at') is None
-    r = client.get('/curation/crops', params={'review_dismissed': 'true'})
+    r = client.get('/curation/projects/default/crops', params={'review_dismissed': 'true'})
     assert r.json()['crops'] == []

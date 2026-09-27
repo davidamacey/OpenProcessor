@@ -19,16 +19,13 @@ using a different fixed prefix) can point at it without a code change — see
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 
 from src.config import CurationConfig, RegionFields, get_curation_config, get_region_fields
 from src.core.logging import get_logger
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 logger = get_logger(__name__)
@@ -38,14 +35,17 @@ def fp_store_dir(
     config: CurationConfig | None = None,
     fields: RegionFields | None = None,
 ) -> Path:
-    """Resolve the false-positive centroid store directory for a deployment.
+    """Resolve the false-positive centroid store directory.
 
-    ``{config.state_dir}/{fields.prefix}_fp`` — e.g. the OSS default is
-    ``/var/lib/openprocessor/region_fp``.
+    ``{state dir}/{fields.prefix}_fp`` — e.g. the OSS default is
+    ``/var/lib/openprocessor/region_fp``. With no explicit ``config`` the
+    state dir is the bound project's (the store is project data;
+    ``default``'s is today's ``state_dir``).
     """
-    cfg = config or get_curation_config()
     rf = fields or get_region_fields()
-    return cfg.state_dir / f'{rf.prefix}_fp'
+    if config is None:
+        return Path(get_curation_config().project_state_dir) / f'{rf.prefix}_fp'
+    return config.state_dir / f'{rf.prefix}_fp'
 
 
 class FalsePositiveCentroidStore:

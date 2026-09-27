@@ -22,10 +22,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.curation import base_curation_config
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 F = get_region_fields()
 
 
@@ -38,7 +39,9 @@ def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         AsyncMock(return_value=None),
     )
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -66,7 +69,10 @@ def test_locate_rank_matches_queue_order(monkeypatch: pytest.MonkeyPatch) -> Non
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
     order = _expected_regions_order(docs)
     for rank, cid in enumerate(order):
-        r = client.get('/curation/review/regions/locate', params={'crop_id': cid, 'page_size': 3})
+        r = client.get(
+            '/curation/projects/default/review/regions/locate',
+            params={'crop_id': cid, 'page_size': 3},
+        )
         assert r.status_code == 200, r.text
         body = r.json()
         assert body['in_queue'] is True, body
@@ -91,20 +97,21 @@ def test_locate_returns_in_queue_for_a_rejected_candidate(
     }
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
 
-    r = client.get('/curation/review/regions/locate', params={'crop_id': 'rej'})
+    r = client.get('/curation/projects/default/review/regions/locate', params={'crop_id': 'rej'})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['in_queue'] is True, body
     assert body['sort_applied'] == 'region_score'
 
     r_detected = client.get(
-        '/curation/review/regions/locate', params={'crop_id': 'rej', 'region_status': 'detected'}
+        '/curation/projects/default/review/regions/locate',
+        params={'crop_id': 'rej', 'region_status': 'detected'},
     )
     assert r_detected.json()['in_queue'] is False
     assert r_detected.json()['reason'] == 'filtered_out'
 
     r_rejected = client.get(
-        '/curation/review/regions/locate',
+        '/curation/projects/default/review/regions/locate',
         params={'crop_id': 'rej', 'region_status': 'verify_rejected'},
     )
     assert r_rejected.json()['in_queue'] is True
@@ -112,21 +119,25 @@ def test_locate_returns_in_queue_for_a_rejected_candidate(
 
 def test_locate_reports_not_in_queue_and_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _region_docs()}), monkeypatch)
-    body = client.get('/curation/review/regions/locate', params={'crop_id': 'done'}).json()
+    body = client.get(
+        '/curation/projects/default/review/regions/locate', params={'crop_id': 'done'}
+    ).json()
     assert (body['in_queue'], body['rank'], body['page'], body['reason']) == (
         False,
         None,
         None,
         'filtered_out',
     )
-    body = client.get('/curation/review/regions/locate', params={'crop_id': 'nope'}).json()
+    body = client.get(
+        '/curation/projects/default/review/regions/locate', params={'crop_id': 'nope'}
+    ).json()
     assert (body['in_queue'], body['reason']) == (False, 'not_found')
 
 
 def test_queue_sort_ends_in_crop_id_tiebreak(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {}})
     fake.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})  # type: ignore[method-assign]
-    _client(fake, monkeypatch).get('/curation/review/all')
+    _client(fake, monkeypatch).get('/curation/projects/default/review/all')
     assert fake.search.call_args.kwargs['body']['sort'][-1] == {'crop_id': {'order': 'asc'}}
 
 
@@ -140,7 +151,7 @@ def test_review_filters_class_source_and_confidence(monkeypatch: pytest.MonkeyPa
     }
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
     r = client.get(
-        '/curation/review/mismatches',
+        '/curation/projects/default/review/mismatches',
         params={'class_id': 1, 'source': 's1', 'conf_min': 0.1, 'conf_max': 0.5},
     )
     assert r.status_code == 200, r.text
@@ -168,11 +179,11 @@ def test_new_class_proposals_tab_and_summary(monkeypatch: pytest.MonkeyPatch) ->
         'plain': {'crop_id': 'plain', 'class_source': 'vlm'},
     }
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
-    r = client.get('/curation/review/new_class_proposals')
+    r = client.get('/curation/projects/default/review/new_class_proposals')
     assert r.status_code == 200, r.text
     assert sorted(i['crop_id'] for i in r.json()['items']) == ['flag', 'p1', 'p2', 'p3']
 
-    r = client.get('/curation/review/new_class_proposals/summary')
+    r = client.get('/curation/projects/default/review/new_class_proposals/summary')
     assert r.status_code == 200, r.text
     body = r.json()
     # DQ-M11: the summary counts exactly the queue (the human flag too).

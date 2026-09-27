@@ -94,7 +94,7 @@ async def test_dry_run_reports_count_and_does_not_touch_triton(
 ) -> None:
     hits = [_hit('crop-1', image_path='/data/a.jpg', bbox=[0.1, 0.1, 0.5, 0.5])]
     client = _FakeOSClient(hits)
-    monkeypatch.setattr(backfill_script, 'AsyncOpenSearch', MagicMock(return_value=client))
+    monkeypatch.setattr(backfill_script, 'make_script_opensearch', MagicMock(return_value=client))
     triton_pool_ctor = MagicMock(
         side_effect=AssertionError('Triton must not be touched in dry-run')
     )
@@ -119,7 +119,7 @@ async def test_apply_writes_normalized_embeddings_for_eligible_items(
     ]
     client = _FakeOSClient(hits)
     fake_pe = _FakePE()
-    monkeypatch.setattr(backfill_script, 'AsyncOpenSearch', MagicMock(return_value=client))
+    monkeypatch.setattr(backfill_script, 'make_script_opensearch', MagicMock(return_value=client))
     monkeypatch.setattr(backfill_script, 'AsyncTritonPool', _FakeTritonPool)
     monkeypatch.setattr(backfill_script, 'PEEncoder', lambda **_kw: fake_pe)
     monkeypatch.setattr(
@@ -149,7 +149,7 @@ async def test_apply_skips_items_with_unreadable_source_image(
     hits = [_hit('crop-missing', image_path='/data/gone.jpg', bbox=[0.1, 0.1, 0.5, 0.5])]
     client = _FakeOSClient(hits)
     fake_pe = _FakePE()
-    monkeypatch.setattr(backfill_script, 'AsyncOpenSearch', MagicMock(return_value=client))
+    monkeypatch.setattr(backfill_script, 'make_script_opensearch', MagicMock(return_value=client))
     monkeypatch.setattr(backfill_script, 'AsyncTritonPool', _FakeTritonPool)
     monkeypatch.setattr(backfill_script, 'PEEncoder', lambda **_kw: fake_pe)
     monkeypatch.setattr(

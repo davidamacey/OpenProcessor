@@ -343,7 +343,7 @@ services:
       # fetch 404s and the VLM stage silently predicts 0 (job still
       # reports "completed").
       - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
-      # Class registry (OP_REGISTRY_PATH, default ./data/class_registry.json):
+      # Class registries (OP_PROJECTS_DATA_ROOT, default ./data/projects):
       # without this the registry loads empty and the stage raises
       # "class_names or class_catalog must be supplied".
       - ./data:/app/data
@@ -429,7 +429,7 @@ services:
       - MLFLOW_EXPERIMENT_NAME=${MLFLOW_EXPERIMENT_NAME:-openprocessor}
     volumes:
       # Exports are eval datasets: same /app/data path as yolo-api, where
-      # the API resolved them (OP_EXPORT_ROOT defaults to ./data/exports).
+      # the API resolved them (per project, under ./data/projects/<project>/exports).
       - ./data:/app/data:ro
       - openprocessor-state:/var/lib/openprocessor
     deploy:

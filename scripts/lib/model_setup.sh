@@ -433,7 +433,8 @@ model_setup_restart_triton_fallback() {
         waited=$((waited + 3))
     done
     curl -fsS --max-time 30 -X POST \
-        "http://${OP_HEALTH_HOST:-127.0.0.1}:${api_port}/curation/train/reload_promoted" >/dev/null 2>&1 || true
+        "http://${OP_HEALTH_HOST:-127.0.0.1}:${api_port}/curation/projects/${OP_CURATION_PROJECT:-default}/train/reload_promoted" \
+        >/dev/null 2>&1 || true
     return 0
 }
 

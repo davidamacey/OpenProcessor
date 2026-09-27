@@ -122,7 +122,7 @@ async def test_dry_run_does_not_write(monkeypatch: pytest.MonkeyPatch) -> None:
         ),
     ]
     client = _FakeRevertClient(hits)
-    monkeypatch.setattr(revert_script, 'AsyncOpenSearch', MagicMock(return_value=client))
+    monkeypatch.setattr(revert_script, 'make_script_opensearch', MagicMock(return_value=client))
 
     rc = await revert_script._run('http://fake:9200', apply=False)
 
@@ -157,7 +157,7 @@ async def test_apply_reverts_only_class_range_promotions(
         ),
     ]
     client = _FakeRevertClient(hits)
-    monkeypatch.setattr(revert_script, 'AsyncOpenSearch', MagicMock(return_value=client))
+    monkeypatch.setattr(revert_script, 'make_script_opensearch', MagicMock(return_value=client))
 
     rc = await revert_script._run('http://fake:9200', apply=True)
 

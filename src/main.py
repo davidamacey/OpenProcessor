@@ -52,13 +52,7 @@ from src.routers import (
     search_router,
     v1_router,
 )
-from src.routers.curation import router as curation_router
-from src.routers.curation_images import (
-    crops_router as curation_crops_router,
-    router as curation_images_router,
-)
-from src.routers.curation_train import router as curation_train_router
-from src.routers.curation_umap import router as curation_umap_router
+from src.routers.curation._mounting import mount_all_curation_routers
 from src.utils.retry import RetryExhaustedError
 
 
@@ -88,6 +82,7 @@ class AppResources:
     async_triton_pool: AsyncTritonPool | None = None
     arbiter_task: asyncio.Task[None] | None = None
     curation_knn_warmup_task: asyncio.Task[None] | None = None
+    project_registry_poll_task: asyncio.Task[None] | None = None
     event_bus_started: bool = False
 
 
@@ -171,6 +166,9 @@ async def lifespan(app: FastAPI):
 
     reject_retired_env()
 
+    # The lifespan runs unbound: a global loop never acts on a project by
+    # default. Startup steps that touch project data bind each project in
+    # turn (src.services.projects.bootstrap).
     # Resolve the region profile before serving: a bad profile file fails
     # startup, and no request ever races its first-use resolution.
     from src.services.detection.profile_registry import ensure_env_region_profile
@@ -196,8 +194,13 @@ async def lifespan(app: FastAPI):
     await AppResources.async_triton_pool.initialize()
     logger.info('triton_pool_initialized', channels=4, max_concurrent=64)
 
-    # Best-effort: create the core + curation OpenSearch indexes (F-25) and
-    # kick off the background kNN-warmup task. See
+    # Projects foundation (P1): default record + poll loop, best-effort.
+    from src.services.projects.bootstrap import startup_bootstrap_project_registry_safe
+
+    AppResources.project_registry_poll_task = await startup_bootstrap_project_registry_safe()
+
+    # Best-effort: create the core + every project's curation OpenSearch
+    # indexes (F-25) and kick off the background kNN-warmup task. See
     # dependencies.bootstrap_opensearch_indexes for the full rationale.
     from src.core.dependencies import bootstrap_opensearch_indexes
 
@@ -225,15 +228,22 @@ async def lifespan(app: FastAPI):
     from src.services.curation.autolabel import job as autolabel_job
     from src.services.curation.item_scores import job as item_scores_job
     from src.services.curation.selection import job as selection_job
+    from src.services.projects.bootstrap import for_each_project
 
     for _module in (item_scores_job, selection_job, embedding_viz, autolabel_job, probe_job):
-        try:
-            if _module.reconcile_orphaned_jobs():
-                logger.warning('orphaned_job_reconciled', module=_module.__name__)
-        except Exception as exc:
-            logger.warning(
-                'orphaned_job_reconcile_skipped', module=_module.__name__, error=str(exc)
-            )
+        for _slug in for_each_project():
+            try:
+                if _module.reconcile_orphaned_jobs():
+                    logger.warning(
+                        'orphaned_job_reconciled', module=_module.__name__, project=_slug
+                    )
+            except Exception as exc:
+                logger.warning(
+                    'orphaned_job_reconcile_skipped',
+                    module=_module.__name__,
+                    project=_slug,
+                    error=str(exc),
+                )
 
     # Gap 2 (model export): same idea, different shape — see
     # src.services.model_export's module docstring.
@@ -267,8 +277,8 @@ async def lifespan(app: FastAPI):
         from src.services.training.gpu_arbiter import reconcile_on_startup
 
         # Resolved via GpuArbiterConfig.from_env() (OP_GPU_ALLOWED_IDS,
-        # OP_GPU_ARBITER_CONTAINERS, OP_GPU_ARBITER_TRAINER_CONTAINER,
-        # OP_BAKEOFF_JOBS_DIR). Logged so an operator can confirm the GPU
+        # OP_GPU_ARBITER_CONTAINERS, OP_GPU_ARBITER_TRAINER_CONTAINER).
+        # Logged so an operator can confirm the GPU
         # fence actually took effect.
         arbiter_cfg = get_gpu_arbiter_config()
         logger.info(
@@ -276,7 +286,6 @@ async def lifespan(app: FastAPI):
             allowed_gpu_ids=sorted(arbiter_cfg.allowed_gpu_ids) or 'unrestricted',
             containers=list(arbiter_cfg.containers),
             trainer_container=arbiter_cfg.trainer_container,
-            bakeoff_jobs_dir=arbiter_cfg.bakeoff_jobs_dir,
         )
 
         action = await reconcile_on_startup()
@@ -359,6 +368,11 @@ async def lifespan(app: FastAPI):
             await AppResources.arbiter_task
         AppResources.arbiter_task = None
         logger.info('gpu_arbiter_loop_stopped')
+
+    from src.services.projects.bootstrap import shutdown_project_registry
+
+    await shutdown_project_registry(AppResources.project_registry_poll_task)
+    AppResources.project_registry_poll_task = None
 
     # Stop the event-bus tail task.
     if AppResources.event_bus_started:
@@ -666,13 +680,7 @@ def create_app() -> FastAPI:
     application.include_router(query_router)  # /query - Data retrieval
     application.include_router(ocr_router)  # /ocr - Text extraction
     application.include_router(models_router)  # /models - Model management
-    application.include_router(curation_router)  # /curation/* - Curation/labeling pipeline
-    application.include_router(curation_images_router)  # /curation/images/* - Source image serving
-    application.include_router(
-        curation_crops_router
-    )  # /curation/crops/* - Crop thumbnails/overlays
-    application.include_router(curation_umap_router)  # /curation/cluster/* - UMAP residual reducer
-    application.include_router(curation_train_router)  # /curation/train/* - Training pipeline
+    mount_all_curation_routers(application)  # /curation: global routes + /projects/{project}/...
 
     # Versioned API - All endpoints also available under /v1
     application.include_router(v1_router)  # /v1/* - Versioned API

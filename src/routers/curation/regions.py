@@ -16,11 +16,11 @@ from fastapi import HTTPException, Query
 from src.config import DetectionProfile, get_region_fields
 from src.config.region_state import RegionStatus, region_status_catalog
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
     OpenSearchDep,
     RegionProfileDep,
     _ensure_indexes,
     guard_page_depth,
+    items_index,
     router,
 )
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
@@ -165,7 +165,7 @@ async def list_regions(
         'track_total_hits': True,
     }
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
 
@@ -320,7 +320,7 @@ async def training_candidates(
         'track_total_hits': True,
     }
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
 

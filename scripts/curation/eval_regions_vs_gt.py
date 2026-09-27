@@ -65,7 +65,6 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from opensearchpy import AsyncOpenSearch
 
 from scripts.curation.ingest_upload import map_identifier, parse_path_map
 from scripts.curation.yolo_dataset import DatasetError, discover, label_path_for
@@ -78,6 +77,8 @@ from src.services.curation.region_eval import (
     parse_yolo_labels,
     run_eval,
 )
+from src.services.projects.guard import make_script_opensearch
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
@@ -318,6 +319,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--out-dir', type=Path, default=Path('region_eval'))
     p.add_argument('--worst', type=int, default=20, help='Misses to print (all go to JSONL)')
     p.add_argument('--opensearch-url', default=DEFAULT_OPENSEARCH)
+    add_project_argument(p)
     return p
 
 
@@ -332,7 +334,7 @@ async def _async_main(args: argparse.Namespace, cohort: list[CohortImage]) -> in
             max(0.0, remaining),
         )
 
-    client = AsyncOpenSearch(hosts=[args.opensearch_url], use_ssl=False, timeout=300)
+    client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=300)
     try:
         result = await run_eval(
             client,
@@ -360,6 +362,7 @@ async def _async_main(args: argparse.Namespace, cohort: list[CohortImage]) -> in
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
     args = build_parser().parse_args(argv)
+    bind_script_project(args.project, opensearch_url=args.opensearch_url)
     if not 0.0 < args.iou <= 1.0 or not 0.0 <= args.dedup_iou <= 1.0:
         logger.error('--iou must be in (0, 1] and --dedup-iou in [0, 1]')
         return 1

@@ -13,6 +13,7 @@ real module.
 
 from __future__ import annotations
 
+import src.routers.curation._project_pause
 import src.routers.curation.bakeoff
 import src.routers.curation.classes
 import src.routers.curation.clusters
@@ -23,6 +24,7 @@ import src.routers.curation.edit_undo
 import src.routers.curation.events
 import src.routers.curation.export
 import src.routers.curation.export_single_class
+import src.routers.curation.health
 import src.routers.curation.ingest
 import src.routers.curation.ingest_upload
 import src.routers.curation.label_undo

@@ -15,40 +15,26 @@ import pytest
 from scripts.curation.vlm_worker import fetch_pending_ids
 
 
-class _Resp:
-    def __init__(self, payload: dict[str, Any]) -> None:
-        self._payload = payload
-
-    def raise_for_status(self) -> None:
-        return None
-
-    def json(self) -> dict[str, Any]:
-        return self._payload
-
-
 class _OpenSearchLike:
+    """``search`` that mirrors the real hit shape: ``stored_fields:
+    "_none_"`` would drop ``_id`` along with the source."""
+
     def __init__(self, ids: list[str]) -> None:
         self.ids = ids
         self.bodies: list[dict[str, Any]] = []
 
-    async def post(self, url: str, *, json: dict[str, Any], timeout: float) -> _Resp:  # noqa: ARG002
-        self.bodies.append(json)
-        drop_metadata = json.get('stored_fields') == '_none_'
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
+        self.bodies.append(body)
+        drop_metadata = body.get('stored_fields') == '_none_'
         hits = [
-            {'_index': 'op_items'} if drop_metadata else {'_index': 'op_items', '_id': i}
-            for i in self.ids
+            {'_index': index} if drop_metadata else {'_index': index, '_id': i} for i in self.ids
         ]
-        return _Resp({'hits': {'hits': hits}})
+        return {'hits': {'hits': hits}}
 
 
 @pytest.mark.asyncio
 async def test_fetch_pending_ids_returns_ids_without_loading_source() -> None:
     client = _OpenSearchLike(['a', 'b'])
-    ids = await fetch_pending_ids(
-        client,  # type: ignore[arg-type]
-        opensearch_url='http://os:9200',
-        batch_size=2,
-        classifier_skip_conf=0.9,
-    )
+    ids = await fetch_pending_ids(client, batch_size=2, classifier_skip_conf=0.9)
     assert ids == ['a', 'b']
     assert client.bodies[0]['_source'] is False

@@ -29,15 +29,6 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(autouse=True)
-def _reset_field_coverage_cache() -> Iterator[None]:
-    from src.services.curation.strategy_registry import _reset_field_coverage_cache
-
-    _reset_field_coverage_cache()
-    yield
-    _reset_field_coverage_cache()
-
-
-@pytest.fixture(autouse=True)
 def _reset_settings_cache() -> Iterator[None]:
     """See test_curation_settings_router.py's fixture of the same name."""
     from src.clients import curation_opensearch
@@ -54,7 +45,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     fake_os = FakeSettingsOpenSearch()
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     client = TestClient(app)
     client.fake_os = fake_os  # type: ignore[attr-defined]
@@ -65,9 +58,11 @@ def test_methods_reflects_a_stored_cluster_override(app_client: TestClient) -> N
     from src.services.curation.clustering.methods import DEFAULT_METHOD, available_methods
 
     non_default = next(m for m in available_methods() if m != DEFAULT_METHOD)
-    app_client.put('/curation/settings', json={'defaults': {'cluster': non_default}})
+    app_client.put(
+        '/curation/projects/default/settings', json={'defaults': {'cluster': non_default}}
+    )
 
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     cluster_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'cluster'}
     assert cluster_entries[non_default]['default'] is True
@@ -84,10 +79,12 @@ async def test_put_new_sort_default_flips_methods_but_never_overrides_a_tab_defa
     region-score order must not be replaced by a deployment default)."""
     from src.services.curation import review_sorts
 
-    r = app_client.put('/curation/settings', json={'defaults': {'sort': 'uncertainty_entropy'}})
+    r = app_client.put(
+        '/curation/projects/default/settings', json={'defaults': {'sort': 'uncertainty_entropy'}}
+    )
     assert r.status_code == 200
 
-    methods_body = app_client.get('/curation/methods').json()
+    methods_body = app_client.get('/curation/projects/default/methods').json()
     sort_entries = {s['id']: s for s in methods_body['strategies'] if s['axis'] == 'sort'}
     assert sort_entries['uncertainty_entropy']['default'] is True
     assert sort_entries['atypicality']['default'] is False
@@ -114,7 +111,9 @@ async def test_put_new_cluster_default_changes_real_cluster_residuals_call(
     from src.services.curation.clustering.methods import DEFAULT_METHOD, available_methods
 
     non_default = next(m for m in available_methods() if m != DEFAULT_METHOD)
-    app_client.put('/curation/settings', json={'defaults': {'cluster': non_default}})
+    app_client.put(
+        '/curation/projects/default/settings', json={'defaults': {'cluster': non_default}}
+    )
 
     with patch(
         'src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel',

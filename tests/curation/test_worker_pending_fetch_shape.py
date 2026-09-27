@@ -84,31 +84,22 @@ def test_vlm_worker_build_pending_query_omits_ids_clause_when_no_exclusions() ->
 async def test_vlm_worker_fetch_pending_ids_query_shape() -> None:
     captured: dict[str, Any] = {}
 
-    class _FakeResponse:
-        def raise_for_status(self) -> None:
-            return None
-
-        def json(self) -> dict[str, Any]:
+    class _FakeOpenSearch:
+        async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
+            captured['index'] = index
+            captured['body'] = body
             return {'hits': {'hits': [{'_id': 'c1'}, {'_id': 'c2'}]}}
 
-    class _FakeClient:
-        async def post(
-            self,
-            _url: str,
-            *,
-            json: dict[str, Any],
-            timeout: float,  # noqa: ARG002
-        ) -> _FakeResponse:
-            captured['body'] = json
-            return _FakeResponse()
-
     ids = await vlm_worker.fetch_pending_ids(
-        _FakeClient(),
-        opensearch_url='http://os:9200',
+        _FakeOpenSearch(),
         batch_size=64,
         classifier_skip_conf=0.8,
         exclude_ids=['x1', 'x2'],
     )
+    # The bound project's own items index, never a literal.
+    from src.config.curation import items_index
+
+    assert captured['index'] == items_index()
     assert ids == ['c1', 'c2']
     body = captured['body']
     assert body['_source'] is False

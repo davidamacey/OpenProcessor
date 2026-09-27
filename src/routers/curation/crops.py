@@ -9,7 +9,6 @@ from fastapi import HTTPException, Query
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.clients.occ_bulk import occ_update_bulk
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
     CropBatchLabelRequest,
     CropExcludeRequest,
     CropFlagNewClassRequest,
@@ -24,6 +23,7 @@ from src.routers.curation._common import (
     _now_iso,
     get_class_registry,
     guard_page_depth,
+    items_index,
     logger,
     router,
 )
@@ -71,7 +71,7 @@ async def _occ_bulk_human_relabel(
     """
     status_map = await occ_update_bulk(
         opensearch,
-        index=CURATION_ITEMS_INDEX,
+        index=items_index(),
         ids=list(crop_ids),
         merge_fn=lambda _crop_id, source: merger(source),
         max_retries=max_retries,
@@ -87,7 +87,7 @@ async def _occ_bulk_human_relabel(
         docs = await mget_crops(
             opensearch,
             conflict_ids,
-            index=CURATION_ITEMS_INDEX,
+            index=items_index(),
             source_includes=['class_source'],
         )
         for cid in conflict_ids:
@@ -277,7 +277,7 @@ async def list_crops(
         '_source': {'excludes': item_list_source_excludes()},
     }
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
@@ -285,7 +285,7 @@ async def list_crops(
     # pool; None falls through to the plain sort above.
     ordered = await ordered_crops_page(
         opensearch,
-        index=CURATION_ITEMS_INDEX,
+        index=items_index(),
         order=order,
         query_clause=query_clause,
         cluster_id=cluster_id,
@@ -308,7 +308,7 @@ async def _crops_by_ids(opensearch: Any, ids: list[str]) -> list[dict[str, Any]]
     if not ids:
         return []
     resp = await opensearch.mget(
-        index=CURATION_ITEMS_INDEX,
+        index=items_index(),
         body={'ids': ids},
         _source_excludes=item_list_source_excludes(),
     )
@@ -338,7 +338,7 @@ async def get_crop(
         # class_id_history, since a single-item view may legitimately
         # want it, unlike a paginated list.
         resp = await opensearch.get(
-            index=CURATION_ITEMS_INDEX, id=crop_id, _source_excludes=item_source_excludes()
+            index=items_index(), id=crop_id, _source_excludes=item_source_excludes()
         )
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
@@ -459,7 +459,7 @@ async def move_crops(
     if kind == 'candidate':
         from src.services.curation.exclusion import cluster_member_count
 
-        if await cluster_member_count(opensearch, CURATION_ITEMS_INDEX, target_id) == 0:
+        if await cluster_member_count(opensearch, items_index(), target_id) == 0:
             raise HTTPException(
                 status_code=400, detail=f'candidate cluster {target_id} has no members'
             )
@@ -516,7 +516,7 @@ async def flag_new_class(
     now = _now_iso()
     bulk: list[dict[str, Any]] = []
     for crop_id in payload.crop_ids:
-        bulk.append({'update': {'_index': CURATION_ITEMS_INDEX, '_id': crop_id}})
+        bulk.append({'update': {'_index': items_index(), '_id': crop_id}})
         bulk.append(
             {
                 'doc': {
@@ -590,7 +590,7 @@ async def _occ_bulk_human_write(
             opensearch,
             doc_ids=list(crop_ids),
             merger=merger,
-            index=CURATION_ITEMS_INDEX,
+            index=items_index(),
             refresh='wait_for',
             writer_id=writer_id,
         )
@@ -619,7 +619,7 @@ async def batch_unexclude_crops(
     from src.services.curation.exclusion import live_candidate_ids, unexclusion_update
 
     try:
-        live = await live_candidate_ids(opensearch, CURATION_ITEMS_INDEX, payload.crop_ids)
+        live = await live_candidate_ids(opensearch, items_index(), payload.crop_ids)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
     now = _now_iso()
@@ -652,7 +652,7 @@ async def review_dismiss_crop(crop_id: str, opensearch: OpenSearchDep) -> dict[s
     }
     try:
         await opensearch.update(
-            index=CURATION_ITEMS_INDEX,
+            index=items_index(),
             id=crop_id,
             body=body,
             refresh='wait_for',

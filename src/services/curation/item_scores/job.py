@@ -62,6 +62,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from src.config.curation import get_curation_config
+from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
 
 
@@ -80,12 +82,12 @@ _HEARTBEAT_STALE_S = 30.0
 # reference internally, so an unreferenced task can be garbage-collected
 # mid-run. Module-level singleton matches the one-job-at-a-time contract
 # start_job()/_is_busy() already enforce via the state file.
-_active_task: asyncio.Task[None] | None = None
+_active_tasks: dict[str, asyncio.Task[None]] = {}  # per project slug
 
 
 def _state_dir() -> Path:
     """Resolved fresh each call so tests can override via monkeypatch."""
-    return Path(os.environ.get('OP_SCORES_STATE_DIR', '/jobs/scores'))
+    return project_jobs_dir(Path(os.environ.get('OP_SCORES_STATE_DIR', '/jobs/scores')))
 
 
 def _state_file() -> Path:
@@ -240,8 +242,9 @@ def start_job(opensearch: AsyncOpenSearch, scorer_names: list[str]) -> dict[str,
             started_at=time.time(),
         )
         _atomic_write(state)
-        global _active_task  # noqa: PLW0603 - singleton task handle, mirrors auto_label_job's module globals
-        _active_task = asyncio.create_task(run_scoring_job(job_id, opensearch, scorer_names))
+        _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
+            run_scoring_job(job_id, opensearch, scorer_names)
+        )
     return state.to_dict()
 
 

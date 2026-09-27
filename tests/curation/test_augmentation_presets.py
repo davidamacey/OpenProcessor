@@ -60,7 +60,9 @@ def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     from src.routers.curation_train import router as train_router
 
     app = FastAPI()
-    app.include_router(train_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, train_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as client:
         yield client
@@ -74,7 +76,7 @@ def _check(body: dict[str, Any], name: str) -> dict[str, Any]:
 
 
 def test_presets_are_served_with_labels_and_descriptions(app_client: TestClient) -> None:
-    r = app_client.get('/curation/train/augmentation_presets')
+    r = app_client.get('/curation/projects/default/train/augmentation_presets')
     assert r.status_code == 200, r.text
     body = r.json()
     ids = [p['id'] for p in body['presets']]
@@ -89,7 +91,7 @@ def test_presets_are_served_with_labels_and_descriptions(app_client: TestClient)
 
 def test_presets_route_is_typed_in_the_contract(app_client: TestClient) -> None:
     spec = app_client.get('/openapi.json').json()
-    op = spec['paths']['/curation/train/augmentation_presets']['get']
+    op = spec['paths']['/curation/projects/{project}/train/augmentation_presets']['get']
     ref = op['responses']['200']['content']['application/json']['schema']['$ref']
     schema = spec['components']['schemas'][ref.rsplit('/', 1)[-1]]
     assert set(schema['properties']) >= {'presets', 'default'}
@@ -98,10 +100,12 @@ def test_presets_route_is_typed_in_the_contract(app_client: TestClient) -> None:
 # --------------------------------------------------------------- preflight
 
 
-def test_preflight_blocks_an_unknown_preset(app_client: TestClient) -> None:
+def test_preflight_blocks_an_unknown_preset(
+    app_client: TestClient, project_export_root: Path
+) -> None:
     body = app_client.post(
-        '/curation/train/preflight',
-        json={'dataset_export_dir': '/data/exports/x', 'augmentation': BAD},
+        '/curation/projects/default/train/preflight',
+        json={'dataset_export_dir': str(project_export_root / 'x'), 'augmentation': BAD},
     ).json()
     check = _check(body, 'augmentation_preset')
     assert check['severity'] == 'block'
@@ -111,22 +115,24 @@ def test_preflight_blocks_an_unknown_preset(app_client: TestClient) -> None:
     assert body['blocked'] is True
 
 
-def test_preflight_passes_a_known_preset(app_client: TestClient) -> None:
+def test_preflight_passes_a_known_preset(app_client: TestClient, project_export_root: Path) -> None:
     body = app_client.post(
-        '/curation/train/preflight',
+        '/curation/projects/default/train/preflight',
         json={
-            'dataset_export_dir': '/data/exports/x',
+            'dataset_export_dir': str(project_export_root / 'x'),
             'augmentation': {'enabled': True, 'preset': 'low_light'},
         },
     ).json()
     assert _check(body, 'augmentation_preset')['severity'] == 'ok'
 
 
-def test_preflight_ignores_the_preset_of_a_disabled_block(app_client: TestClient) -> None:
+def test_preflight_ignores_the_preset_of_a_disabled_block(
+    app_client: TestClient, project_export_root: Path
+) -> None:
     body = app_client.post(
-        '/curation/train/preflight',
+        '/curation/projects/default/train/preflight',
         json={
-            'dataset_export_dir': '/data/exports/x',
+            'dataset_export_dir': str(project_export_root / 'x'),
             'augmentation': {**BAD, 'enabled': False},
         },
     ).json()
@@ -138,13 +144,17 @@ def test_preflight_ignores_the_preset_of_a_disabled_block(app_client: TestClient
 
 @pytest.mark.parametrize('force', ['false', 'true'])
 def test_start_refuses_an_unknown_preset_before_claiming_the_gpu(
-    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, force: str
+    app_client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    force: str,
+    project_export_root: Path,
 ) -> None:
     claim = AsyncMock()
     monkeypatch.setattr('src.services.training.gpu_arbiter.claim_gpus_for_training', claim)
     r = app_client.post(
-        f'/curation/train/start?force={force}',
-        json={'dataset_export_dir': '/data/exports/x', 'augmentation': BAD},
+        f'/curation/projects/default/train/start?force={force}',
+        json={'dataset_export_dir': str(project_export_root / 'x'), 'augmentation': BAD},
     )
     assert r.status_code == 422, r.text
     assert 'no_such_preset' in r.text
@@ -153,14 +163,17 @@ def test_start_refuses_an_unknown_preset_before_claiming_the_gpu(
 
 
 def test_start_campaign_refuses_an_unknown_preset_before_claiming_the_gpu(
-    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    project_export_root: Path,
 ) -> None:
     claim = AsyncMock()
     monkeypatch.setattr('src.services.training.gpu_arbiter.claim_gpus_for_training', claim)
     r = app_client.post(
-        '/curation/train/start_campaign?force=true',
+        '/curation/projects/default/train/start_campaign?force=true',
         json={
-            'dataset_export_dir': '/data/exports/x',
+            'dataset_export_dir': str(project_export_root / 'x'),
             'runs': [{'profile': 'nano', 'model_size': 'n'}],
             'augmentation': BAD,
         },

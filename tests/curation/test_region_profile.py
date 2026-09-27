@@ -212,7 +212,7 @@ def _patch_worker_io(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
     vlm.aclose = AsyncMock()
     mocks = {
         'AsyncTritonPool': MagicMock(return_value=pool),
-        'AsyncOpenSearch': MagicMock(return_value=os_client),
+        'make_script_opensearch': MagicMock(return_value=os_client),
         'SegmenterClient': MagicMock(return_value=segmenter),
         'VlmLabeler': MagicMock(return_value=vlm),
     }
@@ -255,7 +255,7 @@ async def test_worker_is_a_noop_without_a_region_profile(
     rc = await worker.run(_worker_args(tmp_path))
     assert rc == 0
     mocks['AsyncTritonPool'].assert_not_called()
-    mocks['AsyncOpenSearch'].assert_not_called()
+    mocks['make_script_opensearch'].assert_not_called()
     mocks['SegmenterClient'].assert_not_called()
 
 

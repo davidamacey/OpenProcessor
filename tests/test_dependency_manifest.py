@@ -179,9 +179,6 @@ _ALLOWLIST = {
     # returns None on any failure, falling back to the sentinel-only path.
     # The GPU arbiter is a documented no-op on main.
     'docker': 'optional docker-SDK path with a graceful None fallback (GPU arbiter, currently a no-op)',
-    # src/services/curation/autolabel/job.py falls back to polling
-    # (_watch_state_file_poll) inside a try/except ImportError.
-    'inotify_simple': 'optional inotify-based watch with a polling fallback on ImportError',
     # perception_models (top-level `core`): its own requirements exact-pin
     # timm==1.0.15, which conflicts with open-clip-torch>=3.2, so it is
     # declared as pyproject's `pe` extra and installed --no-deps at a pinned
@@ -192,6 +189,11 @@ _ALLOWLIST = {
     # handlers. The API image ships scripts/ (Dockerfile COPY) and the router
     # already reads scripts/curation/bakeoff/baselines.json from it.
     'scripts': 'first-party repo package shipped in the API image (bake-off profiles)',
+    # src/services/projects/lifecycle.py's _soft_delete_mlflow() wraps the
+    # import (and every MLflow call) in a try/except Exception, logging
+    # and continuing -- a guarded delete never fails just because MLflow
+    # is unreachable or not installed in a given deployment.
+    'mlflow': 'optional MLflow soft-delete on project delete, with a logged skip on failure',
 }
 
 # Files whose dependency lists are legitimately out of scope for the

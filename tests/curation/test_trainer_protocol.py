@@ -48,17 +48,46 @@ import trainer  # noqa: E402
 
 @pytest.fixture
 def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A shared /jobs volume both halves of the protocol point at."""
+    """A shared /jobs volume both halves of the protocol point at.
+
+    Also points ``default``'s ``export_root`` (and so its stamped
+    ``project_export_root``, projects_plan.md §5.3) at ``tmp_path``'s
+    project data root via ``OP_PROJECTS_DATA_ROOT`` (``OP_EXPORT_ROOT``
+    is retired -- P1 removed the env-derived default special case) --
+    every fixture's ``export_dir`` lives under it, so the trainer's
+    export-containment check never rejects these fixtures' export dirs
+    as escaping the project. Resets the cached ``CurationConfig``
+    singleton (the codebase's existing pattern, e.g.
+    ``test_export_datasets.py``) so the env var actually takes. Returns
+    the resolved ``.../projects/default`` subdir -- default is an
+    ordinary project (no special-casing), so that's where job files
+    actually land.
+    """
+    import src.config.curation as curation_config_mod
+
     d = tmp_path / 'jobs'
     d.mkdir()
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(d))
-    return d
+    # default's export_root resolves to OP_PROJECTS_DATA_ROOT/default/exports
+    # (P1: no special-casing); point OP_PROJECTS_DATA_ROOT at tmp_path
+    # directly so export_dir (below) can build under exactly that path.
+    monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path))
+    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
+    resolved = d / 'projects' / 'default'
+    resolved.mkdir(parents=True, exist_ok=True)
+    return resolved
 
 
 @pytest.fixture
-def export_dir(tmp_path: Path) -> Path:
-    """A minimal frozen export: 3 classes, one labeled image per split."""
-    root = tmp_path / 'export'
+def export_dir(tmp_path: Path, jobs_dir: Path) -> Path:
+    """A minimal frozen export: 3 classes, one labeled image per split.
+
+    Depends on ``jobs_dir`` for its ``OP_PROJECTS_DATA_ROOT`` side
+    effect (must run first) and builds under ``default``'s real
+    ``export_root`` (``OP_PROJECTS_DATA_ROOT/default/exports``) so the
+    trainer's export-containment check never rejects it.
+    """
+    root = tmp_path / 'default' / 'exports' / 'export'
     for split in ('train', 'val', 'test'):
         (root / 'images' / split).mkdir(parents=True)
         (root / 'labels' / split).mkdir(parents=True)
@@ -753,7 +782,7 @@ def test_auto_quantize_posts_the_bakeoff_run_request(
 
     assert calls == [
         (
-            'http://api.test:8000/curation/bakeoff/run',
+            'http://api.test:8000/curation/projects/default/bakeoff/run',
             {
                 'job_id': f'{job_id}_quant',
                 'datasets': [{'id': f'run:{job_id}'}],
@@ -777,6 +806,41 @@ def test_auto_quantize_posts_the_bakeoff_run_request(
     status_code = 409
     campaign.write_quant_bakeoff_job(spec, state)
     assert len(calls) == 2
+
+
+def test_trainer_calls_back_under_the_project_that_wrote_the_job(
+    jobs_dir: Path, export_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``job.json`` names its project; the campaign auto-promote goes to
+    that project's prefix, and a job with no project posts nothing (there
+    is no unscoped route to fall back to)."""
+    import json
+
+    import requests
+
+    monkeypatch.setattr(campaign, 'API_BASE_URL', 'http://api.test:8000')
+    monkeypatch.setattr(campaign, 'API_PREFIX', '/curation')
+    calls: list[str] = []
+
+    class _Ok:
+        def raise_for_status(self) -> None:
+            return None
+
+    def _post(url: str, **_kw: Any) -> _Ok:
+        calls.append(url)
+        return _Ok()
+
+    monkeypatch.setattr(requests, 'post', _post)
+    job_id = _write_job(dataset_export_dir=str(export_dir))
+    raw = json.loads((jobs_dir / f'{job_id}.job.json').read_text())
+    assert raw['project'] == 'default'
+    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    assert spec.project == 'default'
+
+    assert campaign._post_promote(spec.project, job_id, 'best')
+    assert calls == [f'http://api.test:8000/curation/projects/default/train/promote/{job_id}']
+    assert not campaign._post_promote(None, job_id, 'best')
+    assert len(calls) == 1
 
 
 # =============================================================================

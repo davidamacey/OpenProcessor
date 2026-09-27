@@ -60,6 +60,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from src.config.curation import get_curation_config
+from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
 
 
@@ -79,7 +81,7 @@ _HEARTBEAT_TICK_S = 10.0
 # mid-run. Per-process only (not consulted for cross-process state; that
 # all lives in the state file) -- kept for parity with the other job
 # modules' identical comment.
-_active_task: asyncio.Task[None] | None = None
+_active_tasks: dict[str, asyncio.Task[None]] = {}  # per project slug
 
 
 class ProbeJobBusyError(Exception):
@@ -90,7 +92,7 @@ def _jobs_dir() -> Path:
     """Resolved fresh each call so tests can override via monkeypatch
     (same convention as ``item_scores.job._state_dir`` /
     ``embedding_viz._jobs_dir``)."""
-    return Path(os.environ.get('OP_PROBE_JOBS_DIR', '/jobs/probe'))
+    return project_jobs_dir(Path(os.environ.get('OP_PROBE_JOBS_DIR', '/jobs/probe')))
 
 
 def _state_file() -> Path:
@@ -318,8 +320,6 @@ async def start_probe_job(
         msg = f'unknown probe architecture {architecture!r} (expected one of {PROBE_ARCHITECTURES})'
         raise ValueError(msg)
 
-    global _active_task  # noqa: PLW0603 - singleton task handle, mirrors item_scores.job
-
     with exclusive_start_lock(_lock_file()) as acquired:
         if not acquired:
             msg = 'a probe job start is already in progress on another worker'
@@ -351,7 +351,7 @@ async def start_probe_job(
         )
         _atomic_write(state)
 
-        _active_task = asyncio.create_task(
+        _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
             _run(
                 job_id,
                 train_job_id,
@@ -385,8 +385,7 @@ def _reset_for_tests() -> None:
     """Kept for API-compat with any caller expecting it, but a file-backed
     job has no meaningful module-level state left to reset -- tests
     should instead point ``OP_PROBE_JOBS_DIR`` at a fresh ``tmp_path``."""
-    global _active_task  # noqa: PLW0603
-    _active_task = None
+    _active_tasks.clear()
     with contextlib.suppress(FileNotFoundError):
         _state_file().unlink()
     with contextlib.suppress(FileNotFoundError):

@@ -39,6 +39,7 @@ from PIL import Image
 
 import scripts.curation.region_worker_main as worker
 from src.config import get_region_fields
+from src.config.project_context import current_project
 from src.services.detection.cascade_detect import RegionCandidate
 from src.services.labeling.vlm_labeler import VlmCombinedReply, VlmRegionVerdict
 
@@ -66,6 +67,7 @@ def _make_task(
     detector_score: float = 0.91,
 ) -> worker._ItemTask:
     return worker._ItemTask(
+        project=current_project().record,
         crop_id=crop_id,
         image_path='/dev/null/never-read',
         item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
@@ -80,18 +82,24 @@ def _make_task(
     )
 
 
-def _vlm_with_combined(
-    *,
-    reply: VlmCombinedReply,
-    class_names: list[str] | None = None,
-) -> MagicMock:
+_CLASS_NAMES = ['sedan', 'pickup', 'audi']
+
+
+@pytest.fixture(autouse=True)
+def _bound_project_catalog(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The combined call classifies against the bound project's registry
+    (``bound_class_catalog``); pin it to a known catalog."""
+    from scripts.curation.worker import combined
+
+    monkeypatch.setattr(
+        combined,
+        'bound_class_catalog',
+        lambda: (list(_CLASS_NAMES), {name: i for i, name in enumerate(_CLASS_NAMES)}),
+    )
+
+
+def _vlm_with_combined(*, reply: VlmCombinedReply) -> MagicMock:
     g = MagicMock()
-    g.class_names = class_names or ['sedan', 'pickup', 'audi']
-    # Authoritative class_name -> class_id map the worker reads via
-    # ``vlm.name_to_id`` to resolve the combined reply's class. Without a
-    # real dict here, MagicMock's auto-attr makes ``name_to_id.get(...)``
-    # return a mock instead of the resolved id.
-    g.name_to_id = {name: i for i, name in enumerate(g.class_names)}
     g.label_combined = AsyncMock(return_value=reply)
     g.verify_region = AsyncMock(
         return_value=VlmRegionVerdict(

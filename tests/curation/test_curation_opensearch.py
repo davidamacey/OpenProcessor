@@ -197,13 +197,13 @@ def test_classes_mirrors_registry_schema() -> None:
 async def test_get_curation_index_settings_returns_string_keyed_dict() -> None:
     out = await get_curation_index_settings()
     assert set(out.keys()) == {
-        'op_images',
-        'op_items',
-        'op_labels_confirmed',
-        'op_classes',
-        'op_curation_settings',
-        'op_umap_state',
-        'op_umap_viz_state',
+        'op_prj_default__images',
+        'op_prj_default__items',
+        'op_prj_default__labels_confirmed',
+        'op_prj_default__classes',
+        'op_prj_default__settings',
+        'op_prj_default__umap_state',
+        'op_prj_default__umap_viz_state',
     }
 
 
@@ -230,26 +230,26 @@ async def test_create_curation_indexes_creates_all_when_missing() -> None:
     client = _make_mock_client(exists_returns=False)
     results = await create_curation_indexes(client, force_recreate=False)
     assert results == {
-        'op_images': True,
-        'op_items': True,
-        'op_labels_confirmed': True,
-        'op_classes': True,
-        'op_curation_settings': True,
-        'op_umap_state': True,
-        'op_umap_viz_state': True,
+        'op_prj_default__images': True,
+        'op_prj_default__items': True,
+        'op_prj_default__labels_confirmed': True,
+        'op_prj_default__classes': True,
+        'op_prj_default__settings': True,
+        'op_prj_default__umap_state': True,
+        'op_prj_default__umap_viz_state': True,
     }
     # Each index was created exactly once with the right body.
     create_calls = client.indices.create.await_args_list
     assert len(create_calls) == 7
     seen = {call.kwargs['index'] for call in create_calls}
     assert seen == {
-        'op_images',
-        'op_items',
-        'op_labels_confirmed',
-        'op_classes',
-        'op_curation_settings',
-        'op_umap_state',
-        'op_umap_viz_state',
+        'op_prj_default__images',
+        'op_prj_default__items',
+        'op_prj_default__labels_confirmed',
+        'op_prj_default__classes',
+        'op_prj_default__settings',
+        'op_prj_default__umap_state',
+        'op_prj_default__umap_viz_state',
     }
     # Each index name got the body for its OWN role, not a mismatched one
     # (catches a role<->index swap bug) — comparing against INDEX_BODIES
@@ -313,11 +313,11 @@ async def test_ensure_score_fields_migration_matches_body_and_is_additive() -> N
     client.indices.put_mapping = AsyncMock(return_value={'acknowledged': True})
     result = await ensure_items_score_fields(client)
     assert result['acknowledged'] is True
-    assert result['index'] == 'op_items'
+    assert result['index'] == 'op_prj_default__items'
 
     call = client.indices.put_mapping.await_args
     assert call is not None
-    assert call.kwargs['index'] == 'op_items'
+    assert call.kwargs['index'] == 'op_prj_default__items'
     body_props = call.kwargs['body']['properties']
     assert set(body_props) == set(result['fields_added'])
 

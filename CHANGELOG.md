@@ -33,6 +33,358 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interpolates `${OPENSEARCH_HEAP}` instead of a baked value. The
   installer summary prints the heap and the soft shard budget (heap GB x
   `OP_SHARDS_PER_HEAP_GB`, new advanced knob, default 20).
+
+### Fixed
+- **P3F finish pass 4 (2026-09-27).** Closes the pass-3 confirmation
+  re-review's two remaining small items (F1, F2) plus a nit (n-f):
+  - **F1 (the important one -- a genuine data-loss bug under the real
+    production topology)**: pass 3's `delete._FINISH_IN_PROGRESS` guard
+    is per-WORKER-PROCESS only, and `yolo-api` runs `--workers=32`. A
+    retried DELETE that lands on a different worker (31 times out of 32
+    in production) had its own, empty copy of that guard and could not
+    see that a finish for the same slug was already running elsewhere.
+    The review's cross-worker probe showed the exact failure: finish A
+    timed out on its drain wait and rolled the record back to `active`,
+    while finish B -- on the simulated second worker, unaware of A --
+    went on to unload the project's models and delete all 7 of its
+    indexes anyway, refusing only at the very last step (the tombstone
+    write), by which point the data was already gone. Fix:
+    `delete_project_finish` now claims exclusive ownership of the finish
+    with a real cross-process primitive, right after the drain succeeds
+    and before the first irreversible step (model unload) --
+    `_refetch_for_write(expect_status='deleting')` followed by an
+    OCC-guarded `write_record`. A peer finish that already moved the
+    record off `deleting` (e.g. a sibling's rollback) makes this claim
+    raise 409 `invalid_transition` before anything destructive runs; two
+    finishes whose claim reads race each other resolve via ordinary
+    OpenSearch document-version OCC (`RevisionConflictError` -> 409
+    `revision_conflict`). This works across all 32 worker processes
+    because it is backed by OpenSearch's own document versioning, not an
+    in-memory set any one process can see. The now-inaccurate
+    "process-wide" wording describing the pass-3 guard (`delete.py`,
+    `_FINISH_IN_PROGRESS`'s docstring, and this file's own pass-3 entry
+    above) is corrected to say what it actually protects: one worker
+    process, not the deployment.
+  - **F2 (known gap, documented + best-effort cleanup)**: a losing
+    resurrection attempt -- a create that loses the MA1
+    `expect_status='building'` race on its final `active`/`failed` write
+    because a concurrent stale-`building` DELETE won and tombstoned the
+    slug first -- can leave up to 7 freshly created
+    `op_prj_<slug>__*` indexes unreachable under a now-retired slug
+    (needs a create running past `_BUILDING_STALE_SECONDS`, 120s, with a
+    DELETE landing inside that exact window; rare, and it costs only
+    shards, never a correctness bug). This was previously silent.
+    `create_project` now logs `project_create_orphaned_after_delete`
+    with the exact orphaned index names whenever this fires, and
+    best-effort deletes them itself (any failure to do so is logged and
+    swallowed -- this is cleanup, not a correctness path) since the
+    retired slug can never own them again anyway.
+  - **Nit (m5 job.json label parsing)**: `_train_job_label` (`busy.py`)
+    guards against a `job.json` that is valid JSON but not an object
+    (e.g. a bare list) -- it used to call `.get(...)` unconditionally and
+    raise `AttributeError`, failing the busy preflight (and with it
+    delete/archive) for a hand-edited or corrupted `job.json`. Now
+    treated the same as missing/unreadable: falls back to the job id.
+
+- **P3F finish pass 3 (2026-09-27).** Closes the "MERGE AFTER FIXES"
+  re-review's two majors and its m-a path-escape gap:
+  - **MA1**: a status-transition write now re-validates the status it
+    still owns, not just the storage-level OCC token. `_refetch_for_write`
+    takes an `expect_status` argument and raises 409 `invalid_transition`
+    if a fresh re-read is no longer in that status -- applied to create's
+    `active`/`failed` writes (`expect_status='building'`) and
+    `delete_project_finish`'s drain-timeout rollback and tombstone
+    (`expect_status='deleting'`). Without this, a re-read taken
+    immediately before a write always has a trivially-current seq/term
+    (nothing else was writing at that exact instant), so OCC alone never
+    caught a slow create's late `active` write resurrecting a slug a
+    stale-building delete had already tombstoned. `delete_project` itself
+    now reads the record ONCE (`_get_mutable_record`) and runs every
+    precondition check plus the write against that same read's seq/term,
+    instead of checking against a possibly-stale registry snapshot and
+    then re-reading fresh only at write time. A new `delete._FINISH_IN_PROGRESS`
+    guard (plus a router-level `_BACKGROUND_DELETE_TASKS` keyed by slug)
+    also ensures only one `delete_project_finish` genuinely runs to
+    completion per slug at a time -- **within one worker process**. As
+    pass 4 below found, this guard is per-worker-process only and does
+    NOT protect across `yolo-api`'s `--workers=32`; the real cross-process
+    fix landed in pass 4.
+  - **MA2**: `delete_project_finish`'s model-unload step (and
+    `dry_run_delete`'s `promoted_models` report) now enumerate EVERY
+    model a project owns (`_owned_models`, keyed on
+    `promote.json.project`), not just the `shared=True` subset
+    (`_shared_model_users`, now used only for the `in_use` refusal). A
+    project's own models -- private ones included, the common case --
+    are always unloaded on a normal delete; `force` only bypasses the
+    `in_use` 409 for the shared subset, never whether unload runs.
+  - **m-a**: the delete path-escape guard (m1, previous pass) covered
+    only `train_jobs_dir`/`autolabel_dir`. The other 6 of the project's
+    8 dirs still accepted `path == shared_root` itself (a corrupted
+    resources record pointing at the multi-project root could wipe every
+    sibling project's dir tree). One guard
+    (`_require_project_scoped_path`) now covers all 8, each requiring a
+    strict `<shared_root>/<slug>`-rooted path, always raising
+    `path_escape`. Path validation (`_validate_delete_paths`) also now
+    runs as a preflight in `delete_project_finish`, before the drain
+    wait and the irreversible index delete -- previously it ran only
+    inside dir removal, itself after indexes were already gone, so a
+    `path_escape` left the record wedged `deleting` forever.
+  - **m5 (partial, from the prior pass)**: a train job's `JobRef.label`
+    is now its submitted `mlflow_run_name` (read from the companion
+    `<job_id>.job.json`) when one was set, falling back to the internal
+    job id only when it wasn't -- documented explicitly rather than
+    always silently treating the job id as a human label.
+
+- **P3F finish pass 2 (2026-09-27).** Closes every item the P3 re-review
+  still marked open (verdict FIX-FIRST):
+  - **M4 retry**: a re-issued `DELETE ?confirm=<slug>` on a record already
+    `deleting` (a prior finish attempt's index or model-unload step
+    failed) now answers 202 and re-triggers the finish, instead of 409
+    `invalid_transition`.
+  - **N1**: a `building` record left by a mid-create failure no longer
+    wedges forever. `create_project` catches a failure in its own initial
+    `write_record` (distinguishing a genuine storage-level slug conflict,
+    propagated untouched, from its own `bump_revision` failing after the
+    doc landed, which now flips the record to `failed`). A delete-side
+    escape hatch also allows deleting a `building` record whose
+    `updated_at` is stale (>120s); a fresh one still 409s.
+  - **B2(a) residual**: `create_project` now calls `registry.refresh_strict()`
+    (raises) right after the `building` write, and verifies every one of
+    its own indexes actually exists before ever writing `active` --
+    `_ensure_indexes` is itself fail-open, so refresh_strict alone did
+    not close the gap that let a live create return `active` with zero
+    real indexes.
+  - **M5 step 4**: `delete_project_finish` now unloads the project's own
+    promoted, shared models via P2's `unload_triton_model` primitive
+    (after the drain wait, before index deletion); `dry_run_delete`
+    reports them in `promoted_models` instead of a hardcoded `[]`.
+  - **B2(b)**: the `FakeLifecycleOpenSearch`/`_noop_ensure_indexes` test
+    stub across `tests/projects/*` now really creates the bound
+    project's indexes (`fake_ensure_indexes`), so `create_project`'s
+    index-verification check has real state to check, and a genuine
+    `indices.create` failure (simulated) is proven to still end the
+    create `failed`.
+  - **Minors**: m1 (the delete-path directory guard for
+    `train_jobs_dir`/`autolabel_dir` was checked against a root derived
+    from the same path, which could never refuse anything -- now guards
+    against the real shared root with a `path_escape` refusal), m2 (every
+    status-transition write rebuilds its doc from a fresh read, not a
+    stale closure snapshot, so a concurrent write landing during a
+    delete's up-to-60s drain wait is no longer silently discarded), m5
+    (`JobRef.started_at` is now a real timestamp or `null`, never an
+    always-`''` filler), m7 (the 10s capacity cache is now busted on
+    every create/delete), m8 (heap sum excludes non-data nodes; the warn
+    message no longer rounds 0.5 GB down to "0 GB"), m10 (dry-run index
+    counts report `null`, not `0`, when uncountable). m4 (cross-document
+    races on `_last_active_check`) and m12 (`GET /projects`'s per-project
+    `validated_count` N+1) are documented as deferred, not fixed --
+    both need infra (distributed locking; a cross-index aggregation the
+    test fakes don't model) this pass does not add.
+
+- **P3 review fix pass (2026-09-27).** Addresses the independent P3 review's
+  blocker and majors:
+  - M1: `POST /projects` create is now storage-OCC-safe (`op_type='create'`);
+    a concurrent create of the same slug 409s `slug_taken` for the loser
+    instead of silently overwriting.
+  - M7 / m9: every clone-on-create refusal (unknown axis, clone into itself,
+    a source that is not `active`/`archived`) now runs *before* the first
+    write, so a refused clone burns no slug, creates no indexes and leaves
+    no `failed` record. Clone-into-itself is a clean 422 `combine_invalid`,
+    not a 500 `SameFileError`. New error code: `clone_source_not_ready`.
+  - M2: a read-only bind (archived project, or a stale registry) now
+    refuses every non-safe HTTP method at bind time (409 `project_archived`
+    / `project_read_only`) before the route handler runs, covering
+    file-backed writes the OpenSearch guard never saw.
+  - M6: `tests/curation/test_cross_project_leak.py`'s `leak_env` now seeds
+    the shared `op_projects` registry doc, so the leak sweep's lifecycle
+    mutations (PATCH/archive/unarchive/clone_settings) exercise a real
+    write behind the real guard instead of 404ing before ever reaching it;
+    added a create-then-real-delete pass asserting other projects' data is
+    untouched.
+  - Fixed the test suite's process-wide default project registry stub
+    (`tests/conftest.py`) so it is never reported `stale` by M2's new
+    read-only gate -- it is a deliberately frozen, authoritative-for-tests
+    snapshot, not an instance that fell behind.
+
+### Added
+- **P3 finish pass, Cropwright backend asks (2026-09-27).** `GET
+  {prefix}/models/status` now serves `owned: bool` (this route's own
+  ownership check, never inferred client-side from `project`) and
+  `sharing_revision: int | None` (only for an owned entry -- the value
+  `PUT .../sharing` needs as `expected_revision`) on every entry; a
+  foreign shared entry is served `unloadable: false`. `GET {prefix}/pause`
+  now also reports `paused_by: list[str]` (`'project'` / `'gpu_training'`)
+  and `reason: str | None` for the global GPU/training claim
+  (`gpu_arbiter.read_training_lock`); `ProjectSummary.paused` lets `GET
+  /projects` render a per-row paused chip with no extra reads.
+  Pause/resume now publish `project.paused` / `project.resumed` on the
+  global event stream (BA-P2-1, BA-P2-2, BA-P2-4, BA-P2-5, BA-P2-7).
+- **P3 finish pass, final merge.** Merged `cutover/projects-workers`
+  (through `fix(projects): refresh detection-worker liveness on a
+  timer`) into `cutover/projects-lifecycle`: the detection-worker
+  fairness scan now re-reads its liveness file on a timer instead of
+  once at process start, plus a per-project worker-runtime regression
+  test. No conflicts; `cutover/projects-foundation` had not moved past
+  what was already merged. Full suite (4287 passed, 5 skipped),
+  pre-commit, and contract generation all verified green post-merge.
+- **P3F finish pass (projects lifecycle).** `delete`/`archive`'s busy
+  check now runs through `src.services.projects.busy.running_jobs`
+  (§5.4's real per-project job inventory) instead of a bespoke file
+  scan; the 409 `project_busy` body carries typed `JobRef` objects
+  (`kind`, `kind_label`, `id`, `label`, `started_at` -- Cropwright rev-3
+  delta 11), not raw ids. `ConfigErrorDetail.jobs` is now
+  `list[JobRefWire] | None`.
+- Delete's §5.5 shared-promoted-model guard: a project that owns a
+  model opted into cross-project sharing (`promote.json.shared`) is
+  refused (409 `in_use`) unless `force=true`, which proceeds and logs
+  `project_delete_forced_past_shared_models` distinctly. **Known gap**:
+  the *dependent project* list this returns is the project's own shared
+  model names, not consumer slugs -- there is no reverse index of
+  "which project actually uses model X" yet (needs the not-yet-landed
+  W4 profile-CRUD wave; see the `TODO(W4/profile_validation)` already in
+  `_models_sharing.py`).
+- `registry.write_record` raises `RevisionConflictError` on a losing
+  OCC race (`if_seq_no`/`if_primary_term` stale); `lifecycle.write_record`
+  translates that into the API's 409 `revision_conflict`, so a second
+  concurrent writer never silently clobbers the first.
+- `ProjectRegistry.stale`: true right after the most recent
+  `ensure_fresh()` failed. The request binder (`_project_deps.py`) now
+  binds read-only whenever the registry is stale, not just when the
+  cached status is `archived` (P1R minor 10: a project flipped to
+  `deleting` while OpenSearch is flaky must not bind writable off a
+  stale snapshot).
+- `src/services/projects/clone.py`: `clone_settings`/`clone_settings_into`
+  split out of `lifecycle.py` (700-LOC ratchet); re-exported from
+  `lifecycle` for existing callers.
+- `ensure_region_class()` now also runs at the end of `create_project`,
+  and inside `clone.py`'s `_apply_clone` whenever `'classes'` was not
+  one of the cloned axes -- `bootstrap.py`'s startup seed only ever
+  covered projects that existed when the process booted, so a project
+  created (or cloned without its classes) afterward had an empty
+  registry until the next restart.
+- Confirmed already-correct and covered with new regression tests:
+  delete's 202/background-completing shape (delta 10), and the
+  registry's `search_after` pagination past OpenSearch's 1000-hit
+  default result window (P1R minor 4).
+- `GET /curation/projects/{project}/models/status?include_other_projects=true`
+  also lists other projects' promoted models whose owner shared them
+  (§5.5 #3). Every Triton entry now carries `project` (owner slug, null
+  for base models), `shared` and `class_mapping: {mapped_count,
+  unmapped}` (null for a model with no class list); external entries
+  carry `project: null, shared: false, class_mapping: null`.
+- `GET /curation/projects/{project}/models/{name}/class_mapping`: the full
+  name mapping of a model onto the bound project's registry (`model`,
+  `model_project`, `project`, `entries[{model_id, model_name, class_id,
+  class_name, match}]`, `unmapped`, `not_covered`, `labels.match`), 404
+  `model_not_found` for another project's unshared model (Cropwright
+  delta 8).
+- **Cross-project model sharing (§5.5, owner D1).** New
+  `src/services/training/model_classes.py`: `model_classes()` reads a
+  model's own classes from `promote.json.classes` (model order), else
+  `labels.txt`; `model_class_mapping()` matches a model's classes onto
+  the *consuming* project's registry by name (exact, then
+  case-insensitive) -- runs for every model, own-project included, so a
+  class renamed since training shows up as unmapped there too. Never a
+  raw model id crosses a project boundary.
+- `PUT /curation/projects/{project}/models/{name}/sharing` -- owner-only
+  opt-in/opt-out (404 for a non-owner), optimistic concurrency via
+  `promote.json.sharing_revision` (409 `revision_conflict`). The
+  used_by/in_use cross-project detector-usage scan is a documented
+  `TODO` (needs W4's per-project `DetectionProfile` read, not merged
+  here); unsharing is never refused yet.
+- `POST /curation/projects/{project}/pause`, `POST .../resume`, `GET
+  .../pause` -- the write side of the `pipeline_paused.flag` file
+  sentinel the multi-project workers already read.
+- `src/services/projects/busy.py`'s `_detection_worker_inflight` reads
+  the real per-project `runtime_detection_worker_<host>.json` liveness
+  files `fairness.py` writes, instead of a `[]` stub.
+- `triton_promote.py`'s `promote()` now writes `promote.json.classes`
+  (== `labels.txt`, model order), `shared` (preserved across a
+  re-promote) and `class_remap_source`.
+
+### Fixed
+- Bake-off queue docs (`docs/CURATION.md`, `env.template`, `bakeoff.py`,
+  `bakeoff_runner._pending_job_files`) described
+  `$OP_STATE_DIR/bakeoff_jobs` / `OP_BAKEOFF_JOBS_DIR` as the router's
+  queue. Every project, `default` included, queues in
+  `$OP_STATE_DIR/projects/<slug>/bakeoff_jobs`; the evaluator must watch
+  `$OP_STATE_DIR/bakeoff_jobs` on the API's state-dir path to find them.
+- `PUT .../models/{name}/sharing` answers its 404s through `api_error`
+  (`{"detail": {"error": "model_not_found", "message", "project", ...}}`)
+  instead of a bare string detail.
+- `PUT .../models/{name}/sharing`'s revision check is atomic: the
+  read-compare-write of `promote.json` holds a per-model `flock`
+  (`job_lock.exclusive_file_lock`, new blocking sibling of
+  `exclusive_start_lock`) and writes via temp file + rename
+  (`src/services/training/promote_json.py`). Two concurrent PUTs on the
+  same `expected_revision` now give one 200 and one 409
+  `revision_conflict` instead of two 200s. A re-promote takes the same
+  lock and keeps `sharing_revision` (it used to drop it back to 1).
+- `src/services/projects/busy.py`'s `running_jobs()` now reports running
+  probe, item-scores, selection and viz jobs (each module's own
+  `state.json` + heartbeat busy rule, read for the given project), so a
+  P3 delete/archive busy check cannot pass while one runs. A detection
+  worker liveness file older than the worker heartbeat window
+  (`worker_liveness.DEFAULT_MAX_AGE_S`) no longer counts as busy forever.
+- `/train/preflight`, `/train/start` and `/train/start_campaign` refuse a
+  `dataset_export_dir` outside the bound project's `export_root` with 422
+  `{"detail": {"error": "export_outside_project", ...}}`, before any check
+  reads the export; `force=true` does not bypass it. Previously another
+  project's manifest, registry and label counts were read back into the
+  report, and `start?force=true` queued the job.
+- Merged the finished `cutover/projects-foundation` (P1) twice (once
+  before, once after its final review-resolution pass): resolved P1's
+  worker-script conflicts in P2's favour (already multi-project) and
+  P1's guard/registry/context APIs in P1's favour, per R-6.
+- Adapted to P1's `default` refactor (an ordinary registered project,
+  `resources_for_new`-built, no env-derived special case):
+  `gpu_arbiter.py`'s train-jobs-dir/bakeoff-jobs-dir resolution, the
+  many job/status/manifest/heartbeat test fixtures that assumed an
+  unnested default jobs dir, and `_project_owns_model`'s one deliberate
+  exception (`default`'s `model_prefix` stays empty, unlike every other
+  project, so pre-projects/core-pipeline models keep resolving as
+  default's own).
+- `scripts/curation/worker/runner.py`'s multi-project registry
+  discovery opened a second, unmockable `AsyncOpenSearch` straight from
+  `--opensearch`, so every region-worker end-to-end test silently
+  discovered zero projects and processed nothing; now reuses the
+  already-built (patchable) client.
+- `GpuArbiterConfig.bakeoff_jobs_dir`'s `default_factory` read the
+  *bound* project's config, which raises `ProjectNotBound` at API
+  startup (before any request binds one) and silently killed the
+  reconcile-loop task; reads `default`'s own resources directly instead.
+- Adapted P1's cross-project leak sweep's autolabel fixture to P2's
+  actual (already per-project-function, no module constants)
+  `autolabel/job.py`, and registered `preflight_scan._scan_cache` with
+  the sweep's process-cache-clearing fixture.
+- P2 review fixes (`projects_p2_review_2026-09-27.md`): the GPU arbiter's
+  `bakeoff_active()` now sees a bake-off queued in any project (it only
+  watched `default`'s dir and restarted the GPU services under another
+  project's running bake-off); the API reads `.trainer_capabilities.json`
+  from the trainer's watch root, not the bound project's nested jobs dir
+  (where nothing writes it); `_project_owns_model` refuses a model whose
+  `promote.json` names another project, so `default` cannot inherit a
+  project's models when it drops out of the registry snapshot. The route
+  sweep no longer exempts 14 routes from its isolation checks.
+
+### Changed
+- **Merged the three projects-lifecycle branches (checkpoint 1: merges +
+  adapt only).** `cutover/projects-foundation` (P1, default-is-an-
+  ordinary-project + no unscoped alias) and `cutover/projects-workers`
+  (P2, multi-project workers/busy.py/fairness runner) merged into
+  `cutover/projects-lifecycle` (P3, project lifecycle API). Re-added
+  `registry.get_record_with_seq`/`write_record` (P1 dropped them with
+  `default_project_record`; P3's lifecycle.py still needs OCC-guarded
+  writes, now delegating `bump_revision` to `bootstrap.py`'s OCC
+  version). `lifecycle._get_mutable_record` no longer synthesizes a
+  default record from env -- a missing registry doc is a genuine 404.
+  `_project_owns_model` (model unload/status) no longer assumes
+  `default`'s `model_prefix` is `''`; it's `'default__'` like any
+  project's, so an unprefixed name (core pipeline models, pre-project
+  promotes) is owned by `default` specifically rather than by every
+  project. Registered P3's five lifecycle mutations (archive/unarchive/
+  clone_settings/PATCH/DELETE) in the cross-project leak sweep's
+  request-body and unbound-by-design tables.
 - **Triton model names are env-overridable settings, not literals**
   (`TritonModelConfig` in `src/config/settings.py`): `FACE_DETECT_MODEL`,
   `ARCFACE_MODEL`, `CLIP_IMAGE_MODEL`, `CLIP_TEXT_MODEL`, `OCR_DET_MODEL`,
@@ -64,6 +416,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dead safety net that violated the class-identity invariant (names come
   from the model's own labels, never another model's).
 
+### Changed
+- **Project lifecycle finish pass (P3 binding inputs).**
+  - `DELETE /curation/projects/{project}` documents typed responses:
+    200 `DeleteDryRunResponse` (dry run) and 202
+    `ProjectLifecycleResponse` (accepted). `ProjectsResponse.capacity` is
+    the typed `ProjectCapacityWire` (was an untyped object).
+  - Every projects-route error is the typed `ApiErrorResponse`
+    (`{detail: ConfigErrorDetail}`), now in the OpenAPI contract;
+    `ConfigErrorDetail.capacity` is `ProjectCapacityWire`, so a 409
+    `shard_budget_exceeded` carries the full capacity block on the wire.
+  - `ProjectSummary` serves `archivable` (status `active`) and
+    `unarchivable` (status `archived`). Archive and unarchive refuse any
+    other status with 409 `invalid_transition` (new error code;
+    `detail.project_status` / `detail.action` name what was refused), and
+    `clone_settings` refuses a non-active target the same way.
+  - `POST /projects/{project}/clone_settings` checks status, revision,
+    axes, source and target emptiness before writing anything and bumps
+    the revision only after the copy; a refused clone never changes the
+    revision (it used to bump it first, via PATCH).
+  - `counts.validated` (items with `class_validated: true`) is computed
+    on every route that serves project counts (list, get, lifecycle
+    envelopes, `/stats`) and is `null` on all of them when it cannot be
+    counted. `/stats` used to count a `label_validated` field no writer
+    sets and served 0 on failure.
+  - Deleting `default`: the dry run answers 200 with
+    `blocking: ["project_protected"]`; a real delete is 409
+    `project_protected` with or without `confirm`/`force` (it used to be
+    422 `confirm_mismatch` without `confirm`).
+  - The last-active-project rule is one helper used by the delete dry
+    run and the real archive/delete guards: only other `active` projects
+    count (the dry run used to count archived ones, the guards counted
+    building/failed/deleting ones).
+  - A malformed project slug in any `/curation/projects/{project}...`
+    path is 404 `project_not_found`, not a 422 validation error.
+
 ### Fixed
 - **Installer review round-3 follow-ups (s1-s5).**
   - The install summary no longer claims "every port is bound to
@@ -83,11 +470,133 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--rollback` restores the newest backup of a *different* version, so a
     same-version re-run after an upgrade no longer makes rollback land on the
     version already installed.
+- **Trainer capabilities are read from the trainer volume root.** The
+  trainer writes `.trainer_capabilities.json` once at `OP_TRAIN_JOBS_DIR`
+  (it serves every project), but preflight's `trainer_gpus` check and the
+  heartbeat-based reachability probe read it from the bound project's
+  `train_jobs_dir` (`.../projects/<slug>/`), so every project saw "no
+  capabilities file" and GPU-scoping could never block. Both now read
+  `src.config.projects.trainer_jobs_root()`.
+- **Bake-offs are per project end to end.** The GPU arbiter only watched a
+  flat `<state_dir>/bakeoff_jobs` (`GpuArbiterConfig.bakeoff_jobs_dir`)
+  while the router enqueues into each project's own
+  `projects/<slug>/bakeoff_jobs`, so a queued bake-off never kept GPU
+  containers stopped. `bakeoff_active()` now scans every project's queue
+  (`gpu_arbiter.all_bakeoff_jobs_dirs()`); `GpuArbiterConfig.bakeoff_jobs_dir`
+  and the `OP_BAKEOFF_JOBS_DIR` / `OP_BAKEOFF_OUT_DIR` settings are
+  removed. Results live in `<project bakeoff_jobs_dir>/out` for every
+  project (`default` included), and `prune_training_runs.py` prunes only
+  the bound project's results instead of every project pruning the one
+  shared `bakeoff_out` dir. The post-export prune pins exports from the
+  project's own training/bake-off job dirs, not flat env roots no job is
+  written to, so a queued training run's export is never pruned.
 - **`SegmenterClient.source_name` has no default.** The constructor no
   longer defaults to `source_name='sam3'`; every caller (the worker
   runner, tests) passes the active profile's `segmenter_name` explicitly,
   so a non-default segmenter name can never be silently mislabeled as
   `sam3` in stored candidate provenance.
+
+### Added
+- **Projects foundation (P1).**
+  `src/config/projects.py` (`ProjectRecord`/`ProjectResources`,
+  `resources_for_new`/`new_project_record`, slug validation),
+  `src/config/project_context.py` (`ContextVar`-based `BoundProject`,
+  `current_project()`/`bind_project()`/`set_bound_project()`,
+  `bind_process_project()` for script entry points,
+  `run_in_executor_bound()`, `project_jobs_dir()`, `project_env()`), and
+  `src/services/projects/` (`registry.py`: the `op_projects` index
+  snapshot, revision-gated `ensure_fresh()`/`poll_loop()`, exactly the
+  stored records; `bootstrap.py`: idempotent `default` project create; `guard.py`: transport-level
+  OpenSearch project guard — `CrossProjectAccess`/`ProjectNotBound`/
+  `ProjectReadOnly`, `make_curation_opensearch()` and
+  `make_script_opensearch()` as the only client factories;
+  `capacity.py`: read-only shard/heap capacity check, no fixed project
+  cap; `script_binding.py`: `--project` for scripts).
+- **Every curation route is scoped under
+  `/curation/projects/{project}/...`** (`src/routers/curation/_mounting.py`),
+  binding the project for the request. There is no unscoped alias: an
+  unscoped curation path is a 404. The only routes outside a project are
+  `GET /curation/projects[/{project}]`, `GET /curation/health` and
+  `GET /curation/events`. Served URLs (thumbnails, region thumbnails,
+  training artifacts) are always the scoped form.
+- **Global `GET /curation/health` and `GET /curation/events`** for
+  project-less screens: deployment facts only, and only `project: null`
+  events (`project.*` and `combine.*` with `target`). The scoped
+  `{prefix}/health` keeps its shape plus `project`.
+- `GET /curation/projects` serves `labels.status` and
+  `limits.retired_slugs`; `GET /curation/projects/{project}` serves the
+  project's counts and a typed `error`; `ProjectLifecycleResponse`
+  (`{project, warnings}`) is the envelope P3's lifecycle routes answer.
+- Isolation errors map to structured responses: `CrossProjectAccess` /
+  `ProjectNotBound` → 500 `internal_isolation_error`, `ProjectReadOnly` →
+  409 `project_read_only`.
+
+- **Multi-project workers (P2).** One detection worker, VLM worker,
+  auto-label worker and cluster-refresh daemon serve every active project:
+  each cycle they list the active projects, skip paused ones, and bind
+  each project only around its own work; `--project SLUG` narrows a
+  worker to one project. The detection worker splits each fetch by
+  deficit round-robin (equal quota, rotating start, leftover capacity to
+  projects that filled theirs), caps each project's in-flight items at
+  `ceil(pipeline capacity / active projects)`, backs idle projects off
+  from 5 s to 60 s, keeps each batched VLM call to one project, classifies
+  against the item's own project registry, and flushes one `_bulk` per
+  project. The auto-label worker runs one job at a time across projects,
+  oldest trigger first, and checks each project's IVF centroids for a
+  retrain on its own interval.
+- Per-project pipeline pause: `<project_state_dir>/pipeline_paused.flag`
+  stops the workers' fetches for that project only (no route yet). The
+  detection worker writes `runtime_detection_worker_<host>.json`
+  (`inflight`, `applied`, `paused`) into each project's state dir.
+- `prune_exports.py` and `prune_training_runs.py` prune every active and
+  archived project under its own binding.
+
+### Changed
+- **BREAKING: `default` is an ordinary project.** It is created at first
+  boot with the standard naming: indexes `op_prj_default__<role>`, class
+  registry/exports/bake-off eval sets under
+  `$OP_PROJECTS_DATA_ROOT/default/`, uploads and job state under
+  `.../projects/default/`. It can be archived, never deleted. The
+  `OP_*_INDEX` env vars, `OP_ITEMS_INDEX_OVERRIDE`, `OP_REGISTRY_PATH`,
+  `OP_EXPORT_ROOT`, `OP_UPLOAD_ROOT` and `OP_BAKEOFF_EVAL_ROOT` are gone;
+  existing `op_*` indexes are not migrated (re-create and re-ingest).
+- **Unbound project-scoped config fails closed.** Reading a project-scoped
+  `CurationConfig` field with no project bound raises `ProjectNotBound`
+  instead of silently using `default`. Requests bind through their route;
+  the API lifespan runs unbound and binds each active project in turn
+  only for startup steps that touch project data; every
+  `scripts/curation` entry point binds `--project` (default
+  `$OP_CURATION_PROJECT`, else `default`) for its whole process, resolved through
+  the registry so the stored status applies.
+- Index names, the class registry, the index bootstrap flag, the UMAP
+  reducer/projection state files, the eval-dataset roots, and the scores /
+  probe / selection / projection job dirs resolve per bound project
+  (`items_index()` and friends replace the frozen `CURATION_*_INDEX` /
+  `ITEMS_INDEX` constants). `default` is now an ordinary project
+  (`op_prj_default__*`), created with `resources_for_new('default')`;
+  the env-derived special case is gone.
+- The event hub stamps every event with the bound `project` and refuses
+  an unbound publish or one naming another project; a scoped stream
+  delivers only its own project's events, the global stream only
+  `project: null` ones (`project.*`, `combine.*`).
+- **The OpenSearch project guard fails closed by construction.** It
+  allowlists the request shapes the codebase sends and requires every
+  index they name (URL, multi-doc line, query body) to belong to the
+  bound project; index-less searches, wildcards, `_all`, aliases,
+  `_reindex`, `_sql`, unknown `op_prj_` names and cross-index bodies are
+  refused. It is installed when the shared client is built.
+- The IVF residual centroid store lives in each project's state dir
+  (it was one global store shared by every project), the pipeline SSE
+  stats cache is kept per project, and the auto-label trigger/state/
+  heartbeat/cancel files resolve under the bound project's `autolabel_dir`.
+- The pipeline SSE stream polls its own project's auto-label `state.json`
+  (1 s) instead of waiting on a process-wide event that nothing signalled.
+- Workers read OpenSearch only through the guarded client, against the
+  bound project's indexes; `OP_ITEMS_INDEX_OVERRIDE` is gone.
+
+### Removed
+- `src/services/curation/autolabel/cli.py` (nothing launched it) and the
+  unstarted auto-label `state.json` watcher.
 
 ### Added
 - **Text-free region mode.** A region profile with `text_reader: "none"`

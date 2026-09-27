@@ -10,6 +10,7 @@ nothing escapes into a real ``/jobs/`` volume.
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path  # used at runtime (jobs_dir fixture, registry-pin tests)
 
@@ -32,9 +33,22 @@ from src.services.training.jobs import (
 
 @pytest.fixture
 def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Redirect OP_TRAIN_JOBS_DIR at the env-var level."""
+    """Redirect OP_TRAIN_JOBS_DIR at the env-var level.
+
+    ``default`` is an ordinary project (P1: no special-casing), so its
+    real ``train_jobs_dir`` is ``OP_TRAIN_JOBS_DIR/projects/default``,
+    not the env var's value directly -- return the resolved subdir so
+    every test in this file reads/writes where the code actually does.
+    """
+    """Redirect OP_TRAIN_JOBS_DIR at the env-var level and return the
+    actual resolved dir for the bound (``default``, tests/conftest.py)
+    project -- P1R §6.1/D-A: ``project_jobs_dir()`` always nests
+    ``/projects/<slug>``, ``default`` included, so callers must not
+    assume ``OP_TRAIN_JOBS_DIR`` itself is where files land."""
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
-    return tmp_path
+    resolved = tmp_path / 'projects' / 'default'
+    resolved.mkdir(parents=True, exist_ok=True)
+    return resolved
 
 
 @pytest.fixture
@@ -686,9 +700,26 @@ async def test_tail_run_log_missing_file_returns_empty(jobs_dir: Path) -> None:
 
 
 class _FakeCurationConfig:
-    def __init__(self, mlflow_public_url: str | None = None, api_prefix: str = '/curation') -> None:
+    def __init__(
+        self,
+        mlflow_public_url: str | None = None,
+        api_prefix: str = '/curation',
+        train_jobs_dir: Path | None = None,
+    ) -> None:
         self.mlflow_public_url = mlflow_public_url
         self.api_prefix = api_prefix
+        # _resolve_jobs_dir() reads this; these tests only care about
+        # mlflow_public_url/api_prefix, so default to the same
+        # OP_TRAIN_JOBS_DIR/projects/default the ``jobs_dir`` fixture
+        # resolves to (default is an ordinary project -- P1: no
+        # special-casing).
+        # _resolve_jobs_dir() reads this (projects_plan.md §5.3); these
+        # tests only care about mlflow_public_url/api_prefix. Default
+        # nests /projects/default under OP_TRAIN_JOBS_DIR (P1R §6.1/D-A:
+        # project_jobs_dir() always nests, default included).
+        self.train_jobs_dir = train_jobs_dir or (
+            Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs')) / 'projects' / 'default'
+        )
 
 
 def test_public_mlflow_url_builds_from_configured_base(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -766,7 +797,7 @@ async def test_read_status_rewrites_mlflow_url_and_confusion_matrix(
     assert 'confusion_matrix_path' not in status.eval  # the fs path never reaches the wire
     assert (
         status.eval['confusion_matrix_url']
-        == '/curation/train/artifacts/realmlf/confusion_matrix.png'
+        == '/curation/projects/default/train/artifacts/realmlf/confusion_matrix.png'
     )
     assert status.eval['map50'] == 0.62  # untouched
 
@@ -854,7 +885,7 @@ async def test_read_manifest_rewrites_eval_and_mlflow_url(
     assert 'confusion_matrix_path' not in results['eval']
     assert (
         results['eval']['confusion_matrix_url']
-        == '/curation/train/artifacts/manifjob/confusion_matrix.png'
+        == '/curation/projects/default/train/artifacts/manifjob/confusion_matrix.png'
     )
 
 

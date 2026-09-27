@@ -18,7 +18,8 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from scripts.curation.worker.verify import _region_write_doc, candidate_reject_doc
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.curation import base_curation_config
 from src.services.curation.edit_history import EditKind, restore_edit_state
 from src.services.curation.wire import serialize_item
 from src.services.detection.cascade_detect import RegionCandidate
@@ -37,7 +38,7 @@ if TYPE_CHECKING:
 
 
 F = get_region_fields()
-INDEX = get_curation_config().items_index
+INDEX = base_curation_config().items_index
 CANDIDATE = [0.3, 0.6, 0.4, 0.65]
 
 
@@ -88,7 +89,9 @@ def client(fake_os: QueryFakeOpenSearch) -> Any:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     with TestClient(app) as c:
         yield c
@@ -161,7 +164,9 @@ class TestWorkerKeepsTheCandidate:
 
 class TestRegionsStatusFilter:
     def test_status_lists_rejected_items_without_a_box(self, client: TestClient) -> None:
-        resp = client.get('/curation/regions', params={'status': 'verify_rejected'})
+        resp = client.get(
+            '/curation/projects/default/regions', params={'status': 'verify_rejected'}
+        )
         assert resp.status_code == 200, resp.text
         items = {i['crop_id']: i for i in resp.json()['items']}
         assert set(items) == {'rej', 'legacy'}
@@ -172,15 +177,15 @@ class TestRegionsStatusFilter:
         assert items['rej']['region_bbox_norm'] is None
 
     def test_status_detected_lists_only_detected(self, client: TestClient) -> None:
-        resp = client.get('/curation/regions', params={'status': 'detected'})
+        resp = client.get('/curation/projects/default/regions', params={'status': 'detected'})
         assert [i['crop_id'] for i in resp.json()['items']] == ['det']
 
     def test_default_lists_only_boxed_items(self, client: TestClient) -> None:
-        resp = client.get('/curation/regions')
+        resp = client.get('/curation/projects/default/regions')
         assert [i['crop_id'] for i in resp.json()['items']] == ['det']
 
     def test_unknown_status_is_400(self, client: TestClient) -> None:
-        resp = client.get('/curation/regions', params={'status': 'bogus'})
+        resp = client.get('/curation/projects/default/regions', params={'status': 'bogus'})
         assert resp.status_code == 400
 
 
@@ -189,7 +194,7 @@ class TestHumanReversal:
         self, client: TestClient, fake_os: QueryFakeOpenSearch
     ) -> None:
         resp = client.patch(
-            '/curation/crops/rej/region_meta',
+            '/curation/projects/default/crops/rej/region_meta',
             json={'region_status': 'detected', 'region_label_source': 'human'},
         )
         assert resp.status_code == 200, resp.text
@@ -212,10 +217,10 @@ class TestHumanReversal:
     ) -> None:
         before = dict(_doc(fake_os, 'rej'))
         client.patch(
-            '/curation/crops/rej/region_meta',
+            '/curation/projects/default/crops/rej/region_meta',
             json={'region_status': 'detected', 'region_label_source': 'human'},
         )
-        resp = client.post('/curation/crops/rej/region/undo')
+        resp = client.post('/curation/projects/default/crops/rej/region/undo')
         assert resp.status_code == 200, resp.text
         doc = _doc(fake_os, 'rej')
         for key in (
@@ -235,7 +240,7 @@ class TestHumanReversal:
         self, client: TestClient, fake_os: QueryFakeOpenSearch
     ) -> None:
         resp = client.patch(
-            '/curation/crops/rej/region_meta',
+            '/curation/projects/default/crops/rej/region_meta',
             json={'region_status': 'false_positive', 'region_label_source': 'human'},
         )
         assert resp.status_code == 200, resp.text
@@ -247,7 +252,9 @@ class TestHumanReversal:
     def test_put_of_the_candidate_box_is_a_confirmation(
         self, client: TestClient, fake_os: QueryFakeOpenSearch
     ) -> None:
-        resp = client.put('/curation/crops/rej/region', json={'region_bbox_norm': CANDIDATE})
+        resp = client.put(
+            '/curation/projects/default/crops/rej/region', json={'region_bbox_norm': CANDIDATE}
+        )
         assert resp.status_code == 200, resp.text
         doc = _doc(fake_os, 'rej')
         assert doc[F.status] == 'detected'
@@ -260,7 +267,8 @@ class TestHumanReversal:
         self, client: TestClient, fake_os: QueryFakeOpenSearch
     ) -> None:
         resp = client.put(
-            '/curation/crops/rej/region', json={'region_bbox_norm': [0.31, 0.61, 0.42, 0.66]}
+            '/curation/projects/default/crops/rej/region',
+            json={'region_bbox_norm': [0.31, 0.61, 0.42, 0.66]},
         )
         assert resp.status_code == 200, resp.text
         doc = _doc(fake_os, 'rej')
@@ -270,7 +278,7 @@ class TestHumanReversal:
 
     def test_confirm_without_a_box_or_candidate_is_still_refused(self, client: TestClient) -> None:
         resp = client.patch(
-            '/curation/crops/legacy/region_meta',
+            '/curation/projects/default/crops/legacy/region_meta',
             json={'region_status': 'detected', 'region_label_source': 'human'},
         )
         assert resp.status_code == 422

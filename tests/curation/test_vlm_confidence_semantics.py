@@ -9,7 +9,7 @@ could print beside a VLM label was that detector score.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config import get_curation_config
+from src.config.curation import base_curation_config
 from src.services.curation.class_sources import (
     VLM_CATEGORY_SCORE,
     class_confidence,
@@ -31,21 +31,8 @@ from src.services.curation.review_queries import TAB_LABELS
 from src.services.curation.wire import serialize_item
 
 
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
-
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 MODEL_SOURCE = 'secondary_model'
-
-
-@pytest.fixture(autouse=True)
-def _fresh_sort_coverage() -> Iterator[None]:
-    from src.services.curation.strategy_registry import _reset_field_coverage_cache
-
-    _reset_field_coverage_cache()
-    yield
-    _reset_field_coverage_cache()
 
 
 def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
@@ -57,7 +44,9 @@ def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         AsyncMock(return_value=None),
     )
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -90,7 +79,7 @@ def _docs() -> dict[str, dict[str, Any]]:
 def test_vlm_low_conf_selects_on_the_vlm_confidence_only(monkeypatch: pytest.MonkeyPatch) -> None:
     docs = {k: {'crop_id': k, **v} for k, v in _docs().items()}
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
-    r = client.get('/curation/review/vlm_low_conf', params={'page_size': 50})
+    r = client.get('/curation/projects/default/review/vlm_low_conf', params={'page_size': 50})
     assert r.status_code == 200, r.text
     assert {i['crop_id'] for i in r.json()['items']} == {
         'vlm_low_detector_high',

@@ -9,7 +9,7 @@ tab's next sensible sort and say so (``sort_fallback_reason``), and
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from curation.test_curation_settings_client import FakeSettingsOpenSearch
-from src.config import get_curation_config
+from src.config.curation import base_curation_config
 from src.services.curation.review_sorts import REVIEW_SORTS
 
 
@@ -30,22 +30,13 @@ def test_classifier_blind_spots_default_label_has_no_stale_coco_name() -> None:
     assert 'classifier' in label.lower()
 
 
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
-
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 
 
 @pytest.fixture(autouse=True)
-def _fresh_coverage(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    from src.services.curation.strategy_registry import _reset_field_coverage_cache
-
+def _scores_flags_off(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv('OP_SCORES_ENABLED', raising=False)
     monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
-    _reset_field_coverage_cache()
-    yield
-    _reset_field_coverage_cache()
 
 
 def _item(crop_id: str, **fields: Any) -> dict[str, Any]:
@@ -166,19 +157,23 @@ def review_client(monkeypatch: pytest.MonkeyPatch):
             f'src.routers.curation.{mod}._ensure_indexes', AsyncMock(return_value=None)
         )
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
 
 def test_review_route_reports_the_fallback(review_client: TestClient) -> None:
-    r = review_client.get('/curation/review/uncertainty')
+    r = review_client.get('/curation/projects/default/review/uncertainty')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['sort_applied'] == 'atypicality'
     assert 'uncertainty_entropy' in body['sort_fallback_reason']
 
-    r = review_client.get('/curation/review/uncertainty/locate', params={'crop_id': 'a'})
+    r = review_client.get(
+        '/curation/projects/default/review/uncertainty/locate', params={'crop_id': 'a'}
+    )
     assert r.status_code == 200, r.text
     assert r.json()['sort_applied'] == 'atypicality'
     assert 'uncertainty_entropy' in r.json()['sort_fallback_reason']
@@ -207,7 +202,9 @@ def _settings_client(monkeypatch: pytest.MonkeyPatch, fake: Any) -> TestClient:
             f'src.routers.curation.{mod}._ensure_indexes', AsyncMock(return_value=None)
         )
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -215,19 +212,23 @@ def _settings_client(monkeypatch: pytest.MonkeyPatch, fake: Any) -> TestClient:
 def test_put_refuses_a_zero_coverage_sort_default(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _SettingsWithCoverage({})
     client = _settings_client(monkeypatch, fake)
-    r = client.put('/curation/settings', json={'defaults': {'sort': 'uncertainty_entropy'}})
+    r = client.put(
+        '/curation/projects/default/settings', json={'defaults': {'sort': 'uncertainty_entropy'}}
+    )
     assert r.status_code == 422, r.text
     assert 'probe_pred_entropy' in r.text
-    assert client.get('/curation/settings').json()['defaults'] == {}
+    assert client.get('/curation/projects/default/settings').json()['defaults'] == {}
 
     # A sort on a field every item carries is always accepted.
-    r = client.put('/curation/settings', json={'defaults': {'sort': 'recent'}})
+    r = client.put('/curation/projects/default/settings', json={'defaults': {'sort': 'recent'}})
     assert r.status_code == 200, r.text
 
 
 def test_put_accepts_a_covered_sort_default(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _SettingsWithCoverage({'probe_pred_entropy': 3})
     client = _settings_client(monkeypatch, fake)
-    r = client.put('/curation/settings', json={'defaults': {'sort': 'uncertainty_entropy'}})
+    r = client.put(
+        '/curation/projects/default/settings', json={'defaults': {'sort': 'uncertainty_entropy'}}
+    )
     assert r.status_code == 200, r.text
     assert r.json()['defaults'] == {'sort': 'uncertainty_entropy'}

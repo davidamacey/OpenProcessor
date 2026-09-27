@@ -28,7 +28,8 @@ from PIL import Image
 from curation.query_fakes import QueryFakeOpenSearch
 from scripts.curation.worker.verify import _combined_class_update
 from src.clients.curation_opensearch import ClassRegistry
-from src.config import get_curation_config
+from src.config.curation import base_curation_config
+from src.config.project_context import current_project
 from src.services.curation.history import CLASS_STATE_FIELDS
 from src.services.curation.vlm_class_attempt import (
     VLM_CLASS_ATTEMPTED_AT_FIELD as ATTEMPTED,
@@ -41,7 +42,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 CLASS_KEYS = {
     'class_id',
     'class_name',
@@ -116,6 +117,7 @@ async def test_worker_combined_class_write_snapshots_restorable_history() -> Non
 
     F = get_region_fields()
     t = _ItemTask(
+        project=current_project().record,
         crop_id='crop-1',
         image_path='/dev/null/never-read',
         item_bbox_norm=(0.1, 0.1, 0.5, 0.5),

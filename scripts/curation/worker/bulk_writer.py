@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from src.clients.occ import CLASS_WRITE_FIELDS, occ_skip_on_conflict_bulk, strip_class_write_fields
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.project_context import project_api_base
 from src.core.logging import get_logger
 from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
 from src.services.curation.class_write_guard import class_write_allowed
@@ -25,7 +26,7 @@ from src.services.curation.wire import region_event_payload
 logger = get_logger('curation_worker')
 
 
-from scripts.curation.worker.state import CURATION_ITEMS_INDEX, _ItemTask
+from scripts.curation.worker.state import _ItemTask, items_index
 
 
 if TYPE_CHECKING:
@@ -33,7 +34,43 @@ if TYPE_CHECKING:
 
 
 async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> tuple[int, int]:
-    """Apply each task's ``update_doc`` to OpenSearch with OCC semantics.
+    """Group ``tasks`` by their own project and flush one ``_bulk`` call
+    per project, each issued while bound to that project (projects_plan.md
+    §5.1) -- the guard rejects a call issued against project A's index
+    while project B is bound, so writes for different projects can never
+    share one bulk body. A task without a project is a producer bug and
+    raises instead of being written unbound.
+    """
+    from src.config.project_context import bind_project
+
+    if not tasks:
+        return 0, 0
+    by_project: dict[str, list[_ItemTask]] = {}
+    projects_by_slug: dict[str, Any] = {}
+    for t in tasks:
+        if t.project is None:
+            msg = f'item task {t.crop_id!r} has no project'
+            raise ValueError(msg)
+        by_project.setdefault(t.project.slug, []).append(t)
+        projects_by_slug[t.project.slug] = t.project
+
+    n_written = 0
+    n_skipped = 0
+    for slug, group in by_project.items():
+        with bind_project(projects_by_slug[slug]):
+            w, s = await _bulk_update_one_project(opensearch, group)
+        n_written += w
+        n_skipped += s
+    return n_written, n_skipped
+
+
+async def _bulk_update_one_project(
+    opensearch: AsyncOpenSearch, tasks: list[_ItemTask]
+) -> tuple[int, int]:
+    """The original single-``_bulk``-call body of ``_bulk_update``,
+    scoped to tasks that all belong to one (already-bound) project.
+
+    A-PR3: per-doc OCC via :func:`occ_skip_on_conflict_bulk` — on a
 
     A-PR3: per-doc OCC via :func:`occ_skip_on_conflict_bulk` — on a
     seq_no conflict (concurrent human region edit), the worker skips
@@ -126,7 +163,7 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
         opensearch,
         doc_ids=[t.crop_id for t in eligible],
         merger=_merge,
-        index=CURATION_ITEMS_INDEX,
+        index=items_index(),
         # The runner releases a crop from its in-flight set once this
         # returns; ``wait_for`` makes the write visible to the next
         # pending search first, so a refresh-lagged search can't hand the
@@ -179,7 +216,7 @@ async def _publish_region_events(written: list[_ItemTask]) -> None:
     if _EVENT_CLIENT is None:
         _EVENT_CLIENT = httpx.AsyncClient(timeout=2.0)
     F = get_region_fields()
-    url = f'{_EVENT_API_URL}{get_curation_config().api_prefix}/events/publish'
+    url = f'{_EVENT_API_URL}{project_api_base()}/events/publish'
     for t in written:
         region_status = (t.update_doc or {}).get(F.status)
         if not region_status:

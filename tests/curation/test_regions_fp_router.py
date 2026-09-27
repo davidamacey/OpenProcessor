@@ -54,7 +54,9 @@ def app_client_factory():
         from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
         app = FastAPI()
-        app.include_router(curation_router)
+        from _curation_app import mount_curation_routers
+
+        mount_curation_routers(app, curation_router)
         app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
         return TestClient(app)
 
@@ -73,7 +75,7 @@ def test_list_plate_clusters_pins_fp_bucket_first(app_client_factory: Any) -> No
     ]
     client = app_client_factory(_FakeAggOS(buckets))
 
-    resp = client.get('/curation/regions/clusters')
+    resp = client.get('/curation/projects/default/regions/clusters')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['count'] == 2
@@ -89,7 +91,7 @@ def test_list_plate_clusters_reports_representative_ids_and_subcluster_flag(
     buckets = [_bucket(9, doc_count=12, rep_ids=['crop-x', 'crop-y'], n_sub=3, validated=5)]
     client = app_client_factory(_FakeAggOS(buckets))
 
-    resp = client.get('/curation/regions/clusters')
+    resp = client.get('/curation/projects/default/regions/clusters')
     assert resp.status_code == 200, resp.text
     cluster = resp.json()['clusters'][0]
     assert cluster['representative_crop_ids'] == ['crop-x', 'crop-y']
@@ -100,7 +102,7 @@ def test_list_plate_clusters_reports_representative_ids_and_subcluster_flag(
 
 def test_list_plate_clusters_no_buckets_returns_empty(app_client_factory: Any) -> None:
     client = app_client_factory(_FakeAggOS([]))
-    resp = client.get('/curation/regions/clusters')
+    resp = client.get('/curation/projects/default/regions/clusters')
     assert resp.status_code == 200
     assert resp.json() == {'clusters': [], 'count': 0}
 
@@ -111,7 +113,7 @@ def test_list_plate_clusters_surfaces_opensearch_error_as_503(app_client_factory
             raise RuntimeError('cluster down')
 
     client = app_client_factory(_BoomOS())
-    resp = client.get('/curation/regions/clusters')
+    resp = client.get('/curation/projects/default/regions/clusters')
     assert resp.status_code == 503
 
 
@@ -128,7 +130,7 @@ def test_suspected_false_positives_short_circuits_when_no_centroids_built(
     monkeypatch.setattr(FalsePositiveCentroidStore, 'load', lambda _self: False)
 
     client = app_client_factory(_FakeAggOS([]))
-    resp = client.get('/curation/regions/suspected_false_positives')
+    resp = client.get('/curation/projects/default/regions/suspected_false_positives')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['items'] == []
@@ -140,9 +142,9 @@ def test_plate_cluster_status_and_fp_centroid_status_are_reachable(
     app_client_factory: Any,
 ) -> None:
     client = app_client_factory(_FakeAggOS([]))
-    resp = client.get('/curation/regions/cluster/status')
+    resp = client.get('/curation/projects/default/regions/cluster/status')
     assert resp.status_code == 200
-    resp2 = client.get('/curation/regions/fp_centroids/status')
+    resp2 = client.get('/curation/projects/default/regions/fp_centroids/status')
     assert resp2.status_code == 200
 
 
@@ -212,7 +214,7 @@ def test_suspected_false_positives_mget_uses_source_excludes_kwarg(
     fake_os = _FakeFpSearchOS(embedding=[0.1] * 8)
     client = app_client_factory(fake_os)
 
-    resp = client.get('/curation/regions/suspected_false_positives')
+    resp = client.get('/curation/projects/default/regions/suspected_false_positives')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['centroids_built'] is True
@@ -297,9 +299,13 @@ def test_suspected_fp_second_page_within_ttl_does_not_rescroll(
     os_fake = _FakeScrollOS([hits])
     client = app_client_factory(os_fake)
 
-    r1 = client.get('/curation/regions/suspected_false_positives?page=1&page_size=2')
+    r1 = client.get(
+        '/curation/projects/default/regions/suspected_false_positives?page=1&page_size=2'
+    )
     assert r1.status_code == 200, r1.text
-    r2 = client.get('/curation/regions/suspected_false_positives?page=2&page_size=2')
+    r2 = client.get(
+        '/curation/projects/default/regions/suspected_false_positives?page=2&page_size=2'
+    )
     assert r2.status_code == 200, r2.text
 
     assert os_fake.search_calls == 1
@@ -324,11 +330,13 @@ def test_suspected_fp_scroll_exception_still_clears_scroll(monkeypatch: pytest.M
     os_fake = _FakeScrollOS([hits_page_1, []], raise_on_scroll=True)
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: os_fake
 
     with TestClient(app, raise_server_exceptions=False) as client:
-        resp = client.get('/curation/regions/suspected_false_positives')
+        resp = client.get('/curation/projects/default/regions/suspected_false_positives')
 
     assert resp.status_code == 500
     assert os_fake.clear_scroll_calls == 1

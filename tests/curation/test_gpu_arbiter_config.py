@@ -29,7 +29,7 @@ def test_defaults_are_empty_and_permissive() -> None:
     assert cfg.trainer_container is None
     # Never None: the router and the reconcile loop must watch the same dir
     # even when OP_BAKEOFF_JOBS_DIR is unset.
-    assert cfg.bakeoff_jobs_dir == str(get_curation_config().state_dir / 'bakeoff_jobs')
+    assert cfg.bakeoff_jobs_dir == str(get_curation_config().bakeoff_jobs_dir)
     assert cfg.gpu_labels == {}
     assert cfg.default_train_gpus is None
 
@@ -326,8 +326,11 @@ def test_bakeoff_jobs_dir_default_is_shared_with_the_router(
     from src.routers.curation import bakeoff
 
     cfg = GpuArbiterConfig.from_env()
-    assert cfg.bakeoff_jobs_dir == str(get_curation_config().state_dir / 'bakeoff_jobs')
-    assert Path(get_gpu_arbiter_config().bakeoff_jobs_dir) == bakeoff.JOBS_DIR
+    assert cfg.bakeoff_jobs_dir == str(get_curation_config().bakeoff_jobs_dir)
+    # bakeoff.JOBS_DIR is now _jobs_dir(), resolved per-project at call
+    # time (projects_plan.md §5.3); for the bound default project it's
+    # still byte-for-byte the arbiter's bakeoff_jobs_dir.
+    assert Path(get_gpu_arbiter_config().bakeoff_jobs_dir) == bakeoff._jobs_dir()
 
 
 def test_bakeoff_active_after_enqueue_with_no_env(
@@ -351,16 +354,16 @@ def test_bakeoff_active_after_enqueue_with_no_env(
         curation_config_module, '_default_curation_config', cfg, raising=False
     )
     jobs_dir = Path(get_gpu_arbiter_config().bakeoff_jobs_dir)
-    assert jobs_dir == state / 'bakeoff_jobs'
-    clean_arbiter_env.setattr(bakeoff, 'JOBS_DIR', jobs_dir)
-    clean_arbiter_env.setattr(bakeoff, 'OUT_DIR', tmp_path / 'out')
+    assert jobs_dir == state / 'projects' / 'default' / 'bakeoff_jobs'
+    clean_arbiter_env.setattr(bakeoff, '_jobs_dir', lambda: jobs_dir)
+    clean_arbiter_env.setattr(bakeoff, '_out_dir', lambda: tmp_path / 'out')
     exports = tmp_path / 'exports'
     d = exports / 'e1'
     (d / 'labels' / 'test').mkdir(parents=True)
     (d / 'labels' / 'test' / 'a.txt').write_text('0 0.5 0.5 0.1 0.1\n')
     (d / 'data.yaml').write_text('names:\n  0: a\n')
     (d / 'manifest.json').write_text(json.dumps({}))
-    clean_arbiter_env.setattr(eval_datasets, 'EXPORT_ROOT', exports)
+    clean_arbiter_env.setattr(eval_datasets, 'export_root', lambda: exports)
     eval_datasets.clear_cache()
 
     class _Action:
@@ -372,13 +375,47 @@ def test_bakeoff_active_after_enqueue_with_no_env(
     clean_arbiter_env.setattr(gpu_arbiter, 'stop_gpu_services', _stop)
     assert gpu_arbiter.bakeoff_active() is False
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     r = TestClient(app).post(
-        '/curation/bakeoff/run',
+        '/curation/projects/default/bakeoff/run',
         json={
             'datasets': [{'id': 'export:e1'}],
             'models': [{'source': 'custom', 'name': 'c', 'backend': 'ultralytics'}],
         },
     )
     assert r.status_code == 200, r.text
+    assert gpu_arbiter.bakeoff_active() is True
+
+
+def test_bakeoff_active_scans_every_projects_own_queue(
+    tmp_path: Path, clean_arbiter_env: pytest.MonkeyPatch
+) -> None:
+    """A bake-off queued in a non-default project's own ``bakeoff_jobs_dir``
+    must keep the GPUs claimed -- the arbiter scans every project's queue
+    (``gpu_arbiter.all_bakeoff_jobs_dirs()``), not one flat dir."""
+    from dataclasses import replace
+
+    from src.config.curation import base_curation_config
+    from src.config.projects import new_project_record
+    from src.services.projects import registry as registry_mod
+
+    alpha = new_project_record('alpha', base_curation_config())
+    alpha = replace(
+        alpha,
+        resources=replace(alpha.resources, bakeoff_jobs_dir=tmp_path / 'alpha' / 'bakeoff_jobs'),
+    )
+
+    class _Snap:
+        def snapshot(self) -> dict[str, object]:
+            return {'alpha': alpha}
+
+    clean_arbiter_env.setattr(registry_mod, 'get_project_registry', lambda: _Snap())
+    dirs = gpu_arbiter.all_bakeoff_jobs_dirs()
+    assert tmp_path / 'alpha' / 'bakeoff_jobs' in dirs
+
+    assert gpu_arbiter.bakeoff_active() is False
+    alpha.resources.bakeoff_jobs_dir.mkdir(parents=True)
+    (alpha.resources.bakeoff_jobs_dir / 'x.job.json').write_text('{}')
     assert gpu_arbiter.bakeoff_active() is True

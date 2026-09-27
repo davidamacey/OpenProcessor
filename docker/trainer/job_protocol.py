@@ -102,6 +102,16 @@ class JobSpec:
     augmentation: dict[str, Any]
     mlflow_run_name: str
     submitted_at: str
+    # Project isolation (docs/design/openprocessor_internal/projects_plan.md
+    # §5.3). ``project`` names which project submitted the run;
+    # ``project_export_root`` gates ``dataset_export_dir`` -- a job whose
+    # export escapes its own project's export tree is refused rather than
+    # trained (see ``parse_and_validate_job``'s ``ExportOutsideProjectError``);
+    # ``mlflow_experiment`` is used instead of any env-var-only experiment
+    # name.
+    project: str | None = None
+    project_export_root: Path | None = None
+    mlflow_experiment: str | None = None
     # Campaign metadata. Only populated for jobs written by
     # ``POST {api_prefix}/train/start_campaign``.
     campaign_id: str | None = None
@@ -243,6 +253,23 @@ def _job_id_from_path(job_path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
+class JobValidationError(ValueError):
+    """Base class for job-file rejections that carry a stable error code
+    (written to ``status.json`` as ``error_code`` by :func:`reject_job`)."""
+
+    code: str = 'validation_failed'
+
+
+class ExportOutsideProjectError(JobValidationError):
+    """``dataset_export_dir`` is not a subpath of the job's own
+    ``project_export_root`` (docs/design/openprocessor_internal/
+    projects_plan.md §5.3) -- refused rather than trained, since it would
+    otherwise let one project's training run read another project's
+    dataset."""
+
+    code = 'export_outside_project'
+
+
 def parse_and_validate_job(job_path: Path) -> JobSpec:
     """Read ``job.json`` and reject obviously-broken submissions.
 
@@ -281,6 +308,19 @@ def parse_and_validate_job(job_path: Path) -> JobSpec:
     if not export_dir.is_dir():
         msg = f'dataset_export_dir does not exist: {export_dir}'
         raise ValueError(msg)
+
+    project = raw.get('project')
+    project_export_root_raw = raw.get('project_export_root')
+    project_export_root = Path(project_export_root_raw) if project_export_root_raw else None
+    if project_export_root is not None:
+        try:
+            export_dir.resolve().relative_to(project_export_root.resolve())
+        except ValueError as exc:
+            msg = (
+                f"dataset_export_dir {export_dir} is not under this job's "
+                f'project_export_root {project_export_root}'
+            )
+            raise ExportOutsideProjectError(msg) from exc
 
     include_classes = raw.get('include_classes')
     if include_classes is not None and (
@@ -329,6 +369,9 @@ def parse_and_validate_job(job_path: Path) -> JobSpec:
         auto_promote_best=bool(raw.get('auto_promote_best', False)),
         is_last_in_campaign=bool(raw.get('is_last_in_campaign', False)),
         auto_quantize_bakeoff=bool(raw.get('auto_quantize_bakeoff', False)),
+        project=str(project) if project else None,
+        project_export_root=project_export_root,
+        mlflow_experiment=raw.get('mlflow_experiment') or None,
         raw=raw,
     )
 
@@ -708,16 +751,24 @@ def _is_terminal(status_path: Path) -> bool:
 
 
 def list_pending_jobs(jobs_dir: Path) -> list[Path]:
-    """Find ``*.job.json`` files that haven't reached a terminal state.
+    """Find ``*.job.json`` files that haven't reached a terminal state,
+    across every project's own dir under ``<jobs_dir>/projects/<slug>``
+    (docs/design/openprocessor_internal/projects_plan.md §5.3;
+    P1R §6.1/D-A: ``default`` nests the same as every other project --
+    see ``src.config.projects.resources_for_new``). The top-level
+    ``jobs_dir`` glob is kept for a job file dropped directly there by
+    hand; nothing in this codebase writes one.
 
-    Sorted by mtime so older jobs run first (FIFO), matching the order the API
-    writes a campaign's runs in.
+    Sorted by mtime across every project's dir, so a project's job never
+    starves another's (still one run at a time, FIFO) -- matching the
+    order the API writes a campaign's runs in.
     """
     if not jobs_dir.is_dir():
         return []
+    candidates = list(jobs_dir.glob('*.job.json')) + list(jobs_dir.glob('projects/*/*.job.json'))
     return [
         p
-        for p in sorted(jobs_dir.glob('*.job.json'), key=lambda x: x.stat().st_mtime)
+        for p in sorted(candidates, key=lambda x: x.stat().st_mtime)
         if not _is_terminal(_status_path_for(p))
     ]
 
@@ -728,10 +779,12 @@ def reject_job(job_path: Path, exc: Exception) -> None:
     Without this the watcher would re-read the same broken file forever.
     """
     status_path = _status_path_for(job_path)
+    code = getattr(exc, 'code', 'validation_failed')
     payload = {
         'job_id': _job_id_from_path(job_path),
         'state': 'failed',
         'error': f'validation: {exc}',
+        'error_code': code,
         'finished_at': _utcnow_iso(),
         'heartbeat_at': _utcnow_iso(),
     }

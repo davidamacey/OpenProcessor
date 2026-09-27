@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import contextlib
 import json
-import os
 import re
 import shutil
 from pathlib import Path
@@ -169,16 +168,15 @@ def prune_exports_after_write(config: CurationConfig) -> None:
     """Synchronous keep-last prune, called after a successful export
     (``GenericYoloExportService.export_dataset``, via ``asyncio.to_thread``).
 
-    Resolves the job/bake-off job dirs itself so the caller only needs
-    ``CurationConfig``. A no-op when ``export_keep_last <= 0``.
+    Pins come from the bound project's own ``train_jobs_dir`` /
+    ``bakeoff_jobs_dir`` -- the only dirs its jobs are written to. A
+    no-op when ``export_keep_last <= 0``.
     """
-    from src.config import get_gpu_arbiter_config
-
     keep_last = config.export_keep_last
     if keep_last <= 0:
         return
-    jobs_dir = Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
-    bakeoff_jobs_dir = Path(get_gpu_arbiter_config().bakeoff_jobs_dir)
+    jobs_dir = Path(config.train_jobs_dir)
+    bakeoff_jobs_dir = Path(config.bakeoff_jobs_dir)
     pins = collect_export_pins(
         export_root=config.export_root, jobs_dir=jobs_dir, bakeoff_jobs_dir=bakeoff_jobs_dir
     )

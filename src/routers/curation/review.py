@@ -14,7 +14,6 @@ from fastapi import HTTPException, Path as PathParam, Query
 
 from src.config import get_region_fields
 from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
     OpenSearchDep,
     TestHoldoutFreezeRequest,
     TestHoldoutFreezeResponse,
@@ -23,6 +22,7 @@ from src.routers.curation._common import (
     get_class_registry,
     guard_page_depth,
     is_not_found,
+    items_index,
     logger,
     router,
 )
@@ -96,7 +96,7 @@ async def review_unmatched_terms(
         'track_total_hits': True,
     }
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
 
@@ -182,7 +182,7 @@ async def review_raw_label_clusters(
         },
     }
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
 
@@ -383,7 +383,7 @@ async def review_queue(
         '_source': {'excludes': item_list_source_excludes()},
     }
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
 
@@ -490,13 +490,13 @@ async def review_locate(
 
     async def _count(query: dict[str, Any]) -> int:
         try:
-            resp = await opensearch.count(index=CURATION_ITEMS_INDEX, body={'query': query})
+            resp = await opensearch.count(index=items_index(), body={'query': query})
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
         return int(resp.get('count', 0))
 
     try:
-        doc = await opensearch.get(index=CURATION_ITEMS_INDEX, id=crop_id)
+        doc = await opensearch.get(index=items_index(), id=crop_id)
     except Exception as exc:
         if is_not_found(exc):
             return {**out, 'reason': 'not_found'}
@@ -545,7 +545,7 @@ async def freeze_test_holdout(
     if not force:
         try:
             existing = await opensearch.count(
-                index=CURATION_ITEMS_INDEX,
+                index=items_index(),
                 body={'query': {'term': {'test_holdout': True}}},
             )
             if (existing or {}).get('count', 0) > 0:
@@ -560,7 +560,7 @@ async def freeze_test_holdout(
 
     cohort_query = build_cohort_query()
     try:
-        strata = await fetch_cohort_strata(opensearch, CURATION_ITEMS_INDEX, cohort_query)
+        strata = await fetch_cohort_strata(opensearch, items_index(), cohort_query)
     except HTTPException:
         raise
     except Exception as exc:
@@ -590,7 +590,7 @@ async def freeze_test_holdout(
     bulk: list[dict[str, Any]] = []
     now = _now_iso()
     for crop_id in chosen_ids:
-        bulk.append({'update': {'_index': CURATION_ITEMS_INDEX, '_id': crop_id}})
+        bulk.append({'update': {'_index': items_index(), '_id': crop_id}})
         bulk.append({'doc': {'test_holdout': True, 'updated_at': now}})
     try:
         await opensearch.bulk(body=bulk, refresh=True)
@@ -632,7 +632,7 @@ async def test_holdout_stats(opensearch: OpenSearchDep) -> dict[str, Any]:
         'track_total_hits': True,
     }
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)

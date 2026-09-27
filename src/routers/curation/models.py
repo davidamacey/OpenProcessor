@@ -1,4 +1,4 @@
-"""Curation /health + /models/status + /models/{name} (unload) endpoints.
+"""Curation /models/status + /models/{name} (unload) endpoints (``/health`` lives in ``health.py``).
 
 Drives the pipeline-model roster off generic config rather than any
 hardcoded, domain-specific model list:
@@ -16,27 +16,21 @@ import contextlib
 import json
 import os
 import re
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any
 
 import httpx
 from fastapi import HTTPException, Query
 from pydantic import BaseModel
 
 from src.clients.pe_encoder import PE_IMAGE_MODEL
+from src.config.curation import get_curation_config
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
-from src.core.dependencies import AsyncTritonDep  # noqa: TC001
-from src.routers.curation._common import (
-    CURATION_CLASSES_INDEX,
-    CURATION_IMAGES_INDEX,
-    CURATION_ITEMS_INDEX,
-    CURATION_LABELS_CONFIRMED_INDEX,
-    HealthResponse,
-    OpenSearchDep,
-    get_class_registry,
-    logger,
-    router,
+from src.routers.curation._common import logger, router
+from src.routers.curation._models_class_mapping import (
+    bound_registry,
+    discover_foreign_shared_models,
+    listing_fields,
 )
 from src.routers.curation._models_segmenter import build_segmenter_entry
 from src.routers.curation.vlm import _get_vlm_labeler
@@ -53,95 +47,6 @@ from src.services.training.triton_promote import (
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-
-@router.get('/health', response_model=HealthResponse)
-async def curation_health(
-    opensearch: OpenSearchDep,
-    triton_pool: AsyncTritonDep,
-) -> HealthResponse:
-    """Aggregated health: Triton + OpenSearch + VLM + registry mtime."""
-    triton_status: dict[str, Any] = {'reachable': False, 'detail': ''}
-    try:
-        # AsyncTritonDep is a single AsyncInferenceServerClient, not the pool.
-        # Both have is_server_live; fall back to is_server_ready.
-        if hasattr(triton_pool, 'is_server_live'):
-            ok = await triton_pool.is_server_live()
-        elif hasattr(triton_pool, 'health_check'):
-            ok = await triton_pool.health_check()
-        else:
-            ok = False
-        triton_status['reachable'] = bool(ok)
-    except Exception as exc:
-        triton_status['detail'] = str(exc)
-
-    # opensearch dep here is the project's wrapper. Reach the raw async client
-    # via attributes commonly exposed; fall back to assuming `opensearch` IS
-    # an AsyncOpenSearch.
-    raw_os = getattr(opensearch, 'client', None) or opensearch
-
-    os_status: dict[str, Any] = {'reachable': False, 'indexes': {}}
-    try:
-        for idx_name in (
-            CURATION_IMAGES_INDEX,
-            CURATION_ITEMS_INDEX,
-            CURATION_LABELS_CONFIRMED_INDEX,
-            CURATION_CLASSES_INDEX,
-        ):
-            os_status['indexes'][idx_name] = bool(await raw_os.indices.exists(index=idx_name))
-        os_status['reachable'] = True
-    except Exception as exc:
-        os_status['detail'] = str(exc)
-
-    vlm_status: dict[str, Any] = {'reachable': False}
-    try:
-        labeler = _get_vlm_labeler()
-        h = await labeler.health()
-        vlm_status['reachable'] = h.reachable
-        vlm_status['model'] = h.model
-        if h.last_error:
-            vlm_status['last_error'] = h.last_error
-    except Exception as exc:
-        vlm_status['detail'] = str(exc)
-
-    reg_path = get_class_registry().path
-    registry_status: dict[str, Any] = {
-        'path': str(reg_path),
-        'exists': reg_path.exists(),
-    }
-    if reg_path.exists():
-        try:
-            registry_status['mtime'] = datetime.fromtimestamp(
-                reg_path.stat().st_mtime, tz=UTC
-            ).isoformat()
-        except OSError as exc:
-            registry_status['detail'] = str(exc)
-
-    overall: Literal['ok', 'degraded', 'down']
-    if triton_status['reachable'] and os_status['reachable'] and registry_status.get('exists'):
-        overall = 'ok' if vlm_status['reachable'] else 'degraded'
-    elif os_status['reachable']:
-        overall = 'degraded'
-    else:
-        overall = 'down'
-
-    from src.services.curation.region_vocabulary import region_profile_summary
-    from src.services.detection.profile_registry import get_active_region_profile
-
-    active_profile = get_active_region_profile()
-    region_profile = region_profile_summary(active_profile) if active_profile is not None else None
-
-    from src.config import get_curation_config
-
-    return HealthResponse(
-        status=overall,
-        triton=triton_status,
-        opensearch=os_status,
-        vlm=vlm_status,
-        registry=registry_status,
-        region_profile=region_profile,
-        mlflow_public_url=get_curation_config().mlflow_public_url,
-    )
 
 
 def _core_models() -> tuple[tuple[str, str, str, str], ...]:
@@ -354,6 +259,13 @@ def _discover_promoted_models(
     for entry in entries:
         if not entry.is_dir() or entry.name in fixed_names:
             continue
+        # Project scoping (docs/design/openprocessor_internal/
+        # projects_plan.md §5.3, D1): the shared Triton repo holds every
+        # project's promoted models side by side. Only this project's own
+        # are listed here; another project's shared ones come from
+        # discover_foreign_shared_models, on request only.
+        if not _project_owns_model(entry.name):
+            continue
         promote_json = entry / 'promote.json'
         if not promote_json.is_file():
             continue
@@ -412,14 +324,21 @@ def _parse_triton_metrics(text: str) -> dict[str, dict[str, float]]:
 
 
 @router.get('/models/status')
-async def models_status() -> dict[str, Any]:
+async def models_status(
+    include_other_projects: Annotated[
+        bool,
+        Query(description="Also list other projects' promoted models their owners shared"),
+    ] = False,
+) -> dict[str, Any]:
     """Status + usage stats for the models that drive the curation labeling pipeline.
 
     Returns a single ``{"models": [...]}`` object describing each Triton model
     the labeler depends on, plus the external VLM and segmenter services.
     Each entry carries enough metadata for the labeler ``/models`` page to
     render a self-explanatory card without requiring access to
-    Triton/Prometheus directly.
+    Triton/Prometheus directly. Every Triton entry also carries
+    ``project``, ``shared`` and ``class_mapping`` (§5.5: its classes
+    matched by name onto this project's registry).
     """
     triton_http = resolve_triton_http_url()
     triton_metrics_url = os.environ.get('TRITON_METRICS_URL', 'http://triton-server:8002/metrics')
@@ -553,6 +472,18 @@ async def models_status() -> dict[str, Any]:
         )
         for promoted in _discover_promoted_models()
     )
+    if include_other_projects:
+        models.extend(
+            _build_triton_entry(
+                shared['name'],
+                f'{shared["name"]} (shared by {shared["project"]})',
+                f'Promoted in project {shared["project"]} and shared with other projects',
+                'Promoted checkpoint',
+                job_id=shared.get('job_id'),
+                promoted_at=shared.get('promoted_at'),
+            )
+            for shared in discover_foreign_shared_models()
+        )
 
     vlm_status: str = 'unavailable'
     vlm_error: str | None = None
@@ -586,6 +517,22 @@ async def models_status() -> dict[str, Any]:
         }
     )
 
+    # External services (segmenter, VLM) belong to no project and have no
+    # class list of their own.
+    registry = bound_registry()
+    for entry in models:
+        if entry['kind'] == 'triton':
+            entry.update(listing_fields(entry['name'], registry))
+        else:
+            entry.update(
+                {
+                    'project': None,
+                    'shared': False,
+                    'class_mapping': None,
+                    'owned': False,
+                    'sharing_revision': None,
+                }
+            )
     return {'models': models}
 
 
@@ -601,6 +548,50 @@ async def models_status() -> dict[str, Any]:
 # `_core_pipeline_models` are defined above, alongside `models_status`,
 # which surfaces the same flags per-model so the UI doesn't have to
 # re-derive them.)
+
+
+def _project_owns_model(model_name: str) -> bool:
+    """True if ``model_name`` (a ``triton_name``) belongs to the bound
+    project's namespace (docs/design/openprocessor_internal/projects_plan.md
+    §5.3/§5.5: ``triton_name = model_prefix + requested``).
+
+    ``default``'s ``model_prefix`` stays the empty string (the one
+    deliberate exception to "no default special case" -- every
+    pre-projects / core-pipeline model, never namespaced, keeps
+    resolving as default's own). A non-empty prefix owns exactly the
+    names it produces. A namespaced name (contains ``'__'``) that isn't
+    ours belongs to some other project -- registered or not, since only
+    a project's own non-empty prefix ever produces one. An *unprefixed*
+    name (no ``'__'`` at all) carries no project's namespace, so it is
+    owned by ``default`` alone.
+    """
+    from src.config.projects import DEFAULT_SLUG
+    from src.services.projects.registry import get_project_registry
+    from src.services.training.model_classes import model_owner_project
+
+    cfg = get_curation_config()
+    # promote.json names the owner outright; the prefix rule alone would
+    # hand `default` another project's model once that project is missing
+    # from the registry snapshot (deleted, or a stale snapshot).
+    recorded_owner = model_owner_project(model_name)
+    if recorded_owner is not None and recorded_owner != cfg.project_slug:
+        return False
+    own_prefix = cfg.model_prefix
+    if own_prefix:
+        return model_name.startswith(own_prefix)
+    other_prefixes = (
+        record.resources.model_prefix
+        for slug, record in get_project_registry().snapshot().items()
+        if slug != DEFAULT_SLUG and record.resources.model_prefix
+    )
+    return not any(model_name.startswith(prefix) for prefix in other_prefixes)
+
+
+# PUT /models/{model_name}/sharing lives in _models_sharing.py (kept
+# under the 700-LOC ratchet); imported for its route-registration
+# side effect and so `_project_owns_model` above stays this module's
+# single definition (that submodule imports it back from here).
+from src.routers.curation import _models_sharing  # noqa: E402,F401
 
 
 class UnloadModelResponse(BaseModel):
@@ -634,6 +625,12 @@ async def unload_model(
       loud explanation. Unloading any of them breaks live serving until
       something else is loaded.
     """
+    if not _project_owns_model(model_name):
+        raise HTTPException(
+            status_code=404,
+            detail=f'{model_name!r} is not a model owned by this project',
+        )
+
     if model_name in _external_service_model_names():
         raise HTTPException(
             status_code=400,

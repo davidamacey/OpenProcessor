@@ -14,7 +14,7 @@
 # Build:
 #   docker compose --profile curation build curation-evaluator
 #
-# Run on demand (watch mode, matches OP_BAKEOFF_JOBS_DIR in env.template):
+# Run on demand (watch mode; scans every projects/*/bakeoff_jobs under the state dir):
 #   docker compose --profile curation run --rm curation-evaluator
 # One-shot job:
 #   docker compose --profile curation run --rm curation-evaluator \
@@ -92,8 +92,8 @@ COPY --chown=appuser:appuser examples/ ./examples/
 
 USER appuser
 
-# Default job-watch directory — must match OP_BAKEOFF_JOBS_DIR
-# (env.template) when the compose service mounts a different path.
+# Watch root; the runner also scans the sibling projects/*/bakeoff_jobs
+# dirs the API enqueues into.
 ENV OP_BAKEOFF_JOBS_DIR=/var/lib/openprocessor/bakeoff_jobs
 HEALTHCHECK --interval=60s --timeout=10s --start-period=20s --retries=3 \
     CMD test -d "$OP_BAKEOFF_JOBS_DIR" || exit 1

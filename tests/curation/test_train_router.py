@@ -8,12 +8,16 @@ volume is required. Each test exercises a single endpoint.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 # =============================================================================
@@ -51,6 +55,9 @@ def app_client(
 ):
     """Build a minimal FastAPI app with just the train router."""
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
+    # P1R §6.1/D-A: project_jobs_dir() always nests /projects/<slug>,
+    # `default` (the project every unit test binds) included.
+    (tmp_path / 'projects' / 'default').mkdir(parents=True, exist_ok=True)
 
     # claim_gpus_for_training (called unconditionally by /start and
     # /start_campaign before job.json is written) writes a sentinel/lock
@@ -85,7 +92,9 @@ def app_client(
     from src.routers.curation_train import router as curation_train_router
 
     app = FastAPI()
-    app.include_router(curation_train_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_train_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
 
     with TestClient(app) as client:
@@ -97,13 +106,13 @@ def app_client(
 # =============================================================================
 
 
-def test_preflight_smoke(app_client: TestClient) -> None:
+def test_preflight_smoke(app_client: TestClient, project_export_root: Path) -> None:
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'model_size': 'm',
         'profile': 'medium',
     }
-    r = app_client.post('/curation/train/preflight', json=body)
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     assert 'blocked' in out
@@ -126,7 +135,7 @@ def test_preflight_smoke(app_client: TestClient) -> None:
     assert out['thresholds'] == dataset_thresholds()
 
     # P2-8: empty_labels/region_pairing used to be hardcoded 'ok' unconditionally
-    # -- never actually scanned. '/data/exports/x' doesn't exist on disk, so a
+    # -- never actually scanned. str(project_export_root / 'x') doesn't exist on disk, so a
     # real implementation MUST report 'unknown' here, never 'ok' (a lie: nothing
     # was checked).
     empty_labels_check = next(c for c in out['checks'] if c['name'] == 'empty_labels')
@@ -136,7 +145,7 @@ def test_preflight_smoke(app_client: TestClient) -> None:
 
 
 def test_preflight_blocks_when_trainer_unreachable(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch, project_export_root: Path
 ) -> None:
     """P1-8: before the fix, preflight had no trainer-reachable check at
     all, so submitting a job when the trainer container was never started queued
@@ -145,8 +154,8 @@ def test_preflight_blocks_when_trainer_unreachable(
         'src.routers.curation_train.probe_trainer_reachable',
         AsyncMock(return_value=('block', "'trainer' container does not exist")),
     )
-    body = {'dataset_export_dir': '/data/exports/x', 'profile': 'medium'}
-    r = app_client.post('/curation/train/preflight', json=body)
+    body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     trainer_check = next(c for c in out['checks'] if c['name'] == 'trainer_reachable')
@@ -155,14 +164,14 @@ def test_preflight_blocks_when_trainer_unreachable(
 
 
 def test_preflight_ok_when_trainer_reachable(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch, project_export_root: Path
 ) -> None:
     monkeypatch.setattr(
         'src.routers.curation_train.probe_trainer_reachable',
         AsyncMock(return_value=('ok', "'trainer' is running")),
     )
-    body = {'dataset_export_dir': '/data/exports/x', 'profile': 'medium'}
-    r = app_client.post('/curation/train/preflight', json=body)
+    body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     trainer_check = next(c for c in out['checks'] if c['name'] == 'trainer_reachable')
@@ -181,18 +190,18 @@ def _write_trainer_capabilities(jobs_dir: Any, gpu_order: list[int]) -> None:
 
 
 def test_preflight_blocks_gpu_the_trainer_is_not_attached_to(
-    app_client: TestClient, tmp_path: Any
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
 ) -> None:
     """A capabilities file naming [2] and a request for host GPU 0 must
     block -- the original TR-2 failure mode (API accepts a GPU the trainer
     isn't attached to, job hangs in queued/starting forever)."""
     _write_trainer_capabilities(tmp_path, [2])
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'profile': 'medium',
         'cuda_visible_devices': '0',
     }
-    r = app_client.post('/curation/train/preflight', json=body)
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     check = next(c for c in out['checks'] if c['name'] == 'trainer_gpus')
@@ -202,26 +211,28 @@ def test_preflight_blocks_gpu_the_trainer_is_not_attached_to(
 
 
 def test_preflight_ok_for_gpu_the_trainer_is_attached_to(
-    app_client: TestClient, tmp_path: Any
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
 ) -> None:
     _write_trainer_capabilities(tmp_path, [0, 2])
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'profile': 'medium',
         'cuda_visible_devices': '2',
     }
-    r = app_client.post('/curation/train/preflight', json=body)
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     check = next(c for c in out['checks'] if c['name'] == 'trainer_gpus')
     assert check['severity'] == 'ok'
 
 
-def test_preflight_warns_when_no_capabilities_file(app_client: TestClient) -> None:
+def test_preflight_warns_when_no_capabilities_file(
+    app_client: TestClient, project_export_root: Path
+) -> None:
     """No file (older trainer image, or not started yet) is a warning, not
     a block -- an absent file must never be read as 'attached to nothing'."""
-    body = {'dataset_export_dir': '/data/exports/x', 'profile': 'medium'}
-    r = app_client.post('/curation/train/preflight', json=body)
+    body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     check = next(c for c in out['checks'] if c['name'] == 'trainer_gpus')
@@ -229,17 +240,17 @@ def test_preflight_warns_when_no_capabilities_file(app_client: TestClient) -> No
 
 
 def test_preflight_ok_when_capabilities_file_reports_unrestricted(
-    app_client: TestClient, tmp_path: Any
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
 ) -> None:
     """An empty gpu_order means the trainer sees every GPU at its host
     index (OP_TRAIN_GPU_ORDER unset) -- no restriction, any id passes."""
     _write_trainer_capabilities(tmp_path, [])
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'profile': 'medium',
         'cuda_visible_devices': '5',
     }
-    r = app_client.post('/curation/train/preflight', json=body)
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     check = next(c for c in out['checks'] if c['name'] == 'trainer_gpus')
@@ -256,7 +267,7 @@ def test_train_gpus_intersects_with_trainer_capabilities(
 
     _set_arbiter_config(monkeypatch, GpuArbiterConfig())
     _write_trainer_capabilities(tmp_path, [2])
-    r = app_client.get('/curation/train/gpus')
+    r = app_client.get('/curation/projects/default/train/gpus')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['allowed_ids'] == [2]
@@ -265,15 +276,15 @@ def test_train_gpus_intersects_with_trainer_capabilities(
 
 
 def test_start_returns_422_when_trainer_unreachable(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch, project_export_root: Path
 ) -> None:
     """/start must refuse (not silently queue) when the trainer is down."""
     monkeypatch.setattr(
         'src.routers.curation_train.probe_trainer_reachable',
         AsyncMock(return_value=('block', "'trainer' container does not exist")),
     )
-    body = {'dataset_export_dir': '/data/exports/x', 'profile': 'medium'}
-    r = app_client.post('/curation/train/start', json=body)
+    body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
+    r = app_client.post('/curation/projects/default/train/start', json=body)
     assert r.status_code == 422, r.text
     detail = r.json()['detail']
     trainer_check = next(
@@ -282,13 +293,13 @@ def test_start_returns_422_when_trainer_unreachable(
     assert trainer_check['severity'] == 'block'
 
 
-def test_preflight_blocks_optimizer_auto(app_client: TestClient) -> None:
+def test_preflight_blocks_optimizer_auto(app_client: TestClient, project_export_root: Path) -> None:
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'profile': 'medium',
         'hyperparameters': {'optimizer': 'auto'},
     }
-    r = app_client.post('/curation/train/preflight', json=body)
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200
     out = r.json()
     optimizer_check = next(c for c in out['checks'] if c['name'] == 'optimizer_not_auto')
@@ -392,14 +403,14 @@ def test_training_volume_mount_sane_true_for_distinct_device(tmp_path: Any) -> N
 
 
 def test_preflight_blocks_when_mount_not_sane(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch, project_export_root: Path
 ) -> None:
     monkeypatch.setattr(
         'src.routers.curation_train._training_volume_mount_sane',
         lambda _path: False,
     )
-    body = {'dataset_export_dir': '/data/exports/x', 'profile': 'medium'}
-    r = app_client.post('/curation/train/preflight', json=body)
+    body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     disk_check = next(c for c in out['checks'] if c['name'] == 'free_disk')
@@ -409,15 +420,15 @@ def test_preflight_blocks_when_mount_not_sane(
 
 
 def test_preflight_reports_unknown_not_ok_when_disk_unreadable(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch, project_export_root: Path
 ) -> None:
     monkeypatch.setattr(
         'src.routers.curation_train._training_volume_mount_sane',
         lambda _path: True,
     )
     monkeypatch.setattr('src.routers.curation_train._free_gb', lambda _path: None)
-    body = {'dataset_export_dir': '/data/exports/x', 'profile': 'medium'}
-    r = app_client.post('/curation/train/preflight', json=body)
+    body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     disk_check = next(c for c in out['checks'] if c['name'] == 'free_disk')
@@ -457,11 +468,11 @@ def test_unresolvable_include_classes_no_export_id_map_flags_all(tmp_path: Any) 
 
 
 def test_preflight_blocks_unresolvable_include_classes(
-    app_client: TestClient, tmp_path: Any
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
 ) -> None:
     import json
 
-    export_dir = tmp_path / 'export'
+    export_dir = project_export_root / 'export'
     export_dir.mkdir()
     (export_dir / 'class_registry.json').write_text(json.dumps({'export_id_map': {'1': 0}}))
 
@@ -470,7 +481,7 @@ def test_preflight_blocks_unresolvable_include_classes(
         'profile': 'medium',
         'include_classes': [1, 999],
     }
-    r = app_client.post('/curation/train/preflight', json=body)
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     check = next(c for c in out['checks'] if c['name'] == 'include_classes_resolvable')
@@ -479,7 +490,9 @@ def test_preflight_blocks_unresolvable_include_classes(
     assert out['blocked'] is True
 
 
-def test_preflight_lpr_single_class_alias_is_retired(app_client: TestClient, tmp_path: Any) -> None:
+def test_preflight_lpr_single_class_alias_is_retired(
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
+) -> None:
     """The accepted alias 'lpr_single_class' for dataset_kind is
     dropped; only 'single_class' is recognized. A manifest carrying the
     retired alias must be treated as an ordinary multi-class export, so
@@ -487,7 +500,7 @@ def test_preflight_lpr_single_class_alias_is_retired(app_client: TestClient, tmp
     unresolvable class id) instead of being skipped."""
     import json
 
-    export_dir = tmp_path / 'export_lpr_legacy'
+    export_dir = project_export_root / 'export_lpr_legacy'
     export_dir.mkdir()
     (export_dir / 'manifest.json').write_text(
         json.dumps(
@@ -504,7 +517,7 @@ def test_preflight_lpr_single_class_alias_is_retired(app_client: TestClient, tmp
         'profile': 'medium',
         'include_classes': [999],
     }
-    r = app_client.post('/curation/train/preflight', json=body)
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     check = next(c for c in out['checks'] if c['name'] == 'include_classes_resolvable')
@@ -513,13 +526,13 @@ def test_preflight_lpr_single_class_alias_is_retired(app_client: TestClient, tmp
 
 
 def test_preflight_skips_include_classes_check_for_single_class(
-    app_client: TestClient, tmp_path: Any
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
 ) -> None:
     """Single-class jobs have no include_classes concept — the check must
     not even appear, per the existing dataset_kind branch."""
     import json
 
-    export_dir = tmp_path / 'export_single_class_no_include'
+    export_dir = project_export_root / 'export_single_class_no_include'
     export_dir.mkdir()
     (export_dir / 'manifest.json').write_text(
         json.dumps(
@@ -536,7 +549,7 @@ def test_preflight_skips_include_classes_check_for_single_class(
         'profile': 'medium',
         'include_classes': [999],  # would be unresolvable for a vehicle export
     }
-    r = app_client.post('/curation/train/preflight', json=body)
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     names = {c['name'] for c in out['checks']}
@@ -544,7 +557,7 @@ def test_preflight_skips_include_classes_check_for_single_class(
 
 
 def test_preflight_accepts_the_generic_single_class_dataset_kind(
-    app_client: TestClient, tmp_path: Any
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
 ) -> None:
     """A dataset built by ``POST /curation/export/single_class`` writes
     ``dataset_kind='single_class'``; preflight must take the manifest-driven
@@ -552,7 +565,7 @@ def test_preflight_accepts_the_generic_single_class_dataset_kind(
     a hardcoded vocabulary."""
     import json
 
-    export_dir = tmp_path / 'export_single_class'
+    export_dir = project_export_root / 'export_single_class'
     export_dir.mkdir()
     (export_dir / 'manifest.json').write_text(
         json.dumps(
@@ -566,7 +579,7 @@ def test_preflight_accepts_the_generic_single_class_dataset_kind(
     )
 
     body = {'dataset_export_dir': str(export_dir), 'profile': 'medium'}
-    r = app_client.post('/curation/train/preflight', json=body)
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
 
     assert r.status_code == 200, r.text
     out = r.json()
@@ -584,11 +597,11 @@ def test_preflight_accepts_the_generic_single_class_dataset_kind(
 
 
 def test_preflight_empty_labels_blocks_when_whole_export_is_empty(
-    app_client: TestClient, tmp_path: Any
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
 ) -> None:
     import json
 
-    export_dir = tmp_path / 'export'
+    export_dir = project_export_root / 'export'
     (export_dir / 'labels' / 'train').mkdir(parents=True)
     (export_dir / 'labels' / 'train' / 'a.txt').write_text('')
     (export_dir / 'class_registry.json').write_text(
@@ -597,7 +610,7 @@ def test_preflight_empty_labels_blocks_when_whole_export_is_empty(
     (export_dir / 'manifest.json').write_text(json.dumps({'dataset_kind': 'vehicle'}))
 
     body = {'dataset_export_dir': str(export_dir), 'profile': 'medium'}
-    r = app_client.post('/curation/train/preflight', json=body)
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     check = next(c for c in out['checks'] if c['name'] == 'empty_labels')
@@ -606,11 +619,11 @@ def test_preflight_empty_labels_blocks_when_whole_export_is_empty(
 
 
 def test_preflight_single_class_export_skips_scan_and_reports_not_applicable(
-    app_client: TestClient, tmp_path: Any
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
 ) -> None:
     import json
 
-    export_dir = tmp_path / 'export_single_class_scan_skip'
+    export_dir = project_export_root / 'export_single_class_scan_skip'
     export_dir.mkdir()
     (export_dir / 'manifest.json').write_text(
         json.dumps(
@@ -624,7 +637,7 @@ def test_preflight_single_class_export_skips_scan_and_reports_not_applicable(
     )
 
     body = {'dataset_export_dir': str(export_dir), 'profile': 'medium'}
-    r = app_client.post('/curation/train/preflight', json=body)
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     out = r.json()
     empty_check = next(c for c in out['checks'] if c['name'] == 'empty_labels')
@@ -640,9 +653,9 @@ def test_preflight_single_class_export_skips_scan_and_reports_not_applicable(
 # =============================================================================
 
 
-def test_start_writes_job(app_client: TestClient, tmp_path: Any) -> None:
+def test_start_writes_job(app_client: TestClient, tmp_path: Any, project_export_root: Path) -> None:
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'profile': 'medium',
     }
     with patch(
@@ -653,51 +666,52 @@ def test_start_writes_job(app_client: TestClient, tmp_path: Any) -> None:
             ).PreflightReport(blocked=False, checks=[], summary='ok')
         ),
     ):
-        r = app_client.post('/curation/train/start', json=body)
+        r = app_client.post('/curation/projects/default/train/start', json=body)
     assert r.status_code == 201, r.text
     out = r.json()
     assert out['job_id']
     # File was written
-    assert any(tmp_path.glob(f'{out["job_id"]}.job.json'))
+    assert any((tmp_path / 'projects' / 'default').glob(f'{out["job_id"]}.job.json'))
 
 
-def test_start_rejects_optimizer_auto(app_client: TestClient) -> None:
+def test_start_rejects_optimizer_auto(app_client: TestClient, project_export_root: Path) -> None:
     """The router relies on the preflight check, which the live impl runs."""
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'profile': 'medium',
         'hyperparameters': {'optimizer': 'auto'},
     }
-    r = app_client.post('/curation/train/start', json=body)
+    r = app_client.post('/curation/projects/default/train/start', json=body)
     assert r.status_code == 422, r.text
     detail = r.json()['detail']
     assert 'preflight' in detail
     assert detail['preflight']['blocked'] is True
 
 
-def test_start_with_force_bypasses_block(app_client: TestClient, tmp_path: Any) -> None:
+def test_start_with_force_bypasses_block(
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
+) -> None:
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'profile': 'medium',
         'hyperparameters': {'optimizer': 'auto'},
     }
-    r = app_client.post('/curation/train/start?force=true', json=body)
+    r = app_client.post('/curation/projects/default/train/start?force=true', json=body)
     # Even with force, optimizer=auto block path emits 422 only when not forced.
     # Here force=true allows past the blocked report. The route still writes.
     assert r.status_code == 201, r.text
     job_id = r.json()['job_id']
-    assert any(tmp_path.glob(f'{job_id}.job.json'))
+    assert any((tmp_path / 'projects' / 'default').glob(f'{job_id}.job.json'))
 
 
 def test_start_returns_409_when_active_run_exists(
-    app_client: TestClient,
-    tmp_path: Any,
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
 ) -> None:
     """Drop a status.json with state=running; /start should 409."""
     import json
     from datetime import UTC, datetime
 
-    (tmp_path / 'live.status.json').write_text(
+    (tmp_path / 'projects' / 'default' / 'live.status.json').write_text(
         json.dumps(
             {
                 'job_id': 'live',
@@ -707,17 +721,20 @@ def test_start_returns_409_when_active_run_exists(
         )
     )
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'profile': 'medium',
     }
-    r = app_client.post('/curation/train/start', json=body)
+    r = app_client.post('/curation/projects/default/train/start', json=body)
     assert r.status_code == 409, r.text
     detail = r.json()['detail']
     assert 'progress' in detail['message'].lower() or 'preflight' in detail
 
 
 def test_start_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
-    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient,
+    tmp_path: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    project_export_root: Path,
 ) -> None:
     """A claim that needs to stop a configured GPU-resident container
     (e.g. a large vLLM process sharing the requested GPU) must refuse
@@ -740,7 +757,7 @@ def test_start_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
     monkeypatch.setattr(_gpu_arbiter, '_docker_client', lambda: None)
 
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'profile': 'medium',
         'cuda_visible_devices': '0',
     }
@@ -752,15 +769,15 @@ def test_start_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
             ).PreflightReport(blocked=False, checks=[], summary='ok')
         ),
     ):
-        r = app_client.post('/curation/train/start', json=body)
+        r = app_client.post('/curation/projects/default/train/start', json=body)
 
     assert r.status_code == 409, r.text
     assert 'vlm-inference-container' in r.json()['detail']['message']
-    assert list(tmp_path.glob('*.job.json')) == []
+    assert list((tmp_path / 'projects' / 'default').glob('*.job.json')) == []
 
 
 def test_preflight_reports_blocking_gpu_arbiter_check_when_docker_unavailable(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch, project_export_root: Path
 ) -> None:
     """The gpu_arbiter preflight check must go 'block' whenever the claim
     would need to stop a container the docker SDK/socket can't reach --
@@ -781,11 +798,11 @@ def test_preflight_reports_blocking_gpu_arbiter_check_when_docker_unavailable(
     monkeypatch.setattr(_gpu_arbiter, '_docker_client', lambda: None)
 
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'profile': 'medium',
         'cuda_visible_devices': '0',
     }
-    r = app_client.post('/curation/train/preflight', json=body)
+    r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
     checks = {c['name']: c for c in r.json()['checks']}
     assert 'gpu_arbiter' in checks
@@ -799,7 +816,10 @@ def test_preflight_reports_blocking_gpu_arbiter_check_when_docker_unavailable(
 
 
 def test_start_campaign_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
-    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient,
+    tmp_path: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    project_export_root: Path,
 ) -> None:
     from src.config import GpuArbiterConfig
 
@@ -816,39 +836,43 @@ def test_start_campaign_refuses_with_409_when_gpu_stop_required_and_docker_unava
     monkeypatch.setattr(_gpu_arbiter, '_docker_client', lambda: None)
 
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'cuda_visible_devices': '0',
         'runs': [{'profile': 'nano', 'model_size': 'n'}],
     }
-    r = app_client.post('/curation/train/start_campaign?force=true', json=body)
+    r = app_client.post('/curation/projects/default/train/start_campaign?force=true', json=body)
 
     assert r.status_code == 409, r.text
     assert 'vlm-inference-container' in r.json()['detail']['message']
-    assert list(tmp_path.glob('*.job.json')) == []
+    assert list((tmp_path / 'projects' / 'default').glob('*.job.json')) == []
 
 
-def test_start_campaign_writes_n_jobs(app_client: TestClient, tmp_path: Any) -> None:
+def test_start_campaign_writes_n_jobs(
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
+) -> None:
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'runs': [
             {'profile': 'nano', 'model_size': 'n'},
             {'profile': 'medium', 'model_size': 'm'},
         ],
     }
-    r = app_client.post('/curation/train/start_campaign?force=true', json=body)
+    r = app_client.post('/curation/projects/default/train/start_campaign?force=true', json=body)
     assert r.status_code == 201, r.text
     out = r.json()
     assert len(out['job_ids']) == 2
     for jid in out['job_ids']:
-        assert any(tmp_path.glob(f'{jid}.job.json'))
+        assert any((tmp_path / 'projects' / 'default').glob(f'{jid}.job.json'))
 
 
-def test_start_campaign_rejects_empty_runs(app_client: TestClient) -> None:
+def test_start_campaign_rejects_empty_runs(
+    app_client: TestClient, project_export_root: Path
+) -> None:
     body = {
-        'dataset_export_dir': '/data/exports/x',
+        'dataset_export_dir': str(project_export_root / 'x'),
         'runs': [],
     }
-    r = app_client.post('/curation/train/start_campaign', json=body)
+    r = app_client.post('/curation/projects/default/train/start_campaign', json=body)
     assert r.status_code == 422  # Pydantic validation
 
 
@@ -858,13 +882,13 @@ def test_start_campaign_rejects_empty_runs(app_client: TestClient) -> None:
 
 
 def test_status_endpoint_returns_null_when_empty(app_client: TestClient) -> None:
-    r = app_client.get('/curation/train/status')
+    r = app_client.get('/curation/projects/default/train/status')
     assert r.status_code == 200
     assert r.json() is None
 
 
 def test_status_by_id_404(app_client: TestClient) -> None:
-    r = app_client.get('/curation/train/status/nope')
+    r = app_client.get('/curation/projects/default/train/status/nope')
     assert r.status_code == 404
 
 
@@ -872,7 +896,7 @@ def test_status_by_id_returns_status(app_client: TestClient, tmp_path: Any) -> N
     import json
     from datetime import UTC, datetime
 
-    (tmp_path / 'real.status.json').write_text(
+    (tmp_path / 'projects' / 'default' / 'real.status.json').write_text(
         json.dumps(
             {
                 'job_id': 'real',
@@ -881,7 +905,7 @@ def test_status_by_id_returns_status(app_client: TestClient, tmp_path: Any) -> N
             }
         )
     )
-    r = app_client.get('/curation/train/status/real')
+    r = app_client.get('/curation/projects/default/train/status/real')
     assert r.status_code == 200
     body = r.json()
     assert body['job_id'] == 'real'
@@ -889,7 +913,7 @@ def test_status_by_id_returns_status(app_client: TestClient, tmp_path: Any) -> N
 
 
 def test_status_by_id_invalid_id(app_client: TestClient) -> None:
-    r = app_client.get('/curation/train/status/..%2Fescape')
+    r = app_client.get('/curation/projects/default/train/status/..%2Fescape')
     # Path-param percent decoding is up to FastAPI; either 400 or 404 is fine.
     assert r.status_code in (400, 404)
 
@@ -900,7 +924,7 @@ def test_status_by_id_invalid_id(app_client: TestClient) -> None:
 
 
 def test_runs_list_empty(app_client: TestClient) -> None:
-    r = app_client.get('/curation/train/runs')
+    r = app_client.get('/curation/projects/default/train/runs')
     assert r.status_code == 200
     body = r.json()
     assert body['items'] == []
@@ -913,8 +937,8 @@ def test_runs_list_empty(app_client: TestClient) -> None:
 
 
 def test_log_tail_returns_lines(app_client: TestClient, tmp_path: Any) -> None:
-    (tmp_path / 'logj.run.log').write_text('a\nb\nc\nd\n')
-    r = app_client.get('/curation/train/log/tail/logj?lines=2')
+    (tmp_path / 'projects' / 'default' / 'logj.run.log').write_text('a\nb\nc\nd\n')
+    r = app_client.get('/curation/projects/default/train/log/tail/logj?lines=2')
     assert r.status_code == 200
     body = r.json()
     assert body['job_id'] == 'logj'
@@ -927,9 +951,9 @@ def test_log_tail_returns_lines(app_client: TestClient, tmp_path: Any) -> None:
 
 
 def test_cancel_writes_sentinel(app_client: TestClient, tmp_path: Any) -> None:
-    r = app_client.post('/curation/train/cancel/some_job')
+    r = app_client.post('/curation/projects/default/train/cancel/some_job')
     assert r.status_code == 200, r.text
-    assert (tmp_path / 'some_job.cancel').exists()
+    assert (tmp_path / 'projects' / 'default' / 'some_job.cancel').exists()
     assert r.json()['cancelled'] is True
 
 
@@ -939,10 +963,10 @@ def test_cancel_campaign(app_client: TestClient, tmp_path: Any) -> None:
 
     # Two jobs, both belonging to one campaign, one running, one queued.
     for jid in ('camp_run00', 'camp_run01'):
-        (tmp_path / f'{jid}.job.json').write_text(
+        (tmp_path / 'projects' / 'default' / f'{jid}.job.json').write_text(
             json.dumps({'job_id': jid, 'campaign_id': 'camp', 'dataset_export_dir': '/x'})
         )
-        (tmp_path / f'{jid}.status.json').write_text(
+        (tmp_path / 'projects' / 'default' / f'{jid}.status.json').write_text(
             json.dumps(
                 {
                     'job_id': jid,
@@ -952,11 +976,11 @@ def test_cancel_campaign(app_client: TestClient, tmp_path: Any) -> None:
                 }
             )
         )
-    r = app_client.post('/curation/train/cancel_campaign/camp')
+    r = app_client.post('/curation/projects/default/train/cancel_campaign/camp')
     assert r.status_code == 200, r.text
     assert r.json()['cancelled'] == 2
-    assert (tmp_path / 'camp_run00.cancel').exists()
-    assert (tmp_path / 'camp_run01.cancel').exists()
+    assert (tmp_path / 'projects' / 'default' / 'camp_run00.cancel').exists()
+    assert (tmp_path / 'projects' / 'default' / 'camp_run01.cancel').exists()
 
 
 # =============================================================================
@@ -965,7 +989,7 @@ def test_cancel_campaign(app_client: TestClient, tmp_path: Any) -> None:
 
 
 def test_profiles_endpoint(app_client: TestClient) -> None:
-    r = app_client.get('/curation/train/profiles')
+    r = app_client.get('/curation/projects/default/train/profiles')
     assert r.status_code == 200
     body = r.json()
     assert 'profiles' in body
@@ -976,7 +1000,7 @@ def test_profiles_endpoint(app_client: TestClient) -> None:
 
 
 def test_presets_endpoint(app_client: TestClient) -> None:
-    r = app_client.get('/curation/train/presets')
+    r = app_client.get('/curation/projects/default/train/presets')
     assert r.status_code == 200
     body = r.json()
     assert 'class_subset_presets' in body
@@ -1011,7 +1035,7 @@ def test_train_gpus_single_allowed_with_label_and_scoped_container(
             gpu_labels={0: 'RTX A6000', 1: 'RTX 3080 Ti', 2: 'RTX A6000'},
         ),
     )
-    r = app_client.get('/curation/train/gpus')
+    r = app_client.get('/curation/projects/default/train/gpus')
     assert r.status_code == 200
     body = r.json()
     assert body['allowed_ids'] == [2]
@@ -1038,7 +1062,7 @@ def test_train_gpus_multi_id_allowlist(
             gpu_labels={0: 'RTX A6000', 2: 'RTX A6000'},
         ),
     )
-    r = app_client.get('/curation/train/gpus')
+    r = app_client.get('/curation/projects/default/train/gpus')
     assert r.status_code == 200
     body = r.json()
     assert body['allowed_ids'] == [0, 2]
@@ -1064,7 +1088,7 @@ def test_train_gpus_unrestricted(app_client: TestClient, monkeypatch: pytest.Mon
     from src.config import GpuArbiterConfig
 
     _set_arbiter_config(monkeypatch, GpuArbiterConfig())
-    r = app_client.get('/curation/train/gpus')
+    r = app_client.get('/curation/projects/default/train/gpus')
     assert r.status_code == 200
     body = r.json()
     assert body['allowed_ids'] == []
@@ -1080,7 +1104,7 @@ def test_train_gpus_no_labels_falls_back_to_gpu_id(
     from src.config import GpuArbiterConfig
 
     _set_arbiter_config(monkeypatch, GpuArbiterConfig(allowed_gpu_ids=frozenset({3})))
-    r = app_client.get('/curation/train/gpus')
+    r = app_client.get('/curation/projects/default/train/gpus')
     body = r.json()
     assert body['options'][0]['label'] == 'GPU 3'
 
@@ -1099,7 +1123,7 @@ def test_train_gpus_mixed_labels_multi_option_lists_ids_only(
             gpu_labels={0: 'RTX A6000', 1: 'RTX 3080 Ti'},
         ),
     )
-    r = app_client.get('/curation/train/gpus')
+    r = app_client.get('/curation/projects/default/train/gpus')
     body = r.json()
     values = {o['value']: o for o in body['options']}
     assert values['0,1']['label'] == 'GPUs 0,1'
@@ -1193,7 +1217,7 @@ def test_promote_endpoint_returns_422_when_gate_fails(
     )
 
     r = app_client.post(
-        '/curation/train/promote/gate-fail-job',
+        '/curation/projects/default/train/promote/gate-fail-job',
         json={'triton_name': 'yolo26m_fail'},
     )
     assert r.status_code == 422, r.text
@@ -1227,7 +1251,7 @@ def test_promote_endpoint_job_not_ready_422_is_structured_and_force_disallowed(
     monkeypatch.setattr('src.services.training.jobs.read_status', _fake_read_status)
 
     r = app_client.post(
-        '/curation/train/promote/still-running-job',
+        '/curation/projects/default/train/promote/still-running-job',
         json={'triton_name': 'yolo26m_running', 'force': True},
     )
     assert r.status_code == 422, r.text
@@ -1238,27 +1262,27 @@ def test_promote_endpoint_job_not_ready_422_is_structured_and_force_disallowed(
 
 
 def test_manifest_endpoint_returns_404_when_absent(app_client: TestClient) -> None:
-    r = app_client.get('/curation/train/manifest/no-such-job')
+    r = app_client.get('/curation/projects/default/train/manifest/no-such-job')
     assert r.status_code == 404
 
 
 def test_manifest_endpoint_returns_payload_when_present(
-    app_client: TestClient, tmp_path: Any
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
 ) -> None:
     """The labeler reads the manifest verbatim; we return whatever JSON is on disk."""
     job_id = '20260509-test-job'
     payload = {
         'kind': 'train',
         'job_id': job_id,
-        'lineage': {'export_dir': '/data/exports/x', 'include_classes': [12, 81]},
+        'lineage': {'export_dir': str(project_export_root / 'x'), 'include_classes': [12, 81]},
         'results': {'eval': {'map50': 0.91}},
         'promoted_to': None,
     }
     import json
 
-    (tmp_path / f'{job_id}.manifest.json').write_text(json.dumps(payload))
+    (tmp_path / 'projects' / 'default' / f'{job_id}.manifest.json').write_text(json.dumps(payload))
 
-    r = app_client.get(f'/curation/train/manifest/{job_id}')
+    r = app_client.get(f'/curation/projects/default/train/manifest/{job_id}')
     assert r.status_code == 200, r.text
     out = r.json()
     assert out['kind'] == 'train'
@@ -1305,7 +1329,7 @@ def test_promote_endpoint_force_bypasses_gate(
     )
 
     r = app_client.post(
-        '/curation/train/promote/force-job',
+        '/curation/projects/default/train/promote/force-job',
         json={'triton_name': 'yolo26m_forced', 'force': True},
     )
     assert r.status_code == 200, r.text
@@ -1397,7 +1421,7 @@ def test_force_promote_returns_gate_report(
     )
 
     r = app_client.post(
-        '/curation/train/promote/force-report-job',
+        '/curation/projects/default/train/promote/force-report-job',
         json={'triton_name': 'yolo26m_forced_report', 'force': True},
     )
     assert r.status_code == 200, r.text
@@ -1418,7 +1442,7 @@ def test_force_promote_records_force_used_in_manifest(
     from src.services.training.jobs import TrainJobStatus
 
     job_id = 'force-manifest-job'
-    (tmp_path / f'{job_id}.manifest.json').write_text(
+    (tmp_path / 'projects' / 'default' / f'{job_id}.manifest.json').write_text(
         json.dumps({'kind': 'train', 'job_id': job_id, 'promoted_to': None})
     )
 
@@ -1450,13 +1474,15 @@ def test_force_promote_records_force_used_in_manifest(
     )
 
     r = app_client.post(
-        f'/curation/train/promote/{job_id}',
+        f'/curation/projects/default/train/promote/{job_id}',
         json={'triton_name': 'yolo26m_forced_manifest', 'force': True},
     )
     assert r.status_code == 200, r.text
     assert r.json()['lineage_stamped'] is True
 
-    manifest = json.loads((tmp_path / f'{job_id}.manifest.json').read_text())
+    manifest = json.loads(
+        (tmp_path / 'projects' / 'default' / f'{job_id}.manifest.json').read_text()
+    )
     promoted_to = manifest['promoted_to']
     assert promoted_to['force_used'] is True
     assert promoted_to['gate_report'] is not None
@@ -1529,7 +1555,7 @@ def test_stamp_failure_is_not_swallowed(
 
     with capture_logs() as cap:
         r = app_client.post(
-            f'/curation/train/promote/{job_id}',
+            f'/curation/projects/default/train/promote/{job_id}',
             json={'triton_name': 'yolo26m_stamp_fail'},
         )
 
@@ -1546,25 +1572,29 @@ def test_stamp_failure_is_not_swallowed(
 
 
 def test_preflight_warns_on_export_that_dropped_unregistered_class_ids(
-    app_client: TestClient, tmp_path: Any
+    app_client: TestClient, tmp_path: Any, project_export_root: Path
 ) -> None:
     import json as _json
 
-    export_dir = tmp_path / 'export_with_ghosts'
+    export_dir = project_export_root / 'export_with_ghosts'
     export_dir.mkdir()
     (export_dir / 'manifest.json').write_text(
         _json.dumps({'dropped_unregistered_class_ids': {'10000': 2}})
     )
-    r = app_client.post('/curation/train/preflight', json={'dataset_export_dir': str(export_dir)})
+    r = app_client.post(
+        '/curation/projects/default/train/preflight', json={'dataset_export_dir': str(export_dir)}
+    )
     assert r.status_code == 200, r.text
     check = next(c for c in r.json()['checks'] if c['name'] == 'unregistered_class_ids')
     assert check['severity'] == 'warn'
     assert check['detail'] == {'dropped_unregistered_class_ids': {'10000': 2}}
 
-    clean = tmp_path / 'clean_export'
+    clean = project_export_root / 'clean_export'
     clean.mkdir()
     (clean / 'manifest.json').write_text(_json.dumps({'dropped_unregistered_class_ids': {}}))
-    r = app_client.post('/curation/train/preflight', json={'dataset_export_dir': str(clean)})
+    r = app_client.post(
+        '/curation/projects/default/train/preflight', json={'dataset_export_dir': str(clean)}
+    )
     check = next(c for c in r.json()['checks'] if c['name'] == 'unregistered_class_ids')
     assert check['severity'] == 'ok'
 
@@ -1578,7 +1608,7 @@ def test_get_run_artifact_serves_whitelisted_file(app_client: TestClient, tmp_pa
     run_dir = tmp_path / 'runs' / 'artjob'
     run_dir.mkdir(parents=True)
     (run_dir / 'confusion_matrix.png').write_bytes(b'\x89PNG-fake-bytes')
-    (tmp_path / 'artjob.status.json').write_text(
+    (tmp_path / 'projects' / 'default' / 'artjob.status.json').write_text(
         json.dumps(
             {
                 'job_id': 'artjob',
@@ -1588,7 +1618,7 @@ def test_get_run_artifact_serves_whitelisted_file(app_client: TestClient, tmp_pa
         )
     )
 
-    r = app_client.get('/curation/train/artifacts/artjob/confusion_matrix.png')
+    r = app_client.get('/curation/projects/default/train/artifacts/artjob/confusion_matrix.png')
 
     assert r.status_code == 200, r.text
     assert r.content == b'\x89PNG-fake-bytes'
@@ -1601,24 +1631,28 @@ def test_get_run_artifact_404_for_non_whitelisted_name(
     run_dir = tmp_path / 'runs' / 'artjob2'
     run_dir.mkdir(parents=True)
     (run_dir / 'best.pt').write_bytes(b'weights')
-    (tmp_path / 'artjob2.status.json').write_text(
+    (tmp_path / 'projects' / 'default' / 'artjob2.status.json').write_text(
         json.dumps(
             {'job_id': 'artjob2', 'state': 'finished', 'checkpoint_path': str(run_dir / 'best.pt')}
         )
     )
 
-    r = app_client.get('/curation/train/artifacts/artjob2/best.pt')
+    r = app_client.get('/curation/projects/default/train/artifacts/artjob2/best.pt')
 
     assert r.status_code == 404
 
 
 def test_get_run_artifact_404_for_unknown_job(app_client: TestClient) -> None:
-    r = app_client.get('/curation/train/artifacts/does_not_exist/confusion_matrix.png')
+    r = app_client.get(
+        '/curation/projects/default/train/artifacts/does_not_exist/confusion_matrix.png'
+    )
     assert r.status_code == 404
 
 
 def test_get_run_artifact_400_for_invalid_job_id(app_client: TestClient) -> None:
-    r = app_client.get('/curation/train/artifacts/..%2Fescape/confusion_matrix.png')
+    r = app_client.get(
+        '/curation/projects/default/train/artifacts/..%2Fescape/confusion_matrix.png'
+    )
     # Percent-decoding of the path param is up to FastAPI/Starlette; either
     # a 400 (our validation) or 404 (routing never matched) is acceptable,
     # matching the existing /status/{job_id} traversal test's tolerance.
@@ -1630,7 +1664,7 @@ def test_get_run_artifact_404_when_file_never_written(
 ) -> None:
     run_dir = tmp_path / 'runs' / 'artjob3'
     run_dir.mkdir(parents=True)
-    (tmp_path / 'artjob3.status.json').write_text(
+    (tmp_path / 'projects' / 'default' / 'artjob3.status.json').write_text(
         json.dumps(
             {
                 'job_id': 'artjob3',
@@ -1640,7 +1674,7 @@ def test_get_run_artifact_404_when_file_never_written(
         )
     )
 
-    r = app_client.get('/curation/train/artifacts/artjob3/confusion_matrix.png')
+    r = app_client.get('/curation/projects/default/train/artifacts/artjob3/confusion_matrix.png')
 
     assert r.status_code == 404
 
@@ -1650,7 +1684,7 @@ def test_status_eval_never_carries_a_filesystem_path(app_client: TestClient, tmp
     artifact-route URL (or null)."""
     run_dir = tmp_path / 'runs' / 'pathcheck'
     run_dir.mkdir(parents=True)
-    (tmp_path / 'pathcheck.status.json').write_text(
+    (tmp_path / 'projects' / 'default' / 'pathcheck.status.json').write_text(
         json.dumps(
             {
                 'job_id': 'pathcheck',
@@ -1664,7 +1698,7 @@ def test_status_eval_never_carries_a_filesystem_path(app_client: TestClient, tmp
         )
     )
 
-    r = app_client.get('/curation/train/status/pathcheck')
+    r = app_client.get('/curation/projects/default/train/status/pathcheck')
 
     assert r.status_code == 200, r.text
     body = r.json()
@@ -1672,7 +1706,7 @@ def test_status_eval_never_carries_a_filesystem_path(app_client: TestClient, tmp
     assert str(tmp_path) not in json.dumps(body)
     assert (
         body['eval']['confusion_matrix_url']
-        == '/curation/train/artifacts/pathcheck/confusion_matrix.png'
+        == '/curation/projects/default/train/artifacts/pathcheck/confusion_matrix.png'
     )
 
 
@@ -1692,7 +1726,7 @@ def test_reload_promoted_route_returns_the_result_shape(
     )
     monkeypatch.setattr('src.services.training.triton_promote.reload_promoted_models', fake_reload)
 
-    r = app_client.post('/curation/train/reload_promoted')
+    r = app_client.post('/curation/projects/default/train/reload_promoted')
 
     assert r.status_code == 200, r.text
     body = r.json()
@@ -1706,7 +1740,7 @@ def test_reload_promoted_route_defaults_to_empty_lists(
     fake_reload = AsyncMock(return_value={'status': 'ok'})
     monkeypatch.setattr('src.services.training.triton_promote.reload_promoted_models', fake_reload)
 
-    r = app_client.post('/curation/train/reload_promoted')
+    r = app_client.post('/curation/projects/default/train/reload_promoted')
 
     assert r.status_code == 200, r.text
     assert r.json() == {'status': 'ok', 'reloaded': [], 'failed': []}
@@ -1718,14 +1752,17 @@ def test_reload_promoted_route_defaults_to_empty_lists(
 
 
 def test_preflight_defaults_to_the_current_export_when_omitted(
-    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient,
+    tmp_path: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    project_export_root: Path,
 ) -> None:
-    current = tmp_path / 'exports' / '20260925T000000Z'
+    current = project_export_root / '20260925T000000Z'
     current.mkdir(parents=True)
     monkeypatch.setattr('src.services.curation.export.resolve_current_export_dir', lambda: current)
 
     r = app_client.post(
-        '/curation/train/preflight',
+        '/curation/projects/default/train/preflight',
         json={'model_size': 'm', 'profile': 'medium'},
     )
 
@@ -1746,7 +1783,7 @@ def test_preflight_reports_a_clear_block_when_no_export_exists_at_all(
     monkeypatch.setattr('src.services.curation.export.resolve_current_export_dir', _raise)
 
     r = app_client.post(
-        '/curation/train/preflight',
+        '/curation/projects/default/train/preflight',
         json={'model_size': 'm', 'profile': 'medium'},
     )
 
@@ -1759,11 +1796,11 @@ def test_preflight_reports_a_clear_block_when_no_export_exists_at_all(
 
 
 def test_preflight_still_honors_an_explicit_dataset_export_dir(
-    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch, project_export_root: Path
 ) -> None:
     """An explicit dataset_export_dir must win over the current-export
     default -- resolve_current_export_dir must not even be consulted."""
-    explicit = tmp_path / 'explicit_export'
+    explicit = project_export_root / 'explicit_export'
     explicit.mkdir()
 
     def _boom() -> Any:
@@ -1773,7 +1810,7 @@ def test_preflight_still_honors_an_explicit_dataset_export_dir(
     monkeypatch.setattr('src.services.curation.export.resolve_current_export_dir', _boom)
 
     r = app_client.post(
-        '/curation/train/preflight',
+        '/curation/projects/default/train/preflight',
         json={'dataset_export_dir': str(explicit), 'model_size': 'm', 'profile': 'medium'},
     )
 

@@ -36,7 +36,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -44,13 +44,18 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from opensearchpy import AsyncOpenSearch
 
 from scripts.curation.worker.state import _crop_jpeg_from_disk
 from src.clients.pe_encoder import PEEncoder
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_curation_config, get_region_fields
 from src.services.detection.region_embed import embed_region_crops
+from src.services.projects.guard import make_script_opensearch
+from src.services.projects.script_binding import add_project_argument, bind_script_project
+
+
+if TYPE_CHECKING:
+    from opensearchpy import AsyncOpenSearch
 
 
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
@@ -113,7 +118,7 @@ async def _run(
 ) -> int:
     F = get_region_fields()
     cfg = get_curation_config()
-    client = AsyncOpenSearch(hosts=[opensearch_url], use_ssl=False, timeout=300)
+    client = make_script_opensearch([opensearch_url], use_ssl=False, timeout=300)
     try:
         hits = await _scroll_candidates(client, cfg.items_index, max_docs=max_docs)
         print(f'\n{len(hits):,} items have a region box but no {F.embedding!r}.\n')
@@ -186,7 +191,9 @@ def main() -> int:
     p.add_argument('--triton-url', default=DEFAULT_TRITON)
     p.add_argument('--apply', action='store_true', help='Write embeddings (default: dry-run).')
     p.add_argument('--max-docs', type=int, default=None, help='Cap the cohort (testing).')
+    add_project_argument(p)
     args = p.parse_args()
+    bind_script_project(args.project, opensearch_url=args.opensearch_url)
     return asyncio.run(
         _run(args.opensearch_url, args.triton_url, apply=args.apply, max_docs=args.max_docs)
     )

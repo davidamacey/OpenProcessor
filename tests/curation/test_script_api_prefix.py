@@ -55,6 +55,8 @@ class _RecordingClient:
         self.urls.append(url)
 
         class _Resp:
+            status_code = 200
+
             def raise_for_status(self) -> None:
                 return None
 
@@ -64,40 +66,99 @@ class _RecordingClient:
         return _Resp()
 
 
-_ENV_READING_MODULES = ('scripts.curation.vlm_worker', 'scripts.curation.cluster_refresh_daemon')
+# vlm_worker.py/cluster_refresh_daemon.py no longer read OP_API_PREFIX
+# directly -- the caller resolves the prefix (from get_curation_config()
+# while a project is bound) and passes it in explicitly per project, so
+# these now exercise that explicit-prefix contract directly instead of
+# monkeypatching the env and reloading the module.
 
 
 @pytest.fixture
-def custom_prefix() -> Any:
-    """OP_API_PREFIX=/custom-mount for the test, then the env-reading
-    modules are reloaded with the real env so no other test inherits the
-    custom module-level prefix."""
-    mp = pytest.MonkeyPatch()
-    mp.setenv('OP_API_PREFIX', '/custom-mount')
-    yield '/custom-mount'
-    mp.undo()
-    for name in _ENV_READING_MODULES:
-        importlib.reload(importlib.import_module(name))
+def custom_prefix(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """OP_API_PREFIX=/custom-mount, and a fresh env-built base config."""
+    import src.config.curation as curation_config_mod
+
+    monkeypatch.setenv('OP_API_PREFIX', '/custom-mount')
+    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
+    return '/custom-mount'
 
 
+@pytest.fixture
+def beta_bound() -> Any:
+    """A process-wide bind to project ``beta`` -- what bulk_writer's
+    background publisher runs under (script/worker entry point, not a
+    request)."""
+    from datetime import UTC, datetime
+
+    from src.config.curation import base_curation_config
+    from src.config.project_context import bind_process_project
+    from src.config.projects import ProjectRecord, resources_for_new
+
+    now = datetime.now(UTC).isoformat()
+    record = ProjectRecord(
+        slug='beta',
+        display_name='Beta',
+        description='',
+        status='active',
+        revision=1,
+        created_at=now,
+        updated_at=now,
+        origin=None,
+        resources=resources_for_new('beta', base_curation_config()),
+    )
+    bind_process_project(record)
+    yield record
+    bind_process_project(None)
+
+
+@pytest.mark.unbound
 @pytest.mark.asyncio
-async def test_vlm_worker_uses_configured_prefix(custom_prefix: str) -> None:
-    mod = importlib.reload(importlib.import_module('scripts.curation.vlm_worker'))
+async def test_vlm_worker_uses_configured_prefix() -> None:
+    mod = importlib.import_module('scripts.curation.vlm_worker')
     client = _RecordingClient()
-    await mod.label_batch(client, api='http://api', crop_ids=['c1'])  # type: ignore[arg-type]
-    assert client.urls == [f'http://api{custom_prefix}/vlm/label_batch']
+    await mod.label_batch(
+        client, api='http://api', api_prefix='/custom-mount', slug='alpha', crop_ids=['c1']
+    )
+    assert client.urls == ['http://api/custom-mount/projects/alpha/vlm/label_batch']
 
 
+@pytest.mark.unbound
 @pytest.mark.asyncio
-async def test_cluster_refresh_daemon_uses_configured_prefix(custom_prefix: str) -> None:
-    mod = importlib.reload(importlib.import_module('scripts.curation.cluster_refresh_daemon'))
+async def test_cluster_refresh_daemon_uses_configured_prefix() -> None:
+    mod = importlib.import_module('scripts.curation.cluster_refresh_daemon')
     client = _RecordingClient()
-    await mod._trigger_auto_promote(client, 'http://api')  # type: ignore[arg-type]
-    await mod._trigger_auto_label(client, 'http://api')  # type: ignore[arg-type]
+    await mod._trigger_auto_promote(client, 'http://api', '/custom-mount', 'alpha')
+    await mod._trigger_auto_label(client, 'http://api', '/custom-mount', 'alpha')
     assert client.urls == [
-        f'http://api{custom_prefix}/clusters/auto_promote',
-        f'http://api{custom_prefix}/pipeline/auto_label',
+        'http://api/custom-mount/projects/alpha/clusters/auto_promote',
+        'http://api/custom-mount/projects/alpha/pipeline/auto_label',
     ]
+
+
+@pytest.mark.unbound
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('reference_region_profile')
+async def test_worker_event_publisher_posts_to_the_bound_project(
+    monkeypatch: pytest.MonkeyPatch, custom_prefix: str, beta_bound: Any
+) -> None:
+    """The detection worker's region events go to its own project's
+    ``/events/publish``, never an unscoped path."""
+    from scripts.curation.worker import bulk_writer
+
+    posted: list[str] = []
+
+    class _Client:
+        async def post(self, url: str, **_: Any) -> None:
+            posted.append(url)
+
+    class _Task:
+        crop_id = 'beta-item-1'
+        update_doc = {bulk_writer.get_region_fields().status: 'detected'}
+
+    monkeypatch.setattr(bulk_writer, '_EVENT_API_URL', 'http://api')
+    monkeypatch.setattr(bulk_writer, '_EVENT_CLIENT', _Client())
+    await bulk_writer._publish_region_events([_Task()])  # type: ignore[list-item]
+    assert posted == [f'http://api{custom_prefix}/projects/beta/events/publish']
 
 
 class _Cfg:
@@ -124,12 +185,14 @@ def test_ingest_walker_default_api_base_follows_prefix(monkeypatch: pytest.Monke
     mod = importlib.import_module('scripts.curation.ingest_walker')
     monkeypatch.setattr(mod, 'get_curation_config', lambda: _Cfg())
     monkeypatch.setattr('sys.argv', ['ingest_walker', '--root', '/tmp'])
+    monkeypatch.delenv('OP_CURATION_PROJECT', raising=False)
     seen: dict[str, Any] = {}
 
     def _fake_run(**kwargs: Any) -> None:
         seen.update(kwargs)
 
     monkeypatch.setattr(mod, 'run', _fake_run)
+    monkeypatch.setattr(mod, 'bind_script_project', lambda _slug: None)
     monkeypatch.setattr(mod.asyncio, 'run', lambda _coro: None)
     mod.main()
-    assert seen['api_base'] == 'http://localhost:4603/custom-mount'
+    assert seen['api_base'] == 'http://localhost:4603/custom-mount/projects/default'

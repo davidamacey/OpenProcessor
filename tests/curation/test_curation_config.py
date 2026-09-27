@@ -12,13 +12,16 @@ import pytest
 from src.config import CurationConfig, IndexRole, index_name
 
 
-def test_defaults_are_generic_op_names() -> None:
+def test_defaults_are_the_default_projects_names() -> None:
+    """A bare ``CurationConfig`` carries the same names ``default`` is
+    bootstrapped with (``resources_for_new('default', ...)``)."""
+    from src.config.projects import resources_for_new
+
     cfg = CurationConfig()
-    assert cfg.images_index == 'op_images'
-    assert cfg.items_index == 'op_items'
-    assert cfg.labels_confirmed_index == 'op_labels_confirmed'
-    assert cfg.classes_index == 'op_classes'
-    assert cfg.clusters_index == 'op_clusters'
+    expected = resources_for_new('default', cfg)
+    for role in IndexRole:
+        assert index_name(cfg, role) == expected.indexes[role]
+    assert cfg.items_index == 'op_prj_default__items'
     assert cfg.api_prefix == '/curation'
     assert cfg.api_tag == 'Curation'
 
@@ -32,11 +35,14 @@ def test_defaults_use_path_types() -> None:
     assert isinstance(cfg.bakeoff_eval_root, Path)
 
 
-def test_bakeoff_eval_root_default_is_relative_not_a_private_path() -> None:
+def test_bakeoff_eval_root_default_is_relative_not_a_private_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The bake-off harness used to default to owner-private
     absolute paths (one of which named a licensed proprietary image
     corpus). The default must be a repo-relative path, never an
     absolute filesystem path baked into the source."""
+    monkeypatch.delenv('OP_PROJECTS_DATA_ROOT', raising=False)
     cfg = CurationConfig()
     assert not cfg.bakeoff_eval_root.is_absolute()
 
@@ -65,25 +71,37 @@ def test_index_name_resolves_each_role() -> None:
 
 
 def test_from_env_overrides_only_set_vars(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('OP_ITEMS_INDEX', 'env_items')
     monkeypatch.setenv('OP_API_PREFIX', '/curate')
     cfg = CurationConfig.from_env()
-    assert cfg.items_index == 'env_items'
     assert cfg.api_prefix == '/curate'
     # Unset vars fall back to the dataclass default.
-    assert cfg.images_index == 'op_images'
+    assert cfg.api_tag == 'Curation'
 
 
 def test_from_env_respects_custom_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('MYAPP_CLASSES_INDEX', 'app_classes')
+    monkeypatch.setenv('MYAPP_API_TAG', 'App')
     cfg = CurationConfig.from_env(prefix='MYAPP_')
-    assert cfg.classes_index == 'app_classes'
+    assert cfg.api_tag == 'App'
 
 
-def test_from_env_overrides_bakeoff_eval_root(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('OP_BAKEOFF_EVAL_ROOT', '/tmp/my_bakeoff_eval')
-    cfg = CurationConfig.from_env()
-    assert cfg.bakeoff_eval_root == Path('/tmp/my_bakeoff_eval')
+@pytest.mark.parametrize(
+    ('var', 'field'),
+    [
+        ('OP_ITEMS_INDEX', 'items_index'),
+        ('OP_CLASSES_INDEX', 'classes_index'),
+        ('OP_REGISTRY_PATH', 'class_registry_path'),
+        ('OP_EXPORT_ROOT', 'export_root'),
+        ('OP_UPLOAD_ROOT', 'upload_root'),
+        ('OP_BAKEOFF_EVAL_ROOT', 'bakeoff_eval_root'),
+    ],
+)
+def test_no_env_var_configures_a_project_resource(
+    monkeypatch: pytest.MonkeyPatch, var: str, field: str
+) -> None:
+    """Index names and per-project paths come only from the project
+    record; the retired env vars are ignored."""
+    monkeypatch.setenv(var, '/tmp/retired-value')
+    assert str(getattr(CurationConfig.from_env(), field)) != '/tmp/retired-value'
 
 
 def test_prompt_pack_path_defaults_to_none() -> None:

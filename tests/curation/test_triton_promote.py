@@ -293,6 +293,33 @@ async def test_promote_writes_job_id_backpointer_and_version(
 
 
 @pytest.mark.asyncio
+async def test_re_promote_carries_sharing_and_its_revision_forward(
+    fake_status: TrainJobStatus,
+    scratch_models_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A re-promote rewrites promote.json. It must keep the owner's
+    ``shared`` opt-in AND its ``sharing_revision``: resetting the revision
+    would 409 a client that still holds the current one."""
+    monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=True))
+    promoter = _promoter(scratch_models_dir)
+    triton_name = 'op_smoke_v1'
+    await promoter.promote(status=fake_status, triton_name=triton_name, class_id_to_name=CLASS_MAP)
+    path = scratch_models_dir / triton_name / 'promote.json'
+    first = json.loads(path.read_text())
+    path.write_text(json.dumps({**first, 'shared': True, 'sharing_revision': 5}))
+
+    await promoter.promote(
+        status=fake_status, triton_name=triton_name, class_id_to_name=CLASS_MAP, overwrite=True
+    )
+
+    second = json.loads(path.read_text())
+    assert second['version'] == '2'
+    assert second['shared'] is True
+    assert second['sharing_revision'] == 5
+
+
+@pytest.mark.asyncio
 async def test_promote_backpointer_written_even_when_triton_load_times_out(
     fake_status: TrainJobStatus,
     scratch_models_dir: Path,

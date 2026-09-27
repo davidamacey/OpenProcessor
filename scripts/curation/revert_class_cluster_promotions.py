@@ -43,7 +43,7 @@ import os
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -51,12 +51,17 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from opensearchpy import AsyncOpenSearch
 
 from src.clients.occ import is_human_owned_class, occ_skip_on_conflict_bulk
+from src.config.curation import items_index
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
-from src.services.curation.clustering.orchestrator import ITEMS_INDEX
 from src.services.curation.ingest_class_sources import CLUSTER_MAJORITY_CLASS_SOURCE
+from src.services.projects.guard import make_script_opensearch
+from src.services.projects.script_binding import add_project_argument, bind_script_project
+
+
+if TYPE_CHECKING:
+    from opensearchpy import AsyncOpenSearch
 
 
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
@@ -131,9 +136,9 @@ async def _scroll_candidates(client: AsyncOpenSearch, index: str) -> list[dict[s
 
 
 async def _run(opensearch_url: str, *, apply: bool) -> int:
-    client = AsyncOpenSearch(hosts=[opensearch_url], use_ssl=False, timeout=300)
+    client = make_script_opensearch([opensearch_url], use_ssl=False, timeout=300)
     try:
-        hits = await _scroll_candidates(client, ITEMS_INDEX)
+        hits = await _scroll_candidates(client, items_index())
         eligible: dict[str, dict[str, Any]] = {}
         for h in hits:
             source = h.get('_source') or {}
@@ -182,7 +187,7 @@ async def _run(opensearch_url: str, *, apply: bool) -> int:
             client,
             doc_ids=list(eligible.keys()),
             merger=_merge_revert,
-            index=ITEMS_INDEX,
+            index=items_index(),
             refresh=True,
             writer_id='revert_class_cluster_promotions',
         )
@@ -202,7 +207,9 @@ def main() -> int:
     )
     p.add_argument('--opensearch-url', default=DEFAULT_OPENSEARCH)
     p.add_argument('--apply', action='store_true', help='Write reverts (default: dry-run).')
+    add_project_argument(p)
     args = p.parse_args()
+    bind_script_project(args.project, opensearch_url=args.opensearch_url)
     return asyncio.run(_run(args.opensearch_url, apply=args.apply))
 
 

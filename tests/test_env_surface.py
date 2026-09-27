@@ -116,7 +116,7 @@ def _from_env_derived_vars() -> set[str]:
     for f in fields(BakeoffProfile):
         derived.add(f'OP_BAKEOFF_PROFILE_{f.name.upper()}')
     # CurationConfig.from_env uses manual per-field keys (not always the
-    # field name uppercased, e.g. class_registry_path -> OP_REGISTRY_PATH)
+    # field name uppercased, e.g. source_path_aliases -> OP_SOURCE_PATH_ALIASES)
     # -- regex-scan the classmethod's own source for the literal keys it
     # passes to its _str/_path/_int/_float/_bool helpers, rather than guessing.
     curation_src = (REPO_ROOT / 'src/config/curation.py').read_text()
@@ -179,3 +179,35 @@ def test_bakeoff_profile_env_examples_name_real_fields() -> None:
     assert examples, 'env.template should show at least one OP_BAKEOFF_PROFILE_<FIELD> example'
     assert examples <= fields_, sorted(examples - fields_)
     assert 'OP_BAKEOFF_PROFILE_CLASS_FILTER' in examples
+
+
+def test_no_env_var_names_a_project_resource() -> None:
+    """Every project's index names and data paths come from its persisted
+    record (``resources_for_new``), ``default`` included: no env var may
+    configure one project's index or registry/export/upload/eval path."""
+    retired = {
+        'OP_IMAGES_INDEX',
+        'OP_ITEMS_INDEX',
+        'OP_LABELS_CONFIRMED_INDEX',
+        'OP_CLASSES_INDEX',
+        'OP_CLUSTERS_INDEX',
+        'OP_SETTINGS_INDEX',
+        'OP_UMAP_STATE_INDEX',
+        'OP_UMAP_VIZ_STATE_INDEX',
+        'OP_ITEMS_INDEX_OVERRIDE',
+        'OP_REGISTRY_PATH',
+        'OP_EXPORT_ROOT',
+        'OP_UPLOAD_ROOT',
+        'OP_BAKEOFF_EVAL_ROOT',
+    }
+    assert not (retired & _from_env_derived_vars())
+    assert not (retired & _env_template_tokens())
+    offenders = sorted(
+        f'{path.relative_to(REPO_ROOT)}: {var}'
+        for root in ('src', 'scripts', 'docker')
+        for path in (REPO_ROOT / root).rglob('*')
+        if path.is_file() and path.suffix in {'.py', '.yml', '.yaml', '.sh'}
+        for var in retired
+        if re.search(rf'\b{var}\b', path.read_text(encoding='utf-8', errors='replace'))
+    )
+    assert offenders == []

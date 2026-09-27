@@ -21,7 +21,7 @@ import pytest
 from src.services.curation.clustering import orchestrator as _orchestrator
 
 
-_ = _orchestrator.ITEMS_INDEX  # orchestrator must load before auto_promote
+_ = _orchestrator.items_index  # orchestrator must load before auto_promote
 
 from src.routers.curation.clusters import list_clusters  # noqa: E402
 from src.services.curation.cluster_ids import (  # noqa: E402

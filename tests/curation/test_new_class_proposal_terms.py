@@ -21,11 +21,11 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
-from src.config import get_curation_config
+from src.config.curation import base_curation_config
 from src.services.curation.new_class_terms import ProposalTermRules, classify_term
 
 
-ITEMS = get_curation_config().items_index
+ITEMS = base_curation_config().items_index
 
 
 @pytest.fixture
@@ -46,7 +46,9 @@ def _client(fake: Any, registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch)
         AsyncMock(return_value=None),
     )
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -102,8 +104,10 @@ def test_summary_total_equals_the_queue_total(
     registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), registry, monkeypatch)
-    queue = client.get('/curation/review/new_class_proposals', params={'page_size': 100}).json()
-    summary = client.get('/curation/review/new_class_proposals/summary').json()
+    queue = client.get(
+        '/curation/projects/default/review/new_class_proposals', params={'page_size': 100}
+    ).json()
+    summary = client.get('/curation/projects/default/review/new_class_proposals/summary').json()
     assert summary['total_pending'] == queue['total'] == 9
     assert summary['without_term'] == 1
     counted = sum(t['count'] for t in summary['top_terms'] + summary['flagged_terms'])
@@ -116,7 +120,9 @@ def test_no_answer_items_are_excluded_from_the_queue(
     """R5: a VLM attempt with no answer at all (empty_reason=no_answer)
     proposed nothing, so it must never appear in the new-class queue."""
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), registry, monkeypatch)
-    queue = client.get('/curation/review/new_class_proposals', params={'page_size': 100}).json()
+    queue = client.get(
+        '/curation/projects/default/review/new_class_proposals', params={'page_size': 100}
+    ).json()
     ids = {row['crop_id'] for row in queue['items']}
     assert 'no_answer1' not in ids
 
@@ -127,7 +133,9 @@ def test_already_classed_items_are_excluded_from_the_queue(
     """R5: once an item has a resolved class_id, a stale needs_new_class
     flag must not keep surfacing it as a new-class proposal."""
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), registry, monkeypatch)
-    queue = client.get('/curation/review/new_class_proposals', params={'page_size': 100}).json()
+    queue = client.get(
+        '/curation/projects/default/review/new_class_proposals', params={'page_size': 100}
+    ).json()
     ids = {row['crop_id'] for row in queue['items']}
     assert 'already_classed' not in ids
 
@@ -136,11 +144,11 @@ def test_term_count_equals_resolve_match(
     registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), registry, monkeypatch)
-    summary = client.get('/curation/review/new_class_proposals/summary').json()
+    summary = client.get('/curation/projects/default/review/new_class_proposals/summary').json()
     sidecar = {t['label']: t for t in summary['top_terms']}['sidecar']
     assert sidecar['count'] == 3
     r = client.post(
-        '/curation/review/new_class_proposals/resolve',
+        '/curation/projects/default/review/new_class_proposals/resolve',
         params={'dry_run': True},
         json={'label': 'sidecar', 'create': {'class_name': 'sidecar', 'group': 'bikes'}},
     )
@@ -156,7 +164,7 @@ def test_resolve_writes_the_vlm_flagged_row_too(
     client = _client(fake, registry, monkeypatch)
     class_id = registry.load().classes[0].class_id
     r = client.post(
-        '/curation/review/new_class_proposals/resolve',
+        '/curation/projects/default/review/new_class_proposals/resolve',
         json={'label': 'sidecar', 'class_id': class_id},
     )
     assert r.status_code == 200, r.text
@@ -173,7 +181,7 @@ def test_configured_and_registry_rules_flag_terms(
     monkeypatch.setenv('OP_NEW_CLASS_GENERIC_TERMS', 'motorcycle, vehicle')
     monkeypatch.setenv('OP_NEW_CLASS_NON_OBJECT_TERMS', 'blur,empty_road')
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), registry, monkeypatch)
-    body = client.get('/curation/review/new_class_proposals/summary').json()
+    body = client.get('/curation/projects/default/review/new_class_proposals/summary').json()
 
     assert [t['label'] for t in body['top_terms']] == ['sidecar']
     flagged = {t['label']: t for t in body['flagged_terms']}
@@ -198,7 +206,7 @@ def test_no_configured_rule_flags_only_registry_matches(
     monkeypatch.delenv('OP_NEW_CLASS_GENERIC_TERMS', raising=False)
     monkeypatch.delenv('OP_NEW_CLASS_NON_OBJECT_TERMS', raising=False)
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), registry, monkeypatch)
-    body = client.get('/curation/review/new_class_proposals/summary').json()
+    body = client.get('/curation/projects/default/review/new_class_proposals/summary').json()
     assert {t['label'] for t in body['flagged_terms']} == {'Cars', 'sedan'}
     assert body['term_rules']['generic_terms'] == []
 

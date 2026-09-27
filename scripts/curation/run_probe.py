@@ -47,11 +47,12 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from opensearchpy import AsyncOpenSearch
 
 from src.config import get_curation_config
 from src.services.curation.probe_models import PROBE_ARCHITECTURES
 from src.services.curation.probe_predictions import count_probe_candidates, run_probe_inference
+from src.services.projects.guard import make_script_opensearch
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
@@ -84,7 +85,7 @@ async def _async_main(args: argparse.Namespace) -> int:
 
     cfg = get_curation_config()
     version = args.model_version or default_model_version(model_path)
-    client = AsyncOpenSearch(hosts=[args.opensearch_url], use_ssl=False, timeout=300)
+    client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=300)
     try:
         candidates = await count_probe_candidates(
             client, config=cfg, skip_version=version if args.resume else None
@@ -154,7 +155,9 @@ def main() -> int:
     g = p.add_mutually_exclusive_group()
     g.add_argument('--dry-run', action='store_true', default=True)
     g.add_argument('--apply', dest='dry_run', action='store_false')
+    add_project_argument(p)
     args = p.parse_args()
+    bind_script_project(args.project, opensearch_url=args.opensearch_url)
     if args.page_size <= 0:
         p.error('--page-size must be positive')
     return asyncio.run(_async_main(args))

@@ -6,11 +6,12 @@ import asyncio as _events_asyncio
 import json as _events_json
 from typing import Any
 
-from fastapi import Query
+from fastapi import HTTPException, Query
 from fastapi.responses import StreamingResponse
 
+from src.config import get_curation_config
 from src.routers.curation._common import _PublishEvent, router
-from src.services.curation.event_hub import get_event_hub
+from src.services.curation.event_hub import GLOBAL_EVENT_PREFIXES, get_event_hub
 from src.services.curation.wire import region_wire_key
 
 
@@ -29,7 +30,8 @@ async def curation_events(
         'events whose class matches.',
     ),
 ) -> StreamingResponse:
-    """SSE stream of advisory crop-state events.
+    """SSE stream of advisory crop-state events for the bound project
+    only (global ``project: null`` events go to ``{api}/events``).
 
     The connection stays open until the client disconnects. A heartbeat
     comment line is sent every 15s so reverse-proxies don't kill the
@@ -37,7 +39,15 @@ async def curation_events(
     1000 events; oldest drops on overflow — events are advisory).
     """
     hub = get_event_hub()
-    sub = await hub.subscribe(topic=topic, class_id=class_id)
+    sub = await hub.subscribe(
+        project=get_curation_config().project_slug, topic=topic, class_id=class_id
+    )
+    return sse_response(hub, sub)
+
+
+def sse_response(hub: Any, sub: Any) -> StreamingResponse:
+    """Stream ``sub``'s queue as SSE until the client disconnects, then
+    unsubscribe. Shared by the scoped ``/events`` and the global one."""
 
     async def event_gen() -> Any:
         try:
@@ -80,6 +90,12 @@ async def curation_events_publish(payload: _PublishEvent) -> dict[str, Any]:
     that don't share the API process. Events from in-process callers
     (ingest, VLM label_batch) skip this endpoint and call the hub directly.
     """
+    if payload.type.startswith(GLOBAL_EVENT_PREFIXES):
+        # Project lifecycle / combine events are the API's own, on the
+        # global stream; a client may not spoof them on a project stream.
+        raise HTTPException(
+            status_code=422, detail=f'{payload.type!r} is a global event type; not publishable here'
+        )
     status_key = region_wire_key('status')
     event: dict[str, Any] = {
         'type': payload.type,
@@ -100,14 +116,25 @@ async def curation_events_publish(payload: _PublishEvent) -> dict[str, Any]:
         event[region_wire_key('text')] = payload.region_text
     if payload.image_path is not None:
         event['image_path'] = payload.image_path
-    if payload.extra:
-        event.update(payload.extra)
+    bound = get_curation_config().project_slug
+    extra = dict(payload.extra or {})
+    if 'project' in extra and extra.pop('project') != bound:
+        # The bound project always wins; an event cannot be redirected to
+        # another project's stream (or the global one) from here.
+        raise HTTPException(
+            status_code=422,
+            detail=f"extra.project must be the bound project '{bound}' (or omitted)",
+        )
+    extra.pop('target', None)
+    event.update(extra)
+    event['project'] = bound
     get_event_hub().publish(event)
     return {'ok': True}
 
 
 @router.get('/events/stats')
 async def curation_events_stats() -> dict[str, Any]:
-    """Ops counters: subscribers, events_published, events_dropped, plus
-    the active ``bus`` (``file``/``process``) and its ``log_path``."""
-    return get_event_hub().stats()
+    """Ops counters for the bound project's stream: its subscribers and
+    publishes, plus the hub's ``events_dropped``, active ``bus``
+    (``file``/``process``) and ``log_path``."""
+    return get_event_hub().stats(get_curation_config().project_slug)

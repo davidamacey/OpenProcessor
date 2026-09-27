@@ -16,11 +16,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config import IndexRole, get_curation_config, get_region_fields, index_name
+from src.config import IndexRole, get_region_fields, index_name
+from src.config.curation import base_curation_config
 
 
 F = get_region_fields()
-CFG = get_curation_config()
+CFG = base_curation_config()
 ITEMS = index_name(CFG, IndexRole.ITEMS)
 
 # GET /regions requires an active region profile (no-profile gating contract).
@@ -31,7 +32,9 @@ def _client(fake: Any) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -53,7 +56,7 @@ def test_region_text_search_matches_regardless_of_stored_or_query_case() -> None
     client = _client(fake)
 
     for query in ('abc', 'ABC', 'AbC'):
-        resp = client.get('/curation/regions', params={'text': query})
+        resp = client.get('/curation/projects/default/regions', params={'text': query})
         assert resp.status_code == 200, resp.text
         ids = {item['crop_id'] for item in resp.json()['items']}
         assert ids == {'crop_lower', 'crop_mixed'}, (query, ids)
@@ -66,7 +69,7 @@ def test_region_text_search_escapes_wildcard_metacharacters() -> None:
     )
     client = _client(fake)
 
-    resp = client.get('/curation/regions', params={'text': 'AB*CD'})
+    resp = client.get('/curation/projects/default/regions', params={'text': 'AB*CD'})
     assert resp.status_code == 200, resp.text
     ids = {item['crop_id'] for item in resp.json()['items']}
     # A literal '*' in the query must only match the doc that literally

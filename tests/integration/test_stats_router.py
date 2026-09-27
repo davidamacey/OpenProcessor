@@ -104,14 +104,16 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     return TestClient(app)
 
 
 def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient) -> None:
     """Every documented top-level + nested key is present and well-typed."""
-    resp = app_client.get('/curation/stats/dataset')
+    resp = app_client.get('/curation/projects/default/stats/dataset')
     assert resp.status_code == 200, f'unexpected {resp.status_code}: {resp.text[:500]}'
     body = resp.json()
 
@@ -196,7 +198,7 @@ def test_stats_dataset_labeled_counts_consistent(app_client: TestClient) -> None
     - ``by_human <= validated`` (humans always validate when they
       label).
     """
-    body = app_client.get('/curation/stats/dataset').json()
+    body = app_client.get('/curation/projects/default/stats/dataset').json()
     labeled = body['labeled']
     validated = int(body.get('validated', 0))
     # From the fixture: class_sources_with_class.doc_count is the number
@@ -228,7 +230,7 @@ def test_stats_dataset_labeled_counts_consistent(app_client: TestClient) -> None
 
 def test_stats_dataset_legacy_keys_preserved(app_client: TestClient) -> None:
     """Legacy fields the labeler ``getStats`` adapter reads still exist."""
-    body = app_client.get('/curation/stats/dataset').json()
+    body = app_client.get('/curation/projects/default/stats/dataset').json()
     assert 'total_crops' in body
     assert 'validated' in body
     assert 'test_holdout' in body
@@ -258,7 +260,7 @@ def test_cluster_count_is_the_current_total_not_the_last_run(
             'result': {'stages': {'cluster_residuals': {'method': 'ivf', 'n_clusters': 1}}},
         },
     )
-    body = app_client.get('/curation/stats/dataset').json()
+    body = app_client.get('/curation/projects/default/stats/dataset').json()
     clusters = body['clusters']
     assert clusters['cluster_count'] == 5
     assert clusters['last_run_cluster_count'] == 1
@@ -283,7 +285,7 @@ def test_cluster_count_query_excludes_noise_ids() -> None:
 def test_stats_dataset_region_stall_reason_null_by_default(app_client: TestClient) -> None:
     """No active region profile (the fixture's neutral default) -- the
     dashboard must never show a false stall."""
-    body = app_client.get('/curation/stats/dataset').json()
+    body = app_client.get('/curation/projects/default/stats/dataset').json()
     assert body['in_progress']['region_stall_reason'] is None
 
 
@@ -313,7 +315,7 @@ def test_stats_dataset_surfaces_region_stall_reason(
     fake_os.search = AsyncMock(return_value=pending_response)
     app_client.app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
 
-    body = app_client.get('/curation/stats/dataset').json()
+    body = app_client.get('/curation/projects/default/stats/dataset').json()
     reason = body['in_progress']['region_stall_reason']
     assert reason is not None
     assert 'det_v1' in reason

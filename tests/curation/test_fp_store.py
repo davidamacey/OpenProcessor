@@ -21,8 +21,10 @@ if TYPE_CHECKING:
 
 
 class TestFpStoreDir:
-    def test_default_uses_default_config_and_fields(self) -> None:
-        expected = CurationConfig().state_dir / f'{RegionFields().prefix}_fp'
+    def test_default_uses_the_bound_projects_state_dir(self) -> None:
+        expected = (
+            CurationConfig().state_dir / 'projects' / 'default' / f'{RegionFields().prefix}_fp'
+        )
         assert fp_store_dir() == expected
 
     def test_derives_from_injected_state_dir(self, tmp_path: Path) -> None:

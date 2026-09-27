@@ -58,6 +58,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from src.clients.curation_opensearch import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
+from src.config.project_context import run_in_executor_bound
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.export_readiness import (
@@ -530,8 +531,8 @@ class SingleClassExportService:
                 # 'aspect' resizes the longest side down without padding, so
                 # the normalized labels stay valid -- a letterbox offset here
                 # would silently shift every box in the dataset.
-                loop.run_in_executor(
-                    pool, _copy_or_resize_one, src, dest, 'aspect', img_max_side, crop
+                run_in_executor_bound(
+                    loop, pool, _copy_or_resize_one, src, dest, 'aspect', img_max_side, crop
                 )
                 for src, dest, crop in jobs
             ]
