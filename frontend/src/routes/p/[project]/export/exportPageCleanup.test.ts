@@ -36,7 +36,7 @@ describe('export page: stale training-command panel removed', () => {
   });
 
   it('links the operator to /train as the next step', () => {
-    expect(src).toMatch(/<a href=\{resolve\(projectHref\('\/train'\)\)\}/);
+    expect(src).toMatch(/<a\s+href=\{resolve\(projectHref\('\/train'\)\)\}/);
   });
 });
 
