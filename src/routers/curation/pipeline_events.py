@@ -5,9 +5,10 @@ Split out of :mod:`pipeline` so the parent module stays under the
 
 * ``GET /curation/pipeline/events`` — server-sent events for the dashboard.
 
-See the endpoint docstring for the event-type contract. The wakeup
-mechanism is an asyncio ``Event`` signalled by the inotify watcher
-registered in :mod:`src.main` (lifespan task ``watch_state_file``).
+See the endpoint docstring for the event-type contract. Each stream
+watches its own bound project's auto-label ``state.json`` (a 1 s mtime
+poll), so one project's job never wakes or feeds another project's
+dashboard.
 """
 
 from __future__ import annotations
@@ -77,9 +78,8 @@ async def pipeline_events(opensearch: OpenSearchDep) -> StreamingResponse:
       dataset aggregation, so the client renders without any additional
       REST call.
     * ``state`` — whenever ``auto_label`` state changes (stage
-      transitions, progress advances, terminal status). Driven by the
-      inotify watcher in :func:`auto_label_job.watch_state_file`; zero
-      CPU when idle.
+      transitions, progress advances, terminal status), noticed by a 1 s
+      poll of the bound project's ``state.json`` mtime.
     * ``stats`` — refreshed dataset aggregation. Emitted at auto_label
       stage boundaries AND on a periodic timer (``STATS_REFRESH_SECONDS``)
       so the dashboard counts (unlabeled / pending_detection /
@@ -98,8 +98,7 @@ async def pipeline_events(opensearch: OpenSearchDep) -> StreamingResponse:
     HEARTBEAT_SECONDS = 15.0
     # Periodic stats refresh — the detection worker writes back to the
     # items index continuously as it drains, but those writes don't touch
-    # auto_label state.json so the inotify-driven path never wakes for
-    # them. Without a fallback timer the dashboard would only see updated
+    # auto_label state.json so the state poll never sees them. Without a fallback timer the dashboard would only see updated
     # counts at auto_label stage boundaries (i.e. minutes between
     # refreshes when auto_label isn't running at all). 15s matches the
     # heartbeat cadence so we ride the same wakeup cycle.
@@ -116,35 +115,29 @@ async def pipeline_events(opensearch: OpenSearchDep) -> StreamingResponse:
         body = json.dumps(data, default=str)
         return f'event: {event}\ndata: {body}\n\n'
 
+    STATE_POLL_SECONDS = 1.0
+
     async def _gen() -> AsyncIterator[str]:
         import time as _time
 
-        changed = auto_label_job.auto_label_changed_event()
         # Bootstrap. Send the current state + stats so the client renders
         # without any parallel REST call.
+        last_mtime = auto_label_job.state_mtime()
         state = auto_label_job.get_state()
         stats = await _build_stats_payload()
         yield _sse('snapshot', {'state': state, 'stats': stats})
 
         last_stage = state.get('stage')
         last_status = state.get('status')
-        last_stats_at = _time.monotonic()
+        last_stats_at = last_frame_at = _time.monotonic()
         while True:
-            # Race the inotify-driven Event against the heartbeat clock.
-            # Whichever wakes first determines what we emit next.
-            wait_task = asyncio.create_task(changed.wait())
-            try:
-                done, pending = await asyncio.wait(
-                    {wait_task},
-                    timeout=HEARTBEAT_SECONDS,
-                )
-            except asyncio.CancelledError:
-                wait_task.cancel()
-                raise
+            await asyncio.sleep(STATE_POLL_SECONDS)
             now = _time.monotonic()
-            if wait_task in done:
-                changed.clear()
+            mtime = auto_label_job.state_mtime()
+            if mtime != last_mtime:
+                last_mtime = mtime
                 state = auto_label_job.get_state()
+                last_frame_at = now
                 yield _sse('state', state)
                 stage = state.get('stage')
                 status = state.get('status')
@@ -158,12 +151,6 @@ async def pipeline_events(opensearch: OpenSearchDep) -> StreamingResponse:
                     stats = await _build_stats_payload()
                     last_stats_at = now
                     yield _sse('stats', stats)
-            else:
-                # Timeout fired — heartbeat. Cancel the pending wait so
-                # we don't accumulate tasks.
-                for t in pending:
-                    t.cancel()
-                yield ': keepalive\n\n'
             # Periodic stats refresh regardless of auto_label activity.
             # The detection worker keeps writing back to the items index
             # as it drains the queue; this lets the dashboard reflect
@@ -171,8 +158,11 @@ async def pipeline_events(opensearch: OpenSearchDep) -> StreamingResponse:
             # auto_label.
             if (now - last_stats_at) >= STATS_REFRESH_SECONDS:
                 stats = await _build_stats_payload()
-                last_stats_at = now
+                last_stats_at = last_frame_at = now
                 yield _sse('stats', stats)
+            if (now - last_frame_at) >= HEARTBEAT_SECONDS:
+                last_frame_at = now
+                yield ': keepalive\n\n'
 
     return StreamingResponse(
         _gen(),

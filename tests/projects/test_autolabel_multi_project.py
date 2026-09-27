@@ -121,3 +121,85 @@ def test_only_one_job_dispatched_per_discovery_cycle(two_projects) -> None:
     remaining = auto_label_worker._oldest_pending_trigger([alpha, beta])
     assert remaining is not None
     assert remaining[0].slug == 'beta'
+
+
+_RUNS: list[tuple[str, str]] = []
+
+
+async def _recording_pipeline(*, opensearch: Any, progress: Any, **kwargs: Any) -> dict[str, Any]:
+    from src.config.project_context import current_project
+
+    slug = current_project().record.slug
+    _RUNS.append(('start', slug))
+    await asyncio.sleep(0.05)
+    _RUNS.append(('end', slug))
+    return {'ok': True}
+
+
+class _Registry:
+    def __init__(self, records: list[ProjectRecord]) -> None:
+        self._records = records
+
+    async def ensure_fresh(self) -> None:
+        return None
+
+    def active_projects(self) -> list[ProjectRecord]:
+        return list(self._records)
+
+
+def test_worker_loop_runs_triggers_fifo_one_at_a_time(
+    two_projects, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    alpha, beta = two_projects
+    now = time.time()
+    for record, age in ((beta, 10.0), (alpha, 100.0)):
+        with bind_project(record):
+            path = get_curation_config().autolabel_dir / 'trigger.json'
+        path.write_text(
+            f'{{"job_id": "{record.slug}-job", '
+            f'"pipeline": "{__name__}:_recording_pipeline", "args": {{}}}}'
+        )
+        os.utime(path, (now - age, now - age))
+    _RUNS.clear()
+    monkeypatch.setattr(
+        auto_label_worker, 'script_project_registry', lambda *_a: _Registry([beta, alpha])
+    )
+    monkeypatch.setattr(auto_label_worker, '_build_opensearch', lambda: _NullOpenSearch())
+    monkeypatch.setattr(auto_label_worker, '_write_container_heartbeat', lambda *_a: None)
+    monkeypatch.setattr(auto_label_worker, 'AUTO_RETRAIN_CHECK_INTERVAL_S', 0.0)
+    monkeypatch.setattr(auto_label_worker, 'POLL_INTERVAL_S', 0.01)
+
+    async def _drive() -> None:
+        stop = asyncio.Event()
+        loop_task = asyncio.create_task(auto_label_worker._main_loop(stop, None))
+        while len(_RUNS) < 4:
+            await asyncio.sleep(0.01)
+        stop.set()
+        await loop_task
+
+    asyncio.run(asyncio.wait_for(_drive(), timeout=10))
+    # Oldest trigger (alpha) first, and the second job starts only after
+    # the first ended.
+    assert _RUNS == [('start', 'alpha'), ('end', 'alpha'), ('start', 'beta'), ('end', 'beta')]
+    for record in (alpha, beta):
+        with bind_project(record):
+            state = get_curation_config().autolabel_dir / 'state.json'
+            assert f'"{record.slug}-job"' in state.read_text()
+
+
+class _NullOpenSearch:
+    async def close(self) -> None:
+        return None
+
+
+def test_state_mtime_is_per_project(two_projects) -> None:
+    from src.services.curation.autolabel import job
+
+    alpha, beta = two_projects
+    with bind_project(beta):
+        before = job.state_mtime()
+    with bind_project(alpha):
+        job._atomic_write({'status': 'running'})
+        assert job.state_mtime() > 0
+    with bind_project(beta):
+        assert job.state_mtime() == before

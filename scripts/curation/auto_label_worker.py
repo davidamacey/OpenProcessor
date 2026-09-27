@@ -31,7 +31,7 @@ owning project's own ``autolabel_dir``:
   ``{job_id, pipeline, args}`` written by ``start_job``. Worker
   claims it via ``unlink`` (atomic on Linux) then runs the pipeline.
 * State file ``state.json`` — worker writes this as it advances
-  stages; SSE reader (yolo-api) tails it via inotify.
+  stages; each project's SSE stream (yolo-api) polls its mtime.
 * Heartbeat file ``heartbeat`` — worker touches every 5 s while
   running; API uses mtime to detect a dead worker.
 * Cancel flag ``cancel.flag`` — operator writes via

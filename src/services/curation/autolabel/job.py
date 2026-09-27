@@ -47,11 +47,8 @@ Public API:
 * :func:`get_state` — read state.json (with stale-heartbeat repair).
 * :func:`get_job_state` — one job by id (current, or archived on replace).
 * :func:`cancel_job` — touch the cancel flag.
-* :func:`auto_label_changed_event` — asyncio.Event signalled whenever
-  ``state.json`` is rewritten (driven by the inotify watcher below).
-* :func:`watch_state_file` — lifespan task that fires the event.
-* :func:`shutdown_active_run` — no-op kept for API compatibility;
-  the worker container has its own restart policy.
+* :func:`state_mtime` — the bound project's ``state.json`` mtime, which
+  the SSE stream polls to notice a rewrite.
 """
 
 from __future__ import annotations
@@ -116,12 +113,6 @@ def _heartbeat_file() -> Path:
 # heartbeat every 5 s; 30 s leaves room for a long blocking call inside
 # a stage without false-positives.
 _HEARTBEAT_STALE_S = 30.0
-
-# Module-level asyncio Event signalled whenever state.json is rewritten.
-# The SSE endpoint awaits this; an inotify watcher started in the FastAPI
-# lifespan does the signalling. Per-uvicorn-worker; each worker watches
-# the same on-disk file.
-_changed_event: asyncio.Event | None = None
 
 
 @dataclass
@@ -548,105 +539,11 @@ def cancel_job() -> bool:
     return True
 
 
-def auto_label_changed_event() -> asyncio.Event:
-    """Module-level asyncio.Event signalled whenever state.json is rewritten.
-
-    SSE handlers await this. The first caller creates it (lazy init) so
-    importing this module from a non-async context still works.
-    """
-    global _changed_event  # noqa: PLW0603 - intentional module-level lazy singleton
-    if _changed_event is None:
-        _changed_event = asyncio.Event()
-    return _changed_event
-
-
-def _signal_changed() -> None:
-    """Best-effort: bump the asyncio Event if it exists. Called by the
-    inotify watcher whenever state.json mtime advances."""
-    ev = _changed_event
-    if ev is not None and not ev.is_set():
-        ev.set()
-
-
-async def watch_state_file() -> None:
-    """Long-running task: signal :func:`auto_label_changed_event`
-    whenever ``state.json`` is rewritten.
-
-    Uses inotify so there's **zero CPU when nothing is changing** — the
-    handler blocks on ``loop.add_reader`` until the kernel reports an
-    event. Designed for the FastAPI lifespan: launch with
-    ``asyncio.create_task(watch_state_file())`` and ``.cancel()`` it on
-    shutdown.
-
-    Falls back to a 1-second mtime poll if inotify isn't available (e.g.
-    running on a filesystem that doesn't support it). The poll is
-    bounded; production should always have inotify.
-    """
-    _ensure_dir()
-    # Touch the file so inotify has something to watch even before the
-    # first run.
-    if not _state_file().exists():
-        _atomic_write(asdict(_JobState()))
-
-    auto_label_changed_event()  # ensure the Event is created
-
+def state_mtime() -> float:
+    """The bound project's ``state.json`` mtime (0.0 before any run). The
+    SSE stream polls this per connection: it only ever sees its own
+    project's job, and a stat per second per open dashboard is cheap."""
     try:
-        import inotify_simple  # type: ignore[import-not-found]
-    except ImportError:
-        await _watch_state_file_poll()
-        return
-
-    loop = asyncio.get_running_loop()
-    inotify = inotify_simple.INotify()
-    # IN_CLOSE_WRITE catches the atomic-rename target; IN_MOVED_TO catches
-    # the rename itself (we write to .tmp then replace).
-    flags = (
-        inotify_simple.flags.CLOSE_WRITE
-        | inotify_simple.flags.MOVED_TO
-        | inotify_simple.flags.CREATE
-    )
-    inotify.add_watch(str(_state_dir()), flags)
-
-    fd_event = asyncio.Event()
-    loop.add_reader(inotify.fd, fd_event.set)
-    try:
-        while True:
-            await fd_event.wait()
-            fd_event.clear()
-            for ev in inotify.read(timeout=0):
-                if ev.name == _state_file().name:
-                    _signal_changed()
-                    break
-    except asyncio.CancelledError:
-        raise
-    finally:
-        loop.remove_reader(inotify.fd)
-        inotify.close()
-
-
-async def _watch_state_file_poll() -> None:
-    """Fallback path for systems without inotify. 1 Hz mtime poll."""
-    last_mtime = 0.0
-    while True:
-        try:
-            mtime = _state_file().stat().st_mtime
-        except FileNotFoundError:
-            mtime = 0.0
-        if mtime != last_mtime:
-            last_mtime = mtime
-            _signal_changed()
-        await asyncio.sleep(1.0)
-
-
-async def shutdown_active_run(timeout: float = 10.0) -> None:  # noqa: ARG001 — kept for lifespan compat
-    """No-op. Kept for FastAPI lifespan signature compatibility.
-
-    The auto_label pipeline now runs in a separate
-    ``curation-auto-label-worker`` container with its own lifecycle.
-    Stopping yolo-api no longer needs to (and can no longer) reach
-    across containers to cancel an in-flight run. Operators who want
-    to halt a run during an API restart should ``docker compose stop
-    curation-auto-label-worker`` first; the worker's signal handler
-    flips state.json to 'cancelled' on its way down.
-    """
-    return
+        return _state_file().stat().st_mtime
+    except FileNotFoundError:
+        return 0.0
