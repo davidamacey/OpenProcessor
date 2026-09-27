@@ -33,9 +33,15 @@ from src.services.training.jobs import (
 
 @pytest.fixture
 def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Redirect OP_TRAIN_JOBS_DIR at the env-var level."""
+    """Redirect OP_TRAIN_JOBS_DIR at the env-var level and return the
+    actual resolved dir for the bound (``default``, tests/conftest.py)
+    project -- P1R §6.1/D-A: ``project_jobs_dir()`` always nests
+    ``/projects/<slug>``, ``default`` included, so callers must not
+    assume ``OP_TRAIN_JOBS_DIR`` itself is where files land."""
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
-    return tmp_path
+    resolved = tmp_path / 'projects' / 'default'
+    resolved.mkdir(parents=True, exist_ok=True)
+    return resolved
 
 
 @pytest.fixture
@@ -696,10 +702,12 @@ class _FakeCurationConfig:
         self.mlflow_public_url = mlflow_public_url
         self.api_prefix = api_prefix
         # _resolve_jobs_dir() reads this (projects_plan.md §5.3); these
-        # tests only care about mlflow_public_url/api_prefix, so default
-        # to OP_TRAIN_JOBS_DIR/'/jobs' -- whatever _resolve_jobs_dir used
-        # before it became project-scoped.
-        self.train_jobs_dir = train_jobs_dir or Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
+        # tests only care about mlflow_public_url/api_prefix. Default
+        # nests /projects/default under OP_TRAIN_JOBS_DIR (P1R §6.1/D-A:
+        # project_jobs_dir() always nests, default included).
+        self.train_jobs_dir = train_jobs_dir or (
+            Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs')) / 'projects' / 'default'
+        )
 
 
 def test_public_mlflow_url_builds_from_configured_base(monkeypatch: pytest.MonkeyPatch) -> None:

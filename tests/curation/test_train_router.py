@@ -51,6 +51,9 @@ def app_client(
 ):
     """Build a minimal FastAPI app with just the train router."""
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
+    # P1R §6.1/D-A: project_jobs_dir() always nests /projects/<slug>,
+    # `default` (the project every unit test binds) included.
+    (tmp_path / 'projects' / 'default').mkdir(parents=True, exist_ok=True)
 
     # claim_gpus_for_training (called unconditionally by /start and
     # /start_campaign before job.json is written) writes a sentinel/lock
@@ -188,7 +191,7 @@ def test_preflight_blocks_gpu_the_trainer_is_not_attached_to(
     """A capabilities file naming [2] and a request for host GPU 0 must
     block -- the original TR-2 failure mode (API accepts a GPU the trainer
     isn't attached to, job hangs in queued/starting forever)."""
-    _write_trainer_capabilities(tmp_path, [2])
+    _write_trainer_capabilities(tmp_path / 'projects' / 'default', [2])
     body = {
         'dataset_export_dir': '/data/exports/x',
         'profile': 'medium',
@@ -206,7 +209,7 @@ def test_preflight_blocks_gpu_the_trainer_is_not_attached_to(
 def test_preflight_ok_for_gpu_the_trainer_is_attached_to(
     app_client: TestClient, tmp_path: Any
 ) -> None:
-    _write_trainer_capabilities(tmp_path, [0, 2])
+    _write_trainer_capabilities(tmp_path / 'projects' / 'default', [0, 2])
     body = {
         'dataset_export_dir': '/data/exports/x',
         'profile': 'medium',
@@ -235,7 +238,7 @@ def test_preflight_ok_when_capabilities_file_reports_unrestricted(
 ) -> None:
     """An empty gpu_order means the trainer sees every GPU at its host
     index (OP_TRAIN_GPU_ORDER unset) -- no restriction, any id passes."""
-    _write_trainer_capabilities(tmp_path, [])
+    _write_trainer_capabilities(tmp_path / 'projects' / 'default', [])
     body = {
         'dataset_export_dir': '/data/exports/x',
         'profile': 'medium',
@@ -257,7 +260,7 @@ def test_train_gpus_intersects_with_trainer_capabilities(
     from src.config import GpuArbiterConfig
 
     _set_arbiter_config(monkeypatch, GpuArbiterConfig())
-    _write_trainer_capabilities(tmp_path, [2])
+    _write_trainer_capabilities(tmp_path / 'projects' / 'default', [2])
     r = app_client.get('/curation/projects/default/train/gpus')
     assert r.status_code == 200, r.text
     body = r.json()
@@ -660,7 +663,7 @@ def test_start_writes_job(app_client: TestClient, tmp_path: Any) -> None:
     out = r.json()
     assert out['job_id']
     # File was written
-    assert any(tmp_path.glob(f'{out["job_id"]}.job.json'))
+    assert any((tmp_path / 'projects' / 'default').glob(f'{out["job_id"]}.job.json'))
 
 
 def test_start_rejects_optimizer_auto(app_client: TestClient) -> None:
@@ -688,7 +691,7 @@ def test_start_with_force_bypasses_block(app_client: TestClient, tmp_path: Any) 
     # Here force=true allows past the blocked report. The route still writes.
     assert r.status_code == 201, r.text
     job_id = r.json()['job_id']
-    assert any(tmp_path.glob(f'{job_id}.job.json'))
+    assert any((tmp_path / 'projects' / 'default').glob(f'{job_id}.job.json'))
 
 
 def test_start_returns_409_when_active_run_exists(
@@ -699,7 +702,7 @@ def test_start_returns_409_when_active_run_exists(
     import json
     from datetime import UTC, datetime
 
-    (tmp_path / 'live.status.json').write_text(
+    (tmp_path / 'projects' / 'default' / 'live.status.json').write_text(
         json.dumps(
             {
                 'job_id': 'live',
@@ -758,7 +761,7 @@ def test_start_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
 
     assert r.status_code == 409, r.text
     assert 'vlm-inference-container' in r.json()['detail']['message']
-    assert list(tmp_path.glob('*.job.json')) == []
+    assert list((tmp_path / 'projects' / 'default').glob('*.job.json')) == []
 
 
 def test_preflight_reports_blocking_gpu_arbiter_check_when_docker_unavailable(
@@ -826,7 +829,7 @@ def test_start_campaign_refuses_with_409_when_gpu_stop_required_and_docker_unava
 
     assert r.status_code == 409, r.text
     assert 'vlm-inference-container' in r.json()['detail']['message']
-    assert list(tmp_path.glob('*.job.json')) == []
+    assert list((tmp_path / 'projects' / 'default').glob('*.job.json')) == []
 
 
 def test_start_campaign_writes_n_jobs(app_client: TestClient, tmp_path: Any) -> None:
@@ -842,7 +845,7 @@ def test_start_campaign_writes_n_jobs(app_client: TestClient, tmp_path: Any) -> 
     out = r.json()
     assert len(out['job_ids']) == 2
     for jid in out['job_ids']:
-        assert any(tmp_path.glob(f'{jid}.job.json'))
+        assert any((tmp_path / 'projects' / 'default').glob(f'{jid}.job.json'))
 
 
 def test_start_campaign_rejects_empty_runs(app_client: TestClient) -> None:
@@ -874,7 +877,7 @@ def test_status_by_id_returns_status(app_client: TestClient, tmp_path: Any) -> N
     import json
     from datetime import UTC, datetime
 
-    (tmp_path / 'real.status.json').write_text(
+    (tmp_path / 'projects' / 'default' / 'real.status.json').write_text(
         json.dumps(
             {
                 'job_id': 'real',
@@ -915,7 +918,7 @@ def test_runs_list_empty(app_client: TestClient) -> None:
 
 
 def test_log_tail_returns_lines(app_client: TestClient, tmp_path: Any) -> None:
-    (tmp_path / 'logj.run.log').write_text('a\nb\nc\nd\n')
+    (tmp_path / 'projects' / 'default' / 'logj.run.log').write_text('a\nb\nc\nd\n')
     r = app_client.get('/curation/projects/default/train/log/tail/logj?lines=2')
     assert r.status_code == 200
     body = r.json()
@@ -931,7 +934,7 @@ def test_log_tail_returns_lines(app_client: TestClient, tmp_path: Any) -> None:
 def test_cancel_writes_sentinel(app_client: TestClient, tmp_path: Any) -> None:
     r = app_client.post('/curation/projects/default/train/cancel/some_job')
     assert r.status_code == 200, r.text
-    assert (tmp_path / 'some_job.cancel').exists()
+    assert (tmp_path / 'projects' / 'default' / 'some_job.cancel').exists()
     assert r.json()['cancelled'] is True
 
 
@@ -941,10 +944,10 @@ def test_cancel_campaign(app_client: TestClient, tmp_path: Any) -> None:
 
     # Two jobs, both belonging to one campaign, one running, one queued.
     for jid in ('camp_run00', 'camp_run01'):
-        (tmp_path / f'{jid}.job.json').write_text(
+        (tmp_path / 'projects' / 'default' / f'{jid}.job.json').write_text(
             json.dumps({'job_id': jid, 'campaign_id': 'camp', 'dataset_export_dir': '/x'})
         )
-        (tmp_path / f'{jid}.status.json').write_text(
+        (tmp_path / 'projects' / 'default' / f'{jid}.status.json').write_text(
             json.dumps(
                 {
                     'job_id': jid,
@@ -957,8 +960,8 @@ def test_cancel_campaign(app_client: TestClient, tmp_path: Any) -> None:
     r = app_client.post('/curation/projects/default/train/cancel_campaign/camp')
     assert r.status_code == 200, r.text
     assert r.json()['cancelled'] == 2
-    assert (tmp_path / 'camp_run00.cancel').exists()
-    assert (tmp_path / 'camp_run01.cancel').exists()
+    assert (tmp_path / 'projects' / 'default' / 'camp_run00.cancel').exists()
+    assert (tmp_path / 'projects' / 'default' / 'camp_run01.cancel').exists()
 
 
 # =============================================================================
@@ -1258,7 +1261,7 @@ def test_manifest_endpoint_returns_payload_when_present(
     }
     import json
 
-    (tmp_path / f'{job_id}.manifest.json').write_text(json.dumps(payload))
+    (tmp_path / 'projects' / 'default' / f'{job_id}.manifest.json').write_text(json.dumps(payload))
 
     r = app_client.get(f'/curation/projects/default/train/manifest/{job_id}')
     assert r.status_code == 200, r.text
@@ -1420,7 +1423,7 @@ def test_force_promote_records_force_used_in_manifest(
     from src.services.training.jobs import TrainJobStatus
 
     job_id = 'force-manifest-job'
-    (tmp_path / f'{job_id}.manifest.json').write_text(
+    (tmp_path / 'projects' / 'default' / f'{job_id}.manifest.json').write_text(
         json.dumps({'kind': 'train', 'job_id': job_id, 'promoted_to': None})
     )
 
@@ -1458,7 +1461,9 @@ def test_force_promote_records_force_used_in_manifest(
     assert r.status_code == 200, r.text
     assert r.json()['lineage_stamped'] is True
 
-    manifest = json.loads((tmp_path / f'{job_id}.manifest.json').read_text())
+    manifest = json.loads(
+        (tmp_path / 'projects' / 'default' / f'{job_id}.manifest.json').read_text()
+    )
     promoted_to = manifest['promoted_to']
     assert promoted_to['force_used'] is True
     assert promoted_to['gate_report'] is not None
@@ -1584,7 +1589,7 @@ def test_get_run_artifact_serves_whitelisted_file(app_client: TestClient, tmp_pa
     run_dir = tmp_path / 'runs' / 'artjob'
     run_dir.mkdir(parents=True)
     (run_dir / 'confusion_matrix.png').write_bytes(b'\x89PNG-fake-bytes')
-    (tmp_path / 'artjob.status.json').write_text(
+    (tmp_path / 'projects' / 'default' / 'artjob.status.json').write_text(
         json.dumps(
             {
                 'job_id': 'artjob',
@@ -1607,7 +1612,7 @@ def test_get_run_artifact_404_for_non_whitelisted_name(
     run_dir = tmp_path / 'runs' / 'artjob2'
     run_dir.mkdir(parents=True)
     (run_dir / 'best.pt').write_bytes(b'weights')
-    (tmp_path / 'artjob2.status.json').write_text(
+    (tmp_path / 'projects' / 'default' / 'artjob2.status.json').write_text(
         json.dumps(
             {'job_id': 'artjob2', 'state': 'finished', 'checkpoint_path': str(run_dir / 'best.pt')}
         )
@@ -1640,7 +1645,7 @@ def test_get_run_artifact_404_when_file_never_written(
 ) -> None:
     run_dir = tmp_path / 'runs' / 'artjob3'
     run_dir.mkdir(parents=True)
-    (tmp_path / 'artjob3.status.json').write_text(
+    (tmp_path / 'projects' / 'default' / 'artjob3.status.json').write_text(
         json.dumps(
             {
                 'job_id': 'artjob3',
@@ -1660,7 +1665,7 @@ def test_status_eval_never_carries_a_filesystem_path(app_client: TestClient, tmp
     artifact-route URL (or null)."""
     run_dir = tmp_path / 'runs' / 'pathcheck'
     run_dir.mkdir(parents=True)
-    (tmp_path / 'pathcheck.status.json').write_text(
+    (tmp_path / 'projects' / 'default' / 'pathcheck.status.json').write_text(
         json.dumps(
             {
                 'job_id': 'pathcheck',

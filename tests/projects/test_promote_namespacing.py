@@ -79,10 +79,11 @@ def test_model_prefix_matches_resources_for_new_convention() -> None:
     beta = resources_for_new('beta', base_curation_config())
     assert beta.model_prefix == 'beta__'
     default_prefix = resources_for_new('default', base_curation_config()).model_prefix
-    # P1R D-A: `default` is an ordinary registered project now, built with
-    # this same `resources_for_new` -- no env-derived special case, so its
-    # model_prefix follows the same convention as every other slug.
-    assert default_prefix == 'default__'
+    # §5.3/§5.5: model_prefix is the one deliberate exception to D-A's
+    # "no default special case" -- default stays unprefixed so every
+    # pre-projects / core-pipeline model (never namespaced) keeps
+    # resolving as default's own.
+    assert default_prefix == ''
 
 
 @pytest.mark.asyncio
@@ -154,19 +155,18 @@ def test_requested_name_with_reserved_separator_is_rejected(tmp_path, monkeypatc
     spoof the namespacing separator once prefixed."""
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
 
-    from fastapi import FastAPI
+    from _curation_app import SCOPED, curation_test_app
     from fastapi.testclient import TestClient
 
     from src.routers.curation._common import _raw_opensearch_dep
     from src.routers.curation_train import router as curation_train_router
 
-    app = FastAPI()
-    app.include_router(curation_train_router)
+    app = curation_test_app(curation_train_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()
 
     with TestClient(app) as client:
         resp = client.post(
-            '/curation/train/promote/nonexistent-job',
+            f'{SCOPED}/train/promote/nonexistent-job',
             json={'triton_name': 'alpha__x'},
         )
     assert resp.status_code == 422

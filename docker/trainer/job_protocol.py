@@ -752,11 +752,12 @@ def _is_terminal(status_path: Path) -> bool:
 
 def list_pending_jobs(jobs_dir: Path) -> list[Path]:
     """Find ``*.job.json`` files that haven't reached a terminal state,
-    across the default project's dir AND every per-project dir under it
-    (docs/design/openprocessor_internal/projects_plan.md §5.3: job.json
-    lands in the bound project's own ``train_jobs_dir``, which for a
-    non-default project is ``<jobs_dir>/projects/<slug>`` -- see
-    ``src.config.projects.resources_for_new``).
+    across every project's own dir under ``<jobs_dir>/projects/<slug>``
+    (docs/design/openprocessor_internal/projects_plan.md §5.3;
+    P1R §6.1/D-A: ``default`` nests the same as every other project --
+    see ``src.config.projects.resources_for_new``). The top-level
+    ``jobs_dir`` glob is kept for a job file dropped directly there by
+    hand; nothing in this codebase writes one.
 
     Sorted by mtime across every project's dir, so a project's job never
     starves another's (still one run at a time, FIFO) -- matching the
