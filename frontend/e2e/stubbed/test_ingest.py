@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from conftest import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
 from fixtures.multipart import parse_multipart
@@ -39,6 +40,7 @@ def _base_ingest_stubs(
     batch_source_roots=None,
     stall_reason=None,
     region_dependencies=None,
+    upload_enabled=True,
 ) -> None:
     """Baseline: `/ingest/config` is always stubbed here (the page fetches
     it on mount), and the drain response always carries the served
@@ -62,7 +64,7 @@ def _base_ingest_stubs(
         r"/ingest/config(\?|$)",
         {
             "upload": {
-                "enabled": True,
+                "enabled": upload_enabled,
                 "max_images_per_request": 128,
                 "max_bytes_per_request": 268435456,
                 "accepted_extensions": [".jpg", ".jpeg", ".png"],
@@ -352,6 +354,22 @@ def test_server_path_batch_panel_absent_without_source_roots(stub, page, app_url
     page.wait_for_selector('h1:has-text("Ingest")')
     page.wait_for_selector("text=Upload")
     assert "Server-path ingest" not in page.locator("body").inner_text()
+
+
+def test_upload_disabled_shows_one_line_and_no_upload_panel(stub, page, app_url):
+    """The served `upload.enabled: false`: no browser-upload panel, one line
+    saying so, and no upload request can be made."""
+    _base_ingest_stubs(stub, upload_enabled=False)
+    page.goto(f"{app_url}/p/default/ingest")
+    page.get_by_test_id("ingest-upload-disabled").wait_for(timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id("ingest-upload-disabled")).to_have_text(
+        "Browser uploads are disabled on this deployment."
+    )
+    expect(page.locator("input[type=file]")).to_have_count(0)
+    expect(page.get_by_role("heading", name="Upload", exact=True)).to_have_count(0)
+    # The rest of the page (status table, clustering handoff) still renders.
+    page.get_by_role("heading", name="Clustering").wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert not [c for c in stub.calls if "/ingest/upload" in c[1]]
 
 
 def test_region_drain_shows_served_stall_reason(stub, page, app_url):

@@ -8,8 +8,11 @@
    *
    * Every limit and caveat comes from the served `IngestConfig`
    * (`GET {API_PREFIX}/ingest/config`), fetched once on mount; the
-   * upload UI renders only once it has loaded. The upload caveat banner
-   * renders only when the backend serves `upload.persists_bytes: false`.
+   * upload UI renders only once it has loaded. The served
+   * `upload.enabled: false` replaces the browser-upload panel with one
+   * line; `batch.enabled: false` (or no `batch.source_roots`) hides the
+   * server-path panel. The upload caveat banner renders only when the
+   * backend serves `upload.persists_bytes: false`.
    */
   import IngestDropZone from '$lib/components/ingest/IngestDropZone.svelte';
   import IngestRunPanel from '$lib/components/ingest/IngestRunPanel.svelte';
@@ -18,7 +21,10 @@
   import ClusteringHandoff from '$lib/components/ingest/ClusteringHandoff.svelte';
   import IngestBatchPanel from '$lib/components/ingest/IngestBatchPanel.svelte';
   import { getIngestConfig } from '$lib/api';
-  import { resolveIngestConfig } from '$lib/ingest/ingestConfig';
+  import {
+    resolveIngestConfig,
+    serverPathIngestAvailable,
+  } from '$lib/ingest/ingestConfig';
   import { regionProfileStore } from '$stores/regionProfile.svelte';
   import type { IngestFile } from '$lib/ingest/fileSource';
   import type { IngestRunState } from '$lib/ingest/ingestRunController.svelte';
@@ -64,39 +70,43 @@
   {:else if !config}
     <p class="text-sm text-zinc-500">Loading…</p>
   {:else}
-    {#if !config.uploadPersistsBytes}
-      <p
-        class="rounded border border-amber-900 bg-amber-950/30 p-3 text-xs text-amber-200"
-      >
-        This backend indexes uploads without keeping the image; use server-path ingest or
-        the command-line uploader.
+    {#if !config.uploadEnabled}
+      <p class="text-sm text-zinc-400" data-testid="ingest-upload-disabled">
+        Browser uploads are disabled on this deployment.
       </p>
+    {:else}
+      {#if !config.uploadPersistsBytes}
+        <p
+          class="rounded border border-amber-900 bg-amber-950/30 p-3 text-xs text-amber-200"
+        >
+          This backend indexes uploads without keeping the image; use server-path ingest
+          or the command-line uploader.
+        </p>
+      {/if}
+
+      <section class="space-y-3 rounded-lg border border-zinc-800 p-4">
+        <h2 class="text-sm font-semibold text-zinc-200">Upload</h2>
+        <IngestDropZone
+          acceptedExtensions={config.acceptedExtensions}
+          onselect={(files) => (selectedFiles = files)}
+        />
+        {#if selectedFiles.length > 0}
+          <p class="text-xs text-zinc-400">{selectedFiles.length} files selected</p>
+        {/if}
+        <IngestRunPanel
+          files={selectedFiles}
+          {config}
+          onChunkDone={() => (statusRefreshToken += 1)}
+          onStateChange={(s) => (runState = s)}
+        />
+      </section>
     {/if}
 
-    <section class="space-y-3 rounded-lg border border-zinc-800 p-4">
-      <h2 class="text-sm font-semibold text-zinc-200">Upload</h2>
-      <IngestDropZone
-        acceptedExtensions={config.acceptedExtensions}
-        onselect={(files) => (selectedFiles = files)}
-      />
-      {#if selectedFiles.length > 0}
-        <p class="text-xs text-zinc-400">{selectedFiles.length} files selected</p>
-      {/if}
-      <IngestRunPanel
-        files={selectedFiles}
-        {config}
-        onChunkDone={() => (statusRefreshToken += 1)}
-        onStateChange={(s) => (runState = s)}
-      />
-    </section>
-
-    {#if config.batchSourceRoots.length > 0}
-      <!-- Piece 11: server-path ingest, gated on the backend actually
-           advertising source roots via BA-2's `batch.source_roots` — a
-           deployment with no mounted server-side root has nothing to
-           offer here. `POST {API_PREFIX}/ingest/batch` itself predates
-           #36; BA-2/BA-5 are what make gating and the label_txt_path
-           root guard real. -->
+    {#if serverPathIngestAvailable(config)}
+      <!-- Piece 11: server-path ingest, gated on the served `batch.enabled`
+           and at least one served `batch.source_roots` entry — a
+           deployment with batch ingest off, or no mounted server-side
+           root, has nothing to offer here. -->
       <section class="space-y-3 rounded-lg border border-zinc-800 p-4">
         <h2 class="text-sm font-semibold text-zinc-200">Server-path ingest</h2>
         <IngestBatchPanel {config} />

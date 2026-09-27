@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { servedIngestConfig as servedConfig } from '$lib/test/fixtures/ingestConfig';
-import { resolveIngestConfig } from './ingestConfig';
+import { resolveIngestConfig, serverPathIngestAvailable } from './ingestConfig';
 
 describe('resolveIngestConfig', () => {
   it('resolves every served field', () => {
@@ -60,5 +60,18 @@ describe('resolveIngestConfig', () => {
       }),
     );
     expect(loose.uploadMaxBytes).toBeLessThan(10 * 1024 * 1024 * 1024);
+  });
+});
+
+describe('serverPathIngestAvailable', () => {
+  const withBatch = (enabled: boolean, source_roots: string[]) =>
+    resolveIngestConfig(
+      servedConfig({ batch: { enabled, max_items: 256, source_roots } }),
+    );
+
+  it('needs both the served batch.enabled and at least one source root', () => {
+    expect(serverPathIngestAvailable(withBatch(true, ['/data']))).toBe(true);
+    expect(serverPathIngestAvailable(withBatch(false, ['/data']))).toBe(false);
+    expect(serverPathIngestAvailable(withBatch(true, []))).toBe(false);
   });
 });

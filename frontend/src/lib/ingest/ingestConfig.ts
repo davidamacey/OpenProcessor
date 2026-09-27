@@ -59,6 +59,12 @@ function readRuntimeMaxRequestMb(): number {
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_INGEST_MAX_REQUEST_MB;
 }
 
+/** Whether `/ingest` offers server-path ingest: the served `batch.enabled`
+ *  AND at least one served `batch.source_roots` entry. */
+export function serverPathIngestAvailable(config: ResolvedIngestConfig): boolean {
+  return config.batchEnabled && config.batchSourceRoots.length > 0;
+}
+
 /** Resolve the served `IngestConfig` into the values every ingest module uses. */
 export function resolveIngestConfig(served: IngestConfig): ResolvedIngestConfig {
   const maxRequestMb = readRuntimeMaxRequestMb();

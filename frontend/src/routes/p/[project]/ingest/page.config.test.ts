@@ -77,4 +77,47 @@ describe('/ingest — served config', () => {
     await vi.waitFor(() => expect(target.textContent).toContain('boom'));
     expect(target.querySelector('input[type=file]')).toBeNull();
   });
+
+  it('replaces the upload panel with one line when the backend serves upload.enabled: false', async () => {
+    const served = servedIngestConfig();
+    getConfig.mockResolvedValue({
+      ...served,
+      upload: { ...served.upload, enabled: false, persists_bytes: false },
+    });
+    await render();
+    await vi.waitFor(() =>
+      expect(
+        target.querySelector('[data-testid="ingest-upload-disabled"]'),
+      ).not.toBeNull(),
+    );
+    expect(target.textContent).toContain(
+      'Browser uploads are disabled on this deployment.',
+    );
+    expect(target.querySelector('input[type=file]')).toBeNull();
+    // The upload-only caveat goes with the panel.
+    expect(target.textContent).not.toContain('without keeping the image');
+  });
+
+  it('shows the server-path panel only when batch is enabled and has source roots', async () => {
+    const served = servedIngestConfig();
+    getConfig.mockResolvedValue({
+      ...served,
+      batch: { ...served.batch, enabled: true, source_roots: ['/data/archive'] },
+    });
+    await render();
+    await vi.waitFor(() => expect(target.textContent).toContain('Server-path ingest'));
+  });
+
+  it('hides the server-path panel when the backend serves batch.enabled: false, roots or not', async () => {
+    const served = servedIngestConfig();
+    getConfig.mockResolvedValue({
+      ...served,
+      batch: { ...served.batch, enabled: false, source_roots: ['/data/archive'] },
+    });
+    await render();
+    await vi.waitFor(() =>
+      expect(target.querySelector('input[type=file]')).not.toBeNull(),
+    );
+    expect(target.textContent).not.toContain('Server-path ingest');
+  });
 });
