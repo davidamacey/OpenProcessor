@@ -8,6 +8,7 @@
  */
 
 import type { SlotKey, SlotData } from './annotations/types';
+import type { ModelClassMappingSummary } from './types_models';
 
 /** Who wrote a crop's current label. Same vocabulary as `class_source`
  *  (curation_api_contract.md "class_source values"): `human*`, the fixed
@@ -1116,6 +1117,21 @@ export interface ModelInfo {
   /** Present (with job_id/version) only for models promoted through this pipeline. */
   job_id?: string | null;
   promoted_at?: string | null;
+  /** Served (projects P2, §5.5): the owning project's slug (a promoted
+   *  model's `promote.json.project`); `null` for a model with no
+   *  promote.json and for every external service. */
+  project: string | null;
+  /** Served: whether the owner opted this model into cross-project
+   *  sharing. Another project's model is only ever listed when true. */
+  shared: boolean;
+  /** Served: the model's classes matched by name onto the active
+   *  project's registry; `null` for a model with no class list. */
+  class_mapping: ModelClassMappingSummary | null;
+  /** The model's sharing revision, sent back as `expected_revision` on
+   *  `PUT .../sharing`. NOT served at OpenProcessor be20dc40 (backend ask
+   *  BA-P2-1, docs/design/projects-p2-sharing-pause-ui-plan-2026-09-27.md
+   *  §5): the owner toggle stays absent while it is undefined. */
+  sharing_revision?: number;
 }
 
 export interface ModelsStatus {

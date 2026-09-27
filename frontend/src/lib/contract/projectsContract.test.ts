@@ -116,6 +116,13 @@ const CASES: [string, string[]][] = [
       true
     >),
   ],
+  [
+    'PipelinePauseState',
+    keys({ project: true, paused: true } satisfies Record<
+      keyof T.PipelinePauseState,
+      true
+    >),
+  ],
 ];
 
 describe('types_projects.ts matches the vendored OpenAPI', () => {

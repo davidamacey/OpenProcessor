@@ -6,7 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Cross-project model sharing on `/models` (OpenProcessor projects P2,
+  §5.5).** The page lists other projects' shared models
+  (`include_other_projects=true`) with a "from `<project>`" chip, and
+  every model with a served `class_mapping` shows "N classes map", the
+  served unmapped class names and a name-by-name "Class mapping" table
+  (`GET .../models/{name}/class_mapping`); class ids are never shown. The
+  active project's own promoted models show their served sharing state
+  and an owner-only, confirm-gated "Share with other projects" / "Stop
+  sharing" toggle (`PUT .../models/{name}/sharing` with the served
+  revision; a revision conflict reloads, an `in_use` refusal offers the
+  served `force`, every refusal is shown verbatim). The toggle needs the
+  model's sharing revision, which the backend doesn't serve on the
+  listing yet, so it stays absent until it does. Unsharing warns that
+  another project may be using the model.
+- **Per-project pipeline pause.** `/projects` shows a "paused" chip on
+  each project whose served `GET {prefix}/pause` flag is set, and a
+  confirm-gated Pause / Resume pipeline action on writable projects
+  (`POST {prefix}/pause` / `/resume`, through each project's own served
+  prefix). The project switcher shows "paused" for the active project.
+
 ### Changed
+
+- **Archive / Unarchive on `/projects` follow the served `archivable` /
+  `unarchivable` flags** (vendored from OpenProcessor be20dc40) instead of
+  being inferred from `writable` / `selectable`.
 
 - **The `/clusters` region gallery picks the false-positive bucket by
   served `cluster_kind`, not a client id constant.** `SlotGallery.svelte`

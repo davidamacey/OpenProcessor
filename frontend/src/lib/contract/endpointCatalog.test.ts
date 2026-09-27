@@ -44,6 +44,14 @@ const SCANNED_FILES = [
  *  project is even selected. */
 const GLOBAL_SCANNED_FILES = ['lib/api.ts', 'lib/sse.ts'] as const;
 
+/** Every file that composes a backend URL through
+ *  `${projectPrefix(project)}` — a SCOPED route addressed through a
+ *  specific project's own served prefix rather than the active one
+ *  (`/projects` row actions such as pause/resume). Resolved against the
+ *  scoped OpenAPI paths exactly like `${scoped()}`. */
+const PROJECT_PREFIX_MARKER = '${projectPrefix(project)}';
+const PROJECT_PREFIX_SCANNED_FILES = ['lib/api.ts'] as const;
+
 function read(rel: string): string {
   return readFileSync(path.join(srcRoot, rel), 'utf-8');
 }
@@ -208,6 +216,26 @@ function resolveCalls(
   });
 }
 
+function grepFilesWith(marker: string): string[] {
+  let out = '';
+  try {
+    out = execFileSync(
+      'grep',
+      ['-rlF', '--include=*.ts', '--include=*.svelte', marker, srcRoot],
+      { encoding: 'utf-8' },
+    );
+  } catch (e) {
+    if ((e as { status?: number }).status !== 1) throw e;
+  }
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((p) => path.relative(srcRoot, p))
+    .filter(
+      (p) => !p.endsWith('.test.ts') && !p.startsWith(path.join('lib', 'contract')),
+    );
+}
+
 describe('endpoint catalog: completeness', () => {
   it('scans a non-trivial number of call sites (guards a vacuous pass)', () => {
     const total = SCANNED_FILES.reduce((n, f) => n + resolveCalls(f).length, 0);
@@ -235,6 +263,22 @@ describe('endpoint catalog: completeness', () => {
       (p) => !scannedSet.has(p as (typeof SCANNED_FILES)[number]),
     );
     expect(unscanned).toEqual([]);
+  });
+
+  it('no other src/ file references ${projectPrefix(project)} outside PROJECT_PREFIX_SCANNED_FILES', () => {
+    const scannedSet = new Set<string>(PROJECT_PREFIX_SCANNED_FILES);
+    expect(
+      grepFilesWith(PROJECT_PREFIX_MARKER).filter((p) => !scannedSet.has(p)),
+    ).toEqual([]);
+  });
+
+  it('every projectPrefix() URL in api.ts uses the scanned marker', () => {
+    // A wrapper that names its parameter anything but `project` would
+    // slip past the marker scan; fail instead of silently skipping it.
+    const src = read('lib/api.ts');
+    const uses = src.match(/\$\{projectPrefix\([^)]*\)\}/g) ?? [];
+    expect(uses.length).toBeGreaterThan(0);
+    expect(uses.filter((u) => u !== PROJECT_PREFIX_MARKER)).toEqual([]);
   });
 
   it('no other src/ file references ${globalApi()} outside GLOBAL_SCANNED_FILES', () => {
@@ -370,6 +414,16 @@ function describeCalls(
 describe('endpoint catalog: every call resolves to a real OpenAPI operation', () => {
   for (const file of SCANNED_FILES) {
     describeCalls(file, resolveCalls(file), 'scoped');
+  }
+});
+
+describe('endpoint catalog: every served-project-prefix call resolves to a real OpenAPI operation', () => {
+  for (const file of PROJECT_PREFIX_SCANNED_FILES) {
+    describeCalls(
+      `${file} (projectPrefix)`,
+      resolveCalls(file, PROJECT_PREFIX_MARKER),
+      'scoped',
+    );
   }
 });
 

@@ -183,3 +183,12 @@ export interface ProjectErrorDetail {
   heap_max_bytes?: number | null;
   current_revision?: number | null;
 }
+
+/** `GET|POST {prefix}/pause`, `POST {prefix}/resume` (projects P2,
+ *  `projects_plan.md` §5.1): the project's own pipeline-pause flag. It
+ *  says nothing about WHY workers may be idle (e.g. the global GPU
+ *  training claim), so the UI shows `paused` and nothing more. */
+export interface PipelinePauseState {
+  project: string;
+  paused: boolean;
+}

@@ -161,12 +161,17 @@ describe('api.ts composition ratchet — every apiFetch path starts with ${scope
     expect(calls.length).toBeGreaterThanOrEqual(70);
   });
 
-  it('every call composes its path from ${scoped()} or ${globalApi()}', () => {
+  it('every call composes its path from ${scoped()}, ${globalApi()} or a served project prefix', () => {
     // ${globalApi()}: the P1-cutover global routes (getGlobalHealth,
     // getProjects) — the small, explicit exception to "every call is
-    // scoped", never a hand-assembled prefix.
+    // scoped", never a hand-assembled prefix. ${projectPrefix(project)}:
+    // a scoped route of a SPECIFIC project (`/projects` row actions),
+    // built from that project's served `prefix`.
     const bad = calls.filter(
-      (h) => !h.startsWith('`${scoped()}') && !h.startsWith('`${globalApi()}'),
+      (h) =>
+        !h.startsWith('`${scoped()}') &&
+        !h.startsWith('`${globalApi()}') &&
+        !h.startsWith('`${projectPrefix(project)}'),
     );
     expect(bad).toEqual([]);
   });
