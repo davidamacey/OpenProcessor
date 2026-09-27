@@ -37,12 +37,6 @@ import { undoStore } from '$stores/undo.svelte';
 import type { SlotSpec } from '$lib/annotations/types';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
-// TODO(naming-w2): switch the FP-bucket check to the served
-// `cluster_kind === 'false_positive'` on the selected region cluster and
-// delete this constant. Until then this is the one place the frontend
-// mirrors the backend's reserved false-positive region-cluster id.
-export const FALSE_POSITIVE_REGION_CLUSTER_ID = -100;
-
 const GALLERY_PAGE_SIZE = 60;
 
 export function createSlotGalleryController(slot: SlotSpec) {
@@ -85,6 +79,16 @@ export function createSlotGalleryController(slot: SlotSpec) {
   let clusters = $state<Cluster[]>([]);
   let selectedCluster = $state<number | null>(null);
   let clusterBusy = $state<boolean>(false);
+
+  // The permanent false-positive bucket is identified by the served
+  // `cluster_kind === 'false_positive'` on the selected cluster card —
+  // never by its id (the backend's `-100` is just today's convention, not
+  // a contract). Looked up in the already-loaded `clusters` list rather
+  // than carried alongside `selectedCluster`, so a normal cluster that
+  // happens to reuse that id is never mistaken for the FP bucket.
+  const selectedClusterIsFalsePositive = $derived(
+    clusters.find((c) => c.id === selectedCluster)?.cluster_kind === 'false_positive',
+  );
 
   // Sub-cluster delineation inside an open region bucket — mirrors the item
   // cluster detail. null = "all" (the server returns regions ordered by subid so
@@ -565,6 +569,9 @@ export function createSlotGalleryController(slot: SlotSpec) {
     },
     get selectedCluster() {
       return selectedCluster;
+    },
+    get selectedClusterIsFalsePositive() {
+      return selectedClusterIsFalsePositive;
     },
     get clusterBusy() {
       return clusterBusy;
