@@ -254,6 +254,12 @@ UNBOUND_BY_DESIGN: frozenset[tuple[str, str]] = frozenset(
         ('POST', '/archive'),
         ('POST', '/unarchive'),
         ('POST', '/clone_settings'),
+        # BA-P2-5: pause/resume publish project.paused/project.resumed on
+        # the *global* stream (project: null, target: slug) so every open
+        # Cropwright tab learns about it, same rationale as the other
+        # project.* lifecycle events above.
+        ('POST', '/pause'),
+        ('POST', '/resume'),
     }
 )
 
