@@ -78,21 +78,30 @@ def _bakeoff_jobs(record: ProjectRecord) -> list[JobRef]:
     ]
 
 
-def _autolabel_jobs(record: ProjectRecord) -> list[JobRef]:  # noqa: ARG001 - see docstring
+def _autolabel_jobs(record: ProjectRecord) -> list[JobRef]:
     """Auto-label worker state (``src.services.curation.autolabel.job``).
 
-    TODO(other agent's worker runtime doc): ``autolabel/job.py`` still
-    reads/writes a single global ``OP_AUTO_LABEL_STATE_DIR`` rather than
-    the bound project's own ``CurationConfig.autolabel_dir`` (a
-    PROJECT_SCOPED_FIELDS entry already computed per project by
-    ``resources_for_new``/``resources_for_default``) -- making that
-    per-project is the auto-label worker's own P2 slice, owned by the
-    parallel worker-wave agent, not this file. Until that lands there is
-    no per-project auto-label state to read without risking a false
-    "project X is busy" read of a different project's run, so this
-    source deliberately reports nothing rather than guessing.
+    ``autolabel_dir`` is a PROJECT_SCOPED_FIELDS entry
+    (``resources_for_new``/``resources_for_default``); the worker/job
+    module resolves it from the *bound* project context, so reading
+    another project's state without binding means reading its
+    ``state.json`` directly here rather than calling ``get_state()``
+    (which also runs stale-heartbeat repair as a side effect -- not this
+    read-only inventory's job). ``'running'`` is the only busy status
+    (see ``_JobState.status``); a missing/unreadable file means idle.
     """
-    return []
+    import json
+
+    state_file = record.resources.autolabel_dir / 'state.json'
+    if not state_file.is_file():
+        return []
+    try:
+        payload = json.loads(state_file.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return []
+    if payload.get('status') != 'running':
+        return []
+    return [JobRef(kind='autolabel', job_id=str(payload.get('job_id') or 'autolabel'))]
 
 
 def _export_jobs(record: ProjectRecord) -> list[JobRef]:  # noqa: ARG001 - see docstring

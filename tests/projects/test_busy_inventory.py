@@ -38,6 +38,7 @@ def _record(slug: str, tmp_path=None) -> ProjectRecord:
             resources,
             train_jobs_dir=tmp_path / 'jobs' / 'projects' / slug,
             bakeoff_jobs_dir=tmp_path / 'state' / 'projects' / slug / 'bakeoff_jobs',
+            autolabel_dir=tmp_path / 'jobs' / 'auto_label' / 'projects' / slug,
         )
     return ProjectRecord(
         slug=slug,
@@ -95,11 +96,41 @@ def test_bakeoff_jobs_pending_only(tmp_path) -> None:
     assert found == [JobRef(kind='bakeoff', job_id='x')]
 
 
-def test_autolabel_and_export_and_detection_stubs_report_nothing(tmp_path) -> None:
-    """Documented gaps (owned by other waves/agents), not silently-wrong
-    positives: each stub returns [] rather than guessing at a shape."""
+def test_autolabel_jobs_running_only(tmp_path) -> None:
     record = _record('alpha', tmp_path)
+    state_dir = record.resources.autolabel_dir
+    state_dir.mkdir(parents=True)
+    (state_dir / 'state.json').write_text(
+        json.dumps({'status': 'running', 'job_id': 'al-1'}), encoding='utf-8'
+    )
+    assert _autolabel_jobs(record) == [JobRef(kind='autolabel', job_id='al-1')]
+
+    (state_dir / 'state.json').write_text(
+        json.dumps({'status': 'completed', 'job_id': 'al-1'}), encoding='utf-8'
+    )
     assert _autolabel_jobs(record) == []
+
+
+def test_autolabel_jobs_scoped_to_its_own_dir(tmp_path) -> None:
+    alpha = _record('alpha', tmp_path)
+    beta = _record('beta', tmp_path)
+    alpha.resources.autolabel_dir.mkdir(parents=True)
+    beta.resources.autolabel_dir.mkdir(parents=True)
+    (alpha.resources.autolabel_dir / 'state.json').write_text(
+        json.dumps({'status': 'running', 'job_id': 'a1'}), encoding='utf-8'
+    )
+    (beta.resources.autolabel_dir / 'state.json').write_text(
+        json.dumps({'status': 'idle'}), encoding='utf-8'
+    )
+    assert _autolabel_jobs(alpha) == [JobRef(kind='autolabel', job_id='a1')]
+    assert _autolabel_jobs(beta) == []
+
+
+def test_export_and_detection_stubs_report_nothing(tmp_path) -> None:
+    """Documented gaps: export has no async job protocol yet, and the
+    detection worker's per-project runtime doc doesn't exist yet -- each
+    stub returns [] rather than guessing at a shape."""
+    record = _record('alpha', tmp_path)
     assert _export_jobs(record) == []
     assert _detection_worker_inflight(record) == []
 
