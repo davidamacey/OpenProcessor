@@ -1,7 +1,7 @@
 """Unit tests for cluster_id_normalize.py's run_update_by_query_polled.
 
 The real bug this fixes: `client.update_by_query(..., wait_for_completion=True)`
-on a large index (op_items, 347k+ docs) held the HTTP connection open
+on a large index (op_prj_default__items, 347k+ docs) held the HTTP connection open
 for the entire operation, then returned one huge response — which failed to
 parse client-side ("Too many headers received") even though the operation
 completed successfully server-side every time (confirmed live via
@@ -40,7 +40,9 @@ async def test_submits_async_not_blocking():
             {'completed': True, 'response': {'updated': 5, 'batches': 1}},
         ]
     )
-    await run_update_by_query_polled(client, index='op_items', body={'query': {'match_all': {}}})
+    await run_update_by_query_polled(
+        client, index='op_prj_default__items', body={'query': {'match_all': {}}}
+    )
     _, kwargs = client.update_by_query.call_args
     assert kwargs['wait_for_completion'] is False
 
@@ -59,7 +61,7 @@ async def test_returns_response_once_task_completes():
     )
     resp = await run_update_by_query_polled(
         client,
-        index='op_items',
+        index='op_prj_default__items',
         body={'query': {'exists': {'field': 'class_id'}}},
         poll_interval_s=0.001,
     )
@@ -82,7 +84,7 @@ async def test_raises_on_task_reported_error():
     )
     with pytest.raises(RuntimeError, match='boom'):
         await run_update_by_query_polled(
-            client, index='op_items', body={'query': {'match_all': {}}}
+            client, index='op_prj_default__items', body={'query': {'match_all': {}}}
         )
 
 
@@ -94,7 +96,7 @@ async def test_raises_timeout_error_when_never_completes():
     with pytest.raises(TimeoutError):
         await run_update_by_query_polled(
             client,
-            index='op_items',
+            index='op_prj_default__items',
             body={'query': {'match_all': {}}},
             poll_interval_s=0.001,
             timeout_s=0.01,
@@ -106,7 +108,7 @@ async def test_forwards_conflicts_and_refresh_params():
     client = _client(tasks_get_results=[{'completed': True, 'response': {}}])
     await run_update_by_query_polled(
         client,
-        index='op_items',
+        index='op_prj_default__items',
         body={'query': {'match_all': {}}},
         conflicts='proceed',
         refresh=True,

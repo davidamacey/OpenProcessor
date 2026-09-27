@@ -152,11 +152,11 @@ async def test_run_projection_job_writes_only_viz_fields_and_metadata(
     assert final_state['n_written'] == len(pool)
     assert final_state['projection_version'] == embedding_viz.VIZ_PROJECTION_VERSION
 
-    # Metadata was saved to embedding_viz's OWN index, never op_umap_state.
+    # Metadata was saved to embedding_viz's OWN index, never op_prj_default__umap_state.
     fake_os.index.assert_awaited_once()
     _, index_kwargs = fake_os.index.call_args
     assert index_kwargs['index'] == embedding_viz.umap_viz_state_index()
-    assert index_kwargs['index'] != 'op_umap_state'
+    assert index_kwargs['index'] != 'op_prj_default__umap_state'
 
     # Every bulk doc body writes ONLY viz_x/viz_y/viz_projection_version --
     # never cluster_id/cluster_subid/cluster_distance.

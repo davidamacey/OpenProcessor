@@ -2,9 +2,9 @@
 ``docs/design/openprocessor_internal/projects_plan.md`` §2.2).
 
 A *project* is a named, isolated dataset workspace. ``default`` is an
-ordinary project whose resources happen to resolve to today's env-driven
-index names and paths, so nothing that already runs against the default
-project needs to change.
+ordinary project, created at bootstrap with the same naming as every
+other one (:func:`resources_for_new`); it is only protected (archive, never
+delete; owner decision D5).
 """
 
 from __future__ import annotations
@@ -62,9 +62,8 @@ def is_valid_slug(slug: str) -> bool:
 
 @dataclass(frozen=True)
 class ProjectResources:
-    """Every resource a bound project needs, resolved once (at default-boot
-    time for ``default``, at create time for a new project) and then
-    treated as immutable — a later env change must never remap a live
+    """Every resource a bound project needs, resolved once at create time
+    (bootstrap, for ``default``) and then treated as immutable — a later env change must never remap a live
     project's data."""
 
     indexes: Mapping[IndexRole, str]
@@ -107,30 +106,6 @@ def _projects_data_root() -> Path:
     return Path(os.environ.get('OP_PROJECTS_DATA_ROOT', './data/projects'))
 
 
-def resources_for_default(base: CurationConfig) -> ProjectResources:
-    """Today's env-derived values, computed fresh at every boot -- the
-    ``default`` project is not a special case, it is the project whose
-    resources happen to already exist."""
-    from src.config.curation import IndexRole, index_name
-
-    indexes = {role: index_name(base, role) for role in IndexRole}
-    return ProjectResources(
-        indexes=indexes,
-        class_registry_path=base.class_registry_path,
-        export_root=base.export_root,
-        upload_root=base.upload_root,
-        bakeoff_eval_root=base.bakeoff_eval_root,
-        project_state_dir=base.state_dir,
-        train_jobs_dir=Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs')),
-        autolabel_dir=Path(os.environ.get('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label')),
-        bakeoff_jobs_dir=Path(
-            os.environ.get('OP_BAKEOFF_JOBS_DIR', str(base.state_dir / 'bakeoff_jobs'))
-        ),
-        mlflow_experiment=os.environ.get('MLFLOW_EXPERIMENT_NAME', 'openprocessor'),
-        model_prefix='',
-    )
-
-
 def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
     """Resources for a brand-new project ``slug``, per the §2.2 naming
     table. Computed once at create time and persisted -- never
@@ -154,4 +129,28 @@ def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
         bakeoff_jobs_dir=base.state_dir / 'projects' / slug / 'bakeoff_jobs',
         mlflow_experiment=f'openprocessor-{slug}',
         model_prefix=f'{slug}__',
+    )
+
+
+def new_project_record(
+    slug: str,
+    base: CurationConfig,
+    *,
+    display_name: str | None = None,
+    description: str = '',
+    status: ProjectStatus = 'active',
+    now: str = '',
+) -> ProjectRecord:
+    """A fresh record for ``slug`` with :func:`resources_for_new` -- the one
+    way every project, ``default`` included, gets its resources."""
+    return ProjectRecord(
+        slug=slug,
+        display_name=display_name or slug.replace('-', ' ').title(),
+        description=description,
+        status=status,
+        revision=1,
+        created_at=now,
+        updated_at=now,
+        origin=None,
+        resources=resources_for_new(slug, base),
     )

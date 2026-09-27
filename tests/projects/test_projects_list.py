@@ -10,7 +10,7 @@ from typing import Literal
 import pytest
 
 from src.config.curation import base_curation_config
-from src.config.projects import ProjectRecord, resources_for_default, resources_for_new
+from src.config.projects import ProjectRecord, resources_for_new
 from src.routers.curation import projects as projects_router
 from src.routers.curation._config_common_models import ConfigErrorDetail
 from src.services.projects.registry import ProjectRegistry
@@ -22,7 +22,7 @@ def _record(
 ) -> ProjectRecord:
     now = datetime.now(UTC).isoformat()
     resources = (
-        resources_for_default(base_curation_config())
+        resources_for_new('default', base_curation_config())
         if slug == 'default'
         else resources_for_new(slug, base_curation_config())
     )

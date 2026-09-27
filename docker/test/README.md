@@ -104,10 +104,9 @@ day they are fixed:
    the shipped prompt is parsed as a negative verdict with
    `reason='parse_failure'`. See
    `tests/live/test_live_vlm.py::test_vlm_verdict_key_matches_the_shipped_prompt`.
-2. **Two index names bypass `CurationConfig`** — `op_umap_viz_state`
-   (`embedding_viz.py`) and `op_umap_state`
-   (`clustering/embedding_reduce.py`) are hardcoded, so no `OP_*_INDEX`
-   setting can move them. See
+2. **Every index is the bound project's** — including the two UMAP state
+   indexes (`embedding_viz.py`, `clustering/embedding_reduce.py`); the
+   harness's `OP_PROJECT_INDEX_PREFIX=verify_prj_` moves all of them. See
    `tests/live/test_live_clusters.py::test_viz_state_index_honours_the_configured_index_prefix`.
 
 A third, non-bug prerequisite is documented by

@@ -20,7 +20,7 @@ pytestmark = pytest.mark.live
 # Container-side export root, as configured in docker/test/compose.yml. The
 # API reports paths in its own namespace; the test reads the same bytes
 # through the host side of the bind mount.
-CONTAINER_EXPORT_ROOT = '/verify-data/exports'
+CONTAINER_EXPORT_ROOT = '/verify-data/projects/default/exports'
 
 
 def _host_path(container_path: str) -> Any:

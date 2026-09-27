@@ -359,13 +359,14 @@ def curation_app(
     temp_root = Path(tempfile.gettempdir()).resolve()
     monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (temp_root,))  # noqa: ARG005
 
-    # BA-1: POST /ingest/upload persists bytes under CurationConfig.upload_root
-    # -- give it a real, writable directory under the same temp root the
-    # source-path tests already declare servable, and force the process-wide
-    # config singleton to rebuild so it picks this env var up.
+    # BA-1: POST /ingest/upload persists bytes under the project's upload
+    # root ($OP_STATE_DIR/projects/<project>/uploads) -- give it a real,
+    # writable state dir under the same temp root the source-path tests
+    # already declare servable, and force the process-wide config
+    # singleton to rebuild so it picks this env var up.
     import src.config.curation as curation_config_mod
 
-    monkeypatch.setenv('OP_UPLOAD_ROOT', str(temp_root / 'op_test_uploads'))
+    monkeypatch.setenv('OP_STATE_DIR', str(temp_root / 'op_test_state'))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
 
     try:

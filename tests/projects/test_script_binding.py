@@ -91,7 +91,7 @@ def test_project_argument_defaults_to_env(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_default_binds_the_whole_process_from_the_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     def _factory(_hosts: list[str], **_kw: Any) -> Any:
-        client, _inner = _guarded_client([])
+        client, _inner = _guarded_client([_record('default')])
         return client
 
     monkeypatch.setattr(guard, 'make_script_opensearch', _factory)
@@ -108,9 +108,10 @@ def test_archived_default_binds_read_only(monkeypatch: pytest.MonkeyPatch) -> No
     is never writable from a script."""
     import dataclasses
 
-    from src.services.projects.registry import default_project_record
+    from src.config.curation import base_curation_config as _base
+    from src.config.projects import new_project_record
 
-    archived = dataclasses.replace(default_project_record(), status='archived')
+    archived = dataclasses.replace(new_project_record('default', _base()), status='archived')
 
     def _factory(_hosts: list[str], **_kw: Any) -> Any:
         client, _inner = _guarded_client([archived])

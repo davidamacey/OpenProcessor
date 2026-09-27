@@ -18,7 +18,7 @@ the progress file is skipped before rescanning — a crashed walker
 never re-POSTs work it already handed to the server. A single failed
 image ingest inside an otherwise-successful batch does *not* have its
 error re-driven by this walker; it is reported and left in the
-`op_items`/`op_images` write path's own results.
+items/images write path's own results.
 
 Usage:
     python3 scripts/curation/ingest_walker.py \\

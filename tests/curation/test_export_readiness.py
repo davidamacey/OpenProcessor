@@ -42,7 +42,7 @@ INDEX_CREATED = datetime(2026, 9, 24, 13, 50, tzinfo=UTC)
 
 def _settings(uuid: str = INDEX_UUID, created: datetime = INDEX_CREATED) -> dict[str, Any]:
     return {
-        'op_items': {
+        'op_prj_default__items': {
             'settings': {
                 'index': {'uuid': uuid, 'creation_date': str(int(created.timestamp() * 1000))}
             }
@@ -142,7 +142,11 @@ def test_export_router_maps_nothing_to_export_to_422(monkeypatch: pytest.MonkeyP
 # ------------------------------------------------------------ preflight rules
 
 
-CURRENT = {'index': 'op_items', 'uuid': INDEX_UUID, 'created_at': INDEX_CREATED.isoformat()}
+CURRENT = {
+    'index': 'op_prj_default__items',
+    'uuid': INDEX_UUID,
+    'created_at': INDEX_CREATED.isoformat(),
+}
 
 
 def test_generation_same_uuid_is_ok() -> None:

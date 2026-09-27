@@ -92,7 +92,7 @@ def test_upload_ingests_bytes_under_client_identifiers(
     # configured upload root, content-addressed.
     persisted_paths = {d['image_path'] for d in docs.values()}
     assert len(persisted_paths) == 2
-    assert all('op_test_uploads' in p for p in persisted_paths)
+    assert all('op_test_state/projects/default/uploads' in p for p in persisted_paths)
     # The identifiers do not exist on the server: the whole-frame
     # embedding must come from the uploaded bytes, never a path re-read.
     assert pe.whole_frame_paths == []

@@ -35,7 +35,9 @@ class _OpenSearchLike:
         self.bodies.append(json)
         drop_metadata = json.get('stored_fields') == '_none_'
         hits = [
-            {'_index': 'op_items'} if drop_metadata else {'_index': 'op_items', '_id': i}
+            {'_index': 'op_prj_default__items'}
+            if drop_metadata
+            else {'_index': 'op_prj_default__items', '_id': i}
             for i in self.ids
         ]
         return _Resp({'hits': {'hits': hits}})

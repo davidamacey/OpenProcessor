@@ -322,7 +322,7 @@ def build_parser() -> argparse.ArgumentParser:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument('--opensearch-url', default=DEFAULT_OPENSEARCH)
-    p.add_argument('--index', default=None, help='Items index (default: OP_ITEMS_INDEX / config)')
+    p.add_argument('--index', default=None, help='Items index (default: the --project items index)')
     p.add_argument(
         '--embedder',
         choices=['auto', 'pe', 'sentence-transformers', 'hash'],

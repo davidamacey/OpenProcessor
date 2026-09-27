@@ -27,5 +27,7 @@ class _FakeScrollOS:
 @pytest.mark.asyncio
 async def test_scroll_hits_default_page_size_is_2000() -> None:
     client = _FakeScrollOS()
-    await scroll_hits(client, index='op_items', query={'match_all': {}}, source=['crop_id'])
+    await scroll_hits(
+        client, index='op_prj_default__items', query={'match_all': {}}, source=['crop_id']
+    )
     assert client.search_bodies[0]['size'] == 2000

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -11,8 +10,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-import src.config
-import src.config.curation
 from src.routers.curation._common import config as curation_config
 
 
@@ -30,7 +27,9 @@ def _write_export(d: Path, **meta: Any) -> None:
 
 @pytest.fixture
 def export_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    root = tmp_path / 'exports'
+    # The bound project's export root: <OP_PROJECTS_DATA_ROOT>/default/exports.
+    monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects'))
+    root = tmp_path / 'projects' / 'default' / 'exports'
     # Multi-class versions directly under the root, `current` -> v2.
     _write_export(root / 'v1', version_tag='v1', exported_at='2026-01-01', image_count=10)
     _write_export(
@@ -64,13 +63,6 @@ def export_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     # Not a dataset at all: ignored.
     (root / 'scratch' / 'junk').mkdir(parents=True)
 
-    # get_curation_config() now returns a CurationConfigView, not a plain
-    # dataclass instance -- dataclasses.replace() needs the underlying
-    # base instance instead (src.config.curation.base_curation_config()).
-    from src.config.curation import base_curation_config
-
-    cfg = dataclasses.replace(base_curation_config(), export_root=root)
-    monkeypatch.setattr(src.config.curation, '_default_curation_config', cfg)
     return root
 
 

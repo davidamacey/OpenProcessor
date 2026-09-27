@@ -133,7 +133,7 @@ async def test_compute_diverse_order_disabled_returns_none_without_any_os_call(
 
     monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
     fake_os = _fake_scroll_client(_orthonormal_pool(5))
-    result = await compute_diverse_order(fake_os, 'op_items', {'match_all': {}})
+    result = await compute_diverse_order(fake_os, 'op_prj_default__items', {'match_all': {}})
     assert result is None
     fake_os.search.assert_not_called()
 
@@ -147,7 +147,7 @@ async def test_compute_diverse_order_returns_full_ranking_when_enabled_and_small
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     pool = _orthonormal_pool(6)
     fake_os = _fake_scroll_client(pool)
-    result = await compute_diverse_order(fake_os, 'op_items', {'match_all': {}})
+    result = await compute_diverse_order(fake_os, 'op_prj_default__items', {'match_all': {}})
     assert result is not None
     assert set(result) == {cid for cid, _ in pool}
     assert len(result) == 6
@@ -168,7 +168,7 @@ async def test_compute_diverse_order_falls_back_above_inline_cap(
     # 5 trips truncation immediately on the first (only) scroll page.
     monkeypatch.setenv('OP_SELECT_SYNC_MAX_OPS', '4')
     fake_os = _fake_scroll_client(_orthonormal_pool(5))
-    result = await compute_diverse_order(fake_os, 'op_items', {'match_all': {}})
+    result = await compute_diverse_order(fake_os, 'op_prj_default__items', {'match_all': {}})
     assert result is None
 
 
@@ -180,7 +180,7 @@ async def test_compute_diverse_order_empty_pool_returns_empty_list(
 
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     fake_os = _fake_scroll_client([])
-    result = await compute_diverse_order(fake_os, 'op_items', {'match_all': {}})
+    result = await compute_diverse_order(fake_os, 'op_prj_default__items', {'match_all': {}})
     assert result == []
 
 
@@ -199,14 +199,14 @@ async def test_compute_diverse_order_cache_hits_when_k_caps_the_order(
     fake_os = _fake_scroll_client(pool)
 
     first = await compute_diverse_order(
-        fake_os, 'op_items', {'match_all': {}}, current_count=6, k=2
+        fake_os, 'op_prj_default__items', {'match_all': {}}, current_count=6, k=2
     )
     assert first is not None
     assert len(first) == 2
     assert fake_os.search.await_count == 1
 
     second = await compute_diverse_order(
-        fake_os, 'op_items', {'match_all': {}}, current_count=6, k=2
+        fake_os, 'op_prj_default__items', {'match_all': {}}, current_count=6, k=2
     )
     assert second == first
     # Still 1 -- the second call hit the cache instead of re-scrolling.

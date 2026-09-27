@@ -63,7 +63,9 @@ async def test_planted_far_member_ranks_first() -> None:
         'far-outlier': [0.0, 1.0, 0.0],
     }
     client = _FakeScrollOS(docs)
-    order = await compute_outlier_order(client, 'op_items', {'term': {'cluster_id': 1}})
+    order = await compute_outlier_order(
+        client, 'op_prj_default__items', {'term': {'cluster_id': 1}}
+    )
     assert order is not None
     assert order[0] == 'far-outlier'
     assert set(order) == set(docs)
@@ -72,14 +74,18 @@ async def test_planted_far_member_ranks_first() -> None:
 @pytest.mark.asyncio
 async def test_single_member_cluster_returns_that_one_id() -> None:
     client = _FakeScrollOS({'only-one': [1.0, 0.0, 0.0]})
-    order = await compute_outlier_order(client, 'op_items', {'term': {'cluster_id': 2}})
+    order = await compute_outlier_order(
+        client, 'op_prj_default__items', {'term': {'cluster_id': 2}}
+    )
     assert order == ['only-one']
 
 
 @pytest.mark.asyncio
 async def test_empty_cluster_returns_empty_list() -> None:
     client = _FakeScrollOS({})
-    order = await compute_outlier_order(client, 'op_items', {'term': {'cluster_id': 3}})
+    order = await compute_outlier_order(
+        client, 'op_prj_default__items', {'term': {'cluster_id': 3}}
+    )
     assert order == []
 
 
@@ -88,7 +94,9 @@ async def test_too_large_cluster_returns_none(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(outliers_mod, '_MAX_MEMBERS', 2)
     docs = {f'm{i}': [1.0, float(i) * 0.01, 0.0] for i in range(5)}
     client = _FakeScrollOS(docs)
-    order = await compute_outlier_order(client, 'op_items', {'term': {'cluster_id': 4}})
+    order = await compute_outlier_order(
+        client, 'op_prj_default__items', {'term': {'cluster_id': 4}}
+    )
     assert order is None
 
 
@@ -98,7 +106,7 @@ async def test_cached_order_reused_when_count_unchanged() -> None:
     client = _FakeScrollOS(docs)
     query = {'term': {'cluster_id': 5}}
 
-    first = await compute_outlier_order(client, 'op_items', query, current_count=2)
+    first = await compute_outlier_order(client, 'op_prj_default__items', query, current_count=2)
 
     # A client that would raise if actually queried again — proves the
     # second call served from cache rather than re-scrolling.
@@ -106,7 +114,7 @@ async def test_cached_order_reused_when_count_unchanged() -> None:
         async def search(self, **_kw: Any) -> dict[str, Any]:
             raise AssertionError('should not re-query while cache is valid')
 
-    second = await compute_outlier_order(_BoomOS(), 'op_items', query, current_count=2)
+    second = await compute_outlier_order(_BoomOS(), 'op_prj_default__items', query, current_count=2)
     assert second == first
 
 
@@ -116,11 +124,11 @@ async def test_cache_invalidated_when_member_count_changes() -> None:
     client = _FakeScrollOS(docs)
     query = {'term': {'cluster_id': 6}}
 
-    await compute_outlier_order(client, 'op_items', query, current_count=2)
+    await compute_outlier_order(client, 'op_prj_default__items', query, current_count=2)
 
     docs3 = {**docs, 'c': [0.0, 0.0, 1.0]}
     client2 = _FakeScrollOS(docs3)
-    second = await compute_outlier_order(client2, 'op_items', query, current_count=3)
+    second = await compute_outlier_order(client2, 'op_prj_default__items', query, current_count=3)
     assert second is not None
     assert set(second) == set(docs3)
 
@@ -148,7 +156,9 @@ async def test_members_missing_embedding_field_are_skipped() -> None:
         async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
             return {}
 
-    order = await compute_outlier_order(_PartialOS(), 'op_items', {'term': {'cluster_id': 7}})
+    order = await compute_outlier_order(
+        _PartialOS(), 'op_prj_default__items', {'term': {'cluster_id': 7}}
+    )
     assert order == ['has-embedding']
 
 
@@ -172,6 +182,8 @@ async def test_too_large_cluster_never_issues_a_search_call(
             raise AssertionError('must not scroll a pool already known to exceed _MAX_MEMBERS')
 
     client = _CountOnlyOS()
-    order = await compute_outlier_order(client, 'op_items', {'term': {'cluster_id': 9}})
+    order = await compute_outlier_order(
+        client, 'op_prj_default__items', {'term': {'cluster_id': 9}}
+    )
     assert order is None
     assert client.search_calls == 0

@@ -282,7 +282,7 @@ def test_classes_merge_resets_stale_human_provenance_on_crops_only(
     ubq_calls = fake_opensearch.update_by_query.call_args_list
     assert len(ubq_calls) == 1
     labels_body = ubq_calls[0].kwargs['body']
-    assert ubq_calls[0].kwargs['index'] == 'op_labels_confirmed'
+    assert ubq_calls[0].kwargs['index'] == 'op_prj_default__labels_confirmed'
     labels_source = labels_body['script']['source']
     assert 'class_validated' not in labels_source
     assert 'label_source' not in labels_source
@@ -291,7 +291,7 @@ def test_classes_merge_resets_stale_human_provenance_on_crops_only(
     # stale human provenance on the merged crop.
     assert len(bulk_calls) == 1
     bulk_body = bulk_calls[0]
-    assert bulk_body[0]['update']['_index'] == 'op_items'
+    assert bulk_body[0]['update']['_index'] == 'op_prj_default__items'
     crop_doc = bulk_body[1]['doc']
     # F-56 follow-up: merge_source above is class_validated=True -- that
     # carries over to the target, it is not cleared.

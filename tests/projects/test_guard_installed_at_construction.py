@@ -85,14 +85,13 @@ def test_the_lifespan_binds_no_project() -> None:
 def test_for_each_project_binds_each_active_project_in_turn() -> None:
     import dataclasses
 
-    from src.config.curation import base_curation_config
+    from src.config.curation import base_curation_config, base_curation_config as _base
     from src.config.project_context import current_project, is_project_bound
-    from src.config.projects import ProjectStatus, resources_for_new
+    from src.config.projects import ProjectStatus, new_project_record, resources_for_new
     from src.services.projects import registry as registry_mod
     from src.services.projects.bootstrap import for_each_project
-    from src.services.projects.registry import default_project_record
 
-    base = default_project_record()
+    base = new_project_record('default', _base())
     registry = registry_mod.get_project_registry()
     statuses: tuple[tuple[str, ProjectStatus], ...] = (
         ('alpha', 'active'),

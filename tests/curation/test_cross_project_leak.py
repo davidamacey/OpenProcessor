@@ -6,8 +6,8 @@ OpenSearch indexes, directories, caches and event stream.
 Why two passes: a process cache primed by the first project is read back
 by the second one. A single sweep as one project can never see that.
 
-Setup: three projects -- ``default`` (the env-named indexes and dirs),
-``alpha`` and ``beta`` -- on a fake OpenSearch transport behind the real
+Setup: three ordinary projects -- ``default``, ``alpha`` and ``beta`` --
+on a fake OpenSearch transport behind the real
 project guard. Each is seeded with its own items, images, labels and
 classes, and with filesystem state under its own resources (job state,
 a training run, an FP centroid store). Every id and class name embeds
@@ -536,7 +536,7 @@ def _record(slug: str, resources: Any) -> Any:
 def _job_dirs(slug: str, tmp_path: Path) -> list[Path]:
     """The per-project job dirs P1 routes through ``project_jobs_dir``."""
     roots = [tmp_path / 'jobs' / name for name in ('probe', 'select', 'scores', 'viz')]
-    return roots if slug == 'default' else [root / 'projects' / slug for root in roots]
+    return [root / 'projects' / slug for root in roots]
 
 
 def _seed_files(record: Any, tmp_path: Path) -> list[Path]:
@@ -591,10 +591,6 @@ def _seed_files(record: Any, tmp_path: Path) -> list[Path]:
         (res.export_root if sub == 'exports' else res.upload_root).mkdir(
             parents=True, exist_ok=True
         )
-    if slug == 'default':
-        # default's dirs are the deployment roots every other project nests
-        # under; only its own leaf files are checked.
-        return [*own_dirs, res.class_registry_path.parent]
     return [
         *own_dirs,
         res.project_state_dir,
@@ -623,20 +619,16 @@ def leak_env(
     import src.config.curation as curation_config_mod
     from src.clients import curation_opensearch
     from src.config.curation import IndexRole, base_curation_config
-    from src.config.projects import resources_for_new
+    from src.config.projects import new_project_record, resources_for_new
     from src.core.dependencies import app_state, get_async_triton
     from src.routers.curation import _common
     from src.services.curation import event_hub
     from src.services.curation.autolabel import job as autolabel_job
     from src.services.projects import guard, registry as registry_mod
-    from src.services.projects.registry import ProjectRegistry, default_project_record
+    from src.services.projects.registry import ProjectRegistry
 
     for name, sub in {
         'STATE_DIR': 'state',
-        'EXPORT_ROOT': 'default/exports',
-        'UPLOAD_ROOT': 'default/uploads',
-        'REGISTRY_PATH': 'default/class_registry.json',
-        'BAKEOFF_EVAL_ROOT': 'default/bakeoff_eval',
         'CROP_CACHE_DIR': 'crop_cache',
         'TRAIN_JOBS_DIR': 'jobs/train',
         'AUTO_LABEL_STATE_DIR': 'jobs/auto_label',
@@ -676,7 +668,7 @@ def leak_env(
         monkeypatch.setattr(autolabel_job, attr, al_dir / fname if fname else al_dir)
 
     base = base_curation_config()
-    records = {'default': default_project_record()}
+    records = {'default': new_project_record('default', base)}
     for slug in ('alpha', 'beta'):
         records[slug] = _record(slug, resources_for_new(slug, base))
 
@@ -687,7 +679,7 @@ def leak_env(
     own_dirs = {slug: _seed_files(record, tmp_path) for slug, record in records.items()}
 
     registry = ProjectRegistry(lambda: None)
-    registry._by_slug = {s: r for s, r in records.items() if s != 'default'}
+    registry._by_slug = dict(records)
     registry._revision = 1
 
     async def _fresh(self: Any) -> None:

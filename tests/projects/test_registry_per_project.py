@@ -167,9 +167,7 @@ def test_index_bootstrap_runs_once_per_project(tmp_path: Any, monkeypatch: Any) 
     assert created == ['alpha', 'beta']
 
 
-def test_job_dirs_nest_per_project_and_default_keeps_todays_path(
-    tmp_path: Any, monkeypatch: Any
-) -> None:
+def test_job_dirs_nest_per_project_default_included(tmp_path: Any, monkeypatch: Any) -> None:
     from pathlib import Path
 
     from src.config.project_context import bind_project
@@ -187,9 +185,9 @@ def test_job_dirs_nest_per_project_and_default_keeps_todays_path(
         'select': select_job._jobs_dir,
         'viz': embedding_viz._jobs_dir,
     }
-    # tests/conftest.py binds `default` for this test.
+    # tests/conftest.py binds `default` for this test: it nests like any project.
     for name, fn in dirs.items():
-        assert fn() == Path(tmp_path / name)
+        assert fn() == Path(tmp_path / name / 'projects' / 'default')
     with bind_project(_new_record('beta', tmp_path)):
         for name, fn in dirs.items():
             assert fn() == Path(tmp_path / name / 'projects' / 'beta')
@@ -254,4 +252,26 @@ def test_refresh_reads_every_project_past_one_page(fake_registry_client) -> None
 
     registry = ProjectRegistry(lambda: client)
     asyncio.run(registry.ensure_fresh())
-    assert len(registry.snapshot()) == n + 1  # + the env-derived default
+    assert len(registry.snapshot()) == n  # exactly the stored records, nothing synthesized
+
+
+def test_default_is_an_ordinary_bootstrapped_project(fake_registry_client) -> None:
+    """``default`` gets the standard naming, and a registry knows it only
+    from its stored record (nothing is synthesized from the env)."""
+    client = fake_registry_client
+
+    async def _run() -> ProjectRegistry:
+        registry = ProjectRegistry(lambda: client)
+        await registry.ensure_fresh()
+        assert registry.get('default') is None  # never bootstrapped: unknown
+        await bootstrap_default_project(client)
+        await registry.ensure_fresh()
+        return registry
+
+    record = asyncio.run(_run()).get('default')
+    assert record is not None
+    assert set(record.resources.indexes.values()) == {
+        f'op_prj_default__{role.value}' for role in record.resources.indexes
+    }
+    assert record.resources.class_registry_path.parts[-2:] == ('default', 'class_registry.json')
+    assert record.resources.model_prefix == 'default__'

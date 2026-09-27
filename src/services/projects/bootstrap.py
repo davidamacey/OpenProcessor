@@ -1,8 +1,9 @@
 """Idempotent startup bootstrap of the ``default`` project record.
 
-This is the *only* "migration" P1 performs, and it touches no data
-index -- it just upserts the registry doc so ``default`` shows up in
-``GET /projects`` with its stored status.
+``default`` is created like any project (``new_project_record``: indexes
+``{OP_PROJECT_INDEX_PREFIX}default__<role>``, dirs under the projects data
+and state roots). The bootstrap touches no data index; the project's
+indexes are created by the normal per-project index bootstrap.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.config.curation import base_curation_config
-from src.config.projects import DEFAULT_SLUG, ProjectRecord, resources_for_default
+from src.config.projects import DEFAULT_SLUG, ProjectRecord, new_project_record
 from src.core.logging import get_logger
 from src.services.projects.registry import REVISION_DOC_ID, projects_index, record_to_doc
 
@@ -44,7 +45,7 @@ async def bootstrap_default_project(client: Any) -> ProjectRecord:
     """Create the ``default`` project doc if it does not exist yet, or
     return the existing one unchanged. Never overwrites an existing
     record (a later env change must not remap a live project), and never
-    issues a reindex/update_by_query against any data index."""
+    touches any data index."""
     from src.services.projects.guard import bind_registry_admin
 
     doc_id = f'project:{DEFAULT_SLUG}'
@@ -59,17 +60,12 @@ async def bootstrap_default_project(client: Any) -> ProjectRecord:
         except Exception:  # nosec B110 - the client raises on a missing doc; that's first-boot, not an error
             logger.debug('no existing default project doc; bootstrapping one')
 
-        now = datetime.now(UTC).isoformat()
-        record = ProjectRecord(
-            slug=DEFAULT_SLUG,
+        record = new_project_record(
+            DEFAULT_SLUG,
+            base_curation_config(),
             display_name='Default',
-            description='The original, unscoped dataset workspace.',
-            status='active',
-            revision=1,
-            created_at=now,
-            updated_at=now,
-            origin=None,
-            resources=resources_for_default(base_curation_config()),
+            description='The project every fresh install starts with.',
+            now=datetime.now(UTC).isoformat(),
         )
         await client.index(index=projects_index(), id=doc_id, body=record_to_doc(record))
         await bump_revision(client)

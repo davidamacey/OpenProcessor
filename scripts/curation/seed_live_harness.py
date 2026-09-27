@@ -161,14 +161,13 @@ def _assert_verify_scoped(cfg: Any) -> None:
         'items_index': cfg.items_index,
         'labels_confirmed_index': cfg.labels_confirmed_index,
         'classes_index': cfg.classes_index,
-        'clusters_index': cfg.clusters_index,
         'settings_index': cfg.settings_index,
     }
     bad = {k: v for k, v in names.items() if not v.startswith('verify_')}
     if bad:
         _fail(
             'refusing to seed: these configured index names lack the '
-            f'`verify_` prefix: {bad}. Set the OP_*_INDEX env vars first.'
+            f'`verify_` prefix: {bad}. Set OP_PROJECT_INDEX_PREFIX=verify_prj_ first.'
         )
 
 
@@ -402,7 +401,6 @@ async def _seed(args: argparse.Namespace) -> int:
                 cfg.items_index,
                 cfg.labels_confirmed_index,
                 cfg.classes_index,
-                cfg.clusters_index,
                 cfg.settings_index,
             ):
                 try:
@@ -413,7 +411,7 @@ async def _seed(args: argparse.Namespace) -> int:
             if registry_path.parent.is_dir():
                 for stale in registry_path.parent.glob(f'{registry_path.stem}*.json'):
                     stale.unlink()
-            for sub in ('exports', 'state', 'crop_cache'):
+            for sub in ('projects', 'state', 'crop_cache'):
                 target = Path(args.data_root) / sub
                 if target.is_dir():
                     shutil.rmtree(target)

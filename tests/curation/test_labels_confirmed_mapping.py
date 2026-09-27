@@ -1,7 +1,7 @@
 """labels_confirmed mapping must declare every field a writer sets.
 
 `label_import.py` (mismatch provenance) and the class-merge relabel path
-(`routers/curation/classes.py`) both write fields the ``op_labels_confirmed``
+(`routers/curation/classes.py`) both write fields the ``op_prj_default__labels_confirmed``
 mapping never declared, so they were picked up dynamically instead of with
 a deliberate type. This locks the mapping (and the migration that adds it
 to a long-lived index) to the literal field set those writers use.

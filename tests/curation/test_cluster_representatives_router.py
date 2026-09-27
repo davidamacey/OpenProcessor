@@ -139,7 +139,7 @@ def test_cluster_representatives_query_shape_has_no_top_hits(
     fake_opensearch.search.assert_awaited_once()
     assert fake_opensearch.search.await_args is not None
     body = fake_opensearch.search.await_args.kwargs['body']
-    assert fake_opensearch.search.await_args.kwargs['index'] == 'op_items'
+    assert fake_opensearch.search.await_args.kwargs['index'] == 'op_prj_default__items'
     assert body['size'] == 0
 
     terms = body['aggs']['clusters']['terms']
@@ -167,7 +167,7 @@ def test_cluster_representatives_msearch_only_covers_the_page(
     assert len(msearch_body) == 4
     headers = msearch_body[0::2]
     queries = msearch_body[1::2]
-    assert all(h == {'index': 'op_items'} for h in headers)
+    assert all(h == {'index': 'op_prj_default__items'} for h in headers)
     for q in queries:
         assert 'top_hits' not in str(q)
         assert q['size'] == 3

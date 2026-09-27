@@ -10,15 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Projects foundation (P1).**
   `src/config/projects.py` (`ProjectRecord`/`ProjectResources`,
-  `resources_for_default`/`resources_for_new`, slug validation),
+  `resources_for_new`/`new_project_record`, slug validation),
   `src/config/project_context.py` (`ContextVar`-based `BoundProject`,
   `current_project()`/`bind_project()`/`set_bound_project()`,
   `bind_process_project()` for script entry points,
   `run_in_executor_bound()`, `project_jobs_dir()`, `project_env()`), and
   `src/services/projects/` (`registry.py`: the `op_projects` index
-  snapshot, revision-gated `ensure_fresh()`/`poll_loop()`, `default`
-  always resolved from the env; `bootstrap.py`: idempotent `default`
-  project upsert, no data migration; `guard.py`: transport-level
+  snapshot, revision-gated `ensure_fresh()`/`poll_loop()`, exactly the
+  stored records; `bootstrap.py`: idempotent `default` project create; `guard.py`: transport-level
   OpenSearch project guard — `CrossProjectAccess`/`ProjectNotBound`/
   `ProjectReadOnly`, `make_curation_opensearch()` and
   `make_script_opensearch()` as the only client factories;
@@ -44,6 +43,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   409 `project_read_only`.
 
 ### Changed
+- **BREAKING: `default` is an ordinary project.** It is created at first
+  boot with the standard naming: indexes `op_prj_default__<role>`, class
+  registry/exports/bake-off eval sets under
+  `$OP_PROJECTS_DATA_ROOT/default/`, uploads and job state under
+  `.../projects/default/`. It can be archived, never deleted. The
+  `OP_*_INDEX` env vars, `OP_ITEMS_INDEX_OVERRIDE`, `OP_REGISTRY_PATH`,
+  `OP_EXPORT_ROOT`, `OP_UPLOAD_ROOT` and `OP_BAKEOFF_EVAL_ROOT` are gone;
+  existing `op_*` indexes are not migrated (re-create and re-ingest).
 - **Unbound project-scoped config fails closed.** Reading a project-scoped
   `CurationConfig` field with no project bound raises `ProjectNotBound`
   instead of silently using `default`. Requests bind through their route;
@@ -56,7 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reducer/projection state files, the eval-dataset roots, and the scores /
   probe / selection / projection job dirs resolve per bound project
   (`items_index()` and friends replace the frozen `CURATION_*_INDEX` /
-  `ITEMS_INDEX` constants). `default` keeps today's names and paths.
+  `ITEMS_INDEX` constants).
 - The event hub stamps every event with the bound `project` and refuses
   an unbound publish or one naming another project; a scoped stream
   delivers only its own project's events, the global stream only

@@ -473,10 +473,11 @@ async def test_probe_pred_class_id_is_the_registry_id_not_the_model_dense_id(
 
     import dataclasses
 
+    from src.config.curation import base_curation_config as _base
     from src.config.project_context import bind_project
-    from src.services.projects.registry import default_project_record
+    from src.config.projects import new_project_record
 
-    record = default_project_record()
+    record = new_project_record('default', _base())
     record = dataclasses.replace(
         record, resources=dataclasses.replace(record.resources, class_registry_path=registry_path)
     )
