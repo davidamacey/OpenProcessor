@@ -28,6 +28,8 @@ const SUMMARY = {
   selectable: true,
   is_default: true,
   deletable: true,
+  archivable: true,
+  unarchivable: true,
   revision: true,
   created_at: true,
   updated_at: true,

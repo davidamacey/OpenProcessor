@@ -44,6 +44,12 @@ export interface ProjectSummary {
   /** Served: whether a delete can ever be attempted (false for the
    *  default project). Delete is absent when false. */
   deletable: boolean;
+  /** Served: whether `POST /projects/{slug}/archive` accepts this
+   *  project's status. The Archive action renders only when true. */
+  archivable: boolean;
+  /** Served: whether `POST /projects/{slug}/unarchive` accepts this
+   *  project's status. The Unarchive action renders only when true. */
+  unarchivable: boolean;
   /** Optimistic-concurrency token every lifecycle write sends back as
    *  `expected_revision`. */
   revision: number;

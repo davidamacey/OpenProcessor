@@ -8,8 +8,8 @@
    * from served flags alone:
    *
    * - Open, Edit: `selectable`
-   * - Archive, Copy settings: `writable`
-   * - Unarchive: `selectable && !writable` (reads work, writes don't)
+   * - Copy settings: `writable`
+   * - Archive: `archivable`; Unarchive: `unarchivable`
    * - Delete: `deletable`
    * - Create: disabled only by a served `capacity.status === 'blocked'`
    *
@@ -217,6 +217,8 @@
                       data-testid="project-clone-{p.slug}"
                       onclick={() => (cloning = p)}>Copy settings</button
                     >
+                  {/if}
+                  {#if p.archivable}
                     <button
                       type="button"
                       class="btn btn-sm"
@@ -225,7 +227,8 @@
                       onclick={() => void lifecycle(p, 'Archived', admin.archive)}
                       >Archive</button
                     >
-                  {:else if p.selectable}
+                  {/if}
+                  {#if p.unarchivable}
                     <button
                       type="button"
                       class="btn btn-sm"

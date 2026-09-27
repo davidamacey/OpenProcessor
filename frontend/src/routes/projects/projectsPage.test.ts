@@ -133,6 +133,33 @@ describe('row actions follow served flags only', () => {
     expect(q('project-open-alpha')!.getAttribute('href')).toBe('/p/alpha/dashboard');
   });
 
+  it('Archive / Unarchive read the served archivable / unarchivable, not status', async () => {
+    // Flags that contradict what status/writable would suggest: the served
+    // flags win, so no client-side inference can survive this test.
+    listed = [
+      DEFAULT,
+      testProject({ slug: 'pinned', status: 'active', archivable: false }),
+      testProject({
+        slug: 'frozen',
+        status: 'archived',
+        writable: false,
+        unarchivable: false,
+      }),
+      testProject({
+        slug: 'odd',
+        status: 'building',
+        writable: false,
+        selectable: false,
+        unarchivable: true,
+      }),
+    ];
+    await render();
+    expect(q('project-archive-pinned')).toBeNull();
+    expect(q('project-clone-pinned')).not.toBeNull();
+    expect(q('project-unarchive-frozen')).toBeNull();
+    expect(q('project-unarchive-odd')).not.toBeNull();
+  });
+
   it('a served blocked capacity disables Create and shows the served message', async () => {
     capacity = testCapacity('blocked');
     await render();

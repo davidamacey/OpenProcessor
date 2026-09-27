@@ -102,6 +102,19 @@
         "title": "AcceptedModel",
         "type": "object"
       },
+      "ApiErrorResponse": {
+        "description": "The body of every error :func:`api_error` raises.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/ConfigErrorDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ApiErrorResponse",
+        "type": "object"
+      },
       "ArchiveRequest": {
         "properties": {
           "expected_revision": {
@@ -1854,6 +1867,188 @@
         "title": "CompletedTask",
         "type": "object"
       },
+      "ConfigErrorDetail": {
+        "description": "The ``detail`` body of every project-route 4xx/5xx.\n\nOptional fields are code-specific and ``None``/absent otherwise; kept\ntyped so OpenAPI documents them rather than leaving ``detail`` as an\nopaque blob.",
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "active_shards": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Shards"
+          },
+          "capacity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectCapacityWire"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Revision"
+          },
+          "error": {
+            "enum": [
+              "project_not_found",
+              "project_archived",
+              "project_read_only",
+              "project_building",
+              "project_deleting",
+              "project_failed",
+              "project_busy",
+              "slug_taken",
+              "slug_retired",
+              "last_active_project",
+              "shard_budget_exceeded",
+              "project_protected",
+              "target_not_empty",
+              "preview_stale",
+              "in_use",
+              "slug_invalid",
+              "confirm_mismatch",
+              "combine_invalid",
+              "model_name_reserved",
+              "internal_isolation_error",
+              "revision_conflict",
+              "invalid_transition",
+              "export_outside_project",
+              "model_not_found"
+            ],
+            "title": "Error",
+            "type": "string"
+          },
+          "hard_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hard Limit"
+          },
+          "heap_max_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heap Max Bytes"
+          },
+          "jobs": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/JobRefWire"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jobs"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "needed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needed"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "project_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Status"
+          },
+          "projects": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projects"
+          },
+          "soft_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soft Limit"
+          }
+        },
+        "required": [
+          "error",
+          "message"
+        ],
+        "title": "ConfigErrorDetail",
+        "type": "object"
+      },
       "Coverage": {
         "properties": {
           "n_covered": {
@@ -2441,6 +2636,140 @@
           "id"
         ],
         "title": "DatasetRef",
+        "type": "object"
+      },
+      "DeleteBlockingIssue": {
+        "description": "One reason a delete is refused (delta 11: structured, not bare\ncodes).",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "DeleteBlockingIssue",
+        "type": "object"
+      },
+      "DeleteDryRunResponse": {
+        "properties": {
+          "blocking": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocking",
+            "type": "array"
+          },
+          "blocking_detail": {
+            "items": {
+              "$ref": "#/components/schemas/DeleteBlockingIssue"
+            },
+            "title": "Blocking Detail",
+            "type": "array"
+          },
+          "dirs": {
+            "items": {
+              "$ref": "#/components/schemas/DryRunDirReport"
+            },
+            "title": "Dirs",
+            "type": "array"
+          },
+          "indexes": {
+            "items": {
+              "$ref": "#/components/schemas/DryRunIndexReport"
+            },
+            "title": "Indexes",
+            "type": "array"
+          },
+          "mlflow_experiment": {
+            "title": "Mlflow Experiment",
+            "type": "string"
+          },
+          "promoted_models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Promoted Models",
+            "type": "array"
+          },
+          "referenced_by": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Referenced By",
+            "type": "array"
+          },
+          "running_jobs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Running Jobs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "indexes",
+          "dirs",
+          "mlflow_experiment",
+          "blocking",
+          "blocking_detail"
+        ],
+        "title": "DeleteDryRunResponse",
+        "type": "object"
+      },
+      "DryRunDirReport": {
+        "properties": {
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "bytes"
+        ],
+        "title": "DryRunDirReport",
+        "type": "object"
+      },
+      "DryRunIndexReport": {
+        "properties": {
+          "docs": {
+            "title": "Docs",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "store_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Bytes"
+          }
+        },
+        "required": [
+          "name",
+          "docs"
+        ],
+        "title": "DryRunIndexReport",
         "type": "object"
       },
       "EvalClassGt": {
@@ -5155,6 +5484,40 @@
         "title": "JobProgress",
         "type": "object"
       },
+      "JobRefWire": {
+        "description": "One running job blocking a lifecycle action (Cropwright rev-3\ndelta 11): typed, not a raw id string, so a caller can render\n\"cars has 2 running jobs: Training run run-7, Bake-off run-42\"\nwithout a second lookup.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "kind_label": {
+            "title": "Kind Label",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "kind_label",
+          "id",
+          "label",
+          "started_at"
+        ],
+        "title": "JobRefWire",
+        "type": "object"
+      },
       "LatencyStats": {
         "properties": {
           "mean": {
@@ -5581,6 +5944,207 @@
         "title": "MetricBlock",
         "type": "object"
       },
+      "ModelClassMappingEntry": {
+        "properties": {
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Name"
+          },
+          "match": {
+            "enum": [
+              "exact",
+              "case_insensitive",
+              "none"
+            ],
+            "title": "Match",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "integer"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id",
+          "model_name",
+          "class_id",
+          "class_name",
+          "match"
+        ],
+        "title": "ModelClassMappingEntry",
+        "type": "object"
+      },
+      "ModelClassMappingLabels": {
+        "properties": {
+          "match": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Match",
+            "type": "object"
+          }
+        },
+        "title": "ModelClassMappingLabels",
+        "type": "object"
+      },
+      "ModelClassMappingResponse": {
+        "description": "The full name mapping of one model onto the bound project.",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ModelClassMappingEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "labels": {
+            "$ref": "#/components/schemas/ModelClassMappingLabels"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "model_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Project"
+          },
+          "not_covered": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Not Covered",
+            "type": "array"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "unmapped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmapped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "model",
+          "model_project",
+          "project",
+          "entries",
+          "unmapped",
+          "not_covered"
+        ],
+        "title": "ModelClassMappingResponse",
+        "type": "object"
+      },
+      "ModelSharingRequest": {
+        "properties": {
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "shared": {
+            "title": "Shared",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "shared",
+          "expected_revision"
+        ],
+        "title": "ModelSharingRequest",
+        "type": "object"
+      },
+      "ModelSharingResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "shared": {
+            "title": "Shared",
+            "type": "boolean"
+          },
+          "used_by": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ModelSharingUser"
+            },
+            "title": "Used By",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "project",
+          "shared",
+          "revision"
+        ],
+        "title": "ModelSharingResponse",
+        "type": "object"
+      },
+      "ModelSharingUser": {
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "ModelSharingUser",
+        "type": "object"
+      },
       "NotCoveredClass": {
         "properties": {
           "eval_class_id": {
@@ -5777,6 +6341,24 @@
           "fn"
         ],
         "title": "PerClassRow",
+        "type": "object"
+      },
+      "PipelinePauseState": {
+        "properties": {
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "paused"
+        ],
+        "title": "PipelinePauseState",
         "type": "object"
       },
       "PreflightCheck": {
@@ -6057,6 +6639,78 @@
         "title": "ProfilesResponse",
         "type": "object"
       },
+      "ProjectCapacityWire": {
+        "description": "The OpenSearch shard/heap capacity block (§2.3,\n``src.services.projects.capacity.ProjectCapacity.to_wire``): served on\n``GET /projects`` and on a 409 ``shard_budget_exceeded``.",
+        "properties": {
+          "active_shards": {
+            "title": "Active Shards",
+            "type": "integer"
+          },
+          "data_nodes": {
+            "title": "Data Nodes",
+            "type": "integer"
+          },
+          "hard_limit": {
+            "title": "Hard Limit",
+            "type": "integer"
+          },
+          "heap_max_bytes": {
+            "title": "Heap Max Bytes",
+            "type": "integer"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
+          },
+          "max_shards_per_node": {
+            "title": "Max Shards Per Node",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "per_project_shards": {
+            "title": "Per Project Shards",
+            "type": "integer"
+          },
+          "projects_until_soft_limit": {
+            "title": "Projects Until Soft Limit",
+            "type": "integer"
+          },
+          "soft_limit": {
+            "title": "Soft Limit",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "warn",
+              "blocked"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "active_shards",
+          "per_project_shards",
+          "soft_limit",
+          "hard_limit",
+          "heap_max_bytes",
+          "max_shards_per_node",
+          "data_nodes",
+          "projects_until_soft_limit",
+          "message",
+          "labels"
+        ],
+        "title": "ProjectCapacityWire",
+        "type": "object"
+      },
       "ProjectCounts": {
         "properties": {
           "images": {
@@ -6197,6 +6851,10 @@
       "ProjectRecordResponse": {
         "description": "``GET {prefix}`` (``/projects/{project}``): exactly ``ProjectSummary``\n+ ``resources`` (paths as served strings) + ``error`` (null unless\n``status == \"failed\"``, which P1 never produces -- create is P3\nscope).",
         "properties": {
+          "archivable": {
+            "title": "Archivable",
+            "type": "boolean"
+          },
           "counts": {
             "$ref": "#/components/schemas/ProjectCounts"
           },
@@ -6275,6 +6933,10 @@
             "title": "Status",
             "type": "string"
           },
+          "unarchivable": {
+            "title": "Unarchivable",
+            "type": "boolean"
+          },
           "updated_at": {
             "title": "Updated At",
             "type": "string"
@@ -6294,6 +6956,8 @@
           "selectable",
           "is_default",
           "deletable",
+          "archivable",
+          "unarchivable",
           "revision",
           "created_at",
           "updated_at",
@@ -6330,8 +6994,15 @@
             "type": "integer"
           },
           "validated": {
-            "title": "Validated",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validated"
           }
         },
         "required": [
@@ -6392,6 +7063,10 @@
       },
       "ProjectSummary": {
         "properties": {
+          "archivable": {
+            "title": "Archivable",
+            "type": "boolean"
+          },
           "counts": {
             "$ref": "#/components/schemas/ProjectCounts"
           },
@@ -6455,6 +7130,10 @@
             "title": "Status",
             "type": "string"
           },
+          "unarchivable": {
+            "title": "Unarchivable",
+            "type": "boolean"
+          },
           "updated_at": {
             "title": "Updated At",
             "type": "string"
@@ -6474,6 +7153,8 @@
           "selectable",
           "is_default",
           "deletable",
+          "archivable",
+          "unarchivable",
           "revision",
           "created_at",
           "updated_at",
@@ -6506,14 +7187,12 @@
           "capacity": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/ProjectCapacityWire"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Capacity"
+            ]
           },
           "default_slug": {
             "title": "Default Slug",
@@ -9401,6 +10080,26 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -9432,6 +10131,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
           }
         },
         "summary": "Global Health",
@@ -9465,6 +10184,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
           },
           "422": {
             "content": {
@@ -9505,6 +10244,26 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -9532,7 +10291,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -9579,11 +10337,41 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Delete Project Curation Projects  Project  Delete"
+                  "$ref": "#/components/schemas/DeleteDryRunResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Dry run (writes nothing)"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectLifecycleResponse"
+                }
+              }
+            },
+            "description": "Delete accepted; finishing"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
           },
           "422": {
             "content": {
@@ -9609,7 +10397,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -9625,6 +10412,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
           },
           "422": {
             "content": {
@@ -9650,7 +10457,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -9676,6 +10482,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
           },
           "422": {
             "content": {
@@ -9703,7 +10529,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -9729,6 +10554,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
           },
           "422": {
             "content": {
@@ -9757,7 +10602,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -9817,7 +10661,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -9890,7 +10733,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -9934,7 +10776,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -9987,7 +10828,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10047,7 +10887,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10101,7 +10940,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10154,7 +10992,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10198,7 +11035,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10268,7 +11104,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10322,7 +11157,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10364,7 +11198,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10420,7 +11253,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10488,7 +11320,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10543,7 +11374,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10594,7 +11424,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10659,7 +11488,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10745,7 +11573,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10798,7 +11625,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10841,7 +11667,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10867,6 +11692,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
           },
           "422": {
             "content": {
@@ -10895,7 +11740,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -10941,7 +11785,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -11141,7 +11984,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -11236,7 +12078,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -11308,7 +12149,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -11411,7 +12251,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -11825,7 +12664,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -11881,7 +12719,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -11937,7 +12774,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -11993,7 +12829,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12049,7 +12884,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12105,7 +12939,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12161,7 +12994,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12217,7 +13049,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12273,7 +13104,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12338,7 +13168,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12391,7 +13220,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12446,7 +13274,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12511,7 +13338,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12566,7 +13392,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12637,7 +13462,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12690,7 +13514,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12755,7 +13578,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12810,7 +13632,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12875,7 +13696,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12930,7 +13750,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -12995,7 +13814,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13060,7 +13878,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13115,7 +13932,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13170,7 +13986,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13235,7 +14050,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13290,7 +14104,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13336,7 +14149,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13414,7 +14226,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13470,7 +14281,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13516,7 +14326,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13607,7 +14416,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13649,7 +14457,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13705,7 +14512,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13763,7 +14569,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13807,7 +14612,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13863,7 +14667,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13907,7 +14710,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -13964,7 +14766,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -14012,7 +14813,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -14060,7 +14860,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -14118,7 +14917,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -14174,7 +14972,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -14228,7 +15025,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -14272,7 +15068,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -14326,7 +15121,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -14380,7 +15174,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -14424,7 +15217,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -14486,7 +15278,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -14543,7 +15334,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -14579,7 +15369,7 @@
     },
     "/curation/projects/{project}/models/status": {
       "get": {
-        "description": "Status + usage stats for the models that drive the curation labeling pipeline.\n\nReturns a single ``{\"models\": [...]}`` object describing each Triton model\nthe labeler depends on, plus the external VLM and segmenter services.\nEach entry carries enough metadata for the labeler ``/models`` page to\nrender a self-explanatory card without requiring access to\nTriton/Prometheus directly.",
+        "description": "Status + usage stats for the models that drive the curation labeling pipeline.\n\nReturns a single ``{\"models\": [...]}`` object describing each Triton model\nthe labeler depends on, plus the external VLM and segmenter services.\nEach entry carries enough metadata for the labeler ``/models`` page to\nrender a self-explanatory card without requiring access to\nTriton/Prometheus directly. Every Triton entry also carries\n``project``, ``shared`` and ``class_mapping`` (§5.5: its classes\nmatched by name onto this project's registry).",
         "operationId": "models_status_curation_projects__project__models_status_get",
         "parameters": [
           {
@@ -14587,9 +15377,20 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
+            }
+          },
+          {
+            "description": "Also list other projects' promoted models their owners shared",
+            "in": "query",
+            "name": "include_other_projects",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also list other projects' promoted models their owners shared",
+              "title": "Include Other Projects",
+              "type": "boolean"
             }
           }
         ],
@@ -14642,7 +15443,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -14688,6 +15488,215 @@
         ]
       }
     },
+    "/curation/projects/{project}/models/{model_name}/class_mapping": {
+      "get": {
+        "description": "How ``model_name``'s classes map by name onto this project's\nregistry. Visible for this project's own models and base models, and\nfor another project's model only once its owner shares it -- 404\n``model_not_found`` otherwise, so an unshared model's existence and\nclasses never reach another project.",
+        "operationId": "get_model_class_mapping_curation_projects__project__models__model_name__class_mapping_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_name",
+            "required": true,
+            "schema": {
+              "title": "Model Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelClassMappingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Model Class Mapping",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/models/{model_name}/sharing": {
+      "put": {
+        "description": "Opt a promoted model into (or out of) cross-project sharing. Only\nthe owning project may call this -- 404 for anyone else, matching\nevery other ownership check in this router.",
+        "operationId": "set_model_sharing_curation_projects__project__models__model_name__sharing_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_name",
+            "required": true,
+            "schema": {
+              "title": "Model Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Bypass the in-use refusal when unsharing (logged)",
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Bypass the in-use refusal when unsharing (logged)",
+              "title": "Force",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelSharingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSharingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Model Sharing",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/pause": {
+      "get": {
+        "operationId": "get_pipeline_pause_state_curation_projects__project__pause_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelinePauseState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Pipeline Pause State",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "post": {
+        "description": "Skip this project in every worker's next discovery cycle. Idempotent.",
+        "operationId": "pause_pipeline_curation_projects__project__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelinePauseState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause Pipeline",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/pipeline/auto_label": {
       "post": {
         "description": "Run the full auto-labeling chain end-to-end:\n\n1. (optional) Re-train FAISS clusters on every embedded item.\n2. Auto-promote items in high-purity clusters (``cluster_propagation``).\n3. Run the VLM over remaining unvalidated items with the open-vocabulary\n   prompt — high-confidence labels are auto-validated, ``__new__``\n   proposals are flagged for the curator queue.\n\nOutput enumerates each stage's counts so the labeler dashboard can show\n\"this many items still need a human.\" Idempotent: safe to re-run.",
@@ -14698,7 +15707,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -15012,7 +16020,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -15058,7 +16065,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -15356,7 +16362,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -15411,7 +16416,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -15457,7 +16461,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -15499,7 +16502,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -15545,7 +16547,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -15599,7 +16600,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -15643,7 +16643,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -15927,7 +16926,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -15983,7 +16981,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16086,7 +17083,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16132,7 +17128,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16228,7 +17223,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16274,7 +17268,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16320,7 +17313,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16366,7 +17358,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16412,7 +17403,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16501,7 +17491,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16597,7 +17586,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16631,6 +17619,49 @@
         ]
       }
     },
+    "/curation/projects/{project}/resume": {
+      "post": {
+        "description": "Clear this project's pause flag. Idempotent -- resuming an\nalready-running project is a no-op, not an error.",
+        "operationId": "resume_pipeline_curation_projects__project__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelinePauseState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Pipeline",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/review/new_class_proposals/resolve": {
       "post": {
         "description": "Bulk-resolve every new-class queue item proposing ``label`` — the\nsame selection ``GET /review/new_class_proposals`` and its summary use\n(``vlm_new_class_pending`` rows and ``needs_new_class`` flags, never a\nvalidated, dismissed, excluded or test-holdout item), so ``matched``\nequals the summary's ``count`` for the term.\n\nUnlike relabeling ``GET /review/new_class_proposals/summary``'s\n``sample_crop_ids`` (capped at 20) one at a time, this selects and\nwrites **every** matching, still-pending item for the term in one\ncall — the backend owns the \"resolve this term\" decision, not the\nclient re-issuing ``PUT /crops/batch_label`` per page of samples.\n\nExactly one of ``class_id`` (map to an existing registry class) /\n``create`` (register a new one first, through the same path as\n``POST /classes``) must be set — ``422`` otherwise. An unknown\n``class_id`` is ``400``; a duplicate ``create.class_name`` is ``409``\nand writes nothing. ``create`` happens before any item write — if\nnothing matches, the class is still created (the operator asked for\nit) and ``matched`` reports ``0``.\n\nEach matching item is written independently via ``occ_update_one``\n(bounded concurrency), re-checking at write time that it is still\npending this exact proposal; an item whose state changed in the\nmeantime is reported in ``skipped``, not written. Every write records\na restorable ``class_id_history`` snapshot, so\n``POST /crops/label/undo_batch`` on ``updated_ids`` puts the item\nback exactly as a pending proposal.\n\n``?dry_run=true`` reports ``matched`` / ``matched_ids`` and writes or\ncreates nothing (``class_id`` is ``null`` when ``create`` was given).",
@@ -16641,7 +17672,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16707,7 +17737,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16777,7 +17806,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16847,7 +17875,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16891,7 +17918,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -16960,7 +17986,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -17249,7 +18274,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -17526,7 +18550,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -17571,7 +18594,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -17626,7 +18648,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -17671,7 +18692,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -17717,7 +18737,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -17957,7 +18976,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18003,7 +19021,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18057,7 +19074,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18103,7 +19119,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18145,7 +19160,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18198,7 +19212,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18214,6 +19227,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
           },
           "422": {
             "content": {
@@ -18242,7 +19275,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18288,7 +19320,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18334,7 +19365,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18400,7 +19430,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18468,7 +19497,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18505,7 +19533,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18560,7 +19587,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18615,7 +19641,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18659,7 +19684,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18714,7 +19738,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18781,7 +19804,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18823,7 +19845,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18877,7 +19898,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18921,7 +19941,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -18976,7 +19995,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19030,7 +20048,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19074,7 +20091,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19141,7 +20157,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19207,7 +20222,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19273,7 +20287,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19336,7 +20349,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19380,7 +20392,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19443,7 +20454,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19469,6 +20479,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
           },
           "422": {
             "content": {
@@ -19497,7 +20527,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19584,7 +20613,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19630,7 +20658,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19700,7 +20727,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19746,7 +20772,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19811,7 +20836,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19875,7 +20899,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19929,7 +20952,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
@@ -19983,7 +21005,6 @@
             "name": "project",
             "required": true,
             "schema": {
-              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
             }
