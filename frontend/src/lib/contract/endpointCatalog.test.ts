@@ -199,8 +199,32 @@ const PENDING_BACKEND_W10: Array<{ path: string; method: string }> = [
   { path: '/reprocess/jobs/*/cancel', method: 'POST' },
 ];
 
+/**
+ * OpenProcessor W3 (prompt-pack CRUD, any_domain_plan.md §3.2 / §7.2) and
+ * the pack half of W5 (`POST /prompt_packs/test`, §5.1 / §7.5) — built
+ * against the frozen spec before the backend implements them (docs/design/
+ * w3-pack-editor-ui-plan-2026-09-27.md). DELETE THIS LIST when
+ * `npm run contract:sync` vendors W3 (and W5 for `/prompt_packs/test`);
+ * every route then has to resolve for real.
+ */
+const PENDING_BACKEND_W3: Array<{ path: string; method: string }> = [
+  { path: '/prompt_packs', method: 'GET' },
+  { path: '/prompt_packs/schema', method: 'GET' },
+  { path: '/prompt_packs/validate', method: 'POST' },
+  { path: '/prompt_packs/*', method: 'GET' },
+  { path: '/prompt_packs/*', method: 'PUT' },
+  { path: '/prompt_packs/*', method: 'DELETE' },
+  { path: '/prompt_packs/*/revisions', method: 'GET' },
+  { path: '/prompt_packs/*/revisions/*', method: 'GET' },
+  { path: '/prompt_packs/*/clone', method: 'POST' },
+  { path: '/prompt_packs/active', method: 'GET' },
+  { path: '/prompt_packs/*/activate', method: 'POST' },
+  { path: '/prompt_packs/active/rollback', method: 'POST' },
+  { path: '/prompt_packs/test', method: 'POST' },
+];
+
 function isPendingBackend(path: string, method: string): boolean {
-  return [...PENDING_BACKEND, ...PENDING_BACKEND_W10].some(
+  return [...PENDING_BACKEND, ...PENDING_BACKEND_W10, ...PENDING_BACKEND_W3].some(
     (p) => p.path === path && p.method === method,
   );
 }

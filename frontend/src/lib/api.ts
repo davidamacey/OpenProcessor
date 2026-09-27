@@ -111,6 +111,22 @@ import type {
   ReprocessResponse,
 } from './types_import';
 import type {
+  ActiveConfigResponse,
+  ActiveRef,
+  PackActivateRequest,
+  PackCloneRequest,
+  PackErrorDetail,
+  PackTestRequest,
+  PackTestResponse,
+  PackUpdateRequest,
+  PackValidateRequest,
+  PromptPackDoc,
+  PromptPackList,
+  PromptPackRevisionList,
+  PromptPackSchema,
+  ValidationReport,
+} from './types_packs';
+import type {
   BakeoffComparison,
   BakeoffMatrix,
   BakeoffProfileList,
@@ -4960,6 +4976,173 @@ export function datasetErrorDetail(e: unknown): DatasetErrorDetail | null {
 /** The served `message` of a W10 refusal, else the generic detail. */
 export function datasetErrorText(e: unknown): string {
   const d = datasetErrorDetail(e);
+  if (d) return d.message;
+  if (e instanceof ApiError && e.detail) return e.detail;
+  return (e as Error)?.message ?? String(e);
+}
+
+// -- Prompt packs (OpenProcessor W3; test-on-crop W5) --------------------
+// any_domain_plan.md §3, §5.1, §7.2, §7.5;
+// docs/design/w3-pack-editor-ui-plan-2026-09-27.md §1.
+
+/** `GET /prompt_packs`: every pack (builtin, file, stored) plus the
+ *  clone-only templates and the active ref. Also the W3 gate's probe. */
+export function listPromptPacks(signal?: AbortSignal): Promise<PromptPackList> {
+  return apiFetch<PromptPackList>(`${scoped()}/prompt_packs`, {}, signal);
+}
+
+export function getPromptPackSchema(signal?: AbortSignal): Promise<PromptPackSchema> {
+  return apiFetch<PromptPackSchema>(`${scoped()}/prompt_packs/schema`, {}, signal);
+}
+
+/** `POST /prompt_packs/validate`: a draft's report. Never writes and
+ *  never 422s; a reserved or taken `name` is an issue in the report. */
+export function validatePromptPack(
+  body: PackValidateRequest,
+  signal?: AbortSignal,
+): Promise<ValidationReport> {
+  return apiFetch<ValidationReport>(
+    `${scoped()}/prompt_packs/validate`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+export function getPromptPack(
+  name: string,
+  signal?: AbortSignal,
+): Promise<PromptPackDoc> {
+  return apiFetch<PromptPackDoc>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}`,
+    {},
+    signal,
+  );
+}
+
+export function getPromptPackRevisions(
+  name: string,
+  signal?: AbortSignal,
+): Promise<PromptPackRevisionList> {
+  return apiFetch<PromptPackRevisionList>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}/revisions`,
+    {},
+    signal,
+  );
+}
+
+export function getPromptPackRevision(
+  name: string,
+  revision: number,
+  signal?: AbortSignal,
+): Promise<PromptPackDoc> {
+  return apiFetch<PromptPackDoc>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}/revisions/${encodeURIComponent(String(revision))}`,
+    {},
+    signal,
+  );
+}
+
+/** `POST /prompt_packs/{name}/clone` → 201 the new stored pack. */
+export function clonePromptPack(
+  name: string,
+  body: PackCloneRequest,
+): Promise<PromptPackDoc> {
+  return apiFetch<PromptPackDoc>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}/clone`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+/** `PUT /prompt_packs/{name}`: saves a new revision (OCC on
+ *  `expected_revision`; 409 `revision_conflict` carries the current one). */
+export function updatePromptPack(
+  name: string,
+  body: PackUpdateRequest,
+): Promise<PromptPackDoc> {
+  return apiFetch<PromptPackDoc>(`${scoped()}/prompt_packs/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+/** `DELETE /prompt_packs/{name}?expected_revision=` → 204. */
+export function deletePromptPack(name: string, expectedRevision: number): Promise<void> {
+  return apiFetch<void>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}${qs({ expected_revision: expectedRevision })}`,
+    {
+      method: 'DELETE',
+    },
+  );
+}
+
+export function getActivePromptPack(signal?: AbortSignal): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(`${scoped()}/prompt_packs/active`, {}, signal);
+}
+
+/** `POST /prompt_packs/{name}/activate` (OCC on `expected_active`). */
+export function activatePromptPack(
+  name: string,
+  body: PackActivateRequest,
+): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}/activate`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+/** `POST /prompt_packs/active/rollback`: re-activates the previous pack. */
+export function rollbackPromptPack(body: {
+  expected_active: ActiveRef;
+}): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(`${scoped()}/prompt_packs/active/rollback`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/** `POST /prompt_packs/test` (W5): runs one call on real crops and never
+ *  writes. Each result's `preview_item` (the item as the write would
+ *  leave it) is also mapped into `preview`. */
+export async function testPromptPack(
+  body: PackTestRequest,
+  signal?: AbortSignal,
+): Promise<PackTestResponse<Crop>> {
+  const res = await apiFetch<PackTestResponse>(
+    `${scoped()}/prompt_packs/test`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+  return {
+    ...res,
+    results: (res.results ?? []).map((r) => ({
+      ...r,
+      preview: r.preview_item ? mapRawCrop(r.preview_item as unknown as RawCrop) : null,
+    })),
+  };
+}
+
+/** The structured pack refusal (`{detail: ConfigErrorDetail}`), or `null`
+ *  when the error isn't one. The UI shows `message`, branches on `error`. */
+export function packErrorDetail(e: unknown): PackErrorDetail | null {
+  if (!(e instanceof ApiError)) return null;
+  const body = e.body;
+  if (!body || typeof body !== 'object') return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  const d = detail as Record<string, unknown>;
+  if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
+  return d as unknown as PackErrorDetail;
+}
+
+/** The served `message` of a pack refusal, else the generic detail. */
+export function packErrorText(e: unknown): string {
+  const d = packErrorDetail(e);
   if (d) return d.message;
   if (e instanceof ApiError && e.detail) return e.detail;
   return (e as Error)?.message ?? String(e);
