@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Bind address is configurable.** The compose port is now
+  `${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}`. The
+  default serves this machine and the local network; set `127.0.0.1` to
+  limit it to this machine. Each GitHub release now attaches
+  `docker-compose.yml`, `.env.example` and a `SHA256SUMS` for them, taken
+  from the tagged commit, for OpenProcessor's one-line installer.
+- **Faster test runs.** `npm run test:e2e` now builds and serves the app
+  once, then runs the stubbed Playwright suite across parallel pytest-xdist
+  workers. That's about 40 s instead of about 160 s for 101 tests, and the
+  worker count is set with `E2E_WORKERS`. The pre-push unit-test hook no
+  longer caps vitest at 4 workers, which cut it from about 1 min 44 s to
+  about 31 s. `test_keymap_absent_when_404` now waits on the real key and
+  request instead of fixed sleeps; it flaked under parallel load.
+
 ### Added
 
 - **W8 multi-box regions — wire model and write paths (lockstep branch
@@ -70,6 +86,75 @@ null, bbox_norm}`) plus the owner-decided Enter semantics
     item-level `batch_status` route, not the per-box `batch_box_state`
     (declared and unit-tested in `api.ts`, not yet wired into the gallery
     UI) — see the plan doc's updated status section for the full list.
+- **Configurable keyboard shortcuts — editor + served keymap (K2 of
+  `docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md`).**
+  Built ahead of OpenProcessor W2b's `GET/PUT {prefix}/keymap`,
+  `POST {prefix}/keymap/validate` and `POST {prefix}/keymap/reset` — a
+  pre-W2b backend 404s/501s and every route below stays absent, not
+  disabled.
+  - `keymapStore` now loads the scoped `GET {prefix}/keymap` once from
+    the root layout (`loadKeymap()`, `src/lib/stores/keymap.svelte.ts`)
+    and adopts it via `setDocument(doc, 'served')`; a `config.changed
+axis=keymap` SSE frame refetches and applies live, no reload
+    (`src/routes/+layout.svelte`).
+  - New `/settings#keyboard` "Keyboard shortcuts" card
+    (`src/lib/components/settings/KeymapCard.svelte`): one table per
+    context, key-capture add/remove per action (up to
+    `grammar.max_combos_per_action`), locked actions read-only, a
+    "custom keys" badge when the project's keymap isn't the default,
+    debounced `POST /keymap/validate` rendering the server's own
+    errors/warnings verbatim, and `PUT`'s 409 `revision_conflict` /
+    409 `class_hotkey_conflict` (with an "Unbind these class keys and
+    save" retry) / 422 `validation_failed` all handled per the plan's
+    §4.3 wire shapes. "Reset this action" / "Reset all to defaults"
+    round-trip through `POST /keymap/reset`.
+  - The `~` shortcut overlay now prints ONE row per action (a
+    multi-key action like "Step back" used to print once per key) and
+    links to the new editor.
+  - Plan §5.3 guard: the layout's class-hotkey listener now defers to
+    any active keymap-registered action on the same key
+    (`keyboardStore.hasActiveBinding`), making the grandfathered
+    collision case deterministic instead of firing both handlers.
+  - `setClassHotkey` (`src/lib/classHotkey.ts`) renders the backend's
+    structured 422 `hotkey_reserved` (names the owning action(s)) and
+    409 `hotkey_taken` (names the owning class) details instead of a
+    generic string.
+  - Contract: the four `/keymap*` routes are a documented
+    pending-backend allow-list in `endpointCatalog.test.ts` until
+    OpenProcessor W2b lands and `npm run contract:sync` vendors them.
+  - e2e: `e2e/stubbed/test_keymap.py` (rebind → save → applies live on
+    `/review`; absent + default keys still work on a 404). Every
+    existing stubbed e2e test now sees a default 404 stub for
+    `GET {prefix}/keymap` (`e2e/conftest.py`).
+- **OpenProcessor 3cd4ca87 adoption** (contract sync + 503/Retry-After):
+  - `apiFetch` (`src/lib/api.ts`) now honours a 503's `Retry-After`
+    (seconds) header in place of that attempt's fixed backoff delay,
+    clamped to `MAX_RETRY_AFTER_MS` (5s) so a served value can't stall
+    the UI far past the existing 3-retry budget or add an extra attempt.
+    Matches the backend's new Triton-unavailable handler, which returns
+    503 + `Retry-After: 5` (and a plain-string `detail`) instead of a
+    bare 500 or a silent empty 200 on a Triton outage. The ingest run
+    controller's existing 503 auto-pause and the health/dataset-stats
+    polling's error surfacing both already render `ApiError`'s
+    `message`/`detail`, so they show the served detail unchanged — no
+    call-site changes needed there.
+  - `types_bakeoff.ts` gains `EvalDatasetClass.registry_class_name`,
+    `BakeoffProfile.context_class_names` and
+    `ClassMapping.model_to_eval_names` (each paired-by-name alongside
+    its existing id field, per the class-id-display-audit's
+    "never a client id→name lookup" finding). None of the three is
+    rendered anywhere in `/bakeoff` today — the eval-dataset/profile/
+    class-mapping UI already shows only served names
+    (`class_filter`, `NotCoveredClass`/`UnmappedModelClass`) — so this
+    is types-only, pinned to the vendored OpenAPI by
+    `bakeoffContract.test.ts`.
+  - OCR failure reasons (`TextRegion.rec_error`/`OcrResult.rec_errors`)
+    landed only on the raw `/ocr`/`/analyze` inference routes at this
+    commit, not on the curation wire (`item_text_lines[].confidence`,
+    `region_text_confidence` still serve a bare `null` with no reason —
+    confirmed against the backend source, whose own merge commit says
+    "no OCR sentinel on the wire"). No frontend change; a null
+    confidence still renders "—" as before.
 
 - **Action-id keymap store** (internal/architecture, frontend only, step
   K1 of `docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md`).

@@ -31,6 +31,8 @@
   import { strategiesStore } from '$stores/strategies.svelte';
   import { hasFieldCoverage, type MethodInfoBase } from '$lib/strategies';
   import ScoresCard from '$lib/components/ScoresCard.svelte';
+  import KeymapCard from '$lib/components/settings/KeymapCard.svelte';
+  import { keymapAvailability } from '$stores/keymap.svelte';
 
   // `axisOptions()` returns the shared `MethodInfoBase[]` (it serves every
   // axis, not just review_sorts), which doesn't itself declare
@@ -328,6 +330,10 @@
   {/if}
 
   <ScoresCard />
+
+  {#if keymapAvailability.available === true}
+    <KeymapCard />
+  {/if}
 </div>
 
 {#if confirmSpec}

@@ -55,7 +55,7 @@ here is a stub.
 | `/models`        | Triton model registry browser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `/train`         | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Training cohorts picker** (class-agnostic `CORE_COHORTS` for every class + the region profile's 5 server-side modes when one is configured — see "Training cohorts" below). The dataset card shows the _current export's own_ `image_count`/`class_count`/`split_counts`/per-class `class_split_counts` (from `GET {API_PREFIX}/export/status`, OpenProcessor df01309) rather than the dataset-wide validated total — the old global number (which double-counted `test_holdout` crops) survives only as a clearly-labelled "(global pool)" fallback for a pre-df01309 backend or an explicitly-picked past export version. `AugmentationPanel`'s preset picker is served from `GET {API_PREFIX}/train/augmentation_presets` (id/label/description/orientation-sensitive), defaulting to the served `default`; a pre-df01309 backend 404s that endpoint and the panel falls back to a read-only display of the current value. `/train/start`/`/start_campaign`'s 422 on an unknown `augmentation.preset` (`{detail: {message, field, valid_presets}}`) surfaces `valid_presets` in the toast alongside the message. Since OpenProcessor 4c9499a, the card also shows the export's `object_count`/`split_object_counts` (label lines) alongside `image_count`/`split_counts` — "N objects in M images" plus separate images:/objects: split badges — and its per-class table is objects, not an ambiguous count; a `null` field (an export written before 4c9499a recorded it) renders via `formatCount()` as "—", never 0.                                                                                                                                                                                                                                                                                                                                                                       |
 | `/bakeoff`       | Model comparison on OpenProcessor #34's v2 wire (F6, `docs/design/bakeoff-v2-ui-plan-2026-09-25.md`). Pick eval datasets (`GET {API_PREFIX}/bakeoff/eval_datasets`: export test splits first with the current one flagged and preselected, external frozen sets grouped by served `group`), models (finished training runs from `/bakeoff/trained_models`, each with the served per-selected-dataset `for_dataset` facts and a train/test overlap warning when the served overlap is non-null and > 0; the profile's `/bakeoff/baseline_models`; an optional custom ref) and a profile (whatever `/bakeoff/profiles` serves, `default_profile` preselected, `default_error` shown). A confirm dialog precedes `POST /bakeoff/run` (typed `run`/`baseline`/`custom` refs; 400/409/422 detail shown verbatim); the job polls `/bakeoff/status/{id}` with progress, per-stage failures and the enqueue-time class mapping. Results: the `/bakeoff/matrix/{id}` model × dataset matrix bolds every served tied winner (`best` is a list), and `/bakeoff/results/{id}?dataset_id=` renders ranked rows plus a per-class table where an uncovered class reads "not covered" and each model's unmapped classes are listed; a 409 (pre-v2 result) shows a note. Previous runs (`/bakeoff/runs`) stay selectable. State in `src/lib/bakeoff/bakeoffController.svelte.ts`, types in `src/lib/types_bakeoff.ts` (pinned to the vendored OpenAPI by `contract/bakeoffContract.test.ts`); nothing computes a metric, mapping, rank or winner client-side. Gated on backend availability via a one-shot probe of `GET {API_PREFIX}/bakeoff/runs` (`src/lib/bakeoffAvailability.svelte.ts`) — absent, not disabled: the nav link and page body don't render at all when the backend's `{API_PREFIX}/bakeoff/*` router isn't mounted, and no discovery request fires unconditionally on mount. The probe itself would move to an `evaluation` axis on `/methods` once the backend ships one.                             |
-| `/settings`      | Deployment-defaults admin page for the shared curation-strategy defaults (`GET,PUT {API_PREFIX}/settings`) — one place to pin the deployment's clustering method, review-queue sort and VLM prompt pack (the latter honored by the always-on VLM labeler and by auto-label runs that don't pick their own), plus a read-only "Set by the backend's startup config" section for `detection_profile` (the backend picks it from startup config; nothing that runs reads a shared or per-run selection). Which axes get a control is decided solely by the server's per-entry `settable` flag on `/methods` (`settableAxes` in `src/lib/curationSettings.ts`). Deployment-wide — see `docs/design/curation-settings-ui-plan-2026-09-21.md` — so it is its own route rather than a `StrategyBar` chip, with an explicit confirm dialog before every save. Also hosts the **Curation scores card** (`ScoresCard.svelte`, G10, 2026-09-24) — per-scorer coverage from `GET {API_PREFIX}/scores/coverage`, confirm-gated "Compute all"/"Compute selected" (`POST {API_PREFIX}/scores/compute {scorers}`, ids always sourced from the served coverage keys), a progress poll of `GET {API_PREFIX}/scores/status` following `EmbeddingPlot`'s rebuild-job pattern, and "Cancel" (`POST {API_PREFIX}/scores/cancel`). Absent, not broken, when `/scores/coverage` 404s; a failed compute (e.g. mistakenness lacking probe predictions) shows the backend's error verbatim. A completed compute reloads coverage and resets `strategiesStore` so `StrategyBar`'s sort/score options pick up the new coverage without a full page reload — see "Curation-strategy selector bar" below.                                                                                                                                                                                                                                                                                                                               |
+| `/settings`      | Deployment-defaults admin page for the shared curation-strategy defaults (`GET,PUT {API_PREFIX}/settings`) — one place to pin the deployment's clustering method, review-queue sort and VLM prompt pack (the latter honored by the always-on VLM labeler and by auto-label runs that don't pick their own), plus a read-only "Set by the backend's startup config" section for `detection_profile` (the backend picks it from startup config; nothing that runs reads a shared or per-run selection). Which axes get a control is decided solely by the server's per-entry `settable` flag on `/methods` (`settableAxes` in `src/lib/curationSettings.ts`). Deployment-wide — see `docs/design/curation-settings-ui-plan-2026-09-21.md` — so it is its own route rather than a `StrategyBar` chip, with an explicit confirm dialog before every save. Also hosts the **Curation scores card** (`ScoresCard.svelte`, G10, 2026-09-24) — per-scorer coverage from `GET {API_PREFIX}/scores/coverage`, confirm-gated "Compute all"/"Compute selected" (`POST {API_PREFIX}/scores/compute {scorers}`, ids always sourced from the served coverage keys), a progress poll of `GET {API_PREFIX}/scores/status` following `EmbeddingPlot`'s rebuild-job pattern, and "Cancel" (`POST {API_PREFIX}/scores/cancel`). Absent, not broken, when `/scores/coverage` 404s; a failed compute (e.g. mistakenness lacking probe predictions) shows the backend's error verbatim. A completed compute reloads coverage and resets `strategiesStore` so `StrategyBar`'s sort/score options pick up the new coverage without a full page reload — see "Curation-strategy selector bar" below. Also hosts the **Keyboard shortcuts** card (`KeymapCard.svelte`, K2, 2026-09-26) — absent, not disabled, until OpenProcessor W2b's `GET/PUT {API_PREFIX}/keymap` route exists; see "Keyboard shortcuts" below.                                                                                                                |
 
 ## Ingest (`/ingest`, 2026-09-24; BA-1..BA-7 adopted 2026-09-25)
 
@@ -829,11 +829,36 @@ serve) and read through `keymapStore` (`src/lib/stores/keymap.svelte.ts`):
 - **W8 per-box actions** (`review.region.accept_box` / `reject_box`,
   `box_edit.next_box`) are declared `available: false`, so
   `registerAction` and `actionFor` ignore them until W8 lands.
-- **Today (K1) the document is always the fallback.** No request is made.
-  K2 adds a loader that reads the scoped `GET {prefix}/keymap` (via
-  `scoped()`), hands the served document to
-  `keymapStore.setDocument(doc, 'served')` and adds the `/settings`
-  editor. The resolution API doesn't change shape for that.
+- **K2 (2026-09-26): the served keymap is live.** `loadKeymap()`
+  (`src/lib/stores/keymap.svelte.ts`) reads the scoped `GET {prefix}
+/keymap` once from the root layout's `load()` and hands the result to
+  `keymapStore.setDocument(doc, 'served')`; a 404/501 (a pre-W2b
+  backend) sets `keymapAvailability.available = false` and the store
+  stays on `FALLBACK_KEYMAP` silently. A `config.changed axis=keymap`
+  SSE frame (subscribed in `+layout.svelte`) refetches and applies live
+  — dispatch always resolves an action's keys through the store at
+  keypress time, so a rebind needs no reload. `/settings#keyboard`'s
+  "Keyboard shortcuts" card (`KeymapCard.svelte`) is the editor —
+  absent, not disabled, on the fallback: per-context tables, key
+  capture (add/remove, up to `grammar.max_combos_per_action`), locked
+  actions read-only, a "custom keys" badge off the served `is_default`,
+  a debounced `POST /keymap/validate` rendering the server's own
+  errors/warnings verbatim (never a client-computed collision), and
+  `PUT`'s 409 `revision_conflict` / 409 `class_hotkey_conflict` (offers
+  "Unbind these class keys and save", which retries with
+  `unbind_conflicting_class_hotkeys: true`) / 422 `validation_failed`
+  all rendered per their wire shape. "Reset this action" / "Reset all"
+  round-trip `POST /keymap/reset`. The `~` overlay prints one row per
+  ACTION (not per key — a multi-key action used to print twice) and
+  links to the editor. Plan §5.3's guard is live too:
+  `+layout.svelte`'s class-hotkey listener defers to
+  `keyboardStore.hasActiveBinding(key)` first, so a registered action
+  always wins a same-key collision with a class hotkey. `setClassHotkey`
+  renders the backend's structured 422 `hotkey_reserved`/409
+  `hotkey_taken` details (naming the owning action(s)/class) instead of
+  a generic string. The four `/keymap*` routes are a documented
+  pending-backend entry in `endpointCatalog.test.ts`'s contract check
+  until OpenProcessor W2b lands and vendors them.
 
 Reserved single-char action keys (`g n d z x u a m /`, plus `b f e` from the
 region slot's keymap — server-served today as `/abdefgmnuxz`)
@@ -1668,7 +1693,12 @@ scale for a file already in `stryker.config.json`'s `mutate` list.
 (never installed on the host), installs `e2e/requirements.txt` and a
 chromium browser if missing (`scripts/run-e2e.mjs`), then runs
 `e2e/stubbed/` (`npm run build` + `vite preview`, driven by pytest +
-Playwright). Covers the flows a plain `npm test` (jsdom, no real
+Playwright). The runner builds and serves once, then runs the suite in
+parallel with pytest-xdist (`--dist loadfile`; workers default to half the
+CPUs, capped at 6; override with `E2E_WORKERS`), which takes about 40 s
+instead of about 160 s. Tests must wait on real conditions such as a
+selector or `page.expect_request`, not fixed sleeps, because a sleep that
+works serially flakes under parallel load. Covers the flows a plain `npm test` (jsdom, no real
 browser) can't: keyboard-driven `/review` assign/undo, `/clusters/[id]`
 drag/hotkey/discard, the `/settings` and dashboard assist-scope
 wire-composition round trips, tier-2 annotation-profile loading, and
@@ -1873,7 +1903,14 @@ container start by `docker-entrypoint.sh`, so one image fits any deployment:
   set only when the browser must call an API on a different origin.
 
 All API calls flow through `src/lib/api.ts` with retry + AbortController
-for in-flight cancellation.
+for in-flight cancellation. `apiFetch` retries a 5xx up to 3 times
+(250/500/1000ms backoff); since OpenProcessor 3cd4ca87, a 503 carrying a
+`Retry-After` header (seconds — the shape the backend's Triton-outage
+handler sends, `Retry-After: 5`, in place of the old bare 500/silent-200
+on an inference-backend outage) replaces that attempt's fixed delay
+instead, clamped to `MAX_RETRY_AFTER_MS` (5s) so it can't stall the UI
+past the existing retry budget or add an extra attempt. Every caller
+still just sees the eventual `ApiError` with the served `detail` string.
 
 ### Groundwork for multi-project support (2026-09-26)
 

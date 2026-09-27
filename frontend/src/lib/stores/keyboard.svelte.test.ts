@@ -27,6 +27,7 @@ afterEach(() => {
   while (cleanups.length) cleanups.pop()!();
   keyboardStore.setScope('global');
   keyboardStore.closeOverlay();
+  keyboardStore.resume();
 });
 
 describe('keyboardStore', () => {
@@ -177,5 +178,43 @@ describe('keyboardStore', () => {
     } finally {
       classesStore.reservedHotkeys = prev;
     }
+  });
+});
+
+// K2 (plan §5.3/§5.4): the class-hotkey listener guard, and the
+// key-capture widget's suspend/resume.
+describe('hasActiveBinding', () => {
+  it('is true for a registered combo in the active scope, false otherwise', () => {
+    reg('x', vi.fn(), 'cluster');
+    keyboardStore.setScope('cluster');
+    expect(keyboardStore.hasActiveBinding('x')).toBe(true);
+    keyboardStore.setScope('review');
+    expect(keyboardStore.hasActiveBinding('x')).toBe(false);
+  });
+
+  it('is true for a global-scope registration regardless of the active scope', () => {
+    reg('z', vi.fn(), 'global');
+    keyboardStore.setScope('review');
+    expect(keyboardStore.hasActiveBinding('z')).toBe(true);
+  });
+
+  it('is false once the registration is unregistered', () => {
+    const unreg = keyboardStore.register('q', vi.fn(), 'global');
+    expect(keyboardStore.hasActiveBinding('q')).toBe(true);
+    unreg();
+    expect(keyboardStore.hasActiveBinding('q')).toBe(false);
+  });
+});
+
+describe('suspend / resume', () => {
+  it('blocks dispatch while suspended, and resumes normal dispatch after', () => {
+    const handler = vi.fn();
+    reg('k', handler, 'global');
+    keyboardStore.suspend();
+    press({ key: 'k' });
+    expect(handler).not.toHaveBeenCalled();
+    keyboardStore.resume();
+    press({ key: 'k' });
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 });

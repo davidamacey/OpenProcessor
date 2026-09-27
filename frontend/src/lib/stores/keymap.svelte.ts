@@ -18,12 +18,14 @@
  * `grammar.locked_keys` unless that key is one of its own locked keys.
  */
 
+import { ApiError, getKeymap } from '$lib/api';
 import { formatCompactKey, formatShortcutKey } from '$lib/keyboardDisplay';
 import {
   FALLBACK_KEYMAP,
   type KeymapAction,
   type KeymapContext,
   type KeymapDocument,
+  type KeymapValidationIssue,
 } from '$lib/keymapFallback';
 
 export type KeymapSource = 'fallback' | 'served';
@@ -105,6 +107,24 @@ class KeymapStore {
     return this.#doc.reserved_hotkeys ?? null;
   }
 
+  /** The served document verbatim — the editor's read model. `null` on
+   *  fallback (the editor is absent then; see `keymapAvailability`). */
+  get document(): KeymapDocument {
+    return this.#doc;
+  }
+
+  get revision(): number | null {
+    return this.source === 'served' ? (this.#doc.revision ?? null) : null;
+  }
+
+  get isDefault(): boolean {
+    return this.#doc.is_default ?? true;
+  }
+
+  get issues(): KeymapValidationIssue[] {
+    return this.#doc.issues ?? [];
+  }
+
   action(id: string): KeymapAction | undefined {
     return this.#byId.get(id);
   }
@@ -180,3 +200,103 @@ class KeymapStore {
 }
 
 export const keymapStore = new KeymapStore();
+
+/**
+ * `keymapAvailability` — provisional capability gate for the `/settings`
+ * Keyboard section, same shape as `bakeoffAvailability` (K2, plan §5.1).
+ *
+ * A pre-W2b backend 404s/501s `GET {prefix}/keymap`: `available` becomes
+ * `false`, `keymapStore` stays on `FALLBACK_KEYMAP`, and the editor is
+ * ABSENT, not disabled. Any other failure (network, 5xx) leaves
+ * `available` at its current, optimistic value — a transient outage must
+ * not hide a route that actually exists — and `keymapStore` also stays on
+ * the fallback until a load succeeds.
+ */
+class KeymapAvailabilityStore {
+  available = $state<boolean | null>(null);
+  #loaded = false;
+  #inflight: Promise<void> | null = null;
+
+  async init(): Promise<void> {
+    if (this.#loaded) return;
+    if (this.#inflight) return this.#inflight;
+    this.#inflight = loadKeymap().finally(() => {
+      this.#loaded = true;
+      this.#inflight = null;
+    });
+    return this.#inflight;
+  }
+
+  /** For a test/dev reset only. */
+  reset(): void {
+    this.available = null;
+    this.#loaded = false;
+    this.#inflight = null;
+  }
+
+  setAvailable(v: boolean | null): void {
+    this.available = v;
+  }
+}
+
+export const keymapAvailability = new KeymapAvailabilityStore();
+
+/**
+ * Bounded 2s x 3 tries, matching `loadRegionProfile()`'s boot pattern
+ * (plan §5.1). Called once from the root layout's `load()`; also called
+ * by the `config.changed axis=keymap` SSE handler to refetch (unbounded
+ * there — a single retry is enough for a live refetch).
+ */
+const KEYMAP_LOAD_TIMEOUT_MS = 2000;
+const KEYMAP_RETRY_DELAYS_MS = [250, 750];
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('keymap load timed out')), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Reads the scoped `GET {prefix}/keymap` and hands the result to
+ * `keymapStore`. Never throws.
+ *
+ * - 404/501 -> `keymapAvailability.available = false`, stays on the
+ *   fallback silently (this is expected on every deployment until
+ *   OpenProcessor W2b lands).
+ * - Any other failure on every try -> availability left unchanged, stays
+ *   on the fallback.
+ * - Success -> `keymapAvailability.available = true`,
+ *   `keymapStore.setDocument(doc, 'served')`.
+ */
+export async function loadKeymap(): Promise<void> {
+  for (let attempt = 0; attempt < 1 + KEYMAP_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const doc = await withTimeout(getKeymap(), KEYMAP_LOAD_TIMEOUT_MS);
+      keymapAvailability.setAvailable(true);
+      keymapStore.setDocument(doc, 'served');
+      return;
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 404 || e.status === 501)) {
+        keymapAvailability.setAvailable(false);
+        return;
+      }
+      if (attempt < KEYMAP_RETRY_DELAYS_MS.length) {
+        await sleep(KEYMAP_RETRY_DELAYS_MS[attempt]);
+      }
+    }
+  }
+}

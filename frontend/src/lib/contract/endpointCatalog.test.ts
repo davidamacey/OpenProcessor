@@ -130,6 +130,36 @@ const MANUAL_OVERRIDES: Array<{
   },
 ];
 
+/**
+ * Routes proposed to OpenProcessor as a binding wire contract but not yet
+ * implemented server-side, so they can't appear in the vendored OpenAPI
+ * snapshot yet. Each entry names the plan section that binds it — remove
+ * the entry (not widen it) the moment `npm run contract:sync` picks up
+ * the real operation; `keymapActions.test.ts` §5.7 is the sibling check
+ * that will then start failing loudly if this allow-list is stale.
+ *
+ * K2 (docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md §4.1):
+ * OpenProcessor W2b hasn't landed the four `/keymap*` routes yet.
+ */
+const PENDING_BACKEND: Array<{ path: string; method: string }> = [
+  { path: '/keymap', method: 'GET' },
+  { path: '/keymap', method: 'PUT' },
+  { path: '/keymap/validate', method: 'POST' },
+  { path: '/keymap/reset', method: 'POST' },
+  // W8 multi-box regions (feat/w8-multibox-lockstep, docs/design/
+  // w8-multibox-frontend-plan-2026-09-26.md): new in the backend's W8
+  // wave, not yet in the vendored OpenAPI snapshot. Remove at the
+  // lockstep merge once `npm run contract:sync` picks them up.
+  { path: '/crops/*/regions', method: 'PUT' },
+  { path: '/crops/batch_regions', method: 'PUT' },
+  { path: '/crops/*/regions/*', method: 'PATCH' },
+  { path: '/regions/batch_box_state', method: 'POST' },
+];
+
+function isPendingBackend(path: string, method: string): boolean {
+  return PENDING_BACKEND.some((p) => p.path === path && p.method === method);
+}
+
 interface ResolvedCall {
   file: string;
   path: string;
@@ -256,23 +286,6 @@ function findOperation(frontendPath: string, method: string): OpenApiOperation |
   return null;
 }
 
-/**
- * W8 multi-box regions (feat/w8-multibox-lockstep, docs/design/
- * w8-multibox-frontend-plan-2026-09-26.md): these four routes are new in
- * the backend's W8 wave, so the vendored `contracts/openapi/curation.json`
- * snapshot (pre-W8) doesn't have them yet. `it.todo` keeps them visible
- * (not silently skipped) without failing the suite until
- * `npm run contract:sync` picks up the backend's W8 OpenAPI additions —
- * emptied at the lockstep merge, same as wireKeys.test.ts's
- * PENDING_BACKEND_W8.
- */
-const PENDING_BACKEND_W8_ENDPOINTS = new Set<string>([
-  'PUT /crops/*/regions',
-  'PUT /crops/batch_regions',
-  'PATCH /crops/*/regions/*',
-  'POST /regions/batch_box_state',
-]);
-
 describe('endpoint catalog: every call resolves to a real OpenAPI operation', () => {
   for (const file of SCANNED_FILES) {
     const calls = resolveCalls(file);
@@ -283,11 +296,12 @@ describe('endpoint catalog: every call resolves to a real OpenAPI operation', ()
 
       for (const call of calls) {
         const label = `${call.method} ${call.path}`;
-        if (PENDING_BACKEND_W8_ENDPOINTS.has(label)) {
-          it.todo(`${label} exists in the OpenAPI contract (pending backend W8)`);
-          continue;
-        }
-        it(`${label} exists in the OpenAPI contract`, () => {
+        const pending = isPendingBackend(call.path, call.method);
+        it(`${label} exists in the OpenAPI contract${pending ? ' (skipped: pending backend)' : ''}`, (ctx) => {
+          if (pending) {
+            ctx.skip();
+            return;
+          }
           const op = findOperation(call.path, call.method);
           expect(
             op,

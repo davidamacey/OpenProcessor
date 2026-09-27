@@ -4,7 +4,7 @@
   import { formatShortcutKey } from '$lib/keyboardDisplay';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
-  import { keymapStore } from '$stores/keymap.svelte';
+  import { keymapAvailability, keymapStore } from '$stores/keymap.svelte';
   import type { RegistryClass } from '$lib/types';
 
   const shortcuts = $derived(keyboardStore.shortcutsForCurrentScope());
@@ -70,11 +70,22 @@
     >
       <div class="mb-4 flex items-center justify-between">
         <h2 class="text-lg font-semibold text-white">Keyboard Shortcuts</h2>
-        <span
-          class="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-300"
-        >
-          {scopeLabel} page
-        </span>
+        <div class="flex items-center gap-2">
+          {#if keymapAvailability.available !== false}
+            <a
+              href="/settings#keyboard"
+              class="text-[11px] text-blue-400 hover:text-blue-300 hover:underline"
+              onclick={() => keyboardStore.closeOverlay()}
+            >
+              Edit shortcuts…
+            </a>
+          {/if}
+          <span
+            class="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-300"
+          >
+            {scopeLabel} page
+          </span>
+        </div>
       </div>
 
       <section class="mb-5">
@@ -85,10 +96,14 @@
           <p class="text-sm text-zinc-500">No shortcuts on this page.</p>
         {:else}
           <ul class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {#each shortcuts as s (s.scope + ':' + s.key)}
+            {#each shortcuts as s (s.scope + ':' + s.description)}
               <li class="flex items-center justify-between gap-3 text-sm">
                 <span class="text-zinc-300">{s.description}</span>
-                <kbd class="font-mono text-[11px]">{formatShortcutKey(s.key)}</kbd>
+                <span class="flex gap-1">
+                  {#each s.keys as k (k)}
+                    <kbd class="font-mono text-[11px]">{formatShortcutKey(k)}</kbd>
+                  {/each}
+                </span>
               </li>
             {/each}
           </ul>

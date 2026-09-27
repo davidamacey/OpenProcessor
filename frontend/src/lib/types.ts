@@ -1066,7 +1066,8 @@ export interface ToastMessage {
 }
 
 export interface KeyboardShortcut {
-  key: string;
+  /** Every combo bound to this action/registration, in document order. */
+  keys: string[];
   scope: string;
   description: string;
 }

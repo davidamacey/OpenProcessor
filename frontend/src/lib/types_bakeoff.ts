@@ -19,6 +19,16 @@ export interface EvalDatasetClass {
   eval_class_id: number;
   name: string;
   registry_class_id: number | null;
+  /**
+   * Live registry name for `registry_class_id`, resolved by id lookup
+   * server-side — never assumed equal to `name` (the eval dataset's own
+   * name). Null when `registry_class_id` is null or no longer present in
+   * the registry. OpenProcessor 3cd4ca87. Not rendered anywhere today
+   * (`registry_class_id` itself has no display site) — kept paired for
+   * whenever one is added, per the thin-frontend "never a client id
+   * lookup" rule.
+   */
+  registry_class_name: string | null;
   n_objects: number;
   n_images: number;
 }
@@ -108,6 +118,14 @@ export interface BakeoffProfile {
   default_backend: string;
   triton_model: string;
   context_class_ids: number[];
+  /**
+   * Registry names for `context_class_ids`, same order/length, resolved
+   * by id lookup server-side; an entry is the id's string form when it's
+   * no longer in the registry. OpenProcessor 3cd4ca87. Not rendered
+   * anywhere today — `/bakeoff`'s profile summary shows `class_filter`
+   * (already names), not `context_class_ids`.
+   */
+  context_class_names: string[];
   baselines_path: string;
 }
 
@@ -200,6 +218,16 @@ export interface UnmappedModelClass {
 export interface ClassMapping {
   method: ClassMappingMethod;
   model_to_eval: Record<string, number> | null;
+  /**
+   * `{"<model class id>": "<eval class name>"}` — same keys as
+   * `model_to_eval`, paired by name (never by raw index) so a consumer
+   * never has to re-derive the name from the eval class id; null under
+   * the same condition as `model_to_eval`. OpenProcessor 3cd4ca87. Not
+   * rendered anywhere today — `ComparisonView`'s per-class table already
+   * renders served names (`NotCoveredClass`/`UnmappedModelClass`), never
+   * `model_to_eval`'s ids.
+   */
+  model_to_eval_names: Record<string, string> | null;
   unmapped_model_classes: UnmappedModelClass[];
   not_covered_eval_classes: NotCoveredClass[];
   warnings: string[];
