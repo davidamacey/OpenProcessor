@@ -130,9 +130,13 @@ async def _config_store_axis_defaults(opensearch: Any) -> dict[str, str | None]:
         ('prompt_pack', snapshot.active_pack),
         ('detection_profile', snapshot.active_profile),
     ):
-        if ref is None or ref == 'off':
+        if ref is None:
             continue
-        result[axis] = ref[0]
+        # Minor 4 (W2 review): 'off' (an explicit deactivation) is a real,
+        # distinct state from "never activated" (the store's own
+        # docstring, src/services/config_store/store.py's `AxisRef`) --
+        # report it, don't fold it into the same absence as `None`.
+        result[axis] = 'off' if ref == 'off' else ref[0]
     return result
 
 

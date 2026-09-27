@@ -917,6 +917,11 @@ async def run(args: argparse.Namespace) -> int:
                             msg = 'visibility stage fed without a VLM'
                             raise RuntimeError(msg)
                         verdicts = await rt.vlm.region_visible_batch(region_crops)
+                        # Minor 5 (W2 review): only a write this call actually
+                        # informed gets stamped `vlm_prompt_pack` downstream.
+                        for _t in chunk:
+                            if _t.crop_jpeg is not None:
+                                _t.vlm_called = True
                         OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS.labels(outcome='ok').observe(
                             time.monotonic() - _vis_t0
                         )
@@ -1282,6 +1287,11 @@ async def run(args: argparse.Namespace) -> int:
                             combined_crops,
                             class_names=class_names or None,
                         )
+                        # Minor 5 (W2 review): only a write this call actually
+                        # informed gets stamped `vlm_prompt_pack` downstream.
+                        for _t in chunk:
+                            if _t.crop_jpeg is not None:
+                                _t.vlm_called = True
                         _vlm_elapsed = time.monotonic() - _vlm_t0
                         OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS.labels(outcome='ok').observe(
                             _vlm_elapsed

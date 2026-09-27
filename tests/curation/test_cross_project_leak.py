@@ -61,6 +61,7 @@ from opensearchpy import AsyncOpenSearch
 from opensearchpy.exceptions import NotFoundError
 
 from curation.query_fakes import _aggregate, matches
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 API = '/curation'
@@ -163,7 +164,11 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         },
         ('POST', '/scores/compute'): {'json': {}},
         ('POST', '/select/diverse'): {'json': {'k': 1}},
-        ('PUT', '/settings'): {'json': {'defaults': {}}},
+        # minor 7 (W2 review): a config-store axis in the body, not just
+        # an empty `defaults`, so the sweep actually exercises the
+        # config-store write path (`activate` + `bump_config_revision`'s
+        # painless script) instead of only the generic settings-doc merge.
+        ('PUT', '/settings'): {'json': {'defaults': {'prompt_pack': GENERIC_ITEM_PACK.name}}},
         ('POST', '/train/preflight'): {'json': {}},
         # force: the preflight's class-balance/disk gates are not what
         # this test is about; the job files written are.
@@ -687,7 +692,21 @@ class _FakeTransport:
             if method == 'DELETE':
                 self._write(indices[0], doc_id, None, merge=False)
             elif action == '_update':
-                self._write(indices[0], doc_id, payload.get('doc') or {}, merge=True)
+                # minor 7 (W2 review): `bump_config_revision`'s painless
+                # script + upsert body needs real semantics here, not the
+                # generic doc-merge below -- mirrors
+                # tests/curation/_fake_config_opensearch.py's
+                # FakeConfigOpenSearch.update().
+                current = self.store.get(indices[0], {}).get(doc_id)
+                script_source = (payload.get('script') or {}).get('source', '')
+                if current is None and 'config_revision' in script_source:
+                    self._write(indices[0], doc_id, dict(payload.get('upsert') or {}), merge=False)
+                elif current is not None and 'config_revision += 1' in script_source:
+                    bumped = dict(current)
+                    bumped['config_revision'] = int(bumped.get('config_revision', 0)) + 1
+                    self._write(indices[0], doc_id, bumped, merge=False)
+                else:
+                    self._write(indices[0], doc_id, payload.get('doc') or {}, merge=True)
             else:
                 self._write(indices[0], doc_id, payload, merge=False)
             return {'_id': doc_id, 'result': 'updated', '_seq_no': 2, '_primary_term': 1}

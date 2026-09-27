@@ -123,6 +123,54 @@ async def test_clone_activations_copies_active_pack_and_profile() -> None:
 
 
 @pytest.mark.asyncio
+async def test_clone_activations_copies_the_activated_revision_not_the_current_body() -> None:
+    """Minor 2 (W2 review): a pack saved again after being activated
+    diverges ``pack:<name>`` (current) from ``pack:<name>@<rev>`` (the
+    activated revision's immutable copy) -- the clone must copy the body
+    that was actually ACTIVE, not whatever the source has saved since."""
+    client = FakeConfigOpenSearch()
+    source = _record('theta')
+    target = _record('iota')
+
+    from src.services.config_store.index import activate, config_doc_id, save_config
+
+    with bind_project(source):
+        from src.config import get_curation_config
+
+        idx = get_curation_config().configs_index
+        doc_v1 = await save_config(
+            client, idx, kind='prompt_pack', name='wheel', body={'v': 1}, expected_revision=None
+        )
+        await activate(
+            client,
+            idx,
+            axis='prompt_pack',
+            name='wheel',
+            revision=doc_v1['revision'],
+            expected_active=None,
+        )
+        # A later save moves `pack:wheel` (current) to v2 without
+        # reactivating -- the activation still points at v1.
+        await save_config(
+            client,
+            idx,
+            kind='prompt_pack',
+            name='wheel',
+            body={'v': 2},
+            expected_revision=doc_v1['revision'],
+        )
+
+    await _apply_clone(client, target_record=target, source=source, axes=['activations'])
+
+    with bind_project(target):
+        from src.config import get_curation_config
+
+        target_idx = get_curation_config().configs_index
+        cloned = await client.get(index=target_idx, id=config_doc_id('prompt_pack', 'wheel'))
+    assert cloned['_source']['body'] == {'v': 1}
+
+
+@pytest.mark.asyncio
 async def test_clone_activations_is_a_noop_when_source_has_none() -> None:
     client = FakeConfigOpenSearch()
     source = _record('gamma')

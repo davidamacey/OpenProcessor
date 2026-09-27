@@ -85,7 +85,11 @@ def test_put_prompt_pack_null_deactivates(app_client: TestClient) -> None:
         '/curation/projects/default/settings', json={'defaults': {'prompt_pack': None}}
     )
     assert r.status_code == 200, r.text
-    assert 'prompt_pack' not in r.json()['defaults']
+    # Minor 4 (W2 review): `null` deactivates through the store exactly
+    # like `'off'` does (`_activate_config_store_axis` maps both to
+    # `name=None`) -- GET must report that real 'off' state, not omit it
+    # as if the axis had never been touched.
+    assert r.json()['defaults']['prompt_pack'] == 'off'
 
 
 def test_put_detection_profile_off_and_on(app_client: TestClient) -> None:
@@ -107,7 +111,11 @@ def test_put_detection_profile_off_and_on(app_client: TestClient) -> None:
             '/curation/projects/default/settings', json={'defaults': {'detection_profile': 'off'}}
         )
         assert r_off.status_code == 200, r_off.text
-        assert 'detection_profile' not in r_off.json()['defaults']
+        # Minor 4 (W2 review): an explicit deactivation is reported as
+        # 'off', not omitted -- the store's own docstring says those two
+        # states (never activated vs. explicitly turned off) are
+        # deliberately distinct, and GET must not collapse them.
+        assert r_off.json()['defaults']['detection_profile'] == 'off'
 
         # 'off' is a true deactivation -- the env-registered default does
         # NOT silently take back over.

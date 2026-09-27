@@ -7,7 +7,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`op_global_configs`: the global (non-project-scoped) config store
+  (W2 review M3, 2026-09-27).** `src/services/config_store/store.py`
+  gains a sibling to the per-project `ConfigStore`: `global_configs_index()`
+  (env `OP_GLOBAL_CONFIGS_INDEX`, default `op_global_configs` --
+  mirrors `src.services.projects.registry.projects_index()` for
+  `op_projects`), `GLOBAL_CONFIGS_INDEX_BODY` + `ensure_global_configs_index()`
+  (idempotent create-with-mapping, wired into
+  `startup_bootstrap_config_store_safe()` alongside the existing
+  per-project index bootstrap), and `get_global_config_store()` -- a
+  process singleton cached in its own dict (`_GLOBAL_STORE`, never
+  conflated with the per-project `_STORES` cache), reusing
+  `src.services.config_store.index`'s existing doc-id/OCC/revision
+  primitives unchanged (they were already index-parameterized, not
+  project-specific). It never consults
+  `src.config.project_context.current_project` -- no project binding is
+  required, and calling it while a project happens to be bound has no
+  effect on which store it comes back as. This is the foundation W9's
+  VLM endpoint registry (a `local_vlm:desired`-style global axis) builds
+  on; no CRUD routes exist yet. The project guard needed no code change:
+  `op_global_configs` is an unowned index by construction (not
+  `op_projects`, not `op_prj_*`-prefixed), so it already passes the
+  existing unowned-index rule -- readable/writable unbound, refused for
+  a request already bound to a project -- the same shape
+  `visual_search_*` already uses and the shape W9's global-router routes
+  will run under.
+  Tests: `tests/curation/test_global_config_store.py` (new) -- a global
+  write is invisible through any project's own `ConfigStore` and vice
+  versa (sharing one fake OpenSearch client), the global store requires
+  no `bind_project`, it is a singleton regardless of bound state, and
+  it's never the same object/index as a project store;
+  `tests/projects/test_opensearch_guard.py::test_global_configs_index_is_a_legitimate_unowned_index`
+  (new) covers the guard recognition explicitly, alongside the existing
+  `op_projects` case. `tests/curation/_fake_config_opensearch.py`'s
+  `_FakeIndices` gained `exists`/`create` for the new index-bootstrap
+  test.
+
 ### Fixed
+- **W2-finish minors pass (2026-09-27).** Closes 4 of the W2 review's 7
+  minors the prior fix pass left open or didn't fully close (`w2_review_2026-09-27.md`):
+  - **Minor 2** (G1 copied the current body, not the activated
+    revision): `_clone_activations` (`src/services/projects/clone.py`)
+    now reads `config_doc_id(kind, name, activation['revision'])` --
+    the immutable revision copy that was actually active -- instead of
+    `config_doc_id(kind, name)` (whatever the source has saved since,
+    which diverges once a pack/profile is saved again after being
+    activated). Red-then-green:
+    `test_clone_activations_copies_the_activated_revision_not_the_current_body`
+    (new) failed with the stale body (`{'v': 2}` instead of `{'v': 1}`)
+    against the unfixed code.
+  - **Minor 3** (the `except (NotFoundError, KeyError)` test-double
+    accommodation in `clone.py`): re-assessed and fixed, reversing the
+    prior pass's "too risky" call. `tests/projects/conftest.py`'s
+    `FakeLifecycleOpenSearch.get()` now raises `NotFoundError` on a
+    missing doc like the real client (and like
+    `tests/curation/_fake_config_opensearch.py`'s `FakeConfigOpenSearch`
+    already did) instead of returning a `{'found': False}` body --
+    contained, because every production caller of `client.get()` in
+    `registry.py`/`bootstrap.py` already handles BOTH shapes
+    defensively (checked by running the full `tests/projects/` suite,
+    367 passed, after the fake change alone). `clone.py`'s three
+    `except (NotFoundError, KeyError)` sites are now real-404-only:
+    two collapse entirely (`get_activation` already maps a 404 to
+    `None` itself, so nothing there could still raise), the third
+    (a raw `client.get()` for the activated revision copy) keeps
+    `except NotFoundError`, dropping `KeyError`. Verified by the full
+    `tests/projects/` suite (367 passed) and `tests/projects/test_clone_activations.py`
+    (5 passed) after the change.
+  - **Minor 4** (`GET /settings` hid `detection_profile: off`):
+    `_config_store_axis_defaults` (`src/routers/curation/settings.py`)
+    now reports `'off'` explicitly instead of skipping the axis --
+    "never activated" (absent from `defaults`) and "explicitly turned
+    off" (`'off'`) are distinct per the store's own `AxisRef` docstring.
+    Applies to both config-store axes uniformly (`prompt_pack`'s `null`
+    deactivation surfaces as `'off'` too, not just `detection_profile`'s).
+    Red-then-green:
+    `test_put_detection_profile_off_and_on`/`test_put_prompt_pack_null_deactivates`
+    (updated) failed against the unfixed code (`'detection_profile' not in
+    defaults` / `'prompt_pack' not in defaults` no longer held once the
+    assertions were flipped to expect `'off'`).
+  - **Minor 5** (the worker stamped `vlm_prompt_pack` on every region
+    write, even when no VLM call contributed to it): `_ItemTask`
+    (`scripts/curation/worker/state.py`) gains `vlm_called: bool = False`,
+    set at every point a VLM call actually ran for that task this pass
+    (`verify.py::_verify_with_vlm`, `combined.py`'s combined-cohort call,
+    and `runner.py`'s two batched VLM stages -- call-site-only diffs per
+    non-negotiable 8). `bulk_writer.py`'s `_merge` now gates the
+    `vlm_prompt_pack` stamp on the per-task `task.vlm_called`, not just
+    the per-batch resolved pack -- a deployment with no VLM configured,
+    or a write path that skipped the VLM (e.g. the high-confidence
+    secondary-segmenter auto-skip), no longer claims a VLM ran.
+    Red-then-green: `test_bulk_write_stamps_region_profile_and_pack`
+    (existing) failed with `KeyError: 'vlm_prompt_pack'` once the gate
+    landed, until updated to set `task.vlm_called = True`; new
+    `test_bulk_write_does_not_stamp_pack_when_no_vlm_call_happened`
+    covers the previously-missing case.
+  - **Minor 6** (`registry_reclassify.py`'s docstring/code mismatch):
+    the docstring said the default pack is "the active pack"; the code
+    called `resolve_prompt_pack` (env/file default only, never
+    store-aware). Now calls `active_prompt_pack`, matching the
+    docstring and W2's B4 fix elsewhere. Red-then-green:
+    `test_default_pack_resolves_through_the_store_not_the_env_file_default`
+    (new) failed (`active_prompt_pack` never consulted) against the
+    unfixed code.
+  - **Minor 7** (the leak sweep's `_FakeTransport` couldn't run the
+    painless `bump_config_revision` script, so it had no real coverage
+    of the config-store write path): re-assessed and fixed.
+    `tests/curation/test_cross_project_leak.py`'s `route_bodies()` now
+    puts a config-store axis (`prompt_pack: GENERIC_ITEM_PACK.name`) in
+    `PUT /settings`'s body instead of an empty `defaults`, and
+    `_FakeTransport`'s `_update` action now models the real
+    create-with-upsert-vs-script-bump distinction (mirroring
+    `_fake_config_opensearch.py`'s `FakeConfigOpenSearch.update`).
+    Red-then-green: `test_every_scoped_route_stays_inside_the_bound_project`
+    failed with `500 ... KeyError` for both project orderings against
+    the unfixed fake, once the route body change alone landed.
+  - **Not addressed, left as documented (minor 1):** `name@rev` pinning
+    is still a no-op -- explicitly deferred to W3 in the original W2
+    commit message; out of scope for this pass per the brief.
 - **W2 review fix pass (2026-09-27).** Addresses the independent W2
   review's 5 blockers and 7 majors (`w2_review_2026-09-27.md`):
   - **B1** the real worker never held a runtime per project. The

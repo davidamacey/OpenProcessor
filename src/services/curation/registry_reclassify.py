@@ -163,10 +163,14 @@ async def reclassify_unmatched(
         point).
     """
     from src.services.labeling.vlm_labeler import resolve_class_name
-    from src.services.labeling.vlm_prompts import resolve_prompt_pack
+    from src.services.labeling.vlm_prompts import active_prompt_pack
 
     cfg = config or get_curation_config()
-    active_pack = pack or resolve_prompt_pack(cfg)
+    # Minor 6 (W2 review): the docstring promises "the active pack" -- that
+    # means the config-store-aware resolution (falls back to the env/file
+    # default itself when nothing is activated), not the env/file default
+    # unconditionally.
+    active_pack = pack or active_prompt_pack(cfg)
     name_to_id = active_name_to_id(registry)
     result = ReclassifyResult(source=source.prefix, dry_run=dry_run, last_cursor=search_after)
     if not name_to_id:

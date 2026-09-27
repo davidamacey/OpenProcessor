@@ -136,6 +136,10 @@ async def _try_combined_class_region(
         logger.info('curation_combined_parse_failure', crop_id=task.crop_id, error=str(exc))
         return False
 
+    # Minor 5 (W2 review): the write(s) this call feeds get stamped
+    # `vlm_prompt_pack` downstream -- only when a call actually happened.
+    task.vlm_called = True
+
     # Stash class-side update so the eventual no_region_box terminal write
     # can layer it in (via _finalize_no_region) when the region-side
     # verification fails.

@@ -105,8 +105,6 @@ async def _validate_clone(
         # `activate(expected_active=None)` assuming an empty target)
         # only after `settings_defaults`/`classes` had already been
         # written. Refuse up front instead, same as `classes`.
-        from opensearchpy.exceptions import NotFoundError
-
         from src.services.config_store.index import ConfigAxis, get_activation
 
         with bind_project(target_record):
@@ -115,13 +113,12 @@ async def _validate_clone(
             target_index = _get_cfg().configs_index
             activation_axes: tuple[ConfigAxis, ...] = ('prompt_pack', 'detection_profile')
             for axis in activation_axes:
-                try:
-                    existing = await get_activation(client, target_index, axis)
-                except (NotFoundError, KeyError):
-                    # Same test-double accommodation as `_clone_activations`
-                    # below -- a low-fidelity fake answers a missing doc
-                    # with `{'found': False}` instead of raising.
-                    existing = None
+                # Minor 3 (W2 review): `get_activation` already maps a
+                # real (or fake -- tests/projects/conftest.py's
+                # ``FakeLifecycleOpenSearch.get`` now raises like the real
+                # client) 404 to `None` itself; nothing here can still
+                # raise `NotFoundError`/`KeyError`.
+                existing = await get_activation(client, target_index, axis)
                 if existing and existing.get('name'):
                     raise api_error(
                         409,
@@ -202,19 +199,31 @@ async def _clone_activations(
             from src.config import get_curation_config as _get_cfg
 
             source_index = _get_cfg().configs_index
-            try:
-                activation = await get_activation(client, source_index, axis)
-            except (NotFoundError, KeyError):
-                # A low-fidelity test double that answers a missing doc
-                # with a "found: false" shape instead of raising -- same
-                # "nothing to clone" outcome as a real 404.
-                activation = None
+            # Minor 3 (W2 review): `get_activation` already maps a real
+            # (or fake) 404 to `None` itself -- nothing here can still
+            # raise `NotFoundError`/`KeyError` to catch.
+            activation = await get_activation(client, source_index, axis)
             if not activation or not activation.get('name'):
                 continue
             name = activation['name']
+            # Minor 2 (W2 review): copy the body that was actually
+            # ACTIVATED (the immutable `<kind>:<name>@<rev>` revision
+            # copy), not whatever `<kind>:<name>` (current) happens to
+            # hold now -- the two diverge once the source saves again
+            # without reactivating. `revision=None` (an env/file id,
+            # never written to the store) has no revision copy to read;
+            # the lookup below 404s and this axis is skipped, same as
+            # "nothing to clone".
+            revision = activation.get('revision')
+            # Minor 3 (W2 review): a genuine 404 here is the only expected
+            # failure (the activated revision copy no longer exists, e.g.
+            # a never-stored env/file id); a malformed real doc should
+            # raise, not be silently skipped, so `KeyError` is not caught.
             try:
-                stored = await client.get(index=source_index, id=config_doc_id(kind, name))
-            except (NotFoundError, KeyError):
+                stored = await client.get(
+                    index=source_index, id=config_doc_id(kind, name, revision)
+                )
+            except NotFoundError:
                 continue
             body = (stored.get('_source') or {}).get('body')
             if body is None:
