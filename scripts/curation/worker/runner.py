@@ -340,8 +340,11 @@ async def run(args: argparse.Namespace) -> int:
             # correct value. Without this remap, a reply of class_id=0
             # lands the registry's first non-deprecated class label on a
             # doc with class_id=0 (deprecated) — historical drift.
-            vlm.class_names = [c.class_name for c in _reg.classes if not c.deprecated]
-            name_to_id = {c.class_name: int(c.class_id) for c in _reg.classes if not c.deprecated}
+            from src.services.curation.region_class import item_classes
+
+            _labelable = item_classes(_reg.classes)
+            vlm.class_names = [c.class_name for c in _labelable]
+            name_to_id = {c.class_name: int(c.class_id) for c in _labelable}
             vlm.name_to_id = name_to_id
         except Exception as _exc:  # nosec B110 — best-effort, registry optional
             logger.warning('class_registry_load_failed', error=str(_exc))
