@@ -49,6 +49,7 @@ from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.routers.curation import get_class_registry
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI
+from src.routers.curation._config_common_models import api_error
 from src.services.curation.dataset_thresholds import (
     HARD_MIN_CROPS_PER_CLASS,
     MIN_TEST_CROPS_PER_CLASS,
@@ -510,6 +511,25 @@ def _append_single_class_data_checks(
 # =============================================================================
 
 
+def _refuse_export_outside_project(dataset_export_dir: str) -> None:
+    """422 ``export_outside_project`` unless the export lives under the
+    bound project's own ``export_root``.
+
+    Runs before any check reads the export (manifest, registry, label
+    scan), so a foreign or arbitrary path is never read back into the
+    report. Not a preflight row: ``force`` must not bypass it.
+    """
+    cfg = get_curation_config()
+    export_root = Path(cfg.export_root).resolve()
+    if not Path(dataset_export_dir).resolve().is_relative_to(export_root):
+        raise api_error(
+            422,
+            'export_outside_project',
+            f"dataset_export_dir is outside the export root of project '{cfg.project_slug}'",
+            project=cfg.project_slug,
+        )
+
+
 async def _run_preflight(
     spec: TrainJobSpec,
     opensearch: Any,
@@ -553,6 +573,9 @@ async def _run_preflight(
                     message=f'defaulted to the current export: {spec.dataset_export_dir}',
                 )
             )
+
+    if spec.dataset_export_dir:
+        _refuse_export_outside_project(spec.dataset_export_dir)
 
     # ---- 1. optimizer != auto -------------------------------------------------
     optimizer = (spec.hyperparameters or {}).get('optimizer')

@@ -86,14 +86,13 @@ def test_pausing_one_project_leaves_the_others_running(leak_env: LeakEnv) -> Non
     assert client.post(f'{API}/beta/resume').json()['paused'] is False
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        'known gap, projects_p2_review_2026-09-27.md M1: the API accepts a foreign '
-        'dataset_export_dir (only the trainer refuses it later)'
-    ),
-)
-@pytest.mark.parametrize('route', ['/train/preflight', '/train/start'])
+def _training_body(route: str, export_dir: Path) -> dict[str, Any]:
+    if route == '/train/start_campaign':
+        return {'dataset_export_dir': str(export_dir), 'runs': [{'profile': 'probe'}]}
+    return {'dataset_export_dir': str(export_dir)}
+
+
+@pytest.mark.parametrize('route', ['/train/preflight', '/train/start', '/train/start_campaign'])
 def test_training_refuses_another_projects_export(leak_env: LeakEnv, route: str) -> None:
     """``dataset_export_dir`` is caller-supplied. Pointing it at another
     project's export must be refused at the API (not just by the trainer
@@ -107,7 +106,7 @@ def test_training_refuses_another_projects_export(leak_env: LeakEnv, route: str)
     r = _client(leak_env).post(
         f'{API}/beta{route}',
         params={'force': 'true'},
-        json={'dataset_export_dir': str(alpha_export)},
+        json=_training_body(route, alpha_export),
     )
     assert r.status_code == 422, r.text
     assert r.json()['detail']['error'] == 'export_outside_project'

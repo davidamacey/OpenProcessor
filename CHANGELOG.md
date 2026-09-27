@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-promote) and `class_remap_source`.
 
 ### Fixed
+- `/train/preflight`, `/train/start` and `/train/start_campaign` refuse a
+  `dataset_export_dir` outside the bound project's `export_root` with 422
+  `{"detail": {"error": "export_outside_project", ...}}`, before any check
+  reads the export; `force=true` does not bypass it. Previously another
+  project's manifest, registry and label counts were read back into the
+  report, and `start?force=true` queued the job.
 - Merged the finished `cutover/projects-foundation` (P1) twice (once
   before, once after its final review-resolution pass): resolved P1's
   worker-script conflicts in P2's favour (already multi-project) and

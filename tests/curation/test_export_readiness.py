@@ -235,9 +235,9 @@ def _check(body: dict[str, Any], name: str) -> dict[str, Any]:
 
 
 def test_preflight_blocks_single_class_export_older_than_the_index(
-    train_client: TestClient, tmp_path: Path
+    train_client: TestClient, tmp_path: Path, project_export_root: Path
 ) -> None:
-    export_dir = _single_class_export(tmp_path, exported_at='2026-09-24T03:20:32+00:00')
+    export_dir = _single_class_export(project_export_root, exported_at='2026-09-24T03:20:32+00:00')
     r = train_client.post(
         '/curation/projects/default/train/preflight',
         json={'dataset_export_dir': export_dir, 'profile': 'medium'},
@@ -249,9 +249,9 @@ def test_preflight_blocks_single_class_export_older_than_the_index(
 
 
 def test_preflight_passes_generation_for_a_current_stamp(
-    train_client: TestClient, tmp_path: Path
+    train_client: TestClient, tmp_path: Path, project_export_root: Path
 ) -> None:
-    export_dir = _single_class_export(tmp_path, items_index=CURRENT)
+    export_dir = _single_class_export(project_export_root, items_index=CURRENT)
     body = train_client.post(
         '/curation/projects/default/train/preflight',
         json={'dataset_export_dir': export_dir, 'profile': 'medium'},
@@ -261,9 +261,9 @@ def test_preflight_passes_generation_for_a_current_stamp(
 
 
 def test_preflight_blocks_an_empty_multi_class_export(
-    train_client: TestClient, tmp_path: Path
+    train_client: TestClient, tmp_path: Path, project_export_root: Path
 ) -> None:
-    d = tmp_path / 'multi'
+    d = project_export_root / 'multi'
     (d / 'labels' / 'train').mkdir(parents=True)
     (d / 'manifest.json').write_text(
         json.dumps({'image_count': 0, 'split_counts': {}, 'items_index': CURRENT})

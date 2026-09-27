@@ -42,6 +42,7 @@ ErrorCode = Literal[
     'model_name_reserved',
     'internal_isolation_error',
     'revision_conflict',
+    'export_outside_project',
 ]
 
 

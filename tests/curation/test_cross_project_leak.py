@@ -47,7 +47,8 @@ import re
 import subprocess  # nosec B404 - only patched to refuse, never called
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 from urllib.parse import unquote
 
 import httpx
@@ -59,10 +60,6 @@ from opensearchpy import AsyncOpenSearch
 from opensearchpy.exceptions import NotFoundError
 
 from curation.query_fakes import _aggregate, matches
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 API = '/curation'
@@ -91,7 +88,7 @@ def route_params(slug: str) -> dict[str, str]:
     }
 
 
-def route_bodies(slug: str) -> dict[tuple[str, str], dict[str, Any]]:
+def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str, Any]]:
     """A minimal valid request for every mutating route, as ``slug``.
     ``{'json': ...}`` / ``{'files': ..., 'data': ...}`` / ``{'params': ...}``
     are passed straight to ``TestClient.request``. A mutating route missing
@@ -174,7 +171,7 @@ def route_bodies(slug: str) -> dict[tuple[str, str], dict[str, Any]]:
             'params': force,
             'json': {
                 'campaign_id': f'{slug}-campaign-0001',
-                'dataset_export_dir': f'/exports/{slug}-v1',
+                'dataset_export_dir': str(export_root / f'{slug}-v1'),
                 'runs': [{'profile': 'probe', 'model_size': 'n'}],
             },
         },
@@ -1131,7 +1128,7 @@ def _sweep(
         for name in record.resources.indexes.values()
     }
     foreign_markers = [m for other in SLUGS if other != slug for m in _markers(other)]
-    bodies = route_bodies(slug)
+    bodies = route_bodies(slug, records[slug].resources.export_root)
 
     role_of = {name: role.value for role, name in records[slug].resources.indexes.items()}
     leaks: list[str] = []
@@ -1236,7 +1233,7 @@ def test_every_scoped_route_stays_inside_the_bound_project(
     assert not streaming_unmapped, f'unmapped streaming route(s): {streaming_unmapped}'
     mutating = {(m, p[len(SCOPED) :]) for m, p in routes if m != 'GET'}
     every = {(m, p[len(SCOPED) :]) for m, p in routes}
-    mapped = set(NO_WRITE) | set(route_bodies('x')) | set(CROP_FOR) | set(PREPARE)
+    mapped = set(NO_WRITE) | set(route_bodies('x', Path('/unused'))) | set(CROP_FOR) | set(PREPARE)
     stale = sorted((mapped - mutating) | (set(UNSEEDED_WRITES) - every))
     assert not stale, f'entries for routes that no longer exist: {stale}'
 

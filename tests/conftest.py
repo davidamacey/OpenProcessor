@@ -11,6 +11,7 @@ directly per the project README / CLAUDE.md.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -65,6 +66,18 @@ def _projects_data_root(
 
     if 'OP_PROJECTS_DATA_ROOT' not in os.environ:
         monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path_factory.mktemp('projects')))
+
+
+@pytest.fixture
+def project_export_root() -> Path:
+    """The bound ``default`` project's ``export_root`` (created). Training
+    routes refuse a ``dataset_export_dir`` outside it
+    (``export_outside_project``), so fixture exports live here."""
+    from src.config.curation import get_curation_config
+
+    root = Path(get_curation_config().export_root)
+    root.mkdir(parents=True, exist_ok=True)
+    return root
 
 
 @pytest.fixture(autouse=True)
