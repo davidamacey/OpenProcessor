@@ -43,6 +43,7 @@ ErrorCode = Literal[
     'internal_isolation_error',
     'revision_conflict',
     'export_outside_project',
+    'model_not_found',
 ]
 
 

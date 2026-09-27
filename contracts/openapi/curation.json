@@ -5486,6 +5486,129 @@
         "title": "MetricBlock",
         "type": "object"
       },
+      "ModelClassMappingEntry": {
+        "properties": {
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Name"
+          },
+          "match": {
+            "enum": [
+              "exact",
+              "case_insensitive",
+              "none"
+            ],
+            "title": "Match",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "integer"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id",
+          "model_name",
+          "class_id",
+          "class_name",
+          "match"
+        ],
+        "title": "ModelClassMappingEntry",
+        "type": "object"
+      },
+      "ModelClassMappingLabels": {
+        "properties": {
+          "match": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Match",
+            "type": "object"
+          }
+        },
+        "title": "ModelClassMappingLabels",
+        "type": "object"
+      },
+      "ModelClassMappingResponse": {
+        "description": "The full name mapping of one model onto the bound project.",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ModelClassMappingEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "labels": {
+            "$ref": "#/components/schemas/ModelClassMappingLabels"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "model_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Project"
+          },
+          "not_covered": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Not Covered",
+            "type": "array"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "unmapped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmapped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "model",
+          "model_project",
+          "project",
+          "entries",
+          "unmapped",
+          "not_covered"
+        ],
+        "title": "ModelClassMappingResponse",
+        "type": "object"
+      },
       "ModelSharingRequest": {
         "properties": {
           "expected_revision": {
@@ -14144,7 +14267,7 @@
     },
     "/curation/projects/{project}/models/status": {
       "get": {
-        "description": "Status + usage stats for the models that drive the curation labeling pipeline.\n\nReturns a single ``{\"models\": [...]}`` object describing each Triton model\nthe labeler depends on, plus the external VLM and segmenter services.\nEach entry carries enough metadata for the labeler ``/models`` page to\nrender a self-explanatory card without requiring access to\nTriton/Prometheus directly.",
+        "description": "Status + usage stats for the models that drive the curation labeling pipeline.\n\nReturns a single ``{\"models\": [...]}`` object describing each Triton model\nthe labeler depends on, plus the external VLM and segmenter services.\nEach entry carries enough metadata for the labeler ``/models`` page to\nrender a self-explanatory card without requiring access to\nTriton/Prometheus directly. Every Triton entry also carries\n``project``, ``shared`` and ``class_mapping`` (§5.5: its classes\nmatched by name onto this project's registry).",
         "operationId": "models_status_curation_projects__project__models_status_get",
         "parameters": [
           {
@@ -14155,6 +14278,18 @@
               "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
               "title": "Project",
               "type": "string"
+            }
+          },
+          {
+            "description": "Also list other projects' promoted models their owners shared",
+            "in": "query",
+            "name": "include_other_projects",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also list other projects' promoted models their owners shared",
+              "title": "Include Other Projects",
+              "type": "boolean"
             }
           }
         ],
@@ -14248,6 +14383,59 @@
           }
         },
         "summary": "Unload Model",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/models/{model_name}/class_mapping": {
+      "get": {
+        "description": "How ``model_name``'s classes map by name onto this project's\nregistry. Visible for this project's own models and base models, and\nfor another project's model only once its owner shares it -- 404\n``model_not_found`` otherwise, so an unshared model's existence and\nclasses never reach another project.",
+        "operationId": "get_model_class_mapping_curation_projects__project__models__model_name__class_mapping_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_name",
+            "required": true,
+            "schema": {
+              "title": "Model Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelClassMappingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Model Class Mapping",
         "tags": [
           "Curation"
         ]

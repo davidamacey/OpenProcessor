@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `GET /curation/projects/{project}/models/status?include_other_projects=true`
+  also lists other projects' promoted models whose owner shared them
+  (§5.5 #3). Every Triton entry now carries `project` (owner slug, null
+  for base models), `shared` and `class_mapping: {mapped_count,
+  unmapped}` (null for a model with no class list); external entries
+  carry `project: null, shared: false, class_mapping: null`.
+- `GET /curation/projects/{project}/models/{name}/class_mapping`: the full
+  name mapping of a model onto the bound project's registry (`model`,
+  `model_project`, `project`, `entries[{model_id, model_name, class_id,
+  class_name, match}]`, `unmapped`, `not_covered`, `labels.match`), 404
+  `model_not_found` for another project's unshared model (Cropwright
+  delta 8).
 - **Cross-project model sharing (§5.5, owner D1).** New
   `src/services/training/model_classes.py`: `model_classes()` reads a
   model's own classes from `promote.json.classes` (model order), else
