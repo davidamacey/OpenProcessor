@@ -471,13 +471,22 @@ async def test_probe_pred_class_id_is_the_registry_id_not_the_model_dense_id(
     ]
     fake_os = _FakeOpenSearch(docs)
 
-    cfg = get_curation_config()
-    cfg = cfg.__class__(**{**cfg.__dict__, 'class_registry_path': registry_path})
+    base_cfg = get_curation_config()
+
+    class _Cfg:
+        """The bound project's config with its registry path swapped."""
+
+        class_registry_path = registry_path
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(base_cfg, name)
+
+    cfg = _Cfg()
 
     await pp.run_probe_inference(
         tmp_path / 'ckpt.pt',
         fake_os,  # type: ignore[arg-type]
-        config=cfg,
+        config=cfg,  # type: ignore[arg-type]
         model_version=None,
         architecture='yolo11',
     )
