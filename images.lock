@@ -7,7 +7,14 @@
 # syntactically valid but unresolvable placeholder digest so
 # tests/installer/test_static.py can assert the *shape* (no ":latest", a
 # digest is present) without requiring real pushed images. A real release
-# overwrites this file entirely.
+# overwrites this file entirely (scripts/release/build_deploy_bundle.sh
+# refuses to bundle it otherwise).
+#
+# setup-openprocessor.sh refuses these placeholders (they are not 64-hex
+# digests): a release installs only from a real lock. Before images are
+# published, test with local-only tags instead:
+#   setup-openprocessor.sh --release-dir <assets> --version vX.Y.Z --image-tag <tag>
+# with OP_IMAGE_REPO=<local repo prefix>.
 openprocessor=davidamacey/openprocessor@sha256:0000000000000000000000000000000000000000000000000000000000dev0
 openprocessor-triton=davidamacey/openprocessor-triton@sha256:0000000000000000000000000000000000000000000000000000000000dev1
 openprocessor-segmenter=davidamacey/openprocessor-segmenter@sha256:0000000000000000000000000000000000000000000000000000000000dev2

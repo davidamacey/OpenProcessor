@@ -1,0 +1,74 @@
+#!/bin/bash
+# Test double for `curl`. Logs argv to $SHIM_LOG (so a secret passed as an
+# argument would show up there) and serves:
+#   https://release.test/assets/<ref>/<asset>  -> $SHIM_RELEASE/assets/<ref>/<asset>
+#   https://release.test/raw/<ref>/<path>      -> $SHIM_RELEASE/raw/<ref>/<path>
+#   https://cw.test/{assets,raw}/<tag>/<file>  -> $SHIM_RELEASE/cw/<tag>/<file>
+#   https://api.github.com/.../releases/latest -> {"tag_name": "$SHIM_LATEST"}
+#   https://api.github.com/.../commits/<b>     -> {"sha": "$SHIM_BRANCH_SHA"}
+#   https://huggingface.co/api/models/<repo>   -> HTTP $(cat $SHIM_STATE/hf_code) (200)
+#   http://127.0.0.1:<port>/...                -> canned healthy responses
+#                                                 ($SHIM_STATE/health_down: refused)
+set -u
+printf 'curl %s\n' "$*" >> "${SHIM_LOG:?}"
+state="${SHIM_STATE:?}"
+out="" wfmt="" url="" fail=0
+while (( $# > 0 )); do
+    case "$1" in
+        -o) out="$2"; shift 2 ;;
+        -w) wfmt="$2"; shift 2 ;;
+        -H|-X|--max-time|--connect-timeout|--retry|--proto|--proto-redir|-d|--data) shift 2 ;;
+        -f|-fsS|-fsSL|-sf|-sS) [[ "$1" == *f* ]] && fail=1; shift ;;
+        -*) shift ;;
+        *) url="$1"; shift ;;
+    esac
+done
+
+code=200 body="" file=""
+case "$url" in
+    https://release.test/assets/*) file="${SHIM_RELEASE:?}/assets/${url#https://release.test/assets/}" ;;
+    https://release.test/raw/*) file="${SHIM_RELEASE:?}/raw/${url#https://release.test/raw/}" ;;
+    https://cw.test/assets/*) file="${SHIM_RELEASE:?}/cw/${url#https://cw.test/assets/}" ;;
+    https://cw.test/raw/*) file="${SHIM_RELEASE:?}/cw/${url#https://cw.test/raw/}" ;;
+    https://api.github.com/*/releases/latest) body="{\"tag_name\": \"${SHIM_LATEST:-v9.9.9}\"}" ;;
+    https://api.github.com/*/commits/*) body="{
+  \"sha\": \"${SHIM_BRANCH_SHA:-}\"
+}" ;;
+    https://huggingface.co/api/models/*) code="$(cat "${state}/hf_code" 2>/dev/null || echo 200)"; body="{}" ;;
+    http://127.0.0.1:*|http://0.0.0.0:*)
+        if [[ -e "${state}/health_down" ]]; then
+            exit 7
+        fi
+        path="/${url#http://*/}"
+        case "$path" in
+            /v1/models) body="{\"data\": [{\"id\": \"local-vlm\", \"root\": \"${SHIM_VLM_ROOT:-}\"}]}" ;;
+            /health) body='{"status": "ready", "loaded": true}' ;;
+            /curation/health) body='{"status": "ok"}' ;;
+            *) body='{}' ;;
+        esac
+        ;;
+    *) code=404 ;;
+esac
+
+if [[ -n "$file" ]]; then
+    if [[ -f "$file" ]]; then
+        body_file="$file"
+    else
+        code=404
+    fi
+fi
+
+if (( code >= 400 )) && (( fail == 1 )) && [[ -z "$wfmt" ]]; then
+    echo "curl: (22) The requested URL returned error: ${code}" >&2
+    exit 22
+fi
+
+if [[ -n "$out" ]]; then
+    if [[ -n "${body_file:-}" ]]; then cat "$body_file" > "$out"; else printf '%s' "$body" > "$out"; fi
+elif [[ -z "$wfmt" ]]; then
+    if [[ -n "${body_file:-}" ]]; then cat "$body_file"; else printf '%s\n' "$body"; fi
+fi
+if [[ -n "$wfmt" ]]; then
+    printf '%s' "${wfmt//%\{http_code\}/$code}"
+fi
+exit 0

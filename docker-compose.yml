@@ -827,7 +827,8 @@ services:
     environment:
       - discovery.type=single-node
       - bootstrap.memory_lock=true
-      - "OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g"  # Heap size (adjust based on RAM)
+      # Heap: OPENSEARCH_HEAP in .env; the installer sizes it to RAM/8, clamped to 1-8g.
+      - "OPENSEARCH_JAVA_OPTS=-Xms${OPENSEARCH_HEAP:-2g} -Xmx${OPENSEARCH_HEAP:-2g}"
       - DISABLE_SECURITY_PLUGIN=true  # Disable security for dev (enable in production)
     ulimits:
       memlock:
