@@ -3,8 +3,8 @@
  * configurable-keyboard-shortcuts-plan-2026-09-26.md §5.1). Stubs
  * `fetch` directly, same pattern as `strategies.svelte.test.ts` — both
  * `keymapStore` and `keymapAvailability` are module-scope singletons, so
- * mocking `$lib/api` via `vi.doMock` + dynamic import (the
- * `bakeoffAvailability.test.ts` pattern) doesn't reliably rebind the
+ * mocking `$lib/api` via `vi.doMock` + dynamic import doesn't reliably
+ * rebind the
  * already-loaded `keymap.svelte.ts` closure in this suite's module
  * graph; stubbing the actual network boundary avoids that trap.
  */

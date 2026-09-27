@@ -204,7 +204,7 @@ export const keymapStore = new KeymapStore();
 
 /**
  * `keymapAvailability` — provisional capability gate for the `/settings`
- * Keyboard section, same shape as `bakeoffAvailability` (K2, plan §5.1).
+ * Keyboard section (K2, plan §5.1).
  *
  * A pre-W2b backend 404s/501s `GET {prefix}/keymap`: `available` becomes
  * `false`, `keymapStore` stays on `FALLBACK_KEYMAP`, and the editor is

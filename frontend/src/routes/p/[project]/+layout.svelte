@@ -22,8 +22,6 @@
     slotForClassName,
     slotRegistryWarnings,
   } from '$lib/annotations/registeredSlots';
-  import { bakeoffAvailability } from '$lib/bakeoffAvailability.svelte';
-  import { ingestAvailability } from '$lib/ingest/ingestAvailability.svelte';
   import { isPickerHiddenClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import ShortcutOverlay from '$components/ShortcutOverlay.svelte';
@@ -85,22 +83,6 @@
       releaseHealth();
       releaseClasses();
     };
-  });
-
-  // One-shot, never-rejecting probe deciding whether the /bakeoff nav
-  // link renders at all — see bakeoffAvailability.svelte.ts's doc comment
-  // for why a probe is safe here (idempotent read, unambiguous 404 vs.
-  // "no runs yet") and why this whole mechanism is provisional.
-  $effect(() => {
-    if (!slug) return;
-    void bakeoffAvailability.init();
-  });
-
-  // Same probe pattern as bakeoffAvailability above, for the /ingest
-  // nav link — see ingestAvailability.svelte.ts's doc comment.
-  $effect(() => {
-    if (!slug) return;
-    void ingestAvailability.init();
   });
 
   // Tier-2 deployment-profile problems are the operator's to fix and are
@@ -388,13 +370,11 @@
           class={navLinkClass('dashboard')}
           aria-current={navCurrent('dashboard')}>Dashboard</a
         >
-        {#if ingestAvailability.available !== false}
-          <a
-            href={resolve(projectHref('/ingest'))}
-            class={navLinkClass('ingest')}
-            aria-current={navCurrent('ingest')}>Ingest</a
-          >
-        {/if}
+        <a
+          href={resolve(projectHref('/ingest'))}
+          class={navLinkClass('ingest')}
+          aria-current={navCurrent('ingest')}>Ingest</a
+        >
         <a
           href={resolve(projectHref('/clusters'))}
           class={navLinkClass('clusters')}
@@ -425,13 +405,11 @@
           class={navLinkClass('train')}
           aria-current={navCurrent('train')}>Train</a
         >
-        {#if bakeoffAvailability.available !== false}
-          <a
-            href={resolve(projectHref('/bakeoff'))}
-            class={navLinkClass('bakeoff')}
-            aria-current={navCurrent('bakeoff')}>Bake-off</a
-          >
-        {/if}
+        <a
+          href={resolve(projectHref('/bakeoff'))}
+          class={navLinkClass('bakeoff')}
+          aria-current={navCurrent('bakeoff')}>Bake-off</a
+        >
         <a
           href={resolve(projectHref('/settings'))}
           class={navLinkClass('settings')}
