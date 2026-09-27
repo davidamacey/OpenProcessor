@@ -13,7 +13,8 @@ never pushed onto `undoStore`) — `POST .../region/undo` was never called.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, wait_for_paint
+from playwright.sync_api import expect
 
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
@@ -72,7 +73,7 @@ def test_region_reject_then_z_calls_region_undo(stub, page, app_url):
     page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(500)
+    expect(counter.first).to_contain_text("1 total", timeout=ACTION_TIMEOUT_MS)
 
     # D = reject on the region tab -> the no_region_visible reject status
     # wants a reason (DQ-m6: now an in-app modal, not window.prompt()), so
@@ -81,16 +82,20 @@ def test_region_reject_then_z_calls_region_undo(stub, page, app_url):
     # the box), so one Z undoes it.
     page.keyboard.press("d")
     page.get_by_label("Reason for rejecting").wait_for(timeout=5000)
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(400)
+    with page.expect_response(
+        lambda r: r.request.method == "PATCH" and r.url.endswith("/region_meta"), timeout=ACTION_TIMEOUT_MS
+    ):
+        page.keyboard.press("Enter")
 
     assert len(meta_calls) == 1, f"D should PATCH region_meta exactly once: {meta_calls}"
     assert meta_calls[0].get("region_status"), f"reject must send a status: {meta_calls}"
     assert region_calls == [], f"reject must not also PUT region: {region_calls}"
 
     # Z must now reverse that write server-side.
-    page.keyboard.press("z")
-    page.wait_for_timeout(400)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.endswith("/region/undo"), timeout=ACTION_TIMEOUT_MS
+    ):
+        page.keyboard.press("z")
 
     assert len(undo_calls) == 1, (
         f"Z on the region tab must POST {{API_PREFIX}}/crops/{{id}}/region/undo "
@@ -118,9 +123,12 @@ def test_region_reject_z_before_any_write_does_not_call_region_undo(stub, page, 
     page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(500)
+    expect(counter.first).to_contain_text("1 total", timeout=ACTION_TIMEOUT_MS)
 
+    # Nothing to undo means no request is ever fired — there's no positive
+    # signal to wait on, so settle via a real paint tick (the store's
+    # early return is synchronous) before asserting the negative.
     page.keyboard.press("z")
-    page.wait_for_timeout(300)
+    wait_for_paint(page)
 
     assert undo_calls == [], f"Z with nothing recorded must not call region/undo: {undo_calls}"

@@ -14,6 +14,7 @@ from __future__ import annotations
 from conftest import ACTION_TIMEOUT_MS
 
 from fixtures.wire import REGION_CLASS
+from playwright.sync_api import expect
 
 CLASSES = [
     {
@@ -75,7 +76,9 @@ def test_region_status_filter_lists_served_statuses_and_forwards_the_query_param
 
     select = page.locator('label:has-text("Status") select')
     select.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
+    # Wait for the served vocabulary's options to actually populate the
+    # <select> instead of an arbitrary settle sleep.
+    expect(select.locator("option")).to_have_count(3, timeout=ACTION_TIMEOUT_MS)
 
     option_values = select.locator("option").evaluate_all("opts => opts.map(o => o.value)")
     option_labels = select.locator("option").evaluate_all(
@@ -85,8 +88,11 @@ def test_region_status_filter_lists_served_statuses_and_forwards_the_query_param
     assert option_labels == ["any", "Detected", "Rejected (candidate kept)"], option_labels
 
     region_list_calls.clear()
-    select.select_option("verify_rejected")
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "GET" and "/regions" in r.url and "status=verify_rejected" in r.url,
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        select.select_option("verify_rejected")
 
     assert region_list_calls, "picking a status must trigger a fresh GET {API_PREFIX}/regions call"
     assert any("status=verify_rejected" in url for url in region_list_calls), region_list_calls

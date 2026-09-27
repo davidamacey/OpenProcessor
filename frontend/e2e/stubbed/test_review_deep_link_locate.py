@@ -35,7 +35,7 @@ the time the key lands.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, wait_for_paint
 
 import re
 import threading
@@ -163,7 +163,11 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
 
     locate_gate.set()
     page.wait_for_selector("text=Locating crop", state="detached", timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)  # let any in-flight PUT (there shouldn't be one) land
+    # There should be no in-flight PUT to wait FOR — this settles the
+    # event loop via a real paint tick (same rationale as the module
+    # docstring: a fixed sleep here would be exactly the kind of
+    # timing-fragile check this test deliberately avoids elsewhere).
+    wait_for_paint(page)
 
     assert not any("crop-0" in c for c in label_calls), (
         f"a keypress fired while locating must never label crop-0 (item #1): {label_calls}"

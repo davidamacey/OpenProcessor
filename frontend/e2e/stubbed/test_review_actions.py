@@ -12,6 +12,7 @@ from __future__ import annotations
 from conftest import ACTION_TIMEOUT_MS
 
 from fixtures.wire import make_item
+from playwright.sync_api import expect
 
 CLASSES = [
     {"id": 1, "name": "ducati", "group": "moto", "hotkey_letter": "k", "count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
@@ -78,8 +79,10 @@ def test_review_assign_then_undo(stub, page, app_url):
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     before = counter.first.inner_text()
 
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "PUT" and r.url.endswith("/label"), timeout=ACTION_TIMEOUT_MS
+    ):
+        page.keyboard.press("Enter")
 
     assert len(label_calls) == 1, f"Enter should PUT exactly one label: {label_calls}"
     method, path, body = label_calls[0]
@@ -87,11 +90,14 @@ def test_review_assign_then_undo(stub, page, app_url):
     assert path.endswith("/label")
     assert body.get("class_id") == 1, body
 
+    expect(counter.first).not_to_have_text(before, timeout=ACTION_TIMEOUT_MS)
     after_label = counter.first.inner_text()
     assert after_label != before, "the queue should visibly advance after a successful assign"
 
-    page.keyboard.press("z")
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.endswith("/label/undo"), timeout=ACTION_TIMEOUT_MS
+    ):
+        page.keyboard.press("z")
 
     assert len(undo_calls) == 1, f"Z should POST exactly one .../label/undo: {undo_calls}"
     undo_method, undo_path = undo_calls[0]

@@ -17,7 +17,7 @@ whatever the server returns.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, wait_for_paint
 
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
@@ -121,12 +121,15 @@ def test_confirming_a_verify_rejected_item_promotes_the_candidate_via_status_pat
     # "no bbox at all".
     page.get_by_text("rejected candidate", exact=False).first.wait_for(timeout=10000)
 
-    # Give the canvas a beat to seed editedSlotBox from the candidate box
-    # before confirming (same pattern as test_region_confirm.py).
-    page.wait_for_timeout(500)
+    # Give the canvas a real paint tick to seed editedSlotBox from the
+    # candidate box before confirming (same pattern as test_region_confirm.py).
+    wait_for_paint(page)
 
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "PATCH" and r.url.endswith("/region_meta"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press("Enter")
 
     assert region_calls == [], (
         f"an unchanged candidate-box confirm must not PUT region: {region_calls}"

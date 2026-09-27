@@ -22,6 +22,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   about 31 s. `test_keymap_absent_when_404` now waits on the real key and
   request instead of fixed sleeps; it flaked under parallel load.
 
+### Fixed
+
+- **Stubbed e2e suite no longer flakes under pytest-xdist parallel
+  load.** Every fixed `page.wait_for_timeout(...)` sleep across
+  `e2e/stubbed/**` (127 occurrences in 30 files) that was gating an
+  assertion is replaced with a real wait: `page.expect_response(...)`
+  around the action that should fire a request, `expect(locator)...`/
+  `page.wait_for_selector`/`page.wait_for_load_state("networkidle")` for
+  UI/network settle, or a Python-side poll of the stub's own call log for
+  an async client-side refetch with no `page.*`-observable signal. A
+  "must NOT fire" assertion now triggers and waits for a later request or
+  UI change proving the keypress was processed (or, when nothing async
+  ever happens, a `wait_for_paint` — two real animation frames — new in
+  `e2e/conftest.py`) before asserting the absence, never straight after a
+  sleep. Two short fixed sleeps remain, both documented as pacing
+  synthetic input rather than gating an assertion: the inter-move delay
+  in a simulated pointer drag (`test_labeling_flow.py`, needed for
+  svelte-dnd-action's own drag-gesture detection) and a 50ms poll
+  interval in a Python-side call-log poll
+  (`test_clusters_display_order_representatives.py`).
+
 ### Added
 
 - **Configurable keyboard shortcuts — editor + served keymap (K2 of

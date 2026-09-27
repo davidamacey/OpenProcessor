@@ -22,11 +22,13 @@ pre-existing params.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, wait_for_paint
 
 import json
 import re
 from urllib.parse import urlsplit
+
+from playwright.sync_api import expect
 
 CLASSES = [
     {
@@ -139,7 +141,9 @@ def test_assist_scope(stub, page, app_url):
     page.goto(f"{app_url}/dashboard")
     start_btn = page.get_by_role("button", name="Recluster now")
     start_btn.first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
+    # Real wait for the dashboard's on-mount requests to finish before the
+    # negative "no assist chip" assertion below.
+    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
 
     assert not [c for c in stub.console_errors if c.startswith("pageerror")], "dashboard should render with no pageerror"
     assert page.get_by_text(re.compile(r"^assist:")).count() == 0, "no 'assist:' chip should render — absent, not disabled"
@@ -151,8 +155,11 @@ def test_assist_scope(stub, page, app_url):
     # confirm dialog before it actually starts the run.
     confirm_btn = page.get_by_role("button", name="Start")
     confirm_btn.first.wait_for(timeout=5000)
-    confirm_btn.first.click()
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/pipeline/auto_label/start" in r.url,
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        confirm_btn.first.click()
     assert len(starts1) == 1, f"exactly one POST to auto_label/start expected: {starts1}"
     qs = query_of(starts1[0])
     assert "class_id" not in qs, qs
@@ -167,13 +174,10 @@ def test_assist_scope(stub, page, app_url):
     page.goto(f"{app_url}/dashboard")
     chip = page.get_by_text(re.compile(r"^assist:\s*whole dataset"))
     chip.first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(200)
 
     chip.first.click()
-    page.wait_for_timeout(200)
-
     class_search = page.locator("input[type=search]")
-    assert class_search.count() > 0, "class search box should appear"
+    expect(class_search.first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text("Server default").count() >= 1, "the prompt-pack <select> should appear"
 
     options_text = page.locator("select option").all_inner_texts()
@@ -181,32 +185,36 @@ def test_assist_scope(stub, page, app_url):
     assert any("Warehouse vocabulary" in t for t in options_text), f"the usable pack should be offered: {options_text}"
 
     class_search.first.fill("pall")
-    page.wait_for_timeout(200)
     pallets_row = page.get_by_text("pallets", exact=False)
-    assert pallets_row.count() > 0, "typing 'pall' should narrow the list to pallets"
+    expect(pallets_row.first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     pallets_row.first.click()
-    page.wait_for_timeout(150)
+    # Clicking a class-search result closes the list synchronously — no
+    # network involved, just let the DOM update settle via a real paint.
+    wait_for_paint(page)
 
     selects = page.locator("select")
     assert selects.count() == 1, f"exactly one <select> expected (prompt pack only, no detection profile): {selects.count()}"
     selects.first.select_option("warehouse_v1")
-    page.wait_for_timeout(150)
 
     collapse_btn = page.get_by_role("button", name="×")
     if collapse_btn.count() > 0:
         collapse_btn.first.click()
-    page.wait_for_timeout(200)
 
-    assert page.get_by_text(re.compile(r"^assist:\s*pallets")).count() > 0, "chip should now read 'assist: pallets · warehouse_v1'"
     scoped_btn = page.get_by_role("button", name=re.compile(r"^Recluster · VLM: pallets$"))
-    assert scoped_btn.count() > 0, "button should now read 'Recluster · VLM: pallets'"
+    expect(scoped_btn.first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_text(re.compile(r"^assist:\s*pallets")).first).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
 
     starts2.clear()
     scoped_btn.first.click()
     confirm_btn2 = page.get_by_role("button", name="Start")
     confirm_btn2.first.wait_for(timeout=5000)
-    confirm_btn2.first.click()
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/pipeline/auto_label/start" in r.url,
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        confirm_btn2.first.click()
     assert len(starts2) == 1, f"exactly one scoped POST to auto_label/start expected: {starts2}"
     qs = query_of(starts2[0])
     assert "class_id=1" in qs, qs
@@ -220,16 +228,20 @@ def test_assist_scope(stub, page, app_url):
     chip2 = page.get_by_text(re.compile(r"^assist:"))
     chip2.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     chip2.first.click()
-    page.wait_for_timeout(200)
+    # Expanding is a synchronous DOM toggle; the reset button is only
+    # conditionally present (state may already be back to default after
+    # the reload above), so there's no selector to wait FOR here — just
+    # let the toggle's own DOM update settle via a real paint tick.
+    wait_for_paint(page)
     reset_btn = page.get_by_role("button", name="reset")
     if reset_btn.count() > 0:
         reset_btn.first.click()
-    page.wait_for_timeout(200)
     collapse_btn2 = page.get_by_role("button", name="×")
     if collapse_btn2.count() > 0:
         collapse_btn2.first.click()
-    page.wait_for_timeout(200)
-    assert page.get_by_text(re.compile(r"^assist:\s*whole dataset")).count() > 0, "reset should return the chip to 'assist: whole dataset'"
+    expect(page.get_by_text(re.compile(r"^assist:\s*whole dataset")).first).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    ), "reset should return the chip to 'assist: whole dataset'"
 
     pass2_errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not pass2_errors, f"no pageerror expected across pass 2: {pass2_errors[:3]}"

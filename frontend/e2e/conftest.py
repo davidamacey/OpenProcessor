@@ -80,6 +80,24 @@ HandlerResult = Any  # dict/list (-> 200 json) | tuple[int, Any] | tuple[int, An
 Handler = Callable[[Any, "re.Match[str]"], HandlerResult]
 
 
+def wait_for_paint(page: Any) -> None:
+    """Wait for two real animation frames instead of an arbitrary sleep.
+
+    A handful of interactions (mid-drag Escape, rapid Escape presses) have
+    no app-exposed DOM/network signal to wait on — the assertion that
+    follows is about the ABSENCE of a console error, not a state change a
+    selector can observe. Sleeping a fixed duration there is exactly the
+    flake-under-load pattern this whole rewrite removes: this instead
+    waits on the browser's own paint pipeline (two rAF callbacks
+    guarantees at least one full frame was rendered), which naturally
+    slows down under host contention the same way real waiting would,
+    without picking an arbitrary millisecond budget.
+    """
+    page.evaluate(
+        "() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+    )
+
+
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
