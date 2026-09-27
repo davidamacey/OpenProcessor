@@ -146,6 +146,26 @@ def test_undo_status_write(
     assert _doc(fake_os, 'c1').get(F.rejection_reason) is None
 
 
+def test_undo_restores_box_list_pin4(client: TestClient, fake_os: QueryFakeOpenSearch) -> None:
+    """W8 pin 4: undo restores the actual box-list snapshot, not just the
+    legacy scalar (region_writes.py has none for the box-list PUT)."""
+    before_boxes = _doc(fake_os, 'c1').get(F.boxes)
+    resp = client.put(
+        '/curation/projects/default/crops/c1/regions',
+        json={'boxes': [{'box_id': None, 'bbox_norm': [0.05, 0.05, 0.15, 0.15]}]},
+    )
+    assert resp.status_code == 200, resp.text
+    after_write = _doc(fake_os, 'c1')
+    assert after_write.get(F.boxes)
+    assert after_write.get(F.count) == 1
+
+    resp = client.post('/curation/projects/default/crops/c1/region/undo')
+    assert resp.status_code == 200, resp.text
+    restored = _doc(fake_os, 'c1')
+    assert restored.get(F.boxes) == before_boxes
+    assert not restored.get(F.count)
+
+
 def test_repeated_undo_steps_back(client: TestClient, fake_os: QueryFakeOpenSearch) -> None:
     original = _state(_doc(fake_os, 'c1'))
     client.patch(
