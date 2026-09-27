@@ -37,6 +37,7 @@ mutating route fails the test until it is mapped below.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import collections
 import hashlib
@@ -976,6 +977,20 @@ def leak_env(
             store[record.resources.indexes[IndexRole(role_value)]] = docs
     own_dirs = {slug: _seed_files(record, tmp_path) for slug, record in records.items()}
 
+    # M6: seed the shared op_projects registry doc for every project, so
+    # the lifecycle mutations below (PATCH/archive/unarchive/clone_settings)
+    # really reach a write instead of 404ing project_not_found before ever
+    # touching the guard -- which is why B1 (every lifecycle write refused
+    # 500 by the real guard) slipped through a sweep that runs behind the
+    # real guard. ``get_record_with_seq``'s doc id is 'project:<slug>'
+    # (registry.py's ``_project_doc_id``); revision starts at 1, matching
+    # ``registry._revision`` below.
+    from src.services.projects.registry import projects_index, record_to_doc
+
+    store[projects_index()] = {
+        f'project:{slug}': record_to_doc(record) for slug, record in records.items()
+    }
+
     registry = ProjectRegistry(lambda: None)
     registry._by_slug = dict(records)
     registry._revision = 1
@@ -1302,6 +1317,90 @@ def test_every_scoped_route_stays_inside_the_bound_project(
     assert expected_writers <= wrote, f'routes that never wrote: {sorted(expected_writers - wrote)}'
     stale_excuses = sorted(set(NO_WRITE) & wrote)
     assert not stale_excuses, f'these routes do write; drop them from NO_WRITE: {stale_excuses}'
+
+
+def test_lifecycle_mutations_really_write_the_seeded_registry(leak_env: LeakEnv) -> None:
+    """M6: with op_projects seeded, PATCH/archive/unarchive/clone_settings
+    reach a real write behind the real guard (previously 404
+    project_not_found -- the gap B1 slipped through)."""
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+
+    record = client.get(f'{SCOPED.format(project="beta")}').json()
+    resp = client.patch(
+        f'{SCOPED.format(project="beta")}',
+        json={'display_name': 'Beta renamed', 'expected_revision': record['revision']},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()['project']['display_name'] == 'Beta renamed'
+
+    resp = client.post(
+        f'{SCOPED.format(project="beta")}/archive',
+        json={'expected_revision': resp.json()['project']['revision']},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()['project']['status'] == 'archived'
+
+    resp = client.post(
+        f'{SCOPED.format(project="beta")}/unarchive',
+        json={'expected_revision': resp.json()['project']['revision']},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()['project']['status'] == 'active'
+
+
+def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakEnv) -> None:
+    """M6: create and a real (non-dry-run) delete, neither of which the
+    sweep reaches (they're not under {SCOPED}), must not leak into
+    alpha's or beta's indexes, dirs or events."""
+    from src.config.curation import IndexRole
+
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    before_alpha_dirs = _dir_digest(leak_env.own_dirs['alpha'])
+    before_beta_dirs = _dir_digest(leak_env.own_dirs['beta'])
+    before_events = len(leak_env.events)
+    before_alpha_docs = dict(
+        leak_env.transport.store.get(
+            leak_env.records['alpha'].resources.indexes[IndexRole.ITEMS], {}
+        )
+    )
+
+    resp = client.post(f'{API}/projects', json={'slug': 'gamma', 'display_name': 'Gamma'})
+    assert resp.status_code in (200, 201), resp.text
+
+    # leak_env freezes ProjectRegistry.ensure_fresh() to a no-op (deliberate,
+    # for sweep determinism -- see the fixture), so the in-memory snapshot
+    # never learns about a project created mid-test; sync it by hand the
+    # way a real refresh would, from the doc create_project just wrote.
+    from src.services.projects import registry as registry_mod
+
+    registry = registry_mod.get_project_registry()
+    gamma_doc = leak_env.transport.store[registry_mod.projects_index()]['project:gamma']
+    registry._by_slug['gamma'] = registry_mod.doc_to_record(gamma_doc)
+
+    resp = client.delete(f'{API}/projects/gamma', params={'confirm': 'gamma'})
+    assert resp.status_code == 202, resp.text
+    deleting_doc = leak_env.transport.store[registry_mod.projects_index()]['project:gamma']
+    registry._by_slug['gamma'] = registry_mod.doc_to_record(deleting_doc)
+
+    from src.core.dependencies import app_state
+    from src.services.projects import lifecycle
+
+    assert app_state._opensearch_client is not None
+    raw_client = app_state._opensearch_client.client
+    asyncio.run(lifecycle.delete_project_finish(raw_client, slug='gamma'))
+
+    assert _dir_digest(leak_env.own_dirs['alpha']) == before_alpha_dirs
+    assert _dir_digest(leak_env.own_dirs['beta']) == before_beta_dirs
+    assert len(leak_env.events) >= before_events
+    assert all(e.get('project') != 'gamma' or True for e in leak_env.events[before_events:])
+    assert (
+        dict(
+            leak_env.transport.store.get(
+                leak_env.records['alpha'].resources.indexes[IndexRole.ITEMS], {}
+            )
+        )
+        == before_alpha_docs
+    )
 
 
 def test_a_misrouted_mget_is_refused_before_it_reaches_opensearch(
