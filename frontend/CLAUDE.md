@@ -1684,8 +1684,25 @@ other reachable Cropwright nginx origin) — unset, `_require_live_url`
 (`e2e/live/conftest.py`, session-scoped + autouse) skips every test in
 the tier before a browser is ever launched, so this never runs in CI or
 under plain `npm run test:e2e`. A session-scoped `live_url` fixture
-preflights `GET {API_PREFIX}/health`, skipping with a clear message on
-anything short of a clean 200.
+preflights the GLOBAL `GET {API_PREFIX}/health` (never a project-scoped
+one — health and `/projects` are the only routes that stay unscoped
+post-cutover, see "Projects — /p/[project] routes" above), skipping with
+a clear message on anything short of a clean 200.
+
+**Project-aware (2026-09-27, following the projects cutover).** A
+session-scoped `live_project` fixture reads the GLOBAL `GET
+{API_PREFIX}/projects` once, resolves the served `default_slug` against
+that response's `projects` list, and exposes `{slug, prefix}` — every
+direct API read in this tier goes through `api_get(live_url,
+live_project, path)` (built from the served `prefix`, never assembled
+client-side), and every page navigation goes through
+`page_path(live_project, path)` (`/p/<slug><path>`). `live_region_profile`
+now reads the region profile from the default project's own scoped
+`{prefix}/health` (per-project, matching
+`src/lib/stores/regionProfile.svelte.ts`), not the global one. The
+write guard's `_READ_ONLY_POST_SUFFIXES` matches `/train/preflight` by
+path suffix (rather than a fixed absolute path) since the scoped prefix
+varies per project.
 
 **Hard read-only, structurally, not by test discipline.** Every test
 uses the `guarded_page` fixture: it routes every `**/curation/**`
@@ -1738,36 +1755,44 @@ nav is now its own horizontally-scrolling strip, `overflow-x-auto
 whitespace-nowrap`, with every link `shrink-0` and the status chip
 pinned `shrink-0` so it's never squeezed.)
 
-Three test modules, 24 tests total against this deployment's live
+Three test modules, 26 tests total against this deployment's live
 dataset:
 
-- **`test_route_sweep.py`** — every top-level route mounts: `/dashboard`,
+- **`test_route_sweep.py`** — every project-scoped top-level route mounts
+  under `/p/<slug>/...` (`live_project`'s resolved default-project slug):
+  `/dashboard`,
   `/ingest`, `/clusters` (plain and `?class=<served region_class_name>`), `/review`
   with each tab's `?tab=<urlId>` (`all`/`uncertainty`/
   `model_disagreements`/`classifier_blind_spots`/`new_class_proposals`/
   `regions`), `/classes`, `/export`, `/train`, `/models`, `/bakeoff`,
-  `/settings`. `/ingest` fails against any backend that predates
+  `/settings` — plus the one GLOBAL page, `/projects` (never under
+  `/p/<slug>/...`), swept by its own
+  `test_global_route_mounts_cleanly`. `/ingest` fails against any backend that predates
   `docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md` (this
   currently deployed build 404s it) — that's expected until the next
   deploy, not a bug. Each asserts:
   no `pageerror`; no `**/curation/**` response >= 400 outside a small,
   explicit, documented allow-list (`ALLOWED_4XX_5XX` in
-  `e2e/live/conftest.py` — empty today, since every endpoint this
-  deployment serves on mount came back 200/204 in manual verification);
+  `e2e/live/conftest.py` — one entry today, `GET .../keymap` 404, for a
+  deployment that predates OpenProcessor W2b, see "Keyboard shortcuts"
+  above; every other endpoint this deployment serves on mount came back
+  200/204 in manual verification);
   no literal `"NaN"`/`"undefined"` in the rendered body text; every
   `<img>` whose bounding box intersects the 1280×720 viewport finishes
   loading (`naturalWidth > 0`) — an offscreen lazy image is allowed to
   still be pending; no horizontal overflow at the narrow 800px viewport
   (see above). Also saves the always-on desktop/narrow screenshots
   described above.
-- **`test_data_agreement.py`** — the UI shows what the API serves:
-  the dashboard's "Clusters (total now)" vs `GET {API_PREFIX}/stats/
+- **`test_data_agreement.py`** — the UI shows what the API serves, every
+  direct read scoped to the default project's own served `prefix` via
+  `api_get(live_url, live_project, path)`:
+  the dashboard's "Clusters (total now)" vs `GET {prefix}/stats/
 dataset` `clusters.cluster_count`; `/review?tab=regions`'s queue-counter
-  total vs `GET {API_PREFIX}/review/regions` `total`, both unfiltered
+  total vs `GET {prefix}/review/regions` `total`, both unfiltered
   and with `?region_status=verify_rejected`; every `filter_specs` entry
-  `GET {API_PREFIX}/review/tabs` serves for the `regions` tab renders a
+  `GET {prefix}/review/tabs` serves for the `regions` tab renders a
   `<select>` with exactly the served option labels; a served
-  `rejection_reasons` label (`GET {API_PREFIX}/regions/vocabulary`,
+  `rejection_reasons` label (`GET {prefix}/regions/vocabulary`,
   resolved exact-then-longest-prefix, mirroring
   `regionVocabularyStore.rejectionReasonLabel`) actually renders for a
   live `verify_rejected` item — skipped, not failed, when the live
@@ -1781,15 +1806,15 @@ dataset` `clusters.cluster_count`; `/review?tab=regions`'s queue-counter
   URL-seeded `?region_status=` filter's `filter_specs` finish loading —
   see "Served per-tab filters" above) rather than racing a single read.
   Also: `test_ingest_status_agrees` (the `/ingest` status table's total
-  vs `GET {API_PREFIX}/ingest/status`) and `test_region_drain_agrees`
+  vs `GET {prefix}/ingest/status`) and `test_region_drain_agrees`
   (the region-drain panel's `total_unfinished` vs
-  `GET {API_PREFIX}/ingest/region_drain`, via `wait_for_stable_text`
+  `GET {prefix}/ingest/region_drain`, via `wait_for_stable_text`
   since the value moves during a live cascade) — both fail against a
   pre-ingest backend the same way `test_route_sweep.py`'s `/ingest`
   case does.
 - **`test_deep_link.py`** — takes the first crop id off `GET
-{API_PREFIX}/review/regions?region_status=verify_rejected&page_size=1`
-  (skips if none), opens `/review?tab=regions&region_status=
+{prefix}/review/regions?region_status=verify_rejected&page_size=1`
+  (skips if none), opens `/p/<slug>/review?tab=regions&region_status=
 verify_rejected&crop_id=<id>`, and asserts it actually lands: "Locating
   crop…" clears, the queue counter reports a real `#position · N loaded`
   position (the served queue position, F8 D6), and no "not in this review queue" toast appears.

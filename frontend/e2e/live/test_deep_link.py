@@ -14,12 +14,16 @@ from typing import Any
 
 import pytest
 
-from conftest import api_get, wait_for_stable_text
+from conftest import api_get, page_path, wait_for_stable_text
 from fixtures.wire import REGION_TAB_URL_ID
 
 
-def test_deep_link_lands_on_the_requested_crop(guarded_page: Any, live_url: str) -> None:
-    rejected = api_get(live_url, "/review/regions?region_status=verify_rejected&page_size=1")
+def test_deep_link_lands_on_the_requested_crop(
+    guarded_page: Any, live_url: str, live_project: dict
+) -> None:
+    rejected = api_get(
+        live_url, live_project, "/review/regions?region_status=verify_rejected&page_size=1"
+    )
     items = rejected.get("items", [])
     if not items:
         pytest.skip("no verify_rejected items in the live dataset right now")
@@ -27,7 +31,7 @@ def test_deep_link_lands_on_the_requested_crop(guarded_page: Any, live_url: str)
 
     page = guarded_page.page
     page.goto(
-        f"{live_url}/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected&crop_id={crop_id}",
+        f"{live_url}{page_path(live_project, f'/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected&crop_id={crop_id}')}",
         wait_until="domcontentloaded",
     )
 
