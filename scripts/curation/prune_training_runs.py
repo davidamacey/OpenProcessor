@@ -11,11 +11,18 @@ Two independent prunes, both dry-run by default:
 
 Neither touches MLflow runs.
 
-    # See what would be removed.
+Loops over every active AND archived project by default, pruning each
+project's own runs under its own binding (projects_plan.md §11 W7).
+``--project SLUG`` restricts the run to just that one project.
+
+    # See what would be removed, every project.
     python3 scripts/curation/prune_training_runs.py
 
-    # Actually remove.
+    # Actually remove, every project.
     python3 scripts/curation/prune_training_runs.py --apply
+
+    # One project only.
+    python3 scripts/curation/prune_training_runs.py --project cars --apply
 
     # Different retention windows.
     python3 scripts/curation/prune_training_runs.py --keep-last 10 --bakeoff-out-keep-last 5
@@ -24,6 +31,7 @@ Neither touches MLflow runs.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -34,8 +42,10 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from src.config import get_curation_config, get_gpu_arbiter_config
-from src.services.projects.script_binding import add_project_argument, bind_script_project
+from src.config import get_curation_config
+from src.config.project_context import bind_project
+from src.services.projects.registry import get_project_registry
+from src.services.projects.script_binding import bind_script_project
 from src.services.training.run_retention import (
     apply_bakeoff_out_prune,
     apply_run_prune,
@@ -45,12 +55,17 @@ from src.services.training.run_retention import (
 from src.services.training.triton_promote import resolve_triton_models_dir
 
 
-def run(args: argparse.Namespace) -> int:
-    jobs_dir = Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
+def _run_one_project(args: argparse.Namespace) -> int:
+    """Prune training runs + bake-off output for whatever project is
+    currently bound. ``train_jobs_dir``/``bakeoff_jobs_dir`` come from
+    the bound project's own ``CurationConfig`` view (PROJECT_SCOPED_FIELDS),
+    not a raw env var, so each project prunes only its own dir."""
+    config = get_curation_config()
+    jobs_dir = config.train_jobs_dir
     model_repo = resolve_triton_models_dir()
-    bakeoff_jobs_dir = Path(get_gpu_arbiter_config().bakeoff_jobs_dir)
+    bakeoff_jobs_dir = config.bakeoff_jobs_dir
     bakeoff_out_dir = Path(
-        os.environ.get('OP_BAKEOFF_OUT_DIR', str(get_curation_config().state_dir / 'bakeoff_out'))
+        os.environ.get('OP_BAKEOFF_OUT_DIR', str(config.state_dir / 'bakeoff_out'))
     )
 
     run_plan = plan_run_prune(
@@ -84,6 +99,24 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
+async def run(args: argparse.Namespace) -> int:
+    """Prune every active + archived project (or just ``--project SLUG``
+    when given), each under its own binding."""
+    if args.project:
+        bind_script_project(args.project)
+        return _run_one_project(args)
+
+    registry = get_project_registry()
+    await registry.ensure_fresh()
+    projects = registry.active_projects() + registry.archived_projects()
+    rc = 0
+    for record in projects:
+        print(f'== project {record.slug} ({record.status}) ==')
+        with bind_project(record, read_only=record.status == 'archived'):
+            rc = _run_one_project(args) or rc
+    return rc
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -93,14 +126,17 @@ def build_parser() -> argparse.ArgumentParser:
     g = p.add_mutually_exclusive_group()
     g.add_argument('--dry-run', dest='apply', action='store_false', default=False)
     g.add_argument('--apply', dest='apply', action='store_true')
-    add_project_argument(p)
+    p.add_argument(
+        '--project',
+        default=None,
+        help='Restrict to one project slug. Default: every active + archived project.',
+    )
     return p
 
 
 def main() -> int:
     args = build_parser().parse_args()
-    bind_script_project(args.project)
-    return run(args)
+    return asyncio.run(run(args))
 
 
 if __name__ == '__main__':
