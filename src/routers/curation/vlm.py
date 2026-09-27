@@ -332,8 +332,10 @@ async def vlm_label_batch(
         return {'predicted': 0, 'updated': 0}
 
     from src.services.labeling.vlm_labeler import resolve_class_name as _resolve_class_name_fn
+    from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
+    _pack_stamp = prompt_pack_stamp(labeler._pack)
     # Use the open-vocabulary path so the VLM can flag genuinely-unknown
     # items instead of silently snapping them to the wrong class.
     predictions = await labeler.label_or_propose_batch(crops, class_names)
@@ -370,6 +372,7 @@ async def vlm_label_batch(
             continue
         if 'class_source' not in update:
             empty_answers += 1
+        update['vlm_prompt_pack'] = _pack_stamp
         if proposal is not None:
             proposals.append(proposal)
         updates_by_id[p.img_id] = update
@@ -441,8 +444,10 @@ async def vlm_verify_regions(
         raise HTTPException(status_code=400, detail='maximum 64 crop_ids per call')
 
     from src.services.labeling.vlm_labeler import RegionCrop
+    from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
+    _pack_stamp = prompt_pack_stamp(labeler._pack)
     n_verified = 0
     # Keyed by crop_id rather than written straight to a plain bulk
     # body -- the actual write goes through occ_skip_on_conflict_bulk
@@ -489,6 +494,7 @@ async def vlm_verify_regions(
             _F.verified: verdict.is_region,
             _F.reason: verdict.reason,
             'updated_at': now,
+            'vlm_prompt_pack': _pack_stamp,
         }
     if updates_by_id:
 

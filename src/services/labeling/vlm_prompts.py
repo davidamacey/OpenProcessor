@@ -542,6 +542,31 @@ def get_prompt_pack(
     return available_prompt_packs(cfg).get(name)
 
 
+def prompt_pack_stamp(pack: PromptPack) -> str:
+    """``"<name>@<revision|sha12>"`` provenance stamp for ``vlm_prompt_pack``
+    (any_domain_plan.md §3.7/§9 W2) -- every VLM write site stamps this
+    onto the item it wrote so a later audit can tell which pack produced
+    the write. When ``pack`` is the store's currently *activated* pack,
+    the stamp uses its exact saved revision; otherwise (a file/built-in
+    pack the store never activated) a content hash distinguishes two
+    edits of the same name.
+    """
+    try:
+        from src.services.config_store import get_config_store
+
+        ref = get_config_store().current.active_pack
+    except Exception:  # pragma: no cover - config_store always importable
+        ref = None
+    if isinstance(ref, tuple):
+        name, revision = ref
+        if name == pack.name and revision is not None:
+            return f'{pack.name}@{revision}'
+    import hashlib
+
+    digest = hashlib.sha256(json.dumps(pack.to_dict(), sort_keys=True).encode()).hexdigest()[:12]
+    return f'{pack.name}@{digest}'
+
+
 __all__ = [
     'BUILT_IN_PACKS',
     'GENERIC_ITEM_PACK',
@@ -550,6 +575,7 @@ __all__ = [
     'active_prompt_pack',
     'available_prompt_packs',
     'get_prompt_pack',
+    'prompt_pack_stamp',
     'prompt_text_examples',
     'resolve_prompt_pack',
 ]

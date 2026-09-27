@@ -19,7 +19,6 @@ from src.clients.curation_opensearch import (
     create_curation_indexes,
     ensure_images_upload_fields,
     ensure_items_cluster_geometry_fields,
-    ensure_items_config_stamp_fields,
     ensure_items_embedding_fields,
     ensure_items_exclusion_fields,
     ensure_items_history_fields,
@@ -276,10 +275,6 @@ async def _ensure_indexes_locked(opensearch: Any) -> None:
             await ensure_items_text_reader_fields(opensearch)
         except Exception as exc:
             logger.warning('curation_text_reader_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_items_config_stamp_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_config_stamp_fields_migration_failed', error=str(exc))
         try:
             await ensure_items_validation_split_fields(opensearch)
         except Exception as exc:

@@ -1,13 +1,14 @@
 """Shard folding (owner D4, projects_plan.md §2.3): ``_configs_body()``'s
 mapping is a conflict-free union with ``_settings_body()`` and
-``_umap_viz_state_body()``, and a project created after W2 resolves 6
-distinct index names, not 8."""
+``_umap_viz_state_body()``, and every project -- ``default`` included, since
+P1F made it an ordinary project (D-A) -- resolves 6 distinct index names via
+``resources_for_new``, not 8."""
 
 from __future__ import annotations
 
 from src.clients.curation_opensearch import _configs_body, _settings_body, _umap_viz_state_body
 from src.config.curation import IndexRole, base_curation_config
-from src.config.projects import resources_for_default, resources_for_new
+from src.config.projects import resources_for_new
 
 
 def test_configs_mapping_union_has_no_type_conflicts() -> None:
@@ -28,9 +29,9 @@ def test_new_project_has_six_distinct_indexes() -> None:
     assert resources.indexes[IndexRole.CLASSES] != resources.indexes[IndexRole.CONFIGS]
 
 
-def test_default_project_keeps_separate_settings_and_umap_viz_state() -> None:
-    """``default`` is unaffected by folding -- it keeps its own
-    env-derived settings/umap-viz-state index names (no migration)."""
-    resources = resources_for_default(base_curation_config())
-    assert resources.indexes[IndexRole.SETTINGS] != resources.indexes[IndexRole.CONFIGS]
-    assert resources.indexes[IndexRole.UMAP_VIZ_STATE] != resources.indexes[IndexRole.CONFIGS]
+def test_default_gets_the_same_folding_as_any_other_project() -> None:
+    """``default`` is an ordinary project (P1F D-A): it goes through
+    ``resources_for_new`` like any other slug, so it also folds."""
+    resources = resources_for_new('default', base_curation_config())
+    assert resources.indexes[IndexRole.SETTINGS] == resources.indexes[IndexRole.CONFIGS]
+    assert resources.indexes[IndexRole.UMAP_VIZ_STATE] == resources.indexes[IndexRole.CONFIGS]

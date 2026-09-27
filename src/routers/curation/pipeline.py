@@ -393,6 +393,10 @@ async def pipeline_auto_label(
     labeler = _get_vlm_labeler(prompt_pack, prompt_pack_revision)
     class_catalog = format_class_catalog(class_dicts, labeler._pack)
 
+    from src.services.labeling.vlm_prompts import prompt_pack_stamp
+
+    _pack_stamp = prompt_pack_stamp(labeler._pack)
+
     # Count how many crops bypass the synonym/fuzzy force-fit because the
     # VLM's confidence is low — those route straight to the raw-label
     # cluster pipeline instead. Logged in the pipeline summary.
@@ -488,6 +492,7 @@ async def pipeline_auto_label(
             )
             if update is None:
                 continue
+            update['vlm_prompt_pack'] = _pack_stamp
             if proposal is not None:
                 proposals.append(proposal)
             updates_by_id[p.img_id] = update

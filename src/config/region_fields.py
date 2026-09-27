@@ -93,9 +93,9 @@ class RegionFields:
     detected_at: str = 'region_detected_at'
 
     # Config-store provenance (W2): which activated region profile
-    # (name) + revision produced this write. Item-level fields, not
-    # folded into ``kind == 'config'`` docs -- see
-    # ``ensure_items_config_stamp_fields``.
+    # (name) + revision produced this write. Item-level fields, in
+    # ``_items_body()`` from the start -- not folded into ``kind ==
+    # 'config'`` docs.
     profile: str = 'region_profile'
     profile_revision: str = 'region_profile_revision'
 

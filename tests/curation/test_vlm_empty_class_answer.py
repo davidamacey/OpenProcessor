@@ -35,6 +35,7 @@ from src.services.curation.vlm_class_attempt import (
     VLM_CLASS_EMPTY_REASON_FIELD as REASON,
 )
 from src.services.labeling.vlm_labeler import VlmClassPrediction, VlmCombinedReply
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 if TYPE_CHECKING:
@@ -208,6 +209,8 @@ async def _run_label_batch(
     fake = QueryFakeOpenSearch({ITEMS: docs})
 
     class _Labeler:
+        _pack = GENERIC_ITEM_PACK
+
         async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
             return [preds[c.img_id] for c in crops]
 
@@ -313,7 +316,7 @@ async def test_pipeline_vlm_stage_empty_answer_keeps_class(
 
     class _Labeler:
         model = 'fake-vlm'
-        _pack = None
+        _pack = GENERIC_ITEM_PACK
 
         async def label_or_propose_batch(self, crops: list[Any], *_a: Any, **_k: Any) -> list[Any]:
             return [answers[c.img_id] for c in crops]

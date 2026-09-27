@@ -26,6 +26,7 @@ import pytest
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 ITEMS = base_curation_config().items_index
@@ -50,6 +51,8 @@ class _FakeVerdict:
 
 
 class _Labeler:
+    _pack = GENERIC_ITEM_PACK
+
     async def verify_region(self, _crop: Any) -> _FakeVerdict:
         return _FakeVerdict()
 
@@ -59,6 +62,8 @@ class _RacingLabeler:
     on OpenSearch between this endpoint's initial per-crop ``get`` (used
     to read region_box/image_path) and its final bulk write, which is
     exactly the round-trip window a real VLM call spans."""
+
+    _pack = GENERIC_ITEM_PACK
 
     def __init__(self, fake: QueryFakeOpenSearch) -> None:
         self._fake = fake

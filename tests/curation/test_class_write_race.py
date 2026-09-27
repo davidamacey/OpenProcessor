@@ -33,6 +33,7 @@ from src.services.curation.class_write_guard import (
     class_state_token,
 )
 from src.services.labeling.vlm_labeler import VlmClassPrediction
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 if TYPE_CHECKING:
@@ -137,6 +138,8 @@ async def test_label_batch_skips_item_restored_during_vlm_call(
     fake = QueryFakeOpenSearch({ITEMS: {'undone': _discarded('undone'), 'plain': _plain('plain')}})
 
     class _Labeler:
+        _pack = GENERIC_ITEM_PACK
+
         async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
             _restored_by_undo(fake.docs(ITEMS)['undone'])
             return [
@@ -171,7 +174,7 @@ async def test_pipeline_vlm_stage_skips_item_restored_during_vlm_call(
 
     class _Labeler:
         model = 'fake-vlm'
-        _pack = None
+        _pack = GENERIC_ITEM_PACK
 
         async def label_or_propose_batch(self, crops: list[Any], *_a: Any, **_k: Any) -> list[Any]:
             _restored_by_undo(fake.docs(ITEMS)['undone'])

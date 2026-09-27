@@ -197,14 +197,15 @@ def test_classes_mirrors_registry_schema() -> None:
 @pytest.mark.asyncio
 async def test_get_curation_index_settings_returns_string_keyed_dict() -> None:
     out = await get_curation_index_settings()
+    # SETTINGS and UMAP_VIZ_STATE fold onto the same name as CONFIGS
+    # (shard folding, owner D4) -- so the string-keyed dict has 6 distinct
+    # keys covering all 8 roles, not 8.
     assert set(out.keys()) == {
         'op_prj_default__images',
         'op_prj_default__items',
         'op_prj_default__labels_confirmed',
         'op_prj_default__classes',
-        'op_prj_default__settings',
         'op_prj_default__umap_state',
-        'op_prj_default__umap_viz_state',
         'op_prj_default__configs',
     }
 
@@ -236,34 +237,36 @@ async def test_create_curation_indexes_creates_all_when_missing() -> None:
         'op_prj_default__items': True,
         'op_prj_default__labels_confirmed': True,
         'op_prj_default__classes': True,
-        'op_prj_default__settings': True,
         'op_prj_default__umap_state': True,
-        'op_prj_default__umap_viz_state': True,
         'op_prj_default__configs': True,
     }
-    # Each index was created exactly once with the right body.
+    # Each distinct index name was created exactly once (SETTINGS and
+    # UMAP_VIZ_STATE fold onto CONFIGS's name -- 6 creates, not 8).
     create_calls = client.indices.create.await_args_list
-    assert len(create_calls) == 9
+    assert len(create_calls) == 6
     seen = {call.kwargs['index'] for call in create_calls}
     assert seen == {
         'op_prj_default__images',
         'op_prj_default__items',
         'op_prj_default__labels_confirmed',
         'op_prj_default__classes',
-        'op_prj_default__settings',
         'op_prj_default__umap_state',
-        'op_prj_default__umap_viz_state',
         'op_prj_default__configs',
     }
-    # Each index name got the body for its OWN role, not a mismatched one
-    # (catches a role<->index swap bug) — comparing against INDEX_BODIES
-    # itself only proves wiring, not content, so also pin one body's
-    # actual shape against literal expected values below.
+    # Each index name got the merged body for every role that resolves to
+    # it -- comparing against INDEX_BODIES itself only proves wiring, not
+    # content, so also pin one body's actual shape against literal
+    # expected values below.
     by_name = {call.kwargs['index']: call.kwargs['body'] for call in create_calls}
     from src.config import index_name
 
-    for role in IndexRole:
+    configs_name = index_name(config, IndexRole.CONFIGS)
+    for role in (IndexRole.IMAGES, IndexRole.ITEMS, IndexRole.LABELS_CONFIRMED, IndexRole.CLASSES):
         assert by_name[index_name(config, role)] == INDEX_BODIES[role]
+    # The folded name's mapping is a union, not any single role's body.
+    for role in (IndexRole.CONFIGS, IndexRole.SETTINGS, IndexRole.UMAP_VIZ_STATE):
+        for field, spec in INDEX_BODIES[role]['mappings']['properties'].items():
+            assert by_name[configs_name]['mappings']['properties'][field] == spec
     # No deletes (we did not force-recreate).
     assert client.indices.delete.await_count == 0
 
@@ -294,8 +297,8 @@ async def test_create_curation_indexes_force_recreate_deletes_first() -> None:
     client = _make_mock_client(exists_returns=True)
     results = await create_curation_indexes(client, force_recreate=True)
     assert all(results.values())
-    assert client.indices.delete.await_count == 8
-    assert client.indices.create.await_count == 8
+    assert client.indices.delete.await_count == 6
+    assert client.indices.create.await_count == 6
 
 
 @pytest.mark.asyncio

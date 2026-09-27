@@ -108,15 +108,18 @@ class CurationConfig:
     # doc, not a full index of many rows. See
     # ``src.clients.curation_opensearch.CURATION_SETTINGS_DOC_ID`` for the
     # fixed doc id this index always addresses.
-    settings_index: str = 'op_prj_default__settings'
+    # Shard folding (owner D4, projects_plan.md §2.3): SETTINGS folds onto
+    # CONFIGS's name for every project, ``default`` included -- the bare
+    # dataclass default matches what ``resources_for_new`` computes.
+    settings_index: str = 'op_prj_default__configs'
     # Two deliberately distinct UMAP-state indexes (see
     # ``src/services/curation/embedding_viz.py`` module docstring):
     # the retired clustering reducer's fitted-manifold cache
     # (``clustering/embedding_reduce.py``) and the visualization-only
-    # projection's own metadata slot. They must never share a name or
-    # state, so they get separate fields rather than one shared role.
+    # projection's own metadata slot. UMAP_STATE keeps its own index;
+    # UMAP_VIZ_STATE folds onto CONFIGS's name (shard folding, owner D4).
     umap_state_index: str = 'op_prj_default__umap_state'
-    umap_viz_state_index: str = 'op_prj_default__umap_viz_state'
+    umap_viz_state_index: str = 'op_prj_default__configs'
     # Prompt packs, region profiles, activations, revision counter (W2).
     configs_index: str = 'op_prj_default__configs'
 

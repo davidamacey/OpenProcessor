@@ -22,6 +22,7 @@ from curation.query_fakes import QueryFakeOpenSearch
 from curation.test_auto_label_selection import client, job_dir, packs  # noqa: F401 - fixtures
 from curation.test_pipeline import _FakeClassEntry, _FakeRegistry
 from src.config.curation import base_curation_config
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 if TYPE_CHECKING:
@@ -57,7 +58,7 @@ def _docs() -> dict[str, dict[str, Any]]:
 
 class _Labeler:
     model = 'fake-vlm'
-    _pack = None
+    _pack = GENERIC_ITEM_PACK
 
     def __init__(self) -> None:
         self.sent: list[str] = []

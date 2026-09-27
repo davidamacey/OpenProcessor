@@ -298,9 +298,9 @@ def _items_body() -> dict[str, Any]:
                 # Config-store stamps (W2): which activated region profile /
                 # revision produced this item's region write, and which
                 # prompt pack / revision the VLM used for its most recent
-                # write. Null for an item never touched by either. See
-                # ensure_items_config_stamp_fields for the migration path on
-                # a live index that predates this mapping.
+                # write. Null for an item never touched by either. No
+                # back-compat migration for a pre-W2 index: stacks are
+                # re-created (execution_schedule.md §4.0 NON-NEGOTIABLE 4).
                 'region_profile': {'type': 'keyword'},
                 'region_profile_revision': {'type': 'integer'},
                 'vlm_prompt_pack': {'type': 'keyword'},
@@ -1287,43 +1287,6 @@ async def ensure_items_text_reader_fields(
             conflicts.append(field)
     logger.info(
         'curation_mapping_migration', index=index, fields=added, existing_conflicts=conflicts
-    )
-    return {'acknowledged': True, 'index': index, 'fields_added': added, 'conflicts': conflicts}
-
-
-async def ensure_items_config_stamp_fields(
-    client: AsyncOpenSearch,
-) -> dict[str, Any]:
-    """PUT the config-store provenance stamps (W2) onto the items mapping:
-    ``region_profile`` / ``region_profile_revision`` (the activated
-    region profile + revision that produced a worker region write) and
-    ``vlm_prompt_pack`` (``"<name>@<revision|sha12>"`` from the pack the
-    VLM used for its most recent write). Additive and idempotent, same
-    pattern as :func:`ensure_items_text_reader_fields`.
-    """
-    index = config.items_index
-    specs = {
-        'region_profile': {'type': 'keyword'},
-        'region_profile_revision': {'type': 'integer'},
-        'vlm_prompt_pack': {'type': 'keyword'},
-    }
-    added: list[str] = []
-    conflicts: list[str] = []
-    for field, spec in specs.items():
-        try:
-            await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
-            added.append(field)
-        except Exception as exc:
-            msg = str(exc)
-            if not _is_recoverable_mapping_conflict(msg):
-                logger.error('curation_mapping_migration_failed', index=index, error=msg)
-                return {'acknowledged': False, 'index': index, 'fields_added': added, 'error': msg}
-            conflicts.append(field)
-    logger.info(
-        'curation_config_stamp_fields_migration',
-        index=index,
-        fields=added,
-        existing_conflicts=conflicts,
     )
     return {'acknowledged': True, 'index': index, 'fields_added': added, 'conflicts': conflicts}
 
