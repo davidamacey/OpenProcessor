@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, wait_for_paint
 
 import struct
 import zlib
@@ -188,7 +188,8 @@ def test_narrow_review_tabs_and_nav_show_hidden_items(stub, page, app_url):
     # The active (last) tab was invisible past the edge — now scrolled in.
     active = page.get_by_role("button", name=REGION_TAB_LABEL, exact=True)
     active.wait_for(timeout=10000)
-    page.wait_for_timeout(300)
+    # Scroll-into-view layout needs a real paint, not an arbitrary sleep.
+    wait_for_paint(page)
     strip_box = page.get_by_test_id("review-tabs").bounding_box()
     box = active.bounding_box()
     assert strip_box and box

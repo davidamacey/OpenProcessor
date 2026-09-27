@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
 
+from playwright.sync_api import expect
+
 from fixtures.wire import REGION_CLASS
 
 CLASSES = [
@@ -55,7 +57,9 @@ def test_region_gallery_detector_filter_lists_served_filterable_detectors(stub, 
     # unrelated cluster-sort <select>, so `.first` would be ambiguous.
     select = page.locator('label:has-text("Detector") select')
     select.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
+    # Wait for the served vocabulary's options to actually populate the
+    # <select> instead of an arbitrary settle sleep.
+    expect(select.locator("option")).to_have_count(3, timeout=ACTION_TIMEOUT_MS)
 
     option_values = select.locator("option").evaluate_all(
         "opts => opts.map(o => o.value)"

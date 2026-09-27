@@ -13,7 +13,7 @@ review/+page.svelte).
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, wait_for_paint
 
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
@@ -74,12 +74,16 @@ def test_region_confirm_unchanged_box_sends_patch_region_meta(stub, page, app_ur
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
-    # Give the slot canvas a beat to seed editedSlotBox from the served
-    # region_bbox_in_parent before confirming.
-    page.wait_for_timeout(500)
+    # Give the slot canvas a real paint tick to seed editedSlotBox from the
+    # served region_bbox_in_parent before confirming (a client-side $effect,
+    # not a network round trip).
+    wait_for_paint(page)
 
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "PATCH" and r.url.endswith("/region_meta"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press("Enter")
 
     assert region_calls == [], (
         f"an unchanged-box confirm must not PUT region (rewrites detector provenance): {region_calls}"

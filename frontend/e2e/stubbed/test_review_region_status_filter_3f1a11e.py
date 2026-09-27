@@ -18,7 +18,11 @@ served `rejection_reasons` vocabulary, never the generic per-item
 
 from __future__ import annotations
 
+import time
+
 from conftest import ACTION_TIMEOUT_MS
+
+from playwright.sync_api import expect
 
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_LABEL, REGION_TAB_URL_ID
 
@@ -159,7 +163,6 @@ def test_region_status_filter_forwards_the_param_and_needs_human_reason_never_re
     page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(500)
 
     # The served label renders (not a raw param name), and the label
     # ("Needs review") is never worded as a rejection for this
@@ -176,8 +179,13 @@ def test_region_status_filter_forwards_the_param_and_needs_human_reason_never_re
     assert option_values == ["all", "detected", "verify_rejected"], option_values
 
     region_calls.clear()
-    select.select_option("verify_rejected")
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "GET"
+        and "/review/regions" in r.url
+        and "region_status=verify_rejected" in r.url,
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        select.select_option("verify_rejected")
 
     assert region_calls, "picking a status must trigger a fresh GET {API_PREFIX}/review/regions call"
     assert any("region_status=verify_rejected" in url for url in region_calls), region_calls
@@ -210,9 +218,18 @@ def test_region_status_from_the_url_reaches_the_queue_request(stub, page, app_ur
 
     page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected")
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(1500)
+
+    # The URL-seeded filter reaches the queue only once /review/tabs lands
+    # and the refetch effect re-runs — poll the stub's own call log (real
+    # network fact) for the refetch actually carrying the param, instead
+    # of a fixed sleep.
+    deadline = time.monotonic() + ACTION_TIMEOUT_MS / 1000
+    while time.monotonic() < deadline and not (
+        region_calls and "region_status=verify_rejected" in region_calls[-1]
+    ):
+        page.wait_for_timeout(50)
 
     assert region_calls, "the region queue must be fetched"
     assert "region_status=verify_rejected" in region_calls[-1], region_calls
     select = page.locator('label:has-text("Status") select')
-    assert select.input_value() == "verify_rejected"
+    expect(select).to_have_value("verify_rejected", timeout=ACTION_TIMEOUT_MS)

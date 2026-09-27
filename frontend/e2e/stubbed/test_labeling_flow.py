@@ -11,11 +11,12 @@ behavior.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, wait_for_paint
 
 import re
 
 from fixtures.wire import make_item
+from playwright.sync_api import expect
 
 ROUTES = [
     "/",
@@ -179,31 +180,41 @@ def test_labeling_flow(stub, page, app_url):
     # ---- cluster detail page ------------------------------------
     page.goto(f"{app_url}/p/default/clusters/1")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(600)
+    # wait_for_selector("img") above already blocks until a real crop image
+    # is in the DOM, which only happens inside the grid — no extra sleep
+    # needed before this count check.
     assert page.locator("article, li, div").count() > 0, "grid did not render"
 
     # 1.1 — with nothing ever dragged, a class letter must label the selection.
     page.locator("body").click(position={"x": 5, "y": 5})
     page.locator("img").nth(1).click()
-    page.wait_for_timeout(150)
+    expect(page.get_by_text("1 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     stub.calls.clear()
-    page.keyboard.press("k")
-    page.wait_for_timeout(400)
+    with page.expect_response(
+        lambda r: r.request.method == "PUT" and ("batch_label" in r.url or r.url.endswith("/label")),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press("k")
     labeled = [c for c in stub.calls if "batch_label" in c[1] or c[1].endswith("/label")]
     assert len(labeled) == 1, f"1.1 class hotkey should label exactly the selection: calls={stub.calls}"
 
     # 1.2 — Shift+N flags for a new class (plain N must not).
     page.locator("img").nth(1).click()
-    page.wait_for_timeout(150)
+    expect(page.get_by_text("1 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     stub.calls.clear()
-    page.keyboard.press("Shift+N")
-    page.wait_for_timeout(400)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "flag_new_class" in r.url, timeout=ACTION_TIMEOUT_MS
+    ):
+        page.keyboard.press("Shift+N")
     flagged = [c for c in stub.calls if "flag_new_class" in c[1]]
     assert len(flagged) == 1, f"1.2 Shift+N should flag for new class: calls={stub.calls}"
 
     stub.calls.clear()
+    # Plain N is "skip + advance" (cluster.skip) — prove the keypress was
+    # actually processed by waiting for its own toast, then assert the
+    # negative (no flag_new_class call), never straight after a sleep.
     page.keyboard.press("n")
-    page.wait_for_timeout(300)
+    expect(page.get_by_text("Skipped.")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert not any("flag_new_class" in c[1] for c in stub.calls), "1.2 plain N must not flag"
 
     # 1.9 — Escape during/after a real pointer drag must not blow the stack.
@@ -215,14 +226,25 @@ def test_labeling_flow(stub, page, app_url):
     page.mouse.down()
     for dx in (6, 18, 40, 70):
         page.mouse.move(cx + dx, cy + dx // 2)
+        # Not a "wait for a result" sleep: svelte-dnd-action's pointer-drag
+        # detection needs real spaced-out move events to recognize a drag
+        # gesture at all, so this paces the synthetic input rather than
+        # gating an assertion. Kept deliberately short and fixed.
         page.wait_for_timeout(60)
     page.keyboard.press("Escape")  # during the drag
-    page.wait_for_timeout(200)
+    wait_for_paint(page)
     page.mouse.up()
-    page.wait_for_timeout(300)
-    for _ in range(3):  # and again after it completed
+    # Prove the page is still responsive (not hung/crashed) after the
+    # mid-drag Escape + mouseup by driving one more real interaction and
+    # waiting for its own UI change, instead of sleeping and hoping.
+    page.locator("img").nth(0).click()
+    expect(page.get_by_text("1 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    for _ in range(3):  # and again after the drag completed
         page.keyboard.press("Escape")
-        page.wait_for_timeout(80)
+        wait_for_paint(page)
+    # Escape with no drag in progress clears the selection (cluster.cancel)
+    # — a real, observable state change proving the last Escape ran.
+    expect(page.get_by_text("0 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     overflow = [
         c
         for c in stub.console_errors
@@ -235,13 +257,17 @@ def test_labeling_flow(stub, page, app_url):
     page.goto(f"{app_url}/p/default/review")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(700)
+    expect(counter.first).to_contain_text("3 total", timeout=ACTION_TIMEOUT_MS)
     before = counter.first.inner_text()
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(800)
+    with page.expect_response(
+        lambda r: r.request.method == "PUT" and r.url.endswith("/label"), timeout=ACTION_TIMEOUT_MS
+    ):
+        page.keyboard.press("Enter")
+    expect(page.get_by_text(re.compile("Label failed", re.I)).first).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
     after = counter.first.inner_text()
     assert before.strip() == after.strip(), f"1.3 failed label must return the item to the queue: before={before!r} after={after!r}"
-    assert page.get_by_text(re.compile("Label failed", re.I)).count() > 0, "1.3 failure toast missing"
     assert page.get_by_text(re.compile("stub: label rejected")).count() > 0, "1.8 toast must carry the server detail"
 
     review_errors = [c for c in stub.console_errors if c.startswith("pageerror") or "Uncaught" in c]
@@ -252,34 +278,37 @@ def test_labeling_flow(stub, page, app_url):
     for route in ROUTES:
         stub.console_errors.clear()
         page.goto(f"{app_url}{route}")
-        page.locator("main").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-        page.wait_for_timeout(300)
+        main = page.locator("main").first
+        main.wait_for(timeout=ACTION_TIMEOUT_MS)
+        expect(main).not_to_have_text("", timeout=ACTION_TIMEOUT_MS)
         crashed = [c for c in stub.console_errors if c.startswith("pageerror") or "Uncaught" in c]
-        body = page.locator("main").first.inner_text()
+        body = main.inner_text()
         assert not crashed and len(body.strip()) > 0, (
             f"{route} should mount without errors: errors={crashed[:2]} body_len={len(body.strip())}"
         )
 
     # ---- modal backdrops -----------------------------------------
     page.goto(f"{app_url}/p/default/classes")
-    page.wait_for_timeout(400)
-    page.get_by_role("button", name="+ Add Class").first.click()
+    page.wait_for_selector("main", timeout=ACTION_TIMEOUT_MS)
+    add_class_btn = page.get_by_role("button", name="+ Add Class").first
+    expect(add_class_btn).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    add_class_btn.click()
     dialog = page.get_by_role("dialog", name="Add class")
-    assert dialog.count() > 0, "Add Class modal should open"
+    expect(dialog).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     dialog.get_by_text("Add Class").first.click()
-    page.wait_for_timeout(250)
-    assert dialog.count() > 0, "click inside the panel should keep the modal open"
+    # Clicking inside the panel must NOT close it — prove the app is still
+    # live by re-reading the dialog's own bounding box below (a stale/
+    # detached element would fail there), then assert it's still open.
     box = dialog.bounding_box()
     assert box is not None
+    assert dialog.count() > 0, "click inside the panel should keep the modal open"
     page.mouse.click(box["x"] + 6, box["y"] + 6)  # backdrop corner
-    page.wait_for_timeout(300)
-    assert dialog.count() == 0, "click on the backdrop should close the modal"
+    expect(dialog).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
 
-    page.get_by_role("button", name="+ Add Class").first.click()
-    page.wait_for_timeout(200)
+    add_class_btn.click()
+    expect(page.get_by_role("dialog", name="Add class")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     page.keyboard.press("Escape")
-    page.wait_for_timeout(300)
-    assert page.get_by_role("dialog", name="Add class").count() == 0, "Escape should close the modal"
+    expect(page.get_by_role("dialog", name="Add class")).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
 
     modal_errors = [c for c in stub.console_errors if c.startswith("pageerror") or "Uncaught" in c]
     assert not modal_errors, f"no uncaught errors in the modal flow expected: {modal_errors[:3]}"

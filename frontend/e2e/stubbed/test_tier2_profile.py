@@ -26,6 +26,8 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
 
+from playwright.sync_api import expect
+
 import re
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL, review_tab, review_tabs
@@ -122,8 +124,11 @@ def test_tier2_profile_served(stub, page, app_url):
     pallet_tab = page.get_by_role("button", name="Pallet labels")
     assert pallet_tab.count() > 0
     review_calls.clear()
-    pallet_tab.first.click()
-    page.wait_for_timeout(800)
+    with page.expect_response(
+        lambda r: r.url.endswith("/review/regions") or "/review/regions?" in r.url,
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        pallet_tab.first.click()
     assert any(c.endswith("/review/regions") or "/review/regions?" in c for c in review_calls), (
         f"clicking it should drive GET /curation/review/regions: {review_calls}"
     )
@@ -147,10 +152,9 @@ def test_tier2_profile_malformed(stub, page, app_url):
     region_tab = page.get_by_role("button", name=REGION_TAB_LABEL)
     assert region_tab.count() > 0, "the region tab should still be clickable"
     region_tab.first.click()
-    page.wait_for_timeout(300)
 
     toast_text = page.locator("text=/annotation profile/i")
-    assert toast_text.count() > 0, "a toast should mention the deployment annotation profile"
+    expect(toast_text.first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
     warn_msgs = [c for c in stub.console_errors if "annotation-profiles" in c.lower()]
     assert any("bind must be an object" in m for m in warn_msgs), (

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
 
+from playwright.sync_api import expect
+
 from fixtures.wire import make_item
 
 CLASSES = [
@@ -72,14 +74,15 @@ def test_cluster_single_discard(stub, page, app_url):
 
     page.goto(f"{app_url}/p/default/clusters/1")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(400)
 
     page.locator("img").nth(1).click()
-    page.wait_for_timeout(150)
+    expect(page.get_by_text("1 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
     discard_calls.clear()
-    page.keyboard.press("d")
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/discard" in r.url, timeout=ACTION_TIMEOUT_MS
+    ):
+        page.keyboard.press("d")
 
     assert len(discard_calls) == 1, f"D on a single selection should call the single discard endpoint: {discard_calls}"
     method, path = discard_calls[0]

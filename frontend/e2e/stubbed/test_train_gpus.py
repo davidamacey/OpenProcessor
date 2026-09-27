@@ -7,6 +7,7 @@ preselecting the server's `default: true` entry.
 from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
+from playwright.sync_api import expect
 
 CLASSES = [
     {"class_id": 1, "class_name": "ducati", "kind": "item", "group": "moto", "hotkey_letter": "k", "sample_count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
@@ -68,10 +69,9 @@ def test_train_gpu_options(stub, page, app_url):
 
     page.goto(f"{app_url}/p/default/train")
     page.get_by_text("GPUs", exact=True).first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
 
     radios = page.get_by_role("radio")
-    assert radios.count() == 2, f"exactly 2 GPU radios expected, got {radios.count()}"
+    expect(radios).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text("GPU 1 (RTX 3080 Ti)").count() > 0
     assert page.get_by_text("GPU 2 (RTX A6000)").count() > 0
 
@@ -95,7 +95,6 @@ def test_train_gpu_options_unrestricted(stub, page, app_url):
 
     page.goto(f"{app_url}/p/default/train")
     page.locator("input[aria-label='CUDA visible devices']").wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(200)
 
     assert page.locator("input[aria-label='CUDA visible devices']").count() == 1, (
         "an unrestricted backend should show the free-text CUDA-devices field"
