@@ -47,7 +47,8 @@ import re
 import subprocess  # nosec B404 - only patched to refuse, never called
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 from urllib.parse import unquote
 
 import httpx
@@ -59,10 +60,6 @@ from opensearchpy import AsyncOpenSearch
 from opensearchpy.exceptions import NotFoundError
 
 from curation.query_fakes import _aggregate, matches
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 API = '/curation'
@@ -83,14 +80,15 @@ def route_params(slug: str) -> dict[str, str]:
         'job_id': f'{slug}-job-0001',
         'campaign_id': f'{slug}-campaign-0001',
         'name': f'{slug}-model',
-        'model_name': f'{slug}-model',
+        # A promoted model's triton_name is model_prefix + name (plan §5.3).
+        'model_name': f'{slug}__model',
         'tab': 'uncertainty',
         'alias': f'{slug}-source',
         'artifact': 'results.csv',
     }
 
 
-def route_bodies(slug: str) -> dict[tuple[str, str], dict[str, Any]]:
+def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str, Any]]:
     """A minimal valid request for every mutating route, as ``slug``.
     ``{'json': ...}`` / ``{'files': ..., 'data': ...}`` / ``{'params': ...}``
     are passed straight to ``TestClient.request``. A mutating route missing
@@ -149,6 +147,7 @@ def route_bodies(slug: str) -> dict[tuple[str, str], dict[str, Any]]:
             'files': [('images', (f'{slug}-up.jpg', jpeg_bytes(len(slug)), 'image/jpeg'))],
         },
         ('POST', '/probe/run'): {'json': {'job_id': f'{slug}-job-0001'}},
+        ('PUT', '/models/{model_name}/sharing'): {'json': {'shared': True, 'expected_revision': 1}},
         ('PUT', '/crops/{crop_id}/region'): {'json': {'region_bbox_norm': [0.1, 0.1, 0.4, 0.4]}},
         ('PATCH', '/crops/{crop_id}/region_meta'): {'json': {'region_text': f'{slug}TXT'}},
         ('PUT', '/crops/batch_region'): {
@@ -172,13 +171,25 @@ def route_bodies(slug: str) -> dict[tuple[str, str], dict[str, Any]]:
             'params': force,
             'json': {
                 'campaign_id': f'{slug}-campaign-0001',
-                'dataset_export_dir': f'/exports/{slug}-v1',
+                'dataset_export_dir': str(export_root / f'{slug}-v1'),
                 'runs': [{'profile': 'probe', 'model_size': 'n'}],
             },
         },
         ('POST', '/train/promote/{job_id}'): {
             'json': {'triton_name': f'{slug}_model', 'force': True}
         },
+        # P3 lifecycle mutations (global_router, not part of the scoped
+        # double-mount, but textually under SCOPED -- see
+        # tests/projects/test_route_scoping.py). ``DELETE`` uses
+        # ``dry_run`` so the sweep never actually removes the project
+        # (which would break every later call for this slug in the same
+        # pass); the others act for real -- see NO_WRITE for why none of
+        # the five register a write here.
+        ('DELETE', ''): {'params': {'dry_run': 'true'}},
+        ('PATCH', ''): {'json': {'display_name': f'{slug}-renamed', 'expected_revision': 1}},
+        ('POST', '/archive'): {'json': {'expected_revision': 1}},
+        ('POST', '/unarchive'): {'json': {'expected_revision': 1}},
+        ('POST', '/clone_settings'): {'json': {'from': slug, 'expected_revision': 1}},
     }
 
 
@@ -198,6 +209,18 @@ NO_WRITE: dict[tuple[str, str], str] = {
         'POST',
         '/vlm/region_visible_batch',
     ): "returns the VLM's verdicts to the caller; stores nothing",
+    # P3 lifecycle mutations write the shared op_projects registry doc,
+    # never the project's own item/image/etc indexes or state-dir files
+    # -- the write-detection this sweep does (own_indexes / dir digest)
+    # has nothing of the bound project's *data* to see, by design.
+    (
+        'DELETE',
+        '',
+    ): 'dry_run=true in the sweep; a real delete mutates the registry, not project data',
+    ('PATCH', ''): 'mutates the shared project registry doc, not project data',
+    ('POST', '/archive'): 'mutates the shared project registry doc, not project data',
+    ('POST', '/unarchive'): 'mutates the shared project registry doc, not project data',
+    ('POST', '/clone_settings'): 'mutates the shared project registry doc, not project data',
 }
 
 # Routes whose ``{crop_id}`` is a seeded item other than ``-item-0001``,
@@ -209,23 +232,42 @@ CROP_FOR: dict[tuple[str, str], str] = {
 }
 
 # Routes that answer 5xx in the fixture for a reason that is not isolation.
-EXPECTED_5XX: dict[tuple[str, str], str] = {}
+EXPECTED_5XX: dict[tuple[str, str], str] = {
+    ('DELETE', '/models/{model_name}'): (
+        '502: the dead in-process Triton never confirms the unload, so the route '
+        'refuses to delete the (own, ownership-checked) model dir'
+    ),
+}
 
-# Known leaks owned by P2 (cutover/projects-workers, projects_plan.md §5):
-# process-global state P1 did not create and P2 makes per project. Each
-# entry: (method, template) -> the foreign-project evidence it may show.
-# Anything else is a P1 failure.
-P2_DEFERRED: dict[tuple[str, str], str] = {
-    ('POST', '/pipeline/auto_label/start'): 'global auto-label trigger/state dir (P2)',
-    ('POST', '/pipeline/auto_label'): 'global auto-label trigger/state dir (P2)',
-    ('GET', '/pipeline/auto_label/status'): 'global auto-label state dir (P2)',
-    ('GET', '/train/runs'): 'global training staging dir (P2)',
-    ('GET', '/train/status'): 'global training staging dir (P2)',
-    ('POST', '/vlm/label_cluster/{cluster_id}'): 'queues the global auto-label job (P2)',
-    ('POST', '/pipeline/auto_label/cancel'): 'global auto-label state dir (P2)',
-    ('POST', '/bakeoff/run'): 'global bake-off jobs dir and GPU claim (P2, plan §5.3)',
-    ('POST', '/train/promote/{job_id}'): 'promoted-model ownership in the shared Triton repo (P2)',
-    ('DELETE', '/models/{model_name}'): 'promoted-model ownership in the shared Triton repo (P2)',
+# P3 lifecycle mutations (global_router; textually under SCOPED but never
+# part of the scoped/alias double-mount -- see the module docstring at the
+# top of src/routers/curation/projects.py). They act *on* a project via a
+# plain ``project: str`` path parameter, not *within* one via
+# ``bind_path_project``, so their OpenSearch calls (all against the shared
+# ``op_projects`` registry doc) are correctly unbound (``try_current_project()
+# is None``) rather than bound to the slug in the URL.
+UNBOUND_BY_DESIGN: frozenset[tuple[str, str]] = frozenset(
+    {
+        ('DELETE', ''),
+        ('PATCH', ''),
+        ('POST', '/archive'),
+        ('POST', '/unarchive'),
+        ('POST', '/clone_settings'),
+    }
+)
+
+# Mutating routes whose write this fixture cannot reach yet: the seeded
+# state lacks what the route acts on. They are excused ONLY from the
+# "wrote nothing" check; every isolation check (foreign indexes, foreign
+# markers in the response, events, 5xx, cache parity, foreign files)
+# still applies to them.
+UNSEEDED_WRITES: dict[tuple[str, str], str] = {
+    ('POST', '/bakeoff/run'): 'needs a resolvable contender model list, not seeded',
+    ('POST', '/train/promote/{job_id}'): 'needs an exported best.onnx, not seeded',
+    ('DELETE', '/models/{model_name}'): 'see EXPECTED_5XX: no live Triton to confirm the unload',
+    ('POST', '/vlm/label_cluster/{cluster_id}'): (
+        '409s: /pipeline/auto_label/start already queued a run earlier in the pass'
+    ),
 }
 
 
@@ -244,22 +286,33 @@ def _running_job(job_dir: str) -> Any:
     return prepare
 
 
+def _promoted_model(env: LeakEnv, slug: str) -> None:
+    """A model ``slug`` promoted into the shared Triton repo (seeded fresh
+    before each route that acts on it: DELETE removes it)."""
+    model_dir = env.root / 'models' / f'{slug}__model'
+    (model_dir / '1').mkdir(parents=True, exist_ok=True)
+    (model_dir / '1' / 'model.plan').write_bytes(b'fake plan')
+    (model_dir / 'labels.txt').write_text(f'{CLASS_NAMES[slug]}\n', encoding='utf-8')
+    (model_dir / 'promote.json').write_text(
+        json.dumps(
+            {
+                'project': slug,
+                'shared': False,
+                'sharing_revision': 1,
+                'classes': [{'model_id': 0, 'name': CLASS_NAMES[slug]}],
+            }
+        ),
+        encoding='utf-8',
+    )
+
+
 PREPARE: dict[tuple[str, str], Any] = {
+    ('PUT', '/models/{model_name}/sharing'): _promoted_model,
+    ('DELETE', '/models/{model_name}'): _promoted_model,
     ('POST', '/probe/cancel'): _running_job('probe'),
     ('POST', '/scores/cancel'): _running_job('scores'),
     ('POST', '/select/cancel'): _running_job('select'),
     ('POST', '/viz/projection/cancel'): _running_job('viz'),
-}
-
-
-# Routes that read the trainer's jobs dir, which is still shared across
-# projects until P2 scopes it (plan §5.3): another project's job ids may
-# show in their responses. They must still write (and stay off every
-# other project's indexes and dirs).
-P2_SHARED_TRAIN_JOBS: dict[tuple[str, str], str] = {
-    ('GET', '/bakeoff/trained_models'): 'lists every run in the shared trainer jobs dir (P2)',
-    ('POST', '/train/preflight'): 'the active-run check scans the shared trainer jobs dir (P2)',
-    ('POST', '/train/start'): 'the active-run check scans the shared trainer jobs dir (P2)',
 }
 
 
@@ -854,7 +907,6 @@ def leak_env(
     from src.core.dependencies import app_state, get_async_triton
     from src.routers.curation import _common
     from src.services.curation import event_hub
-    from src.services.curation.autolabel import job as autolabel_job
     from src.services.projects import guard, registry as registry_mod
     from src.services.projects.registry import ProjectRegistry
 
@@ -872,7 +924,6 @@ def leak_env(
         'REGION_DRAIN_STATE_DIR': 'jobs/region_drain',
         'HEARTBEAT_DIR': 'state/heartbeats',
         'TRAIN_RUNS_ROOT': 'state/training_runs',
-        'BAKEOFF_OUT_DIR': 'state/bakeoff_out',
         'SOURCE_ROOT': 'images',
         'TRITON_MODEL_REPO': 'models',
     }.items():
@@ -897,19 +948,22 @@ def leak_env(
 
     monkeypatch.setattr(embedding_reduce, 'UMAP_N_COMPONENTS', 2)
     monkeypatch.setattr(embedding_reduce, 'UMAP_N_NEIGHBORS', 3)
-    # Import-time constants of the (P2-owned) auto-label module: keep them
-    # inside tmp_path so the sweep never touches the host's /jobs.
+    # The auto-label module resolves its state dir per bound project
+    # (``_state_dir()`` -> ``get_curation_config().autolabel_dir``, itself
+    # ``OP_AUTO_LABEL_STATE_DIR`` + ``/projects/<slug>``) -- keep it inside
+    # tmp_path so the sweep never touches the host's /jobs. Must be set
+    # before the project records below are built from this env.
     al_dir = tmp_path / 'jobs' / 'auto_label'
-    for attr, fname in {
-        '_STATE_DIR': '',
-        '_STATE_FILE': 'state.json',
-        '_CANCEL_FLAG': 'cancel.flag',
-        '_RUNNING_LOCK': 'running.lock',
-        '_EXIT_CODE_FILE': 'exit_code',
-        '_TRIGGER_FILE': 'trigger.json',
-        '_HEARTBEAT_FILE': 'heartbeat',
-    }.items():
-        monkeypatch.setattr(autolabel_job, attr, al_dir / fname if fname else al_dir)
+    monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(al_dir))
+    # The (P2-owned) auto-label module resolves its state dir fresh per
+    # bound project on every call (`_state_dir()` -> the bound project's
+    # own `autolabel_dir`, a PROJECT_SCOPED_FIELDS entry) -- there is no
+    # import-time module constant left to patch. Redirect the env var
+    # `resources_for_new` reads instead, so the sweep never touches the
+    # host's /jobs and each project's own nested dir
+    # (`<this>/projects/<slug>`, `default` included per P1R §6.1/D-A) is
+    # kept inside tmp_path.
+    monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'jobs' / 'auto_label'))
 
     base = base_curation_config()
     records = {'default': new_project_record('default', base)}
@@ -1121,7 +1175,7 @@ def _sweep(
         for name in record.resources.indexes.values()
     }
     foreign_markers = [m for other in SLUGS if other != slug for m in _markers(other)]
-    bodies = route_bodies(slug)
+    bodies = route_bodies(slug, records[slug].resources.export_root)
 
     role_of = {name: role.value for role, name in records[slug].resources.indexes.items()}
     leaks: list[str] = []
@@ -1136,7 +1190,6 @@ def _sweep(
         key = (method, template[len(SCOPED) :])
         if only is not None and not only(key):
             continue
-        deferred = key in P2_DEFERRED
         url = _fill(template, slug, key)
         before_access, before_write, before_events = (
             len(env.accesses),
@@ -1162,7 +1215,7 @@ def _sweep(
                     f'{tag}: bound={bound} reached {foreign_indexes.get(index, "every")!r} '
                     f'index {index} ({os_url})'
                 )
-            if bound != slug:
+            if bound != slug and key not in UNBOUND_BY_DESIGN:
                 leaks.append(f'{tag}: OpenSearch call bound to {bound!r}')
         leaks.extend(
             f'{tag}: event {event.get("type")} went to project {event.get("project")!r}'
@@ -1171,15 +1224,14 @@ def _sweep(
         )
 
         body = response.text
-        if not deferred and key not in P2_SHARED_TRAIN_JOBS:
-            leaks.extend(f'{tag}: response carries {m!r}' for m in foreign_markers if m in body)
+        leaks.extend(f'{tag}: response carries {m!r}' for m in foreign_markers if m in body)
         if response.headers.get('content-type', '').startswith('application/json'):
             leaks.extend(
                 f'{tag}: served URL {u!r} is not under {slug} prefix'
                 for u in _served_urls(response.json())
                 if u != f'{API}/projects/{slug}' and not u.startswith(f'{API}/projects/{slug}/')
             )
-        if response.status_code >= 500 and key not in EXPECTED_5XX and not deferred:
+        if response.status_code >= 500 and key not in EXPECTED_5XX:
             leaks.append(f'{tag}: unexpected {response.status_code} {body[:300]}')
         if method != 'GET':
             if response.status_code == 422 and key not in NO_WRITE:
@@ -1191,7 +1243,7 @@ def _sweep(
                 or _dir_digest([env.root]) != tree_before
             ):
                 wrote.add(key)
-            elif key not in NO_WRITE and not deferred:
+            elif key not in NO_WRITE and key not in UNSEEDED_WRITES:
                 leaks.append(
                     f'{tag}: mutating route wrote nothing ({response.status_code} {body[:200]})'
                 )
@@ -1213,7 +1265,7 @@ def _cache_parity(
         f'[{second}] {m} {p}: issued {sorted(shapes_second.get((m, p), {}).items())}, '
         f'but as {first} {sorted(shapes_first[(m, p)].items())} (unkeyed cache?)'
         for (m, p) in shapes_first
-        if shapes_first[(m, p)] != shapes_second.get((m, p)) and (m, p) not in P2_DEFERRED
+        if shapes_first[(m, p)] != shapes_second.get((m, p))
     ]
 
 
@@ -1228,8 +1280,8 @@ def test_every_scoped_route_stays_inside_the_bound_project(
     assert not streaming_unmapped, f'unmapped streaming route(s): {streaming_unmapped}'
     mutating = {(m, p[len(SCOPED) :]) for m, p in routes if m != 'GET'}
     every = {(m, p[len(SCOPED) :]) for m, p in routes}
-    mapped = set(NO_WRITE) | set(route_bodies('x')) | set(CROP_FOR) | set(PREPARE)
-    stale = sorted((mapped - mutating) | ((set(P2_DEFERRED) | set(P2_SHARED_TRAIN_JOBS)) - every))
+    mapped = set(NO_WRITE) | set(route_bodies('x', Path('/unused'))) | set(CROP_FOR) | set(PREPARE)
+    stale = sorted((mapped - mutating) | (set(UNSEEDED_WRITES) - every))
     assert not stale, f'entries for routes that no longer exist: {stale}'
 
     leaks_first, _, roles_first = _sweep(leak_env, first)
@@ -1246,7 +1298,7 @@ def test_every_scoped_route_stays_inside_the_bound_project(
     leaks.extend(f"[{second}] changed {first}'s file {p}" for p in changed)
     assert not leaks, 'cross-project leak(s):\n' + '\n'.join(sorted(set(leaks)))
     # Not vacuous: every mutating route not excused in NO_WRITE really wrote.
-    expected_writers = mutating - set(NO_WRITE) - set(P2_DEFERRED)
+    expected_writers = mutating - set(NO_WRITE) - set(UNSEEDED_WRITES)
     assert expected_writers <= wrote, f'routes that never wrote: {sorted(expected_writers - wrote)}'
     stale_excuses = sorted(set(NO_WRITE) & wrote)
     assert not stale_excuses, f'these routes do write; drop them from NO_WRITE: {stale_excuses}'

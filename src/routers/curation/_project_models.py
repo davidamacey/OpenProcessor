@@ -16,6 +16,7 @@ from src.config.projects import (
     PROJECT_SLUG_RE,
     RESERVED_SLUGS,
 )
+from src.routers.curation._config_common_models import ProjectCapacityWire
 
 
 if TYPE_CHECKING:
@@ -40,12 +41,17 @@ _ARCHIVED_STATUS = 'archived'
 
 CLONEABLE_AXES: tuple[str, ...] = ('settings_defaults', 'classes')
 
+# The only statuses archive / unarchive act on (lifecycle.py enforces them).
+ARCHIVABLE_STATUSES = frozenset({'active'})
+UNARCHIVABLE_STATUSES = frozenset({'archived'})
+
 
 class ProjectCounts(BaseModel):
     images: int = 0
     items: int = 0
-    # Not computed yet (it needs a per-project query on the items index):
-    # ``null`` rather than a made-up 0.
+    # Items with a human-validated class (the same count on every route,
+    # ``src.services.projects.stats.validated_count``); ``null`` when it
+    # could not be counted, never a made-up 0.
     validated: int | None = None
 
 
@@ -59,6 +65,10 @@ class ProjectSummary(BaseModel):
     selectable: bool
     is_default: bool
     deletable: bool
+    # Whether POST .../archive / .../unarchive accepts this status; the
+    # server refuses any other transition with 409 invalid_transition.
+    archivable: bool
+    unarchivable: bool
     revision: int
     created_at: str
     updated_at: str
@@ -93,6 +103,8 @@ def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
         selectable=record.status in ('active', 'archived'),
         is_default=is_default,
         deletable=not is_default,
+        archivable=record.status in ARCHIVABLE_STATUSES,
+        unarchivable=record.status in UNARCHIVABLE_STATUSES,
         revision=record.revision,
         created_at=record.created_at,
         updated_at=record.updated_at,
@@ -122,7 +134,7 @@ class ProjectLabels(BaseModel):
 class ProjectsResponse(BaseModel):
     default_slug: str
     projects: list[ProjectSummary]
-    capacity: dict[str, Any] | None
+    capacity: ProjectCapacityWire | None
     limits: ProjectLimits
     labels: ProjectLabels = Field(default_factory=ProjectLabels)
     include_archived: bool
@@ -152,8 +164,8 @@ class ProjectError(BaseModel):
     message: str
 
 
-def capacity_wire(capacity: ProjectCapacity | None) -> dict[str, Any] | None:
-    return capacity.to_wire() if capacity is not None else None
+def capacity_wire(capacity: ProjectCapacity | None) -> ProjectCapacityWire | None:
+    return ProjectCapacityWire(**capacity.to_wire()) if capacity is not None else None
 
 
 class ProjectRecordResponse(ProjectSummary):
@@ -164,6 +176,87 @@ class ProjectRecordResponse(ProjectSummary):
 
     resources: dict[str, Any]
     error: ProjectError | None = None
+
+
+class CreateProjectRequest(BaseModel):
+    """``POST /projects`` (P3)."""
+
+    slug: str
+    display_name: str
+    description: str = ''
+    clone_settings_from: str | None = None
+    clone_axes: list[str] | None = None
+
+
+class PatchProjectRequest(BaseModel):
+    """``PATCH {prefix}`` (P3). The slug is immutable."""
+
+    display_name: str | None = None
+    description: str | None = None
+    expected_revision: int
+
+
+class ArchiveRequest(BaseModel):
+    expected_revision: int
+
+
+class CloneSettingsRequest(BaseModel):
+    """``POST {prefix}/clone_settings`` (P3)."""
+
+    from_: str = Field(alias='from')
+    axes: list[str] | None = None
+    expected_revision: int
+
+    model_config = {'populate_by_name': True}
+
+
+class DeleteBlockingIssue(BaseModel):
+    """One reason a delete is refused (delta 11: structured, not bare
+    codes)."""
+
+    code: str
+    message: str
+
+
+class DryRunIndexReport(BaseModel):
+    name: str
+    docs: int
+    store_bytes: int | None = None
+
+
+class DryRunDirReport(BaseModel):
+    path: str
+    bytes: int
+
+
+class DeleteDryRunResponse(BaseModel):
+    indexes: list[DryRunIndexReport]
+    dirs: list[DryRunDirReport]
+    promoted_models: list[str] = Field(default_factory=list)
+    mlflow_experiment: str
+    running_jobs: list[dict[str, Any]] = Field(default_factory=list)
+    referenced_by: list[dict[str, Any]] = Field(default_factory=list)
+    blocking: list[str]
+    blocking_detail: list[DeleteBlockingIssue]
+
+
+class ProjectStatsCounts(BaseModel):
+    images: int
+    items: int
+    # Same count and same null-when-uncountable rule as ProjectCounts.validated.
+    validated: int | None
+    pending_detection: int
+    holdout_items: int
+    classes: int
+    promoted_models: int
+
+
+class ProjectStatsResponse(BaseModel):
+    counts: ProjectStatsCounts
+    indexes: list[dict[str, Any]]
+    disk: dict[str, Any]
+    jobs: dict[str, Any]
+    last_ingest_at: str | None = None
 
 
 def resources_wire(resources: Any) -> dict[str, Any]:

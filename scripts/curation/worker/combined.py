@@ -24,6 +24,7 @@ from scripts.curation.worker.state import (
     _PENDING_VERIFICATION_ALIASES,
     _is_secondary_shape,
     _ItemTask,
+    bound_class_catalog,
     region_profile,
 )
 from scripts.curation.worker.verify import (
@@ -122,8 +123,7 @@ async def _try_combined_class_region(
     ``update_doc``: nothing is written and the item stays pending -- until
     the no-verdict cap, when the candidate is parked for review instead.
     """
-    class_names = getattr(vlm, 'class_names', None) or []
-    name_to_id = getattr(vlm, 'name_to_id', None) or {}
+    class_names, name_to_id = bound_class_catalog()
     try:
         reply = await vlm.label_combined(
             img_id=task.crop_id,

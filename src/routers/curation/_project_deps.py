@@ -12,7 +12,7 @@ from fastapi import Path
 from fastapi.responses import JSONResponse
 
 from src.config.project_context import set_bound_project, try_current_project
-from src.config.projects import PROJECT_SLUG_RE, ProjectRecord
+from src.config.projects import ProjectRecord  # noqa: TC001 - resolved at runtime by FastAPI
 from src.core.logging import get_logger
 from src.routers.curation._config_common_models import ConfigErrorDetail, api_error
 from src.services.projects.registry import get_project_registry
@@ -42,14 +42,18 @@ async def _resolve_and_bind(slug: str) -> ProjectRecord:
         raise api_error(
             409, 'project_failed', f"project '{slug}' failed to build; delete it", project=slug
         )
-    read_only = record.status == 'archived'
+    # P1R minor 10: if the last ensure_fresh() failed, this snapshot's
+    # `status` may be stale (e.g. another instance flipped this project
+    # active -> deleting after our last successful read) -- bind
+    # read-only rather than trust a possibly-stale `active`.
+    read_only = record.status == 'archived' or registry.stale
     set_bound_project(record, read_only=read_only)
     return record
 
 
-async def bind_path_project(
-    project: Annotated[str, Path(pattern=PROJECT_SLUG_RE)],
-) -> ProjectRecord:
+async def bind_path_project(project: Annotated[str, Path()]) -> ProjectRecord:
+    """A malformed slug names no project: 404 ``project_not_found`` like
+    any unknown slug, never a bare 422."""
     return await _resolve_and_bind(project)
 
 

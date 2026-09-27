@@ -12,6 +12,7 @@ import json
 from typing import TYPE_CHECKING
 
 import pytest
+from _project_paths import default_train_jobs_dir
 
 from src.services.training.jobs import TrainJobStatus
 
@@ -72,8 +73,7 @@ async def test_trained_models_reports_the_eval_score_with_its_split(
     ckpt = tmp_path / 'runs' / 'run-3' / 'weights' / 'best.pt'
     ckpt.parent.mkdir(parents=True)
     ckpt.write_bytes(b'pt')
-    jobs_dir = tmp_path / 'jobs'
-    jobs_dir.mkdir()
+    jobs_dir = default_train_jobs_dir(tmp_path / 'jobs')
     (jobs_dir / 'run-3.status.json').write_text(
         json.dumps(
             {
@@ -85,7 +85,7 @@ async def test_trained_models_reports_the_eval_score_with_its_split(
             }
         )
     )
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(jobs_dir))
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path / 'jobs'))
     monkeypatch.setattr(bakeoff_jobs, 'RUNS_HOST_ROOT', tmp_path / 'runs')
 
     body = await bakeoff.bakeoff_trained_models()

@@ -55,6 +55,8 @@ class _RecordingClient:
         self.urls.append(url)
 
         class _Resp:
+            status_code = 200
+
             def raise_for_status(self) -> None:
                 return None
 
@@ -62,6 +64,13 @@ class _RecordingClient:
                 return {}
 
         return _Resp()
+
+
+# vlm_worker.py/cluster_refresh_daemon.py no longer read OP_API_PREFIX
+# directly -- the caller resolves the prefix (from get_curation_config()
+# while a project is bound) and passes it in explicitly per project, so
+# these now exercise that explicit-prefix contract directly instead of
+# monkeypatching the env and reloading the module.
 
 
 @pytest.fixture
@@ -76,7 +85,9 @@ def custom_prefix(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 @pytest.fixture
 def beta_bound() -> Any:
-    """The workers' ``--project beta``: the whole process bound to beta."""
+    """A process-wide bind to project ``beta`` -- what bulk_writer's
+    background publisher runs under (script/worker entry point, not a
+    request)."""
     from datetime import UTC, datetime
 
     from src.config.curation import base_curation_config
@@ -102,28 +113,26 @@ def beta_bound() -> Any:
 
 @pytest.mark.unbound
 @pytest.mark.asyncio
-async def test_vlm_worker_honours_project_and_prefix(custom_prefix: str, beta_bound: Any) -> None:
+async def test_vlm_worker_uses_configured_prefix() -> None:
     mod = importlib.import_module('scripts.curation.vlm_worker')
     client = _RecordingClient()
-    await mod.label_batch(client, api='http://api', crop_ids=['c1'])  # type: ignore[arg-type]
-    assert client.urls == [f'http://api{custom_prefix}/projects/beta/vlm/label_batch']
-    assert mod._items_index() == 'op_prj_beta__items'
+    await mod.label_batch(
+        client, api='http://api', api_prefix='/custom-mount', slug='alpha', crop_ids=['c1']
+    )
+    assert client.urls == ['http://api/custom-mount/projects/alpha/vlm/label_batch']
 
 
 @pytest.mark.unbound
 @pytest.mark.asyncio
-async def test_cluster_refresh_daemon_honours_project_and_prefix(
-    custom_prefix: str, beta_bound: Any
-) -> None:
+async def test_cluster_refresh_daemon_uses_configured_prefix() -> None:
     mod = importlib.import_module('scripts.curation.cluster_refresh_daemon')
     client = _RecordingClient()
-    await mod._trigger_auto_promote(client, 'http://api')  # type: ignore[arg-type]
-    await mod._trigger_auto_label(client, 'http://api')  # type: ignore[arg-type]
+    await mod._trigger_auto_promote(client, 'http://api', '/custom-mount', 'alpha')
+    await mod._trigger_auto_label(client, 'http://api', '/custom-mount', 'alpha')
     assert client.urls == [
-        f'http://api{custom_prefix}/projects/beta/clusters/auto_promote',
-        f'http://api{custom_prefix}/projects/beta/pipeline/auto_label',
+        'http://api/custom-mount/projects/alpha/clusters/auto_promote',
+        'http://api/custom-mount/projects/alpha/pipeline/auto_label',
     ]
-    assert mod._items_index() == 'op_prj_beta__items'
 
 
 @pytest.mark.unbound

@@ -105,7 +105,9 @@ def _registry_class_ids(cfg: CurationConfig) -> dict[str, int]:
     except Exception as exc:
         logger.warning('probe_registry_unavailable', error=str(exc))
         return {}
-    return {c.class_name: c.class_id for c in reg.classes if not c.deprecated}
+    from src.services.curation.region_class import item_classes
+
+    return {c.class_name: c.class_id for c in item_classes(reg.classes)}
 
 
 def _crop_and_predict(

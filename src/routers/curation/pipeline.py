@@ -372,22 +372,22 @@ async def pipeline_auto_label(
 
     # Reuse the VLM label_batch logic by calling it directly (no HTTP
     # hop). Build ItemCrops here so we can chunk.
+    from src.services.curation.region_class import item_classes
     from src.services.labeling.vlm_labeler import (
         format_class_catalog,
         resolve_class_name as _resolve_class_name_fn,
     )
 
     reg = get_class_registry().load()
-    class_names = [c.class_name for c in reg.classes if not c.deprecated]
-    name_to_id = {c.class_name: c.class_id for c in reg.classes if not c.deprecated}
+    labelable = item_classes(reg.classes)
+    class_names = [c.class_name for c in labelable]
+    name_to_id = {c.class_name: c.class_id for c in labelable}
 
     # Render the registry as a grouped+described catalog so the VLM's
     # prompt tells it what each cryptic slug actually means visually. Big
     # quality lift over the bare CSV — see ``format_class_catalog``.
     class_dicts = [
-        {'class_name': c.class_name, 'group': getattr(c, 'group', None)}
-        for c in reg.classes
-        if not c.deprecated
+        {'class_name': c.class_name, 'group': getattr(c, 'group', None)} for c in labelable
     ]
     # The run's selected pack (resolve_prompt_pack() default when unset).
     labeler = _get_vlm_labeler(prompt_pack, prompt_pack_revision)
@@ -449,7 +449,9 @@ async def pipeline_auto_label(
                 logger.warning('pipeline_thumb_failed', crop_id=crop_id, error=str(exc))
                 continue
             crops.append(ItemCrop(img_id=crop_id, jpeg_bytes=jpeg))
-        if not crops:
+        # No item classes yet (a fresh project, or only the region class):
+        # nothing to label items as.
+        if not crops or not class_names:
             return 0, 0, []
         preds = await labeler.label_or_propose_batch(
             crops,

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _project_paths import default_train_jobs_dir
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -92,7 +93,7 @@ def test_labels_txt_uses_pinned_registry_not_live(
 
     # 1. The registry snapshot pinned at submit time (P1-12) — class_id=5
     #    was 'suv' when this job was submitted.
-    snapshot_path = tmp_path / f'{job_id}.registry_snapshot.json'
+    snapshot_path = default_train_jobs_dir(tmp_path) / f'{job_id}.registry_snapshot.json'
     snapshot_path.write_text(
         json.dumps(
             {
@@ -104,7 +105,7 @@ def test_labels_txt_uses_pinned_registry_not_live(
     )
 
     # 2. job.json carries the pin's location, as write_job would have written it.
-    (tmp_path / f'{job_id}.job.json').write_text(
+    (default_train_jobs_dir(tmp_path) / f'{job_id}.job.json').write_text(
         json.dumps(
             {
                 'job_id': job_id,
@@ -180,7 +181,7 @@ def test_labels_txt_falls_back_to_live_registry_without_a_pin(
     registry_snapshot_path — promote must still work, falling back to the
     live registry rather than erroring."""
     job_id = 'no-pin-job'
-    (tmp_path / f'{job_id}.job.json').write_text(
+    (default_train_jobs_dir(tmp_path) / f'{job_id}.job.json').write_text(
         json.dumps({'job_id': job_id, 'dataset_export_dir': '/data/exports/x'})
     )
 

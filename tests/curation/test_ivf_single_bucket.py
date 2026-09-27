@@ -33,10 +33,11 @@ def ivf_store_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     from src.services.curation.clustering.methods import ivf_store as ivf_store_mod
 
     store_dir = tmp_path / 'ivf_residuals'
-    monkeypatch.setattr(ivf_store_mod, 'IVF_STORE_DIR', store_dir)
-    monkeypatch.setattr(ivf_store_mod, 'CENTROIDS_PATH', store_dir / 'centroids.faiss')
-    monkeypatch.setattr(ivf_store_mod, 'METADATA_PATH', store_dir / 'metadata.json')
-    monkeypatch.setattr(ivf_store_mod, 'GATE_PATH', store_dir / 'gate.json')
+
+    class _FakeCurationConfig:
+        project_state_dir = tmp_path
+
+    monkeypatch.setattr(ivf_store_mod, 'get_curation_config', lambda: _FakeCurationConfig())
     return store_dir
 
 

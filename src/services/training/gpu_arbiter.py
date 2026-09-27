@@ -39,6 +39,7 @@ logged best-effort fallback.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import time
 from dataclasses import dataclass
@@ -47,6 +48,7 @@ from typing import Any
 
 from src.config import get_curation_config, get_gpu_arbiter_config
 from src.core.logging import get_logger
+from src.services.training.arbiter_dirs import all_bakeoff_jobs_dirs, all_train_jobs_dirs
 
 
 logger = get_logger(__name__)
@@ -100,18 +102,20 @@ LOCK_GRACE_SECONDS = 90.0
 def bakeoff_active(*, jobs_dir: Path | None = None) -> bool:
     """True if a bake-off job is queued or running (job.json still present).
 
-    ``jobs_dir`` defaults to ``GpuArbiterConfig.bakeoff_jobs_dir`` (always
-    set: ``OP_BAKEOFF_JOBS_DIR`` or ``<state_dir>/bakeoff_jobs``, the same
-    dir the bake-off router writes into). A missing dir means nothing queued.
+    ``jobs_dir`` scans only that dir. By default every dir a bake-off can
+    be queued in is scanned (:func:`all_bakeoff_jobs_dirs`): the arbiter is
+    global, but the bake-off router writes into the bound project's own
+    ``bakeoff_jobs_dir`` (projects_plan.md §5.3). A missing dir means
+    nothing queued.
     """
-    configured = jobs_dir if jobs_dir is not None else get_gpu_arbiter_config().bakeoff_jobs_dir
-    if not configured:
-        return False
-    target = Path(configured)
-    try:
-        return any(target.glob('*.job.json'))
-    except OSError:
-        return False
+    targets = [Path(jobs_dir)] if jobs_dir is not None else all_bakeoff_jobs_dirs()
+    for target in targets:
+        try:
+            if any(target.glob('*.job.json')):
+                return True
+        except OSError:
+            continue
+    return False
 
 
 # =============================================================================
@@ -125,6 +129,10 @@ class ArbiterAction:
 
     action: str  # 'sentinel_set' | 'sentinel_cleared' | 'gpu_services_stopped' | 'gpu_services_started' | 'noop'
     detail: str = ''
+    # Project owning the active run (projects_plan.md §5.3); None when
+    # nothing is active or it can't be attributed (e.g. the lock closing
+    # the claim->write race before job.json's project is known).
+    holder_project: str | None = None
 
 
 class GpuArbiterStopFailedError(RuntimeError):
@@ -504,19 +512,6 @@ async def release_gpus_after_training(
 # ---- recovery on API startup -------------------------------------------
 
 
-def _resolve_train_jobs_dir() -> Path:
-    """The trainer's jobs directory, honoring ``OP_TRAIN_JOBS_DIR``.
-
-    Delegates to the training-jobs module rather than re-reading the env
-    var so the arbiter can never scan a different directory than the one
-    jobs are actually written to. Imported lazily to keep this module
-    importable on its own.
-    """
-    from src.services.training.jobs import _resolve_jobs_dir
-
-    return _resolve_jobs_dir()
-
-
 async def reconcile_on_startup(
     *,
     train_jobs_dir: Path | None = None,
@@ -524,38 +519,31 @@ async def reconcile_on_startup(
 ) -> ArbiterAction:
     """Enforce the desired GPU-service state -- both directions.
 
-    ``train_jobs_dir`` defaults to the deployment's configured jobs
-    directory (:func:`_resolve_train_jobs_dir`); callers pass it
-    explicitly only to point at a test fixture.
+    ``train_jobs_dir`` defaults to :func:`all_train_jobs_dirs` (default
+    dir + every active/archived project's own dir, §5.3), so a run
+    started in any project keeps the GPUs claimed. An explicit path
+    (test fixtures) scans only that one dir, attributed to no project.
 
-    Runs once at API startup *and* on a periodic loop (wired in
-    :mod:`src.main`'s lifespan), in every uvicorn worker. Single
-    authority for whether the configured GPU-resident containers should
-    be down (a run owns the GPUs) or up (nothing active), and drives
-    them toward that state every tick -- idempotent, so running in every
-    worker is safe re-enforcement, not a race.
+    Runs once at API startup *and* on a periodic loop (every uvicorn
+    worker); idempotent re-enforcement, not a race.
 
-    A run owns the GPUs when either: a ``*.job.json`` exists whose
+    A run owns the GPUs when a ``*.job.json`` exists whose
     ``*.status.json`` hasn't reached a :data:`TRAINER_TERMINAL_STATES`
-    state (no status yet = just-claimed; unknown/non-terminal = still
-    live); or the training lock is present and younger than
-    :data:`LOCK_GRACE_SECONDS` (written by
-    :func:`claim_gpus_for_training` before job.json exists, closing the
-    claim->write race window).
-
-    The active run's ``cuda_visible_devices`` decides enforcement via
-    :func:`containers_to_stop`: the union over every active run stays
-    stopped; every other configured container is (re)started; the pause
-    sentinel stays set while any run is active. An unreadable job.json
-    is treated conservatively -- keep every configured container
-    stopped. Nothing active -> clear lock + sentinel, start everything.
+    state, or the training lock is present and younger than
+    :data:`LOCK_GRACE_SECONDS`. Enforcement via ``cuda_visible_devices``
+    + :func:`containers_to_stop`; nothing active -> clear lock/sentinel
+    and start everything.
     """
     sentinel_target = sentinel_path(sentinel)
-    jobs_dir = train_jobs_dir if train_jobs_dir is not None else _resolve_train_jobs_dir()
+    if train_jobs_dir is not None:
+        jobs_dirs: dict[str, Path] = {'': train_jobs_dir}
+    else:
+        jobs_dirs = all_train_jobs_dirs()
     status_states: dict[str, str | None] = {}
     active_stems: set[str] = set()
     all_configured = tuple(name for name, _ in get_gpu_arbiter_config().container_gpus)
     stop_names: set[str] = set()
+    holder_project: str | None = None
 
     def _accumulate(cvd: str | None) -> None:
         if cvd is None:
@@ -563,7 +551,9 @@ async def reconcile_on_startup(
         else:
             stop_names.update(containers_to_stop(cvd))
 
-    if jobs_dir.exists():
+    for project_slug, jobs_dir in jobs_dirs.items():
+        if not jobs_dir.exists():
+            continue
         for status_file in jobs_dir.glob('*.status.json'):
             try:
                 payload = json.loads(status_file.read_text(encoding='utf-8'))
@@ -588,6 +578,8 @@ async def reconcile_on_startup(
             except (OSError, ValueError):
                 cvd = None
             _accumulate(cvd)
+            if holder_project is None and project_slug:
+                holder_project = project_slug
 
     # The lock closes the window before job.json is visible, and ages out so
     # a crashed claim can't reserve the GPUs forever.
@@ -624,11 +616,10 @@ async def reconcile_on_startup(
             stopped=list(ordered_stop),
             started=list(to_start),
         )
-        if start_result is not None:
-            return start_result
-        if stop_result is not None:
-            return stop_result
-        return pause_result
+        result = start_result if start_result is not None else stop_result
+        if result is None:
+            result = pause_result
+        return dataclasses.replace(result, holder_project=holder_project)
 
     # Nothing active -- release everything: clear the (stale) lock +
     # sentinel and bring the configured containers back up. This is the
@@ -658,6 +649,8 @@ __all__ = [
     'TRAINER_TERMINAL_STATES',
     'ArbiterAction',
     'GpuArbiterStopFailedError',
+    'all_bakeoff_jobs_dirs',
+    'all_train_jobs_dirs',
     'bakeoff_active',
     'claim_gpus_for_training',
     'clear_training_lock',

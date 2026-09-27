@@ -173,6 +173,22 @@ async def bump_revision(client: Any) -> int:
     raise RuntimeError('project registry revision kept conflicting; giving up')
 
 
+async def _bootstrap_once() -> Any:
+    """Upsert ``default``, read the registry and seed each project's region
+    class. Raises while OpenSearch is unreachable or the registry unread."""
+    from src.services.projects.guard import make_curation_opensearch
+    from src.services.projects.registry import get_project_registry
+
+    client = await make_curation_opensearch()
+    await bootstrap_default_project(client)
+    registry = get_project_registry()
+    await registry.ensure_fresh()
+    if not registry.refreshed:
+        raise RuntimeError('project registry not readable yet')
+    _seed_region_classes()
+    return registry
+
+
 async def startup_bootstrap_project_registry() -> Any:
     """Everything ``src.main``'s lifespan needs for the projects
     foundation: upsert the ``default`` record, do one registry refresh,
@@ -182,14 +198,18 @@ async def startup_bootstrap_project_registry() -> Any:
     ratchet."""
     import asyncio
 
-    from src.services.projects.guard import make_curation_opensearch
-    from src.services.projects.registry import get_project_registry
-
-    client = await make_curation_opensearch()
-    await bootstrap_default_project(client)
-    registry = get_project_registry()
-    await registry.ensure_fresh()
+    registry = await _bootstrap_once()
     return asyncio.create_task(registry.poll_loop())
+
+
+def _seed_region_classes() -> None:
+    from src.services.curation.region_class import ensure_region_class
+
+    for slug in for_each_project():
+        try:
+            ensure_region_class()
+        except Exception as exc:
+            logger.warning('region_class_seed_failed', project=slug, error=str(exc))
 
 
 async def shutdown_project_registry(task: Any | None) -> None:
@@ -205,13 +225,33 @@ async def shutdown_project_registry(task: Any | None) -> None:
         await task
 
 
+_BOOTSTRAP_RETRY_INITIAL_S = 1.0
+_BOOTSTRAP_RETRY_MAX_S = 30.0
+
+
 async def startup_bootstrap_project_registry_safe() -> Any | None:
-    """``startup_bootstrap_project_registry``, but never raises -- a
-    startup-time OpenSearch hiccup here must not block the rest of the
-    app from starting; the next request-time ``ensure_fresh()`` call
-    still runs."""
+    """``startup_bootstrap_project_registry``, but never raises: when
+    OpenSearch is not reachable yet (a fresh install starts everything at
+    once), the returned task keeps retrying with backoff and then runs the
+    poll loop, so ``default`` still gets created and seeded."""
+    import asyncio
+
     try:
         return await startup_bootstrap_project_registry()
     except Exception as exc:
-        logger.warning('project_registry_bootstrap_skipped', error=str(exc))
-        return None
+        logger.warning('project_registry_bootstrap_deferred', error=str(exc))
+
+    async def _retry_then_poll() -> None:
+        delay = _BOOTSTRAP_RETRY_INITIAL_S
+        while True:
+            await asyncio.sleep(delay)
+            try:
+                registry = await _bootstrap_once()
+            except Exception as exc:
+                logger.warning('project_registry_bootstrap_retry_failed', error=str(exc))
+                delay = min(delay * 2, _BOOTSTRAP_RETRY_MAX_S)
+                continue
+            logger.info('project_registry_bootstrap_recovered')
+            await registry.poll_loop()
+
+    return asyncio.create_task(_retry_then_poll())

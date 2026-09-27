@@ -11,11 +11,18 @@ Never touches: a custom-named export dir, the ``current`` symlink's
 target, or any export dir a training job, a finished run's lineage, or a
 queued/running bake-off still references.
 
-    # See what would be removed.
+Loops over every active AND archived project by default, pruning each
+project's own exports under its own binding (projects_plan.md §11 W7).
+``--project SLUG`` restricts the run to just that one project.
+
+    # See what would be removed, every project.
     python3 scripts/curation/prune_exports.py
 
-    # Actually remove.
+    # Actually remove, every project.
     python3 scripts/curation/prune_exports.py --apply
+
+    # One project only.
+    python3 scripts/curation/prune_exports.py --project cars --apply
 
     # Different retention window.
     python3 scripts/curation/prune_exports.py --keep-last 10
@@ -24,7 +31,7 @@ queued/running bake-off still references.
 from __future__ import annotations
 
 import argparse
-import os
+import asyncio
 import sys
 from pathlib import Path
 
@@ -34,20 +41,30 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from src.config import get_curation_config, get_gpu_arbiter_config
+from src.config import get_curation_config
+from src.config.project_context import bind_project
 from src.services.curation.export_retention import (
     apply_export_prune,
     collect_export_pins,
     plan_export_prune,
 )
-from src.services.projects.script_binding import add_project_argument, bind_script_project
+from src.services.projects.script_binding import (
+    abind_script_project,
+    add_project_argument,
+    script_project_registry,
+)
 
 
-def run(args: argparse.Namespace) -> int:
+def _run_one_project(args: argparse.Namespace) -> int:
+    """Prune exports for whatever project is currently bound.
+    ``train_jobs_dir``/``bakeoff_jobs_dir`` come from the bound
+    project's own ``CurationConfig`` view (PROJECT_SCOPED_FIELDS), not
+    a raw env var / the global GPU-arbiter config, so each project's
+    export pins are computed against its own dirs only."""
     config = get_curation_config()
     export_root = Path(args.export_root) if args.export_root else config.export_root
-    jobs_dir = Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
-    bakeoff_jobs_dir = Path(get_gpu_arbiter_config().bakeoff_jobs_dir)
+    jobs_dir = config.train_jobs_dir
+    bakeoff_jobs_dir = config.bakeoff_jobs_dir
 
     pins = collect_export_pins(
         export_root=export_root, jobs_dir=jobs_dir, bakeoff_jobs_dir=bakeoff_jobs_dir
@@ -71,6 +88,24 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
+async def run(args: argparse.Namespace) -> int:
+    """Prune every active + archived project (or just ``--project SLUG``
+    when given), each under its own binding."""
+    if args.project:
+        await abind_script_project(args.project)
+        return _run_one_project(args)
+
+    registry = script_project_registry()
+    await registry.refresh_strict()
+    projects = registry.active_projects() + registry.archived_projects()
+    rc = 0
+    for record in projects:
+        print(f'== project {record.slug} ({record.status}) ==')
+        with bind_project(record, read_only=record.status == 'archived'):
+            rc = _run_one_project(args) or rc
+    return rc
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -81,13 +116,19 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument('--dry-run', dest='apply', action='store_false', default=False)
     g.add_argument('--apply', dest='apply', action='store_true')
     add_project_argument(p)
+    # Default: every active + archived project, each under its own binding.
+    p.set_defaults(project=None)
     return p
 
 
 def main() -> int:
-    args = build_parser().parse_args()
-    bind_script_project(args.project)
-    return run(args)
+    parser = build_parser()
+    args = parser.parse_args()
+    if args.export_root and not args.project:
+        # One override dir pruned against every project's pins would
+        # delete exports another project still pins.
+        parser.error('--export-root needs --project')
+    return asyncio.run(run(args))
 
 
 if __name__ == '__main__':

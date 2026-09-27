@@ -27,6 +27,7 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
 from src.config import CurationConfig, get_region_fields
 from src.config.curation import base_curation_config
+from src.config.project_context import current_project
 from src.services.curation.class_write_guard import (
     CLASS_GUARD_SOURCE_FIELDS,
     ClassWriteGuard,
@@ -324,6 +325,7 @@ async def test_worker_drops_class_fields_when_class_changed_after_read() -> None
     read = _discarded('w1') | {F.status: 'pending_detection'}
     fake = QueryFakeOpenSearch({items_index(): {'w1': dict(read)}})
     task = _ItemTask(
+        project=current_project().record,
         crop_id='w1',
         image_path='/x.jpg',
         item_bbox_norm=(0.1, 0.1, 0.5, 0.5),
@@ -357,6 +359,7 @@ async def test_worker_writes_class_when_unchanged() -> None:
     read = _plain('w2') | {F.status: 'pending_detection'}
     fake = QueryFakeOpenSearch({items_index(): {'w2': dict(read)}})
     task = _ItemTask(
+        project=current_project().record,
         crop_id='w2',
         image_path='/x.jpg',
         item_bbox_norm=(0.1, 0.1, 0.5, 0.5),

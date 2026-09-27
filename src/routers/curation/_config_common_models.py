@@ -57,12 +57,46 @@ ErrorCode = Literal[
     'config_store_unavailable',
     'read_only',
     'name_conflict',
+    'invalid_transition',
+    'export_outside_project',
+    'model_not_found',
 ]
 
 # Seeded with the codes W2 raises (none yet -- W2 has no validated
 # writes of its own, only the low-level OCC primitives). W3/W4 add the
 # pack/profile validation codes; W8/W9 add theirs.
 ValidationCode = Literal['name_conflict']
+
+
+class ProjectCapacityWire(BaseModel):
+    """The OpenSearch shard/heap capacity block (§2.3,
+    ``src.services.projects.capacity.ProjectCapacity.to_wire``): served on
+    ``GET /projects`` and on a 409 ``shard_budget_exceeded``."""
+
+    status: Literal['ok', 'warn', 'blocked']
+    active_shards: int
+    per_project_shards: int
+    soft_limit: int
+    hard_limit: int
+    heap_max_bytes: int
+    max_shards_per_node: int
+    data_nodes: int
+    projects_until_soft_limit: int
+    message: str
+    labels: dict[str, str]
+
+
+class JobRefWire(BaseModel):
+    """One running job blocking a lifecycle action (Cropwright rev-3
+    delta 11): typed, not a raw id string, so a caller can render
+    "cars has 2 running jobs: Training run run-7, Bake-off run-42"
+    without a second lookup."""
+
+    kind: str
+    kind_label: str
+    id: str
+    label: str
+    started_at: str
 
 
 class ConfigErrorDetail(BaseModel):
@@ -76,7 +110,8 @@ class ConfigErrorDetail(BaseModel):
     error: ErrorCode
     message: str
     project: str | None = None
-    jobs: list[str] | None = None
+    # delta 11: 409 project_busy carries typed JobRef objects, not raw ids.
+    jobs: list[JobRefWire] | None = None
     projects: list[str] | None = None
     active_shards: int | None = None
     needed: int | None = None
@@ -89,6 +124,19 @@ class ConfigErrorDetail(BaseModel):
     current: ActiveRef | None = None
     axis: str | None = None
     valid_ids: list[str] | None = None
+    # Delta 12: the full capacity object on shard_budget_exceeded (and in
+    # the shard_budget_high warning), so a create form re-renders from
+    # one response instead of a second GET /projects.
+    capacity: ProjectCapacityWire | None = None
+    # invalid_transition: the status the project is in, and the action refused.
+    project_status: str | None = None
+    action: str | None = None
+
+
+class ApiErrorResponse(BaseModel):
+    """The body of every error :func:`api_error` raises."""
+
+    detail: ConfigErrorDetail
 
 
 def api_error(status: int, code: ErrorCode, message: str, **fields: Any) -> HTTPException:

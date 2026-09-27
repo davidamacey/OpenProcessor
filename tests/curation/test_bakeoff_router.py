@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _project_paths import default_train_jobs_dir
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -143,19 +144,24 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Path]:
     dirs = {
         'exports': tmp_path / 'exports',
         'external': tmp_path / 'bakeoff_eval',
-        'train_jobs': tmp_path / 'train_jobs',
+        'train_jobs_root': tmp_path / 'train_jobs',
         'runs': tmp_path / 'runs',
         'jobs': tmp_path / 'bakeoff_jobs',
         'out': tmp_path / 'bakeoff_out',
     }
-    for key in ('exports', 'external', 'train_jobs', 'runs'):
+    for key in ('exports', 'external', 'train_jobs_root', 'runs'):
         dirs[key].mkdir()
+    # default's train_jobs_dir nests under the OP_TRAIN_JOBS_DIR root.
+    dirs['train_jobs'] = default_train_jobs_dir(dirs['train_jobs_root'])
     monkeypatch.setattr(eval_datasets, 'export_root', lambda: dirs['exports'])
     monkeypatch.setattr(eval_datasets, 'external_root', lambda: dirs['external'])
     monkeypatch.setattr(bakeoff_jobs, 'RUNS_HOST_ROOT', dirs['runs'])
-    monkeypatch.setattr(bakeoff, 'JOBS_DIR', dirs['jobs'])
-    monkeypatch.setattr(bakeoff, 'OUT_DIR', dirs['out'])
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(dirs['train_jobs']))
+    # bakeoff.JOBS_DIR/OUT_DIR are now _jobs_dir()/_out_dir() -- resolved
+    # per-project at call time (projects_plan.md §5.3) instead of module-
+    # level constants -- so tests patch the functions themselves.
+    monkeypatch.setattr(bakeoff, '_jobs_dir', lambda: dirs['jobs'])
+    monkeypatch.setattr(bakeoff, '_out_dir', lambda: dirs['out'])
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(dirs['train_jobs_root']))
     for key in [k for k in __import__('os').environ if k.startswith('OP_BAKEOFF_PROFILE')]:
         monkeypatch.delenv(key)
     eval_datasets.clear_cache()
@@ -198,7 +204,11 @@ def make_run(
     ckpt = dirs['runs'] / run_id / 'weights' / 'best.pt'
     ckpt.parent.mkdir(parents=True)
     ckpt.write_bytes(b'pt')
+    # `dirs['train_jobs']` is already default's fully-nested
+    # `OP_TRAIN_JOBS_DIR/projects/default` (see `default_train_jobs_dir`
+    # in tests/_project_paths.py) -- do not nest it again here.
     jobs = dirs['train_jobs']
+    jobs.mkdir(parents=True, exist_ok=True)
     (jobs / f'{run_id}.status.json').write_text(
         json.dumps(
             {

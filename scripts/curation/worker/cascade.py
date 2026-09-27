@@ -127,6 +127,7 @@ async def _fetch_pending(
     *,
     batch_size: int,
     exclude_ids: list[str] | None = None,
+    project: Any = None,
 ) -> list[_ItemTask]:
     """Pull up to ``batch_size`` pending crops, oldest first.
 
@@ -195,9 +196,13 @@ async def _fetch_pending(
                 detector_score=float(src.get(F.score) or 0.0),
                 request_id=str(src.get('request_id') or '-'),
                 class_token=class_state_token(src),
+                project=project,
             )
         )
     return tasks
+
+
+# fetch_pending_multi_project lives in fairness.py (700 LOC ceiling).
 
 
 # =============================================================================

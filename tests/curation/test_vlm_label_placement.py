@@ -109,3 +109,33 @@ def test_placement_rules() -> None:
     assert class_cluster_placement(update, {'cluster_id': -2, 'class_excluded': True}) == {}
     # Only writes that set a class move anything.
     assert class_cluster_placement({'class_source': 'vlm_unmatched'}, {'cluster_id': 1}) == {}
+
+
+@pytest.mark.asyncio
+async def test_label_batch_with_no_classes_is_a_409_not_a_500(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A fresh project has an empty class registry; the VLM worker still
+    finds unlabelled items and calls this route. That must be a clean,
+    machine-readable refusal the worker can back off on, not an unhandled
+    ValueError (500) retried forever."""
+    from fastapi import HTTPException
+
+    import src.routers.curation.vlm as vlm_mod
+    from src.routers.curation.vlm import VlmLabelBatchRequest
+
+    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
+    monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
+
+    def _no_labeler(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError('the VLM must not be called with no classes')
+
+    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', _no_labeler)
+    fake = QueryFakeOpenSearch({ITEMS: {'a': _item('a')}})
+
+    with pytest.raises(HTTPException) as exc_info:
+        await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['a']), fake)
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail['error'] == 'no_classes'
+    assert fake.docs(ITEMS)['a'] == _item('a')

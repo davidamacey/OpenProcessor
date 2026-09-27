@@ -47,11 +47,8 @@ Public API:
 * :func:`get_state` — read state.json (with stale-heartbeat repair).
 * :func:`get_job_state` — one job by id (current, or archived on replace).
 * :func:`cancel_job` — touch the cancel flag.
-* :func:`auto_label_changed_event` — asyncio.Event signalled whenever
-  ``state.json`` is rewritten (driven by the inotify watcher below).
-* :func:`watch_state_file` — lifespan task that fires the event.
-* :func:`shutdown_active_run` — no-op kept for API compatibility;
-  the worker container has its own restart policy.
+* :func:`state_mtime` — the bound project's ``state.json`` mtime, which
+  the SSE stream polls to notice a rewrite.
 """
 
 from __future__ import annotations
@@ -59,13 +56,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import os
 import time
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 STAGES: tuple[str, ...] = (
@@ -77,25 +76,43 @@ STAGES: tuple[str, ...] = (
 )
 
 
-_STATE_DIR = Path(os.environ.get('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label'))
-_STATE_FILE = _STATE_DIR / 'state.json'
-_CANCEL_FLAG = _STATE_DIR / 'cancel.flag'
-_RUNNING_LOCK = _STATE_DIR / 'running.lock'
-_EXIT_CODE_FILE = _STATE_DIR / 'exit_code'
-_TRIGGER_FILE = _STATE_DIR / 'trigger.json'
-_HEARTBEAT_FILE = _STATE_DIR / 'heartbeat'
+def _state_dir() -> Path:
+    # The bound project's own autolabel_dir -- resolved fresh on every
+    # call, never cached at import time (PROJECT_SCOPED_FIELDS).
+    from src.config.curation import get_curation_config
+
+    return get_curation_config().autolabel_dir
+
+
+def _state_file() -> Path:
+    return _state_dir() / 'state.json'
+
+
+def _cancel_flag() -> Path:
+    return _state_dir() / 'cancel.flag'
+
+
+def _running_lock() -> Path:
+    return _state_dir() / 'running.lock'
+
+
+def _exit_code_file() -> Path:
+    return _state_dir() / 'exit_code'
+
+
+def _trigger_file() -> Path:
+    return _state_dir() / 'trigger.json'
+
+
+def _heartbeat_file() -> Path:
+    return _state_dir() / 'heartbeat'
+
 
 # How stale the worker's heartbeat must be before we declare the worker
 # dead and stamp 'vanished' on a 'running' state. The worker touches
 # heartbeat every 5 s; 30 s leaves room for a long blocking call inside
 # a stage without false-positives.
 _HEARTBEAT_STALE_S = 30.0
-
-# Module-level asyncio Event signalled whenever state.json is rewritten.
-# The SSE endpoint awaits this; an inotify watcher started in the FastAPI
-# lifespan does the signalling. Per-uvicorn-worker; each worker watches
-# the same on-disk file.
-_changed_event: asyncio.Event | None = None
 
 
 @dataclass
@@ -135,21 +152,21 @@ class _JobState:
 
 
 def _ensure_dir() -> None:
-    _STATE_DIR.mkdir(parents=True, exist_ok=True)
+    _state_dir().mkdir(parents=True, exist_ok=True)
 
 
 def _atomic_write(payload: dict[str, Any]) -> None:
     """Write state.json via temp + rename so readers never see a partial file."""
     _ensure_dir()
-    tmp = _STATE_FILE.with_suffix('.tmp')
+    tmp = _state_file().with_suffix('.tmp')
     tmp.write_text(json.dumps(payload, default=str))
-    tmp.replace(_STATE_FILE)
+    tmp.replace(_state_file())
 
 
 def _read_state() -> _JobState:
     """Load the on-disk state. Returns a default idle state if missing."""
     try:
-        raw = json.loads(_STATE_FILE.read_text())
+        raw = json.loads(_state_file().read_text())
     except (FileNotFoundError, json.JSONDecodeError):
         return _JobState()
     state = _JobState()
@@ -169,7 +186,7 @@ def _heartbeat_age() -> float | None:
     a 'running' state should be repaired to 'failed'.
     """
     try:
-        mtime = _HEARTBEAT_FILE.stat().st_mtime
+        mtime = _heartbeat_file().stat().st_mtime
     except (FileNotFoundError, PermissionError, OSError):
         return None
     return max(0.0, time.time() - mtime)
@@ -188,7 +205,7 @@ def _is_busy() -> bool:
     'busy' — a second :func:`start_job` while a trigger sits unread
     would otherwise stomp on it.
     """
-    if _TRIGGER_FILE.exists():
+    if _trigger_file().exists():
         return True
     age = _heartbeat_age()
     if age is None:
@@ -203,11 +220,11 @@ def _reap_stale_artifacts() -> None:
     Safe to call concurrently — uses suppressed FileNotFoundError.
     """
     with contextlib.suppress(FileNotFoundError):
-        _RUNNING_LOCK.unlink()
+        _running_lock().unlink()
     with contextlib.suppress(FileNotFoundError):
-        _CANCEL_FLAG.unlink()
+        _cancel_flag().unlink()
     with contextlib.suppress(FileNotFoundError):
-        _HEARTBEAT_FILE.unlink()
+        _heartbeat_file().unlink()
 
 
 def reconcile_orphaned_jobs() -> bool:
@@ -230,13 +247,13 @@ def reconcile_orphaned_jobs() -> bool:
     lifespan, 'interrupted' is what a caller normally observes for a
     heartbeat-stale run recovered at startup.
     """
-    if _TRIGGER_FILE.exists():
+    if _trigger_file().exists():
         return False
     from src.services.curation.job_reconcile import reconcile_stale_running
 
     return reconcile_stale_running(
-        _STATE_FILE,
-        _HEARTBEAT_FILE,
+        _state_file(),
+        _heartbeat_file(),
         stale_s=_HEARTBEAT_STALE_S,
         error_prefix='auto_label worker',
     )
@@ -258,7 +275,7 @@ def get_state() -> dict[str, Any]:
     state = _read_state()
     if state.status == 'running':
         age = _heartbeat_age()
-        if not _TRIGGER_FILE.exists() and (age is None or age > _HEARTBEAT_STALE_S):
+        if not _trigger_file().exists() and (age is None or age > _HEARTBEAT_STALE_S):
             stale_msg = (
                 f'auto_label worker heartbeat stale ({age:.1f}s ago)'
                 if age is not None
@@ -282,7 +299,7 @@ def get_job_state(job_id: str) -> dict[str, Any] | None:
     current = get_state()
     if current.get('job_id') == job_id:
         return current
-    return job_history.load(_STATE_DIR, job_id)
+    return job_history.load(_state_dir(), job_id)
 
 
 class _Progress:
@@ -370,10 +387,10 @@ class _Progress:
 
     @property
     def cancelled(self) -> bool:
-        return _CANCEL_FLAG.exists()
+        return _cancel_flag().exists()
 
     def raise_if_cancelled(self) -> None:
-        if _CANCEL_FLAG.exists():
+        if _cancel_flag().exists():
             raise asyncio.CancelledError('auto_label run cancelled by operator')
 
 
@@ -456,17 +473,17 @@ def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]
     # operators get a clean slate. (cancel.flag would otherwise short-
     # circuit the next run at its first stage boundary.)
     with contextlib.suppress(FileNotFoundError):
-        _CANCEL_FLAG.unlink()
+        _cancel_flag().unlink()
     with contextlib.suppress(FileNotFoundError):
-        _EXIT_CODE_FILE.unlink()
+        _exit_code_file().unlink()
     with contextlib.suppress(FileNotFoundError):
-        _HEARTBEAT_FILE.unlink()
+        _heartbeat_file().unlink()
 
     # Keep the outgoing job answerable by id (GET .../status/{job_id}).
     # get_state() first so a dead run is archived with its repaired status.
     from src.services.curation.autolabel import job_history
 
-    job_history.archive(_STATE_DIR, get_state())
+    job_history.archive(_state_dir(), get_state())
 
     pipeline_path = _pipeline_import_path(pipeline_fn)
     serializable_args = _serializable(kwargs)
@@ -487,7 +504,7 @@ def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]
 
     # Drop the trigger. The worker watches for this file every
     # POLL_INTERVAL_S and claims it atomically via unlink.
-    trigger_tmp = _TRIGGER_FILE.with_suffix('.tmp')
+    trigger_tmp = _trigger_file().with_suffix('.tmp')
     trigger_tmp.write_text(
         json.dumps(
             {
@@ -498,7 +515,7 @@ def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]
             }
         )
     )
-    trigger_tmp.replace(_TRIGGER_FILE)
+    trigger_tmp.replace(_trigger_file())
     return state.to_dict()
 
 
@@ -518,109 +535,15 @@ def cancel_job() -> bool:
     if not _is_busy():
         return False
     _ensure_dir()
-    _CANCEL_FLAG.touch()
+    _cancel_flag().touch()
     return True
 
 
-def auto_label_changed_event() -> asyncio.Event:
-    """Module-level asyncio.Event signalled whenever state.json is rewritten.
-
-    SSE handlers await this. The first caller creates it (lazy init) so
-    importing this module from a non-async context still works.
-    """
-    global _changed_event  # noqa: PLW0603 - intentional module-level lazy singleton
-    if _changed_event is None:
-        _changed_event = asyncio.Event()
-    return _changed_event
-
-
-def _signal_changed() -> None:
-    """Best-effort: bump the asyncio Event if it exists. Called by the
-    inotify watcher whenever state.json mtime advances."""
-    ev = _changed_event
-    if ev is not None and not ev.is_set():
-        ev.set()
-
-
-async def watch_state_file() -> None:
-    """Long-running task: signal :func:`auto_label_changed_event`
-    whenever ``state.json`` is rewritten.
-
-    Uses inotify so there's **zero CPU when nothing is changing** — the
-    handler blocks on ``loop.add_reader`` until the kernel reports an
-    event. Designed for the FastAPI lifespan: launch with
-    ``asyncio.create_task(watch_state_file())`` and ``.cancel()`` it on
-    shutdown.
-
-    Falls back to a 1-second mtime poll if inotify isn't available (e.g.
-    running on a filesystem that doesn't support it). The poll is
-    bounded; production should always have inotify.
-    """
-    _ensure_dir()
-    # Touch the file so inotify has something to watch even before the
-    # first run.
-    if not _STATE_FILE.exists():
-        _atomic_write(asdict(_JobState()))
-
-    auto_label_changed_event()  # ensure the Event is created
-
+def state_mtime() -> float:
+    """The bound project's ``state.json`` mtime (0.0 before any run). The
+    SSE stream polls this per connection: it only ever sees its own
+    project's job, and a stat per second per open dashboard is cheap."""
     try:
-        import inotify_simple  # type: ignore[import-not-found]
-    except ImportError:
-        await _watch_state_file_poll()
-        return
-
-    loop = asyncio.get_running_loop()
-    inotify = inotify_simple.INotify()
-    # IN_CLOSE_WRITE catches the atomic-rename target; IN_MOVED_TO catches
-    # the rename itself (we write to .tmp then replace).
-    flags = (
-        inotify_simple.flags.CLOSE_WRITE
-        | inotify_simple.flags.MOVED_TO
-        | inotify_simple.flags.CREATE
-    )
-    inotify.add_watch(str(_STATE_DIR), flags)
-
-    fd_event = asyncio.Event()
-    loop.add_reader(inotify.fd, fd_event.set)
-    try:
-        while True:
-            await fd_event.wait()
-            fd_event.clear()
-            for ev in inotify.read(timeout=0):
-                if ev.name == _STATE_FILE.name:
-                    _signal_changed()
-                    break
-    except asyncio.CancelledError:
-        raise
-    finally:
-        loop.remove_reader(inotify.fd)
-        inotify.close()
-
-
-async def _watch_state_file_poll() -> None:
-    """Fallback path for systems without inotify. 1 Hz mtime poll."""
-    last_mtime = 0.0
-    while True:
-        try:
-            mtime = _STATE_FILE.stat().st_mtime
-        except FileNotFoundError:
-            mtime = 0.0
-        if mtime != last_mtime:
-            last_mtime = mtime
-            _signal_changed()
-        await asyncio.sleep(1.0)
-
-
-async def shutdown_active_run(timeout: float = 10.0) -> None:  # noqa: ARG001 — kept for lifespan compat
-    """No-op. Kept for FastAPI lifespan signature compatibility.
-
-    The auto_label pipeline now runs in a separate
-    ``curation-auto-label-worker`` container with its own lifecycle.
-    Stopping yolo-api no longer needs to (and can no longer) reach
-    across containers to cancel an in-flight run. Operators who want
-    to halt a run during an API restart should ``docker compose stop
-    curation-auto-label-worker`` first; the worker's signal handler
-    flips state.json to 'cancelled' on its way down.
-    """
-    return
+        return _state_file().stat().st_mtime
+    except FileNotFoundError:
+        return 0.0

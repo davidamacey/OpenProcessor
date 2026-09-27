@@ -95,6 +95,74 @@ def doc_to_record(doc: Mapping[str, Any]) -> ProjectRecord:
     )
 
 
+async def get_record_with_seq(
+    client: Any, slug: str
+) -> tuple[ProjectRecord | None, int | None, int | None]:
+    """The stored record plus its ``_seq_no``/``_primary_term``, for an
+    OCC-guarded write. ``None`` (with no seq/term) when the doc does not
+    exist yet."""
+    try:
+        doc = await client.get(index=projects_index(), id=_project_doc_id(slug))
+    except Exception as exc:
+        if getattr(exc, 'status_code', None) == 404 or 'NotFound' in type(exc).__name__:
+            return None, None, None
+        raise
+    if not doc.get('found', True):
+        return None, None, None
+    return doc_to_record(doc['_source']), doc.get('_seq_no'), doc.get('_primary_term')
+
+
+class RevisionConflictError(Exception):
+    """Raised by :func:`write_record` when the ``if_seq_no``/
+    ``if_primary_term`` OCC guard lost a race against another writer --
+    i.e. a second bump landed between this caller's read and its write.
+    Callers translate this into the API's 409 ``revision_conflict``
+    (never a silent overwrite; never a bare 500)."""
+
+
+def _is_conflict_exception(exc: Exception) -> bool:
+    if getattr(exc, 'status_code', None) == 409:
+        return True
+    return 'Conflict' in type(exc).__name__
+
+
+async def write_record(
+    client: Any,
+    record: ProjectRecord,
+    *,
+    if_seq_no: int | None = None,
+    if_primary_term: int | None = None,
+) -> None:
+    """Write ``record`` (create or OCC-guarded overwrite) and bump the
+    registry revision. Raises :class:`RevisionConflictError` when
+    ``if_seq_no``/``if_primary_term`` are stale -- i.e. another writer's
+    bump landed first (the storage-level race this guards against;
+    callers translate it into the API's 409 ``revision_conflict``)."""
+    from src.services.projects.bootstrap import bump_revision
+    from src.services.projects.guard import bind_registry_admin
+
+    kwargs: dict[str, Any] = {}
+    if if_seq_no is not None:
+        kwargs['if_seq_no'] = if_seq_no
+    if if_primary_term is not None:
+        kwargs['if_primary_term'] = if_primary_term
+    # The guard only lets lifecycle code write op_projects; a create has no
+    # project bound yet, so every registry write declares itself here.
+    with bind_registry_admin():
+        try:
+            await client.index(
+                index=projects_index(),
+                id=_project_doc_id(record.slug),
+                body=record_to_doc(record),
+                **kwargs,
+            )
+        except Exception as exc:
+            if _is_conflict_exception(exc):
+                raise RevisionConflictError(f'revision conflict writing {record.slug!r}') from exc
+            raise
+        await bump_revision(client)
+
+
 async def _read_revision(client: Any) -> int:
     """The ``meta:projects_revision`` counter; 0 when the doc (or the whole
     index) does not exist yet. Any other failure propagates."""
@@ -139,6 +207,17 @@ class ProjectRegistry:
         """At least one :meth:`ensure_fresh` read the registry successfully."""
         return self._refreshed
 
+    @property
+    def stale(self) -> bool:
+        """True right after the most recent :meth:`ensure_fresh` failed
+        (P1R minor 10): the snapshot's ``status`` for any project may be
+        out of date -- e.g. a project flipped ``active`` -> ``deleting``
+        by another API instance between this instance's last successful
+        refresh and now. A binder that trusts a stale ``active`` here
+        would let writes through against a project mid-delete. Cleared
+        by the next successful refresh."""
+        return self._failed_at is not None
+
     def snapshot(self) -> Mapping[str, ProjectRecord]:
         """The last-refreshed view. Cheap, sync, no I/O -- callers that
         need at-most-1s staleness should call :meth:`ensure_fresh` first."""
@@ -146,6 +225,20 @@ class ProjectRegistry:
 
     def get(self, slug: str) -> ProjectRecord | None:
         return self._by_slug.get(slug)
+
+    def active_projects(self) -> list[ProjectRecord]:
+        """Every ``active`` project (``default`` included), for workers
+        that must discover the whole fleet instead of binding one slug.
+        Archived/deleting/building/failed projects are excluded -- a
+        worker skips them entirely, the same way a request to their
+        indexes would 404/409 at the route layer."""
+        return [record for record in self.snapshot().values() if record.status == 'active']
+
+    def archived_projects(self) -> list[ProjectRecord]:
+        """Every ``archived`` project, for maintenance scripts
+        (``prune_exports.py``, ``prune_training_runs.py``) that must still
+        clean up a project's own files after it stops taking traffic."""
+        return [record for record in self.snapshot().values() if record.status == 'archived']
 
     async def ensure_fresh(self) -> None:
         """One GET of the revision counter; a ``_search`` over every
@@ -177,6 +270,17 @@ class ProjectRegistry:
             self._failed_at = time.monotonic()
             logger.warning('project_registry_refresh_failed', error=str(exc))
 
+    async def refresh_strict(self) -> None:
+        """Reload every project doc now, raising on any failure. For
+        one-shot maintenance scripts, where silently falling back to a
+        stale or ``default``-only view would skip projects unnoticed."""
+        client = self._client_factory()
+        if asyncio.iscoroutine(client):
+            client = await client
+        async with self._lock:
+            await self._refresh(client, await _read_revision(client))
+        self._failed_at = None
+
     async def _refresh(self, client: Any, current_revision: int) -> None:
         """Read every project doc, a page at a time (``search_after`` on
         the ``slug`` keyword), so the registry has no size cap."""
@@ -184,7 +288,9 @@ class ProjectRegistry:
         after: list[Any] | None = None
         while True:
             body: dict[str, Any] = {
-                'query': {'prefix': {'_id': 'project:'}},
+                # OpenSearch refuses prefix queries on _id; only project
+                # docs carry `slug` (the revision counter doc does not).
+                'query': {'exists': {'field': 'slug'}},
                 'size': _REFRESH_PAGE_SIZE,
                 'sort': [{'slug': 'asc'}],
             }

@@ -190,6 +190,8 @@ SUMMARY_KEYS = {
     'selectable',
     'is_default',
     'deletable',
+    'archivable',
+    'unarchivable',
     'revision',
     'created_at',
     'updated_at',

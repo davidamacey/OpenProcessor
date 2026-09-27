@@ -240,6 +240,22 @@ async def vlm_label_batch(
     if len(payload.crop_ids) > 64:
         raise HTTPException(status_code=400, detail='maximum 64 crop_ids per call')
 
+    reg = get_class_registry().load()
+    from src.services.curation.region_class import item_classes
+
+    labelable = item_classes(reg.classes)
+    class_names = [c.class_name for c in labelable]
+    if not class_names:
+        # A fresh project: the VLM worker already has unlabelled items to
+        # send, but there is nothing to label them as yet.
+        raise HTTPException(
+            status_code=409,
+            detail={
+                'error': 'no_classes',
+                'message': 'this project has no classes yet; add classes before VLM labeling',
+            },
+        )
+
     # Pull image_path + bbox_norm for each crop, then build ItemCrop list
     # with the LRU-thumbnail JPEG bytes (128px is enough for the VLM).
     from src.services.labeling.vlm_labeler import ItemCrop
@@ -274,8 +290,6 @@ async def vlm_label_batch(
             logger.warning('curation_vlm_thumb_failed', crop_id=crop_id, error=str(exc))
             return None
 
-    reg = get_class_registry().load()
-    class_names = [c.class_name for c in reg.classes if not c.deprecated]
     crops: list[ItemCrop] = []
     cache_hits = 0
     cache_misses = 0
@@ -339,7 +353,7 @@ async def vlm_label_batch(
     # Use the open-vocabulary path so the VLM can flag genuinely-unknown
     # items instead of silently snapping them to the wrong class.
     predictions = await labeler.label_or_propose_batch(crops, class_names)
-    name_to_id = {c.class_name: c.class_id for c in reg.classes if not c.deprecated}
+    name_to_id = {c.class_name: c.class_id for c in labelable}
     # Collect per-doc updates, then dispatch via occ_skip_on_conflict_bulk
     # so a concurrent human edit always wins.
     updates_by_id: dict[str, dict[str, Any]] = {}

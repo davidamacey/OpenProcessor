@@ -32,6 +32,7 @@ import scripts.curation.region_worker_main as worker
 import scripts.curation.worker.state as worker_state
 from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
 from src.config import get_region_fields
+from src.config.project_context import current_project
 from src.services.curation.class_write_guard import class_state_token
 from src.services.detection.cascade_detect import RegionCandidate, crop_norm_to_source_norm
 from src.services.labeling.vlm_labeler import VlmRegionVerdict
@@ -69,6 +70,7 @@ def _make_task(
 ) -> worker._ItemTask:
     """Build a fully populated ``_ItemTask`` for routing tests."""
     return worker._ItemTask(
+        project=current_project().record,
         crop_id=crop_id,
         image_path='/dev/null/never-read',
         item_bbox_norm=item_bbox,

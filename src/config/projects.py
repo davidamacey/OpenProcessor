@@ -102,8 +102,16 @@ def _project_index_prefix() -> str:
     return os.environ.get('OP_PROJECT_INDEX_PREFIX', 'op_prj_')
 
 
-def _projects_data_root() -> Path:
+def projects_data_root() -> Path:
     return Path(os.environ.get('OP_PROJECTS_DATA_ROOT', './data/projects'))
+
+
+def trainer_jobs_root() -> Path:
+    """The shared trainer volume root (``OP_TRAIN_JOBS_DIR``). Each
+    project's ``train_jobs_dir`` nests under ``<root>/projects/<slug>``;
+    trainer-global files (``.trainer_capabilities.json``) live at the
+    root itself, since one trainer serves every project."""
+    return Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
 
 
 def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
@@ -113,7 +121,7 @@ def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
     from src.config.curation import IndexRole
 
     prefix = _project_index_prefix()
-    data_root = _projects_data_root() / slug
+    data_root = projects_data_root() / slug
     indexes = {role: f'{prefix}{slug}__{role.value}' for role in IndexRole}
     # Shard folding (owner D4, projects_plan.md §2.3): every project --
     # ``default`` included, since it is now an ordinary project built by
@@ -132,13 +140,20 @@ def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
         upload_root=base.state_dir / 'projects' / slug / 'uploads',
         bakeoff_eval_root=data_root / 'bakeoff_eval',
         project_state_dir=base.state_dir / 'projects' / slug,
-        train_jobs_dir=Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs')) / 'projects' / slug,
+        train_jobs_dir=trainer_jobs_root() / 'projects' / slug,
         autolabel_dir=Path(os.environ.get('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label'))
         / 'projects'
         / slug,
         bakeoff_jobs_dir=base.state_dir / 'projects' / slug / 'bakeoff_jobs',
         mlflow_experiment=f'openprocessor-{slug}',
-        model_prefix=f'{slug}__',
+        # §5.3/§5.5: `default`'s model_prefix stays empty (not `default__`)
+        # so every model promoted before projects existed -- and every
+        # core pipeline model, which never carries a project prefix --
+        # keeps resolving as `default`'s own. This is a model-naming
+        # exception only; every OTHER resource (indexes, state dirs,
+        # class registry) still follows the ordinary per-slug convention
+        # (D-A, P1R §6.1) with no other `default` special case.
+        model_prefix='' if slug == DEFAULT_SLUG else f'{slug}__',
     )
 
 

@@ -95,5 +95,22 @@ def bind_script_project_from_env() -> ProjectRecord:
     return bind_script_project(os.environ.get('OP_CURATION_PROJECT', DEFAULT_SLUG))
 
 
+def script_project_registry(opensearch_url: str | None = None) -> ProjectRegistry:
+    """A project registry for a multi-project worker or maintenance script,
+    reading the projects index through the script's own guarded client
+    (``opensearch_url``, else ``$OPENSEARCH_URL``) rather than the API
+    process's client factory. The client lives as long as the registry."""
+    from src.services.projects.guard import make_script_opensearch
+
+    client = make_script_opensearch([opensearch_url or _default_opensearch_url()])
+    return ProjectRegistry(lambda: client)
+
+
+def only_project(records: list[ProjectRecord], slug: str | None) -> list[ProjectRecord]:
+    """``records`` restricted to ``slug`` (a worker's optional ``--project``
+    filter); all of them when ``slug`` is ``None``."""
+    return [r for r in records if slug is None or r.slug == slug]
+
+
 def _default_opensearch_url() -> str:
     return os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
