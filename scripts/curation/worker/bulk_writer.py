@@ -33,7 +33,51 @@ if TYPE_CHECKING:
 
 
 async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> tuple[int, int]:
-    """Apply each task's ``update_doc`` to OpenSearch with OCC semantics.
+    """Group ``tasks`` by their own project and flush one ``_bulk`` call
+    per project, each issued while bound to that project (projects_plan.md
+    §5.1) -- the guard rejects a call issued against project A's index
+    while project B is bound, so writes for different projects can never
+    share one bulk body.
+
+    Tasks with ``project is None`` (legacy single-project callers/tests
+    that never set one) are flushed together, unbound, exactly as
+    before.
+    """
+    from src.config.project_context import bind_project
+
+    if not tasks:
+        return 0, 0
+    by_project: dict[str, list[_ItemTask]] = {}
+    unbound: list[_ItemTask] = []
+    projects_by_slug: dict[str, Any] = {}
+    for t in tasks:
+        if t.project is None:
+            unbound.append(t)
+            continue
+        by_project.setdefault(t.project.slug, []).append(t)
+        projects_by_slug[t.project.slug] = t.project
+
+    n_written = 0
+    n_skipped = 0
+    for slug, group in by_project.items():
+        with bind_project(projects_by_slug[slug]):
+            w, s = await _bulk_update_one_project(opensearch, group)
+        n_written += w
+        n_skipped += s
+    if unbound:
+        w, s = await _bulk_update_one_project(opensearch, unbound)
+        n_written += w
+        n_skipped += s
+    return n_written, n_skipped
+
+
+async def _bulk_update_one_project(
+    opensearch: AsyncOpenSearch, tasks: list[_ItemTask]
+) -> tuple[int, int]:
+    """The original single-``_bulk``-call body of ``_bulk_update``,
+    scoped to tasks that all belong to one (already-bound) project.
+
+    A-PR3: per-doc OCC via :func:`occ_skip_on_conflict_bulk` — on a
 
     A-PR3: per-doc OCC via :func:`occ_skip_on_conflict_bulk` — on a
     seq_no conflict (concurrent human region edit), the worker skips
