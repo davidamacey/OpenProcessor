@@ -181,7 +181,9 @@ def test_label_batch_reports_no_classes_instead_of_raising() -> None:
 
     async def _run() -> dict[str, Any]:
         async with _mock_client(409, {'detail': {'error': 'no_classes'}}) as client:
-            return await vlm_worker.label_batch(client, api='http://api', crop_ids=['a'])
+            return await vlm_worker.label_batch(
+                client, api='http://api', api_prefix='/curation', slug='default', crop_ids=['a']
+            )
 
     assert asyncio.run(_run()) == {'no_classes': True}
 
@@ -194,7 +196,9 @@ def test_label_batch_still_raises_on_other_errors() -> None:
 
     async def _run() -> None:
         async with _mock_client(500, {'detail': 'boom'}) as client:
-            await vlm_worker.label_batch(client, api='http://api', crop_ids=['a'])
+            await vlm_worker.label_batch(
+                client, api='http://api', api_prefix='/curation', slug='default', crop_ids=['a']
+            )
 
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
         asyncio.run(_run())
