@@ -73,6 +73,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   test.
 
 ### Fixed
+- **W2b-finish: independent re-verification of the Opus review fix pass
+  (2026-09-27), plus merging in W2's reviewed config-store hot reload.**
+  Merged `main` (W2 config store hot reload, `op_global_configs`, P3F
+  finish passes 2-4, P3 review fixes) into `cutover/keymap`; confirmed
+  `scripts/curation/worker/{runtime.py,runner.py}` now match `main`
+  exactly (no diff), so this branch inherits W2's real per-project
+  hot-reload worker unchanged. Then independently reproduced every one
+  of `w2b_review_2026-09-27.md`'s own probes against commit `f418a357`
+  ("W2b Opus review fixes -- B1/B2/B3 blockers + majors") instead of
+  trusting its commit message -- B1 (atomic unbind-then-save
+  rollback), B2 (all-or-nothing keymap clone), B3
+  (`get_active_region_profile()`-backed `available`), M1 (reserved-
+  hotkey `actions[]` from the project's own overrides), M2 (canonical
+  combo grammar, rejects `shift+ctrl+z`/`ctrl+ctrl+z`/`alt+meta+x`), M3
+  (`keymap_class_hotkey_conflict` as a real `ValidationIssue`, folded
+  into `POST /keymap/validate`'s `ok`), M4 (validate uses PUT's replace
+  semantics), M5 (`If-Match: "keymap:N"` accepted), M6 (`save_keymap_doc`
+  calls the real atomic `bump_config_revision`, no parallel bump path)
+  and M7 (`test_put_keymap_422_on_collision` implemented, not a `pass`
+  stub; `keymap_combo_invalid`/`keymap_focus_key`/
+  `keymap_class_hotkey_conflict` all have real validator tests; the
+  alpha/beta keymap and class-hotkey isolation probes are permanent
+  `leak_env` tests) were all genuinely fixed, not just claimed. Found
+  and fixed two real gaps the merge with `main` surfaced that the
+  original fix pass's narrower test run never caught:
+  - `tests/projects/conftest.py`'s `FakeLifecycleOpenSearch.update()`
+    (used by the project-lifecycle/clone unit tests, a different fake
+    from `tests/curation/_fake_config_opensearch.py`'s
+    `FakeConfigOpenSearch`) had never been taught M6's painless-script
+    `bump_config_revision` shape, so any `create_project(...,
+    clone_settings_from=...)` that clones the `keymap` axis raised
+    `TypeError('unexpected keyword argument retry_on_conflict')`. Taught
+    it the same real create-vs-bump distinction the other fake already
+    had (see M6's own guidance: the fix belongs in the fakes, not a
+    parallel production path). Red-then-green:
+    `test_create_with_bad_clone_source_burns_no_slug_and_leaves_no_indexes`
+    failed with that `TypeError` before this fix.
+  - `tests/projects/test_clone_settings.py`'s
+    `test_clone_keymap_axis_copies_overrides_and_reports_class_conflicts`
+    asserted the pre-B2 partial-copy behavior (drop only the
+    conflicting action, copy the rest) -- stale since B2's fix (landed
+    in the same `f418a357` commit) made the axis all-or-nothing.
+    Renamed to `test_clone_keymap_axis_all_or_nothing_reports_class_conflicts`,
+    fixed its assertion, and added a sibling
+    `test_clone_keymap_axis_copies_overrides_when_no_conflicts` for the
+    clean-copy case its old docstring described but never actually
+    exercised post-B2.
+  - Resolved the `main` merge's textual conflicts (`CHANGELOG.md` --
+    both sides' distinct entries kept; `contracts/openapi/curation.json`
+    and `_config_common_models.py`'s shared `ErrorCode` Literal --
+    both sides' new codes kept; `projects.py`'s `clone_settings_route`
+    -- now both publishes `project.updated` (`main`) and returns
+    `keymap_clone_conflicts` (this branch); `test_cross_project_leak.py`
+    -- kept `main`'s more correct fake `_update` handler, which
+    distinguishes a fresh upsert from an existing doc's script-driven
+    increment matching real OpenSearch upsert semantics, over this
+    branch's own less-correct version; `test_project_lifecycle_routes.py`
+    -- kept both branches' new tests).
+- **Review focus-item #5: create-time keymap clone conflicts are now a
+  `ProjectWarning`, not just a log line.** `create_project`'s
+  `clone_settings_from` clone could silently drop a keymap override on
+  a class-hotkey conflict, logging
+  `project_create_keymap_clone_conflicts` but leaving the 201 response's
+  `warnings` empty (`ProjectLifecycleResponse.keymap_clone_conflicts` is
+  the standalone `POST clone_settings` route's field, always `[]` on
+  create). `create_project` now appends one `ProjectWarning` (code
+  `keymap_clone_conflict`) per dropped conflict to the `(record,
+  warnings)` pair every caller already unpacks. Red-then-green:
+  `test_create_project_surfaces_keymap_clone_conflicts_as_warnings`
+  (new) failed with an empty `warnings` list before this change.
 - **W2-finish review fix-on-fix pass (2026-09-27), including a
   fix-on-fix confirmation re-review.** Addresses the independent review
   of the W2-finish pass (`w2_finish_review_2026-09-27.md`), which came
