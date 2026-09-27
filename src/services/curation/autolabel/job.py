@@ -59,13 +59,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import os
 import time
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 STAGES: tuple[str, ...] = (
@@ -77,13 +79,37 @@ STAGES: tuple[str, ...] = (
 )
 
 
-_STATE_DIR = Path(os.environ.get('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label'))
-_STATE_FILE = _STATE_DIR / 'state.json'
-_CANCEL_FLAG = _STATE_DIR / 'cancel.flag'
-_RUNNING_LOCK = _STATE_DIR / 'running.lock'
-_EXIT_CODE_FILE = _STATE_DIR / 'exit_code'
-_TRIGGER_FILE = _STATE_DIR / 'trigger.json'
-_HEARTBEAT_FILE = _STATE_DIR / 'heartbeat'
+def _state_dir() -> Path:
+    # The bound project's own autolabel_dir -- resolved fresh on every
+    # call, never cached at import time (PROJECT_SCOPED_FIELDS).
+    from src.config.curation import get_curation_config
+
+    return get_curation_config().autolabel_dir
+
+
+def _state_file() -> Path:
+    return _state_dir() / 'state.json'
+
+
+def _cancel_flag() -> Path:
+    return _state_dir() / 'cancel.flag'
+
+
+def _running_lock() -> Path:
+    return _state_dir() / 'running.lock'
+
+
+def _exit_code_file() -> Path:
+    return _state_dir() / 'exit_code'
+
+
+def _trigger_file() -> Path:
+    return _state_dir() / 'trigger.json'
+
+
+def _heartbeat_file() -> Path:
+    return _state_dir() / 'heartbeat'
+
 
 # How stale the worker's heartbeat must be before we declare the worker
 # dead and stamp 'vanished' on a 'running' state. The worker touches
@@ -135,21 +161,21 @@ class _JobState:
 
 
 def _ensure_dir() -> None:
-    _STATE_DIR.mkdir(parents=True, exist_ok=True)
+    _state_dir().mkdir(parents=True, exist_ok=True)
 
 
 def _atomic_write(payload: dict[str, Any]) -> None:
     """Write state.json via temp + rename so readers never see a partial file."""
     _ensure_dir()
-    tmp = _STATE_FILE.with_suffix('.tmp')
+    tmp = _state_file().with_suffix('.tmp')
     tmp.write_text(json.dumps(payload, default=str))
-    tmp.replace(_STATE_FILE)
+    tmp.replace(_state_file())
 
 
 def _read_state() -> _JobState:
     """Load the on-disk state. Returns a default idle state if missing."""
     try:
-        raw = json.loads(_STATE_FILE.read_text())
+        raw = json.loads(_state_file().read_text())
     except (FileNotFoundError, json.JSONDecodeError):
         return _JobState()
     state = _JobState()
@@ -169,7 +195,7 @@ def _heartbeat_age() -> float | None:
     a 'running' state should be repaired to 'failed'.
     """
     try:
-        mtime = _HEARTBEAT_FILE.stat().st_mtime
+        mtime = _heartbeat_file().stat().st_mtime
     except (FileNotFoundError, PermissionError, OSError):
         return None
     return max(0.0, time.time() - mtime)
@@ -188,7 +214,7 @@ def _is_busy() -> bool:
     'busy' — a second :func:`start_job` while a trigger sits unread
     would otherwise stomp on it.
     """
-    if _TRIGGER_FILE.exists():
+    if _trigger_file().exists():
         return True
     age = _heartbeat_age()
     if age is None:
@@ -203,11 +229,11 @@ def _reap_stale_artifacts() -> None:
     Safe to call concurrently — uses suppressed FileNotFoundError.
     """
     with contextlib.suppress(FileNotFoundError):
-        _RUNNING_LOCK.unlink()
+        _running_lock().unlink()
     with contextlib.suppress(FileNotFoundError):
-        _CANCEL_FLAG.unlink()
+        _cancel_flag().unlink()
     with contextlib.suppress(FileNotFoundError):
-        _HEARTBEAT_FILE.unlink()
+        _heartbeat_file().unlink()
 
 
 def reconcile_orphaned_jobs() -> bool:
@@ -230,13 +256,13 @@ def reconcile_orphaned_jobs() -> bool:
     lifespan, 'interrupted' is what a caller normally observes for a
     heartbeat-stale run recovered at startup.
     """
-    if _TRIGGER_FILE.exists():
+    if _trigger_file().exists():
         return False
     from src.services.curation.job_reconcile import reconcile_stale_running
 
     return reconcile_stale_running(
-        _STATE_FILE,
-        _HEARTBEAT_FILE,
+        _state_file(),
+        _heartbeat_file(),
         stale_s=_HEARTBEAT_STALE_S,
         error_prefix='auto_label worker',
     )
@@ -258,7 +284,7 @@ def get_state() -> dict[str, Any]:
     state = _read_state()
     if state.status == 'running':
         age = _heartbeat_age()
-        if not _TRIGGER_FILE.exists() and (age is None or age > _HEARTBEAT_STALE_S):
+        if not _trigger_file().exists() and (age is None or age > _HEARTBEAT_STALE_S):
             stale_msg = (
                 f'auto_label worker heartbeat stale ({age:.1f}s ago)'
                 if age is not None
@@ -282,7 +308,7 @@ def get_job_state(job_id: str) -> dict[str, Any] | None:
     current = get_state()
     if current.get('job_id') == job_id:
         return current
-    return job_history.load(_STATE_DIR, job_id)
+    return job_history.load(_state_dir(), job_id)
 
 
 class _Progress:
@@ -370,10 +396,10 @@ class _Progress:
 
     @property
     def cancelled(self) -> bool:
-        return _CANCEL_FLAG.exists()
+        return _cancel_flag().exists()
 
     def raise_if_cancelled(self) -> None:
-        if _CANCEL_FLAG.exists():
+        if _cancel_flag().exists():
             raise asyncio.CancelledError('auto_label run cancelled by operator')
 
 
@@ -456,17 +482,17 @@ def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]
     # operators get a clean slate. (cancel.flag would otherwise short-
     # circuit the next run at its first stage boundary.)
     with contextlib.suppress(FileNotFoundError):
-        _CANCEL_FLAG.unlink()
+        _cancel_flag().unlink()
     with contextlib.suppress(FileNotFoundError):
-        _EXIT_CODE_FILE.unlink()
+        _exit_code_file().unlink()
     with contextlib.suppress(FileNotFoundError):
-        _HEARTBEAT_FILE.unlink()
+        _heartbeat_file().unlink()
 
     # Keep the outgoing job answerable by id (GET .../status/{job_id}).
     # get_state() first so a dead run is archived with its repaired status.
     from src.services.curation.autolabel import job_history
 
-    job_history.archive(_STATE_DIR, get_state())
+    job_history.archive(_state_dir(), get_state())
 
     pipeline_path = _pipeline_import_path(pipeline_fn)
     serializable_args = _serializable(kwargs)
@@ -487,7 +513,7 @@ def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]
 
     # Drop the trigger. The worker watches for this file every
     # POLL_INTERVAL_S and claims it atomically via unlink.
-    trigger_tmp = _TRIGGER_FILE.with_suffix('.tmp')
+    trigger_tmp = _trigger_file().with_suffix('.tmp')
     trigger_tmp.write_text(
         json.dumps(
             {
@@ -498,7 +524,7 @@ def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]
             }
         )
     )
-    trigger_tmp.replace(_TRIGGER_FILE)
+    trigger_tmp.replace(_trigger_file())
     return state.to_dict()
 
 
@@ -518,7 +544,7 @@ def cancel_job() -> bool:
     if not _is_busy():
         return False
     _ensure_dir()
-    _CANCEL_FLAG.touch()
+    _cancel_flag().touch()
     return True
 
 
@@ -559,7 +585,7 @@ async def watch_state_file() -> None:
     _ensure_dir()
     # Touch the file so inotify has something to watch even before the
     # first run.
-    if not _STATE_FILE.exists():
+    if not _state_file().exists():
         _atomic_write(asdict(_JobState()))
 
     auto_label_changed_event()  # ensure the Event is created
@@ -579,7 +605,7 @@ async def watch_state_file() -> None:
         | inotify_simple.flags.MOVED_TO
         | inotify_simple.flags.CREATE
     )
-    inotify.add_watch(str(_STATE_DIR), flags)
+    inotify.add_watch(str(_state_dir()), flags)
 
     fd_event = asyncio.Event()
     loop.add_reader(inotify.fd, fd_event.set)
@@ -588,7 +614,7 @@ async def watch_state_file() -> None:
             await fd_event.wait()
             fd_event.clear()
             for ev in inotify.read(timeout=0):
-                if ev.name == _STATE_FILE.name:
+                if ev.name == _state_file().name:
                     _signal_changed()
                     break
     except asyncio.CancelledError:
@@ -603,7 +629,7 @@ async def _watch_state_file_poll() -> None:
     last_mtime = 0.0
     while True:
         try:
-            mtime = _STATE_FILE.stat().st_mtime
+            mtime = _state_file().stat().st_mtime
         except FileNotFoundError:
             mtime = 0.0
         if mtime != last_mtime:
