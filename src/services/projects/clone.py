@@ -168,7 +168,13 @@ async def _clone_activations(
             from src.config import get_curation_config as _get_cfg
 
             source_index = _get_cfg().configs_index
-            activation = await get_activation(client, source_index, axis)
+            try:
+                activation = await get_activation(client, source_index, axis)
+            except (NotFoundError, KeyError):
+                # A low-fidelity test double that answers a missing doc
+                # with a "found: false" shape instead of raising -- same
+                # "nothing to clone" outcome as a real 404.
+                activation = None
             if not activation or not activation.get('name'):
                 continue
             name = activation['name']
