@@ -470,6 +470,14 @@
             "title": "Context Class Ids",
             "type": "array"
           },
+          "context_class_names": {
+            "description": "Registry names for context_class_ids, same order/length, resolved by id lookup; an entry is the id's string form when it's no longer in the registry",
+            "items": {
+              "type": "string"
+            },
+            "title": "Context Class Names",
+            "type": "array"
+          },
           "default": {
             "title": "Default",
             "type": "boolean"
@@ -534,6 +542,7 @@
           "default_backend",
           "triton_model",
           "context_class_ids",
+          "context_class_names",
           "baselines_path"
         ],
         "title": "BakeoffProfileRow",
@@ -1385,6 +1394,21 @@
             "description": "{\"<model class id>\": <eval class id>}; null = matched by name in the evaluator",
             "title": "Model To Eval"
           },
+          "model_to_eval_names": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "{\"<model class id>\": \"<eval class name>\"}; same keys as model_to_eval, paired by name (never by raw index) so a consumer never has to re-derive the name from the eval class id; null under the same condition as model_to_eval",
+            "title": "Model To Eval Names"
+          },
           "not_covered_eval_classes": {
             "items": {
               "$ref": "#/components/schemas/NotCoveredClass"
@@ -1410,6 +1434,7 @@
         "required": [
           "method",
           "model_to_eval",
+          "model_to_eval_names",
           "unmapped_model_classes",
           "not_covered_eval_classes",
           "warnings"
@@ -2646,12 +2671,25 @@
             ],
             "description": "Class-registry id (inverse of class_registry.json export_id_map); null when the export has no registry mapping for it",
             "title": "Registry Class Id"
+          },
+          "registry_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Live registry name for registry_class_id, resolved by id lookup, never assumed equal to the eval dataset name; null when registry_class_id is null or no longer present in the registry (e.g. deleted, not merely deprecated)",
+            "title": "Registry Class Name"
           }
         },
         "required": [
           "eval_class_id",
           "name",
           "registry_class_id",
+          "registry_class_name",
           "n_objects",
           "n_images"
         ],
@@ -5835,6 +5873,7 @@
         "properties": {
           "architecture": {
             "default": "yolo26",
+            "description": "One of ('yolo11', 'yolo26', 'yolov5_objectness').",
             "title": "Architecture",
             "type": "string"
           },
@@ -6031,9 +6070,15 @@
             "type": "integer"
           },
           "validated": {
-            "default": 0,
-            "title": "Validated",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validated"
           }
         },
         "title": "ProjectCounts",
@@ -8120,6 +8165,17 @@
             ],
             "title": "Job Id"
           },
+          "mlflow_experiment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Experiment"
+          },
           "mlflow_run_name": {
             "anyOf": [
               {
@@ -8162,6 +8218,28 @@
             ],
             "title": "Profile",
             "type": "string"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "project_export_root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Export Root"
           },
           "registry_sha": {
             "anyOf": [
@@ -9292,7 +9370,7 @@
   "paths": {
     "/curation/events": {
       "get": {
-        "description": "SSE stream of global events only (``project: null``): project\nlifecycle (``project.*``), VLM-registry ``config.changed`` and\n``combine.*``. A ``combine.*`` event names the project it builds in\n``target``. No project's own events are ever delivered here.",
+        "description": "SSE stream of global events only (``project: null``): project\nlifecycle (``project.*``) and ``combine.*`` (``GLOBAL_EVENT_PREFIXES``).\nA ``combine.*`` event names the project it builds in ``target``. No\nproject's own events are ever delivered here; a project's config\nchanges (``config.changed``) ride that project's own stream.",
         "operationId": "global_events_curation_events_get",
         "parameters": [
           {
@@ -13250,7 +13328,7 @@
     },
     "/curation/projects/{project}/events": {
       "get": {
-        "description": "SSE stream of advisory crop-state events for the bound project,\nplus every global (``project: null``) event.\n\nThe connection stays open until the client disconnects. A heartbeat\ncomment line is sent every 15s so reverse-proxies don't kill the\nsocket. Subscribers each get their own bounded queue (capped at\n1000 events; oldest drops on overflow — events are advisory).",
+        "description": "SSE stream of advisory crop-state events for the bound project\nonly (global ``project: null`` events go to ``{api}/events``).\n\nThe connection stays open until the client disconnects. A heartbeat\ncomment line is sent every 15s so reverse-proxies don't kill the\nsocket. Subscribers each get their own bounded queue (capped at\n1000 events; oldest drops on overflow — events are advisory).",
         "operationId": "curation_events_curation_projects__project__events_get",
         "parameters": [
           {
@@ -13384,7 +13462,7 @@
     },
     "/curation/projects/{project}/events/stats": {
       "get": {
-        "description": "Ops counters: subscribers, events_published, events_dropped, plus\nthe active ``bus`` (``file``/``process``) and its ``log_path``.",
+        "description": "Ops counters for the bound project's stream: its subscribers and\npublishes, plus the hub's ``events_dropped``, active ``bus``\n(``file``/``process``) and ``log_path``.",
         "operationId": "curation_events_stats_curation_projects__project__events_stats_get",
         "parameters": [
           {
@@ -15371,7 +15449,7 @@
     },
     "/curation/projects/{project}/pipeline/events": {
       "get": {
-        "description": "Server-sent events stream for the curation dashboard.\n\nReplaces a ``GET /curation/stats/dataset`` polling loop. One open\nHTTP connection per dashboard tab; the server pushes:\n\n* ``snapshot`` (on connect) — current ``state.json`` plus a one-shot\n  dataset aggregation, so the client renders without any additional\n  REST call.\n* ``state`` — whenever ``auto_label`` state changes (stage\n  transitions, progress advances, terminal status). Driven by the\n  inotify watcher in :func:`auto_label_job.watch_state_file`; zero\n  CPU when idle.\n* ``stats`` — refreshed dataset aggregation. Emitted at auto_label\n  stage boundaries AND on a periodic timer (``STATS_REFRESH_SECONDS``)\n  so the dashboard counts (unlabeled / pending_detection /\n  pending_verification) keep ticking while the detection worker\n  drains the queue independent of auto_label. Frontends that only\n  care about pipeline status can ignore these.\n* heartbeat comment frame every 15 s so reverse proxies don't reap\n  the connection. This is the only fixed-rate traffic on the\n  channel.\n\nThe dashboard consumes this with ``new EventSource(url)`` and\nswitches on ``ev.type`` (snapshot | state | stats).",
+        "description": "Server-sent events stream for the curation dashboard.\n\nReplaces a ``GET /curation/stats/dataset`` polling loop. One open\nHTTP connection per dashboard tab; the server pushes:\n\n* ``snapshot`` (on connect) — current ``state.json`` plus a one-shot\n  dataset aggregation, so the client renders without any additional\n  REST call.\n* ``state`` — whenever ``auto_label`` state changes (stage\n  transitions, progress advances, terminal status), noticed by a 1 s\n  poll of the bound project's ``state.json`` mtime.\n* ``stats`` — refreshed dataset aggregation. Emitted at auto_label\n  stage boundaries AND on a periodic timer (``STATS_REFRESH_SECONDS``)\n  so the dashboard counts (unlabeled / pending_detection /\n  pending_verification) keep ticking while the detection worker\n  drains the queue independent of auto_label. Frontends that only\n  care about pipeline status can ignore these.\n* heartbeat comment frame every 15 s so reverse proxies don't reap\n  the connection. This is the only fixed-rate traffic on the\n  channel.\n\nThe dashboard consumes this with ``new EventSource(url)`` and\nswitches on ``ev.type`` (snapshot | state | stats).",
         "operationId": "pipeline_events_curation_projects__project__pipeline_events_get",
         "parameters": [
           {
@@ -15459,7 +15537,7 @@
     },
     "/curation/projects/{project}/probe/run": {
       "post": {
-        "description": "Start a probe pass from a finished training run's export.\n\n``409`` when: the referenced training job isn't finished or has no\nexported checkpoint, or a probe job is already running. GPU claim\n(when ``gpu`` is given) goes through the same arbiter\n``POST /train/start`` uses; a claim failure is also ``409`` (never\nsilent -- see ``src.services.curation.probe_job``).",
+        "description": "Start a probe pass from a finished training run's export.\n\n``409`` when: the referenced training job isn't finished or has no\nexported checkpoint, or a probe job is already running. ``422`` when\n``architecture`` is outside\n:data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`. GPU\nclaim (when ``gpu`` is given) goes through the same arbiter\n``POST /train/start`` uses; a claim failure is also ``409`` (never\nsilent -- see ``src.services.curation.probe_job``).",
         "operationId": "probe_run_curation_projects__project__probe_run_post",
         "parameters": [
           {

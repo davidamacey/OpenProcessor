@@ -17,9 +17,10 @@
  * See docs/design/test-audit-2026-09-24.md recommendation 5 and CLAUDE.md's
  * "Development" section.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { createServer } from 'node:net';
+import { availableParallelism, homedir } from 'node:os';
 import { join } from 'node:path';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -82,5 +83,79 @@ if (isLive) {
   );
 }
 
-console.log(`[test:e2e] running pytest ${target} …`);
-run(VENV_PYTEST, pytestArgs);
+if (isLive || process.env.E2E_APP_URL) {
+  console.log(`[test:e2e] running pytest ${target} …`);
+  run(VENV_PYTEST, pytestArgs);
+} else {
+  // Build and serve once here, then fan the stubbed suite out across xdist
+  // workers. Left to conftest's session fixture, every worker would run its
+  // own build and preview server. Every test stubs its own page, so the
+  // tests share nothing but this static server.
+  console.log('[test:e2e] building …');
+  run('npm', ['run', '-s', 'build']);
+  const port = await freePort();
+  const preview = spawn(
+    'npx',
+    ['vite', 'preview', '--port', String(port), '--strictPort'],
+    {
+      cwd: ROOT,
+      stdio: 'ignore',
+    },
+  );
+  const stop = () => preview.kill('SIGTERM');
+  process.on('exit', stop);
+  process.on('SIGINT', () => process.exit(130));
+  const url = `http://localhost:${port}`;
+  await waitForServer(url, preview);
+  const workers =
+    process.env.E2E_WORKERS ??
+    String(Math.min(6, Math.max(1, Math.floor(availableParallelism() / 2))));
+  console.log(
+    `[test:e2e] running pytest ${target} with ${workers} workers against ${url} …`,
+  );
+  const res = spawnSync(
+    VENV_PYTEST,
+    [...pytestArgs, '-n', workers, '--dist', 'loadfile'],
+    {
+      stdio: 'inherit',
+      cwd: ROOT,
+      env: { ...process.env, E2E_APP_URL: url },
+    },
+  );
+  stop();
+  process.exit(res.status ?? 1);
+}
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const srv = createServer();
+    srv.once('error', reject);
+    srv.listen(0, () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+}
+
+async function waitForServer(url, proc, timeoutMs = 90_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (proc.exitCode !== null) {
+      console.error(`[test:e2e] vite preview exited early (code ${proc.exitCode})`);
+      process.exit(1);
+    }
+    try {
+      await fetch(url);
+      // One throwaway request so the first test doesn't pay the static
+      // handler's first-request cost against its own timeout.
+      await fetch(url);
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  console.error(
+    `[test:e2e] vite preview did not come up within ${timeoutMs / 1000}s at ${url}`,
+  );
+  process.exit(1);
+}

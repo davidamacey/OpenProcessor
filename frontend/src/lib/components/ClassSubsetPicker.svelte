@@ -103,6 +103,7 @@
       setSelected(next);
       return;
     }
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local set mutated then immediately spread into an array and discarded; never stored in reactive state
     const cur = new Set(selected ?? []);
     if (cur.has(id)) cur.delete(id);
     else cur.add(id);

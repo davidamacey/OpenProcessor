@@ -86,6 +86,7 @@ export interface StrategyBar {
 
 export function createStrategyBar(opts: StrategyBarOptions = {}): StrategyBar {
   const defaultId = opts.defaultId ?? 'default';
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- immutable lookup set built once from options, only ever read via .has()
   const overlayIds = new Set(opts.overlayIds ?? []);
 
   let sort = $state<string>(defaultId);

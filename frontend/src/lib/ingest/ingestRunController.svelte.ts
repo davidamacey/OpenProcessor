@@ -114,6 +114,7 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
   const concurrency = deps.concurrency ?? 2;
 
   let runOpts: IngestRunStartOpts | null = null;
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- internal id->file lookup, reassigned wholesale (never mutated in place) and never read reactively by a template
   let filesById = new Map<string, IngestFile>();
   let queue: Chunk[] = [];
   let cursor = 0;
@@ -147,8 +148,10 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
 
   async function runPrefilter(files: IngestFile[]): Promise<IngestFile[]> {
     if (runOpts!.skipLookup) return files;
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local lookup map consumed synchronously within this function, never stored in reactive state
     const idToFile = new Map(files.map((f) => [identifierFor(f), f]));
     const idChunks = chunkForLookup([...idToFile.keys()], deps.config.pathLookupMax);
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local lookup set consumed synchronously within this function, never stored in reactive state
     const known = new Set<string>();
     for (const chunk of idChunks) {
       try {
@@ -198,6 +201,7 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
     // For an upload result `image_path` is the server-persisted path, not
     // the client identifier — the identifier this controller sent
     // (`image_paths` form field) comes back as `source_identifier`.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local lookup map consumed synchronously within this function, never stored in reactive state
     const byIdentifier = new Map(
       res.results
         .filter((r) => r.source_identifier != null)
@@ -397,6 +401,7 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
       errorReason = null;
       Object.assign(totals, emptyTotals());
       results.clear();
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- see filesById declaration above
       filesById = new Map(files.map((f) => [f.id, f]));
       abortController = new AbortController();
 

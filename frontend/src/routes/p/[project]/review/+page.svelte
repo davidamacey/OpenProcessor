@@ -429,6 +429,7 @@
   // it would sail straight back into the queue. Entries come back out on
   // rollback and on undo-restore. Not $state: only loadMore reads it, and
   // that read is inside an async callback, never in a reactive context.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately not reactive, see the comment above: only read inside an async callback, never in a reactive context
   const handledIds = new Set<string>();
 
   // Queue action controller (assign / discard / skip / undo) — extracted

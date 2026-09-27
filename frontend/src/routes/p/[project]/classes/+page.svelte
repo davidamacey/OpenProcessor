@@ -79,6 +79,7 @@
   const allClasses = $derived(classesStore.classes);
 
   const groups = $derived.by(() => {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local set built and consumed within this computation, never stored in reactive state (only the resulting sorted array is)
     const set = new Set<string>();
     for (const c of allClasses) {
       const g = c.group ?? '';

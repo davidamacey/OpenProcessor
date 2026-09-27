@@ -130,6 +130,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
   // Distinct sub-cluster ids present in the loaded regions, sorted lexically so
   // "9a","9aa","9ab"… land in human-expected order.
   const subclusterIds = $derived.by(() => {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
     const set = new Set<string>();
     for (const p of pager.items)
       if (p.region_cluster_subid) set.add(p.region_cluster_subid);
@@ -138,6 +139,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
 
   // Per-subid counts for the separator-header labels ('__none__' = unrefined).
   const subCounts = $derived.by(() => {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
     const m = new Map<string, number>();
     for (const p of pager.items) {
       const k = p.region_cluster_subid ?? '__none__';
@@ -162,6 +164,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
   const groups = $derived.by(
     (): { key: string; label: string; items: RegionBrowseItem[] }[] => {
       if (!groupBySubid) return [{ key: '__all__', label: '', items: pager.items }];
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
       const byKey = new Map<string, RegionBrowseItem[]>();
       for (const p of pager.items) {
         const sub = p.region_cluster_subid ?? '__none__';
@@ -429,6 +432,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
       // Render exactly what the server wrote. `items` covers every crop
       // actually updated; conflicted/invalid ids are left untouched here
       // and reported in the toast below.
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
       const byId = new Map(res.items.map((p) => [p.crop_id, p]));
       pager.items = pager.items.map((p) => byId.get(p.crop_id) ?? p);
       // M6: Z reverses this bulk status write server-side — the server's
@@ -506,6 +510,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
    */
   function mergeUndoneItems(crops: Crop[]): void {
     if (crops.length === 0) return;
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
     const byId = new Map(crops.map((c) => [c.id, c]));
     pager.items = pager.items.map((p) => {
       const restored = byId.get(p.crop_id);

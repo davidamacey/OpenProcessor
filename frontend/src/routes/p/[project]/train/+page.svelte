@@ -861,6 +861,7 @@
   // N-classes × M-cohorts request storm): a group's cohort definitions
   // AND counts load once, the first time its header scrolls into the
   // viewport, instead of every group firing requests on mount.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- one-shot load guard, never read reactively by a template/derived
   const groupCountsLoaded = new Set<number>();
   function lazyLoadGroupCounts(node: HTMLElement, group: CohortGroup) {
     const observer = new IntersectionObserver(

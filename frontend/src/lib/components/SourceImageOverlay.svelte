@@ -12,6 +12,7 @@
   // projects would show another project's cached context. Not evicted —
   // bounded by "crops a human actually opened this session", which is
   // small.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- module-level promise cache, never read reactively by a template/derived; plain Map avoids needless per-entry proxy overhead
   const contextCache = new Map<string, Promise<CropContextResponse>>();
 
   function cacheKey(cropId: string): string {

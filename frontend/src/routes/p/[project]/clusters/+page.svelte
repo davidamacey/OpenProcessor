@@ -3,6 +3,7 @@
   import { projectHref } from '$lib/projectPaths';
   import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
+  import { SvelteMap } from 'svelte/reactivity';
   import { page } from '$app/state';
   import {
     ApiError,
@@ -130,6 +131,7 @@
   //     URL/filter-driven reload effects below.
   // One controller per slot, kept for the page's lifetime so a slot's
   // gallery filters survive switching to another class and back.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- memoization cache of controller instances, kept for the page's lifetime but never read reactively by a template/derived
   const galleriesBySlot = new Map<string, SlotGalleryController>();
   function galleryFor(slot: SlotSpec): SlotGalleryController {
     let g = galleriesBySlot.get(slot.key);
@@ -293,11 +295,10 @@
   // result's cluster_id isn't in that map (e.g. the grid was itself
   // filtered by class), fall back to one additional unfiltered call
   // rather than showing a blank badge.
-  let clusterMetaMap = $state(new Map<number, Cluster>());
+  const clusterMetaMap = new SvelteMap<number, Cluster>();
   $effect(() => {
-    const m = new Map<number, Cluster>();
-    for (const c of clusterPager.items) m.set(c.id, c);
-    clusterMetaMap = m;
+    clusterMetaMap.clear();
+    for (const c of clusterPager.items) clusterMetaMap.set(c.id, c);
   });
   async function ensureClusterMeta(ids: number[]): Promise<void> {
     const missing = ids.filter((id) => !clusterMetaMap.has(id));
@@ -306,9 +307,7 @@
       // Badge lookup only reads dominant_class_name/purity/etc — no
       // representatives needed, so skip that window entirely (D-4).
       const res = await getClusters({ representatives_limit: 0 });
-      const m = new Map(clusterMetaMap);
-      for (const c of res.items) m.set(c.id, c);
-      clusterMetaMap = m;
+      for (const c of res.items) clusterMetaMap.set(c.id, c);
     } catch (e) {
       toastStore.warn(`Could not load cluster info for badges: ${(e as Error).message}`);
     }
@@ -687,6 +686,7 @@
         const results = await Promise.allSettled(
           ids.map((id) => getClusters({ cluster_id: id, representatives_limit: 1 })),
         );
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local merge lookup consumed synchronously within this call, never stored in reactive state
         const byId = new Map<number, Cluster>();
         for (const r of results) {
           if (r.status === 'fulfilled') {
