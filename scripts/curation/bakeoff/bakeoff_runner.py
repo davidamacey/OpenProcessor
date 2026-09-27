@@ -381,20 +381,41 @@ def run_job(spec: dict[str, Any]) -> dict[str, Any]:
     return finish('done')
 
 
+def _pending_job_files(jobs_dir: Path) -> list[Path]:
+    """The default project's ``*.job.json`` plus every other project's own
+    bake-off job dir (docs/design/openprocessor_internal/projects_plan.md
+    §5.3). ``jobs_dir`` is the default project's ``bakeoff_jobs_dir``
+    (``<state_dir>/bakeoff_jobs``); a non-default project's is
+    ``<state_dir>/projects/<slug>/bakeoff_jobs`` (see
+    ``src.config.projects.resources_for_new``) -- a sibling of
+    ``jobs_dir.parent`` (``<state_dir>/projects/*/bakeoff_jobs``), not a
+    subdirectory of ``jobs_dir`` itself, so the two globs are separate
+    patterns rather than one recursive one. Sorted by mtime across both so
+    one project's queue can't starve another's (FIFO, one job at a time,
+    matching the trainer's cross-project fairness)."""
+    project_dirs_glob = jobs_dir.parent / 'projects' / '*' / 'bakeoff_jobs'
+    candidates = list(jobs_dir.glob('*.job.json')) + list(
+        project_dirs_glob.parent.glob('*/bakeoff_jobs/*.job.json')
+    )
+    return sorted(candidates, key=lambda p: p.stat().st_mtime)
+
+
 def _watch(jobs_dir: Path, poll: float) -> int:
     jobs_dir.mkdir(parents=True, exist_ok=True)
     done_dir = jobs_dir / 'done'
     done_dir.mkdir(exist_ok=True)
     print(f'bakeoff_runner watching {jobs_dir} (poll {poll}s)', flush=True)
     while True:
-        for job_file in sorted(jobs_dir.glob('*.job.json')):
+        for job_file in _pending_job_files(jobs_dir):
+            job_done_dir = job_file.parent / 'done'
             try:
                 spec = json.loads(job_file.read_text(encoding='utf-8'))
                 print(f'running job {job_file.name}', flush=True)
                 run_job(spec)
             except Exception as exc:  # keep the watcher alive on a bad job
                 print(f'job {job_file.name} failed: {exc}', flush=True)
-            job_file.rename(done_dir / job_file.name)
+            job_done_dir.mkdir(exist_ok=True)
+            job_file.rename(job_done_dir / job_file.name)
         time.sleep(poll)
 
 

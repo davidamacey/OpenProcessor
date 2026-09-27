@@ -4,10 +4,10 @@ yolo-api pins an older Ultralytics release and cannot load every model
 family the harness scores, so it does NOT run the comparison itself. It
 resolves the request (eval datasets, training runs, class mappings; see
 ``src/services/curation/bakeoff_jobs.py``) into a ``<job_id>.job.json`` in
-``JOBS_DIR``, which the evaluator container watches. The evaluator scores
+``_jobs_dir()``, which the evaluator container watches. The evaluator scores
 every model on every dataset's frozen test split and writes ``status.json``,
 ``<dataset dir>/comparison.json`` and ``matrix.json`` under
-``OUT_DIR/<job_id>/`` for these routes to serve.
+``_out_dir()/<job_id>/`` for these routes to serve.
 
 Endpoints:
     GET  /bakeoff/eval_datasets     exports + external frozen sets usable as eval data
@@ -27,7 +27,7 @@ containers scoped (``GpuArbiterConfig.container_gpus``) to those ids are
 stopped -- a bake-off on an idle GPU no longer stops a service pinned to a
 different one. Unset keeps the old behavior: stop everything configured. The
 arbiter's reconcile loop keeps the scoped set stopped while any job file is
-queued in ``JOBS_DIR`` and restarts them once the evaluator moves it to
+queued in ``_jobs_dir()`` and restarts them once the evaluator moves it to
 ``done/``. A job queued with no evaluator running keeps them stopped; its
 status stays ``queued`` and deleting the job file releases the GPU on the
 next reconcile tick.
@@ -73,11 +73,32 @@ from src.services.curation import bakeoff_jobs, eval_datasets
 
 logger = get_logger(__name__)
 
-# The arbiter's reconcile loop watches this same dir (bakeoff_active()).
-JOBS_DIR = Path(get_gpu_arbiter_config().bakeoff_jobs_dir)
-OUT_DIR = Path(
-    os.environ.get('OP_BAKEOFF_OUT_DIR', str(get_curation_config().state_dir / 'bakeoff_out'))
-)
+
+# Project-scoped (docs/design/openprocessor_internal/projects_plan.md
+# §5.3): each project's bake-off jobs/outputs live under its own
+# ``CurationConfig.bakeoff_jobs_dir`` (a PROJECT_SCOPED_FIELDS entry), not
+# a single global dir, so no project's queue or results leak into
+# another's. Resolved at call time (never a module-level constant) so a
+# later bind_project is always picked up.
+#
+# ``default``'s ``CurationConfig.bakeoff_jobs_dir`` already resolves via
+# the same ``OP_BAKEOFF_JOBS_DIR`` env var as ``GpuArbiterConfig``'s copy
+# (``src.config.projects.resources_for_default``), so ``_jobs_dir()`` is
+# byte-for-byte the old module-level ``JOBS_DIR`` for ``default``.
+# ``_out_dir()`` keeps
+# ``default``'s exact old path/env var (``OP_BAKEOFF_OUT_DIR`` / a sibling
+# ``bakeoff_out`` dir, NOT nested under ``bakeoff_jobs``) and only nests a
+# project's outputs under its own ``bakeoff_jobs_dir`` for a non-default
+# project (which has no ``OP_BAKEOFF_OUT_DIR`` precedent to preserve).
+def _jobs_dir() -> Path:
+    return Path(get_curation_config().bakeoff_jobs_dir)
+
+
+def _out_dir() -> Path:
+    cfg = get_curation_config()
+    if cfg.project_slug == 'default':
+        return Path(os.environ.get('OP_BAKEOFF_OUT_DIR', str(cfg.state_dir / 'bakeoff_out')))
+    return Path(cfg.bakeoff_jobs_dir) / 'out'
 
 
 def _raise(exc: bakeoff_jobs.BakeoffRequestError) -> NoReturn:
@@ -200,11 +221,11 @@ async def bakeoff_run(payload: BakeoffRunRequest) -> BakeoffRunAccepted:
     from src.services.training import gpu_arbiter
 
     try:
-        spec, accepted = await bakeoff_jobs.build_job_spec(payload, out_root=OUT_DIR)
+        spec, accepted = await bakeoff_jobs.build_job_spec(payload, out_root=_out_dir())
     except bakeoff_jobs.BakeoffRequestError as exc:
         _raise(exc)
-    job_file = JOBS_DIR / f'{spec.job_id}.job.json'
-    status_file = OUT_DIR / spec.job_id / 'status.json'
+    job_file = _jobs_dir() / f'{spec.job_id}.job.json'
+    status_file = _out_dir() / spec.job_id / 'status.json'
     if job_file.exists() or status_file.exists():
         raise HTTPException(status_code=409, detail=f'bake-off job {spec.job_id} already exists')
 
@@ -252,7 +273,7 @@ async def bakeoff_status(job_id: str) -> BakeoffStatus:
     """The job's ``status.json`` (``queued`` until the evaluator picks it up)."""
     job_id = _safe(job_id)
     return _read_result(
-        OUT_DIR / job_id / 'status.json', BakeoffStatus, f'no status for job {job_id}'
+        _out_dir() / job_id / 'status.json', BakeoffStatus, f'no status for job {job_id}'
     )
 
 
@@ -267,8 +288,8 @@ def _safe(job_id: str) -> str:
 async def bakeoff_runs() -> BakeoffRunList:
     """Comparison jobs, newest first. Directories without a v2 ``status.json`` are skipped."""
     rows: list[tuple[str, BakeoffRunRow]] = []
-    if OUT_DIR.is_dir():
-        for d in OUT_DIR.iterdir():
+    if _out_dir().is_dir():
+        for d in _out_dir().iterdir():
             status_file = d / 'status.json'
             if not status_file.is_file():
                 continue
@@ -290,7 +311,7 @@ async def bakeoff_results(job_id: str, dataset_id: str | None = None) -> Bakeoff
     job_id = _safe(job_id)
     if dataset_id is None:
         status = _read_result(
-            OUT_DIR / job_id / 'status.json', BakeoffStatus, f'no comparison for job {job_id}'
+            _out_dir() / job_id / 'status.json', BakeoffStatus, f'no comparison for job {job_id}'
         )
         if not status.datasets:
             raise HTTPException(status_code=404, detail=f'job {job_id} has no datasets')
@@ -299,7 +320,7 @@ async def bakeoff_results(job_id: str, dataset_id: str | None = None) -> Bakeoff
         raise HTTPException(status_code=400, detail=f'invalid dataset id {dataset_id!r}')
     dir_name = dataset_id.replace(':', '__').replace('/', '__')
     return _read_result(
-        OUT_DIR / job_id / dir_name / 'comparison.json',
+        _out_dir() / job_id / dir_name / 'comparison.json',
         BakeoffComparison,
         f'no comparison for job {job_id} on {dataset_id} (not done?)',
     )
@@ -310,5 +331,7 @@ async def bakeoff_matrix(job_id: str) -> BakeoffMatrix:
     """Model x dataset matrix of a finished job; ``best`` lists every tied winner."""
     job_id = _safe(job_id)
     return _read_result(
-        OUT_DIR / job_id / 'matrix.json', BakeoffMatrix, f'no matrix for job {job_id} (not done?)'
+        _out_dir() / job_id / 'matrix.json',
+        BakeoffMatrix,
+        f'no matrix for job {job_id} (not done?)',
     )
