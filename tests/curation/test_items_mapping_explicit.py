@@ -32,24 +32,11 @@ _MUST_BE_KEYWORD = {
 }
 
 
-# W8 (multi-box regions): the per-item box-list summary fields exist on
-# RegionFields but their items-mapping additions are explicitly out of
-# scope for this pass (see the handback report) -- excluded here rather
-# than half-wired. ``boxes_state`` is never a top-level document key at
-# all: it names the FIXED element key ``state`` inside one
-# ``region_boxes`` nested-list entry, not an item-level property.
+# ``boxes_state`` is never a top-level document key at all: it names the
+# FIXED element key ``state`` inside one ``region_boxes`` nested-list
+# entry (used only to build nested queries), not an item-level property.
 _W8_NOT_YET_MAPPED = {
-    'boxes',
     'boxes_state',
-    'box_embeddings',
-    'count',
-    'rejected_count',
-    'max_score',
-    'set_complete',
-    'revision',
-    'box_seq',
-    'boxes_migrated_at',
-    'legacy_scalars',
 }
 
 

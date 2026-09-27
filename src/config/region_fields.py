@@ -130,8 +130,6 @@ class RegionFields:
     set_complete: str = 'region_set_complete'
     revision: str = 'region_revision'
     box_seq: str = 'region_box_seq'
-    boxes_migrated_at: str = 'region_boxes_migrated_at'
-    legacy_scalars: str = 'region_legacy_scalars'
 
     class_id: str = 'region_class_id'
     label_source: str = 'region_label_source'

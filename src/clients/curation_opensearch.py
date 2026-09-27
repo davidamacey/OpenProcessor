@@ -494,6 +494,60 @@ def _items_body() -> dict[str, Any]:
                 # index.knn: true), so the plain-float rationale no
                 # longer applies.
                 F.embedding: _knn_field(dim=config.encoder_embedding_dim),
+                # W8 multi-box regions: the per-item box list. `nested` so a
+                # query like "a box with detector=sam3 AND state=accepted"
+                # means the same box (region_boxes.box_query, the only
+                # place that builds this nested clause). Element keys are
+                # FIXED strings, not RegionFields-indirected (W8.2): the
+                # list is new, so no deployment has legacy names for them.
+                F.boxes: {
+                    'type': 'nested',
+                    'properties': {
+                        'box_id': {'type': 'keyword'},
+                        'bbox_norm': {'type': 'float', 'index': False},
+                        'state': {'type': 'keyword'},
+                        'score': {'type': 'float'},
+                        'detector': {'type': 'keyword'},
+                        'detector_version': {'type': 'keyword'},
+                        'source': {'type': 'keyword'},
+                        'bbox_correct': {'type': 'boolean'},
+                        'confidence': {'type': 'keyword'},
+                        'rejection_reason': {'type': 'keyword'},
+                        'text': {'type': 'keyword'},
+                        'text_raw': {'type': 'keyword'},
+                        'text_source': {'type': 'keyword'},
+                        'text_engine_version': {'type': 'keyword'},
+                        'text_confidence': {'type': 'float'},
+                        'text_vlm': {'type': 'keyword'},
+                        'text_ocr': {'type': 'keyword'},
+                        'text_choice': {'type': 'keyword'},
+                        'text_vlm_invalid': {'type': 'keyword'},
+                        'text_disagreement': {'type': 'boolean'},
+                        'cluster_id': {'type': 'integer'},
+                        'cluster_subid': {'type': 'keyword'},
+                        'cluster_distance': {'type': 'float'},
+                        'detected_at': {'type': 'date'},
+                    },
+                },
+                # Per-box vectors live in a SIBLING nested field, not
+                # inside F.boxes (W8.2): every item read that feeds
+                # serialize_item / every OCC read excludes vectors, and a
+                # human edit that read region_boxes with vectors excluded
+                # and wrote the list back would silently delete every
+                # embedding. Only the embed stage / backfill write this.
+                F.box_embeddings: {
+                    'type': 'nested',
+                    'properties': {
+                        'box_id': {'type': 'keyword'},
+                        'embedding': _knn_field(dim=config.encoder_embedding_dim),
+                    },
+                },
+                F.count: {'type': 'integer'},
+                F.rejected_count: {'type': 'integer'},
+                F.max_score: {'type': 'float'},
+                F.set_complete: {'type': 'boolean'},
+                F.revision: {'type': 'integer'},
+                F.box_seq: {'type': 'integer', 'index': False},
                 # History: nested array recording every class write so
                 # operators can answer "who labeled this and when" after a
                 # model drift investigation. Cap at MAX_HISTORY_ENTRIES (32,

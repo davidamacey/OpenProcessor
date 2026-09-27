@@ -268,7 +268,16 @@ def test_serialize_item_carries_region_boxes_and_stats() -> None:
         F.revision: 2,
     }
     item = serialize_item(src, 'x')
-    assert item['region_boxes'] == [box.to_doc()]
+    # bbox_in_parent / thumbnail_url are derived wire-only additions on
+    # top of the stored element (W8.9) -- not part of RegionBox.to_doc().
+    assert item['region_boxes'] == [
+        {
+            **box.to_doc(),
+            'bbox_in_parent': None,
+            'thumbnail_url': item['region_boxes'][0]['thumbnail_url'],
+        }
+    ]
+    assert item['region_boxes'][0]['thumbnail_url'].endswith('/crops/x/region_thumbnail?box_id=b1')
     assert item['region_count'] == 1
     assert item['region_rejected_count'] == 0
     assert item['region_max_score'] == 0.9
