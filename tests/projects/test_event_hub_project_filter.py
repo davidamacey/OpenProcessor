@@ -182,3 +182,12 @@ async def test_global_events_route_subscribes_to_the_global_stream(hub: EventHub
     (sub,) = hub._subscribers
     assert sub.project is None
     await response.body_iterator.aclose()
+
+
+@pytest.mark.parametrize('key', ['type', 'topic', 'project'])
+def test_global_event_fields_cannot_override_the_envelope(hub: EventHub, key: str) -> None:
+    """Re-review R7: ``type=`` (or any envelope key) in ``fields`` must not
+    smuggle a project event onto the global stream."""
+    with pytest.raises(ValueError, match='envelope'):
+        publish_global_event('project.updated', **{key: 'crop.classified'}, crop_id='beta-1')
+    assert hub.stats(None)['events_published'] == 0

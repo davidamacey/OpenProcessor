@@ -146,6 +146,43 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         registry_mod.set_project_registry(None)
 
 
+# Module-level TTL caches (module, attribute). Production keys each by
+# project, but every unit test binds the same ``default`` record, so a cache
+# one test fills would answer the next test's first request.
+_PROCESS_CACHES = (
+    ('src.services.curation.strategy_registry', '_COVERAGE_CACHE'),
+    ('src.routers.curation.select', '_ORDER_CACHE'),
+    ('src.services.curation.clustering.outliers', '_CACHE'),
+    ('src.clients.curation_opensearch', '_settings_cache'),
+    ('src.routers.curation.regions_fp', '_suspected_fp_cache'),
+    ('src.services.curation.eval_datasets', '_CACHE'),
+    # Config-store snapshots (W2): one ConfigStore per project, keyed by
+    # slug in a module-level dict -- every test binds the same ``default``
+    # project, so a store one test mutates would leak into the next.
+    ('src.services.config_store.store', '_STORES'),
+)
+
+
+def _clear_process_caches() -> None:
+    import sys
+
+    for module_name, attr in _PROCESS_CACHES:
+        module = sys.modules.get(module_name)
+        if module is not None:
+            getattr(module, attr).clear()
+    capacity = sys.modules.get('src.services.projects.capacity')
+    if capacity is not None:
+        setattr(capacity, '_cache', None)  # noqa: B010 - module attr unknown to mypy
+
+
+@pytest.fixture(autouse=True)
+def _fresh_process_caches() -> Iterator[None]:
+    """No test inherits (or leaves behind) a module TTL cache."""
+    _clear_process_caches()
+    yield
+    _clear_process_caches()
+
+
 collect_ignore = [
     'test_full_system.py',
     'test_scrfd_pipeline.py',

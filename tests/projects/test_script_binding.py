@@ -83,7 +83,7 @@ def _guarded_client(records: list[ProjectRecord]) -> Any:
 
 def test_project_argument_defaults_to_env(monkeypatch: pytest.MonkeyPatch) -> None:
     parser = argparse.ArgumentParser()
-    monkeypatch.setenv('OP_PROJECT', 'beta')
+    monkeypatch.setenv('OP_CURATION_PROJECT', 'beta')
     script_binding.add_project_argument(parser)
     assert parser.parse_args([]).project == 'beta'
     assert parser.parse_args(['--project', 'alpha']).project == 'alpha'

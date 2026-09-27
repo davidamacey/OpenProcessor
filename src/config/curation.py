@@ -82,6 +82,10 @@ class IndexRole(str, Enum):
 # Identity sentinel: "derive this path from ``state_dir``" (compared with
 # ``is`` in ``CurationConfig.__post_init__``, never by value).
 _FOLLOWS_STATE_DIR = Path('<follows state_dir>')
+# "Take this from the ``default`` project's ``resources_for_new``" (an
+# index name can never contain ``<``; the path is compared with ``is``).
+_FROM_DEFAULT_PROJECT = '<from the default project>'
+_FROM_DEFAULT_PROJECT_PATH = Path('<from the default project>')
 
 
 @dataclass(frozen=True)
@@ -99,31 +103,35 @@ class CurationConfig:
     # ``{OP_PROJECT_INDEX_PREFIX}{slug}__{role}`` (``resources_for_new``),
     # resolved from the bound project. These fields exist so a caller can
     # construct an explicit ``CurationConfig`` (unit tests, one-off tools);
-    # ``get_curation_config()`` always answers from the bound project.
-    images_index: str = 'op_prj_default__images'
-    items_index: str = 'op_prj_default__items'
-    labels_confirmed_index: str = 'op_prj_default__labels_confirmed'
-    classes_index: str = 'op_prj_default__classes'
+    # ``get_curation_config()`` always answers from the bound project. Left
+    # unset, an explicit instance takes the ``default`` project's names and
+    # data paths from ``resources_for_new`` (see __post_init__) -- there is
+    # no second naming path.
+    images_index: str = _FROM_DEFAULT_PROJECT
+    items_index: str = _FROM_DEFAULT_PROJECT
+    labels_confirmed_index: str = _FROM_DEFAULT_PROJECT
+    classes_index: str = _FROM_DEFAULT_PROJECT
     # Single shared-defaults document (curation-strategy settings) — one
     # doc, not a full index of many rows. See
     # ``src.clients.curation_opensearch.CURATION_SETTINGS_DOC_ID`` for the
     # fixed doc id this index always addresses.
     # Shard folding (owner D4, projects_plan.md §2.3): SETTINGS folds onto
-    # CONFIGS's name for every project, ``default`` included -- the bare
-    # dataclass default matches what ``resources_for_new`` computes.
-    settings_index: str = 'op_prj_default__configs'
+    # CONFIGS's name for every project, ``default`` included --
+    # ``resources_for_new`` (via __post_init__ below) resolves the folded
+    # name; there is no second naming path.
+    settings_index: str = _FROM_DEFAULT_PROJECT
     # Two deliberately distinct UMAP-state indexes (see
     # ``src/services/curation/embedding_viz.py`` module docstring):
     # the retired clustering reducer's fitted-manifold cache
     # (``clustering/embedding_reduce.py``) and the visualization-only
     # projection's own metadata slot. UMAP_STATE keeps its own index;
     # UMAP_VIZ_STATE folds onto CONFIGS's name (shard folding, owner D4).
-    umap_state_index: str = 'op_prj_default__umap_state'
-    umap_viz_state_index: str = 'op_prj_default__configs'
+    umap_state_index: str = _FROM_DEFAULT_PROJECT
+    umap_viz_state_index: str = _FROM_DEFAULT_PROJECT
     # Prompt packs, region profiles, activations, revision counter (W2).
-    configs_index: str = 'op_prj_default__configs'
+    configs_index: str = _FROM_DEFAULT_PROJECT
 
-    class_registry_path: Path = Path('./data/projects/default/class_registry.json')
+    class_registry_path: Path = _FROM_DEFAULT_PROJECT_PATH
     # Optional deployment-supplied VLM PromptPack (see
     # ``src.services.labeling.vlm_prompts.PromptPack.from_json`` and
     # ``docs/design/curation_design_rationale.md``'s PromptPack section).
@@ -136,7 +144,7 @@ class CurationConfig:
     # built-in generic pack; chosen per run / via the settings default.
     prompt_pack_paths: tuple[Path, ...] = ()
     source_root: Path = Path('./data/images')
-    export_root: Path = Path('./data/projects/default/exports')
+    export_root: Path = _FROM_DEFAULT_PROJECT_PATH
     # ST-4: keep-last retention for auto-named (timestamped) export dirs
     # under export_root. 0 = keep all. Never touches custom-named exports,
     # the `current` symlink target, or any dir pinned by a job/run/bake-off.
@@ -153,7 +161,7 @@ class CurationConfig:
     # image_serving.py) so the path guards accept it. Default lives
     # under state_dir, following the crop_cache_dir precedent for a
     # server-owned data directory that isn't a mounted source archive.
-    upload_root: Path = Path('/var/lib/openprocessor/projects/default/uploads')
+    upload_root: Path = _FROM_DEFAULT_PROJECT_PATH
 
     # BA-2/BA-5: /ingest/upload + /ingest/batch request limits, served on
     # GET /ingest/config so a client never has to hardcode them.
@@ -179,7 +187,7 @@ class CurationConfig:
     # as a literal string. jobs/out mirror the state_dir/training_staging
     # precedent below; eval_root is a data root, so it mirrors
     # source_root/export_root instead.
-    bakeoff_eval_root: Path = Path('./data/projects/default/bakeoff_eval')
+    bakeoff_eval_root: Path = _FROM_DEFAULT_PROJECT_PATH
 
     # Searchable per-item text (src/services/curation/item_text.py): the
     # region worker stores every OCR line read on the item crop. Effective
@@ -238,6 +246,25 @@ class CurationConfig:
     model_prefix: str = ''
 
     def __post_init__(self) -> None:
+        unset_indexes = [
+            attr
+            for attr in _INDEX_ROLE_ATTR.values()
+            if getattr(self, attr) == _FROM_DEFAULT_PROJECT
+        ]
+        unset_paths = [
+            attr
+            for attr in _DEFAULT_PROJECT_PATH_FIELDS
+            if getattr(self, attr) is _FROM_DEFAULT_PROJECT_PATH
+        ]
+        if unset_indexes or unset_paths:
+            from src.config.projects import DEFAULT_SLUG, resources_for_new
+
+            resources = resources_for_new(DEFAULT_SLUG, self)
+            role_of = {attr: role for role, attr in _INDEX_ROLE_ATTR.items()}
+            for attr in unset_indexes:
+                object.__setattr__(self, attr, resources.indexes[role_of[attr]])
+            for attr in unset_paths:
+                object.__setattr__(self, attr, getattr(resources, attr))
         if self.project_state_dir is _FOLLOWS_STATE_DIR:
             object.__setattr__(self, 'project_state_dir', self.state_dir)
         if self.bakeoff_jobs_dir is _FOLLOWS_STATE_DIR:
@@ -395,6 +422,13 @@ def _parse_source_path_aliases(raw: str, default: Mapping[str, Path]) -> Mapping
         aliases[alias] = Path(path)
     return aliases
 
+
+_DEFAULT_PROJECT_PATH_FIELDS = (
+    'class_registry_path',
+    'export_root',
+    'upload_root',
+    'bakeoff_eval_root',
+)
 
 _INDEX_ROLE_ATTR: dict[IndexRole, str] = {
     IndexRole.IMAGES: 'images_index',

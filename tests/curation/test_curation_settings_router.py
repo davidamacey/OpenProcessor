@@ -25,15 +25,6 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(autouse=True)
-def _reset_field_coverage_cache() -> Iterator[None]:
-    from src.services.curation.strategy_registry import _reset_field_coverage_cache
-
-    _reset_field_coverage_cache()
-    yield
-    _reset_field_coverage_cache()
-
-
-@pytest.fixture(autouse=True)
 def _reset_settings_cache() -> Iterator[None]:
     """The settings-doc cache is module-level and keyed by index name
     -- every test in this file shares the default index, and a fresh

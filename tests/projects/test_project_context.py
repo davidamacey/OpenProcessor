@@ -111,7 +111,7 @@ def test_run_in_executor_bound_inherits_binding() -> None:
 
 def test_project_env() -> None:
     with bind_project(_record('alpha')):
-        assert project_env() == {'OP_PROJECT': 'alpha'}
+        assert project_env() == {'OP_CURATION_PROJECT': 'alpha'}
 
 
 def test_two_sequential_testclient_requests_see_own_binding() -> None:

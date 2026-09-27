@@ -23,22 +23,7 @@ from fastapi.testclient import TestClient
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
     from pathlib import Path
-
-
-@pytest.fixture(autouse=True)
-def _reset_field_coverage_cache() -> Iterator[None]:
-    """The Phase 6 field-coverage lookup is cached at module scope
-    (``strategy_registry._COVERAGE_CACHE``, a 60s TTL) so ``GET
-    /curation/methods`` stays O(1) per request. Reset it around every test in
-    this module so one test's ``fake_os.count`` stub can never leak into
-    the next test's assertions."""
-    from src.services.curation.strategy_registry import _reset_field_coverage_cache
-
-    _reset_field_coverage_cache()
-    yield
-    _reset_field_coverage_cache()
 
 
 @pytest.fixture

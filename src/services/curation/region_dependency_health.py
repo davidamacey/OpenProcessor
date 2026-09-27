@@ -42,7 +42,10 @@ if TYPE_CHECKING:
 def _state_dir() -> Path:
     """Resolved fresh each call (same convention as region_drain.py's
     _state_dir) so tests can override via monkeypatch/env."""
-    return Path(os.environ.get('OP_REGION_DRAIN_STATE_DIR', '/jobs/region_drain'))
+    from src.config.project_context import project_jobs_dir
+
+    # Per project: the streak/stall state describes one project's queue.
+    return project_jobs_dir(Path(os.environ.get('OP_REGION_DRAIN_STATE_DIR', '/jobs/region_drain')))
 
 
 def _state_file() -> Path:
