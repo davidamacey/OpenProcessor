@@ -39,7 +39,6 @@ import type {
   CropRegionUndoBatchResult,
   CropUndoBatchResult,
   ItemTextLine,
-  RegistryClass,
   RegistryClassCreate,
   RegistryClassMerge,
   RegistryClassUpdate,
@@ -3663,10 +3662,6 @@ export function listDatasets(
 }
 
 // -- classes mutators ----------------------------------------------------
-
-export function getClass(classId: number, signal?: AbortSignal): Promise<RegistryClass> {
-  return apiFetch<RegistryClass>(`${scoped()}/classes/${classId}`, {}, signal);
-}
 
 export function addClass(
   payload: RegistryClassCreate,
