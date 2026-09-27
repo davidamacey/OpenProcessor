@@ -3,9 +3,9 @@ sidebar_position: 3
 title: Clusters
 ---
 
-# Clusters (`/clusters`, `/clusters/[id]`)
+# Clusters (`/p/<project>/clusters`, `/p/<project>/clusters/[id]`)
 
-## Cluster grid (`/clusters`)
+## Cluster grid (`/p/<project>/clusters`)
 
 Every cluster as a card: dominant class, **cohesion** (the served
 nearest-centroid purity — labelled "cohesion" rather than "purity" so a
@@ -26,7 +26,7 @@ representative crops.
 
 <Screenshot name="clusters-1600.png" alt="Cropwright cluster grid" caption="Cluster grid with cohesion badges" />
 
-## Cluster detail (`/clusters/[id]`)
+## Cluster detail (`/p/<project>/clusters/[id]`)
 
 The core triage surface: a crop grid for one cluster with pointer-based
 drag and drop onto class rows, bulk select/confirm/move/discard/ignore,

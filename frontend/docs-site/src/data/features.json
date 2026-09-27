@@ -33,5 +33,10 @@
     "title": "Ingest at scale",
     "icon": "upload",
     "desc": "Browser upload or server-path batch ingest, chunked and resumable, with per-file results and a region-drain gate before the next clustering pass."
+  },
+  {
+    "title": "Multiple projects, one deployment",
+    "icon": "folder",
+    "desc": "Each project keeps its own classes, data and curation settings under its own `/p/<project>` URL, switchable from the top bar with guarded create/archive/delete."
   }
 ]

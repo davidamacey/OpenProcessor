@@ -3,7 +3,7 @@ sidebar_position: 4
 title: Review
 ---
 
-# Review queue (`/review`)
+# Review queue (`/p/<project>/review`)
 
 A one-item-at-a-time, keyboard-driven queue.
 

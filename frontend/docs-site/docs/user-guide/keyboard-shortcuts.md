@@ -5,10 +5,15 @@ title: Keyboard shortcuts
 
 # Keyboard shortcuts
 
-Class assignment is per-class (`hotkey_letter`, set on `/classes` or in the
-`~` overlay). Reserved single-character action keys can never be bound to a
-class — the reserved set is served by the backend (`GET {API_PREFIX}/classes`'s
-`reserved_hotkeys`) unioned with every registered slot's own keymap.
+Class assignment is per-class (`hotkey_letter`, set on `/p/<project>/classes`
+or in the `~` overlay). Reserved single-character action keys can never be
+bound to a class — the reserved set is served by the backend
+(`GET {prefix}/classes`'s `reserved_hotkeys`) unioned with every registered
+slot's own keymap.
+
+Every other shortcut is a named **action** (e.g. "confirm", "discard",
+"undo") bound to a key, not a hardcoded key with no name — this is what
+makes the shortcuts below customizable per project rather than fixed.
 
 ## Global
 
@@ -18,7 +23,7 @@ class — the reserved set is served by the backend (`GET {API_PREFIX}/classes`'
 | `Esc` | Close the overlay |
 | _class letter_ | Assign that class (selection / current item) |
 
-## `/clusters/[id]`
+## `/p/<project>/clusters/[id]`
 
 | Key | Action |
 | --- | --- |
@@ -36,7 +41,7 @@ class — the reserved set is served by the backend (`GET {API_PREFIX}/classes`'
 | `M` | Move selected to another cluster |
 | `Esc` | Clear drag capture / close picker / clear selection |
 
-## `/review`
+## `/p/<project>/review`
 
 | Key | Action |
 | --- | --- |
@@ -57,3 +62,35 @@ class — the reserved set is served by the backend (`GET {API_PREFIX}/classes`'
 
 `Esc` cannot cancel an in-progress pointer drag (only keyboard/aria drags) —
 it clears the captured multi-drag set and restores the grid layout instead.
+
+## Customizing shortcuts
+
+The tables above are the defaults every deployment starts with. When the
+backend serves a keymap, `/p/<project>/settings` gets a **Keyboard
+shortcuts** card that lets you rebind them for that project — it's
+per-project, so two projects on the same deployment can bind the same
+action to different keys. On a backend that doesn't serve a keymap yet, the
+card doesn't appear at all and every shortcut runs on its built-in default.
+
+- **Verb groups.** Actions that mean the same thing across several pages —
+  undo, confirm, discard, skip, previous/next, select all, ignore, nudge —
+  are edited together as one group by default: rebinding "undo" applies
+  everywhere undo appears. A "Customize per page" section under each group
+  lets you give one specific page its own key for that verb instead,
+  without touching the others.
+- **Up to three keys per action.** Each action can carry more than one key
+  combo (so an old habit and a new one can both work at once), capped at
+  three per action.
+- **Locked keys.** `Esc`, `Enter`, and the four arrow keys keep their
+  built-in meaning and can't be reassigned away from it — an action that
+  already uses one of them keeps it, and no other action can take it.
+  You can still add extra key combos to actions that don't already use a
+  locked key.
+- **Class-hotkey clashes.** If a key you're binding to an action is already
+  used as a class hotkey, the save is refused with an offer to unbind the
+  class key first and save again — it never silently overrides one binding
+  with the other.
+- **Reset.** Every action (or the whole keymap) can be reset back to its
+  default binding.
+
+<Screenshot name="settings-keymap-1600.png" alt="Cropwright keyboard shortcuts editor" caption="Settings — the keyboard shortcuts editor, verb groups and per-page overrides" />

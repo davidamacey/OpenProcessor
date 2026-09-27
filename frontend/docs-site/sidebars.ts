@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'User Guide',
       items: [
+        'user-guide/projects',
         'user-guide/dashboard',
         'user-guide/ingest',
         'user-guide/clusters',
