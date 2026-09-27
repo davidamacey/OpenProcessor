@@ -92,6 +92,25 @@ import type {
   TrainManifest,
 } from './types_train';
 import type {
+  DatasetErrorDetail,
+  DatasetFormatsResponse,
+  DatasetImportEntryPage,
+  DatasetImportJob,
+  DatasetImportList,
+  DatasetImportRequest,
+  DatasetIssuePage,
+  DatasetPreview,
+  DatasetPreviewRequest,
+  DatasetUndoReport,
+  DatasetUndoRequest,
+  DatasetUploadResponse,
+  NextStep,
+  ReprocessJob,
+  ReprocessOneRequest,
+  ReprocessRequest,
+  ReprocessResponse,
+} from './types_import';
+import type {
   BakeoffComparison,
   BakeoffMatrix,
   BakeoffProfileList,
@@ -4612,4 +4631,245 @@ export function bakeoffMatrix(
   signal?: AbortSignal,
 ): Promise<BakeoffMatrix> {
   return apiFetch(`${scoped()}/bakeoff/matrix/${encodeURIComponent(jobId)}`, {}, signal);
+}
+
+// -- labeled-dataset import and Reprocess (OpenProcessor W10) ------------
+//
+// any_domain_plan.md §7.12 / W10.14; docs/design/
+// w10-import-reprocess-ui-plan-2026-09-27.md. Every route is scoped to the
+// active project (the import's target is the path's project; no body
+// carries `project`). A backend without W10 404s `GET /datasets/formats`,
+// which `datasetsAvailability` treats as "not deployed yet".
+
+export function getDatasetFormats(signal?: AbortSignal): Promise<DatasetFormatsResponse> {
+  return apiFetch<DatasetFormatsResponse>(`${scoped()}/datasets/formats`, {}, signal);
+}
+
+/** `POST /datasets/uploads` — one multipart `file` (a .zip/.tar/.tar.gz),
+ *  streamed server-side; the response's `dataset_path` is what the
+ *  preview then reads. */
+export function uploadDatasetArchive(
+  file: File,
+  signal?: AbortSignal,
+): Promise<DatasetUploadResponse> {
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  return apiFetch<DatasetUploadResponse>(
+    `${scoped()}/datasets/uploads`,
+    { method: 'POST', body: fd },
+    signal,
+  );
+}
+
+/** Dry run: writes nothing. Dataset problems come back as `issues`,
+ *  never as a 4xx (only a malformed body or a disallowed root 422s). */
+export function previewDataset(
+  body: DatasetPreviewRequest,
+  signal?: AbortSignal,
+): Promise<DatasetPreview> {
+  return apiFetch<DatasetPreview>(
+    `${scoped()}/datasets/preview`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** 202 with a new job, or 200 with the existing one (`reused: true`). */
+export function startDatasetImport(
+  body: DatasetImportRequest,
+  signal?: AbortSignal,
+): Promise<DatasetImportJob> {
+  return apiFetch<DatasetImportJob>(
+    `${scoped()}/datasets/imports`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+export function listDatasetImports(
+  params: { page?: number; page_size?: number; status?: string | null } = {},
+  signal?: AbortSignal,
+): Promise<DatasetImportList> {
+  return apiFetch<DatasetImportList>(
+    `${scoped()}/datasets/imports${qs({
+      page: params.page,
+      page_size: params.page_size,
+      status: params.status,
+    })}`,
+    {},
+    signal,
+  );
+}
+
+export function getDatasetImport(
+  importId: string,
+  signal?: AbortSignal,
+): Promise<DatasetImportJob> {
+  return apiFetch<DatasetImportJob>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}`,
+    {},
+    signal,
+  );
+}
+
+export function getDatasetImportIssues(
+  importId: string,
+  params: { code?: string | null; page?: number; page_size?: number } = {},
+  signal?: AbortSignal,
+): Promise<DatasetIssuePage> {
+  return apiFetch<DatasetIssuePage>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/issues${qs({
+      code: params.code,
+      page: params.page,
+      page_size: params.page_size,
+    })}`,
+    {},
+    signal,
+  );
+}
+
+export function getDatasetImportEntries(
+  importId: string,
+  params: {
+    split?: string | null;
+    label_state?: string | null;
+    status?: string | null;
+    page?: number;
+    page_size?: number;
+  } = {},
+  signal?: AbortSignal,
+): Promise<DatasetImportEntryPage> {
+  return apiFetch<DatasetImportEntryPage>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/entries${qs({
+      split: params.split,
+      label_state: params.label_state,
+      status: params.status,
+      page: params.page,
+      page_size: params.page_size,
+    })}`,
+    {},
+    signal,
+  );
+}
+
+export function cancelDatasetImport(
+  importId: string,
+  signal?: AbortSignal,
+): Promise<DatasetImportJob> {
+  return apiFetch<DatasetImportJob>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/cancel`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+export function resumeDatasetImport(
+  importId: string,
+  signal?: AbortSignal,
+): Promise<DatasetImportJob> {
+  return apiFetch<DatasetImportJob>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/resume`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+/** Dry run → `DatasetUndoReport`; apply → 202 `DatasetImportJob`
+ *  (`status: undoing`). */
+export function undoDatasetImport(
+  importId: string,
+  body: DatasetUndoRequest,
+  signal?: AbortSignal,
+): Promise<DatasetUndoReport | DatasetImportJob> {
+  return apiFetch<DatasetUndoReport | DatasetImportJob>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/undo`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** A finished import's served `next_steps` entry, run as served: its
+ *  `method` against its `path` under the project's prefix, no body
+ *  (plan §8 question 10). */
+export function runServedNextStep(
+  step: NextStep,
+  signal?: AbortSignal,
+): Promise<unknown> {
+  return apiFetch<unknown>(
+    `${scoped()}${step.path}`,
+    { method: step.method.toUpperCase() },
+    signal,
+  );
+}
+
+/** Batch Reprocess. `dry_run` defaults to true on the server; the caller
+ *  always sends it explicitly. */
+export function reprocessBatch(
+  body: ReprocessRequest,
+  signal?: AbortSignal,
+): Promise<ReprocessResponse> {
+  return apiFetch<ReprocessResponse>(
+    `${scoped()}/reprocess`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** Single-item Reprocess; returns the post-write `items` to adopt. */
+export function reprocessCrop(
+  cropId: string,
+  body: ReprocessOneRequest,
+  signal?: AbortSignal,
+): Promise<ReprocessResponse> {
+  return apiFetch<ReprocessResponse>(
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/reprocess`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+export function getReprocessJob(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ReprocessJob> {
+  return apiFetch<ReprocessJob>(
+    `${scoped()}/reprocess/jobs/${encodeURIComponent(jobId)}`,
+    {},
+    signal,
+  );
+}
+
+export function cancelReprocessJob(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ReprocessJob> {
+  return apiFetch<ReprocessJob>(
+    `${scoped()}/reprocess/jobs/${encodeURIComponent(jobId)}/cancel`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+/**
+ * The structured W10 refusal (`{detail: ConfigErrorDetail}` with the
+ * optional `issues`/`unmapped`/`import_id`), or `null` when the error
+ * isn't one. The UI shows `message` and branches only on `error`.
+ */
+export function datasetErrorDetail(e: unknown): DatasetErrorDetail | null {
+  if (!(e instanceof ApiError)) return null;
+  const body = e.body;
+  if (!body || typeof body !== 'object') return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  const d = detail as Record<string, unknown>;
+  if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
+  return d as unknown as DatasetErrorDetail;
+}
+
+/** The served `message` of a W10 refusal, else the generic detail. */
+export function datasetErrorText(e: unknown): string {
+  const d = datasetErrorDetail(e);
+  if (d) return d.message;
+  if (e instanceof ApiError && e.detail) return e.detail;
+  return (e as Error)?.message ?? String(e);
 }
