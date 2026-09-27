@@ -854,7 +854,6 @@ def leak_env(
     from src.core.dependencies import app_state, get_async_triton
     from src.routers.curation import _common
     from src.services.curation import event_hub
-    from src.services.curation.autolabel import job as autolabel_job
     from src.services.projects import guard, registry as registry_mod
     from src.services.projects.registry import ProjectRegistry
 
@@ -897,19 +896,15 @@ def leak_env(
 
     monkeypatch.setattr(embedding_reduce, 'UMAP_N_COMPONENTS', 2)
     monkeypatch.setattr(embedding_reduce, 'UMAP_N_NEIGHBORS', 3)
-    # Import-time constants of the (P2-owned) auto-label module: keep them
-    # inside tmp_path so the sweep never touches the host's /jobs.
-    al_dir = tmp_path / 'jobs' / 'auto_label'
-    for attr, fname in {
-        '_STATE_DIR': '',
-        '_STATE_FILE': 'state.json',
-        '_CANCEL_FLAG': 'cancel.flag',
-        '_RUNNING_LOCK': 'running.lock',
-        '_EXIT_CODE_FILE': 'exit_code',
-        '_TRIGGER_FILE': 'trigger.json',
-        '_HEARTBEAT_FILE': 'heartbeat',
-    }.items():
-        monkeypatch.setattr(autolabel_job, attr, al_dir / fname if fname else al_dir)
+    # The (P2-owned) auto-label module resolves its state dir fresh per
+    # bound project on every call (`_state_dir()` -> the bound project's
+    # own `autolabel_dir`, a PROJECT_SCOPED_FIELDS entry) -- there is no
+    # import-time module constant left to patch. Redirect the env var
+    # `resources_for_new` reads instead, so the sweep never touches the
+    # host's /jobs and each project's own nested dir
+    # (`<this>/projects/<slug>`, `default` included per P1R §6.1/D-A) is
+    # kept inside tmp_path.
+    monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'jobs' / 'auto_label'))
 
     base = base_curation_config()
     records = {'default': new_project_record('default', base)}
