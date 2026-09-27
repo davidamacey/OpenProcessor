@@ -45,6 +45,7 @@ from pydantic import BaseModel, Field
 
 from src.config import get_curation_config, get_gpu_arbiter_config, get_region_fields
 from src.config.curation import items_index
+from src.config.projects import trainer_jobs_root
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.routers.curation import get_class_registry
@@ -360,7 +361,7 @@ def _read_trainer_capabilities() -> dict[str, Any] | None:
     Callers must treat that as "can't verify" (a warning), not "no GPUs
     attached" (which would incorrectly block every request).
     """
-    path = train_jobs._resolve_jobs_dir() / TRAINER_CAPABILITIES_FILENAME
+    path = trainer_jobs_root() / TRAINER_CAPABILITIES_FILENAME
     try:
         return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError):

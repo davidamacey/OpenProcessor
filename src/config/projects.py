@@ -106,6 +106,14 @@ def projects_data_root() -> Path:
     return Path(os.environ.get('OP_PROJECTS_DATA_ROOT', './data/projects'))
 
 
+def trainer_jobs_root() -> Path:
+    """The shared trainer volume root (``OP_TRAIN_JOBS_DIR``). Each
+    project's ``train_jobs_dir`` nests under ``<root>/projects/<slug>``;
+    trainer-global files (``.trainer_capabilities.json``) live at the
+    root itself, since one trainer serves every project."""
+    return Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
+
+
 def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
     """Resources for a brand-new project ``slug``, per the §2.2 naming
     table. Computed once at create time and persisted -- never
@@ -122,7 +130,7 @@ def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
         upload_root=base.state_dir / 'projects' / slug / 'uploads',
         bakeoff_eval_root=data_root / 'bakeoff_eval',
         project_state_dir=base.state_dir / 'projects' / slug,
-        train_jobs_dir=Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs')) / 'projects' / slug,
+        train_jobs_dir=trainer_jobs_root() / 'projects' / slug,
         autolabel_dir=Path(os.environ.get('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label'))
         / 'projects'
         / slug,

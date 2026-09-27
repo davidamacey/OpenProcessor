@@ -31,6 +31,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from src.config import get_gpu_arbiter_config
+from src.config.projects import trainer_jobs_root
 from src.services.training.gpu_arbiter import _container_status_sync, _docker_client
 
 
@@ -53,9 +54,8 @@ TRAINER_HEARTBEAT_STALE_SECONDS = 120.0
 
 
 def _read_trainer_capabilities_file() -> dict[str, Any] | None:
-    from src.services.training.jobs import _resolve_jobs_dir
-
-    path = _resolve_jobs_dir() / TRAINER_CAPABILITIES_FILENAME
+    # Trainer-global: written once at the volume root, not per project.
+    path = trainer_jobs_root() / TRAINER_CAPABILITIES_FILENAME
     try:
         return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError):
