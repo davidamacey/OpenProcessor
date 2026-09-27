@@ -63,15 +63,27 @@ def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     d = tmp_path / 'jobs'
     d.mkdir()
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(d))
-    monkeypatch.setenv('OP_EXPORT_ROOT', str(tmp_path))
+    # export_root is a PROJECT_SCOPED_FIELDS entry now (P1R §6.1/D-A):
+    # OP_EXPORT_ROOT no longer exists. OP_PROJECTS_DATA_ROOT/<slug>/exports
+    # is the one path every project's export_root follows, default
+    # included -- see export_dir below.
+    monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     return d
 
 
 @pytest.fixture
-def export_dir(tmp_path: Path) -> Path:
-    """A minimal frozen export: 3 classes, one labeled image per split."""
-    root = tmp_path / 'export'
+def export_dir(jobs_dir: Path) -> Path:
+    """A minimal frozen export: 3 classes, one labeled image per split.
+
+    Lives under the bound (``default``) project's real ``export_root``
+    (``OP_PROJECTS_DATA_ROOT/default/exports``, set by ``jobs_dir`` above)
+    so the trainer's export-containment check against
+    ``project_export_root`` never rejects it.
+    """
+    from src.config.curation import get_curation_config
+
+    root = get_curation_config().export_root / 'export'
     for split in ('train', 'val', 'test'):
         (root / 'images' / split).mkdir(parents=True)
         (root / 'labels' / split).mkdir(parents=True)

@@ -341,8 +341,39 @@ class _FakeOpenSearch:
             'pending_verify',
             'pending_verification',
         }
+        # The multi-project detection worker discovers its projects
+        # through this same (patchable, per-test) OpenSearch client
+        # (scripts/curation/worker/runner.py `run()`) -- seed a single
+        # `default` project doc so ProjectRegistry.ensure_fresh() finds
+        # exactly one active project instead of silently discovering
+        # none and processing nothing.
+        from src.config.curation import base_curation_config
+        from src.config.projects import DEFAULT_SLUG, new_project_record
+        from src.services.projects.registry import REVISION_DOC_ID, projects_index, record_to_doc
 
-    async def search(self, **_kw: Any) -> dict[str, Any]:
+        self._projects_index = projects_index()
+        self._project_doc = record_to_doc(new_project_record(DEFAULT_SLUG, base_curation_config()))
+        self._revision_doc_id = REVISION_DOC_ID
+
+    async def get(self, *, index: str, **kw: Any) -> dict[str, Any]:
+        doc_id = kw.get('id')
+        if index == self._projects_index and doc_id == self._revision_doc_id:
+
+            class _NotFoundError(Exception):
+                status_code = 404
+
+            raise _NotFoundError('no revision doc in the fake registry index')
+        msg = (
+            f'_FakeOpenSearch.get is only wired for the projects revision doc, got {index}/{doc_id}'
+        )
+        raise AttributeError(msg)
+
+    async def search(self, *, index: str | None = None, **_kw: Any) -> dict[str, Any]:
+        if index == self._projects_index:
+            # One page, no search_after pagination needed for one doc.
+            if _kw.get('body', {}).get('search_after'):
+                return {'hits': {'hits': []}}
+            return {'hits': {'hits': [{'_source': self._project_doc, 'sort': ['default']}]}}
         if self._pending_refresh is not None:
             self._pending_refresh -= 1
             if self._pending_refresh <= 0:
