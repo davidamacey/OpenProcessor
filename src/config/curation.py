@@ -229,6 +229,13 @@ class CurationConfig:
     # a deployment-tunable bar, not a magic number.
     probe_actionable_min_confidence: float = 0.5
 
+    # W8: served abuse guard on human region-box writes. Human box lists
+    # are unbounded per the owner's rule -- this caps the ELEMENT COUNT of
+    # one write request (PUT .../regions, batch PUT, batch_box_state
+    # targets), not a labeling rule. Served on /health and
+    # /regions/vocabulary as region_profile.limits.max_boxes_per_write.
+    region_max_boxes_per_write: int = 500
+
     # --- Project-scoped fields (see PROJECT_SCOPED_FIELDS below and
     # docs/design/openprocessor_internal/projects_plan.md §2.2/§3.3).
     # No env var sets any project-scoped field: ``get_curation_config()``
@@ -375,6 +382,9 @@ class CurationConfig:
             ),
             probe_actionable_min_confidence=_float(
                 'PROBE_ACTIONABLE_MIN_CONFIDENCE', defaults.probe_actionable_min_confidence
+            ),
+            region_max_boxes_per_write=_int(
+                'REGION_MAX_BOXES_PER_WRITE', defaults.region_max_boxes_per_write
             ),
         )
 

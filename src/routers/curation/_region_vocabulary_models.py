@@ -45,6 +45,17 @@ class RejectionReasonEntry(BaseModel):
     )
 
 
+class RegionProfileLimits(BaseModel):
+    """W8 write-size guards, never hardcoded by a client."""
+
+    max_boxes_per_write: int = Field(
+        description=(
+            "Abuse guard: max element count of one crop's boxes in a PUT/batch PUT, or the "
+            'targets count of one batch_box_state call. See OP_REGION_MAX_BOXES_PER_WRITE.'
+        )
+    )
+
+
 class RegionProfileSummary(BaseModel):
     """The active region profile's identity, served on ``GET /health`` and
     ``GET /regions/vocabulary`` -- THE signal a client keys on to decide
@@ -62,6 +73,13 @@ class RegionProfileSummary(BaseModel):
     )
     text_hint_enabled: bool = Field(
         description='Whether the OCR text-hint re-pass is enabled after a segmenter miss.'
+    )
+    limits: RegionProfileLimits = Field(
+        description=(
+            'W8: served write-size guards. max_boxes_per_write is an abuse guard on the '
+            'element count of one region-box write request, not a labeling rule -- human '
+            'box lists are otherwise unbounded.'
+        )
     )
 
 

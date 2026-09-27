@@ -7677,6 +7677,21 @@
         "title": "RegionDependencyStatusResponse",
         "type": "object"
       },
+      "RegionProfileLimits": {
+        "description": "W8 write-size guards, never hardcoded by a client.",
+        "properties": {
+          "max_boxes_per_write": {
+            "description": "Abuse guard: max element count of one crop's boxes in a PUT/batch PUT, or the targets count of one batch_box_state call. See OP_REGION_MAX_BOXES_PER_WRITE.",
+            "title": "Max Boxes Per Write",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_boxes_per_write"
+        ],
+        "title": "RegionProfileLimits",
+        "type": "object"
+      },
       "RegionProfileSummary": {
         "description": "The active region profile's identity, served on ``GET /health`` and\n``GET /regions/vocabulary`` -- THE signal a client keys on to decide\nwhether region-scoped UI/routes are available at all.",
         "properties": {
@@ -7687,6 +7702,10 @@
           "display_name_singular": {
             "title": "Display Name Singular",
             "type": "string"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/RegionProfileLimits",
+            "description": "W8: served write-size guards. max_boxes_per_write is an abuse guard on the element count of one region-box write request, not a labeling rule -- human box lists are otherwise unbounded."
           },
           "name": {
             "title": "Name",
@@ -7719,7 +7738,8 @@
           "region_class_name",
           "text_reader",
           "reads_text",
-          "text_hint_enabled"
+          "text_hint_enabled",
+          "limits"
         ],
         "title": "RegionProfileSummary",
         "type": "object"

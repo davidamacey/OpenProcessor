@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **W8 multi-box regions (partial, foundational slice).** Laid the core
+  storage primitives for the per-item region-box list
+  (`src/services/curation/region_boxes.py`): `RegionBox`, `read_boxes`,
+  `boxes_write_fields`, `next_box_id` (never reuses an id after a delete),
+  `derive_status` (fixed accepted > false_positive > proposed > rejected >
+  empty precedence), `box_query`/`has_any_box_query` nested-query helpers,
+  and `BOX_STATES`. Added the new `RegionFields` attributes for the list
+  and its item-level summary fields (`region_boxes`, `region_box_embeddings`,
+  `region_count`, `region_rejected_count`, `region_max_score`,
+  `region_set_complete`, `region_revision`, `region_box_seq`,
+  `region_boxes_migrated_at`, `region_legacy_scalars`).
+  Added the served per-box `box_states` vocabulary with a semantic `tone`
+  field (W8.7 pin) to `GET /regions/statuses`. Added the served,
+  operator-tunable write-size abuse guard `region_max_boxes_per_write`
+  (env `OP_REGION_MAX_BOXES_PER_WRITE`, default 500), served on
+  `region_profile.limits.max_boxes_per_write` (`/health` and
+  `/regions/vocabulary`).
+  **Not yet done** (see the handback report for the full list): the
+  worker pipeline rewrite (candidate selection, numbered VLM overlay,
+  verdict-to-storage), the human edit routes (`PUT .../regions`,
+  `PATCH .../regions/{box_id}`, `batch_box_state`), removal of the old
+  scalar routes/fields, the `_items_body` mapping additions for the new
+  nested fields (explicitly excluded from the mapping-coverage and wire
+  tests this pass), embeddings, and clustering. This is a foundational
+  slice only, not the full W8 wave.
+
 ### Fixed
 - **P3 review fix pass (2026-09-27).** Addresses the independent P3 review's
   blocker and majors:
