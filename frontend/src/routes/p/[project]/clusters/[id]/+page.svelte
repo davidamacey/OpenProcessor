@@ -73,10 +73,10 @@
     n_pool: number | null;
   } | null>(null);
 
-  // Human-readable cluster name for the header. Prefers the served
-  // `dominant_class_name` directly (class-id-display-audit-2026-09-26) —
-  // falling back to a registry lookup only for a served cluster that
-  // predates that field. Candidate clusters (>= 10000) have no name yet —
+  // Human-readable cluster name for the header: the served
+  // `dominant_class_name` (class-id-display-audit-2026-09-26), falling back
+  // to a registry lookup only when the cluster card itself failed to load
+  // (getCluster's null-identity stub). Candidate clusters (>= 10000) have no name yet —
   // label them so the operator knows it's unlabeled by design, not a bug.
   const clusterName = $derived(
     cluster?.dominant_class_name ?? clsForCluster?.name ?? null,

@@ -712,29 +712,6 @@ describe('searchCrops', () => {
     expect(url).toContain('max_rank=1');
   });
 
-  it('maps similarity_score through onto each item', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        total: 1,
-        page: 1,
-        page_size: 30,
-        items: [
-          {
-            crop_id: 'c1',
-            image_path: '/x/y.jpg',
-            bbox_norm: [0, 0, 1, 1],
-            similarity_score: 0.91,
-          },
-        ],
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const res = await searchCrops('red widget_a', 1, 30);
-    expect(res.items[0]?.similarity_score).toBe(0.91);
-    expect(res.items[0]?.id).toBe('c1');
-  });
-
   it('maps the live backend field `semantic_score` through onto each item (OpenProcessor _hydrate_item)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
@@ -755,66 +732,6 @@ describe('searchCrops', () => {
 
     const res = await searchCrops('red widget_a', 1, 30);
     expect(res.items[0]?.similarity_score).toBe(0.73);
-  });
-
-  it('prefers similarity_score over semantic_score over score when more than one is present', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        total: 1,
-        page: 1,
-        page_size: 30,
-        items: [
-          {
-            crop_id: 'c1',
-            image_path: '/x/y.jpg',
-            bbox_norm: [0, 0, 1, 1],
-            similarity_score: 0.91,
-            semantic_score: 0.73,
-            score: 0.5,
-          },
-        ],
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-    const res1 = await searchCrops('red widget_a', 1, 30);
-    expect(res1.items[0]?.similarity_score).toBe(0.91);
-
-    const fetchMock2 = vi.fn().mockResolvedValue(
-      jsonResponse({
-        total: 1,
-        page: 1,
-        page_size: 30,
-        items: [
-          {
-            crop_id: 'c1',
-            image_path: '/x/y.jpg',
-            bbox_norm: [0, 0, 1, 1],
-            semantic_score: 0.73,
-            score: 0.5,
-          },
-        ],
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock2);
-    const res2 = await searchCrops('red widget_a', 1, 30);
-    expect(res2.items[0]?.similarity_score).toBe(0.73);
-  });
-
-  it('falls back to a bare score field if the server sends that instead', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        total: 1,
-        page: 1,
-        page_size: 30,
-        items: [
-          { crop_id: 'c1', image_path: '/x/y.jpg', bbox_norm: [0, 0, 1, 1], score: 0.5 },
-        ],
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const res = await searchCrops('red widget_a', 1, 30);
-    expect(res.items[0]?.similarity_score).toBe(0.5);
   });
 
   it('defaults similarity_score to 0 when the server omits both fields', async () => {

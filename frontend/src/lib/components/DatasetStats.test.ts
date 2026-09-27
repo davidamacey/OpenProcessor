@@ -12,6 +12,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import type { DatasetStats as DatasetStatsType } from '$lib/api';
+import { datasetStatsFixture } from '$lib/test/fixtures/datasetStats';
 import {
   installServedRegionProfile,
   resetDeploymentSlots,
@@ -36,25 +37,23 @@ vi.mock('$lib/sse', () => ({
 
 const { default: DatasetStats } = await import('./DatasetStats.svelte');
 
-function goodStats(overrides: Partial<DatasetStatsType> = {}): DatasetStatsType {
+type StatsOverrides = {
+  [K in keyof DatasetStatsType]?: DatasetStatsType[K] extends object
+    ? Partial<DatasetStatsType[K]>
+    : DatasetStatsType[K];
+};
+
+/** A full served `/stats/dataset` body; nested sections merge over it. */
+function goodStats(overrides: StatsOverrides = {}): DatasetStatsType {
+  const base = datasetStatsFixture();
   return {
-    as_of: '2026-09-24T00:00:00Z',
-    total_crops: 1000,
-    validated: 500,
-    test_holdout: 50,
-    by_source: [{ key: 'nas1', doc_count: 1000 }],
-    labeled: { by_human: 100, by_vlm: 200, by_classifier: 50, other: 5 },
-    regions: { total_detected: 0, by_detector: 0, by_segmenter: 0, by_human: 0 },
-    unlabeled: { pending_detection: 10, pending_verification: 5, no_label_source: 2 },
-    in_progress: { region_drain_total_unfinished: 0 },
-    clusters: {
-      last_run_at: null,
-      cluster_count: 0,
-      residual_count: 0,
-      noise_count: 0,
-      method: null,
-    },
+    ...base,
     ...overrides,
+    labeled: { ...base.labeled, ...overrides.labeled },
+    regions: { ...base.regions, ...overrides.regions },
+    unlabeled: { ...base.unlabeled, ...overrides.unlabeled },
+    in_progress: { ...base.in_progress, ...overrides.in_progress },
+    clusters: { ...base.clusters, ...overrides.clusters },
   } as DatasetStatsType;
 }
 
@@ -116,7 +115,7 @@ describe('DatasetStats', () => {
     expect(rows).toContain('Made by last run 1');
   });
 
-  it('#36 item 2 (D1): renders unlabeled.vlm_no_class in the Unlabeled block when served', () => {
+  it('#36 item 2 (D1): renders unlabeled.vlm_no_class in the Unlabeled block', () => {
     target = document.createElement('div');
     document.body.appendChild(target);
     instance = mount(DatasetStats, { target, props: {} });
@@ -220,18 +219,6 @@ describe('DatasetStats', () => {
     expect(target.querySelector('[data-testid="region-stall-reason"]')).toBeNull();
   });
 
-  it('#36 item 2: omits the VLM-no-class row on a backend that predates the field', () => {
-    target = document.createElement('div');
-    document.body.appendChild(target);
-    instance = mount(DatasetStats, { target, props: {} });
-    flushSync();
-
-    capturedOpts?.onSnapshot?.({}, goodStats() as unknown as Record<string, unknown>);
-    flushSync();
-
-    expect(target.textContent).not.toContain('VLM, no class');
-  });
-
   it('D4 (visual audit 2026-09-24): no hardcoded model/vendor names or HDD copy, verifier count named as such', () => {
     installServedRegionProfile(WIDGET_TAG_PROFILE);
     target = document.createElement('div');
@@ -248,10 +235,9 @@ describe('DatasetStats', () => {
           confirmed: 30,
           by_detector: 20,
           by_segmenter: 10,
-          by_human: 0,
         },
         in_progress: { region_drain_total_unfinished: 3 },
-      } as Partial<DatasetStatsType>) as unknown as Record<string, unknown>,
+      } as StatsOverrides) as unknown as Record<string, unknown>,
     );
     flushSync();
 
@@ -282,9 +268,8 @@ describe('DatasetStats', () => {
           confirmed: 30,
           by_detector: 20,
           by_segmenter: 10,
-          by_human: 0,
         },
-      } as Partial<DatasetStatsType>) as unknown as Record<string, unknown>,
+      } as StatsOverrides) as unknown as Record<string, unknown>,
     );
     flushSync();
 

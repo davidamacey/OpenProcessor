@@ -1109,13 +1109,13 @@ export interface ModelInfo {
    *  the active config hard-blocks (`is_region_protected`, now also
    *  covering the ingest primary proposer/secondary classifier and the
    *  OCR det/rec pair, not just the region detector). `unloadButtonState`
-   *  reads this FIRST, ahead of `kind`/`is_region_protected` — the
-   *  server's own verdict, never re-derived from the other flags. */
-  unloadable?: boolean;
+   *  reads this FIRST, ahead of `is_region_protected` — the server's own
+   *  verdict, never re-derived from the other flags. */
+  unloadable: boolean;
   /** Served (OpenProcessor ba88751): true only for a model the pipeline
    *  can run without — the region profile's detector when a segmenter is
-   *  configured. Pairs with status `not_installed`. Absent on older backends. */
-  optional?: boolean;
+   *  configured. Pairs with status `not_installed`. */
+  optional: boolean;
   /** Present (with job_id/version) only for models promoted through this pipeline. */
   job_id?: string | null;
   promoted_at?: string | null;

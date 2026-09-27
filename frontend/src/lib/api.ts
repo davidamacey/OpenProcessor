@@ -1530,28 +1530,26 @@ export interface DatasetStats {
   regions: {
     /** Crops with a region_bbox_norm right now — the honest "crops with a
      *  region" count (matches the region cluster view). */
-    boxed?: number;
+    boxed: number;
     /** Crops the verifier confirmed carry a real region (region_status='detected'). */
-    confirmed?: number;
+    confirmed: number;
     /** Sum of region_detector credit — includes rejected/failed attempts,
-     *  so it OVERSTATES real regions. Kept for back-compat; not the headline. */
+     *  so it OVERSTATES real regions. Not the headline. */
     total_detected: number;
     by_detector: number;
     by_segmenter: number;
-    /** Legacy alias for ``by_human_drew``. */
-    by_human: number;
     /** Crops where the operator drew a fresh region bbox from scratch. */
-    by_human_drew?: number;
+    by_human_drew: number;
     /** Crops whose region was verified by a human (the Confirm button). */
-    verified_by_human?: number;
+    verified_by_human: number;
     /** Crops whose region was verified by the VLM verifier (auto-verify). */
-    verified_by_vlm?: number;
+    verified_by_vlm: number;
     /**
      * Union: any region the operator touched — drew the bbox OR
      * confirmed an AI-proposed one. The dashboard surfaces this as
      * the honest "you reviewed N regions" number.
      */
-    validated_by_human?: number;
+    validated_by_human: number;
   };
   unlabeled: {
     pending_detection: number;
@@ -1562,22 +1560,20 @@ export interface DatasetStats {
      *  `class_id`). */
     no_label_source: number;
     /** Subset of `no_label_source` the VLM looked at but couldn't (or
-     *  didn't) resolve to a class (#36 item 2). Served alongside
-     *  `no_label_source`; absent on a backend that predates it. */
-    vlm_no_class?: number;
+     *  didn't) resolve to a class (#36 item 2). */
+    vlm_no_class: number;
     /** F-23 (OpenProcessor d72cc63): crops a detector proposed but
      *  nothing has classified yet — a subset of `no_label_source`, like
-     *  `vlm_no_class`. Moved here from the always-0 `labeled.by_proposal`
-     *  (removed). Absent on a backend that predates it. */
-    by_proposal?: number;
+     *  `vlm_no_class`. */
+    by_proposal: number;
   };
   in_progress: {
     region_drain_total_unfinished: number;
     /** V-1 (OpenProcessor d72cc63): a served, human-readable line naming
      *  why the region drain can't progress (a region-profile dependency
      *  is down, and since when). Null when nothing is pending or every
-     *  dependency is ready; absent on an older backend. Rendered verbatim. */
-    region_stall_reason?: string | null;
+     *  dependency is ready. Rendered verbatim. */
+    region_stall_reason: string | null;
   };
   clusters: {
     last_run_at: string | null;
@@ -1721,19 +1717,19 @@ type RawCluster = {
   purity: number | null;
   /** How many members `purity` was computed over (the geometry pass's
    *  coverage for this cluster) — purity is noisy at low n. */
-  purity_n?: number | null;
+  purity_n: number | null;
   /** Always `'nearest_centroid'` today; served so the frontend never
    *  hardcodes what `purity` means. */
-  purity_basis?: string | null;
+  purity_basis: string | null;
   /** Server-banded purity (see `purity_thresholds` below) — 'pure' | 'mixed' | 'noisy'. */
   purity_tier: 'pure' | 'mixed' | 'noisy' | null;
   /** Largest-class share among LABELLED members (the old label-based
    *  "purity" — always 1.0 for a class cluster by construction, which is
    *  exactly why it stopped being called `purity`). `promotable` uses
    *  this, not the geometry-based `purity` above. */
-  label_purity?: number | null;
+  label_purity: number | null;
   /** Share of this cluster's members that have any label at all. */
-  labelled_share?: number | null;
+  labelled_share: number | null;
   /** Server's auto-promote eligibility gate for this cluster. */
   promotable: boolean;
   is_unlabeled: boolean;
@@ -1787,15 +1783,15 @@ function _rawClusterToCluster(
     // members), never the nearest-centroid geometry `purity` below —
     // mapping `purity` here rendered "class_b · 3%" for a cluster that
     // is 616/616 class_b.
-    dominant_pct: c.label_purity ?? null,
+    dominant_pct: c.label_purity,
     dominant_count: c.dominant_count ?? null,
     labelled_count: c.labelled_count ?? null,
     purity: c.purity,
-    purity_n: c.purity_n ?? null,
-    purity_basis: c.purity_basis ?? null,
+    purity_n: c.purity_n,
+    purity_basis: c.purity_basis,
     purity_tier: c.purity_tier ?? null,
-    label_purity: c.label_purity ?? null,
-    labelled_share: c.labelled_share ?? null,
+    label_purity: c.label_purity,
+    labelled_share: c.labelled_share,
     promotable: !!c.promotable,
     core_similarity_min: coreSimilarityMin,
     is_unlabeled: c.is_unlabeled,
@@ -3549,11 +3545,7 @@ export async function searchCrops(
   filter: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<SearchCrop>> {
-  type RawSearchItem = RawCrop & {
-    similarity_score?: number | null;
-    semantic_score?: number | null;
-    score?: number | null;
-  };
+  type RawSearchItem = RawCrop & { semantic_score: number | null };
   type RawPage = {
     total: number;
     page: number;
@@ -3570,11 +3562,8 @@ export async function searchCrops(
     return {
       ...base,
       // The backend's `_hydrate_item` (OpenProcessor semantic_search.py) sends
-      // the match score as `semantic_score` — `similarity_score`/`score`
-      // are legacy/defensive fallbacks that the live endpoint has never
-      // actually populated. Without the semantic_score read here every
-      // search-result badge silently rendered 0%.
-      similarity_score: it.similarity_score ?? it.semantic_score ?? it.score ?? 0,
+      // the match score as `semantic_score`.
+      similarity_score: it.semantic_score ?? 0,
     };
   });
   return {
