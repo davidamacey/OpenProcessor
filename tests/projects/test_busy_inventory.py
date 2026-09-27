@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import time
 from datetime import UTC, datetime
+
+import pytest
 
 from src.config.curation import base_curation_config
 from src.config.projects import ProjectRecord, resources_for_new
@@ -141,11 +144,27 @@ def test_detection_worker_inflight_reads_the_real_liveness_file(tmp_path) -> Non
     state_dir = record.resources.project_state_dir
     state_dir.mkdir(parents=True)
     (state_dir / 'runtime_detection_worker_workerhost.json').write_text(
-        json.dumps({'inflight': 3, 'applied': True, 'paused': False, 'host': 'workerhost'}),
+        json.dumps(
+            {
+                'inflight': 3,
+                'applied': True,
+                'paused': False,
+                'updated_at': time.time(),
+                'host': 'workerhost',
+            }
+        ),
         encoding='utf-8',
     )
     (state_dir / 'runtime_detection_worker_idlehost.json').write_text(
-        json.dumps({'inflight': 0, 'applied': True, 'paused': False, 'host': 'idlehost'}),
+        json.dumps(
+            {
+                'inflight': 0,
+                'applied': True,
+                'paused': False,
+                'updated_at': time.time(),
+                'host': 'idlehost',
+            }
+        ),
         encoding='utf-8',
     )
 
@@ -160,10 +179,10 @@ def test_detection_worker_inflight_scoped_to_its_own_dir(tmp_path) -> None:
     alpha.resources.project_state_dir.mkdir(parents=True)
     beta.resources.project_state_dir.mkdir(parents=True)
     (alpha.resources.project_state_dir / 'runtime_detection_worker_h1.json').write_text(
-        json.dumps({'inflight': 1, 'host': 'h1'}), encoding='utf-8'
+        json.dumps({'inflight': 1, 'updated_at': time.time(), 'host': 'h1'}), encoding='utf-8'
     )
     (beta.resources.project_state_dir / 'runtime_detection_worker_h2.json').write_text(
-        json.dumps({'inflight': 1, 'host': 'h2'}), encoding='utf-8'
+        json.dumps({'inflight': 1, 'updated_at': time.time(), 'host': 'h2'}), encoding='utf-8'
     )
 
     assert _detection_worker_inflight(alpha) == [JobRef(kind='detection_worker', job_id='h1')]
@@ -193,3 +212,99 @@ def test_running_jobs_aggregates_every_source_for_one_project(tmp_path) -> None:
 
     beta_jobs = running_jobs(beta)
     assert beta_jobs == [JobRef(kind='train', job_id='z')]
+
+
+# The per-project job states of the four in-process curation job runners
+# (projects_plan.md §5.4: item-scores, probe, selection, plus the UMAP viz
+# job). Each writes ``<env base>/projects/<slug>/state.json`` + a
+# ``heartbeat`` file.
+_STATE_JOBS = [
+    ('probe', 'OP_PROBE_JOBS_DIR'),
+    ('scores', 'OP_SCORES_STATE_DIR'),
+    ('select', 'OP_SELECT_JOBS_DIR'),
+    ('viz', 'OP_VIZ_JOBS_DIR'),
+]
+
+
+def _write_job_state(base, slug: str, status: str, *, heartbeat_age_s: float | None) -> None:
+    import os
+    import time
+
+    job_dir = base / 'projects' / slug
+    job_dir.mkdir(parents=True, exist_ok=True)
+    (job_dir / 'state.json').write_text(
+        json.dumps({'job_id': f'{slug}-job-1', 'status': status}), encoding='utf-8'
+    )
+    heartbeat = job_dir / 'heartbeat'
+    if heartbeat_age_s is None:
+        heartbeat.unlink(missing_ok=True)
+        return
+    heartbeat.touch()
+    then = time.time() - heartbeat_age_s
+    os.utime(heartbeat, (then, then))
+
+
+@pytest.mark.parametrize(('kind', 'env_var'), _STATE_JOBS)
+def test_a_running_curation_job_makes_only_its_own_project_busy(
+    tmp_path, monkeypatch, kind: str, env_var: str
+) -> None:
+    base = tmp_path / kind
+    monkeypatch.setenv(env_var, str(base))
+    alpha = _record('alpha', tmp_path)
+    beta = _record('beta', tmp_path)
+    _write_job_state(base, 'alpha', 'running', heartbeat_age_s=1.0)
+    _write_job_state(base, 'beta', 'completed', heartbeat_age_s=1.0)
+
+    assert JobRef(kind=kind, job_id='alpha-job-1') in running_jobs(alpha)
+    assert [j for j in running_jobs(beta) if j.kind == kind] == []
+
+
+@pytest.mark.parametrize(('kind', 'env_var'), _STATE_JOBS)
+def test_a_just_started_curation_job_with_no_heartbeat_yet_is_busy(
+    tmp_path, monkeypatch, kind: str, env_var: str
+) -> None:
+    base = tmp_path / kind
+    monkeypatch.setenv(env_var, str(base))
+    alpha = _record('alpha', tmp_path)
+    _write_job_state(base, 'alpha', 'running', heartbeat_age_s=None)
+
+    assert JobRef(kind=kind, job_id='alpha-job-1') in running_jobs(alpha)
+
+
+@pytest.mark.parametrize(('kind', 'env_var'), _STATE_JOBS)
+def test_a_curation_job_with_a_stale_heartbeat_is_not_busy(
+    tmp_path, monkeypatch, kind: str, env_var: str
+) -> None:
+    """A ``running`` state whose heartbeat is past the job module's own
+    staleness window is an orphan of a dead process, not a live job."""
+    base = tmp_path / kind
+    monkeypatch.setenv(env_var, str(base))
+    alpha = _record('alpha', tmp_path)
+    _write_job_state(base, 'alpha', 'running', heartbeat_age_s=3600.0)
+
+    assert [j for j in running_jobs(alpha) if j.kind == kind] == []
+
+
+def test_a_crashed_detection_workers_stale_liveness_file_is_not_busy(tmp_path) -> None:
+    """A worker that died mid-batch leaves ``inflight > 0`` behind. Past
+    the worker heartbeat window it must stop counting as busy, or the
+    project could never be deleted or archived."""
+    import time
+
+    from src.services.curation.worker_liveness import DEFAULT_MAX_AGE_S
+
+    record = _record('alpha', tmp_path)
+    state_dir = record.resources.project_state_dir
+    state_dir.mkdir(parents=True)
+    (state_dir / 'runtime_detection_worker_dead.json').write_text(
+        json.dumps(
+            {'inflight': 4, 'host': 'dead', 'updated_at': time.time() - DEFAULT_MAX_AGE_S - 5}
+        ),
+        encoding='utf-8',
+    )
+    (state_dir / 'runtime_detection_worker_live.json').write_text(
+        json.dumps({'inflight': 2, 'host': 'live', 'updated_at': time.time()}),
+        encoding='utf-8',
+    )
+
+    assert _detection_worker_inflight(record) == [JobRef(kind='detection_worker', job_id='live')]

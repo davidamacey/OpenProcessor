@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-promote) and `class_remap_source`.
 
 ### Fixed
+- `src/services/projects/busy.py`'s `running_jobs()` now reports running
+  probe, item-scores, selection and viz jobs (each module's own
+  `state.json` + heartbeat busy rule, read for the given project), so a
+  P3 delete/archive busy check cannot pass while one runs. A detection
+  worker liveness file older than the worker heartbeat window
+  (`worker_liveness.DEFAULT_MAX_AGE_S`) no longer counts as busy forever.
 - `/train/preflight`, `/train/start` and `/train/start_campaign` refuse a
   `dataset_export_dir` outside the bound project's `export_root` with 422
   `{"detail": {"error": "export_outside_project", ...}}`, before any check
