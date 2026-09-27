@@ -47,16 +47,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unbound project-scoped config fails closed.** Reading a project-scoped
   `CurationConfig` field with no project bound raises `ProjectNotBound`
   instead of silently using `default`. Requests bind through their route;
-  the API lifespan binds `default` for startup work and its background
-  loops; every `scripts/curation` entry point binds `--project` (default
-  `$OP_PROJECT`, else `default`) for its whole process.
+  the API lifespan runs unbound and binds each active project in turn
+  only for startup steps that touch project data; every
+  `scripts/curation` entry point binds `--project` (default
+  `$OP_PROJECT`, else `default`) for its whole process, resolved through
+  the registry so the stored status applies.
 - Index names, the class registry, the index bootstrap flag, the UMAP
   reducer/projection state files, the eval-dataset roots, and the scores /
   probe / selection / projection job dirs resolve per bound project
   (`items_index()` and friends replace the frozen `CURATION_*_INDEX` /
   `ITEMS_INDEX` constants). `default` keeps today's names and paths.
-- The event hub stamps every event with its `project`; a scoped stream
-  delivers its own project's events plus global ones.
+- The event hub stamps every event with the bound `project` and refuses
+  an unbound publish or one naming another project; a scoped stream
+  delivers only its own project's events, the global stream only
+  `project: null` ones (`project.*`, `combine.*`).
+- **The OpenSearch project guard fails closed by construction.** It
+  allowlists the request shapes the codebase sends and requires every
+  index they name (URL, multi-doc line, query body) to belong to the
+  bound project; index-less searches, wildcards, `_all`, aliases,
+  `_reindex`, `_sql`, unknown `op_prj_` names and cross-index bodies are
+  refused. It is installed when the shared client is built.
 
 ### Added
 - **Text-free region mode.** A region profile with `text_reader: "none"`
