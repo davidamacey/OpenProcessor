@@ -96,7 +96,7 @@ class TestSegmenterClientDisabled:
 
     @pytest.mark.parametrize('base_url', [None, '', '   ', ',,'])
     async def test_disabled_client_construction_does_not_raise(self, base_url) -> None:
-        client = SegmenterClient(base_url=base_url)
+        client = SegmenterClient(base_url=base_url, source_name='sam3')
         assert client.enabled is False
         assert client.base_urls == []
         assert client.base_url == ''
@@ -108,7 +108,7 @@ class TestSegmenterClientDisabled:
 
         transport = httpx.MockTransport(handler)
         httpx_client = httpx.AsyncClient(transport=transport, timeout=5.0)
-        client = SegmenterClient(base_url='', client=httpx_client)
+        client = SegmenterClient(base_url='', client=httpx_client, source_name='sam3')
 
         with caplog.at_level(logging.INFO):
             result = await client.segment(b'\xff\xd8fake')
@@ -117,7 +117,7 @@ class TestSegmenterClientDisabled:
         await client.aclose()
 
     async def test_enabled_client_is_unaffected(self) -> None:
-        client = SegmenterClient(base_url='http://segmenter-fake:8000')
+        client = SegmenterClient(base_url='http://segmenter-fake:8000', source_name='sam3')
         assert client.enabled is True
         assert client.base_urls == ['http://segmenter-fake:8000']
         assert client.base_url == 'http://segmenter-fake:8000'
@@ -134,7 +134,7 @@ class TestCascadeWithoutSegmenter:
         silently omitting it.
         """
         F = get_region_fields()
-        segmenter = SegmenterClient(base_url=None)
+        segmenter = SegmenterClient(base_url=None, source_name='sam3')
         assert segmenter.enabled is False
 
         task = _make_task(region_status='pending', group='cars')
@@ -158,7 +158,7 @@ class TestCascadeWithoutSegmenter:
         (segment returns None) instead of raising.
         """
         F = get_region_fields()
-        segmenter = SegmenterClient(base_url='')
+        segmenter = SegmenterClient(base_url='', source_name='sam3')
 
         task = _make_task(region_status='pending', class_name='class_c', group='group_c')
         await worker._process_crop(

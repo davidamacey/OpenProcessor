@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Triton model names are env-overridable settings, not literals**
+  (`TritonModelConfig` in `src/config/settings.py`): `FACE_DETECT_MODEL`,
+  `ARCFACE_MODEL`, `CLIP_IMAGE_MODEL`, `CLIP_TEXT_MODEL`, `OCR_DET_MODEL`,
+  `OCR_REC_MODEL` now read from `os.environ` like `YOLO_MODEL` already
+  did, plus two new fields, `OCR_PIPELINE_MODEL` and `PE_IMAGE_MODEL`/
+  `PE_TEXT_MODEL`. `triton_client.py`, `fast_face_client.py`,
+  `pe_encoder.py` and `scripts/curation/bakeoff/sample.py` now read these
+  instead of hardcoding the model name. Documented (commented, advanced)
+  in `env.template`.
+- **One probe-architecture registry.** `PROBE_ARCHITECTURES` (renamed
+  from the private `_PROBE_ARCHITECTURES`) in
+  `src/services/curation/probe_models.py` is now the single source of
+  truth, imported by `scripts/curation/run_probe.py`,
+  `src/services/curation/probe_predictions.py`,
+  `src/services/curation/probe_job.py` and `src/routers/curation/probe.py`
+  instead of each redeclaring its own copy of the tuple.
+  `start_probe_job` now rejects an unknown `architecture` immediately
+  (`ValueError`, `422` at `POST /probe/run`) instead of only failing deep
+  inside the background task.
+
+### Removed
+- **COCO special-case in class-name resolution.** `class_names.py`'s
+  `_STOCK_COCO_MODEL_NAMES` fallback (borrowing COCO's vocabulary for the
+  stock YOLO11 detector names if `labels.txt` was ever missing) is gone —
+  both stock detectors already ship their own `labels.txt`, so this was
+  dead safety net that violated the class-identity invariant (names come
+  from the model's own labels, never another model's).
+
+### Fixed
+- **`SegmenterClient.source_name` has no default.** The constructor no
+  longer defaults to `source_name='sam3'`; every caller (the worker
+  runner, tests) passes the active profile's `segmenter_name` explicitly,
+  so a non-default segmenter name can never be silently mislabeled as
+  `sam3` in stored candidate provenance.
+
 ### Added
 - **Text-free region mode.** A region profile with `text_reader: "none"`
   stores region boxes and no region text: the region OCR reader never

@@ -357,7 +357,7 @@ def _build_yolov5_objectness_predictor(model_path: Path) -> tuple[_PredictFn, st
     return predict, model_path.name
 
 
-_PROBE_ARCHITECTURES = ('yolo11', 'yolo26', 'yolov5_objectness')
+PROBE_ARCHITECTURES = ('yolo11', 'yolo26', 'yolov5_objectness')
 
 
 def _build_predictor(model_path: Path, architecture: str) -> tuple[_PredictFn, str]:
@@ -377,5 +377,5 @@ def _build_predictor(model_path: Path, architecture: str) -> tuple[_PredictFn, s
     if architecture == 'yolov5_objectness':
         return _build_yolov5_objectness_predictor(model_path)
     raise ValueError(
-        f'unknown probe architecture {architecture!r} (expected one of {_PROBE_ARCHITECTURES})'
+        f'unknown probe architecture {architecture!r} (expected one of {PROBE_ARCHITECTURES})'
     )

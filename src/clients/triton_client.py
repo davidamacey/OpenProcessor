@@ -261,7 +261,7 @@ class TritonClient:
         clip_inputs[0].set_data_from_numpy(clip_input)
         clip_outputs = [InferRequestedOutput('image_embeddings')]
         clip_response = self._infer_with_retry(
-            'mobileclip2_s2_image_encoder', clip_inputs, clip_outputs
+            TritonModelConfig.CLIP_IMAGE_MODEL, clip_inputs, clip_outputs
         )
 
         # Parse outputs
@@ -367,7 +367,8 @@ class TritonClient:
         input_tensor.set_data_from_numpy(img_array)
 
         output = InferRequestedOutput('image_embeddings')
-        response = self._infer_with_retry('mobileclip2_s2_image_encoder', [input_tensor], [output])
+        clip_image_model = TritonModelConfig.CLIP_IMAGE_MODEL
+        response = self._infer_with_retry(clip_image_model, [input_tensor], [output])
 
         return response.as_numpy('image_embeddings')[0]
 
@@ -377,7 +378,8 @@ class TritonClient:
         input_tensor.set_data_from_numpy(tokens.astype(np.int64))
 
         output = InferRequestedOutput('text_embeddings')
-        response = self._infer_with_retry('mobileclip2_s2_text_encoder', [input_tensor], [output])
+        clip_text_model = TritonModelConfig.CLIP_TEXT_MODEL
+        response = self._infer_with_retry(clip_text_model, [input_tensor], [output])
 
         return response.as_numpy('text_embeddings')[0]
 
@@ -491,7 +493,7 @@ class TritonClient:
             InferRequestedOutput('rec_scores'),
         ]
 
-        response = self._infer_with_retry('ocr_pipeline', inputs, outputs)
+        response = self._infer_with_retry(TritonModelConfig.OCR_PIPELINE_MODEL, inputs, outputs)
 
         num_texts_raw = response.as_numpy('num_texts')
         logger.info(
@@ -596,7 +598,7 @@ class TritonClient:
             output = InferRequestedOutput('image_embeddings')
 
             response = self._infer_with_retry(
-                'mobileclip2_s2_image_encoder', [input_tensor], [output]
+                TritonModelConfig.CLIP_IMAGE_MODEL, [input_tensor], [output]
             )
 
             embeddings = response.as_numpy('image_embeddings')
@@ -633,7 +635,9 @@ class TritonClient:
             input_tensor.set_data_from_numpy(batch.astype(np.float32))
 
             output = InferRequestedOutput('output')
-            response = self._infer_with_retry('arcface_w600k_r50', [input_tensor], [output])
+            response = self._infer_with_retry(
+                TritonModelConfig.ARCFACE_MODEL, [input_tensor], [output]
+            )
 
             embeddings = response.as_numpy('output')
             all_embeddings.append(embeddings)
