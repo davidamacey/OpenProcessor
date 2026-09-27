@@ -281,6 +281,7 @@ class TritonPromoter:
         fp16: bool = True,
         overwrite: bool = False,
         class_remap: ClassRemapResult | None = None,
+        project: str | None = None,
     ) -> PromoteResult:
         """Run the promote pipeline end-to-end.
 
@@ -402,6 +403,12 @@ class TritonPromoter:
             'triton_name': triton_name,
             'version': str(next_version),
             'promoted_at': datetime.now(tz=UTC).isoformat(),
+            # docs/design/openprocessor_internal/projects_plan.md §5.3: the
+            # project that submitted this promote, so an operator (or
+            # DELETE /models/{name}'s ownership check) can trace a served
+            # model back to its owning project without re-deriving it from
+            # ``triton_name``'s prefix.
+            'project': project,
             'class_remap': {
                 'source': remap.source,
                 'n_classes': len(remap.mapping)
@@ -648,6 +655,7 @@ async def promote_yolo26_to_triton(
     overwrite: bool = False,
     class_remap: ClassRemapResult | None = None,
     promoter: TritonPromoter | None = None,
+    project: str | None = None,
 ) -> PromoteResult:
     """Convenience wrapper. The router uses this; tests pass a custom promoter."""
     p = promoter or TritonPromoter()
@@ -660,6 +668,7 @@ async def promote_yolo26_to_triton(
         fp16=fp16,
         overwrite=overwrite,
         class_remap=class_remap,
+        project=project,
     )
 
 
