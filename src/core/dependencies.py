@@ -102,9 +102,16 @@ class OpenSearchClientFactory:
             settings = get_settings()
 
             logger.info(f'Initializing OpenSearch client ({settings.opensearch_url})...')
-            app_state._opensearch_client = OpenSearchClient(
+            client = OpenSearchClient(
                 hosts=[settings.opensearch_url], http_auth=None, timeout=settings.opensearch_timeout
             )
+            # The project guard goes on at construction, before the first
+            # request of any kind (projects_plan.md §2.4).
+            from src.services.projects.guard import install_project_guard
+            from src.services.projects.registry import get_project_registry
+
+            install_project_guard(client.client, get_project_registry())
+            app_state._opensearch_client = client
 
             if not await app_state._opensearch_client.ping():
                 raise RuntimeError(f'OpenSearch connection failed: {settings.opensearch_url}')
@@ -189,6 +196,15 @@ async def get_async_triton():
 async def get_opensearch():
     """Dependency for OpenSearch client."""
     return await OpenSearchClientFactory.get_client()
+
+
+async def get_curation_opensearch() -> Any:
+    """Dependency for the raw, project-guarded ``AsyncOpenSearch`` every
+    curation route uses (one dependency for every curation router, so one
+    override covers them all)."""
+    from src.services.projects.guard import make_curation_opensearch
+
+    return await make_curation_opensearch()
 
 
 async def get_visual_search_service():
