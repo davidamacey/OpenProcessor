@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-promote) and `class_remap_source`.
 
 ### Fixed
+- `PUT .../models/{name}/sharing`'s revision check is atomic: the
+  read-compare-write of `promote.json` holds a per-model `flock`
+  (`job_lock.exclusive_file_lock`, new blocking sibling of
+  `exclusive_start_lock`) and writes via temp file + rename
+  (`src/services/training/promote_json.py`). Two concurrent PUTs on the
+  same `expected_revision` now give one 200 and one 409
+  `revision_conflict` instead of two 200s. A re-promote takes the same
+  lock and keeps `sharing_revision` (it used to drop it back to 1).
 - `src/services/projects/busy.py`'s `running_jobs()` now reports running
   probe, item-scores, selection and viz jobs (each module's own
   `state.json` + heartbeat busy rule, read for the given project), so a

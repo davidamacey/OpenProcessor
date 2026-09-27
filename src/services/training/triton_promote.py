@@ -27,7 +27,6 @@ accelerator JIT-compile. We need different scaffolding.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 import os
 import shutil
@@ -39,6 +38,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from src.core.logging import get_logger
+from src.services.training.promote_json import write_promote_backpointer
 from src.services.training.yolo_triton_config import (
     DEFAULT_INPUT_SIZE,
     DEFAULT_MAX_BATCH,
@@ -399,14 +399,6 @@ class TritonPromoter:
         # 5xx's (fail-soft — the files are still valid and loadable later).
         promote_json_path = model_dir / 'promote.json'
         remap = class_remap or _NONE_REMAP
-        # §5.5 (owner D1): a re-promote (new version of the same
-        # triton_name) preserves the owner's prior sharing opt-in --
-        # PUT .../sharing is the only route that changes it.
-        prior_shared = False
-        with contextlib.suppress(OSError, ValueError):
-            prior_shared = bool(
-                json.loads(promote_json_path.read_text(encoding='utf-8')).get('shared')
-            )
         backpointer = {
             'job_id': status.job_id,
             'triton_name': triton_name,
@@ -421,8 +413,8 @@ class TritonPromoter:
             # §5.5: never crosses a project boundary by raw id -- other
             # projects consume this model only by class NAME
             # (src.services.training.model_classes), via labels.txt's own
-            # model-output order.
-            'shared': prior_shared,
+            # model-output order. `shared`/`sharing_revision` are carried
+            # over from the prior promote.json by write_promote_backpointer.
             'classes': [
                 {'model_id': i, 'name': class_id_to_name[i]} for i in sorted(class_id_to_name)
             ],
@@ -435,11 +427,7 @@ class TritonPromoter:
                 'sha256': None,
             },
         }
-        await asyncio.to_thread(
-            promote_json_path.write_text,
-            json.dumps(backpointer, indent=2, sort_keys=True),
-            encoding='utf-8',
-        )
+        await asyncio.to_thread(write_promote_backpointer, promote_json_path, backpointer)
 
         # Copy the resolved remap into the served model dir too, alongside
         # config.pbtxt/labels.txt, so an operator inspecting the served
