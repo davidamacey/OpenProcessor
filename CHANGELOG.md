@@ -8,6 +8,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **P3F finish pass 3 (2026-09-27).** Closes the "MERGE AFTER FIXES"
+  re-review's two majors and its m-a path-escape gap:
+  - **MA1**: a status-transition write now re-validates the status it
+    still owns, not just the storage-level OCC token. `_refetch_for_write`
+    takes an `expect_status` argument and raises 409 `invalid_transition`
+    if a fresh re-read is no longer in that status -- applied to create's
+    `active`/`failed` writes (`expect_status='building'`) and
+    `delete_project_finish`'s drain-timeout rollback and tombstone
+    (`expect_status='deleting'`). Without this, a re-read taken
+    immediately before a write always has a trivially-current seq/term
+    (nothing else was writing at that exact instant), so OCC alone never
+    caught a slow create's late `active` write resurrecting a slug a
+    stale-building delete had already tombstoned. `delete_project` itself
+    now reads the record ONCE (`_get_mutable_record`) and runs every
+    precondition check plus the write against that same read's seq/term,
+    instead of checking against a possibly-stale registry snapshot and
+    then re-reading fresh only at write time. A new process-wide
+    `delete._FINISH_IN_PROGRESS` guard (plus a router-level
+    `_BACKGROUND_DELETE_TASKS` keyed by slug) also ensures only one
+    `delete_project_finish` genuinely runs to completion per slug at a
+    time, so a re-DELETE issued mid-drain can no longer race a second
+    finish against the first one's own rollback.
+  - **MA2**: `delete_project_finish`'s model-unload step (and
+    `dry_run_delete`'s `promoted_models` report) now enumerate EVERY
+    model a project owns (`_owned_models`, keyed on
+    `promote.json.project`), not just the `shared=True` subset
+    (`_shared_model_users`, now used only for the `in_use` refusal). A
+    project's own models -- private ones included, the common case --
+    are always unloaded on a normal delete; `force` only bypasses the
+    `in_use` 409 for the shared subset, never whether unload runs.
+  - **m-a**: the delete path-escape guard (m1, previous pass) covered
+    only `train_jobs_dir`/`autolabel_dir`. The other 6 of the project's
+    8 dirs still accepted `path == shared_root` itself (a corrupted
+    resources record pointing at the multi-project root could wipe every
+    sibling project's dir tree). One guard
+    (`_require_project_scoped_path`) now covers all 8, each requiring a
+    strict `<shared_root>/<slug>`-rooted path, always raising
+    `path_escape`. Path validation (`_validate_delete_paths`) also now
+    runs as a preflight in `delete_project_finish`, before the drain
+    wait and the irreversible index delete -- previously it ran only
+    inside dir removal, itself after indexes were already gone, so a
+    `path_escape` left the record wedged `deleting` forever.
+  - **m5 (partial, from the prior pass)**: a train job's `JobRef.label`
+    is now its submitted `mlflow_run_name` (read from the companion
+    `<job_id>.job.json`) when one was set, falling back to the internal
+    job id only when it wasn't -- documented explicitly rather than
+    always silently treating the job id as a human label.
+
 - **P3F finish pass 2 (2026-09-27).** Closes every item the P3 re-review
   still marked open (verdict FIX-FIRST):
   - **M4 retry**: a re-issued `DELETE ?confirm=<slug>` on a record already
