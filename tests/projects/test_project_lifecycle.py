@@ -273,3 +273,98 @@ def test_archive_last_active_project_refused() -> None:
             )
         )
     assert exc_info.value.detail['error'] == 'last_active_project'
+
+
+def test_create_with_bad_clone_source_burns_no_slug_and_leaves_no_indexes() -> None:
+    """M7/m9: a refused clone (typo'd source) must run before the first
+    write -- no record, no indexes, no retired slug. Previously the
+    'building' record and indexes were created first, the clone check
+    ran last, and the slug was left permanently 'failed'."""
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            lifecycle.create_project(
+                client, slug='gamma', display_name='Gamma', clone_settings_from='alpah'
+            )
+        )
+    assert exc_info.value.detail['error'] == 'project_not_found'
+
+    asyncio.run(registry.ensure_fresh())
+    assert registry.get('gamma') is None
+    assert client.indexes == {}
+
+    # The slug is free to try again, cleanly, with the typo fixed.
+    asyncio.run(lifecycle.create_project(client, slug='alpah', display_name='Alpah'))
+    record, _ = asyncio.run(
+        lifecycle.create_project(
+            client, slug='gamma', display_name='Gamma', clone_settings_from='alpah'
+        )
+    )
+    assert record.status == 'active'
+
+
+def test_create_with_bad_clone_axis_burns_no_slug() -> None:
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            lifecycle.create_project(
+                client,
+                slug='gamma',
+                display_name='Gamma',
+                clone_settings_from='default',
+                clone_axes=['bogus'],
+            )
+        )
+    assert exc_info.value.detail['error'] == 'combine_invalid'
+    asyncio.run(registry.ensure_fresh())
+    assert registry.get('gamma') is None
+
+
+def test_create_cloning_into_itself_is_a_clean_4xx_not_500() -> None:
+    """m9: previously a 500 SameFileError from shutil.copy2."""
+    client = FakeLifecycleOpenSearch()
+    _registry_for(client)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            lifecycle.create_project(
+                client, slug='gamma', display_name='Gamma', clone_settings_from='gamma'
+            )
+        )
+    assert exc_info.value.detail['error'] == 'combine_invalid'
+    assert exc_info.value.status_code < 500
+
+
+def test_create_cloning_from_a_building_source_is_refused() -> None:
+    """m9: only active/archived projects can be cloned from."""
+    client = FakeLifecycleOpenSearch()
+    _registry_for(client)
+    from src.config.curation import base_curation_config
+    from src.config.projects import ProjectRecord, resources_for_new
+    from src.services.projects.registry import write_record as raw_write_record
+
+    resources = resources_for_new('building_src', base_curation_config())
+    record = ProjectRecord(
+        slug='building_src',
+        display_name='Building',
+        description='',
+        status='building',
+        revision=1,
+        created_at='t',
+        updated_at='t',
+        origin=None,
+        resources=resources,
+    )
+    asyncio.run(raw_write_record(client, record, op_type='create'))
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            lifecycle.create_project(
+                client, slug='gamma', display_name='Gamma', clone_settings_from='building_src'
+            )
+        )
+    assert exc_info.value.detail['error'] == 'clone_source_not_ready'

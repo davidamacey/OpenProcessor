@@ -22,6 +22,52 @@ if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
 
 
+_CLONE_SOURCE_READY_STATUSES = frozenset({'active', 'archived'})
+
+
+async def _validate_clone_source(
+    client: Any,  # noqa: ARG001 - kept for signature symmetry with _validate_clone
+    *,
+    target_slug: str,
+    from_slug: str,
+    axes: list[str] | None,
+) -> tuple[ProjectRecord, list[str]]:
+    """Every clone refusal that does not depend on the target already
+    existing, checked before the *first* write on either caller's path
+    (M7): unknown axis (422 ``combine_invalid``), a clone into itself
+    (422 ``combine_invalid`` -- was a 500 ``SameFileError``, m9), and a
+    source that does not exist or is not ``active``/``archived`` (m9 --
+    ``building``/``failed``/``deleting`` sources are refused, 409
+    ``clone_source_not_ready``). Returns the source record and resolved
+    axes; callers still run their own target-shaped checks (target
+    emptiness) afterwards."""
+    from src.services.projects.lifecycle import _require_found, _resolve_existing
+
+    resolved_axes = axes if axes else list(CLONEABLE_AXES)
+    for axis in resolved_axes:
+        if axis not in CLONEABLE_AXES:
+            raise api_error(422, 'combine_invalid', f"unknown clone axis '{axis}'")
+
+    if from_slug == target_slug:
+        raise api_error(
+            422,
+            'combine_invalid',
+            f"'{target_slug}' cannot be cloned into itself",
+            project=target_slug,
+        )
+
+    source = _require_found(await _resolve_existing(from_slug), from_slug)
+    if source.status not in _CLONE_SOURCE_READY_STATUSES:
+        raise api_error(
+            409,
+            'clone_source_not_ready',
+            f"'{from_slug}' is {source.status}; only an active or archived project can be cloned",
+            project=from_slug,
+            project_status=source.status,
+        )
+    return source, resolved_axes
+
+
 async def _validate_clone(
     client: Any,
     *,
@@ -30,18 +76,13 @@ async def _validate_clone(
     axes: list[str] | None,
 ) -> tuple[ProjectRecord, list[str]]:
     """Every refusal a clone can hit, checked before anything is written:
-    unknown axis (422 ``combine_invalid``), unknown source (404), and
+    the source-shaped checks in :func:`_validate_clone_source`, plus
     ``classes`` into a target that already has items (409
     ``target_not_empty`` -- a clone is always a byte-identical starting
     point, never a merge). Returns the source record and resolved axes."""
-    from src.services.projects.lifecycle import _require_found, _resolve_existing
-
-    resolved_axes = axes if axes else list(CLONEABLE_AXES)
-    for axis in resolved_axes:
-        if axis not in CLONEABLE_AXES:
-            raise api_error(422, 'combine_invalid', f"unknown clone axis '{axis}'")
-
-    source = _require_found(await _resolve_existing(from_slug), from_slug)
+    source, resolved_axes = await _validate_clone_source(
+        client, target_slug=target_record.slug, from_slug=from_slug, axes=axes
+    )
 
     if 'classes' in resolved_axes:
         with bind_project(target_record):

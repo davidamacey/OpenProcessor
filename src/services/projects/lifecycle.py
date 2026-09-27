@@ -192,6 +192,19 @@ async def create_project(
             )
         raise api_error(409, 'slug_taken', f"a project named '{slug}' already exists", project=slug)
 
+    if clone_settings_from:
+        # M7: every refusal a clone can raise -- unknown axis, clone into
+        # itself, a source that does not exist or is not ready -- runs
+        # BEFORE the first write. A refused clone must burn no slug, hold
+        # no shards and leave no dirs (it used to leave the record
+        # 'failed' with gamma's indexes already created -- see the P3
+        # review's M7/m9).
+        from src.services.projects.clone import _validate_clone_source
+
+        await _validate_clone_source(
+            client, target_slug=slug, from_slug=clone_settings_from, axes=clone_axes
+        )
+
     warnings = await _capacity_error_or_warning(client)
 
     now = _now()

@@ -39,6 +39,7 @@ ErrorCode = Literal[
     'slug_invalid',
     'confirm_mismatch',
     'combine_invalid',
+    'clone_source_not_ready',
     'model_name_reserved',
     'internal_isolation_error',
     'revision_conflict',
