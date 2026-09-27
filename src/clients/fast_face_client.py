@@ -22,6 +22,7 @@ import numpy as np
 from tritonclient.grpc import InferInput, InferRequestedOutput
 
 from src.clients.triton_pool import TritonClientManager
+from src.config.settings import TritonModelConfig
 from src.utils.face_align import align_faces_batch, preprocess_for_arcface
 from src.utils.retry import retry_sync
 from src.utils.scrfd_decode import (
@@ -49,8 +50,8 @@ class FastFaceClient:
 
     def __init__(self, triton_url: str = 'triton-server:8001'):
         self.client = TritonClientManager.get_sync_client(triton_url)
-        self.scrfd_model = 'scrfd_10g_bnkps'
-        self.arcface_model = 'arcface_w600k_r50'
+        self.scrfd_model = TritonModelConfig.FACE_DETECT_MODEL
+        self.arcface_model = TritonModelConfig.ARCFACE_MODEL
         logger.info('FastFaceClient initialized (SCRFD + Umeyama alignment)')
 
     # =========================================================================

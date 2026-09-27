@@ -79,11 +79,9 @@ def test_model_prefix_matches_resources_for_new_convention() -> None:
     beta = resources_for_new('beta', base_curation_config())
     assert beta.model_prefix == 'beta__'
     default_prefix = resources_for_new('default', base_curation_config()).model_prefix
-    # default's own resources come from resources_for_default, not
-    # resources_for_new -- but resources_for_new('default', ...) would
-    # still compute 'default__', proving the empty default_prefix on
-    # the real default record comes specifically from
-    # resources_for_default, not from the slug happening to be 'default'.
+    # P1R D-A: `default` is an ordinary registered project now, built with
+    # this same `resources_for_new` -- no env-derived special case, so its
+    # model_prefix follows the same convention as every other slug.
     assert default_prefix == 'default__'
 
 
@@ -131,9 +129,10 @@ async def test_default_promote_name_is_unprefixed(
     monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=True))
     promoter = TritonPromoter(triton_models_dir=scratch_models_dir, triton_http_url='http://unused')
 
-    from src.services.projects.registry import default_project_record
+    from src.config.curation import base_curation_config
+    from src.config.projects import new_project_record
 
-    with bind_project(default_project_record()):
+    with bind_project(new_project_record('default', base_curation_config())):
         from src.config.curation import get_curation_config
 
         cfg = get_curation_config()
@@ -192,9 +191,10 @@ def test_project_owns_model_prefix_isolation() -> None:
             assert _project_owns_model('other__x') is False
             assert _project_owns_model('yolov11_small_trt_end2end') is False
 
-        from src.services.projects.registry import default_project_record
+        from src.config.curation import base_curation_config
+        from src.config.projects import new_project_record
 
-        with bind_project(default_project_record()):
+        with bind_project(new_project_record('default', base_curation_config())):
             assert _project_owns_model('yolov11_small_trt_end2end') is True
             assert _project_owns_model('beta__x') is False
     finally:

@@ -204,3 +204,27 @@ def test_every_curation_script_takes_and_binds_a_project() -> None:
         if 'bind_script_project(' not in text:
             offenders.append(f'{_rel(path)}: --project never bound')
     assert offenders == []
+
+
+def test_no_index_name_literals() -> None:
+    """A literal index name (``'op_items'``, ``'op_prj_default__items'``
+    and friends) pins code to one project's index; every index name comes
+    from the bound project (``index_name(cfg, role)``). Only
+    ``src/config/curation.py`` spells the ``default`` names, as the shape of
+    an explicitly constructed ``CurationConfig``."""
+    import re
+
+    from src.config.curation import IndexRole
+
+    roles = '|'.join(role.value for role in IndexRole)
+    pattern = re.compile(rf'^op_(prj_[a-z0-9-]+__)?({roles}|curation_settings|clusters)$')
+    offenders = [
+        f'{_rel(path)}:{node.lineno} {node.value!r}'
+        for path in _iter_py_files('src', 'scripts', 'docker')
+        if _rel(path) != 'src/config/curation.py'
+        for node in ast.walk(_parse(path))
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and pattern.match(node.value)
+    ]
+    assert offenders == []

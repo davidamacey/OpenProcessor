@@ -1150,8 +1150,8 @@ changes actual server behavior, not just what `GET /methods` displays:
 | `prompt_pack` | `POST /pipeline/auto_label*` — `?prompt_pack=<id>` selects the pack for that job's VLM labeling stage (same override/`422`/echo semantics); omitted resolves via this function. Every VLM endpoint (`POST /vlm/label_batch`, `/vlm/verify_regions`, `/vlm/verify_region_batch`, `/vlm/region_visible_batch`) also uses the effective default. Selectable ids: the built-in generic pack, every `OP_PROMPT_PACK_PATHS` pack, and the `OP_PROMPT_PACK_PATH` pack (the fallback default). |
 
 Storage: a single OpenSearch document (not a full index of many rows),
-in its own small index (`IndexRole.SETTINGS`, default `op_curation_settings`,
-override via `OP_SETTINGS_INDEX`) addressed by the fixed doc id
+in its own small index (`IndexRole.SETTINGS`, the project's
+`op_prj_<project>__settings`) addressed by the fixed doc id
 `CURATION_SETTINGS_DOC_ID = 'default'` — following the exact same
 `IndexRole` + `INDEX_BODIES` convention every other curation index uses
 (`src/clients/curation_opensearch.py`), wired into the same
@@ -2039,7 +2039,7 @@ client can word ANY tab's empty state without a per-tab round trip.
 **BA-1 (blocking, breaking wire shape for uploads)** —
 `POST /ingest/upload` now persists uploaded bytes server-side, content
 addressed, under `CurationConfig.upload_root` /
-`OP_UPLOAD_ROOT` (default under the state dir):
+the project's upload root (`$OP_STATE_DIR/projects/<project>/uploads`):
 `<upload_root>/<imohash[:2]>/<imohash><ext>`, written atomically
 (temp file + `os.replace`), so the same bytes are only ever stored
 once. `image_path` on the images doc and in every `IngestImageResponse`

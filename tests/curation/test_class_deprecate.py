@@ -47,7 +47,9 @@ def client(registry: ClassRegistry, fake_os: AsyncMock, monkeypatch: pytest.Monk
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     with TestClient(app) as c:
         yield c
@@ -91,7 +93,7 @@ def test_set_deprecated_false_name_clash_raises(registry: ClassRegistry) -> None
 
 
 def test_deprecate_empty_class_works(client: TestClient, registry: ClassRegistry) -> None:
-    resp = client.post('/curation/classes/0/deprecate')
+    resp = client.post('/curation/projects/default/classes/0/deprecate')
     assert resp.status_code == 200, resp.text
     assert resp.json()['deprecated'] is True
     assert _entry(registry, 0).deprecated is True
@@ -101,7 +103,7 @@ def test_deprecate_class_with_items_is_409_with_counts(
     client: TestClient, fake_os: AsyncMock, registry: ClassRegistry
 ) -> None:
     fake_os.count = AsyncMock(side_effect=[{'count': 3}, {'count': 1}])
-    resp = client.post('/curation/classes/0/deprecate')
+    resp = client.post('/curation/projects/default/classes/0/deprecate')
     assert resp.status_code == 409, resp.text
     detail = resp.json()['detail']
     assert detail['error'] == 'class_still_referenced'
@@ -117,7 +119,7 @@ def test_deprecate_class_with_only_confirmed_labels_is_409(
     """Items-index count can be zero while confirmed-label docs still
     reference the class -- either nonzero count blocks."""
     fake_os.count = AsyncMock(side_effect=[{'count': 0}, {'count': 2}])
-    resp = client.post('/curation/classes/0/deprecate')
+    resp = client.post('/curation/projects/default/classes/0/deprecate')
     assert resp.status_code == 409, resp.text
     assert resp.json()['detail']['item_count'] == 0
     assert resp.json()['detail']['confirmed_label_count'] == 2
@@ -125,28 +127,31 @@ def test_deprecate_class_with_only_confirmed_labels_is_409(
 
 
 def test_deprecate_unknown_id_is_404(client: TestClient) -> None:
-    resp = client.post('/curation/classes/9999/deprecate')
+    resp = client.post('/curation/projects/default/classes/9999/deprecate')
     assert resp.status_code == 404, resp.text
 
 
 def test_deprecate_is_idempotent(
     client: TestClient, fake_os: AsyncMock, registry: ClassRegistry
 ) -> None:
-    assert client.post('/curation/classes/0/deprecate').status_code == 200
+    assert client.post('/curation/projects/default/classes/0/deprecate').status_code == 200
     # Second call must succeed even though a real count would now 409 --
     # idempotent means it doesn't re-check references on an already
     # deprecated class.
     fake_os.count = AsyncMock(return_value={'count': 999})
-    resp = client.post('/curation/classes/0/deprecate')
+    resp = client.post('/curation/projects/default/classes/0/deprecate')
     assert resp.status_code == 200, resp.text
     assert resp.json()['deprecated'] is True
 
 
 def test_deprecate_clears_hotkey(client: TestClient, registry: ClassRegistry) -> None:
-    assert client.put('/curation/classes/0', json={'hotkey_letter': 'v'}).status_code == 200
+    assert (
+        client.put('/curation/projects/default/classes/0', json={'hotkey_letter': 'v'}).status_code
+        == 200
+    )
     assert _entry(registry, 0).hotkey_letter == 'v'
 
-    resp = client.post('/curation/classes/0/deprecate')
+    resp = client.post('/curation/projects/default/classes/0/deprecate')
     assert resp.status_code == 200, resp.text
     assert resp.json()['hotkey_letter'] is None
     assert _entry(registry, 0).hotkey_letter is None
@@ -158,22 +163,22 @@ def test_deprecate_clears_hotkey(client: TestClient, registry: ClassRegistry) ->
 
 
 def test_restore_works(client: TestClient, registry: ClassRegistry) -> None:
-    assert client.post('/curation/classes/0/deprecate').status_code == 200
-    resp = client.post('/curation/classes/0/restore')
+    assert client.post('/curation/projects/default/classes/0/deprecate').status_code == 200
+    resp = client.post('/curation/projects/default/classes/0/restore')
     assert resp.status_code == 200, resp.text
     assert resp.json()['deprecated'] is False
     assert _entry(registry, 0).deprecated is False
 
 
 def test_restore_unknown_id_is_404(client: TestClient) -> None:
-    assert client.post('/curation/classes/9999/restore').status_code == 404
+    assert client.post('/curation/projects/default/classes/9999/restore').status_code == 404
 
 
 def test_restore_name_clash_is_409(client: TestClient, registry: ClassRegistry) -> None:
-    assert client.post('/curation/classes/0/deprecate').status_code == 200
+    assert client.post('/curation/projects/default/classes/0/deprecate').status_code == 200
     registry.add_class('sedan', group='vehicle')  # active class reclaims the name
 
-    resp = client.post('/curation/classes/0/restore')
+    resp = client.post('/curation/projects/default/classes/0/restore')
     assert resp.status_code == 409, resp.text
     assert _entry(registry, 0).deprecated is True
 
@@ -195,7 +200,7 @@ def test_restore_on_merged_class_is_409_with_structured_detail(
     assert _entry(registry, 0).deprecated is True
     assert _entry(registry, 0).merged_into == 1
 
-    resp = client.post('/curation/classes/0/restore')
+    resp = client.post('/curation/projects/default/classes/0/restore')
     assert resp.status_code == 409, resp.text
     detail = resp.json()['detail']
     assert detail['error'] == 'class_merged'
@@ -213,10 +218,10 @@ def test_restore_on_plain_deprecated_class_still_works_after_merge_guard(
     """The merge guard must only fire when merged_into is set -- a class
     deprecated directly (no merge, no target) keeps restoring exactly as
     before."""
-    assert client.post('/curation/classes/0/deprecate').status_code == 200
+    assert client.post('/curation/projects/default/classes/0/deprecate').status_code == 200
     assert _entry(registry, 0).merged_into is None
 
-    resp = client.post('/curation/classes/0/restore')
+    resp = client.post('/curation/projects/default/classes/0/restore')
     assert resp.status_code == 200, resp.text
     assert resp.json()['deprecated'] is False
     assert _entry(registry, 0).deprecated is False
@@ -235,9 +240,9 @@ def test_deprecated_class_disappears_from_non_deprecated_class_name_lists(
     already does ``if not c.deprecated`` -- VLM prompt class lists, the
     training class picker's default class set, export's live-id list --
     must stop offering it once deprecated."""
-    assert client.post('/curation/classes/0/deprecate').status_code == 200
+    assert client.post('/curation/projects/default/classes/0/deprecate').status_code == 200
 
-    listed = client.get('/curation/classes').json()['classes']
+    listed = client.get('/curation/projects/default/classes').json()['classes']
     entry = next(c for c in listed if c['class_id'] == 0)
     assert entry['deprecated'] is True  # still visible for history
 

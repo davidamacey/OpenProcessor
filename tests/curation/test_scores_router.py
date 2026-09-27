@@ -36,7 +36,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
     fake_os.count = AsyncMock(return_value={'count': 0})
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
 
     client = TestClient(app)
@@ -67,11 +69,15 @@ def test_start_then_double_start_409(
 ) -> None:
     _block_run_scoring_job(monkeypatch)
 
-    r1 = app_client.post('/curation/scores/compute', json={'scorers': ['uniqueness']})
+    r1 = app_client.post(
+        '/curation/projects/default/scores/compute', json={'scorers': ['uniqueness']}
+    )
     assert r1.status_code == 200, r1.text
     assert r1.json()['status'] == 'running'
 
-    r2 = app_client.post('/curation/scores/compute', json={'scorers': ['uniqueness']})
+    r2 = app_client.post(
+        '/curation/projects/default/scores/compute', json={'scorers': ['uniqueness']}
+    )
     assert r2.status_code == 409
 
 
@@ -79,9 +85,9 @@ def test_status_reflects_running_job(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _block_run_scoring_job(monkeypatch)
-    app_client.post('/curation/scores/compute', json={})
+    app_client.post('/curation/projects/default/scores/compute', json={})
 
-    r = app_client.get('/curation/scores/status')
+    r = app_client.get('/curation/projects/default/scores/status')
     assert r.status_code == 200
     body = r.json()
     assert body['status'] == 'running'
@@ -92,28 +98,30 @@ def test_cancel_running_job(app_client: TestClient, monkeypatch: pytest.MonkeyPa
     from src.services.curation.item_scores import job as scores_job
 
     _block_run_scoring_job(monkeypatch)
-    app_client.post('/curation/scores/compute', json={'scorers': ['near_dup']})
+    app_client.post('/curation/projects/default/scores/compute', json={'scorers': ['near_dup']})
 
-    r = app_client.post('/curation/scores/cancel')
+    r = app_client.post('/curation/projects/default/scores/cancel')
     assert r.status_code == 200
     assert r.json()['cancelled'] is True
     assert scores_job.is_cancelled()
 
 
 def test_cancel_with_no_job_running(app_client: TestClient) -> None:
-    r = app_client.post('/curation/scores/cancel')
+    r = app_client.post('/curation/projects/default/scores/cancel')
     assert r.status_code == 200
     assert r.json()['cancelled'] is False
 
 
 def test_status_idle_with_no_job(app_client: TestClient) -> None:
-    r = app_client.get('/curation/scores/status')
+    r = app_client.get('/curation/projects/default/scores/status')
     assert r.status_code == 200
     assert r.json()['status'] == 'idle'
 
 
 def test_unknown_scorer_400(app_client: TestClient) -> None:
-    r = app_client.post('/curation/scores/compute', json={'scorers': ['not_a_real_scorer']})
+    r = app_client.post(
+        '/curation/projects/default/scores/compute', json={'scorers': ['not_a_real_scorer']}
+    )
     assert r.status_code == 400
     assert 'not_a_real_scorer' in r.json()['detail']
 
@@ -122,7 +130,9 @@ def test_disabled_when_flag_off_400(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv('OP_SCORES_ENABLED', raising=False)
-    r = app_client.post('/curation/scores/compute', json={'scorers': ['uniqueness']})
+    r = app_client.post(
+        '/curation/projects/default/scores/compute', json={'scorers': ['uniqueness']}
+    )
     assert r.status_code == 400
     assert 'disabled' in r.json()['detail']
 
@@ -137,7 +147,7 @@ def test_coverage_reports_per_field_counts(app_client: TestClient) -> None:
 
     app_client.fake_os.count = AsyncMock(side_effect=_count)  # type: ignore[attr-defined]
 
-    r = app_client.get('/curation/scores/coverage')
+    r = app_client.get('/curation/projects/default/scores/coverage')
     assert r.status_code == 200
     coverage = r.json()['coverage']
     assert set(coverage) == {'uniqueness', 'near_dup', 'mistakenness'}

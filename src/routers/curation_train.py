@@ -100,7 +100,7 @@ config = get_curation_config()
 F = get_region_fields()
 
 router = APIRouter(
-    prefix=f'{config.api_prefix}/train',
+    prefix='/train',
     tags=[f'{config.api_tag} - Train'],
     default_response_class=ORJSONResponse,
 )

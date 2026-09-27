@@ -17,7 +17,7 @@ from src.config.project_context import (
     project_env,
     run_in_executor_bound,
 )
-from src.config.projects import ProjectRecord, resources_for_default
+from src.config.projects import ProjectRecord, resources_for_new
 
 
 # These tests are about binding itself: no autouse `default` binding.
@@ -35,7 +35,7 @@ def _record(slug: str) -> ProjectRecord:
         created_at=now,
         updated_at=now,
         origin=None,
-        resources=resources_for_default(base_curation_config()),
+        resources=resources_for_new('default', base_curation_config()),
     )
 
 

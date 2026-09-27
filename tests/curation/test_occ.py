@@ -90,7 +90,7 @@ class TestBulkExceptionDegradesGracefully:
             return_value={
                 'docs': [
                     {
-                        '_index': 'op_items',
+                        '_index': 'op_prj_default__items',
                         '_id': doc_id,
                         '_seq_no': 1,
                         '_primary_term': 1,
@@ -123,7 +123,7 @@ class TestRefreshForwarding:
             mget_resp = {
                 'docs': [
                     {
-                        '_index': 'op_items',
+                        '_index': 'op_prj_default__items',
                         '_id': 'a',
                         '_seq_no': 1,
                         '_primary_term': 1,

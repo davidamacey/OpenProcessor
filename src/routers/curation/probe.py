@@ -15,17 +15,21 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.routers.curation._common import OpenSearchDep, router
+from src.services.curation.probe_models import PROBE_ARCHITECTURES
 
 
 class ProbeRunRequest(BaseModel):
     job_id: str
     gpu: str | None = None
-    # yolo26 is the only trained family (G-22); yolo11/yolov5_objectness
-    # remain valid for older checkpoints or a second-family reuse.
-    architecture: str = 'yolo26'
+    # yolo26 is the only trained family (G-22); the rest of
+    # PROBE_ARCHITECTURES remains valid for older checkpoints or a
+    # second-family reuse. Validated against PROBE_ARCHITECTURES in
+    # start_probe_job (422 on mismatch) rather than here, so the error
+    # message stays in one place.
+    architecture: str = Field(default='yolo26', description=f'One of {PROBE_ARCHITECTURES}.')
     resume: bool = False
 
 
@@ -86,8 +90,10 @@ async def probe_run(payload: ProbeRunRequest, opensearch: OpenSearchDep) -> dict
     """Start a probe pass from a finished training run's export.
 
     ``409`` when: the referenced training job isn't finished or has no
-    exported checkpoint, or a probe job is already running. GPU claim
-    (when ``gpu`` is given) goes through the same arbiter
+    exported checkpoint, or a probe job is already running. ``422`` when
+    ``architecture`` is outside
+    :data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`. GPU
+    claim (when ``gpu`` is given) goes through the same arbiter
     ``POST /train/start`` uses; a claim failure is also ``409`` (never
     silent -- see ``src.services.curation.probe_job``).
     """
@@ -107,6 +113,8 @@ async def probe_run(payload: ProbeRunRequest, opensearch: OpenSearchDep) -> dict
         )
     except ProbeJobBusyError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except GpuArbiterStopFailedError as exc:
         raise HTTPException(
             status_code=409,

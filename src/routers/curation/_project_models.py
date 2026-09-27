@@ -44,7 +44,9 @@ CLONEABLE_AXES: tuple[str, ...] = ('settings_defaults', 'classes')
 class ProjectCounts(BaseModel):
     images: int = 0
     items: int = 0
-    validated: int = 0
+    # Not computed yet (it needs a per-project query on the items index):
+    # ``null`` rather than a made-up 0.
+    validated: int | None = None
 
 
 class ProjectSummary(BaseModel):

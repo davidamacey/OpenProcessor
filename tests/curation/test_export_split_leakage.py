@@ -294,7 +294,9 @@ def status_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = AsyncMock
     return TestClient(app)
 
@@ -310,7 +312,7 @@ async def test_export_status_serves_the_completed_run(
         lambda: resolve_current_export_dir(service.config),
     )
 
-    body = status_client.get('/curation/export/status').json()
+    body = status_client.get('/curation/projects/default/export/status').json()
 
     assert body['status'] == 'success'
     assert body['path'] == str(Path(result.export_dir).resolve())
@@ -341,7 +343,7 @@ def test_export_status_skipped_items_is_null_for_a_legacy_manifest_without_the_f
         lambda: export_dir,
     )
 
-    body = status_client.get('/curation/export/status').json()
+    body = status_client.get('/curation/projects/default/export/status').json()
 
     assert body['status'] == 'success'
     assert body['skipped_items'] is None
@@ -354,7 +356,7 @@ def test_export_status_is_idle_without_an_export(
         raise FileNotFoundError
 
     monkeypatch.setattr('src.routers.curation.export._resolve_current_export_dir', _missing)
-    body = status_client.get('/curation/export/status').json()
+    body = status_client.get('/curation/projects/default/export/status').json()
     assert body['status'] == 'idle'
     assert body['path'] is None
     assert body['split_counts'] is None
@@ -363,7 +365,7 @@ def test_export_status_is_idle_without_an_export(
 
 def test_export_status_is_in_the_openapi_contract(status_client: TestClient) -> None:
     spec = status_client.get('/openapi.json').json()
-    op = spec['paths']['/curation/export/status']['get']
+    op = spec['paths']['/curation/projects/{project}/export/status']['get']
     ref = op['responses']['200']['content']['application/json']['schema']['$ref']
     schema = spec['components']['schemas'][ref.rsplit('/', 1)[-1]]
     for key in ('path', 'version_tag', 'dataset_sha', 'split_counts', 'class_split_counts'):

@@ -7,18 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Triton model names are env-overridable settings, not literals**
+  (`TritonModelConfig` in `src/config/settings.py`): `FACE_DETECT_MODEL`,
+  `ARCFACE_MODEL`, `CLIP_IMAGE_MODEL`, `CLIP_TEXT_MODEL`, `OCR_DET_MODEL`,
+  `OCR_REC_MODEL` now read from `os.environ` like `YOLO_MODEL` already
+  did, plus two new fields, `OCR_PIPELINE_MODEL` and `PE_IMAGE_MODEL`/
+  `PE_TEXT_MODEL`. `triton_client.py`, `fast_face_client.py`,
+  `pe_encoder.py` and `scripts/curation/bakeoff/sample.py` now read these
+  instead of hardcoding the model name. Documented (commented, advanced)
+  in `env.template`.
+- **One probe-architecture registry.** `PROBE_ARCHITECTURES` (renamed
+  from the private `_PROBE_ARCHITECTURES`) in
+  `src/services/curation/probe_models.py` is now the single source of
+  truth, imported by `scripts/curation/run_probe.py`,
+  `src/services/curation/probe_predictions.py`,
+  `src/services/curation/probe_job.py` and `src/routers/curation/probe.py`
+  instead of each redeclaring its own copy of the tuple.
+  `start_probe_job` now rejects an unknown `architecture` immediately
+  (`ValueError`, `422` at `POST /probe/run`) instead of only failing deep
+  inside the background task.
+
+### Removed
+- **COCO special-case in class-name resolution.** `class_names.py`'s
+  `_STOCK_COCO_MODEL_NAMES` fallback (borrowing COCO's vocabulary for the
+  stock YOLO11 detector names if `labels.txt` was ever missing) is gone —
+  both stock detectors already ship their own `labels.txt`, so this was
+  dead safety net that violated the class-identity invariant (names come
+  from the model's own labels, never another model's).
+
+### Fixed
+- **`SegmenterClient.source_name` has no default.** The constructor no
+  longer defaults to `source_name='sam3'`; every caller (the worker
+  runner, tests) passes the active profile's `segmenter_name` explicitly,
+  so a non-default segmenter name can never be silently mislabeled as
+  `sam3` in stored candidate provenance.
+
 ### Added
 - **Projects foundation (P1).**
   `src/config/projects.py` (`ProjectRecord`/`ProjectResources`,
-  `resources_for_default`/`resources_for_new`, slug validation),
+  `resources_for_new`/`new_project_record`, slug validation),
   `src/config/project_context.py` (`ContextVar`-based `BoundProject`,
   `current_project()`/`bind_project()`/`set_bound_project()`,
   `bind_process_project()` for script entry points,
   `run_in_executor_bound()`, `project_jobs_dir()`, `project_env()`), and
   `src/services/projects/` (`registry.py`: the `op_projects` index
-  snapshot, revision-gated `ensure_fresh()`/`poll_loop()`, `default`
-  always resolved from the env; `bootstrap.py`: idempotent `default`
-  project upsert, no data migration; `guard.py`: transport-level
+  snapshot, revision-gated `ensure_fresh()`/`poll_loop()`, exactly the
+  stored records; `bootstrap.py`: idempotent `default` project create; `guard.py`: transport-level
   OpenSearch project guard — `CrossProjectAccess`/`ProjectNotBound`/
   `ProjectReadOnly`, `make_curation_opensearch()` and
   `make_script_opensearch()` as the only client factories;
@@ -26,16 +61,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cap; `script_binding.py`: `--project` for scripts).
 - **Every curation route is scoped under
   `/curation/projects/{project}/...`** (`src/routers/curation/_mounting.py`),
-  binding the project for the request. The unscoped `/curation/...` paths
-  stay as a hidden alias (`include_in_schema=False`, `OP_UNSCOPED_ALIAS`)
-  bound to `default`, which resolves to today's env-configured index names
-  and paths — no migration. The OpenAPI contract documents only the scoped
-  paths plus the global ones. Served URLs (thumbnails, region thumbnails,
-  training artifacts) are always the canonical scoped form.
+  binding the project for the request. There is no unscoped alias: an
+  unscoped curation path is a 404. The only routes outside a project are
+  `GET /curation/projects[/{project}]`, `GET /curation/health` and
+  `GET /curation/events`. Served URLs (thumbnails, region thumbnails,
+  training artifacts) are always the scoped form.
 - **Global `GET /curation/health` and `GET /curation/events`** for
   project-less screens: deployment facts only, and only `project: null`
-  events (`project.*`, VLM-registry `config.changed`, `combine.*` with
-  `target`). They win over the alias at those two paths. The scoped
+  events (`project.*` and `combine.*` with `target`). The scoped
   `{prefix}/health` keeps its shape plus `project`.
 - `GET /curation/projects` serves `labels.status` and
   `limits.retired_slugs`; `GET /curation/projects/{project}` serves the
@@ -66,19 +99,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   archived project under its own binding.
 
 ### Changed
+- **BREAKING: `default` is an ordinary project.** It is created at first
+  boot with the standard naming: indexes `op_prj_default__<role>`, class
+  registry/exports/bake-off eval sets under
+  `$OP_PROJECTS_DATA_ROOT/default/`, uploads and job state under
+  `.../projects/default/`. It can be archived, never deleted. The
+  `OP_*_INDEX` env vars, `OP_ITEMS_INDEX_OVERRIDE`, `OP_REGISTRY_PATH`,
+  `OP_EXPORT_ROOT`, `OP_UPLOAD_ROOT` and `OP_BAKEOFF_EVAL_ROOT` are gone;
+  existing `op_*` indexes are not migrated (re-create and re-ingest).
 - **Unbound project-scoped config fails closed.** Reading a project-scoped
   `CurationConfig` field with no project bound raises `ProjectNotBound`
   instead of silently using `default`. Requests bind through their route;
-  the API lifespan binds `default` for startup work and its background
-  loops; every `scripts/curation` entry point binds `--project` (default
-  `$OP_PROJECT`, else `default`) for its whole process.
+  the API lifespan runs unbound and binds each active project in turn
+  only for startup steps that touch project data; every
+  `scripts/curation` entry point binds `--project` (default
+  `$OP_PROJECT`, else `default`) for its whole process, resolved through
+  the registry so the stored status applies.
 - Index names, the class registry, the index bootstrap flag, the UMAP
   reducer/projection state files, the eval-dataset roots, and the scores /
   probe / selection / projection job dirs resolve per bound project
   (`items_index()` and friends replace the frozen `CURATION_*_INDEX` /
-  `ITEMS_INDEX` constants). `default` keeps today's names and paths.
-- The event hub stamps every event with its `project`; a scoped stream
-  delivers its own project's events plus global ones.
+  `ITEMS_INDEX` constants). `default` is now an ordinary project
+  (`op_prj_default__*`), created with `resources_for_new('default')`;
+  the env-derived special case is gone.
+- The event hub stamps every event with the bound `project` and refuses
+  an unbound publish or one naming another project; a scoped stream
+  delivers only its own project's events, the global stream only
+  `project: null` ones (`project.*`, `combine.*`).
+- **The OpenSearch project guard fails closed by construction.** It
+  allowlists the request shapes the codebase sends and requires every
+  index they name (URL, multi-doc line, query body) to belong to the
+  bound project; index-less searches, wildcards, `_all`, aliases,
+  `_reindex`, `_sql`, unknown `op_prj_` names and cross-index bodies are
+  refused. It is installed when the shared client is built.
 - The IVF residual centroid store lives in each project's state dir
   (it was one global store shared by every project), the pipeline SSE
   stats cache is kept per project, and the auto-label trigger/state/

@@ -1,0 +1,241 @@
+#!/bin/bash
+# Test double for `docker`. Never touches a real daemon. Logs argv to
+# $SHIM_LOG and answers from fixture files in $SHIM_STATE:
+#   docker_down         present -> every call fails like an unreachable daemon
+#   ps_fail             present -> `docker ps` fails
+#   containers.tsv      project|working_dir|name|ports (| keeps empty fields)
+#   volumes.txt         `docker volume ls` output
+#   config.json         overrides the generated `compose config --format json`
+#   allow_mutations     present -> up/down/pull/run/... succeed (fake);
+#                       absent  -> they fail with SHIM REFUSED (rc 97)
+#   pull_bad_digest     present -> a pull records the wrong RepoDigest
+#   images/<ref>        a "local" image: its RepoDigests, one per line
+#   compose_version     `docker compose version --short` output
+# Writes mutations.log: every state-changing call, whether allowed or not.
+set -u
+state="${SHIM_STATE:?}"
+all_args="$*"
+printf 'docker %s\n' "$all_args" >> "${SHIM_LOG:?}"
+
+if [[ -e "${state}/docker_down" ]]; then
+    echo "Cannot connect to the Docker daemon at unix:///var/run/docker.sock" >&2
+    exit 1
+fi
+
+# Every state-changing call is recorded in mutations.log, allowed or not.
+refuse() {
+    printf 'docker %s\n' "$all_args" >> "${state}/mutations.log"
+    if [[ -e "${state}/allow_mutations" ]]; then
+        return 0
+    fi
+    echo "SHIM REFUSED: docker $*" >&2
+    exit 97
+}
+
+img_file() {
+    printf '%s/images/%s' "$state" "$(printf '%s' "$1" | tr '/:@' '___')"
+}
+
+record_image() {
+    local ref="$1" repo digest
+    mkdir -p "${state}/images"
+    repo="${ref%@*}"
+    [[ "${repo##*/}" == *:* ]] && repo="${repo%:*}"
+    if [[ "$ref" == *@sha256:* ]]; then
+        digest="${ref##*@}"
+    else
+        digest="sha256:$(printf '%s' "$ref" | sha256sum | cut -c1-64)"
+    fi
+    if [[ -e "${state}/pull_bad_digest" ]]; then
+        digest="sha256:$(printf 'tampered' | sha256sum | cut -c1-64)"
+    fi
+    printf '%s@%s\n' "$repo" "$digest" > "$(img_file "$ref")"
+}
+
+containers() { cat "${state}/containers.tsv" 2>/dev/null || true; }
+
+cmd_ps() {
+    local filter_project="" filter_name="" filter_ancestor="" fmt=""
+    while (( $# > 0 )); do
+        case "$1" in
+            --filter)
+                case "$2" in
+                    label=com.docker.compose.project=*) filter_project="${2#label=com.docker.compose.project=}" ;;
+                    name=*) filter_name="${2#name=}"; filter_name="${filter_name#^/}"; filter_name="${filter_name%\$}" ;;
+                    ancestor=*) filter_ancestor="${2#ancestor=}" ;;
+                esac
+                shift 2 ;;
+            --format) fmt="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+    [[ -e "${state}/ps_fail" ]] && { echo "permission denied" >&2; exit 1; }
+    [[ -n "$filter_ancestor" ]] && exit 0
+    local project wd name ports
+    while IFS='|' read -r project wd name ports; do
+        [[ -z "$project$name" ]] && continue
+        [[ -n "$filter_project" && "$project" != "$filter_project" ]] && continue
+        [[ -n "$filter_name" && "$name" != "$filter_name" ]] && continue
+        case "$fmt" in
+            *'.Names}}|'*working_dir*) echo "${name}|${wd}" ;;
+            *'.Names}}|'*) echo "${name}|${project}" ;;
+            *working_dir*) echo "$wd" ;;
+            *'"com.docker.compose.project"'*) echo "$project" ;;
+            *Names*) echo "$name" ;;
+            *Ports*) echo "$ports" ;;
+            *) echo "$name" ;;
+        esac
+    done < <(containers)
+}
+
+env_val() {
+    local file="$1" key="$2"
+    [[ -f "$file" ]] || return 0
+    awk -v k="$key" '{ i = index($0, "=") } i > 1 && substr($0, 1, i - 1) == k { v = substr($0, i + 1) } END { print v }' "$file"
+}
+
+cmd_compose() {
+    local project="" envfile="" sub="" args=()
+    while (( $# > 0 )); do
+        case "$1" in
+            -p) project="$2"; shift 2 ;;
+            --env-file) envfile="$2"; shift 2 ;;
+            --project-directory|-f|--profile) shift 2 ;;
+            -*) args+=("$1"); shift ;;
+            *) if [[ -z "$sub" ]]; then sub="$1"; else args+=("$1"); fi; shift ;;
+        esac
+    done
+    case "$sub" in
+        version)
+            cat "${state}/compose_version" 2>/dev/null || echo "2.29.7"
+            ;;
+        config)
+            local cpn="${COMPOSE_PROJECT_NAME:-}"
+            [[ -z "$cpn" ]] && cpn="$(env_val "$envfile" COMPOSE_PROJECT_NAME)"
+            [[ -z "$cpn" ]] && cpn=openprocessor
+            if [[ " ${args[*]:-} " == *" --images "* && "$project" != *-cw ]]; then
+                local k v repo tag
+                repo="$(env_val "$envfile" OP_IMAGE_REPO)"; repo="${repo:-davidamacey}"
+                tag="$(env_val "$envfile" OP_IMAGE_TAG)"; tag="${tag:-0.3.0}"
+                local profiles wanted
+                profiles=",$(env_val "$envfile" COMPOSE_PROFILES),"
+                wanted="OP_API_IMAGE:openprocessor OP_TRITON_IMAGE:openprocessor-triton"
+                [[ "$profiles" == *,curation,* ]] && wanted+=" OP_EVALUATOR_IMAGE:openprocessor-evaluator"
+                [[ "$profiles" == *,segmenter,* ]] && wanted+=" OP_SEGMENTER_IMAGE:openprocessor-segmenter"
+                [[ "$profiles" == *,training,* ]] && wanted+=" OP_TRAINER_IMAGE:openprocessor-trainer"
+                for k in $wanted; do
+                    v="$(env_val "$envfile" "${k%%:*}")"
+                    [[ -n "$v" ]] || v="${repo}/${k#*:}:${tag}"
+                    echo "$v"
+                done
+                if [[ "$profiles" == *,vlm,* ]]; then
+                    v="$(env_val "$envfile" VLM_IMAGE)"
+                    echo "${v:-vllm/vllm-openai:gemma4-cu130@sha256:0d152595cd940ea1e0890fa190a37b7a86e3f7f0f5048ac3e2e4c14529fea833}"
+                fi
+                third="OPENSEARCH_IMAGE:opensearchproject/opensearch:3.6.0"
+                [[ "$profiles" == *,training,* ]] && third+=" MLFLOW_IMAGE:ghcr.io/mlflow/mlflow:v2.19.0"
+                [[ "$profiles" == *,monitoring,* ]] && third+=" PROMETHEUS_IMAGE:prom/prometheus:v3.12.0 GRAFANA_IMAGE:grafana/grafana:13.1.0 LOKI_IMAGE:grafana/loki:3.6.12 ALLOY_IMAGE:grafana/alloy:v1.17.1"
+                for k in $third; do
+                    v="$(env_val "$envfile" "${k%%:*}")"
+                    echo "${v:-${k#*:}}"
+                done
+                return 0
+            fi
+            if [[ "$project" == *-cw ]]; then
+                local cimg cbind cport cname
+                cimg="${CROPWRIGHT_IMAGE:-$(env_val "$envfile" CROPWRIGHT_IMAGE)}"
+                cbind="${CROPWRIGHT_BIND_ADDRESS:-$(env_val "$envfile" CROPWRIGHT_BIND_ADDRESS)}"
+                cport="$(env_val "$envfile" CROPWRIGHT_PORT)"
+                cname="$(env_val "$envfile" CROPWRIGHT_CONTAINER_NAME)"
+                [[ -e "${state}/cw_ignores_bind" ]] && cbind=0.0.0.0
+                if [[ " ${args[*]:-} " == *" --images "* ]]; then
+                    echo "${cimg:-davidamacey/cropwright:1.2.3}"
+                    return 0
+                fi
+                printf '{\n  "name": "%s",\n  "services": {\n    "cropwright": {\n      "container_name": "%s",\n      "ports": [\n        {\n          "host_ip": "%s",\n          "published": "%s",\n          "target": 8080\n        }\n      ]\n    }\n  }\n}\n' \
+                    "$project" "${cname:-cropwright}" "${cbind:-0.0.0.0}" "${cport:-5184}"
+                return 0
+            fi
+            if [[ -f "${state}/config.json" ]]; then
+                cat "${state}/config.json"
+                return 0
+            fi
+            cat <<JSON
+{
+  "name": "${project}",
+  "networks": {
+    "triton_net": {
+      "name": "${project}_triton_net",
+      "driver": "bridge",
+      "ipam": {}
+    }
+  },
+  "services": {
+    "opensearch": {
+      "container_name": "${cpn}-opensearch",
+      "networks": {
+        "triton_net": null
+      }
+    },
+    "triton-server": {
+      "container_name": "${cpn}-triton"
+    },
+    "yolo-api": {
+      "container_name": "${cpn}-api"
+    }
+  },
+  "volumes": {
+    "opensearch_data": {
+      "name": "${project}_opensearch_data"
+    }
+  }
+}
+JSON
+            ;;
+        ps|images|ls|logs|port|top)
+            ;;
+        *)
+            refuse compose "$sub"
+            ;;
+    esac
+}
+
+case "${1:-}" in
+    info)
+        case "$*" in
+            *Runtimes*) echo '{"nvidia":{"path":"nvidia-container-runtime"},"runc":{"path":"runc"}}' ;;
+            *DockerRootDir*) echo "${state}" ;;
+            *) echo "Server Version: 99.0-shim" ;;
+        esac
+        ;;
+    ps) shift; cmd_ps "$@" ;;
+    compose) shift; cmd_compose "$@" ;;
+    image)
+        [[ "${2:-}" == inspect ]] || exit 1
+        ref="${!#}"
+        f="$(img_file "$ref")"
+        [[ -f "$f" ]] || { echo "Error: No such image: ${ref}" >&2; exit 1; }
+        case "$*" in
+            *RepoDigests*) cat "$f" ;;
+            *'.Id'*) echo "sha256:$(printf '%s' "$ref" | sha256sum | cut -c1-64)" ;;
+            *) echo "[]" ;;
+        esac
+        ;;
+    pull)
+        refuse pull
+        record_image "${2:?}"
+        ;;
+    run)
+        refuse run
+        echo "GPU 0: Shim GPU (UUID: GPU-shim)"
+        ;;
+    rmi)
+        refuse rmi
+        ;;
+    volume)
+        cat "${state}/volumes.txt" 2>/dev/null || true
+        ;;
+    *)
+        refuse "$@"
+        ;;
+esac

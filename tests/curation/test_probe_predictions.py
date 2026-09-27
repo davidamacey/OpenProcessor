@@ -471,25 +471,24 @@ async def test_probe_pred_class_id_is_the_registry_id_not_the_model_dense_id(
     ]
     fake_os = _FakeOpenSearch(docs)
 
-    base_cfg = get_curation_config()
+    import dataclasses
 
-    class _Cfg:
-        """The bound project's config with its registry path swapped."""
+    from src.config.curation import base_curation_config as _base
+    from src.config.project_context import bind_project
+    from src.config.projects import new_project_record
 
-        class_registry_path = registry_path
-
-        def __getattr__(self, name: str) -> Any:
-            return getattr(base_cfg, name)
-
-    cfg = _Cfg()
-
-    await pp.run_probe_inference(
-        tmp_path / 'ckpt.pt',
-        fake_os,  # type: ignore[arg-type]
-        config=cfg,  # type: ignore[arg-type]
-        model_version=None,
-        architecture='yolo11',
+    record = new_project_record('default', _base())
+    record = dataclasses.replace(
+        record, resources=dataclasses.replace(record.resources, class_registry_path=registry_path)
     )
+    with bind_project(record):
+        await pp.run_probe_inference(
+            tmp_path / 'ckpt.pt',
+            fake_os,  # type: ignore[arg-type]
+            config=get_curation_config(),
+            model_version=None,
+            architecture='yolo11',
+        )
 
     [update] = fake_os.updates
     assert update['doc']['probe_pred_class'] == 'truck'

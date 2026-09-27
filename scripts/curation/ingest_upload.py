@@ -370,7 +370,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         '--api-base',
         default=f'http://localhost:4603{get_curation_config().api_prefix}',
-        help='Curation API base URL including the api prefix (no trailing slash)',
+        help='Curation API mount including the api prefix (no trailing slash); '
+        'requests go to <api-base>/projects/<--project>/...',
     )
     p.add_argument('--source', default='upload', help='Provenance tag for every image')
     p.add_argument('--batch-size', type=int, default=32, help=f'Images per upload (<= {MAX_BATCH})')
@@ -414,7 +415,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         logger.warning('batch size clamped to %d', batch_size)
     extensions = frozenset(f'.{e.strip().lstrip(".").lower()}' for e in args.extensions.split(','))
     cfg = UploadConfig(
-        api_base=args.api_base.rstrip('/'),
+        api_base=f'{args.api_base.rstrip("/")}/projects/{args.project}',
         source=args.source,
         batch_size=batch_size,
         reader_threads=args.reader_threads,

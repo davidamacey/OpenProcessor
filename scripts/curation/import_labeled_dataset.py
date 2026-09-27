@@ -495,7 +495,11 @@ def build_parser() -> argparse.ArgumentParser:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument('--dataset', required=True, type=Path, help='data.yaml or dataset root')
-    p.add_argument('--api-base', default=f'http://localhost:4603{get_curation_config().api_prefix}')
+    p.add_argument(
+        '--api-base',
+        default=f'http://localhost:4603{get_curation_config().api_prefix}',
+        help='Curation API mount; requests go to <api-base>/projects/<--project>/...',
+    )
     p.add_argument('--splits', default=None, help='Comma-separated subset (default: all found)')
     p.add_argument(
         '--path-map',
@@ -558,7 +562,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         splits[name] = samples
     dataset_root = args.dataset.parent if args.dataset.is_file() else args.dataset
     cfg = ImportConfig(
-        api_base=args.api_base.rstrip('/'),
+        api_base=f'{args.api_base.rstrip("/")}/projects/{args.project}',
         state_dir=args.state_dir or Path('dataset_import_state') / dataset_root.name,
         source_prefix=args.source_prefix or dataset_root.name,
         path_map=args.path_map,

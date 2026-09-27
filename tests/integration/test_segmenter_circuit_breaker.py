@@ -50,7 +50,7 @@ def _build_client(
 ) -> SegmenterClient:
     transport = httpx.MockTransport(handler)
     httpx_client = httpx.AsyncClient(transport=transport, timeout=5.0)
-    sam = SegmenterClient(base_url=base_urls, client=httpx_client)
+    sam = SegmenterClient(base_url=base_urls, client=httpx_client, source_name='sam3')
     sam._now = now_func  # type: ignore[assignment]
     return sam
 

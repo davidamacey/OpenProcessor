@@ -16,6 +16,7 @@ scripts/codegen/naming_leak_allowlist.txt # this file; every entry below necessa
 # ---------------------------------------------------------------------------
 
 CHANGELOG.md # documents every rename with the actual old->new literals throughout; this is the historical record of the naming sweep itself, kept intentionally
+setup-openprocessor.sh:attevon-llc/cropwright # sanctioned exception (project convention): the attevon-llc GitHub org is allowed inside Cropwright URLs; CW_GH_REPO default
 
 
 # ---------------------------------------------------------------------------
@@ -26,6 +27,18 @@ CHANGELOG.md # documents every rename with the actual old->new literals througho
 # purpose is matching `'plate_...'` literals, so it necessarily spells the
 # pattern throughout (docstring, regexes, PORTED_PATHS comments).
 scripts/codegen/check_no_literal_region_fields.py # the plate_* literal guard itself; spells the pattern by definition
+
+# installer plan section 2.2: gemma-4-e4b (google/gemma-4-E4B-it,
+# Apache-2.0, ungated) is the shipped default local VLM catalog entry, not
+# a private codename -- images.lock's vlm_gemma4 image key names the vLLM
+# image that serves it.
+images.lock:gemma # public, Apache-2.0 VLM catalog entry (installer plan section 2.2), not a leak
+scripts/lib/image_keys.sh:gemma # shared images.lock key table (release script + installer); public vlm_gemma4 key and the public vllm/vllm-openai:gemma4 image tag, not a leak
+tests/installer/test_vlm_catalog.py # exercises examples/vlm/catalog.tsv's public gemma-4-e4b row (installer plan section 2.2), not a leak
+tests/installer/installer_harness.py:gemma # fake images.lock for the installer tests uses the release's public vlm_gemma4 image key (installer plan 3.1), not a leak
+tests/installer/shims/docker:gemma # test double echoes the compose file's public vLLM gemma4 image default, not a leak
+tests/installer/test_gpu_plan.py:gemma # asserts the public, tested gemma-4-e4b catalog entry is picked (installer plan 2.2), not a leak
+tests/installer/test_setup_dry_run.py:gemma # asserts VLM_IMAGE equals the lock's public vlm_gemma4 key (installer plan 2.2), not a leak
 
 # The retired-env guard and its test spell every retired name on purpose:
 # that IS the mechanism that makes a stale env var fail loudly instead

@@ -8,13 +8,12 @@ See ``docs/design/openprocessor_internal/projects_plan.md`` §4.
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import os
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from src.config.projects import DEFAULT_SLUG, ProjectRecord, ProjectResources
+from src.config.projects import ProjectRecord, ProjectResources
 from src.core.logging import get_logger
 
 
@@ -96,36 +95,6 @@ def doc_to_record(doc: Mapping[str, Any]) -> ProjectRecord:
     )
 
 
-def default_project_record(stored: ProjectRecord | None = None) -> ProjectRecord:
-    """The ``default`` record with its resources derived from the env *now*.
-
-    ``default``'s resources are never read from the stored doc: they are
-    today's env-configured index names and paths, recomputed on every
-    read, so ``OP_ITEMS_INDEX`` and friends keep working exactly as they
-    did before projects existed (no migration, no remap on env change).
-    The stored doc only contributes lifecycle fields (status, revision,
-    timestamps). With no stored doc (first boot, or OpenSearch unreachable
-    when the bootstrap ran) an ``active`` record is synthesized.
-    """
-    from src.config.curation import base_curation_config
-    from src.config.projects import resources_for_default
-
-    resources = resources_for_default(base_curation_config())
-    if stored is not None:
-        return dataclasses.replace(stored, resources=resources)
-    return ProjectRecord(
-        slug=DEFAULT_SLUG,
-        display_name='Default',
-        description='The original, unscoped dataset workspace.',
-        status='active',
-        revision=0,
-        created_at='',
-        updated_at='',
-        origin=None,
-        resources=resources,
-    )
-
-
 async def _read_revision(client: Any) -> int:
     """The ``meta:projects_revision`` counter; 0 when the doc (or the whole
     index) does not exist yet. Any other failure propagates."""
@@ -138,6 +107,8 @@ async def _read_revision(client: Any) -> int:
     return int((counter_doc.get('_source') or {}).get('revision', 0))
 
 
+_REFRESH_PAGE_SIZE = 500
+
 # After a failed refresh, request-path callers skip OpenSearch for this
 # long instead of paying a connection error on every bind.
 _REFRESH_FAILURE_BACKOFF_SECONDS = 5.0
@@ -149,8 +120,9 @@ class ProjectRegistry:
     so a bind is never more than ~1s stale) and by :meth:`poll_loop` (a
     background task started at API startup).
 
-    ``default`` is always present in :meth:`snapshot` / :meth:`get`, with
-    env-derived resources (see :func:`default_project_record`)."""
+    Every project, ``default`` included, is exactly its stored record:
+    nothing is synthesized, so a registry that was never read knows no
+    project at all (and every bind 404s rather than guessing)."""
 
     def __init__(self, client_factory: Any) -> None:
         """``client_factory`` is a zero-arg callable (sync or async)
@@ -160,17 +132,19 @@ class ProjectRegistry:
         self._revision: int = -1
         self._lock = asyncio.Lock()
         self._failed_at: float | None = None
+        self._refreshed = False
+
+    @property
+    def refreshed(self) -> bool:
+        """At least one :meth:`ensure_fresh` read the registry successfully."""
+        return self._refreshed
 
     def snapshot(self) -> Mapping[str, ProjectRecord]:
         """The last-refreshed view. Cheap, sync, no I/O -- callers that
         need at-most-1s staleness should call :meth:`ensure_fresh` first."""
-        view = dict(self._by_slug)
-        view[DEFAULT_SLUG] = default_project_record(self._by_slug.get(DEFAULT_SLUG))
-        return view
+        return dict(self._by_slug)
 
     def get(self, slug: str) -> ProjectRecord | None:
-        if slug == DEFAULT_SLUG:
-            return default_project_record(self._by_slug.get(DEFAULT_SLUG))
         return self._by_slug.get(slug)
 
     def active_projects(self) -> list[ProjectRecord]:
@@ -192,8 +166,8 @@ class ProjectRegistry:
         project doc only when the counter moved.
 
         An unreachable registry keeps the last snapshot (logged, then
-        retried after a short backoff): ``default`` still resolves from
-        the env, and an unknown slug still 404s, so nothing fails open."""
+        retried after a short backoff); an unknown slug still 404s, so
+        nothing fails open."""
         if (
             self._failed_at is not None
             and time.monotonic() - self._failed_at < _REFRESH_FAILURE_BACKOFF_SECONDS
@@ -206,11 +180,13 @@ class ProjectRegistry:
             current_revision = await _read_revision(client)
             if current_revision == self._revision:
                 self._failed_at = None
+                self._refreshed = True
                 return
             async with self._lock:
                 if current_revision != self._revision:
                     await self._refresh(client, current_revision)
             self._failed_at = None
+            self._refreshed = True
         except Exception as exc:
             self._failed_at = time.monotonic()
             logger.warning('project_registry_refresh_failed', error=str(exc))
@@ -227,12 +203,26 @@ class ProjectRegistry:
         self._failed_at = None
 
     async def _refresh(self, client: Any, current_revision: int) -> None:
-        resp = await client.search(
-            index=projects_index(),
-            body={'query': {'prefix': {'_id': 'project:'}}, 'size': 1000},
-        )
-        hits = resp.get('hits', {}).get('hits', [])
-        self._by_slug = {hit['_source']['slug']: doc_to_record(hit['_source']) for hit in hits}
+        """Read every project doc, a page at a time (``search_after`` on
+        the ``slug`` keyword), so the registry has no size cap."""
+        by_slug: dict[str, ProjectRecord] = {}
+        after: list[Any] | None = None
+        while True:
+            body: dict[str, Any] = {
+                'query': {'prefix': {'_id': 'project:'}},
+                'size': _REFRESH_PAGE_SIZE,
+                'sort': [{'slug': 'asc'}],
+            }
+            if after is not None:
+                body['search_after'] = after
+            resp = await client.search(index=projects_index(), body=body)
+            hits = resp.get('hits', {}).get('hits', [])
+            for hit in hits:
+                by_slug[hit['_source']['slug']] = doc_to_record(hit['_source'])
+            if len(hits) < _REFRESH_PAGE_SIZE:
+                break
+            after = hits[-1].get('sort') or [hits[-1]['_source']['slug']]
+        self._by_slug = by_slug
         self._revision = current_revision
 
     async def poll_loop(self, *, interval_seconds: float = 1.0) -> None:

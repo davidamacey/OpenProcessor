@@ -355,7 +355,7 @@ cached per pack name, so a settings default or a per-run
 end to end:**
 
 1. Add pallet classes to the registry (`data/class_registry.json`, or
-   wherever `OP_REGISTRY_PATH` points) — see
+   the project's `class_registry.json` under `OP_PROJECTS_DATA_ROOT`) — see
    `data/class_registry.example.json` for a worked warehouse/pallet
    registry.
 2. Define a `DetectionProfile` for the region type you want the

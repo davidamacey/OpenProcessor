@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, ORJSONResponse, Response
 
 from src.config import get_curation_config, get_region_fields
-from src.core.dependencies import get_opensearch
+from src.core.dependencies import get_curation_opensearch as _raw_opensearch_dep
 from src.core.logging import get_logger
 from src.services.curation.image_serving import (
     THUMBNAIL_CACHE,
@@ -38,17 +38,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-async def _raw_opensearch_dep() -> Any:
-    """Unwrap the OpenSearchClient wrapper to the underlying AsyncOpenSearch.
-
-    ``image_serving._fetch_crop`` calls ``client.get(...)`` directly, which
-    only exists on the raw async client. The default ``OpenSearchDep``
-    yields the wrapper, so we unwrap it here.
-    """
-    wrapper = await get_opensearch()
-    return getattr(wrapper, 'client', wrapper)
-
-
 OpenSearchDep = Annotated[Any, Depends(_raw_opensearch_dep)]
 
 
@@ -58,7 +47,7 @@ config = get_curation_config()
 
 
 router = APIRouter(
-    prefix=f'{config.api_prefix}/images',
+    prefix='/images',
     tags=[f'{config.api_tag} - Images'],
     default_response_class=ORJSONResponse,
 )
@@ -117,7 +106,7 @@ async def thumbnail_cache_stats() -> dict[str, int]:
 
 
 crops_router = APIRouter(
-    prefix=f'{config.api_prefix}/crops',
+    prefix='/crops',
     tags=[f'{config.api_tag} - Crops'],
     default_response_class=ORJSONResponse,
 )

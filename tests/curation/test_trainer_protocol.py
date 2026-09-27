@@ -766,7 +766,7 @@ def test_auto_quantize_posts_the_bakeoff_run_request(
 
     assert calls == [
         (
-            'http://api.test:8000/curation/bakeoff/run',
+            'http://api.test:8000/curation/projects/default/bakeoff/run',
             {
                 'job_id': f'{job_id}_quant',
                 'datasets': [{'id': f'run:{job_id}'}],
@@ -790,6 +790,41 @@ def test_auto_quantize_posts_the_bakeoff_run_request(
     status_code = 409
     campaign.write_quant_bakeoff_job(spec, state)
     assert len(calls) == 2
+
+
+def test_trainer_calls_back_under_the_project_that_wrote_the_job(
+    jobs_dir: Path, export_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``job.json`` names its project; the campaign auto-promote goes to
+    that project's prefix, and a job with no project posts nothing (there
+    is no unscoped route to fall back to)."""
+    import json
+
+    import requests
+
+    monkeypatch.setattr(campaign, 'API_BASE_URL', 'http://api.test:8000')
+    monkeypatch.setattr(campaign, 'API_PREFIX', '/curation')
+    calls: list[str] = []
+
+    class _Ok:
+        def raise_for_status(self) -> None:
+            return None
+
+    def _post(url: str, **_kw: Any) -> _Ok:
+        calls.append(url)
+        return _Ok()
+
+    monkeypatch.setattr(requests, 'post', _post)
+    job_id = _write_job(dataset_export_dir=str(export_dir))
+    raw = json.loads((jobs_dir / f'{job_id}.job.json').read_text())
+    assert raw['project'] == 'default'
+    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    assert spec.project == 'default'
+
+    assert campaign._post_promote(spec.project, job_id, 'best')
+    assert calls == [f'http://api.test:8000/curation/projects/default/train/promote/{job_id}']
+    assert not campaign._post_promote(None, job_id, 'best')
+    assert len(calls) == 1
 
 
 # =============================================================================

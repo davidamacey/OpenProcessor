@@ -2,9 +2,10 @@
 (review delta 1), for screens outside any project (the project list, the
 create form, the combine wizard).
 
-Registered on the projects ``global_router``, which is mounted *before*
-the unscoped ``default`` alias (``_mounting.mount_curation``), so these
-exact paths win over the alias's scoped ``/health`` and ``/events``.
+Registered on the projects ``global_router``: they answer with nothing
+bound. The project's own ``/health`` and ``/events`` live under
+``{api_prefix}/projects/{project}``. The global stream carries only
+``project: null`` events (``project.*``, ``combine.*``).
 """
 
 from __future__ import annotations

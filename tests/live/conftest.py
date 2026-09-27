@@ -31,21 +31,23 @@ COMPOSE_FILE = REPO_ROOT / 'docker' / 'test' / 'compose.yml'
 COMPOSE_PROJECT = 'op-live-verify'
 VERIFY_DATA_DIR = REPO_ROOT / 'docker' / 'test' / 'verify-data'
 JOBS_DIR = VERIFY_DATA_DIR / 'jobs'
-EXPORTS_DIR = VERIFY_DATA_DIR / 'exports'
+EXPORTS_DIR = VERIFY_DATA_DIR / 'projects' / 'default' / 'exports'
 
 API_URL = os.environ.get('VERIFY_API_URL', 'http://localhost:14701')
 OPENSEARCH_URL = os.environ.get('VERIFY_OPENSEARCH_URL', 'http://localhost:14702')
 FAKE_VLM_URL = os.environ.get('VERIFY_FAKE_VLM_URL', 'http://localhost:14704')
 
-# Must match docker/test/compose.yml's OP_API_PREFIX + OP_*_INDEX values.
+# Must match docker/test/compose.yml's OP_API_PREFIX and OP_PROJECT_INDEX_PREFIX.
 API_PREFIX = os.environ.get('VERIFY_API_PREFIX', '/curation')
+# Every curation route lives under the project prefix; the live stack's
+# env-named indexes belong to `default`.
+PROJECT_PREFIX = f'{API_PREFIX}/projects/{os.environ.get("VERIFY_PROJECT", "default")}'
+# The only curation routes outside a project.
+_GLOBAL_PATHS = ('/projects', '/health', '/events')
+# `default`'s indexes: OP_PROJECT_INDEX_PREFIX=verify_prj_ in the compose file.
 INDEXES = {
-    'images': 'verify_images',
-    'items': 'verify_items',
-    'labels_confirmed': 'verify_labels_confirmed',
-    'classes': 'verify_classes',
-    'clusters': 'verify_clusters',
-    'settings': 'verify_settings',
+    role: f'verify_prj_default__{role}'
+    for role in ('images', 'items', 'labels_confirmed', 'classes', 'settings')
 }
 
 # Ports a real deployment on this host is known to use. Hitting any of
@@ -253,20 +255,24 @@ def seeded(api: Any, opensearch: Any) -> dict[str, Any]:
     # The API caches its index bootstrap flag and registry mtime; a probe
     # request after seeding makes sure it has re-read both before the
     # first assertion-bearing call.
-    api.get(f'{API_PREFIX}/classes').raise_for_status()
+    api.get(f'{PROJECT_PREFIX}/classes').raise_for_status()
     return {'items': count, 'stdout': proc.stdout}
 
 
 @pytest.fixture(scope='session')
 def api_client(api: Any) -> Any:
-    """Prefix-aware helper: ``api_client.get('/crops')`` hits ``{API_PREFIX}/crops``."""
+    """Prefix-aware helper: ``api_client.get('/crops')`` hits
+    ``{PROJECT_PREFIX}/crops``; the global routes stay at ``{API_PREFIX}``."""
 
     class _Prefixed:
         def __getattr__(self, name: str) -> Any:
             method = getattr(api, name)
 
             def call(path: str, *args: Any, **kwargs: Any) -> Any:
-                return method(f'{API_PREFIX}{path}', *args, **kwargs)
+                is_global = path.split('?', 1)[0] in _GLOBAL_PATHS or path.startswith('/projects/')
+                return method(
+                    f'{API_PREFIX if is_global else PROJECT_PREFIX}{path}', *args, **kwargs
+                )
 
             return call
 

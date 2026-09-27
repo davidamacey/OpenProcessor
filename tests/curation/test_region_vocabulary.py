@@ -29,7 +29,9 @@ def client() -> Any:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     # GET /review/tabs now also serves empty_state, which issues a
     # couple of `count` calls against opensearch.
     fake = AsyncMock()
@@ -43,7 +45,7 @@ def test_regions_vocabulary_has_no_active_profile_by_default(client: TestClient)
     """No-profile gating contract: with no active region profile, the
     endpoint still 200s (never 404s) and serves `region_profile: null`
     plus every list empty -- not a degraded-but-populated catalog."""
-    resp = client.get('/curation/regions/vocabulary')
+    resp = client.get('/curation/projects/default/regions/vocabulary')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert set(body) == {
@@ -73,7 +75,7 @@ def test_regions_vocabulary_reflects_the_active_profile(
     monkeypatch.setenv('OP_REGION_DETECTION_DETECTOR_MODEL', REFERENCE_REGION_DETECTOR_MODEL)
     profile_registry._reset_registry_for_tests()
     try:
-        resp = client.get('/curation/regions/vocabulary')
+        resp = client.get('/curation/projects/default/regions/vocabulary')
         assert resp.status_code == 200, resp.text
         body = resp.json()
         by_id = {d['id']: d for d in body['detectors']}
@@ -103,7 +105,7 @@ def test_region_profile_summary_serves_both_display_names(
     monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     profile_registry._reset_registry_for_tests()
     try:
-        resp = client.get('/curation/regions/vocabulary')
+        resp = client.get('/curation/projects/default/regions/vocabulary')
         assert resp.status_code == 200, resp.text
         summary = resp.json()['region_profile']
         assert summary['display_name'] == 'Plates'
@@ -124,7 +126,7 @@ def test_regions_vocabulary_env_configured_detector_reflected(
     monkeypatch.setenv('OP_REGION_DETECTION_DETECTOR_MODEL', 'my_custom_region_yolo')
     profile_registry._reset_registry_for_tests()
     try:
-        resp = client.get('/curation/regions/vocabulary')
+        resp = client.get('/curation/projects/default/regions/vocabulary')
         assert resp.status_code == 200, resp.text
         body = resp.json()
         detector_ids = {d['id'] for d in body['detectors']}
@@ -136,7 +138,7 @@ def test_regions_vocabulary_env_configured_detector_reflected(
 
 @pytest.mark.usefixtures('reference_region_profile')
 def test_regions_vocabulary_covers_every_s3_region_source_value(client: TestClient) -> None:
-    resp = client.get('/curation/regions/vocabulary')
+    resp = client.get('/curation/projects/default/regions/vocabulary')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     served_ids = {s['id'] for s in body['region_sources']}
@@ -147,7 +149,7 @@ def test_regions_vocabulary_covers_every_s3_region_source_value(client: TestClie
 def test_review_tabs_has_a_label_for_every_known_tab(client: TestClient) -> None:
     """No region profile is active in this fixture -- 'regions' is
     omitted entirely (no-profile gating contract)."""
-    resp = client.get('/curation/review/tabs')
+    resp = client.get('/curation/projects/default/review/tabs')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     served_ids = {t['id'] for t in body['tabs']}
@@ -160,7 +162,7 @@ def test_review_tabs_has_a_label_for_every_known_tab(client: TestClient) -> None
 
 
 def test_review_tabs_omits_regions_tab_without_a_profile(client: TestClient) -> None:
-    resp = client.get('/curation/review/tabs')
+    resp = client.get('/curation/projects/default/review/tabs')
     assert resp.status_code == 200, resp.text
     served_ids = {t['id'] for t in resp.json()['tabs']}
     assert 'regions' not in served_ids
@@ -168,7 +170,7 @@ def test_review_tabs_omits_regions_tab_without_a_profile(client: TestClient) -> 
 
 @pytest.mark.usefixtures('reference_region_profile')
 def test_review_tabs_includes_regions_tab_with_a_profile(client: TestClient) -> None:
-    resp = client.get('/curation/review/tabs')
+    resp = client.get('/curation/projects/default/review/tabs')
     assert resp.status_code == 200, resp.text
     served_ids = {t['id'] for t in resp.json()['tabs']}
     assert served_ids == set(KNOWN_TABS)
@@ -184,7 +186,7 @@ def test_review_tabs_regions_label_uses_the_active_profiles_display_name(
     monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     profile_registry._reset_registry_for_tests()
     try:
-        resp = client.get('/curation/review/tabs')
+        resp = client.get('/curation/projects/default/review/tabs')
         assert resp.status_code == 200, resp.text
         by_id = {t['id']: t for t in resp.json()['tabs']}
         assert by_id['regions']['label'] == 'Plates'
@@ -198,7 +200,7 @@ def test_review_tabs_serves_region_status_filter_spec(client: TestClient) -> Non
     as a self-describing enum spec (param, kind, label, value/label options)
     so the frontend renders any enum filter generically, with no per-filter
     code; its default rides the existing ``filter_defaults`` map."""
-    resp = client.get('/curation/review/tabs')
+    resp = client.get('/curation/projects/default/review/tabs')
     assert resp.status_code == 200, resp.text
     by_id = {t['id']: t for t in resp.json()['tabs']}
     regions = by_id['regions']
@@ -222,7 +224,7 @@ def test_review_tabs_response_is_typed_in_the_contract(client: TestClient) -> No
     """The tab catalog (incl. ``filter_specs``) is a declared response model,
     so it lands in the generated OpenAPI contract the frontend vendors."""
     schema = client.get('/openapi.json').json()
-    op = schema['paths']['/curation/review/tabs']['get']
+    op = schema['paths']['/curation/projects/{project}/review/tabs']['get']
     ref = op['responses']['200']['content']['application/json']['schema']
     assert '$ref' in ref, ref
 
@@ -230,14 +232,14 @@ def test_review_tabs_response_is_typed_in_the_contract(client: TestClient) -> No
 def test_review_tabs_route_not_shadowed_by_the_tab_path_param(client: TestClient) -> None:
     """'/review/tabs' must resolve to the tab-catalog route, not
     'GET /review/{tab}' with tab='tabs' (an unknown tab -> 400)."""
-    resp = client.get('/curation/review/tabs')
+    resp = client.get('/curation/projects/default/review/tabs')
     assert resp.status_code == 200
     assert 'tabs' in resp.json()
 
 
 @pytest.mark.usefixtures('reference_region_profile')
 def test_regions_vocabulary_serves_the_region_text_rules(client: TestClient) -> None:
-    rules = client.get('/curation/regions/vocabulary').json()['text_rules']
+    rules = client.get('/curation/projects/default/regions/vocabulary').json()['text_rules']
     assert rules['charset'] == '[A-Z0-9]'
     assert (rules['len_min'], rules['len_max']) == (2, 10)
     assert rules['reject_sequences'] is True
@@ -254,7 +256,9 @@ def test_regions_vocabulary_serves_the_rejection_reasons(client: TestClient) -> 
         REJECT_REASON_VERIFIER,
     )
 
-    reasons = client.get('/curation/regions/vocabulary').json()['rejection_reasons']
+    reasons = client.get('/curation/projects/default/regions/vocabulary').json()[
+        'rejection_reasons'
+    ]
     by_id = {r['id']: r for r in reasons}
     assert set(by_id) == {
         REJECT_REASON_VERIFIER,
@@ -279,7 +283,7 @@ def test_regions_vocabulary_response_is_typed_in_openapi(client: TestClient) -> 
     from src.config.region_rejection import REJECTION_REASON_KINDS
 
     spec = client.get('/openapi.json').json()
-    ok = spec['paths']['/curation/regions/vocabulary']['get']['responses']['200']
+    ok = spec['paths']['/curation/projects/{project}/regions/vocabulary']['get']['responses']['200']
     ref = ok['content']['application/json']['schema']['$ref'].rsplit('/', 1)[-1]
     schemas = spec['components']['schemas']
     props = schemas[ref]['properties']
@@ -315,7 +319,7 @@ def text_free_profile(monkeypatch: pytest.MonkeyPatch) -> Any:
 def test_regions_vocabulary_text_free_profile_serves_no_text_vocabulary(
     client: TestClient,
 ) -> None:
-    resp = client.get('/curation/regions/vocabulary')
+    resp = client.get('/curation/projects/default/regions/vocabulary')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['text_rules'] is None
@@ -338,7 +342,7 @@ def test_regions_vocabulary_text_hint_needs_an_ocr_pipeline(
     monkeypatch.setenv('OP_REGION_DETECTION_OCR_PIPELINE_MODEL', '')
     profile_registry._reset_registry_for_tests()
     try:
-        body = client.get('/curation/regions/vocabulary').json()
+        body = client.get('/curation/projects/default/regions/vocabulary').json()
         assert 'ocr' not in {d['role'] for d in body['detectors']}
         assert 'segmenter_text_hint' not in {s['id'] for s in body['region_sources']}
         # Text reading is independent of the hint.
@@ -350,7 +354,7 @@ def test_regions_vocabulary_text_hint_needs_an_ocr_pipeline(
 
 @pytest.mark.usefixtures('reference_region_profile')
 def test_regions_vocabulary_text_reading_profile_summary(client: TestClient) -> None:
-    summary = client.get('/curation/regions/vocabulary').json()['region_profile']
+    summary = client.get('/curation/projects/default/regions/vocabulary').json()['region_profile']
     assert summary['reads_text'] is True
     assert summary['text_hint_enabled'] is True
 
@@ -363,7 +367,7 @@ def test_regions_vocabulary_segmenter_only_profile_lists_no_detector(
     monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     profile_registry._reset_registry_for_tests()
     try:
-        body = client.get('/curation/regions/vocabulary').json()
+        body = client.get('/curation/projects/default/regions/vocabulary').json()
         assert 'detector' not in {d['role'] for d in body['detectors']}
         assert '' not in {d['id'] for d in body['detectors']}
         assert '' not in {a['id'] for a in body['chain_actors']}

@@ -260,10 +260,14 @@ def test_human_typed_text_records_the_human_choice() -> None:
         {index: {'c1': {'crop_id': 'c1', F.text: 'ABC123', F.text_choice: 'vlm_only'}}}
     )
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as client:
-        resp = client.patch('/curation/crops/c1/region_meta', json={'region_text': 'VWY7977'})
+        resp = client.patch(
+            '/curation/projects/default/crops/c1/region_meta', json={'region_text': 'VWY7977'}
+        )
     assert resp.status_code == 200, resp.text
     doc = fake.docs(index)['c1']
     assert (doc[F.text], doc[F.text_source], doc[F.text_choice]) == ('VWY7977', 'human', 'human')

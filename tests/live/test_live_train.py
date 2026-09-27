@@ -28,7 +28,7 @@ from .conftest import JOBS_DIR, docker_ps_snapshot, wait_for_state, wait_until
 pytestmark = pytest.mark.live
 
 # Container-side path of the dataset the API hands the trainer.
-CONTAINER_EXPORT_CURRENT = '/verify-data/exports/current'
+CONTAINER_EXPORT_CURRENT = '/verify-data/projects/default/exports/current'
 
 
 def _job_files(job_id: str) -> dict[str, Any]:

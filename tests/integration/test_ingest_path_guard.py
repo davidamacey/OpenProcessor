@@ -59,7 +59,7 @@ def test_batch_refuses_a_path_outside_the_source_roots(
     inside = _jpeg(served_root, 'in.jpg')
     outside = _jpeg(tmp_path, 'out.jpg', shade=200)
     resp = client.post(
-        '/curation/ingest/batch',
+        '/curation/projects/default/ingest/batch',
         json={
             'items': [{'path': str(inside), 'source': 't'}, {'path': str(outside), 'source': 't'}]
         },
@@ -82,7 +82,7 @@ def test_batch_refuses_a_label_txt_path_outside_the_source_roots(
     outside_label = tmp_path / 'evil.txt'
     outside_label.write_text('0 0.5 0.5 0.2 0.2\n')
     resp = client.post(
-        '/curation/ingest/batch',
+        '/curation/projects/default/ingest/batch',
         json={
             'items': [
                 {
@@ -111,7 +111,7 @@ def test_batch_over_the_configured_item_cap_is_413(
     a = _jpeg(served_root, 'a.jpg')
     b = _jpeg(served_root, 'b.jpg')
     resp = client.post(
-        '/curation/ingest/batch',
+        '/curation/projects/default/ingest/batch',
         json={'items': [{'path': str(a), 'source': 't'}, {'path': str(b), 'source': 't'}]},
     )
     assert resp.status_code == 413
@@ -121,7 +121,9 @@ def test_single_ingest_refuses_a_path_outside_the_source_roots(
     client: TestClient, tmp_path: Path
 ) -> None:
     outside = _jpeg(tmp_path, 'single.jpg')
-    resp = client.post('/curation/ingest/image', json={'path': str(outside), 'source': 't'})
+    resp = client.post(
+        '/curation/projects/default/ingest/image', json={'path': str(outside), 'source': 't'}
+    )
     assert resp.status_code == 422, resp.text
     assert 'source root' in resp.json()['detail']
 
@@ -135,7 +137,7 @@ def test_batch_rejects_a_malformed_body_instead_of_a_silent_noop(
     empty batch on purpose. The wrong key must now 422."""
     inside = _jpeg(served_root, 'wrongkey.jpg')
     resp = client.post(
-        '/curation/ingest/batch',
+        '/curation/projects/default/ingest/batch',
         json={'paths': [str(inside)]},
     )
     assert resp.status_code == 422, resp.text
@@ -144,10 +146,10 @@ def test_batch_rejects_a_malformed_body_instead_of_a_silent_noop(
 def test_batch_rejects_an_empty_items_list(client: TestClient) -> None:
     """F-22: an empty (or omitted) items list is also a no-op that should
     422 rather than silently returning success with zero results."""
-    resp = client.post('/curation/ingest/batch', json={'items': []})
+    resp = client.post('/curation/projects/default/ingest/batch', json={'items': []})
     assert resp.status_code == 422, resp.text
 
-    resp = client.post('/curation/ingest/batch', json={})
+    resp = client.post('/curation/projects/default/ingest/batch', json={})
     assert resp.status_code == 422, resp.text
 
 
@@ -155,5 +157,7 @@ def test_single_ingest_rejects_a_malformed_body(client: TestClient, served_root:
     """F-22: same silent-ignore class of bug on the single-image route --
     an unknown key like 'image_path' instead of 'path' must 422."""
     inside = _jpeg(served_root, 'single_wrongkey.jpg')
-    resp = client.post('/curation/ingest/image', json={'image_path': str(inside), 'source': 't'})
+    resp = client.post(
+        '/curation/projects/default/ingest/image', json={'image_path': str(inside), 'source': 't'}
+    )
     assert resp.status_code == 422, resp.text

@@ -158,7 +158,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     return TestClient(app)
 
@@ -168,14 +170,17 @@ def test_export_yolo_rejects_unknown_keys(app_client: TestClient) -> None:
     'classes' field a caller might expect to narrow the export -- that
     lives on /export/single_class or train's include_classes instead).
     422, not a silent full export."""
-    response = app_client.post('/curation/export/yolo', json={'classes': ['car', 'truck']})
+    response = app_client.post(
+        '/curation/projects/default/export/yolo', json={'classes': ['car', 'truck']}
+    )
     assert response.status_code == 422, response.text
     assert 'classes' in response.text
 
 
 def test_export_yolo_still_accepts_known_fields(app_client: TestClient) -> None:
     response = app_client.post(
-        '/curation/export/yolo', json={'version_tag': 'v1', 'seed': 7, 'max_images': 10}
+        '/curation/projects/default/export/yolo',
+        json={'version_tag': 'v1', 'seed': 7, 'max_images': 10},
     )
     # Not 422 -- may fail downstream (no real OpenSearch data), but the
     # request body itself must validate.
@@ -184,14 +189,14 @@ def test_export_yolo_still_accepts_known_fields(app_client: TestClient) -> None:
 
 def test_export_registry_route_is_mounted(app_client: TestClient) -> None:
     route_paths = {route.path for route in app_client.app.routes}
-    assert '/curation/export/registry/{artifact}' in route_paths
+    assert '/curation/projects/{project}/export/registry/{artifact}' in route_paths
 
     # Point resolution at a directory with nothing in it — the whitelist
     # check + directory resolution both run, we just want to prove the URL
     # actually reaches our handler (any non-405 status is fine here; the
     # exact 404 behavior for a missing current export is covered below).
     for artifact in ('class_registry.json', 'data.yaml', 'manifest.json'):
-        response = app_client.get(f'/curation/export/registry/{artifact}')
+        response = app_client.get(f'/curation/projects/default/export/registry/{artifact}')
         assert response.status_code != 405
 
 
@@ -227,7 +232,7 @@ def test_registry_artifact_happy_path(
         lambda: fake_export_dir,
     )
 
-    response = app_client.get(f'/curation/export/registry/{artifact}')
+    response = app_client.get(f'/curation/projects/default/export/registry/{artifact}')
 
     assert response.status_code == 200
     assert response.content == (fake_export_dir / artifact).read_bytes()
@@ -250,7 +255,7 @@ def test_registry_artifact_unknown_name_short_circuits_before_filesystem(
         _boom,
     )
 
-    response = app_client.get('/curation/export/registry/nonexistent.yaml')
+    response = app_client.get('/curation/projects/default/export/registry/nonexistent.yaml')
 
     assert response.status_code == 404
 
@@ -277,7 +282,7 @@ def test_registry_artifact_path_traversal_rejected(
         _boom,
     )
 
-    response = app_client.get(f'/curation/export/registry/{artifact}')
+    response = app_client.get(f'/curation/projects/default/export/registry/{artifact}')
 
     assert response.status_code == 404
 
@@ -294,7 +299,7 @@ def test_registry_artifact_no_current_export_returns_actionable_404(
         _raise,
     )
 
-    response = app_client.get('/curation/export/registry/manifest.json')
+    response = app_client.get('/curation/projects/default/export/registry/manifest.json')
 
     assert response.status_code == 404
     assert 'export' in response.json()['detail'].lower()
@@ -316,7 +321,7 @@ def test_registry_artifact_missing_file_in_valid_export_dir(
         lambda: export_dir,
     )
 
-    response = app_client.get('/curation/export/registry/class_registry.json')
+    response = app_client.get('/curation/projects/default/export/registry/class_registry.json')
 
     assert response.status_code == 404
     assert 'class_registry.json' in response.json()['detail']
@@ -329,8 +334,8 @@ def test_registry_artifact_missing_file_in_valid_export_dir(
 
 def test_single_class_routes_are_mounted(app_client: TestClient) -> None:
     route_paths = {route.path for route in app_client.app.routes}
-    assert '/curation/export/single_class' in route_paths
-    assert '/curation/export/single_class/status' in route_paths
+    assert '/curation/projects/{project}/export/single_class' in route_paths
+    assert '/curation/projects/{project}/export/single_class/status' in route_paths
 
 
 @pytest.mark.asyncio
@@ -438,7 +443,9 @@ async def test_single_class_handler_maps_bad_config_to_422_not_500(
 
 
 def test_single_class_status_is_idle_before_any_export(app_client: TestClient) -> None:
-    response = app_client.get('/curation/export/single_class/status?profile_name=never-run')
+    response = app_client.get(
+        '/curation/projects/default/export/single_class/status?profile_name=never-run'
+    )
 
     assert response.status_code == 200
     assert response.json() == {
@@ -480,7 +487,9 @@ def test_single_class_status_reports_the_manifest(
         lambda _profile_name: export_dir,
     )
 
-    body = app_client.get('/curation/export/single_class/status?profile_name=regions').json()
+    body = app_client.get(
+        '/curation/projects/default/export/single_class/status?profile_name=regions'
+    ).json()
 
     assert body['status'] == 'success'
     assert body['profile_name'] == 'regions'
@@ -503,7 +512,7 @@ def test_single_class_status_unknown_when_manifest_unreadable(
         lambda _profile_name: export_dir,
     )
 
-    body = app_client.get('/curation/export/single_class/status').json()
+    body = app_client.get('/curation/projects/default/export/single_class/status').json()
 
     assert body['status'] == 'unknown'
     assert body['export_dir'] == str(export_dir)

@@ -16,9 +16,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from src.config.curation import base_curation_config
 from src.config.project_context import bind_project
+from src.config.projects import new_project_record
 from src.routers.curation import pipeline_events as pe
-from src.services.projects.registry import default_project_record
 
 
 if TYPE_CHECKING:
@@ -39,7 +40,7 @@ def _reset_stats_cache() -> Iterator[None]:
 @pytest.fixture(autouse=True)
 def _bind_default_project() -> Iterator[None]:
     """_cached_stats_payload keys its cache by the bound project's slug."""
-    with bind_project(default_project_record()):
+    with bind_project(new_project_record('default', base_curation_config())):
         yield
 
 

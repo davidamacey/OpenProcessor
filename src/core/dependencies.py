@@ -102,9 +102,16 @@ class OpenSearchClientFactory:
             settings = get_settings()
 
             logger.info(f'Initializing OpenSearch client ({settings.opensearch_url})...')
-            app_state._opensearch_client = OpenSearchClient(
+            client = OpenSearchClient(
                 hosts=[settings.opensearch_url], http_auth=None, timeout=settings.opensearch_timeout
             )
+            # The project guard goes on at construction, before the first
+            # request of any kind (projects_plan.md §2.4).
+            from src.services.projects.guard import install_project_guard
+            from src.services.projects.registry import get_project_registry
+
+            install_project_guard(client.client, get_project_registry())
+            app_state._opensearch_client = client
 
             if not await app_state._opensearch_client.ping():
                 raise RuntimeError(f'OpenSearch connection failed: {settings.opensearch_url}')
@@ -141,13 +148,20 @@ async def bootstrap_opensearch_indexes() -> 'asyncio.Task[None] | None':
     try:
         from src.clients.curation_opensearch import create_curation_indexes
         from src.routers.curation._common import warm_knn_indexes
+        from src.services.projects.bootstrap import for_each_project
 
         os_client = await OpenSearchClientFactory.get_client()
         await os_client.create_all_indexes(force_recreate=False)
         logger.info('core_visual_search_indexes_bootstrapped')
-        await create_curation_indexes(os_client.client, force_recreate=False)
-        logger.info('curation_indexes_bootstrapped')
-        return asyncio.create_task(warm_knn_indexes(os_client.client))
+        for slug in for_each_project():
+            await create_curation_indexes(os_client.client, force_recreate=False)
+            logger.info(f'curation_indexes_bootstrapped project={slug}')
+
+        async def _warm_every_project() -> None:
+            for _slug in for_each_project():
+                await warm_knn_indexes(os_client.client)
+
+        return asyncio.create_task(_warm_every_project())
     except Exception as exc:
         logger.warning(f'curation_indexes_bootstrap_skipped: {exc}')
         return None
@@ -189,6 +203,15 @@ async def get_async_triton():
 async def get_opensearch():
     """Dependency for OpenSearch client."""
     return await OpenSearchClientFactory.get_client()
+
+
+async def get_curation_opensearch() -> Any:
+    """Dependency for the raw, project-guarded ``AsyncOpenSearch`` every
+    curation route uses (one dependency for every curation router, so one
+    override covers them all)."""
+    from src.services.projects.guard import make_curation_opensearch
+
+    return await make_curation_opensearch()
 
 
 async def get_visual_search_service():

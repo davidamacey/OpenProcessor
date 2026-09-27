@@ -309,18 +309,19 @@ in ["Environment variables"](#environment-variables) below.
 | VLM labeling | `OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY` |
 | Feature flags | `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW`, `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED` |
 | GPU / training placement | `OP_GPU_ALLOWED_IDS`, `OP_GPU_LABELS`, `OP_GPU_ARBITER_CONTAINERS`, `OP_GPU_ARBITER_TRAINER_CONTAINER`, `OP_TRAIN_DEFAULT_GPUS`, `OP_TRAIN_GPU_ORDER` |
-| Class registry / API surface | `OP_REGISTRY_PATH`, `OP_API_PREFIX` |
+| Projects / API surface | `OP_PROJECTS_DATA_ROOT` (each project's class registry and exports), `OP_PROJECT_INDEX_PREFIX`, `OP_API_PREFIX` |
 | Image build/tag (compose only, not app config) | `OP_IMAGE_REPO`, `OP_IMAGE_TAG`, `OP_BUILD_SHA` |
 
 ## Class-registry schema
 
-The class registry is a single JSON file at `OP_REGISTRY_PATH` (default
-`./data/class_registry.json`), read/written atomically through
+Each project's class registry is a single JSON file at
+`$OP_PROJECTS_DATA_ROOT/<project>/class_registry.json` (default
+`./data/projects/default/class_registry.json` for `default`), read/written atomically through
 `src.clients.curation_opensearch.ClassRegistry`. A worked
 example ships at
 [`data/class_registry.example.json`](../data/class_registry.example.json)
 — a small warehouse/retail inventory set (`cardboard_box`,
-`wooden_pallet`, `forklift`, ...). Copy it to `OP_REGISTRY_PATH` and edit
+`wooden_pallet`, `forklift`, ...). Copy it to the project's registry path and edit
 `classes` for your own domain:
 
 ```json
@@ -535,8 +536,8 @@ sample-clean` removes everything fetched.
    OpenSearch indexes are created automatically on startup via
    `create_curation_indexes` — there is no separate schema-migration
    step to run by hand.
-2. Copy `data/class_registry.example.json` to wherever
-   `OP_REGISTRY_PATH` points (default `./data/class_registry.json`) and
+2. Copy `data/class_registry.example.json` to the project's registry
+   path (`./data/projects/default/class_registry.json` for `default`) and
    edit `classes` for your domain, or start from an empty
    `{"version": 1, "updated_at": "...", "classes": []}` and add classes
    via `POST /curation/classes`.
@@ -710,8 +711,8 @@ be changed at runtime once the app has started.
 
 | Area | Vars |
 |---|---|
-| OpenSearch index names | `OP_IMAGES_INDEX`, `OP_ITEMS_INDEX`, `OP_LABELS_CONFIRMED_INDEX`, `OP_CLASSES_INDEX`, `OP_CLUSTERS_INDEX`, `OP_SETTINGS_INDEX`, `OP_UMAP_STATE_INDEX`, `OP_UMAP_VIZ_STATE_INDEX` |
-| Filesystem roots | `OP_REGISTRY_PATH`, `OP_SOURCE_ROOT`, `OP_SOURCE_PATH_ALIASES` (JSON object or `alias=path,...`), `OP_EXPORT_ROOT`, `OP_STATE_DIR`, `OP_CROP_CACHE_DIR` |
+| Projects (index names and per-project data) | `OP_PROJECT_INDEX_PREFIX` (indexes are `<prefix><project>__<role>`, e.g. `op_prj_default__items`), `OP_PROJECTS_INDEX`, `OP_PROJECTS_DATA_ROOT` (class registry, exports, bake-off eval sets per project) |
+| Filesystem roots | `OP_SOURCE_ROOT`, `OP_SOURCE_PATH_ALIASES` (JSON object or `alias=path,...`), `OP_STATE_DIR` (per-project uploads and state under `projects/<project>/`), `OP_CROP_CACHE_DIR` |
 | VLM prompt pack | `OP_PROMPT_PACK_PATH` (default pack), `OP_PROMPT_PACK_PATHS` (extra selectable packs, comma-separated) |
 | API surface | `OP_API_PREFIX`, `OP_API_TAG` |
 | Embedding / HNSW tuning | `OP_EMBEDDING_DIM`, `OP_ENCODER_EMBEDDING_DIM`, `OP_BACKBONE_EMBEDDING_DIM`, `OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M` |

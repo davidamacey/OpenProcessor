@@ -71,6 +71,7 @@ class _RecordingClient:
 # monkeypatching the env and reloading the module.
 
 
+@pytest.mark.unbound
 @pytest.mark.asyncio
 async def test_vlm_worker_uses_configured_prefix() -> None:
     mod = importlib.import_module('scripts.curation.vlm_worker')
@@ -81,6 +82,7 @@ async def test_vlm_worker_uses_configured_prefix() -> None:
     assert client.urls == ['http://api/custom-mount/projects/alpha/vlm/label_batch']
 
 
+@pytest.mark.unbound
 @pytest.mark.asyncio
 async def test_cluster_refresh_daemon_uses_configured_prefix() -> None:
     mod = importlib.import_module('scripts.curation.cluster_refresh_daemon')
@@ -91,6 +93,33 @@ async def test_cluster_refresh_daemon_uses_configured_prefix() -> None:
         'http://api/custom-mount/projects/alpha/clusters/auto_promote',
         'http://api/custom-mount/projects/alpha/pipeline/auto_label',
     ]
+    assert mod._items_index() == 'op_prj_beta__items'
+
+
+@pytest.mark.unbound
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('reference_region_profile')
+async def test_worker_event_publisher_posts_to_the_bound_project(
+    monkeypatch: pytest.MonkeyPatch, custom_prefix: str, beta_bound: Any
+) -> None:
+    """The detection worker's region events go to its own project's
+    ``/events/publish``, never an unscoped path."""
+    from scripts.curation.worker import bulk_writer
+
+    posted: list[str] = []
+
+    class _Client:
+        async def post(self, url: str, **_: Any) -> None:
+            posted.append(url)
+
+    class _Task:
+        crop_id = 'beta-item-1'
+        update_doc = {bulk_writer.get_region_fields().status: 'detected'}
+
+    monkeypatch.setattr(bulk_writer, '_EVENT_API_URL', 'http://api')
+    monkeypatch.setattr(bulk_writer, '_EVENT_CLIENT', _Client())
+    await bulk_writer._publish_region_events([_Task()])  # type: ignore[list-item]
+    assert posted == [f'http://api{custom_prefix}/projects/beta/events/publish']
 
 
 class _Cfg:
@@ -117,12 +146,14 @@ def test_ingest_walker_default_api_base_follows_prefix(monkeypatch: pytest.Monke
     mod = importlib.import_module('scripts.curation.ingest_walker')
     monkeypatch.setattr(mod, 'get_curation_config', lambda: _Cfg())
     monkeypatch.setattr('sys.argv', ['ingest_walker', '--root', '/tmp'])
+    monkeypatch.delenv('OP_PROJECT', raising=False)
     seen: dict[str, Any] = {}
 
     def _fake_run(**kwargs: Any) -> None:
         seen.update(kwargs)
 
     monkeypatch.setattr(mod, 'run', _fake_run)
+    monkeypatch.setattr(mod, 'bind_script_project', lambda _slug: None)
     monkeypatch.setattr(mod.asyncio, 'run', lambda _coro: None)
     mod.main()
-    assert seen['api_base'] == 'http://localhost:4603/custom-mount'
+    assert seen['api_base'] == 'http://localhost:4603/custom-mount/projects/default'

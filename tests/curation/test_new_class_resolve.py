@@ -49,7 +49,9 @@ def _client(fake: Any, registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -89,7 +91,7 @@ def test_resolve_with_class_id_writes_every_matching_pending_item(
     client = _client(fake, registry, monkeypatch)
 
     r = client.post(
-        '/curation/review/new_class_proposals/resolve',
+        '/curation/projects/default/review/new_class_proposals/resolve',
         json={'label': 'sidecar', 'class_id': class_id},
     )
     assert r.status_code == 200, r.text
@@ -122,7 +124,7 @@ def test_resolve_unknown_class_id_is_400(
     fake = QueryFakeOpenSearch({ITEMS: {'p1': _pending_doc('p1', 'sidecar')}})
     client = _client(fake, registry, monkeypatch)
     r = client.post(
-        '/curation/review/new_class_proposals/resolve',
+        '/curation/projects/default/review/new_class_proposals/resolve',
         json={'label': 'sidecar', 'class_id': 999999},
     )
     assert r.status_code == 400, r.text
@@ -142,7 +144,7 @@ def test_resolve_with_create_registers_class_and_writes_items(
     client = _client(fake, registry, monkeypatch)
 
     r = client.post(
-        '/curation/review/new_class_proposals/resolve',
+        '/curation/projects/default/review/new_class_proposals/resolve',
         json={
             'label': 'sidecar',
             'create': {'class_name': 'sidecar', 'group': 'motorcycle', 'notes': None},
@@ -172,7 +174,7 @@ def test_resolve_create_with_zero_matches_still_creates_the_class(
     fake = QueryFakeOpenSearch({ITEMS: {}})
     client = _client(fake, registry, monkeypatch)
     r = client.post(
-        '/curation/review/new_class_proposals/resolve',
+        '/curation/projects/default/review/new_class_proposals/resolve',
         json={'label': 'sidecar', 'create': {'class_name': 'sidecar'}},
     )
     assert r.status_code == 200, r.text
@@ -190,7 +192,7 @@ def test_resolve_create_duplicate_name_is_409_and_writes_nothing(
     fake = QueryFakeOpenSearch({ITEMS: docs})
     client = _client(fake, registry, monkeypatch)
     r = client.post(
-        '/curation/review/new_class_proposals/resolve',
+        '/curation/projects/default/review/new_class_proposals/resolve',
         json={'label': 'sedan', 'create': {'class_name': 'sedan'}},
     )
     assert r.status_code == 409, r.text
@@ -205,7 +207,7 @@ def test_resolve_create_bad_slug_is_422(
     fake = QueryFakeOpenSearch({ITEMS: {}})
     client = _client(fake, registry, monkeypatch)
     r = client.post(
-        '/curation/review/new_class_proposals/resolve',
+        '/curation/projects/default/review/new_class_proposals/resolve',
         json={'label': 'sidecar', 'create': {'class_name': 'Not A Slug!'}},
     )
     assert r.status_code == 422, r.text
@@ -222,7 +224,9 @@ def test_resolve_neither_class_id_nor_create_is_422(
 ) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {}})
     client = _client(fake, registry, monkeypatch)
-    r = client.post('/curation/review/new_class_proposals/resolve', json={'label': 'sidecar'})
+    r = client.post(
+        '/curation/projects/default/review/new_class_proposals/resolve', json={'label': 'sidecar'}
+    )
     assert r.status_code == 422, r.text
 
 
@@ -233,7 +237,7 @@ def test_resolve_both_class_id_and_create_is_422(
     fake = QueryFakeOpenSearch({ITEMS: {}})
     client = _client(fake, registry, monkeypatch)
     r = client.post(
-        '/curation/review/new_class_proposals/resolve',
+        '/curation/projects/default/review/new_class_proposals/resolve',
         json={'label': 'sidecar', 'class_id': class_id, 'create': {'class_name': 'sidecar'}},
     )
     assert r.status_code == 422, r.text
@@ -252,7 +256,7 @@ def test_resolve_dry_run_writes_and_creates_nothing(
     client = _client(fake, registry, monkeypatch)
 
     r = client.post(
-        '/curation/review/new_class_proposals/resolve',
+        '/curation/projects/default/review/new_class_proposals/resolve',
         params={'dry_run': 'true'},
         json={'label': 'sidecar', 'create': {'class_name': 'sidecar'}},
     )
@@ -277,7 +281,7 @@ def test_resolve_dry_run_with_class_id_writes_nothing(
     fake = QueryFakeOpenSearch({ITEMS: docs})
     client = _client(fake, registry, monkeypatch)
     r = client.post(
-        '/curation/review/new_class_proposals/resolve',
+        '/curation/projects/default/review/new_class_proposals/resolve',
         params={'dry_run': 'true'},
         json={'label': 'sidecar', 'class_id': class_id},
     )
@@ -317,7 +321,7 @@ def test_resolve_skips_item_whose_state_changed_before_write(
     client = _client(fake, registry, monkeypatch)
 
     r = client.post(
-        '/curation/review/new_class_proposals/resolve',
+        '/curation/projects/default/review/new_class_proposals/resolve',
         json={'label': 'sidecar', 'class_id': class_id},
     )
     assert r.status_code == 200, r.text
@@ -343,7 +347,7 @@ def test_resolve_undo_batch_restores_pending_state(
     client = _client(fake, registry, monkeypatch)
 
     r = client.post(
-        '/curation/review/new_class_proposals/resolve',
+        '/curation/projects/default/review/new_class_proposals/resolve',
         json={'label': 'sidecar', 'class_id': class_id},
     )
     assert r.status_code == 200, r.text
@@ -352,7 +356,9 @@ def test_resolve_undo_batch_restores_pending_state(
     for cid in updated_ids:
         assert fake.docs(ITEMS)[cid]['class_validated'] is True
 
-    r = client.post('/curation/crops/label/undo_batch', json={'crop_ids': updated_ids})
+    r = client.post(
+        '/curation/projects/default/crops/label/undo_batch', json={'crop_ids': updated_ids}
+    )
     assert r.status_code == 200, r.text
     undo_body = r.json()
     assert undo_body['undone'] == 3

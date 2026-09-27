@@ -166,19 +166,23 @@ def review_client(monkeypatch: pytest.MonkeyPatch):
             f'src.routers.curation.{mod}._ensure_indexes', AsyncMock(return_value=None)
         )
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
 
 def test_review_route_reports_the_fallback(review_client: TestClient) -> None:
-    r = review_client.get('/curation/review/uncertainty')
+    r = review_client.get('/curation/projects/default/review/uncertainty')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['sort_applied'] == 'atypicality'
     assert 'uncertainty_entropy' in body['sort_fallback_reason']
 
-    r = review_client.get('/curation/review/uncertainty/locate', params={'crop_id': 'a'})
+    r = review_client.get(
+        '/curation/projects/default/review/uncertainty/locate', params={'crop_id': 'a'}
+    )
     assert r.status_code == 200, r.text
     assert r.json()['sort_applied'] == 'atypicality'
     assert 'uncertainty_entropy' in r.json()['sort_fallback_reason']
@@ -207,7 +211,9 @@ def _settings_client(monkeypatch: pytest.MonkeyPatch, fake: Any) -> TestClient:
             f'src.routers.curation.{mod}._ensure_indexes', AsyncMock(return_value=None)
         )
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -215,19 +221,23 @@ def _settings_client(monkeypatch: pytest.MonkeyPatch, fake: Any) -> TestClient:
 def test_put_refuses_a_zero_coverage_sort_default(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _SettingsWithCoverage({})
     client = _settings_client(monkeypatch, fake)
-    r = client.put('/curation/settings', json={'defaults': {'sort': 'uncertainty_entropy'}})
+    r = client.put(
+        '/curation/projects/default/settings', json={'defaults': {'sort': 'uncertainty_entropy'}}
+    )
     assert r.status_code == 422, r.text
     assert 'probe_pred_entropy' in r.text
-    assert client.get('/curation/settings').json()['defaults'] == {}
+    assert client.get('/curation/projects/default/settings').json()['defaults'] == {}
 
     # A sort on a field every item carries is always accepted.
-    r = client.put('/curation/settings', json={'defaults': {'sort': 'recent'}})
+    r = client.put('/curation/projects/default/settings', json={'defaults': {'sort': 'recent'}})
     assert r.status_code == 200, r.text
 
 
 def test_put_accepts_a_covered_sort_default(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _SettingsWithCoverage({'probe_pred_entropy': 3})
     client = _settings_client(monkeypatch, fake)
-    r = client.put('/curation/settings', json={'defaults': {'sort': 'uncertainty_entropy'}})
+    r = client.put(
+        '/curation/projects/default/settings', json={'defaults': {'sort': 'uncertainty_entropy'}}
+    )
     assert r.status_code == 200, r.text
     assert r.json()['defaults'] == {'sort': 'uncertainty_entropy'}

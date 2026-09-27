@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from src.clients.occ import CLASS_WRITE_FIELDS, occ_skip_on_conflict_bulk, strip_class_write_fields
-from src.config import get_curation_config, get_region_fields
+from src.config import get_region_fields
+from src.config.project_context import project_api_base
 from src.core.logging import get_logger
 from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
 from src.services.curation.class_write_guard import class_write_allowed
@@ -215,7 +216,7 @@ async def _publish_region_events(written: list[_ItemTask]) -> None:
     if _EVENT_CLIENT is None:
         _EVENT_CLIENT = httpx.AsyncClient(timeout=2.0)
     F = get_region_fields()
-    url = f'{_EVENT_API_URL}{get_curation_config().api_prefix}/events/publish'
+    url = f'{_EVENT_API_URL}{project_api_base()}/events/publish'
     for t in written:
         region_status = (t.update_doc or {}).get(F.status)
         if not region_status:

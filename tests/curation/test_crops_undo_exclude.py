@@ -490,7 +490,9 @@ def client_for():
 
     def _make(fake: QueryFakeOpenSearch) -> TestClient:
         app = FastAPI()
-        app.include_router(curation_router)
+        from _curation_app import mount_curation_routers
+
+        mount_curation_routers(app, curation_router)
         app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
         return TestClient(app)
 
@@ -508,7 +510,7 @@ async def test_undo_route_restores_and_returns_the_wire_item(
     await _label(crops, fake, registry, 'c1', ids['gadget'])
     client = client_for(fake)
 
-    r = client.post('/curation/crops/c1/label/undo')
+    r = client.post('/curation/projects/default/crops/c1/label/undo')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['crop_id'] == 'c1'
@@ -516,19 +518,19 @@ async def test_undo_route_restores_and_returns_the_wire_item(
     # The earlier validated human label comes back as it was.
     assert _class_state(fake.docs(ITEMS)['c1']) == first
 
-    r = client.post('/curation/crops/c1/label/undo')
+    r = client.post('/curation/projects/default/crops/c1/label/undo')
     assert r.status_code == 200, r.text
     assert r.json()['class_id'] is None
     assert _class_state(fake.docs(ITEMS)['c1']) == before
 
-    r = client.post('/curation/crops/c1/label/undo')
+    r = client.post('/curation/projects/default/crops/c1/label/undo')
     assert r.status_code == 409
     assert _class_state(fake.docs(ITEMS)['c1']) == before
 
 
 def test_undo_route_unknown_crop_is_404(client_for) -> None:
     client = client_for(QueryFakeOpenSearch({ITEMS: {}}))
-    assert client.post('/curation/crops/nope/label/undo').status_code == 404
+    assert client.post('/curation/projects/default/crops/nope/label/undo').status_code == 404
 
 
 @pytest.mark.asyncio
@@ -543,7 +545,8 @@ async def test_undo_batch_reverses_a_batch_label(crops, ids, client_for) -> None
     client = client_for(fake)
 
     r = client.post(
-        '/curation/crops/label/undo_batch', json={'crop_ids': ['b1', 'b2', 'untouched', 'gone']}
+        '/curation/projects/default/crops/label/undo_batch',
+        json={'crop_ids': ['b1', 'b2', 'untouched', 'gone']},
     )
     assert r.status_code == 200, r.text
     body = r.json()
@@ -554,5 +557,7 @@ async def test_undo_batch_reverses_a_batch_label(crops, ids, client_for) -> None
     assert body['conflicts'] == []
     assert {k: _class_state(v) for k, v in fake.docs(ITEMS).items()} == before
 
-    r = client.post('/curation/crops/label/undo_batch', json={'crop_ids': ['b1', 'untouched']})
+    r = client.post(
+        '/curation/projects/default/crops/label/undo_batch', json={'crop_ids': ['b1', 'untouched']}
+    )
     assert r.status_code == 409

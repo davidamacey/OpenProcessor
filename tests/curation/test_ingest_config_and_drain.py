@@ -28,7 +28,9 @@ def _client(fake: AsyncMock) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -45,7 +47,7 @@ def test_ingest_config_is_typed_and_reflects_env(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
 
     fake = AsyncMock()
-    r = _client(fake).get('/curation/ingest/config')
+    r = _client(fake).get('/curation/projects/default/ingest/config')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['upload']['max_images_per_request'] == 7
@@ -72,7 +74,7 @@ def test_region_drain_response_is_typed_with_verdict(monkeypatch: pytest.MonkeyP
             }
         }
     )
-    r = _client(fake).get('/curation/ingest/region_drain')
+    r = _client(fake).get('/curation/projects/default/ingest/region_drain')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['pending_detection'] == 3
@@ -89,7 +91,7 @@ def test_region_drain_reports_drained_after_stable_zero_polls() -> None:
     client = _client(fake)
     last: dict[str, Any] = {}
     for _ in range(region_drain.region_drain_stable_polls() + 1):
-        last = client.get('/curation/ingest/region_drain').json()
+        last = client.get('/curation/projects/default/ingest/region_drain').json()
     assert last['total_unfinished'] == 0
     assert last['drained'] is True
 
@@ -116,7 +118,7 @@ def test_region_drain_reports_no_dependencies_with_no_active_profile(
             }
         }
     )
-    r = _client(fake).get('/curation/ingest/region_drain')
+    r = _client(fake).get('/curation/projects/default/ingest/region_drain')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['region_dependencies'] == []
@@ -147,7 +149,7 @@ def test_region_drain_surfaces_stall_reason_when_a_dependency_is_down(
             }
         }
     )
-    r = _client(fake).get('/curation/ingest/region_drain')
+    r = _client(fake).get('/curation/projects/default/ingest/region_drain')
     assert r.status_code == 200, r.text
     body = r.json()
     [dep] = body['region_dependencies']

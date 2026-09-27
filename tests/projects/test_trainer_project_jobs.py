@@ -67,11 +67,12 @@ def test_write_job_stamps_project_fields(tmp_path, monkeypatch) -> None:
 
 
 def test_default_project_job_lands_in_the_default_dir(tmp_path, monkeypatch) -> None:
-    from src.services.projects.registry import default_project_record
+    from src.config.curation import base_curation_config
+    from src.config.projects import new_project_record
 
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path / 'jobs'))
     export_dir = tmp_path / 'exports' / 'current'
-    with bind_project(default_project_record()):
+    with bind_project(new_project_record('default', base_curation_config())):
         job_id = asyncio.run(train_jobs.write_job(_spec(export_dir)))
     assert (tmp_path / 'jobs' / f'{job_id}.job.json').is_file()
     assert not (tmp_path / 'jobs' / 'projects').exists()
