@@ -59,6 +59,7 @@ from scripts.curation.worker.fairness import (
     FairnessScheduler,
     fetch_pending_multi_project,
     is_project_paused,
+    liveness_loop,
     write_liveness,
 )
 from scripts.curation.worker.no_verdict import (
@@ -1618,6 +1619,15 @@ async def run(args: argparse.Namespace) -> int:
         stage_b_tasks = [asyncio.create_task(stage_b_combined(i)) for i in range(vlm_concurrency)]
         writer_task = asyncio.create_task(writer())
         metrics_task = asyncio.create_task(metrics_reporter())
+        liveness_task = asyncio.create_task(
+            liveness_loop(
+                project_registry.active_projects,
+                lambda: collections.Counter(
+                    owner for cid, owner in in_flight_owner.items() if cid in in_flight
+                ),
+                stop_event,
+            )
+        )
         heartbeat_task = asyncio.create_task(
             heartbeat_loop(
                 'detection_worker',
@@ -1680,6 +1690,9 @@ async def run(args: argparse.Namespace) -> int:
         heartbeat_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await heartbeat_task
+        liveness_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await liveness_task
         # Shut the /metrics HTTP server down cleanly.
         with contextlib.suppress(Exception):
             await metrics_server_runner.cleanup()

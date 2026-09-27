@@ -120,3 +120,40 @@ def test_liveness_lands_under_each_projects_own_location_never_merged(tmp_path: 
     assert beta_path.exists()
     assert alpha_path != beta_path
     assert alpha_path.read_text() != beta_path.read_text()
+
+
+@pytest.mark.asyncio
+async def test_liveness_is_refreshed_on_a_timer_without_new_fetches(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A worker mid-way through a long batch (queue full, or every pending
+    item already in flight) never reaches the producer's post-fetch write.
+    Liveness must still refresh on its own timer, or busy.py reads the
+    worker as idle after 120s and a delete/archive goes through mid-batch."""
+    import asyncio
+
+    from scripts.curation.worker import fairness
+
+    alpha, beta = _record(tmp_path, 'alpha'), _record(tmp_path, 'beta')
+    writes: list[tuple[str, int]] = []
+    real_write = fairness.write_liveness
+
+    def _recording_write(record: ProjectRecord, **kwargs: Any) -> None:
+        writes.append((record.slug, kwargs['inflight']))
+        real_write(record, **kwargs)
+
+    monkeypatch.setattr(fairness, 'write_liveness', _recording_write)
+    monkeypatch.setattr(fairness, 'is_project_paused', lambda _p: False)
+    stop = asyncio.Event()
+    task = asyncio.create_task(
+        fairness.liveness_loop(lambda: [alpha, beta], lambda: {'alpha': 3}, stop, interval_s=0.01)
+    )
+    await asyncio.sleep(0.08)
+    stop.set()
+    await task
+
+    assert writes.count(('alpha', 3)) >= 3
+    assert ('beta', 0) in writes
+    doc = read_liveness(alpha)
+    assert doc is not None
+    assert doc['inflight'] == 3

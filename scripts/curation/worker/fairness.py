@@ -31,6 +31,8 @@ report for the full rationale):
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import math
 import socket
@@ -43,6 +45,8 @@ from scripts.curation._project_worker_utils import is_project_paused
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
     from scripts.curation.worker.state import _ItemTask
     from src.config.projects import ProjectRecord
 
@@ -186,6 +190,35 @@ def write_liveness(
     tmp = path.with_suffix('.tmp')
     tmp.write_text(json.dumps(payload))
     tmp.replace(path)
+
+
+LIVENESS_INTERVAL_S = 15.0
+
+
+async def liveness_loop(
+    projects: Callable[[], list[ProjectRecord]],
+    inflight_counts: Callable[[], Mapping[str, int]],
+    stop_event: asyncio.Event,
+    *,
+    interval_s: float = LIVENESS_INTERVAL_S,
+) -> None:
+    """Refresh every active project's liveness doc on a timer. The
+    producer only writes after a fetch that found new items, so a worker
+    busy on a long batch (queue full, everything pending already in
+    flight, paused) would otherwise go stale and read as idle to
+    ``busy.py``."""
+    while not stop_event.is_set():
+        counts = inflight_counts()
+        for record in projects():
+            with contextlib.suppress(OSError):
+                write_liveness(
+                    record,
+                    inflight=counts.get(record.slug, 0),
+                    applied=True,
+                    paused=is_project_paused(record),
+                )
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_s)
 
 
 def read_liveness(record: ProjectRecord, *, host: str | None = None) -> dict | None:
