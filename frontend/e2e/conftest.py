@@ -357,6 +357,12 @@ class Stub:
         # for every selectable row. Default: not paused.
         # `test_projects_pause.py` overrides it with a stateful stub.
         self.on("GET", r"/pause$", self._pause_state)
+        # W10 (dataset import + Reprocess): /ingest, the item-detail panel
+        # and the cluster toolbar probe `GET {prefix}/datasets/formats`
+        # once per project. Defaults to a 404 — a backend without W10,
+        # where every W10 surface is absent — so existing tests stay
+        # green; test_dataset_import.py overrides it with served formats.
+        self.on("GET", r"/datasets/formats(\?|$)", (404, {"detail": "Not Found"}))
 
         page.route(f"**{api_prefix}/**", self._dispatch)
 

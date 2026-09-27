@@ -27,6 +27,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   confirm-gated Pause / Resume pipeline action on writable projects
   (`POST {prefix}/pause` / `/resume`, through each project's own served
   prefix). The project switcher shows "paused" for the active project.
+- **Labeled-dataset import and Reprocess (OpenProcessor W10), built ahead
+  of the backend.** A `/p/<slug>/datasets` section: the imports list, the
+  `/datasets/import` wizard (server path or archive upload, a debounced
+  served preview with splits, totals and issues, class mapping by name
+  only with the served suggestions and resolved targets, options sent only
+  when set, confirm-gated Start tied to the preview's `import_key`, every
+  served refusal rendered by its message) and the `/datasets/imports/[id]`
+  job view (follows the served `poll_after_s` and `dataset_import.*`
+  events; cancel, resume and a dry-run-first undo). A Reprocess dialog on
+  the item-detail panel (one crop, the served post-write crop adopted) and
+  the `/clusters/[id]` selection (served dry run, then apply). Every W10
+  surface is absent until the backend serves `GET {prefix}/datasets/formats`
+  (a one-shot per-project probe; W10 has no capability flag). nginx gains a
+  dataset-upload location sized by `CROPWRIGHT_DATASET_UPLOAD_MAX_MB`
+  (default 2048). Plan and backend questions:
+  `docs/design/w10-import-reprocess-ui-plan-2026-09-27.md`.
 
 ### Changed
 

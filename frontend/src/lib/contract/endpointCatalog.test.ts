@@ -133,6 +133,17 @@ const MANUAL_OVERRIDES: Array<{
     path: '/regions',
   },
   {
+    file: 'lib/api.ts',
+    marker: 'export function runServedNextStep(',
+    // step.method/step.path: a finished import's served `next_steps`
+    // entry (W10.11). The spec's one documented example is
+    // `POST /regions/cluster`; anything else it serves is the server's
+    // own route.
+    path: '/regions/cluster',
+    method: 'POST',
+    queryParams: [],
+  },
+  {
     file: 'lib/components/SlotCard.svelte',
     marker: 'const thumbUrl = $derived(',
     // thumbCap.path(id, size) — a region slot declares
@@ -162,8 +173,36 @@ const PENDING_BACKEND: Array<{ path: string; method: string }> = [
   { path: '/keymap/reset', method: 'POST' },
 ];
 
+/**
+ * OpenProcessor W10 (labeled-dataset import + Reprocess,
+ * any_domain_plan.md §7.12 / W10.14) — built against the frozen spec
+ * before the backend implements it (docs/design/
+ * w10-import-reprocess-ui-plan-2026-09-27.md). DELETE THIS LIST when
+ * `npm run contract:sync` vendors W10's OpenAPI; every route then has to
+ * resolve for real.
+ */
+const PENDING_BACKEND_W10: Array<{ path: string; method: string }> = [
+  { path: '/datasets/formats', method: 'GET' },
+  { path: '/datasets/uploads', method: 'POST' },
+  { path: '/datasets/preview', method: 'POST' },
+  { path: '/datasets/imports', method: 'POST' },
+  { path: '/datasets/imports', method: 'GET' },
+  { path: '/datasets/imports/*', method: 'GET' },
+  { path: '/datasets/imports/*/issues', method: 'GET' },
+  { path: '/datasets/imports/*/entries', method: 'GET' },
+  { path: '/datasets/imports/*/cancel', method: 'POST' },
+  { path: '/datasets/imports/*/resume', method: 'POST' },
+  { path: '/datasets/imports/*/undo', method: 'POST' },
+  { path: '/reprocess', method: 'POST' },
+  { path: '/crops/*/reprocess', method: 'POST' },
+  { path: '/reprocess/jobs/*', method: 'GET' },
+  { path: '/reprocess/jobs/*/cancel', method: 'POST' },
+];
+
 function isPendingBackend(path: string, method: string): boolean {
-  return PENDING_BACKEND.some((p) => p.path === path && p.method === method);
+  return [...PENDING_BACKEND, ...PENDING_BACKEND_W10].some(
+    (p) => p.path === path && p.method === method,
+  );
 }
 
 interface ResolvedCall {
