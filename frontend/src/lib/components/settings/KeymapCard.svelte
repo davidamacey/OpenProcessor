@@ -412,7 +412,7 @@
   <div class="mb-3 flex items-center justify-between">
     <div>
       <h2 class="text-sm font-semibold text-white">Keyboard shortcuts</h2>
-      <p class="text-xs text-zinc-500">Applies to every project and every browser.</p>
+      <p class="text-xs text-zinc-500">Applies to this project, in every browser.</p>
     </div>
     {#if !keymapStore.isDefault}
       <span
