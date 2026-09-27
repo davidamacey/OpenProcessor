@@ -70,6 +70,19 @@ def test_unowned_index_passes_unbound(snapshot) -> None:
     check_request('GET', '/op_projects/_doc/project:default', None, snapshot)
 
 
+def test_global_configs_index_is_a_legitimate_unowned_index(snapshot) -> None:
+    """M3: ``op_global_configs`` (the one config-store index scoped to no
+    project -- sibling to ``op_projects``, ``visual_search_*``) is
+    readable and writable unbound, same as any other unowned index -- the
+    shape its future global-router routes (W9) will use. A request
+    already bound to a project has no business touching it, so it is
+    refused there exactly like any other unowned index (fail-closed)."""
+    check_request('GET', '/op_global_configs/_doc/pack:local_vlm', None, snapshot)
+    check_request('PUT', '/op_global_configs/_doc/pack:local_vlm', {'a': 1}, snapshot)
+    with bind_project(snapshot['alpha']), pytest.raises(CrossProjectAccess):
+        check_request('GET', '/op_global_configs/_doc/pack:local_vlm', None, snapshot)
+
+
 def test_unbound_plus_project_index_raises_not_bound(snapshot) -> None:
     with pytest.raises(ProjectNotBound):
         check_request('GET', '/op_prj_alpha__items/_doc/x', None, snapshot)

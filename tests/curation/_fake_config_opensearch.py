@@ -18,10 +18,24 @@ class _FakeIndices:
     :class:`FakeConfigOpenSearch`'s ``_search`` is always fully
     consistent with ``index``/``update`` (no simulated NRT lag). See
     :class:`NearRealTimeConfigOpenSearch` below for a fake that models
-    the lag ``refresh`` is meant to force through."""
+    the lag ``refresh`` is meant to force through.
+
+    ``exists``/``create`` back a bare in-memory set of created index
+    names -- just enough for ``ensure_global_configs_index``'s
+    create-if-missing check (op_global_configs, W2 M3)."""
+
+    def __init__(self) -> None:
+        self._created: set[str] = set()
 
     async def refresh(self, index: str) -> dict[str, Any]:  # noqa: ARG002
         return {'_shards': {'total': 1, 'successful': 1, 'failed': 0}}
+
+    async def exists(self, index: str) -> bool:
+        return index in self._created
+
+    async def create(self, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        self._created.add(index)
+        return {'acknowledged': True}
 
 
 class FakeConfigOpenSearch:

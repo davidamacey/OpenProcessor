@@ -20,6 +20,7 @@ Two modes:
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
 import time
 from dataclasses import dataclass, field, replace
@@ -359,21 +360,25 @@ async def _poll_all_active_projects(client: Any, interval: float) -> None:
 
 
 async def startup_bootstrap_config_store_safe() -> Any | None:
-    """``src.main``'s lifespan hook: refresh the bound project's store
-    once (so the very first request-time read is warm), then return a
-    background poll task -- fanned out over every ACTIVE project (M4),
-    not just the one bound at lifespan startup -- that the caller owns
-    cancelling at shutdown. Never raises -- a startup-time OpenSearch
-    hiccup here must not block the rest of the app from starting; the
-    next request-time ``ensure_fresh()`` call still runs.
+    """``src.main``'s lifespan hook: create ``op_global_configs`` (M3) if
+    it does not exist yet, refresh the bound project's store once (so the
+    very first request-time read is warm), then return a background poll
+    task -- fanned out over every ACTIVE project (M4), not just the one
+    bound at lifespan startup -- that the caller owns cancelling at
+    shutdown. Never raises -- a startup-time OpenSearch hiccup here must
+    not block the rest of the app from starting; the next request-time
+    ``ensure_fresh()`` call still runs.
     """
     import asyncio
-    import os
 
     try:
         from src.services.projects.guard import make_curation_opensearch
 
         client = await make_curation_opensearch()
+        # M3: needs no project bound (this index belongs to none) --
+        # runs first, so a later failure below (e.g. no project bound yet
+        # at this point in the lifespan) never skips it.
+        await ensure_global_configs_index(client)
         store = get_config_store(mode='live')
         await store.refresh(client)
         interval = float(os.environ.get('OP_CONFIG_POLL_S', str(OP_CONFIG_POLL_S_DEFAULT)))
@@ -430,12 +435,124 @@ def reset_config_stores() -> None:
         _STORES.clear()
 
 
+# =============================================================================
+# The global (non-project-scoped) config store -- M3
+# =============================================================================
+#
+# any_domain_plan.md / projects_plan.md §11 W2: "ConfigStores: one per
+# project plus op_global_configs". Everything above this section is
+# per-project (keyed by the bound project's slug, unusable unbound). This
+# is its sibling: ONE store for the whole deployment, for a config axis
+# that is not scoped to any project at all -- the concrete near-term
+# consumer is W9's VLM endpoint registry (a `local_vlm:desired`-style
+# global axis), but the mechanism itself is general, the same way
+# ``op_projects`` (src.services.projects.registry) is the one other index
+# that lives outside every project's own index set.
+#
+# No CRUD routes read/write this yet (that is W9's job); this pass only
+# builds the storage primitive: the index name/bootstrap, and a
+# process-singleton :class:`ConfigStore` that never touches
+# ``current_project()`` -- calling it while a project happens to be bound
+# has no effect on which store it returns, and calling it fully unbound
+# (a script, a global route, the lifespan) works with no binding at all.
+
+
+def global_configs_index() -> str:
+    """The one config-store index that belongs to no project -- mirrors
+    ``src.services.projects.registry.projects_index()`` for ``op_projects``."""
+    return os.environ.get('OP_GLOBAL_CONFIGS_INDEX', 'op_global_configs')
+
+
+# Same config-store row shapes as a project's folded ``configs`` index
+# (``src.clients.curation_opensearch._configs_body``), minus the folded
+# SETTINGS/UMAP_VIZ_STATE properties -- the global store never folds any
+# other role onto it, so it carries only the config-store fields
+# ``src.services.config_store.index``'s primitives read/write (``get``,
+# ``save_config``, ``activate``, ``upsert_runtime_doc``, ...). Kept as its
+# own literal body (not imported from ``curation_opensearch``) so this
+# module stays dependency-light, per its own module docstring.
+GLOBAL_CONFIGS_INDEX_BODY: dict[str, Any] = {
+    'settings': {'index': {'number_of_shards': 1, 'number_of_replicas': 0}},
+    'mappings': {
+        'dynamic': False,
+        'properties': {
+            'doc_type': {'type': 'keyword'},
+            'kind': {'type': 'keyword'},
+            'name': {'type': 'keyword'},
+            'revision': {'type': 'integer'},
+            'body': {'type': 'object', 'enabled': False},
+            'description': {'type': 'keyword', 'ignore_above': 512, 'index': False},
+            'created_at': {'type': 'date'},
+            'updated_at': {'type': 'date'},
+            'updated_by': {'type': 'keyword'},
+            'cloned_from': {'type': 'keyword'},
+            'axis': {'type': 'keyword'},
+            'previous': {'type': 'object', 'enabled': False},
+            'config_revision': {'type': 'long'},
+            'process': {'type': 'keyword'},
+            'applied_at': {'type': 'date'},
+        },
+    },
+}
+
+
+async def ensure_global_configs_index(client: Any) -> None:
+    """Create ``op_global_configs`` with its explicit mapping if it does
+    not exist yet -- mirrors
+    ``src.services.projects.bootstrap.ensure_projects_index`` for
+    ``op_projects``. Idempotent; call at startup before the first
+    global-store read/write. Needs no project bound (this index belongs
+    to none)."""
+    index = global_configs_index()
+    if await client.indices.exists(index=index):
+        return
+    await client.indices.create(index=index, body=GLOBAL_CONFIGS_INDEX_BODY)
+
+
+# Cached separately from `_STORES` (never by the same key/dict) so a
+# global store instance can never collide with, or be mistaken for, any
+# project's own store.
+_GLOBAL_STORE: dict[str, ConfigStore] = {}
+_GLOBAL_STORE_LOCK = threading.Lock()
+_GLOBAL_STORE_KEY = 'op_global_configs'
+
+
+def get_global_config_store(*, mode: Literal['live', 'pinned'] = 'live') -> ConfigStore:
+    """The process's singleton :class:`ConfigStore` for
+    ``op_global_configs``.
+
+    Unlike :func:`get_config_store` (keyed by, and unusable without, the
+    *bound* project), this never consults
+    :func:`~src.config.project_context.current_project` at all -- it
+    requires no project binding, and calling it while a project happens
+    to be bound has no effect on which store it returns.
+    """
+    with _GLOBAL_STORE_LOCK:
+        store = _GLOBAL_STORE.get(_GLOBAL_STORE_KEY)
+        if store is None:
+            store = ConfigStore(index=global_configs_index(), mode=mode, label='__global__')
+            _GLOBAL_STORE[_GLOBAL_STORE_KEY] = store
+        return store
+
+
+def reset_global_config_store() -> None:
+    """Test-only: drop the cached global store so a test's fake
+    OpenSearch starts from a clean snapshot."""
+    with _GLOBAL_STORE_LOCK:
+        _GLOBAL_STORE.clear()
+
+
 __all__ = [
+    'GLOBAL_CONFIGS_INDEX_BODY',
     'AxisRef',
     'ConfigSnapshot',
     'ConfigStore',
     'StoredConfig',
     'activate_axis',
+    'ensure_global_configs_index',
     'get_config_store',
+    'get_global_config_store',
+    'global_configs_index',
     'reset_config_stores',
+    'reset_global_config_store',
 ]
