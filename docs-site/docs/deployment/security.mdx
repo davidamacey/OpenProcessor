@@ -1,0 +1,81 @@
+---
+sidebar_position: 2
+title: Security
+---
+
+# Security
+
+:::danger[No authentication]
+OpenProcessor's API (port 4603 by default) has **no authentication,
+authorization or rate limiting** on any route, core or curation. Run it on
+a trusted machine or private network behind your own reverse proxy that
+enforces authentication. Never map its ports to a public interface.
+:::
+
+This is the deliberate, current state of the project, not a bug.
+Optional API authentication is on the [Roadmap](/roadmap).
+
+## Routes that are dangerous without access control
+
+- `DELETE /query/image/{id}` deletes indexed data with no confirmation.
+- `DELETE /curation/models/{model_name}` unloads a promoted model from
+  Triton.
+- `POST /ingest/directory` reads an arbitrary server-side path: anyone who
+  can reach it can make the server read any path it has access to.
+- The curation surface adds well over a hundred routes, dozens of them
+  writes, under the same no-authentication model.
+
+Curation's own path-taking routes are narrower. Batch ingest and label
+import resolve image and label paths only under the configured source
+roots (`OP_SOURCE_ROOT`, `OP_SOURCE_PATH_ALIASES`, the upload root) and
+fail anything else as `unservable_path`; `/curation/images/*` rejects path
+traversal and root escapes with a `400`.
+
+## LAN access from the one-line installer
+
+Cropwright is reachable on your LAN by default, for homelab or small-business
+use. The API itself stays bound to 127.0.0.1. There is no login on
+Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
+everything on 127.0.0.1.
+
+Cropwright's nginx reaches the API over the Docker network, so LAN browsers
+never need the API port. The UI can reach every route above: use it only on a
+network you trust, never port-forward it to the public internet, and put a
+reverse proxy with authentication in front for anything wider. A specific
+`--bind` address also narrows Cropwright to that interface. See the
+[installer page](../getting-started/installer.mdx#network-access).
+
+Release checksums (`SHA256SUMS`, `images.lock`, `cropwright.lock`) prove
+integrity, not authenticity: they come from the same origin as the files they
+cover.
+
+## Other default-open components
+
+- **Grafana** (monitoring profile) ships with `admin` / `admin`. Change
+  it before anyone else can reach it.
+- **OpenSearch** and **OpenSearch Dashboards** run with the security
+  plugin disabled (a development default). Enable it before any
+  production or multi-tenant deployment.
+- **`alloy`** (monitoring profile) mounts the Docker socket to tail every
+  container's logs.
+
+## The Docker socket overlay
+
+`docker-compose.gpu-arbiter.yml` mounts `/var/run/docker.sock` into
+`yolo-api` so training jobs can stop and restart named containers around a
+run (`OP_GPU_ARBITER_CONTAINERS`). Mounting the socket gives that
+container's processes **root-equivalent control of the whole Docker
+host**, not just this project. Only enable it on a host where you trust
+the API's full dependency stack. Without the overlay, arbiter calls are
+no-ops and the API logs one `arbiter_docker_unavailable` warning per
+outage, and trainer reachability is still checked through the trainer's
+heartbeat file.
+
+## Reporting a vulnerability
+
+For an issue that is **not** one of the known gaps above, use GitHub's
+private vulnerability reporting on the
+[repository](https://github.com/davidamacey/OpenProcessor/security)
+rather than a public issue. Include reproduction steps, the affected
+version or commit, and your assessment of impact. Security fixes land on
+`main`; use the latest tagged release.

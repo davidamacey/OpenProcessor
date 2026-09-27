@@ -556,7 +556,9 @@ class TestRunnerUsesDeploymentPromptPack:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         pack = PromptPack(**{**GENERIC_ITEM_PACK.__dict__, 'name': 'deployment_pack'})
-        monkeypatch.setattr(runner_mod, 'resolve_prompt_pack', lambda: pack)
+        from src.services.labeling import vlm_prompts as vlm_prompts_mod
+
+        monkeypatch.setattr(vlm_prompts_mod, 'active_prompt_pack', lambda *_a, **_k: pack)
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         mocks = await _drive_worker(
             tmp_path,

@@ -48,11 +48,16 @@ def test_pause_then_resume_flips_the_flag_workers_read(
 
     r = app_client.get('/curation/projects/default/pause')
     assert r.status_code == 200
-    assert r.json() == {'project': 'default', 'paused': False}
+    assert r.json() == {'project': 'default', 'paused': False, 'paused_by': [], 'reason': None}
 
     r = app_client.post('/curation/projects/default/pause')
     assert r.status_code == 200
-    assert r.json() == {'project': 'default', 'paused': True}
+    assert r.json() == {
+        'project': 'default',
+        'paused': True,
+        'paused_by': ['project'],
+        'reason': None,
+    }
 
     # The exact flag the workers' is_project_paused() reads.
     record = new_project_record('default', base_curation_config())
@@ -65,7 +70,7 @@ def test_pause_then_resume_flips_the_flag_workers_read(
 
     r = app_client.post('/curation/projects/default/resume')
     assert r.status_code == 200
-    assert r.json() == {'project': 'default', 'paused': False}
+    assert r.json() == {'project': 'default', 'paused': False, 'paused_by': [], 'reason': None}
     assert not flag.exists()
     assert is_project_paused(record) is False
 
@@ -81,3 +86,47 @@ def test_pause_and_resume_are_idempotent(
     assert app_client.post('/curation/projects/default/resume').status_code == 200
     assert app_client.post('/curation/projects/default/pause').status_code == 200
     assert app_client.post('/curation/projects/default/pause').status_code == 200
+
+
+def test_pause_state_reports_global_gpu_training_claim(
+    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import src.config.curation as curation_config_mod
+    from src.services.training import gpu_arbiter
+
+    monkeypatch.setenv('OP_STATE_DIR', str(tmp_path))
+    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
+    monkeypatch.setattr(
+        gpu_arbiter, 'read_training_lock', lambda **_: {'cuda_visible_devices': '0'}
+    )
+
+    r = app_client.get('/curation/projects/default/pause')
+    assert r.status_code == 200
+    body = r.json()
+    assert body['paused'] is True
+    assert body['paused_by'] == ['gpu_training']
+    assert body['reason'] is not None
+
+
+def test_pause_publishes_a_global_event(
+    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import src.config.curation as curation_config_mod
+    from src.services.curation import event_hub
+
+    monkeypatch.setenv('OP_STATE_DIR', str(tmp_path))
+    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
+
+    published: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        event_hub,
+        'publish_global_event',
+        lambda event_type, **fields: published.append((event_type, fields)),
+    )
+
+    assert app_client.post('/curation/projects/default/pause').status_code == 200
+    assert app_client.post('/curation/projects/default/resume').status_code == 200
+    assert published == [
+        ('project.paused', {'target': 'default'}),
+        ('project.resumed', {'target': 'default'}),
+    ]

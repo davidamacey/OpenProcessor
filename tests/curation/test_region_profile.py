@@ -201,12 +201,56 @@ def test_training_candidates_query_uses_neutral_profile(region_env: pytest.Monke
     assert REFERENCE_REGION_DETECTOR_MODEL not in str(query)
 
 
-def _patch_worker_io(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
+def _patch_worker_io(
+    monkeypatch: pytest.MonkeyPatch, *, seed_default_project: bool = True
+) -> dict[str, MagicMock]:
+    """``seed_default_project``: B1 -- the worker now builds a runtime
+    only for projects ``project_registry.active_projects()`` actually
+    returns, so a test that wants the worker to build ANYTHING (a
+    detector/segmenter for the env-resolved profile) needs a real
+    ``default`` project doc for the fake registry to find. A test that
+    wants to prove nothing gets built (no profile anywhere) passes
+    ``False`` and skips the registry setup entirely."""
     pool = MagicMock()
     pool.initialize = AsyncMock()
     pool.close = AsyncMock()
     os_client = MagicMock()
-    os_client.search = AsyncMock(return_value={'hits': {'hits': []}})
+    if seed_default_project:
+        from src.config.curation import base_curation_config
+        from src.config.projects import resources_for_new
+        from src.services.projects.registry import (
+            REVISION_DOC_ID,
+            ProjectRecord,
+            projects_index,
+            record_to_doc,
+        )
+
+        default_record = ProjectRecord(
+            slug='default',
+            display_name='Default',
+            description='',
+            status='active',
+            revision=1,
+            created_at='',
+            updated_at='',
+            origin=None,
+            resources=resources_for_new('default', base_curation_config()),
+        )
+
+        async def _search(*, index: str, body: dict) -> dict:  # type: ignore[type-arg]
+            if index == projects_index():
+                return {'hits': {'hits': [{'_source': record_to_doc(default_record)}]}}
+            return {'hits': {'hits': []}}
+
+        async def _get(*, index: str, id: str) -> dict:  # type: ignore[type-arg] # noqa: A002
+            if index == projects_index() and id == REVISION_DOC_ID:
+                return {'found': True, '_source': {'revision': 1}}
+            return {'found': False}
+
+        os_client.search = AsyncMock(side_effect=_search)
+        os_client.get = AsyncMock(side_effect=_get)
+    else:
+        os_client.search = AsyncMock(return_value={'hits': {'hits': []}})
     os_client.bulk = AsyncMock()
     os_client.close = AsyncMock()
     segmenter = MagicMock()
@@ -254,11 +298,15 @@ def _worker_args(
 async def test_worker_is_a_noop_without_a_region_profile(
     region_env: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    mocks = _patch_worker_io(region_env)
+    """B1: the worker now initializes shared infra (Triton pool,
+    OpenSearch client) unconditionally -- it can't know upfront whether
+    ANY active project will ever have a profile, since projects are
+    dynamic. What must still never happen with no profile configured
+    anywhere is building a per-project runtime (SegmenterClient etc).
+    """
+    mocks = _patch_worker_io(region_env, seed_default_project=True)
     rc = await worker.run(_worker_args(tmp_path))
     assert rc == 0
-    mocks['AsyncTritonPool'].assert_not_called()
-    mocks['make_script_opensearch'].assert_not_called()
     mocks['SegmenterClient'].assert_not_called()
 
 

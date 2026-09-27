@@ -68,8 +68,13 @@ async def bootstrap_default_project(client: Any) -> ProjectRecord:
             now=datetime.now(UTC).isoformat(),
         )
         try:
+            # B2: read-your-writes, same as registry.write_record.
             await client.index(
-                index=projects_index(), id=doc_id, body=record_to_doc(record), op_type='create'
+                index=projects_index(),
+                id=doc_id,
+                body=record_to_doc(record),
+                op_type='create',
+                refresh='wait_for',
             )
         except Exception as exc:
             if not _is_conflict(exc):

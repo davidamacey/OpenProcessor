@@ -96,6 +96,31 @@ async def _run(fake, registry, **kw):
 
 
 @pytest.mark.asyncio
+async def test_default_pack_resolves_through_the_store_not_the_env_file_default(
+    monkeypatch: pytest.MonkeyPatch, registry
+) -> None:
+    """Minor 6 (W2 review): the docstring says a caller who passes no
+    ``pack`` gets "the active pack" -- that must mean the config-store-
+    aware :func:`active_prompt_pack`, not the env/file-only
+    :func:`resolve_prompt_pack` `reclassify_unmatched` actually called."""
+    calls: list[object] = []
+
+    def _fake_active_prompt_pack(cfg=None):
+        calls.append(cfg)
+        return PACK
+
+    monkeypatch.setattr(
+        'src.services.labeling.vlm_prompts.active_prompt_pack', _fake_active_prompt_pack
+    )
+    fake = _fake()
+    result = await reclassify_unmatched(fake, source=VLM, registry=registry, config=CFG)
+    assert calls, 'active_prompt_pack was never consulted'
+    # PACK's synonym ('thingamajig' -> 'gadget') is what lets u2 resolve;
+    # a real result (not the trivially-empty default) proves PACK was used.
+    assert result.matched > 0
+
+
+@pytest.mark.asyncio
 async def test_apply_promotes_only_resolvable_unguarded_items(registry):
     fake = _fake()
     result = await _run(fake, registry, dry_run=False)

@@ -1,0 +1,7 @@
+[
+  {"route": "/clusters", "name": "clusters", "wait_for": "main"},
+  {"route": "/review?tab=all", "name": "review", "wait_for": "main"},
+  {"route": "/review?tab=regions", "name": "review-regions", "wait_for": "main"},
+  {"route": "/train", "name": "train", "wait_for": "main"},
+  {"route": "/bakeoff", "name": "bakeoff", "wait_for": "[data-testid='dataset-picker']"}
+]

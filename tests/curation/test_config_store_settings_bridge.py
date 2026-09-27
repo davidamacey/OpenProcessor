@@ -85,7 +85,11 @@ def test_put_prompt_pack_null_deactivates(app_client: TestClient) -> None:
         '/curation/projects/default/settings', json={'defaults': {'prompt_pack': None}}
     )
     assert r.status_code == 200, r.text
-    assert 'prompt_pack' not in r.json()['defaults']
+    # Minor 4 (W2 review): `null` deactivates through the store exactly
+    # like `'off'` does (`_activate_config_store_axis` maps both to
+    # `name=None`) -- GET must report that real 'off' state, not omit it
+    # as if the axis had never been touched.
+    assert r.json()['defaults']['prompt_pack'] == 'off'
 
 
 def test_put_detection_profile_off_and_on(app_client: TestClient) -> None:
@@ -107,7 +111,11 @@ def test_put_detection_profile_off_and_on(app_client: TestClient) -> None:
             '/curation/projects/default/settings', json={'defaults': {'detection_profile': 'off'}}
         )
         assert r_off.status_code == 200, r_off.text
-        assert 'detection_profile' not in r_off.json()['defaults']
+        # Minor 4 (W2 review): an explicit deactivation is reported as
+        # 'off', not omitted -- the store's own docstring says those two
+        # states (never activated vs. explicitly turned off) are
+        # deliberately distinct, and GET must not collapse them.
+        assert r_off.json()['defaults']['detection_profile'] == 'off'
 
         # 'off' is a true deactivation -- the env-registered default does
         # NOT silently take back over.
@@ -134,11 +142,18 @@ def test_active_conflict_is_structured_409(app_client: TestClient) -> None:
         '/curation/projects/default/settings',
         json={'defaults': {'prompt_pack': GENERIC_ITEM_PACK.name}},
     )
-    # Force the process-local snapshot stale so the route re-derives an
-    # ``expected_active`` that no longer matches what's actually stored.
+    # Force the process-local snapshot to disagree with what's actually
+    # stored (simulating a second writer's activation this process
+    # hasn't seen yet) while keeping it "fresh enough" (a real
+    # ``loaded_at``) that ``ensure_fresh`` serves it from cache instead
+    # of re-fetching and silently repairing it before the route reads it.
+    import time as _time
+
     store = get_config_store()
     store.current = store.current.__class__(
-        config_revision=store.current.config_revision, active_pack=None
+        config_revision=store.current.config_revision,
+        active_pack=None,
+        loaded_at=_time.monotonic(),
     )
     r = app_client.put(
         '/curation/projects/default/settings',
@@ -146,3 +161,69 @@ def test_active_conflict_is_structured_409(app_client: TestClient) -> None:
     )
     assert r.status_code == 409, r.text
     assert r.json()['detail']['error'] == 'active_conflict'
+
+
+def test_put_prompt_pack_activates_a_stored_pack_at_its_real_revision(
+    app_client: TestClient,
+) -> None:
+    """M6: activating a STORED pack (not an env/file id) through the
+    settings bridge must stamp its own current revision, not `None` --
+    every other process's `_axis_ref` read used to coerce a `None`
+    revision to `0`, so two processes disagreed about which revision
+    was active."""
+    from src.config.project_context import bind_project
+    from src.services.config_store.index import save_config
+    from src.services.config_store.store import ConfigStore, reset_config_stores
+    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+
+    fake_os = app_client.fake_os  # type: ignore[attr-defined]
+
+    async def _seed() -> tuple[int, str]:
+        from src.config.curation import IndexRole, base_curation_config
+        from src.config.projects import ProjectRecord, resources_for_new
+
+        record = ProjectRecord(
+            slug='default',
+            display_name='Default',
+            description='',
+            status='active',
+            revision=1,
+            created_at='',
+            updated_at='',
+            origin=None,
+            resources=resources_for_new('default', base_curation_config()),
+        )
+        with bind_project(record):
+            idx = resources_for_new('default', base_curation_config()).indexes[IndexRole.CONFIGS]
+            body = {**GENERIC_ITEM_PACK.to_dict(), 'name': 'stored_pack'}
+            doc = await save_config(
+                fake_os,
+                idx,
+                kind='prompt_pack',
+                name='stored_pack',
+                body=body,
+                expected_revision=None,
+            )
+            return doc['revision'], idx
+
+    import asyncio
+
+    revision, idx = asyncio.run(_seed())
+
+    r = app_client.put(
+        '/curation/projects/default/settings',
+        json={'defaults': {'prompt_pack': 'stored_pack'}},
+    )
+    assert r.status_code == 200, r.text
+
+    # A fresh ConfigStore (simulating another process that never wrote
+    # this activation itself) reads the activation doc from scratch.
+    reset_config_stores()
+    other_process_store = ConfigStore(index=idx, mode='live')
+
+    async def _refresh() -> None:
+        await other_process_store.refresh(fake_os)
+
+    asyncio.run(_refresh())
+    assert other_process_store.current.active_pack == ('stored_pack', revision)
+    assert other_process_store.current.active_pack != ('stored_pack', 0)

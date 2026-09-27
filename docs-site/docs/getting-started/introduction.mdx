@@ -1,0 +1,80 @@
+---
+sidebar_position: 1
+title: Introduction
+---
+
+# Introduction
+
+OpenProcessor is a **self-hosted visual AI backend built on NVIDIA Triton
+Inference Server**. One FastAPI service (`yolo-api`, port `4603`) puts
+TensorRT-accelerated detection, face recognition, image/text embeddings,
+OCR and vector search behind a single REST API. An optional, experimental
+**curation subsystem** adds an active-learning dataset backend on top of
+the same models: ingest, clustering, review queues, VLM-assisted labeling,
+export, training, model comparison and promotion back into Triton.
+
+It is licensed **AGPL-3.0-or-later** (see [Licenses](../reference/licenses.mdx)).
+
+## Capabilities
+
+| Area | Routes | Backed by |
+|---|---|---|
+| Object detection | `/detect`, `/detect/batch` | YOLO11 (EfficientNMS end2end engine, GPU NMS) and YOLO26 (NMS-free engine), side by side |
+| Faces | `/faces/detect`, `/faces/recognize`, `/faces/verify`, `/faces/search`, `/faces/identify` | SCRFD-10G (boxes + 5-point landmarks) and ArcFace (512-dim) |
+| Embeddings | `/embed/image`, `/embed/text`, `/embed/batch`, `/embed/boxes` | MobileCLIP2-S2 image and text encoders (512-dim) |
+| Visual search | `/search/image`, `/search/text`, `/search/face`, `/search/ocr`, `/search/object` | OpenSearch k-NN |
+| OCR | `/ocr/predict`, `/ocr/batch` | PP-OCRv5 detection + recognition, orchestrated by a Triton Python-backend (BLS) model |
+| Combined analysis | `/analyze`, `/analyze/batch` | All of the above on one image |
+| Ingest | `/ingest`, `/ingest/batch`, `/ingest/directory` | Indexes global, face, object and OCR documents into OpenSearch |
+| Curation (experimental) | everything under `/curation` | PE-Core embeddings, your own detector, an optional VLM, segmenter and trainer |
+
+Every core route is also mounted under `/v1` (for example `/v1/detect`).
+The `/curation` surface has a single, unversioned prefix. See the
+[API reference](../api-reference/overview.mdx).
+
+## How the pieces fit
+
+- **`triton-server`** serves every model from `models/` in explicit
+  model-control mode, so models load, unload and get promoted at runtime.
+- **`yolo-api`** does request validation, preprocessing, orchestration and
+  response shaping, and talks to Triton over one shared gRPC client so
+  concurrent requests reach Triton's dynamic batcher together.
+- **`opensearch`** stores vectors and metadata for search, and the curation
+  item, class, cluster and settings indexes.
+- **Opt-in compose profiles** add the curation workers, a SAM 3 segmenter,
+  an in-compose vLLM VLM, a trainer with MLflow, and a monitoring stack.
+
+Which services each compose profile starts is on
+[Compose profiles](./compose-profiles.mdx); the diagrams of how they fit
+together are on the [Architecture](../architecture/overview.mdx) page.
+
+## The curation subsystem in one paragraph
+
+The curation subsystem is **domain-agnostic**: nothing about "what a
+region of interest is" is hardcoded. A deployment configures its domain
+through four dataclasses (`CurationConfig`, `RegionFields`,
+`DetectionProfile`, `RegionStatus`), mostly via `OP_*` environment
+variables. It is **bring-your-own-model**: you supply the item detector,
+and optionally a VLM, a region detector and training data. It ships
+**opt-in** behind the `curation` compose profile, is **experimental** in
+v0.3.0 (no backward-compatibility guarantee yet), and — like the rest of
+the API — has **no authentication**. See
+[Curation workflow](../operations/curation-workflow.mdx).
+
+## Frontends
+
+Every route works from `curl`, `httpx` or a client generated from
+`contracts/openapi/curation.json`. [Cropwright](https://github.com/attevon-llc/cropwright)
+is a separate, optional SvelteKit labeling frontend for the `/curation`
+API; some screenshots in these docs were captured from it. It is not
+required to use OpenProcessor.
+
+## Requirements
+
+- An NVIDIA GPU with 8 GB+ VRAM (Ampere or newer), 16 GB RAM, 16 CPU cores
+  at minimum; see [GPU sizing](../deployment/gpu-sizing.mdx).
+- Docker with Compose v2 and the NVIDIA Container Toolkit.
+- Roughly 30-60 minutes on first start for one-time TensorRT compilation;
+  later starts take seconds.
+
+Next: [Quick start](./quick-start.mdx).

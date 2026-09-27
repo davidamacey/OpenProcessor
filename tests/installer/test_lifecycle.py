@@ -6,12 +6,15 @@ what the installer actually tells Docker to do, in order.
 
 from __future__ import annotations
 
+import json
+import os
 import shutil
 import stat
+import subprocess
 from typing import TYPE_CHECKING
 
 import pytest
-from installer_harness import PROJECT, RELEASE, fake_digest
+from installer_harness import CW_TAG, PROJECT, RELEASE, REPO_ROOT, fake_digest
 
 
 if TYPE_CHECKING:
@@ -19,6 +22,8 @@ if TYPE_CHECKING:
 
     from installer_harness import Shimmed
 
+
+BUNDLE = REPO_ROOT / 'scripts/release/build_deploy_bundle.sh'
 
 PLAN_FILES = [
     'yolov11_small_trt_end2end/1/model.plan',
@@ -187,6 +192,45 @@ def test_rollback_restores_the_newest_backup(shimmed: Shimmed) -> None:
         if ln.endswith(' up -d --remove-orphans') and f'-p {PROJECT} ' in ln
     ]
     assert list((inst / '.install' / 'rollback-undo').iterdir())
+
+
+def _add_release(shimmed: Shimmed, tmp_path: Path, ref: str) -> None:
+    """A second fake release, same files, published under another tag."""
+    release = tmp_path / 'rel'
+    if not release.exists():
+        shutil.copytree(shimmed.release, release)
+        shimmed.release = release
+    src = release / 'raw' / RELEASE
+    subprocess.run(
+        ['bash', str(BUNDLE), ref, str(src), str(release / 'assets' / ref)],
+        check=True,
+        capture_output=True,
+        env={**os.environ, 'ALLOW_UNPINNED_LOCK': '0'},
+    )
+    shutil.copytree(src, release / 'raw' / ref)
+
+
+def _installed_version(inst: Path) -> str:
+    return json.loads((inst / '.install' / 'state.json').read_text())['version']
+
+
+def test_rollback_skips_same_version_backups(shimmed: Shimmed, tmp_path: Path) -> None:
+    # Review s5: v9.9.9 -> v9.9.10, then a same-version re-run (another
+    # backup, of v9.9.10). Rollback must land on v9.9.9, not v9.9.10.
+    _add_release(shimmed, tmp_path, 'v9.9.10')
+    assert install(shimmed).returncode == 0
+    inst = shimmed.root / 'inst'
+    assert _installed_version(inst) == RELEASE
+    up = install(shimmed, '--version', 'v9.9.10', '--yes')
+    assert up.returncode == 0, up.stderr[-2000:]
+    assert _installed_version(inst) == 'v9.9.10'
+    again = install(shimmed, '--version', 'v9.9.10')
+    assert again.returncode == 0, again.stderr[-2000:]
+    assert len(list((inst / 'backups').iterdir())) == 2
+    result = shimmed.run(['--rollback', '--unattended', '--dir', 'inst'])
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert _installed_version(inst) == RELEASE
+    assert f'previous version {RELEASE}' in result.stdout + result.stderr
 
 
 def test_rollback_without_a_backup_fails(shimmed: Shimmed) -> None:
@@ -404,6 +448,72 @@ def test_release_dir_is_still_checksum_verified(shimmed: Shimmed, tmp_path: Path
     result = install(shimmed, '--release-dir', str(assets))
     assert result.returncode == 7
     assert not (shimmed.root / 'inst' / '.env').exists()
+
+
+def _bundle_with_cropwright(shimmed: Shimmed, out: Path, cw_dir: Path | None) -> None:
+    env = {**os.environ, 'ALLOW_UNPINNED_LOCK': '0'}
+    if cw_dir is not None:
+        env['CW_RELEASE_DIR'] = str(cw_dir)
+    result = subprocess.run(
+        ['bash', str(BUNDLE), RELEASE, str(shimmed.release / 'raw' / RELEASE), str(out)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_release_dir_bundle_carries_cropwright_for_an_offline_install(
+    shimmed: Shimmed, tmp_path: Path
+) -> None:
+    # Review s3: --release-dir must not silently fetch Cropwright from the network.
+    out = tmp_path / 'assets'
+    _bundle_with_cropwright(shimmed, out, shimmed.release / 'cw' / CW_TAG)
+    for f in ('SHA256SUMS', 'docker-compose.yml', '.env.example'):
+        assert (out / 'cropwright' / CW_TAG / f).is_file()
+    result = install(
+        shimmed,
+        '--release-dir',
+        str(out),
+        '--no-start',
+        tiers='cropwright',
+        CW_ARTIFACT_BASE_URL='https://unreachable.invalid/a',
+        CW_RAW_BASE_URL='https://unreachable.invalid/r',
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert [ln for ln in shimmed.log_lines('curl') if 'unreachable' in ln or 'cw.test' in ln] == []
+    assert 'from the release dir' in result.stderr + result.stdout
+    assert (shimmed.root / 'inst' / 'cropwright' / 'docker-compose.yml').is_file()
+
+
+def test_bundle_refuses_cropwright_assets_that_do_not_match_the_lock(
+    shimmed: Shimmed, tmp_path: Path
+) -> None:
+    cw = tmp_path / 'cw'
+    shutil.copytree(shimmed.release / 'cw' / CW_TAG, cw)
+    (cw / 'SHA256SUMS').write_text((cw / 'SHA256SUMS').read_text() + '# tampered\n')
+    env = {**os.environ, 'ALLOW_UNPINNED_LOCK': '0', 'CW_RELEASE_DIR': str(cw)}
+    result = subprocess.run(
+        ['bash', str(BUNDLE), RELEASE, str(shimmed.release / 'raw' / RELEASE), str(tmp_path / 'o')],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode != 0
+    assert 'cropwright.lock' in result.stderr
+
+
+def test_release_dir_without_cropwright_warns_it_is_not_offline(
+    shimmed: Shimmed, tmp_path: Path
+) -> None:
+    out = tmp_path / 'assets'
+    _bundle_with_cropwright(shimmed, out, None)
+    result = install(shimmed, '--release-dir', str(out), '--no-start', tiers='cropwright')
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert 'not offline' in result.stderr
+    assert [ln for ln in shimmed.log_lines('curl') if 'cw.test' in ln]
 
 
 def test_release_dir_needs_a_version(shimmed: Shimmed) -> None:

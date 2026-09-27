@@ -1,0 +1,10 @@
+[
+  {"step": "Export models", "route": "make download-models export-models", "desc": "Fetch base weights and compile them to TensorRT engines once; Triton loads the cached engines on every later start."},
+  {"step": "Run inference", "route": "/detect /faces /embed /ocr /analyze", "desc": "Stateless core routes: send an image, get normalized boxes, landmarks, 512-dim embeddings or text back."},
+  {"step": "Ingest and index", "route": "/ingest, /curation/ingest/*", "desc": "Index images into OpenSearch for search, or into the curation item pool, where an item detector proposes crops."},
+  {"step": "Cluster and review", "route": "/curation/clusters, /curation/review/{tab}", "desc": "Group crops by PE-Core embedding similarity and work active-learning review queues, most-uncertain first."},
+  {"step": "Label", "route": "/curation/crops/*, /curation/vlm/*", "desc": "Label by hand or with an OpenAI-compatible VLM's suggestions; every write is undoable and keeps its provenance."},
+  {"step": "Export", "route": "/curation/export/yolo", "desc": "Freeze a test holdout and write a deterministic YOLO-format dataset with a checksummed manifest."},
+  {"step": "Train and compare", "route": "/curation/train/*, /curation/bakeoff/*", "desc": "Preflight and launch a training run on the trainer container, then score it against baselines per class."},
+  {"step": "Promote", "route": "/curation/train/promote/{job_id}", "desc": "Serve the winning model from Triton; its predictions feed the next review cycle's disagreement queue."}
+]

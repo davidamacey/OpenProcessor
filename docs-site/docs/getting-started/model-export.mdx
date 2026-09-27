@@ -1,0 +1,127 @@
+---
+sidebar_position: 3
+title: Model export
+---
+
+# Model export
+
+Triton serves TensorRT engines from `models/<name>/1/` with a
+`config.pbtxt` beside them. Engines are compiled **on your GPU**, once;
+Triton loads the cached `.plan` files on every later start.
+`scripts/setup.sh` runs the core exports for you. This page covers doing
+it by hand with the Makefile targets, and the models `setup.sh` does not
+build (PE-Core for curation).
+
+Every target below runs inside the running `yolo-api` container
+(`docker compose exec yolo-api ...`), so start the core stack first
+(`make up`). Weights you download land in `pytorch_models/`, which the
+API container mounts.
+
+## What Triton loads by default
+
+`triton-server` runs in explicit model-control mode with
+`--exit-on-error=false`, so a missing engine leaves that one model
+unloaded instead of stopping the server. The default `--load-model` list
+in `docker-compose.yml`:
+
+| Model | Purpose |
+|---|---|
+| `yolov11_small_trt_end2end` | Object detection (TensorRT + EfficientNMS, normalized boxes) |
+| `scrfd_10g_bnkps` | Face detection + 5-point landmarks |
+| `arcface_w600k_r50` | Face embedding, 512-dim |
+| `mobileclip2_s2_image_encoder`, `mobileclip2_s2_text_encoder` | CLIP image/text embeddings, 512-dim |
+| `paddleocr_det_trt`, `paddleocr_rec_trt` | PP-OCRv5 text detection / recognition |
+| `ocr_pipeline` | OCR orchestration (Triton Python backend, BLS) |
+| `pe_image_encoder` | PE-Core image embedding, 1024-dim (curation) |
+| `pe_text_encoder` | PE-Core text embedding for semantic search (ONNX Runtime, CPU) |
+
+## Core models
+
+| Step | Target | What it does |
+|---|---|---|
+| Base weights | `make download-models` | Fetches `yolo11s.pt`, `scrfd_10g_bnkps.onnx`, `arcface_w600k_r50.onnx` and `mobileclip_s2.pt` into `pytorch_models/` |
+| YOLO11 detection | `make export-models` | Exports YOLO11 small to TensorRT and to a TensorRT end2end engine (EfficientNMS, GPU NMS, normalized boxes), writes `labels.txt` and `config.pbtxt` |
+| Faces | `make setup-face-pipeline` | `download-face-models`, `export-face-recognition` (ArcFace) and `export-scrfd` (SCRFD-10G), then loads both |
+| CLIP embeddings | `make export-mobileclip` | Exports the MobileCLIP image and text encoders, then restarts Triton |
+| OCR | `make setup-ocr` | `download-paddleocr` (PP-OCRv5 ONNX + dictionaries), `export-paddleocr` (det + rec to TensorRT), then restarts Triton |
+
+`make export-small` is the same as `export-models`; `make export-all`
+builds nano through xlarge in every format (60-120 minutes).
+`make export-status`, `make validate-exports` and `make models-list`
+show what exists and what Triton has loaded.
+
+Measured one-time export cost on a 48 GB card (from the README; times vary
+by GPU):
+
+| Model | Export time | Engine size |
+|---|---|---|
+| YOLO11 detection | ~8 min | ~45 MB |
+| YOLO26 detection (optional) | ~6 min | ~40 MB |
+| SCRFD face detection | ~2 min | ~20 MB |
+| ArcFace embeddings | ~2 min | ~86 MB |
+| MobileCLIP image encoder | ~4 min | ~35 MB |
+| MobileCLIP text encoder | ~1 min | ~125 MB |
+| PaddleOCR (det + rec) | ~15 min | ~15 MB |
+
+## YOLO26 alongside YOLO11
+
+YOLO26 uses the stock Ultralytics exporter and produces a natively
+NMS-free, single-tensor engine (no plugin). One Triton instance serves
+both families; the API reads each model's output format from Triton
+metadata.
+
+```bash
+docker compose exec yolo-api python /app/export/export_yolo26.py --models small
+curl -X POST http://localhost:4603/models/yolo26_small_trt/load
+curl -X POST "http://localhost:4603/detect?model_name=yolo26_small_trt" -F "image=@photo.jpg"
+```
+
+Set `YOLO_MODEL=yolo26_small_trt` to make it the default detector.
+Models load and unload at runtime through `POST /models/{name}/load` and
+`POST /models/{name}/unload`.
+
+## PE-Core encoders (required for curation)
+
+Curation stores a 1024-dim `pe_embedding` per item from Meta's
+PE-Core-L14-336. Semantic search, near-duplicate detection, residual
+clustering and the embedding plot all run on it. The Triton model names
+are fixed: `pe_image_encoder` (TensorRT, input `images [B,3,336,336]`,
+output `image_embeddings [B,1024]`) and `pe_text_encoder` (ONNX Runtime,
+one CPU instance, 0 GB of GPU memory). Both are already in Triton's
+`--load-model` list in `docker-compose.yml`.
+
+```bash
+make export-pe
+```
+
+`export-pe` chains:
+
+| Target | Step |
+|---|---|
+| `make pe-download` | Download and SHA-256 verify the pinned checkpoint into the HuggingFace cache (the repo is not gated) |
+| `make pe-export-image` | Image tower to `pytorch_models/pe_image_encoder.onnx` |
+| `make pe-build-trt` | Build the TensorRT plan in `models/pe_image_encoder` |
+| `make pe-export-text-triton` | Export the text tower (parity-gated against PyTorch) and install it as Triton's `pe_text_encoder` |
+
+It then restarts Triton; restart `yolo-api` afterwards. If the TensorRT
+build fails on PE's attention-pool ops, run `make pe-build-ort` to serve
+the image ONNX through Triton's ONNX Runtime backend instead.
+`make pe-text-status` (`GET /health/pe_text`) shows which text backend
+the API is using: with `OP_PE_TEXT_BACKEND=auto` it prefers Triton's
+shared CPU instance and falls back to a lazily loaded in-process PyTorch
+encoder.
+
+## Your own models
+
+| Target | Use |
+|---|---|
+| `make export-custom MODEL=/app/pytorch_models/my.pt [NAME=...] [BATCH=32]` | Export your own YOLO checkpoint |
+| `make export-config CONFIG=/path/to/config.yaml` | Batch export from a YAML config |
+| `make export-dual-head MODEL=... NAME=...` | Export a detector with an extra `sppf_feat` feature-map output, pooled per detection into the curation `backbone_embedding` |
+| `POST /models/upload`, `POST /models/{name}/export` | Upload and export through the API instead of the CLI |
+
+A training run you promote from the curation subsystem is written into
+the model repository and loaded for you; see
+[Training, bake-off and promote](../operations/training-and-promote.mdx).
+Weight licenses differ per model; read [Licenses](../reference/licenses.mdx)
+before any commercial use.

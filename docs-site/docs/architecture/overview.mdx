@@ -1,0 +1,48 @@
+---
+sidebar_position: 1
+title: Architecture
+---
+
+# Architecture
+
+The interactive diagrams live on the **[Architecture](pathname:///architecture)**
+page. Each one is drawn from the current code, and each has views that
+highlight one part of it.
+
+| Group | Diagram | What it shows |
+| --- | --- | --- |
+| System | System overview | Every compose service and profile: clients, `yolo-api`, Triton, OpenSearch, the shared job volumes, curation workers, segmenter, VLM, trainer, evaluator, MLflow and monitoring. |
+| System | Backend modules | `src/main.py`, the core and curation routers, the FastAPI-free services under `src/services/`, the clients, `src/config/`, and the workers that import the same services. |
+| System | Data model | The curation indexes and class registry, and the separate visual-search indexes the core `/ingest` route writes. |
+| Workflows | Core inference | `/detect`, `/faces`, `/embed` and `/ocr`: CPU preprocessing in the API, TensorRT models in Triton, and the `ocr_pipeline` BLS model. |
+| Workflows | Curation pipeline | Ingest, embed, cluster, VLM suggest, human review, export, train, bake-off, promote, and probe predictions back into review. |
+| Workflows | Region cascade | The detection worker's legs (region detector, segmenter, OCR text hint), VLM verify and text read, and the terminal statuses. |
+| Sequences | Training and promote | The job-file protocol between the API and the trainer, the GPU arbiter, and the gated promote into Triton. |
+
+:::note[Region stage: changes coming soon]
+The region-cascade diagram shows the code as it is today: one active
+detection profile per worker process, with its prompts set in configuration.
+Multi-region support and editable prompts/profiles are coming soon, and the
+diagram will be updated when they land.
+:::
+
+## Related pages
+
+- [Introduction](../getting-started/introduction.mdx): the services and
+  what each capability is backed by.
+- [Compose profiles](../getting-started/compose-profiles.mdx): every
+  service, which profile starts it, and how a frontend joins the network.
+- [Model export](../getting-started/model-export.mdx): the Triton models
+  and how they are built.
+- [Workers and heartbeats](../operations/workers.mdx): the curation
+  workers and their shared job state.
+- [Training, bake-off and promote](../operations/training-and-promote.mdx):
+  the file protocol between the API, trainer and evaluator.
+
+## Regenerating the diagrams
+
+The sources are hand-authored [Archify](https://github.com/tt-a1i/archify)
+specs (MIT) in `docs-site/architecture-diagrams/specs/`. After changing one,
+run `scripts/generate-architecture-diagrams.sh` from the repo root; it
+validates each spec at showcase quality and writes the HTML to
+`docs-site/static/architecture/`.

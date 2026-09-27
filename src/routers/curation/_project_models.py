@@ -16,7 +16,7 @@ from src.config.projects import (
     PROJECT_SLUG_RE,
     RESERVED_SLUGS,
 )
-from src.routers.curation._config_common_models import ProjectCapacityWire
+from src.routers.curation._config_common_models import JobRefWire, ProjectCapacityWire
 
 
 if TYPE_CHECKING:
@@ -74,6 +74,10 @@ class ProjectSummary(BaseModel):
     updated_at: str
     counts: ProjectCounts
     origin: dict[str, Any] | None = None
+    # Cropwright BA-P2-4: the per-project pause flag, read straight off
+    # this record's own state dir so GET /projects needs no per-row
+    # GET .../pause call to render a "paused" chip.
+    paused: bool = False
 
 
 def list_membership(status: str, *, include_archived: bool) -> bool:
@@ -85,6 +89,7 @@ def list_membership(status: str, *, include_archived: bool) -> bool:
 
 
 def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
+    from scripts.curation._project_worker_utils import PIPELINE_PAUSED_FLAG_NAME
     from src.config.project_context import bind_project
     from src.config.projects import DEFAULT_SLUG
 
@@ -93,6 +98,7 @@ def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
 
         prefix = project_api_base()
     is_default = record.slug == DEFAULT_SLUG
+    paused = (record.resources.project_state_dir / PIPELINE_PAUSED_FLAG_NAME).exists()
     return ProjectSummary(
         slug=record.slug,
         display_name=record.display_name,
@@ -110,6 +116,7 @@ def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
         updated_at=record.updated_at,
         counts=counts,
         origin=record.origin,
+        paused=paused,
     )
 
 
@@ -232,7 +239,9 @@ class DeleteBlockingIssue(BaseModel):
 
 class DryRunIndexReport(BaseModel):
     name: str
-    docs: int
+    # P3F m10: null when the count genuinely could not be taken, matching
+    # ProjectCounts.validated's null-not-0 rule -- never a made-up 0.
+    docs: int | None = None
     store_bytes: int | None = None
 
 
@@ -246,7 +255,9 @@ class DeleteDryRunResponse(BaseModel):
     dirs: list[DryRunDirReport]
     promoted_models: list[str] = Field(default_factory=list)
     mlflow_experiment: str
-    running_jobs: list[dict[str, Any]] = Field(default_factory=list)
+    # P3F m5: typed, not a raw dict -- same JobRefWire every 409
+    # project_busy carries.
+    running_jobs: list[JobRefWire] = Field(default_factory=list)
     referenced_by: list[dict[str, Any]] = Field(default_factory=list)
     blocking: list[str]
     blocking_detail: list[DeleteBlockingIssue]

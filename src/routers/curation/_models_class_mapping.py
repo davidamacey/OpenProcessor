@@ -26,6 +26,7 @@ from src.services.training.model_classes import (
     model_class_mapping,
     model_classes,
     model_owner_project,
+    model_sharing_revision,
 )
 from src.services.training.triton_promote import resolve_triton_models_dir
 
@@ -82,9 +83,19 @@ def bound_registry() -> ClassRegistryFile:
 
 
 def listing_fields(model_name: str, registry: ClassRegistryFile) -> dict[str, Any]:
-    """``project``, ``shared`` and ``class_mapping`` for one Triton model
-    list entry. ``class_mapping`` is null for a model with no class list
-    (an encoder, an OCR model)."""
+    """``project``, ``shared``, ``class_mapping``, ``owned`` and
+    ``sharing_revision`` for one Triton model list entry. ``class_mapping``
+    is null for a model with no class list (an encoder, an OCR model).
+
+    Cropwright BA-P2-1/BA-P2-2/BA-P2-7: ``owned`` is this route's own
+    ownership check (never inferred client-side from ``project``);
+    ``sharing_revision`` is served only for an owned model (the ``PUT
+    .../sharing`` route needs it as ``expected_revision``, and it isn't
+    meaningful for a model this project doesn't own); a foreign entry is
+    never unloadable through this project's ``DELETE /models/{name}``."""
+    from src.routers.curation.models import _project_owns_model
+
+    owned = _project_owns_model(model_name)
     summary: dict[str, Any] | None = None
     if model_classes(model_name):
         mapping = model_class_mapping(
@@ -98,6 +109,9 @@ def listing_fields(model_name: str, registry: ClassRegistryFile) -> dict[str, An
         'project': model_owner_project(model_name),
         'shared': is_model_shared(model_name),
         'class_mapping': summary,
+        'owned': owned,
+        'sharing_revision': model_sharing_revision(model_name) if owned else None,
+        **({} if owned else {'unloadable': False}),
     }
 
 

@@ -1,0 +1,62 @@
+---
+sidebar_position: 1
+title: API overview
+---
+
+# API overview
+
+Everything is served by one FastAPI service on port **4603** (host port
+`API_PORT`). There are two surfaces:
+
+| Surface | Prefix | Versioned twin | Contract |
+|---|---|---|---|
+| [Core inference and search](./core.mdx) | `/detect`, `/faces`, `/persons`, `/embed`, `/search`, `/ingest`, `/analyze`, `/ocr`, `/clusters`, `/query`, `/models` | Yes: every core router is also mounted under `/v1` | FastAPI's live schema at `/docs` and `/openapi.json` |
+| [Curation](./curation.mdx) (experimental) | `/curation` (`OP_API_PREFIX`) | No `/v1` twin | `contracts/openapi/curation.json` (generated) and `docs/design/curation_api_contract.md` (hand-written) |
+
+Health and metrics routes (`/`, `/live`, `/ready`, `/health`,
+`/health/pe_text`, `/metrics`, `/connection_pool_info`) sit at the root
+with no prefix; see [Health and stall reasons](../operations/health-and-stalls.mdx).
+
+```bash
+curl http://localhost:4603/ | jq '.api_versions'
+# {"current":"v1","supported":["v1"],"deprecated":[]}
+```
+
+## Conventions
+
+- **Images are multipart uploads.** Single-image routes take a file field
+  named `image`; batch routes take a repeated `images` field. `/faces/verify`
+  takes `image1` and `image2`.
+- **Coordinates are normalized** to `0.0-1.0` (`x1, y1, x2, y2`); multiply
+  by the image size for pixels.
+- **Tuning knobs are query parameters** (`confidence`, `top_k`,
+  `min_score`, `model_name`, ...), not JSON bodies. `/search/text` and
+  `/search/ocr` take `text` as a query parameter.
+- **Embeddings** from MobileCLIP and ArcFace are 512-dim and
+  L2-normalized; curation's PE-Core `pe_embedding` is 1024-dim.
+- **No authentication, authorization or rate limiting** on any route.
+  Run it on a trusted network behind your own reverse proxy; see
+  [Security](../deployment/security.mdx).
+
+## The curation contract
+
+`contracts/openapi/curation.json` is `app.openapi()` filtered to the
+`/curation` paths, regenerated with `make contracts` and checked for drift
+by a pre-commit hook, so it always matches the code. TypeScript types for
+the item wire format, class sources and region statuses are generated
+next to it under `contracts/ts/`. Point any OpenAPI client generator at
+that file.
+
+The hand-written contract (`docs/design/curation_api_contract.md`) adds the
+parts a schema can't express: which names are frozen, the one-vocabulary
+wire rule, undo semantics, error behavior, and breaking-change notes for
+consumers.
+
+The single most important rule: **the wire vocabulary is generic and
+fixed.** Region attributes always go out as `region_<attr>`, VLM output
+as `vlm_*`, classifier output as `classifier_*`, whatever storage field
+names a deployment configured. Every item-returning endpoint emits the
+same item shape from one serializer, so a client parses one shape.
+
+Read endpoints **fail closed**: a backend error is an HTTP error, never a
+silently empty result.

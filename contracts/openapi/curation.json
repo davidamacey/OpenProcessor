@@ -2055,7 +2055,9 @@
               "model_not_found",
               "class_hotkey_conflict",
               "hotkey_reserved",
-              "hotkey_taken"
+              "hotkey_taken",
+              "path_escape",
+              "finish_in_progress"
             ],
             "title": "Error",
             "type": "string"
@@ -2864,8 +2866,7 @@
           },
           "running_jobs": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/JobRefWire"
             },
             "title": "Running Jobs",
             "type": "array"
@@ -2902,8 +2903,15 @@
       "DryRunIndexReport": {
         "properties": {
           "docs": {
-            "title": "Docs",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Docs"
           },
           "name": {
             "title": "Name",
@@ -2922,8 +2930,7 @@
           }
         },
         "required": [
-          "name",
-          "docs"
+          "name"
         ],
         "title": "DryRunIndexReport",
         "type": "object"
@@ -5682,16 +5689,22 @@
             "type": "string"
           },
           "started_at": {
-            "title": "Started At",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
           }
         },
         "required": [
           "kind",
           "kind_label",
           "id",
-          "label",
-          "started_at"
+          "label"
         ],
         "title": "JobRefWire",
         "type": "object"
@@ -7090,9 +7103,28 @@
             "title": "Paused",
             "type": "boolean"
           },
+          "paused_by": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Paused By",
+            "type": "array"
+          },
           "project": {
             "title": "Project",
             "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "required": [
@@ -7650,6 +7682,11 @@
             ],
             "title": "Origin"
           },
+          "paused": {
+            "default": false,
+            "title": "Paused",
+            "type": "boolean"
+          },
           "prefix": {
             "title": "Prefix",
             "type": "string"
@@ -7851,6 +7888,11 @@
               }
             ],
             "title": "Origin"
+          },
+          "paused": {
+            "default": false,
+            "title": "Paused",
+            "type": "boolean"
           },
           "prefix": {
             "title": "Prefix",

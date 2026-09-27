@@ -215,10 +215,10 @@ class TestWriters:
     async def test_worker_replaces_a_prompt_example_with_the_ocr_reading(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from scripts.curation.worker import runner as runner_mod
+        from src.services.labeling import vlm_prompts as vlm_prompts_mod
 
         monkeypatch.setattr(
-            runner_mod, 'resolve_prompt_pack', lambda: _pack_with_example('XYZ9876')
+            vlm_prompts_mod, 'active_prompt_pack', lambda *_a, **_k: _pack_with_example('XYZ9876')
         )
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         reply = VlmCombinedReply(

@@ -1,0 +1,118 @@
+---
+sidebar_position: 2
+title: Health and stall reasons
+---
+
+# Health and stall reasons
+
+## Core probes
+
+| Route | Use | Behavior |
+|---|---|---|
+| `GET /live` | Liveness (container healthcheck, k8s `livenessProbe`) | Always `{"status": "alive"}` while the event loop responds; never probes dependencies, so a degraded Triton or OpenSearch doesn't restart the API |
+| `GET /ready` | Readiness (k8s `readinessProbe`, load balancer drain) | `200` with `status: "ready"` when Triton and OpenSearch both respond; `503` with per-service detail otherwise. Adds a best-effort memory/GPU snapshot that never gates readiness |
+| `GET /health` | Backward-compatible alias of `/ready` | |
+| `GET /health/pe_text` | PE-Core text encoder (backs semantic search) | `200` with the active backend (`onnx` / `triton` / `torch`) once warm; `503` while cold. Local to one process. `make pe-text-status` calls it |
+| `GET /metrics` | Prometheus exposition | Scraped by the monitoring profile's Prometheus alongside Triton's `:8002` metrics |
+| `GET /connection_pool_info` | Shared Triton gRPC client stats | |
+| `GET /` | Service info | Versions, loaded model names, Triton URL, GPU availability |
+
+`make status`, `make models-list` and `./scripts/openprocessor.sh status`
+wrap these for the terminal.
+
+## Curation health
+
+`GET /curation/health` summarizes the curation dependencies:
+
+| `status` | When |
+|---|---|
+| `ok` | Triton and OpenSearch reachable, the class registry exists, and the VLM is reachable |
+| `degraded` | OpenSearch is reachable but something else isn't: Triton down, no registry yet (a fresh install until the first class is created), or the VLM unreachable |
+| `down` | OpenSearch unreachable |
+
+The body also carries `triton`, `opensearch` (with per-index existence),
+`vlm` (reachability, model, last error), `registry` (existence, mtime),
+the active `region_profile`, and `mlflow_public_url`. A deployment with
+no VLM configured therefore reads `degraded`, by design.
+
+`GET /curation/models/status` lists every model the pipeline depends on
+(item detector, region detector, OCR, PE encoders, promoted models) with
+Triton's state, plus the external VLM and segmenter services.
+
+## Why isn't the region queue shrinking?
+
+`GET /curation/ingest/region_drain` is the single place to look. It
+returns the pending counts, a stability verdict, the state of every
+dependency the active region profile needs, and a human-readable
+`stall_reason`:
+
+```json
+{"pending_detection": 3516, "pending_verification": 0, "total_unfinished": 3516,
+ "drained": false, "stable_for_s": 0.0,
+ "region_dependencies": [
+   {"role": "detector", "model": "region_detector_v1", "ready": true,
+    "unavailable_since": null, "detail": "READY"},
+   {"role": "segmenter", "model": "segmenter", "ready": false,
+    "unavailable_since": "2026-09-25T14:02:11+00:00",
+    "detail": "not in Triton repository index (never loaded)"}
+ ],
+ "stall_reason": "3516 item(s) awaiting region detection; segmenter unavailable since 2026-09-25T14:02:11+00:00"}
+```
+
+- `drained` turns `true` only after `total_unfinished` has read `0` for
+  `OP_REGION_DRAIN_STABLE_POLLS` consecutive polls (default 3), so a
+  momentary zero between batches doesn't read as "done". Use it as the
+  gate before the next clustering pass.
+- `region_dependencies` is checked from the API process directly against
+  Triton's repository index. It is empty when no region profile is
+  configured (the neutral case, not a stall).
+- `stall_reason` is `null` when nothing is pending, or when every
+  dependency is ready (the worker just hasn't caught up yet).
+- `GET /curation/stats/dataset` mirrors the same computation as
+  `in_progress.region_stall_reason`.
+
+**Items never go terminal because a dependency is down.** The detection
+worker writes a terminal region status only for a real verdict; on an
+infrastructure failure the item stays `pending_detection` and is picked up
+again as soon as the dependency recovers. No requeue is needed.
+
+## Terminal statuses and requeueing
+
+The region state machine (`RegionStatus`, `src/config/region_state.py`):
+
+- `pending_detection` resolves to `detected`, `verify_rejected` or
+  `no_region_box`.
+- `pending_verification` resolves to `detected` or `no_region_visible`.
+- Any path can end in `detection_failed` (for example
+  `reason=image_unavailable` when the worker can't read the source image;
+  check that the detection worker mounts the same source directory as
+  `yolo-api`).
+- A human can set `false_positive`, which keeps the box as a hard
+  negative for training.
+
+To retry items after fixing a model, threshold or mount, use
+`scripts/curation/requeue_regions.py` (dry run by default):
+
+```bash
+python3 scripts/curation/requeue_regions.py --status detection_failed
+python3 scripts/curation/requeue_regions.py --status detection_failed --apply
+# filters: --reason, --detector, --missing-provenance, --max-docs
+# --clear-detection also clears box/verify/text/embedding for a from-scratch re-detect
+python3 scripts/curation/requeue_regions.py --missing-status --apply   # items that predate the region profile
+```
+
+A VLM that keeps answering with no verdict does not loop forever: after
+`OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS` (default 3) replies, the
+combined stage writes `verify_rejected` with reason `verifier_no_verdict`
+and keeps the candidate for human review. Requeue those with
+`--reason verifier_no_verdict`. VLM transport failures never count
+towards the limit.
+
+## Training reachability
+
+`POST /curation/train/preflight` checks `trainer_reachable` before a job
+can queue forever. Its primary signal is the trainer's own heartbeat file
+(`.trainer_capabilities.json` on the shared `/jobs` volume, refreshed
+about every 30 s). A fresh heartbeat reports `ok`; a missing or stale one
+reports `warn`, never `block`. Only with the Docker socket overlay can a
+confirmed "container does not exist" upgrade that to `block`.

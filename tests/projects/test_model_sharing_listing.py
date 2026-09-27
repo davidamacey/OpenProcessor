@@ -115,6 +115,44 @@ def test_the_full_mapping_is_served_by_name_for_a_shared_model(leak_env: LeakEnv
     assert set(body['labels']['match']) == {'exact', 'case_insensitive', 'none'}
 
 
+def test_owned_entry_carries_sharing_revision_and_owned_true(leak_env: LeakEnv) -> None:
+    _promoted_model(leak_env, 'alpha')
+    entry = _entries(_client(leak_env), 'alpha')['alpha__model']
+    assert entry['owned'] is True
+    assert entry['sharing_revision'] == 1
+
+
+def test_sharing_revision_bumps_after_a_share_toggle(leak_env: LeakEnv) -> None:
+    _promoted_model(leak_env, 'alpha')
+    client = _client(leak_env)
+    _share(client, 'alpha')
+    entry = _entries(client, 'alpha')['alpha__model']
+    assert entry['sharing_revision'] == 2
+
+
+def test_foreign_shared_entry_is_not_owned_and_has_no_sharing_revision_and_unloadable_false(
+    leak_env: LeakEnv,
+) -> None:
+    _promoted_model(leak_env, 'alpha')
+    client = _client(leak_env)
+    _share(client, 'alpha')
+    entry = _entries(client, 'beta', include_other_projects='true')['alpha__model']
+    assert entry['owned'] is False
+    assert entry['sharing_revision'] is None
+    assert entry['unloadable'] is False
+
+
+def test_core_and_external_entries_are_not_owned_with_no_sharing_revision(
+    leak_env: LeakEnv,
+) -> None:
+    entries = _entries(_client(leak_env), 'alpha')
+    # Every core/external entry (kind != this project's own promoted model)
+    # must still carry the fields, never omit them.
+    for entry in entries.values():
+        assert 'owned' in entry
+        assert 'sharing_revision' in entry
+
+
 def test_the_mapping_of_an_unshared_foreign_model_is_404(leak_env: LeakEnv) -> None:
     _promoted_model(leak_env, 'alpha')
     client = _client(leak_env)

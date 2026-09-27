@@ -1,0 +1,186 @@
+---
+sidebar_position: 3
+title: Curation routes
+---
+
+# Curation routes
+
+:::info[Experimental]
+The curation subsystem is experimental in v0.3.0. It is real and tested,
+but backward compatibility across releases is not guaranteed until it
+graduates. It ships opt-in behind the `curation` compose profile.
+:::
+
+All paths below are relative to the configured prefix (`OP_API_PREFIX`,
+default `/curation`); consumers should read the prefix from config rather
+than hardcode it. There is no `/v1` twin and no alternate or
+vendor-named alias. The generated contract,
+`contracts/openapi/curation.json`, lists **145 method routes**; the tables
+below group them by area. Request models reject unknown keys
+(`extra='forbid'`), so a stale or misspelled field is a `422`, never a
+silent no-op.
+
+## Health, discovery and settings
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/health` | `status` `ok` / `degraded` / `down` plus `triton`, `opensearch`, `vlm`, `registry`, active `region_profile`, `mlflow_public_url` |
+| GET | `/models/status` | Every model the curation pipeline depends on, plus the external VLM and segmenter entries |
+| DELETE | `/models/{model_name}` | Unload a promoted model. Region-detector/OCR models of the active profile are refused (`403`); other core models need `?force=true` (`409` without it) |
+| GET | `/methods` | Capability discovery: `strategies` per axis (`cluster`, `score`, `sort`, `overlay`, `export`, detection profile, prompt pack) and feature `flags`. Gate optional UI on this, never on a probing write. |
+| GET, PUT | `/settings` | Shared per-axis strategy defaults (`defaults` is an open map keyed by axis id) |
+| GET | `/class_sources` | Every `class_source` value this deployment can write, with role and label |
+| GET | `/stats/dataset`, `/stats/classes` | Dataset totals (labeled by human / VLM / classifier, regions, clusters, in-flight work) and per-class counts |
+| GET, POST | `/events`, `/events/publish`, `/events/stats` | Server-sent events (for example `crop.region_verified`), a cross-process publish endpoint for workers, and hub stats |
+
+## Ingest and label import
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/ingest/image` | Ingest one image by `path` (under a configured source root) |
+| POST | `/ingest/batch` | Ingest `items` by path; capped by `OP_BATCH_MAX_ITEMS_PER_REQUEST` (`413` over it) |
+| POST | `/ingest/upload` | Multipart upload of `images`; bytes are persisted content-addressed under `OP_UPLOAD_ROOT`; optional `run_id` |
+| POST | `/import_labels`, `/import_labels/batch` | Ingest images together with existing YOLO-format label files; returns a model-vs-label disagreement report |
+| POST | `/ingest/path_lookup` | Which image paths (or upload identifiers) are already indexed |
+| GET | `/ingest/config` | Served upload/batch limits and drain-poll parameters |
+| GET | `/ingest/status` | Totals by source and day (optionally `?run_id=`) |
+| GET | `/ingest/region_drain` | Pending region work, a stability verdict (`drained`), per-dependency health and a `stall_reason` |
+
+Each image result carries `status` (`success` / `duplicate` / `failed`),
+`image_id`, `n_crops`, `n_regions`, and on failure an `error_kind`
+(`empty`, `unservable_path`, `unsupported_type`, `decode_failed`,
+`detector_infer`, `bulk_index`, ...). Byte-identical files are
+deduplicated within a batch as well as against the index.
+
+## Items (crops) and labeling
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/crops`, `/crops/{crop_id}` | Browse and filter items; one item |
+| GET | `/crops/{crop_id}/thumbnail`, `/image`, `/region_thumbnail`, `/context` | Item crop, full source image, region crop, and the other items on the same image |
+| GET | `/crops/{crop_id}/history` | Label/edit history |
+| PUT, DELETE | `/crops/{crop_id}/label` | Set (`class_id`, `label_source` `human` or `human_confirmed`) or clear a human label |
+| PUT | `/crops/batch_label` | Label many; returns `updated_ids` and per-item `conflicts` |
+| POST | `/crops/{crop_id}/label/undo`, `/crops/label/undo_batch` | Undo human class writes |
+| POST | `/crops/move` | Move items to another cluster |
+| POST | `/crops/batch_exclude`, `/crops/batch_unexclude` | Exclude from datasets (with a `reason`) / restore |
+| POST | `/crops/{crop_id}/discard`, `/crops/discard_batch` | Discard items |
+| POST | `/crops/flag_new_class` | Flag items as a class the registry lacks |
+| POST | `/crops/{crop_id}/review_dismiss`, `/review_undismiss` | Hide from / return to review |
+| POST | `/crops/{crop_id}/vlm_dismiss`, `/vlm_dismiss/undo` | Dismiss a VLM suggestion / undo |
+
+A human label always writes `class_source: "human"`; a client cannot make
+a human write look machine-made.
+
+## Classes
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET, POST | `/classes` | List (with thresholds and reserved hotkeys) / create (`name` must match `^[a-z0-9_]+$`) |
+| GET, PUT | `/classes/{class_id}` | Get / rename, regroup, rebind hotkey |
+| GET | `/classes/{class_id}/crops` | Items of a class |
+| POST | `/classes/merge` | Merge `source_id` into `target_id`; `?dry_run=true` previews |
+| POST | `/classes/{class_id}/deprecate`, `/restore` | Retire an unreferenced class / restore it |
+| POST | `/classes/sync_to_opensearch` | Re-sync the JSON registry into the classes index |
+
+The registry is a JSON file at `OP_REGISTRY_PATH`; the first
+`POST /classes` creates it with dense ids starting at 0.
+
+## Clusters, scores, selection and search
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/clusters` | Cluster cards: `cluster_kind`, dominant class, purity, validated count, sub-clusters, representatives |
+| GET | `/clusters/representatives` | Representatives only |
+| POST | `/clusters/refine/{cluster_id}` | Split one cluster into sub-clusters |
+| POST | `/clusters/auto_promote` | Validate items in high-purity clusters |
+| POST | `/cluster/umap/rebuild` | Rebuild the residual reducer |
+| GET, POST | `/viz/projection`, `/viz/projection/rebuild`, `/status`, `/cancel` | 2-D embedding projection for plotting |
+| POST, GET | `/scores/compute`, `/scores/status`, `/scores/cancel`, `/scores/coverage` | Mistakenness, uniqueness and near-duplicate scores (`OP_SCORES_ENABLED`) |
+| POST, GET | `/select/diverse`, `/select/status`, `/select/cancel` | k-center-greedy diverse sampling (`OP_SELECT_DIVERSE_ENABLED`) |
+| GET | `/search/text` | PE-Core text-to-image semantic search (`OP_SEMANTIC_SEARCH_ENABLED`) |
+
+## Review queues and holdout
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/review/tabs` | The tab catalog with each tab's filters and defaults |
+| GET | `/review/{tab}` | One queue: `all`, `mismatches`, `vlm_low_conf`, `outliers`, `uncertainty`, `model_disagreements`, `primary_low_conf`, `classifier_blind_spots`, `new_class_proposals`, and `regions` (only when a region profile is active) |
+| GET | `/review/{tab}/locate` | Position of one item within a queue |
+| GET, POST | `/review/new_class_proposals/summary`, `/resolve` | VLM-proposed class names, grouped; accept or reject |
+| GET | `/review/raw_label_clusters`, `/review/unmatched_terms` | Raw VLM answers that matched no class |
+| POST, GET | `/test_holdout/freeze`, `/test_holdout/stats` | Freeze a per-class test split before exporting |
+| POST, GET | `/probe/run`, `/probe/status`, `/probe/cancel` | Active-learning probe predictions (feeds `model_disagreements` and `uncertainty`) |
+
+## VLM and auto-label pipeline
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/vlm/label_batch` | VLM class suggestions for `crop_ids` |
+| POST | `/vlm/label_cluster/{cluster_id}` | VLM-label one cluster's members |
+| POST | `/vlm/verify_regions`, `/vlm/verify_region_batch` | Verify region candidates |
+| POST | `/vlm/region_visible_batch` | "Is a region visible at all?" pre-filter |
+| POST | `/pipeline/auto_label/start` | Queue a job for the auto-label worker (`run_vlm`, `train_clusters`, ...). Clusters only unless `run_vlm=true`. |
+| GET | `/pipeline/auto_label/status`, `/status/{job_id}` | Job progress |
+| POST | `/pipeline/auto_label/cancel` | Cancel |
+| POST | `/pipeline/auto_label` | Run the pipeline in-process (synchronous) |
+| GET | `/pipeline/events` | Pipeline progress events |
+
+A VLM reply with no usable answer is **omitted**, not written as a
+negative verdict, so the item can be retried.
+
+## Regions of interest
+
+Only meaningful with a region detection profile configured.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/regions`, `/regions/statuses`, `/regions/vocabulary` | Browse regions; the status catalog (which are human-writable); detector/segmenter vocabulary for the active profile |
+| PUT | `/crops/{crop_id}/region`, `/crops/batch_region` | Set or confirm a region box (`frame` `source` or `parent`), or `null` for "no region visible" |
+| PATCH | `/crops/{crop_id}/region_meta` | Edit `region_text`, `region_status`, rejection reason |
+| POST | `/crops/{crop_id}/region/undo`, `/crops/region/undo_batch` | Undo region writes |
+| POST | `/regions/batch_status` | Set a human-writable status on many items |
+| POST, GET | `/regions/cluster`, `/regions/cluster/status`, `/regions/clusters`, `/regions/clusters/refine/{cluster_id}` | Cluster region crops |
+| POST, GET | `/regions/fp_centroids/build`, `/status`, `/regions/suspected_false_positives` | False-positive centroids and suspects |
+| GET | `/regions/training_candidates` | Curated cohorts for training the next region detector |
+
+## Export
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/export/yolo` | Multi-class YOLO export (always every class); `require_fully_labeled_images`, `seed`, `max_images`, `dedup_threshold` |
+| POST | `/export/single_class` | Single-class or class-subset export with background/hard-negative frames and `frozen_test_sha` |
+| GET | `/export/status`, `/export/single_class/status` | Export progress |
+| GET | `/export/datasets` | Every export (`kind`, `dataset_sha`, split counts, `is_current`) |
+| GET | `/export/registry/{artifact}` | Download a frozen artifact of the current export (whitelisted names only) |
+| GET | `/training_cohorts` | Per-class training cohorts (`?class_id=`) |
+
+## Training and model comparison
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/train/preflight` | Blocking + warning checks for a spec (dataset, classes, GPUs, trainer reachability) |
+| POST | `/train/start`, `/train/start_campaign` | Submit one run or a progressive multi-size campaign (`?force=true` bypasses blocking checks) |
+| GET | `/train/status`, `/train/status/{job_id}` | Latest / specific run: epochs, eval block, comparison |
+| GET | `/train/runs` | Past runs |
+| GET | `/train/log/tail/{job_id}`, `/train/manifest/{job_id}`, `/train/artifacts/{job_id}/{name}` | Log tail, lineage manifest, run artifacts |
+| POST | `/train/cancel/{job_id}`, `/train/cancel_campaign/{campaign_id}` | Cancel |
+| GET | `/train/profiles`, `/train/presets`, `/train/augmentation_presets`, `/train/gpus` | Hyperparameter tables, class-subset presets, augmentation presets, GPU options |
+| POST | `/train/promote/{job_id}` | Promote a finished run into Triton, behind a quality gate |
+| POST | `/train/reload_promoted` | Reload promoted models after a Triton restart |
+| GET | `/bakeoff/eval_datasets`, `/bakeoff/trained_models`, `/bakeoff/baseline_models`, `/bakeoff/profiles` | What can be compared |
+| POST | `/bakeoff/run` | Queue a comparison for the evaluator |
+| GET | `/bakeoff/runs`, `/bakeoff/status/{job_id}`, `/bakeoff/results/{job_id}`, `/bakeoff/matrix/{job_id}` | Results (schema v2) and the model x dataset matrix |
+
+`POST /train/start` does **not** merge profile defaults: copy the
+hyperparameters from `GET /train/profiles` into the request's own
+`hyperparameters` object. See
+[Training, bake-off and promote](../operations/training-and-promote.mdx).
+
+## Images
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/images/serve` | Serve a source image by path (confined to configured roots) |
+| GET | `/images/root/{alias}` | Serve from a named extra root (`OP_SOURCE_PATH_ALIASES`) |
+| GET | `/images/cache/stats` | Thumbnail cache stats |
