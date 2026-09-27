@@ -137,8 +137,33 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     def _no_registry_client() -> object:
         raise ConnectionError('no project registry in unit tests')
 
-    stub = registry_mod.ProjectRegistry(_no_registry_client)
+    class _NoRegistryNotFoundError(Exception):
+        """Shaped like a 404 for ``_read_revision`` (``'NotFound' in
+        type(exc).__name__``) -- an in-memory answer, no real network."""
+
+    class _NoRegistryClient:
+        """``ensure_fresh``'s only call against this stub: the revision
+        counter doc, answered as "doesn't exist" (revision 0) with no I/O
+        at all. Any other call means a test is exercising more of the
+        registry than this stub models -- ``_no_registry_client`` still
+        raises for those (script-entry-point path, unaffected)."""
+
+        async def get(self, **_kwargs: object) -> object:
+            raise _NoRegistryNotFoundError('no project registry in unit tests')
+
+    stub = registry_mod.ProjectRegistry(lambda: _NoRegistryClient())
     stub._by_slug = {'default': DEFAULT_RECORD}  # type: ignore[dict-item]
+    # M2 (cutover/config-store) added a pre-handler read-only gate keyed
+    # on ``registry.stale`` (``_failed_at is not None``) for every
+    # non-GET. This stub is deliberately never backed by real
+    # OpenSearch, so without this, ``ensure_fresh()``'s very first call
+    # would fail and every mutating route in every unit test would 409
+    # ``project_read_only`` -- pin the revision so ``_read_revision``'s
+    # 0 (via the 404-shaped ``get`` above) matches on the first call and
+    # ``ensure_fresh`` short-circuits before ever calling ``_refresh``
+    # (which would otherwise overwrite ``_by_slug`` with an empty page
+    # and 404 every bind).
+    stub._revision = 0  # type: ignore[attr-defined]
     registry_mod.set_project_registry(stub)
 
     # Script entry points resolve ``--project`` through the registry; here
