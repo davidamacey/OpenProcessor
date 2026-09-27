@@ -67,31 +67,54 @@ REGION_SINGULAR_LABEL = REGION_PROFILE["display_name_singular"]
 DEFAULT_PROJECT_SLUG = "default"
 
 
-def default_project(api_prefix: str) -> dict[str, Any]:
-    return {
-        "slug": DEFAULT_PROJECT_SLUG,
-        "display_name": "Default",
+def project(api_prefix: str, slug: str, **over: Any) -> dict[str, Any]:
+    """One served `ProjectSummary`, `prefix` built the way the server builds
+    it. Every non-slug value is overridable (status, writable, selectable,
+    deletable, revision, ...)."""
+    out: dict[str, Any] = {
+        "slug": slug,
+        "display_name": slug.capitalize(),
         "description": "",
-        "prefix": f"{api_prefix}/projects/{DEFAULT_PROJECT_SLUG}",
+        "prefix": f"{api_prefix}/projects/{slug}",
         "status": "active",
         "writable": True,
         "selectable": True,
-        "is_default": True,
-        "deletable": False,
+        "is_default": False,
+        "deletable": True,
         "revision": 1,
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": "2026-01-01T00:00:00Z",
         "counts": {"images": 0, "items": 0, "validated": 0},
         "origin": None,
     }
+    out.update(over)
+    return out
 
 
-def projects_response(api_prefix: str) -> dict[str, Any]:
+def default_project(api_prefix: str) -> dict[str, Any]:
+    return project(api_prefix, DEFAULT_PROJECT_SLUG, is_default=True, deletable=False)
+
+
+PROJECT_STATUS_LABELS = {
+    "active": "Active",
+    "archived": "Archived",
+    "building": "Building",
+    "failed": "Failed",
+    "deleting": "Deleting",
+    "deleted": "Deleted",
+}
+
+
+def projects_response(
+    api_prefix: str,
+    projects: list[dict[str, Any]] | None = None,
+    capacity_status: str = "ok",
+) -> dict[str, Any]:
     return {
         "default_slug": DEFAULT_PROJECT_SLUG,
-        "projects": [default_project(api_prefix)],
+        "projects": projects if projects is not None else [default_project(api_prefix)],
         "capacity": {
-            "status": "ok",
+            "status": capacity_status,
             "active_shards": 6,
             "per_project_shards": 6,
             "soft_limit": 40,
@@ -100,7 +123,7 @@ def projects_response(api_prefix: str) -> dict[str, Any]:
             "max_shards_per_node": 1000,
             "data_nodes": 1,
             "projects_until_soft_limit": 5,
-            "message": "Room for more projects.",
+            "message": f"Served capacity message ({capacity_status}).",
             "labels": {
                 "ok": "Room for more projects",
                 "warn": "Near the recommended shard budget",
@@ -112,8 +135,10 @@ def projects_response(api_prefix: str) -> dict[str, Any]:
             "slug_min": 2,
             "slug_max": 32,
             "reserved_slugs": ["all", "combine", "global", "health", "new", "none", "projects", "settings", "vlm"],
+            "retired_slugs": [],
             "cloneable_axes": ["settings_defaults", "classes"],
         },
+        "labels": {"status": PROJECT_STATUS_LABELS},
         "include_archived": False,
     }
 
