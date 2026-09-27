@@ -251,9 +251,30 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
         index: str,  # noqa: ARG002
         id: str,  # noqa: A002
         body: dict[str, Any],
+        retry_on_conflict: int = 0,  # noqa: ARG002
     ) -> dict[str, Any]:
-        doc = body.get('doc') or {}
+        # M6 (W2b Opus review): teach this fake W2's atomic
+        # ``bump_config_revision`` (painless script + ``upsert``), the
+        # same real create-vs-bump distinction
+        # ``tests/curation/_fake_config_opensearch.py``'s
+        # ``FakeConfigOpenSearch.update()`` models -- a brand-new doc gets
+        # the ``upsert`` body verbatim (real OpenSearch never runs the
+        # script on the insert path); an existing doc gets the script's
+        # increment applied. The fix belongs here, in the fake, not in a
+        # second production code path.
         current = self.docs.get(id)
+        script_source = (body.get('script') or {}).get('source', '')
+        if current is None and 'config_revision' in script_source:
+            self.docs[id] = dict(body.get('upsert') or {})
+            self._seq[id] = self._seq.get(id, 0) + 1
+            return {'_id': id, 'result': 'created'}
+        if current is not None and 'config_revision += 1' in script_source:
+            bumped = dict(current)
+            bumped['config_revision'] = int(bumped.get('config_revision', 0)) + 1
+            self.docs[id] = bumped
+            self._seq[id] = self._seq.get(id, 0) + 1
+            return {'_id': id, 'result': 'updated'}
+        doc = body.get('doc') or {}
         if current is None:
             if not body.get('doc_as_upsert'):
                 raise KeyError(id)
