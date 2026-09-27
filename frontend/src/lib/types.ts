@@ -46,23 +46,20 @@ export interface RegistryClass {
   /** Server-computed adequacy tier from `GET {API_PREFIX}/classes`
    *  (`block` | `warn` | `ok`, against the served `thresholds`). Never
    *  recomputed client-side from `validated_count`. */
-  adequacy?: string;
+  adequacy: string;
   /** `'item'` (an ordinary item class) or `'region'` (a slot-bound
    *  region class, i.e. the served profile's region_class_name) — served on
-   *  `GET {API_PREFIX}/classes`/`/stats/classes` (OpenProcessor #36 item 1,
-   *  X2/R1). The single source of truth for excluding a region class from
-   *  an item-class picker; `isSlotBoundClass`/`isItemClassTarget`
-   *  (`$lib/classVisibility`) read this first, falling back to the slot
-   *  registry only for a class an older backend doesn't tag. */
-  kind?: 'item' | 'region';
-  /** Validated crops usable for training — `sample_count`/`validated_count`
-   *  no longer include region counts as of #36 (X2), so this is the
-   *  server's own trainable count for the class, not client math. */
-  trainable?: number;
-  /** On `GET {API_PREFIX}/classes`: the shortfall of `trainable` against
-   *  the served per-class hard minimum (`thresholds.block_below`), floored
-   *  at 0 — served directly. > 0 means the class blocks preflight. */
-  trainable_gap?: number;
+   *  `GET {API_PREFIX}/classes`. The single source of truth for excluding
+   *  a region class from an item-class picker (`isSlotBoundClass`/
+   *  `isItemClassTarget`, `$lib/classVisibility`). */
+  kind: 'item' | 'region';
+  /** Validated crops usable for training (region counts, test holdout and
+   *  excluded crops left out) — the server's own count, not client math. */
+  trainable: number;
+  /** The shortfall of `trainable` against the served per-class hard
+   *  minimum (`thresholds.block_below`), floored at 0. > 0 means the
+   *  class blocks preflight. */
+  trainable_gap: number;
 }
 
 /** `thresholds` served on `GET {API_PREFIX}/classes`, `GET {API_PREFIX}/stats/classes`
@@ -354,11 +351,11 @@ export interface TestHoldoutFreezeResult {
 /** Server response from `GET {API_PREFIX}/test_holdout/stats`. */
 export interface TestHoldoutStats {
   total: number;
-  by_class: Array<{ key: number; doc_count: number; deficient?: boolean }>;
+  by_class: Array<{ key: number; doc_count: number; deficient: boolean }>;
   /** The same class-adequacy threshold served on `/classes`/`/stats/classes`
    *  — the frontend's "below 5 test crops" copy reads this, never a
    *  hardcoded 5. */
-  min_test_per_class?: number;
+  min_test_per_class: number;
 }
 
 export interface BBoxNorm {
@@ -638,19 +635,20 @@ export interface StatsSummary {
     validated_count: number;
     /** Server-computed adequacy tier (`block`/`warn`/`ok`) — see
      *  `RegistryClass.adequacy`. */
-    adequacy?: string;
+    adequacy: string;
     /** Server-computed YOLO augmentation target for this class. */
-    aug_target?: number;
+    aug_target: number;
     /** `aug_target - validated_count`, served directly. */
-    aug_gap?: number;
-    /** Validated crops usable for training (region counts excluded, #36
-     *  X2) — the server's own trainable count, not client math. */
-    trainable?: number;
-    /** `aug_target - trainable`, served directly (#36 item 1). */
-    trainable_gap?: number;
+    aug_gap: number;
+    /** See `RegistryClass.trainable`. */
+    trainable: number;
+    /** See `RegistryClass.trainable_gap` (shortfall against the per-class
+     *  hard minimum, not against `aug_target`). */
+    trainable_gap: number;
   }>;
   /** Served alongside `per_class` on `/stats/classes` — same shape as
-   *  `ClassesResponse.thresholds`. */
+   *  `ClassesResponse.thresholds`. Absent only when `/stats/classes`
+   *  itself failed to load. */
   thresholds?: ClassThresholds;
 }
 

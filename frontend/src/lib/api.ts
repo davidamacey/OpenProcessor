@@ -1609,18 +1609,7 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
     by_source?: Array<{ key: string; doc_count: number }>;
   };
   type RawClasses = {
-    classes?: Array<{
-      class_id: number;
-      class_name: string;
-      count?: number;
-      sample_count?: number;
-      validated_count?: number;
-      adequacy?: string;
-      aug_target?: number;
-      aug_gap?: number;
-      trainable?: number;
-      trainable_gap?: number;
-    }>;
+    classes: StatsSummary['per_class'];
     thresholds?: ClassThresholds;
   };
   // allSettled, not Promise.all: /stats/dataset can 503 (G1 — the live
@@ -1650,11 +1639,11 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
       images_pending: 0,
       last_run_at: null,
     },
-    per_class: (cls.classes ?? []).map((c) => ({
+    per_class: cls.classes.map((c) => ({
       class_id: c.class_id,
       class_name: c.class_name,
-      count: c.count ?? c.sample_count ?? 0,
-      validated_count: c.validated_count ?? 0,
+      count: c.count,
+      validated_count: c.validated_count,
       adequacy: c.adequacy,
       aug_target: c.aug_target,
       aug_gap: c.aug_gap,
@@ -1666,68 +1655,49 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
 }
 
 export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse> {
-  // The API returns `{classes: [{class_id, class_name, group, sample_count,
-  // validated_count, deprecated, adequacy, added_at}, ...], thresholds,
-  // reserved_hotkeys}`. Map `classes` to the labeler's RegistryClass shape,
-  // which uses `id`/`name`/`count`; `thresholds` and `reserved_hotkeys` pass
-  // through verbatim — they're the server's own adequacy/hotkey rules, never
-  // recomputed client-side.
+  // Map the served `ClassEntry` rows to the labeler's RegistryClass shape
+  // (`id`/`name`/`count`); `thresholds` and `reserved_hotkeys` pass through
+  // verbatim — the server's own adequacy/hotkey rules, never recomputed
+  // client-side.
   type RawClass = {
-    class_id?: number;
-    id?: number;
-    class_name?: string;
-    name?: string;
-    group?: string | null;
-    sample_count?: number;
-    count?: number;
-    validated_count?: number;
-    cluster_size?: number;
-    color?: string | null;
-    deprecated?: boolean;
-    added_at?: string;
-    hotkey_letter?: string | null;
-    adequacy?: string;
-    kind?: 'item' | 'region';
-    trainable?: number;
-    trainable_gap?: number;
-    merged_into?: number | null;
+    class_id: number;
+    class_name: string;
+    group: string;
+    sample_count: number;
+    validated_count: number;
+    cluster_size: number;
+    deprecated: boolean;
+    added_at: string | null;
+    hotkey_letter: string | null;
+    adequacy: string;
+    kind: 'item' | 'region';
+    trainable: number;
+    trainable_gap: number;
+    merged_into: number | null;
   };
   const res = await apiFetch<{
     classes: RawClass[];
-    thresholds?: ClassThresholds;
-    reserved_hotkeys?: string[];
+    thresholds: ClassThresholds;
+    reserved_hotkeys: string[];
   }>(`${scoped()}/classes`, {}, signal);
-  const raw = res.classes ?? [];
-  const classes = raw.map((c) => ({
-    id: c.class_id ?? c.id ?? -1,
-    name: c.class_name ?? c.name ?? '',
-    group: c.group ?? null,
-    count: c.sample_count ?? c.count ?? 0,
-    validated_count: c.validated_count ?? 0,
-    cluster_size: c.cluster_size ?? 0,
+  const classes = res.classes.map((c) => ({
+    id: c.class_id,
+    name: c.class_name,
+    group: c.group || null,
+    count: c.sample_count,
+    validated_count: c.validated_count,
+    cluster_size: c.cluster_size,
     added_at: c.added_at ?? '',
-    color: c.color ?? null,
-    deprecated: !!c.deprecated,
-    hotkey_letter: c.hotkey_letter ?? null,
+    color: null,
+    deprecated: c.deprecated,
+    hotkey_letter: c.hotkey_letter,
     adequacy: c.adequacy,
     kind: c.kind,
     trainable: c.trainable,
     trainable_gap: c.trainable_gap,
-    merged_into: c.merged_into ?? null,
+    merged_into: c.merged_into,
   }));
-  // Old-shape (bare array) or pre-cutover backend responses omit these —
-  // an empty threshold/reserved set just means the adequacy chip and the
-  // hotkey guard render as "unknown" until a real response arrives, never
-  // a crash or a client-invented number.
-  const thresholds: ClassThresholds = res.thresholds ?? {
-    block_below: 0,
-    warn_below: 0,
-    min_test_per_class: 0,
-    aug_target_min: 0,
-    aug_target_max: 0,
-  };
-  const reserved_hotkeys = res.reserved_hotkeys ?? [];
-  return { classes, thresholds, reserved_hotkeys };
+  return { classes, thresholds: res.thresholds, reserved_hotkeys: res.reserved_hotkeys };
 }
 
 /** Raw cluster card from `{API_PREFIX}/clusters`. The backend is the single

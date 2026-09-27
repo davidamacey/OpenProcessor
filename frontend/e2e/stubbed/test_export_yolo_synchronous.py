@@ -45,6 +45,8 @@ STATS_CLASSES = {
             "adequacy": "warn",
             "aug_target": 500,
             "aug_gap": 466,
+            "trainable": 29,
+            "trainable_gap": 0,
         },
     ],
     "thresholds": {"block_below": 0, "warn_below": 5, "min_test": 5},

@@ -457,20 +457,16 @@
         {row.aug_target.toLocaleString()}
       </td>
       <td class="px-3 py-1.5 text-right">
-        {#if row.trainableGap == null}
-          <span class="font-mono text-xs text-zinc-500">—</span>
-        {:else}
-          <span
-            class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(
-              row.trainableGap,
-            )}"
-            title={row.trainableGap <= 0
-              ? 'on target'
-              : `${row.trainableGap} more trainable crops needed`}
-          >
-            {row.trainableGap > 0 ? '+' : ''}{row.trainableGap.toLocaleString()}
-          </span>
-        {/if}
+        <span
+          class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(
+            row.trainableGap,
+          )}"
+          title={row.trainableGap <= 0
+            ? 'on target'
+            : `${row.trainableGap} more trainable crops needed`}
+        >
+          {row.trainableGap > 0 ? '+' : ''}{row.trainableGap.toLocaleString()}
+        </span>
       </td>
       <td class="px-3 py-1.5 text-right">
         <span
@@ -538,8 +534,8 @@
               >Total (labelled)</th
             >
             <!-- E1 (visual audit 2026-09-24): Validated counts the frozen
-                 test crops too; Trainable is validated minus the served
-                 test holdout, and Gap is measured against Trainable. -->
+                 test crops too; Trainable and Gap are the served
+                 `trainable`/`trainable_gap`. -->
             <th
               class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
               onclick={() => setSort('validated')}

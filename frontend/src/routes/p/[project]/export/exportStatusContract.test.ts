@@ -103,6 +103,10 @@ function makeFetchMock(
         count: 300,
         validated_count: 200,
         adequacy: 'ok',
+        aug_target: 500,
+        aug_gap: 300,
+        trainable: 200,
+        trainable_gap: 0,
       },
     ],
   },
@@ -151,7 +155,9 @@ function makeFetchMock(
       return Promise.resolve(jsonResponse(exportStatusBody));
     }
     if (url.includes('/test_holdout/stats')) {
-      return Promise.resolve(jsonResponse({ total: 0, by_class: [] }));
+      return Promise.resolve(
+        jsonResponse({ total: 0, by_class: [], min_test_per_class: 5 }),
+      );
     }
     if (url.includes('/export/datasets')) {
       return Promise.resolve(jsonResponse({ datasets: [], count: 0 }));
@@ -395,21 +401,33 @@ describe('/export — class table puts classes with data first', () => {
             class_name: 'alpha_empty',
             count: 38,
             validated_count: 0,
+            adequacy: 'block',
             aug_target: 500,
+            aug_gap: 500,
+            trainable: 0,
+            trainable_gap: 30,
           },
           {
             class_id: 2,
             class_name: 'beta_empty',
             count: 5,
             validated_count: 0,
+            adequacy: 'block',
             aug_target: 500,
+            aug_gap: 500,
+            trainable: 0,
+            trainable_gap: 30,
           },
           {
             class_id: 3,
             class_name: 'gamma_full',
             count: 120,
             validated_count: 35,
+            adequacy: 'ok',
             aug_target: 500,
+            aug_gap: 465,
+            trainable: 35,
+            trainable_gap: 0,
           },
         ],
       }),

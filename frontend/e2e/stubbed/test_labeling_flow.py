@@ -129,7 +129,7 @@ def register_base(stub, *, fail_put_label: bool = False) -> None:
     })
     stub.on("GET", r"/stats/dataset(\?|$)", {"total_crops": 3, "validated": 0, "test_holdout": 0, "by_source": {}})
     stub.on("GET", r"/stats/classes(\?|$)", {"classes": []})
-    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": {}})
+    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": [], "min_test_per_class": 5})
     stub.on("GET", r"/export/status(\?|$)", {"status": "idle", "last_run": None})
     stub.on("GET", r"/export/datasets(\?|$)", {"datasets": []})
     stub.on("GET", r"/train/status(\?|$)", {"jobs": []})

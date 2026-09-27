@@ -46,8 +46,10 @@ CLASSES = [
 
 STATS_CLASSES = {
     "classes": [
-        {"class_id": 1, "class_name": "bmw", "count": 300, "validated_count": 200, "adequacy": "ok"},
-        {"class_id": 2, "class_name": "audi", "count": 100, "validated_count": 50, "adequacy": "warn"},
+        {"class_id": 1, "class_name": "bmw", "count": 300, "validated_count": 200, "adequacy": "ok",
+         "aug_target": 500, "aug_gap": 300, "trainable": 200, "trainable_gap": 0},
+        {"class_id": 2, "class_name": "audi", "count": 100, "validated_count": 50, "adequacy": "warn",
+         "aug_target": 500, "aug_gap": 450, "trainable": 50, "trainable_gap": 0},
     ],
     "thresholds": {"block_below": 0, "warn_below": 5, "min_test": 5},
 }
@@ -225,9 +227,11 @@ def test_export_shows_trainable_vs_held_out_and_classes_with_objects(stub, page,
         {
             "classes": [
                 {"class_id": 1, "class_name": "bmw", "count": 108, "validated_count": 35,
-                 "adequacy": "warn", "aug_target": 500, "aug_gap": 465},
+                 "adequacy": "warn", "aug_target": 500, "aug_gap": 465,
+                 "trainable": 30, "trainable_gap": 0},
                 {"class_id": 2, "class_name": "audi", "count": 10, "validated_count": 0,
-                 "adequacy": "block", "aug_target": 500, "aug_gap": 500},
+                 "adequacy": "block", "aug_target": 500, "aug_gap": 500,
+                 "trainable": 0, "trainable_gap": 20},
             ],
             "thresholds": {"block_below": 20, "warn_below": 500, "min_test": 5},
         },
@@ -252,7 +256,7 @@ def test_export_shows_trainable_vs_held_out_and_classes_with_objects(stub, page,
     bmw.wait_for(timeout=ACTION_TIMEOUT_MS)
     cells = [c.strip() for c in bmw.locator("td").all_inner_texts()]
     # Class, ID, Total, Validated, Trainable, Aug target, Gap, Test, Adequacy
-    assert cells[3:8] == ["35", "30", "500", "+470", "5"], cells
+    assert cells[3:8] == ["35", "30", "500", "0", "5"], cells
 
     chip = " ".join(page.locator('[data-testid="export-class-count"]').inner_text().split())
     assert chip == "1 classes with objects (2 in registry)", chip
@@ -281,9 +285,11 @@ def test_export_class_count_chip_prefers_served_classes_with_objects(
         {
             "classes": [
                 {"class_id": 1, "class_name": "bmw", "count": 108, "validated_count": 35,
-                 "adequacy": "warn", "aug_target": 500, "aug_gap": 465},
+                 "adequacy": "warn", "aug_target": 500, "aug_gap": 465,
+                 "trainable": 30, "trainable_gap": 0},
                 {"class_id": 2, "class_name": "audi", "count": 10, "validated_count": 0,
-                 "adequacy": "block", "aug_target": 500, "aug_gap": 500},
+                 "adequacy": "block", "aug_target": 500, "aug_gap": 500,
+                 "trainable": 0, "trainable_gap": 20},
             ],
             "thresholds": {"block_below": 20, "warn_below": 500, "min_test": 5},
         },

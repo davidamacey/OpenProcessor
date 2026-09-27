@@ -377,18 +377,13 @@
   // L5 (visual audit 2026-09-24): `validated_count` includes the frozen
   // test holdout (vw 35 here vs 30 trainable on /train). The served
   // per-class holdout count is shown next to it rather than subtracted
-  // client-side. Absent (older backend / failure) => no suffix.
+  // client-side. A failed read => no suffix.
   let testHeldOutByClass = $state<Map<number, number>>(new Map());
   onMount(() => {
     const ctrl = new AbortController();
     getTestHoldoutStats(ctrl.signal)
       .then((res) => {
-        testHeldOutByClass = new Map(
-          (Array.isArray(res.by_class) ? res.by_class : []).map((b) => [
-            b.key,
-            b.doc_count,
-          ]),
-        );
+        testHeldOutByClass = new Map(res.by_class.map((b) => [b.key, b.doc_count]));
       })
       .catch(() => {
         testHeldOutByClass = new Map();
