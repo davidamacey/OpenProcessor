@@ -170,6 +170,109 @@ def boxes_write_fields(
     return doc
 
 
+class RegionBoxWriteError(ValueError):
+    """A human box write the request can't satisfy (422)."""
+
+
+def apply_put_boxes(
+    current: dict[str, Any],
+    requested: Sequence[dict[str, Any]],
+    *,
+    frame: str,
+    F: RegionFields | None = None,
+    project_parent_to_source: Any = None,
+) -> list[RegionBox]:
+    """Sibling-preserving merge for ``PUT /crops/{crop_id}/regions``.
+
+    ``requested`` is the full list, in display order (any_domain_plan.md
+    §7.7 wire-write table): an element with only ``box_id`` keeps its
+    stored box untouched; one with ``box_id`` plus other keys patches
+    just those keys onto the stored box; ``box_id: None`` (or omitted)
+    is a new box, assigned the next id and defaulting to ``accepted``
+    when ``state`` is omitted (W8 pin 2). Omitting a stored box from
+    ``requested`` deletes it.
+
+    ``project_parent_to_source(bbox, item_bbox_norm) -> list[float]`` is
+    supplied by the caller for ``frame == 'parent'`` (W8 pin 1); this
+    module stays pure and does no geometry itself.
+    """
+    F = F or get_region_fields()
+    existing = {b.box_id: b for b in read_boxes(current, F)}
+    seq = int(current.get(F.box_seq) or 0)
+    result: list[RegionBox] = []
+
+    for element in requested:
+        box_id = element.get('box_id')
+        bbox = element.get('bbox_norm')
+        if bbox is not None and frame == 'parent':
+            if project_parent_to_source is None:
+                msg = "frame='parent' requires project_parent_to_source"
+                raise RegionBoxWriteError(msg)
+            bbox = project_parent_to_source(bbox, current.get(F.bbox_norm))
+        if box_id is None:
+            new_id = next_box_id([*existing.values(), *result], seq=seq)
+            state = element.get('state') or 'accepted'
+            result.append(
+                RegionBox(
+                    box_id=new_id,
+                    bbox_norm=tuple(bbox) if bbox is not None else (0.0, 0.0, 0.0, 0.0),
+                    state=state,
+                    score=1.0,
+                    detector='human',
+                    source='human',
+                    text=element.get('text'),
+                )
+            )
+            continue
+        stored = existing.get(box_id)
+        if stored is None:
+            msg = f'unknown box_id: {box_id!r}'
+            raise RegionBoxWriteError(msg)
+        patch: dict[str, Any] = {}
+        if bbox is not None:
+            patch['bbox_norm'] = tuple(bbox)
+        if 'state' in element and element['state'] is not None:
+            patch['state'] = element['state']
+        if 'text' in element and element['text'] is not None:
+            patch['text'] = element['text']
+        result.append(stored if not patch else _replace(stored, **patch))
+
+    return result
+
+
+def _replace(box: RegionBox, **kwargs: Any) -> RegionBox:
+    doc = box.to_doc()
+    doc.update(kwargs)
+    if 'bbox_norm' in kwargs:
+        doc['bbox_norm'] = list(kwargs['bbox_norm'])
+    return RegionBox.from_doc(doc)
+
+
+def boxes_with_status(status: str, boxes: Sequence[RegionBox]) -> list[RegionBox]:
+    """Whole-set human status transition over the list (W8.7 table).
+
+    A whole-set confirm never overrides a per-box decision that already
+    settled a box; it only settles the undecided ones.
+    """
+    if status == RegionStatus.DETECTED.value:
+        if not boxes:
+            msg = 'no_boxes'
+            raise RegionBoxWriteError(msg)
+        result = [_replace(b, state='accepted') if b.state == 'proposed' else b for b in boxes]
+        if not any(b.state == 'accepted' for b in result):
+            msg = 'no_accepted_box'
+            raise RegionBoxWriteError(msg)
+        return result
+    if status == RegionStatus.FALSE_POSITIVE.value:
+        return [_replace(b, state=RegionStatus.FALSE_POSITIVE.value) for b in boxes]
+    if status == RegionStatus.VERIFY_REJECTED.value:
+        return [_replace(b, state='rejected', rejection_reason='human') for b in boxes]
+    if status == RegionStatus.NO_REGION_VISIBLE.value:
+        return []
+    msg = f'unsupported whole-set status: {status!r}'
+    raise RegionBoxWriteError(msg)
+
+
 def box_query(clause: dict[str, Any], F: RegionFields | None = None) -> dict[str, Any]:
     """Wrap a per-box clause in the one nested-query shape every reader uses."""
     F = F or get_region_fields()
@@ -193,8 +296,11 @@ def has_any_box_query(F: RegionFields | None = None) -> dict[str, Any]:
 __all__ = [
     'BOX_STATES',
     'RegionBox',
+    'RegionBoxWriteError',
     'accepted',
+    'apply_put_boxes',
     'box_query',
+    'boxes_with_status',
     'boxes_write_fields',
     'derive_status',
     'has_any_box_query',

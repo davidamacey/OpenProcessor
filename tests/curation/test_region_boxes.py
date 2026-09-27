@@ -11,13 +11,20 @@ report handed back to the coordinator).
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+
 from src.config.region_fields import RegionFields
 from src.config.region_state import RegionStatus
 from src.services.curation.region_boxes import (
     BOX_STATES,
     RegionBox,
+    RegionBoxWriteError,
     accepted,
+    apply_put_boxes,
     box_query,
+    boxes_with_status,
     boxes_write_fields,
     derive_status,
     has_any_box_query,
@@ -123,3 +130,159 @@ def test_has_any_box_query_is_count_or_rejected() -> None:
             'minimum_should_match': 1,
         }
     }
+
+
+# ---------------------------------------------------------------------------
+# apply_put_boxes: sibling-preserving PUT merge (W8a, any_domain_plan.md
+# §7.7 wire-write table + W8 pins 1-2)
+# ---------------------------------------------------------------------------
+
+
+def _existing_two_boxes() -> dict:
+    b1 = RegionBox(box_id='b1', bbox_norm=(0.1, 0.1, 0.2, 0.2), state='accepted', score=0.9)
+    b2 = RegionBox(box_id='b2', bbox_norm=(0.3, 0.3, 0.4, 0.4), state='proposed', score=0.5)
+    return {F.boxes: [b1.to_doc(), b2.to_doc()], F.box_seq: 2, F.revision: 3}
+
+
+def test_apply_put_boxes_untouched_sibling_by_id_only() -> None:
+    current = _existing_two_boxes()
+    # Only b1 referenced, by id alone -- b2 must survive untouched even
+    # though it's omitted from most of the payload's attention.
+    requested: list[dict[str, Any]] = [{'box_id': 'b1'}, {'box_id': 'b2'}]
+    result = apply_put_boxes(current, requested, frame='source')
+    assert [b.box_id for b in result] == ['b1', 'b2']
+    assert result[0].bbox_norm == (0.1, 0.1, 0.2, 0.2)
+    assert result[0].state == 'accepted'
+    assert result[1].state == 'proposed'
+
+
+def test_apply_put_boxes_omitting_a_stored_box_deletes_it() -> None:
+    current = _existing_two_boxes()
+    requested: list[dict[str, Any]] = [{'box_id': 'b1'}]
+    result = apply_put_boxes(current, requested, frame='source')
+    assert [b.box_id for b in result] == ['b1']
+
+
+def test_apply_put_boxes_move_keeps_state() -> None:
+    current = _existing_two_boxes()
+    requested: list[dict[str, Any]] = [
+        {'box_id': 'b1', 'bbox_norm': [0.15, 0.15, 0.25, 0.25]},
+        {'box_id': 'b2'},
+    ]
+    result = apply_put_boxes(current, requested, frame='source')
+    assert result[0].bbox_norm == (0.15, 0.15, 0.25, 0.25)
+    assert result[0].state == 'accepted'
+
+
+def test_apply_put_boxes_new_box_defaults_to_accepted() -> None:
+    current = _existing_two_boxes()
+    requested: list[dict[str, Any]] = [
+        {'box_id': 'b1'},
+        {'box_id': 'b2'},
+        {'box_id': None, 'bbox_norm': [0.5, 0.5, 0.6, 0.6]},
+    ]
+    result = apply_put_boxes(current, requested, frame='source')
+    assert result[2].box_id == 'b3'
+    assert result[2].state == 'accepted'
+
+
+def test_apply_put_boxes_new_box_explicit_state_honored() -> None:
+    current = _existing_two_boxes()
+    requested: list[dict[str, Any]] = [
+        {'box_id': None, 'bbox_norm': [0.5, 0.5, 0.6, 0.6], 'state': 'rejected'},
+    ]
+    result = apply_put_boxes(current, requested, frame='source')
+    assert result[0].state == 'rejected'
+
+
+def test_apply_put_boxes_unknown_box_id_raises() -> None:
+    current = _existing_two_boxes()
+    with pytest.raises(RegionBoxWriteError):
+        apply_put_boxes(current, [{'box_id': 'b99'}], frame='source')
+
+
+# ---------------------------------------------------------------------------
+# boxes_with_status: whole-set human status transitions (W8.7 table)
+# ---------------------------------------------------------------------------
+
+
+def test_boxes_with_status_detected_accepts_every_proposed() -> None:
+    boxes = [
+        RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='proposed', score=0.9),
+        RegionBox(box_id='b2', bbox_norm=(0, 0, 1, 1), state='rejected', score=0.9),
+    ]
+    result = boxes_with_status('detected', boxes)
+    assert result[0].state == 'accepted'
+    assert result[1].state == 'rejected'
+
+
+def test_boxes_with_status_detected_no_boxes_raises() -> None:
+    with pytest.raises(RegionBoxWriteError):
+        boxes_with_status('detected', [])
+
+
+def test_boxes_with_status_detected_no_accepted_result_raises() -> None:
+    boxes = [RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='rejected', score=0.9)]
+    with pytest.raises(RegionBoxWriteError):
+        boxes_with_status('detected', boxes)
+
+
+def test_boxes_with_status_false_positive_flips_every_box() -> None:
+    boxes = [
+        RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='accepted', score=0.9),
+        RegionBox(box_id='b2', bbox_norm=(0, 0, 1, 1), state='proposed', score=0.5),
+    ]
+    result = boxes_with_status('false_positive', boxes)
+    assert all(b.state == 'false_positive' for b in result)
+
+
+def test_boxes_with_status_verify_rejected_sets_human_reason() -> None:
+    boxes = [RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='accepted', score=0.9)]
+    result = boxes_with_status('verify_rejected', boxes)
+    assert result[0].state == 'rejected'
+    assert result[0].rejection_reason == 'human'
+
+
+def test_boxes_with_status_no_region_visible_clears() -> None:
+    boxes = [RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='accepted', score=0.9)]
+    assert boxes_with_status('no_region_visible', boxes) == []
+
+
+# ---------------------------------------------------------------------------
+# Item-level wire serialization of the box list (W8a, any_domain_plan.md
+# §7.7 "wire read")
+# ---------------------------------------------------------------------------
+
+
+def test_serialize_item_carries_region_boxes_and_stats() -> None:
+    from src.services.curation.wire import serialize_item
+
+    box = RegionBox(box_id='b1', bbox_norm=(0.1, 0.2, 0.3, 0.4), state='accepted', score=0.9)
+    src = {
+        'crop_id': 'x',
+        F.boxes: [box.to_doc()],
+        F.count: 1,
+        F.rejected_count: 0,
+        F.max_score: 0.9,
+        F.set_complete: True,
+        F.revision: 2,
+    }
+    item = serialize_item(src, 'x')
+    assert item['region_boxes'] == [box.to_doc()]
+    assert item['region_count'] == 1
+    assert item['region_rejected_count'] == 0
+    assert item['region_max_score'] == 0.9
+    assert item['region_set_complete'] is True
+    assert item['region_revision'] == 2
+
+
+def test_serialize_item_defaults_when_absent() -> None:
+    from src.services.curation.wire import serialize_item
+
+    item = serialize_item({'crop_id': 'x'}, 'x')
+    assert item['region_boxes'] == []
+    assert item['region_count'] == 0
+    assert item['region_rejected_count'] == 0
+    assert item['region_max_score'] is None
+    assert item['region_set_complete'] is None
+    assert item['region_revision'] == 0
