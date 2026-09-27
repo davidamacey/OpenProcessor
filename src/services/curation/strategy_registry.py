@@ -49,6 +49,7 @@ import time
 from typing import Any, Literal
 
 from src.core.logging import get_logger
+from src.services.curation.axis_copy import axis_copy, detection_profile_strategies
 
 
 logger = get_logger(__name__)
@@ -430,37 +431,6 @@ def _export_strategies() -> list[dict[str, Any]]:
     ]
 
 
-def _detection_profile_strategies(default_id: str | None) -> list[dict[str, Any]]:
-    """Configured sub-region ``DetectionProfile`` axis.
-
-    Reads :mod:`src.services.detection.profile_registry` -- a real,
-    process-lifetime registry a deployment can add more than one profile
-    to (e.g. a badge profile AND a shipping-label profile) --
-    rather than hardcoding any one profile here. Neutral by default: an
-    unconfigured deployment registers nothing, so this axis is empty; the
-    env-selected profile (``OP_REGION_PROFILE`` / ``OP_REGION_DETECTION_*``)
-    plus anything startup code registers is listed.
-
-    ``default_id`` is :func:`resolve_effective_default`'s answer for the
-    ``'detection_profile'`` axis (falls back to
-    ``get_default_profile_name()`` with no shared-settings override)."""
-    # Import triggers cascade_detect's module-level env resolution if it
-    # hasn't run yet in this process.
-    from src.services.detection import cascade_detect  # noqa: F401
-    from src.services.detection.profile_registry import get_profiles
-
-    return [
-        {
-            'id': profile.name,
-            'axis': 'detection_profile',
-            'label': profile.name,
-            'status': 'stable',
-            'default': profile.name == default_id,
-        }
-        for profile in get_profiles().values()
-    ]
-
-
 def _prompt_pack_strategies(default_id: str | None) -> list[dict[str, Any]]:
     """Selectable VLM ``PromptPack`` axis.
 
@@ -635,7 +605,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
         *_score_strategies(),
         *_overlay_strategies(),
         *_export_strategies(),
-        *_detection_profile_strategies(detection_profile_default),
+        *detection_profile_strategies(detection_profile_default),
         *_prompt_pack_strategies(prompt_pack_default),
     ]
 
@@ -677,6 +647,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
             'viz_projection_enabled': _viz_projection_enabled(),
             'semantic_search_enabled': _semantic_search_enabled(),
         },
+        'axes': axis_copy(),
     }
 
 

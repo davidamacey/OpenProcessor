@@ -140,6 +140,16 @@ def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
     prefix = _project_index_prefix()
     data_root = _projects_data_root() / slug
     indexes = {role: f'{prefix}{slug}__{role.value}' for role in IndexRole}
+    # Shard folding (owner D4, projects_plan.md §2.3): a project created
+    # after W2 never gets its own settings / umap-viz-state indexes --
+    # both roles resolve to the configs index name instead (6 indexes,
+    # not 8). ``default`` is unaffected (resources_for_default keeps the
+    # env-derived names). Safe because both folded roles are addressed
+    # by a single fixed doc id only (never searched) and their mappings
+    # merge without a type conflict -- see _configs_body().
+    configs_name = f'{prefix}{slug}__{IndexRole.CONFIGS.value}'
+    indexes[IndexRole.SETTINGS] = configs_name
+    indexes[IndexRole.UMAP_VIZ_STATE] = configs_name
     return ProjectResources(
         indexes=indexes,
         class_registry_path=data_root / 'class_registry.json',

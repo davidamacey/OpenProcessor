@@ -106,6 +106,8 @@
     "region_detector_version",
     "region_detector_chain",
     "region_detected_at",
+    "region_profile",
+    "region_profile_revision",
     "region_candidate_bbox_norm",
     "region_candidate_score",
     "region_candidate_detector",
@@ -971,6 +973,30 @@
         "default": null,
         "title": "Region Pairing"
       },
+      "region_profile": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Profile"
+      },
+      "region_profile_revision": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Profile Revision"
+      },
       "region_reason": {
         "anyOf": [
           {
@@ -1400,6 +1426,8 @@
     "region_detector_version",
     "region_detector_chain",
     "region_detected_at",
+    "region_profile",
+    "region_profile_revision",
     "region_candidate_bbox_norm",
     "region_candidate_score",
     "region_candidate_detector",

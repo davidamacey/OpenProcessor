@@ -70,6 +70,13 @@ class IndexRole(str, Enum):
     # index.
     UMAP_STATE = 'umap_state'
     UMAP_VIZ_STATE = 'umap_viz_state'
+    # The config store (W2, docs/design/openprocessor_internal/any_domain_plan.md
+    # §3.1): prompt packs, region profiles, activations and the
+    # cross-process revision counter. For a project created after W2,
+    # ``resources_for_new`` also folds SETTINGS and UMAP_VIZ_STATE onto
+    # this index's name (projects_plan.md §2.3, owner D4) -- ``default``
+    # keeps its own separate settings/umap-viz-state indexes.
+    CONFIGS = 'configs'
 
 
 # Identity sentinel: "derive this path from ``state_dir``" (compared with
@@ -106,6 +113,8 @@ class CurationConfig:
     # state, so they get separate fields rather than one shared role.
     umap_state_index: str = 'op_umap_state'
     umap_viz_state_index: str = 'op_umap_viz_state'
+    # Prompt packs, region profiles, activations, revision counter (W2).
+    configs_index: str = 'op_curation_configs'
 
     class_registry_path: Path = Path('./data/class_registry.json')
     # Optional deployment-supplied VLM PromptPack (see
@@ -295,6 +304,7 @@ class CurationConfig:
             settings_index=_str('SETTINGS_INDEX', defaults.settings_index),
             umap_state_index=_str('UMAP_STATE_INDEX', defaults.umap_state_index),
             umap_viz_state_index=_str('UMAP_VIZ_STATE_INDEX', defaults.umap_viz_state_index),
+            configs_index=_str('CONFIGS_INDEX', defaults.configs_index),
             class_registry_path=_path('REGISTRY_PATH', defaults.class_registry_path),
             prompt_pack_path=_optional_path('PROMPT_PACK_PATH', defaults.prompt_pack_path),
             prompt_pack_paths=tuple(
@@ -400,6 +410,7 @@ _INDEX_ROLE_ATTR: dict[IndexRole, str] = {
     IndexRole.SETTINGS: 'settings_index',
     IndexRole.UMAP_STATE: 'umap_state_index',
     IndexRole.UMAP_VIZ_STATE: 'umap_viz_state_index',
+    IndexRole.CONFIGS: 'configs_index',
 }
 
 
@@ -436,6 +447,7 @@ PROJECT_SCOPED_FIELDS: frozenset[str] = frozenset(
         'settings_index',
         'umap_state_index',
         'umap_viz_state_index',
+        'configs_index',
         'class_registry_path',
         'export_root',
         'upload_root',

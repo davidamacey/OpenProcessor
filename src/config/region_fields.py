@@ -92,6 +92,13 @@ class RegionFields:
     detector_chain: str = 'region_detector_chain'
     detected_at: str = 'region_detected_at'
 
+    # Config-store provenance (W2): which activated region profile
+    # (name) + revision produced this write. Item-level fields, not
+    # folded into ``kind == 'config'`` docs -- see
+    # ``ensure_items_config_stamp_fields``.
+    profile: str = 'region_profile'
+    profile_revision: str = 'region_profile_revision'
+
     # A detector box the verifier REJECTED (status ``verify_rejected``),
     # kept for human review and reversal. Deliberately NOT ``bbox_norm``:
     # a box there is an accepted region to every reader (browse, export,

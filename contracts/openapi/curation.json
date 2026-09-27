@@ -4484,6 +4484,28 @@
           "region_pairing": {
             "title": "Region Pairing"
           },
+          "region_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Profile"
+          },
+          "region_profile_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Profile Revision"
+          },
           "region_reason": {
             "anyOf": [
               {
@@ -5274,9 +5296,41 @@
         "title": "MatrixModel",
         "type": "object"
       },
+      "MethodAxis": {
+        "description": "One axis's served copy (W2, any_domain_plan.md §7.6 item 7):\nCropwright's dropdown/blurb text for an axis, instead of a\nclient-side hardcoded string per axis id.",
+        "properties": {
+          "axis": {
+            "title": "Axis",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "axis",
+          "label",
+          "description"
+        ],
+        "title": "MethodAxis",
+        "type": "object"
+      },
       "MethodsResponse": {
         "description": "``GET /curation/methods`` response: every strategy across every axis\nplus the feature flags that gated each entry's status.",
         "properties": {
+          "axes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MethodAxis"
+            },
+            "title": "Axes",
+            "type": "array"
+          },
           "flags": {
             "additionalProperties": {
               "type": "boolean"
@@ -17486,7 +17540,7 @@
     },
     "/curation/projects/{project}/settings": {
       "get": {
-        "description": "Current shared curation-strategy defaults.\n\nNo document yet (nothing has ever been ``PUT``) is not an error --\nit means \"no shared override for any axis,\" reported as\n``defaults: {}``, ``updated_at: null``, ``updated_by: null``.",
+        "description": "Current shared curation-strategy defaults.\n\nNo document yet (nothing has ever been ``PUT``) is not an error --\nit means \"no shared override for any axis,\" reported as\n``defaults: {}``, ``updated_at: null``, ``updated_by: null``.\n\n``prompt_pack`` / ``detection_profile`` are reported from the config\nstore's activation (W2), not this settings document -- see\n:func:`_config_store_axis_defaults`.",
         "operationId": "get_curation_settings_route_curation_projects__project__settings_get",
         "parameters": [
           {
@@ -17528,7 +17582,7 @@
         ]
       },
       "put": {
-        "description": "Partially update the shared curation-strategy defaults.\n\nOnly the axes present in ``body.defaults`` are validated and merged;\naxes already stored (and not mentioned here) are left untouched. Each\naxis must be one of\n:data:`~src.services.curation.strategy_defaults.SETTABLE_DEFAULT_AXES`\nand each id must be currently advertised for that axis on\n``GET /methods`` — otherwise this returns ``422`` listing the valid\naxes/ids. A value of ``null`` clears that axis's shared override\n(see ``CurationSettingsUpdateRequest``'s docstring) — the axis simply\nwon't appear in the next ``GET``'s ``defaults`` map. ``updated_by`` is\nalways ``None`` — no user-account system exists yet.",
+        "description": "Partially update the shared curation-strategy defaults.\n\n``prompt_pack`` / ``detection_profile`` in ``body.defaults`` delegate\nto the config store's activation (W2, any_domain_plan.md §3.7): the\nid must be currently advertised for the axis (or ``off`` for\n``detection_profile``), else ``422``; ``null`` deactivates the axis\nthrough the store rather than clearing a settings-doc override. Every\nother axis keeps the prior behavior: it must be one of\n:data:`~src.services.curation.strategy_defaults.SETTABLE_DEFAULT_AXES`\nand each id must be currently advertised for that axis on\n``GET /methods``. ``updated_by`` is always ``None`` — no user-account\nsystem exists yet.",
         "operationId": "update_curation_settings_route_curation_projects__project__settings_put",
         "parameters": [
           {

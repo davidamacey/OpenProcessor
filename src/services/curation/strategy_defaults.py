@@ -51,13 +51,14 @@ def _hardcoded_default_for_axis(axis: str) -> str | None:
         return DEFAULT_METHOD
     if axis == 'detection_profile':
         from src.services.detection import cascade_detect  # noqa: F401 - registers the profile
-        from src.services.detection.profile_registry import get_default_profile_name
+        from src.services.detection.profile_registry import get_active_region_profile
 
-        return get_default_profile_name()
+        active = get_active_region_profile()
+        return active.name if active is not None else None
     if axis == 'prompt_pack':
-        from src.services.labeling.vlm_prompts import resolve_prompt_pack
+        from src.services.labeling.vlm_prompts import active_prompt_pack
 
-        return resolve_prompt_pack().name
+        return active_prompt_pack().name
     return None
 
 
@@ -97,11 +98,22 @@ def _advertised_ids_for_axis(axis: str) -> frozenset[str]:
 # single-selectable-id "default" concept a shared override could apply to
 # today (score/overlay are additive, not mutually-exclusive choices; export
 # has exactly one kind), so PUT /curation/settings rejects them rather than
-# silently accepting a value nothing will ever honor. 'detection_profile'
-# is read-only for the same reason: the region cascade runs in the
-# detection worker on the process's OP_REGION_PROFILE, so a settings
-# override would change nothing that runs.
-SETTABLE_DEFAULT_AXES: frozenset[str] = frozenset({'cluster', 'sort', 'prompt_pack'})
+# silently accepting a value nothing will ever honor.
+#
+# 'detection_profile' joined this set in W2 (any_domain_plan.md §7.6 item
+# 7, §9 W2): the detection worker now hot-reloads its active profile via
+# the config store's quiesce-and-swap (§4.5) instead of only reading
+# OP_REGION_PROFILE at startup, so a PUT here actually changes what runs.
+# 'prompt_pack' and 'detection_profile' are special-cased in
+# ``src.routers.curation.settings`` -- their PUT delegates to
+# ``store.activate_axis`` (the config store's activation, §3.6/§3.7)
+# rather than writing into this module's settings-doc ``defaults`` map;
+# ``_hardcoded_default_for_axis`` for both axes already reads through the
+# store (``active_prompt_pack`` / ``get_active_region_profile``), so the
+# settings-doc override branch below never actually fires for them.
+SETTABLE_DEFAULT_AXES: frozenset[str] = frozenset(
+    {'cluster', 'sort', 'prompt_pack', 'detection_profile'}
+)
 
 
 async def resolve_effective_default(

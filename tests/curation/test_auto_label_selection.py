@@ -184,8 +184,8 @@ def labeler_spy(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[Any]]:
     vlm._get_vlm_labeler.__dict__.pop('_insts', None)
     got: list[Any] = []
 
-    def _spy(pack_name: str | None = None) -> Any:
-        inst = vlm._get_vlm_labeler(pack_name)
+    def _spy(pack_name: str | None = None, revision: int | None = None) -> Any:
+        inst = vlm._get_vlm_labeler(pack_name, revision)
         got.append(inst)
         return inst
 

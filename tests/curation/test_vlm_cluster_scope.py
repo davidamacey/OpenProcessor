@@ -75,8 +75,8 @@ def pipeline_env(monkeypatch: pytest.MonkeyPatch) -> _Labeler:
     monkeypatch.setattr(selection, 'classifier_class_sources', lambda: frozenset({'det_model'}))
 
     labeler = _Labeler()
-    monkeypatch.setattr(pipeline, '_get_vlm_labeler', lambda _pack=None: labeler)
-    monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', AsyncMock(return_value=None))
+    monkeypatch.setattr(pipeline, '_get_vlm_labeler', lambda _pack=None, _rev=None: labeler)
+    monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None)))
     monkeypatch.setattr(pipeline_health, 'pipeline_health_snapshot', AsyncMock(return_value={}))
     monkeypatch.setattr(
         'src.routers.curation.get_class_registry',

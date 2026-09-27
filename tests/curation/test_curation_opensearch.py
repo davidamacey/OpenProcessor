@@ -38,7 +38,7 @@ config = get_curation_config()
 # =============================================================================
 
 
-def test_index_bodies_has_all_seven_roles() -> None:
+def test_index_bodies_has_all_eight_roles() -> None:
     assert set(INDEX_BODIES.keys()) == {
         IndexRole.IMAGES,
         IndexRole.ITEMS,
@@ -47,6 +47,7 @@ def test_index_bodies_has_all_seven_roles() -> None:
         IndexRole.SETTINGS,
         IndexRole.UMAP_STATE,
         IndexRole.UMAP_VIZ_STATE,
+        IndexRole.CONFIGS,
     }
 
 
@@ -204,6 +205,7 @@ async def test_get_curation_index_settings_returns_string_keyed_dict() -> None:
         'op_curation_settings',
         'op_umap_state',
         'op_umap_viz_state',
+        'op_curation_configs',
     }
 
 
@@ -237,10 +239,11 @@ async def test_create_curation_indexes_creates_all_when_missing() -> None:
         'op_curation_settings': True,
         'op_umap_state': True,
         'op_umap_viz_state': True,
+        'op_curation_configs': True,
     }
     # Each index was created exactly once with the right body.
     create_calls = client.indices.create.await_args_list
-    assert len(create_calls) == 7
+    assert len(create_calls) == 8
     seen = {call.kwargs['index'] for call in create_calls}
     assert seen == {
         'op_images',
@@ -250,6 +253,7 @@ async def test_create_curation_indexes_creates_all_when_missing() -> None:
         'op_curation_settings',
         'op_umap_state',
         'op_umap_viz_state',
+        'op_curation_configs',
     }
     # Each index name got the body for its OWN role, not a mismatched one
     # (catches a role<->index swap bug) — comparing against INDEX_BODIES
@@ -290,8 +294,8 @@ async def test_create_curation_indexes_force_recreate_deletes_first() -> None:
     client = _make_mock_client(exists_returns=True)
     results = await create_curation_indexes(client, force_recreate=True)
     assert all(results.values())
-    assert client.indices.delete.await_count == 7
-    assert client.indices.create.await_count == 7
+    assert client.indices.delete.await_count == 8
+    assert client.indices.create.await_count == 8
 
 
 @pytest.mark.asyncio

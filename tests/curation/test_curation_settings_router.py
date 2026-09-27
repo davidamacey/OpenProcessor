@@ -16,6 +16,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from curation._fake_config_opensearch import FakeConfigOpenSearch
 from curation.test_curation_settings_client import FakeSettingsOpenSearch
 
 
@@ -147,39 +148,72 @@ if __name__ == '__main__':
     pytest.main([__file__, '-v'])
 
 
+@pytest.fixture
+def app_client_config_store(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    """A ``FakeConfigOpenSearch``-backed client -- unlike
+    ``FakeSettingsOpenSearch``, this fake also serves the config store's
+    ``get``/``index``/``search`` calls, needed now that
+    ``detection_profile``/``prompt_pack`` PUTs delegate to
+    ``store.activate_axis`` (W2)."""
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
+
+    fake_os = FakeConfigOpenSearch()
+    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    app = FastAPI()
+    app.include_router(curation_router)
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
+    client = TestClient(app)
+    client.fake_os = fake_os  # type: ignore[attr-defined]
+    return client
+
+
+@pytest.fixture(autouse=True)
+def _reset_config_store() -> Iterator[None]:
+    from src.services.config_store.store import reset_config_stores
+
+    reset_config_stores()
+    yield
+    reset_config_stores()
+
+
 @pytest.mark.usefixtures('reference_region_profile')
-def test_put_rejects_detection_profile_as_read_only(app_client: TestClient) -> None:
-    """detection_profile is reported on GET /methods but not settable: the
-    region cascade runs on OP_REGION_PROFILE, so a stored default would be
-    a silent no-op."""
-    r = app_client.put(
+def test_put_detection_profile_now_settable_through_the_store(
+    app_client_config_store: TestClient,
+) -> None:
+    """W2: detection_profile joined the config-store-backed axes (it was
+    read-only pre-W2, when the region cascade only read ``OP_REGION_PROFILE``
+    at process start; the detection worker now hot-reloads it, §4.5)."""
+    r = app_client_config_store.put(
         '/curation/settings', json={'defaults': {'detection_profile': 'license_plate'}}
     )
-    assert r.status_code == 422
-    assert 'detection_profile' in r.json()['detail']
+    assert r.status_code == 200, r.text
+    assert r.json()['defaults']['detection_profile'] == 'license_plate'
+
+    r_unknown = app_client_config_store.put(
+        '/curation/settings', json={'defaults': {'detection_profile': 'not_a_real_profile'}}
+    )
+    assert r_unknown.status_code == 422
+    assert r_unknown.json()['detail']['error'] == 'unknown_profile'
 
 
 @pytest.mark.usefixtures('reference_region_profile')
 def test_methods_marks_settable_axes_and_reports_active_region_profile(
-    app_client: TestClient,
+    app_client_config_store: TestClient,
 ) -> None:
-    from src.clients.curation_opensearch import CURATION_SETTINGS_DOC_ID
-    from src.config import get_curation_config
+    r = app_client_config_store.put(
+        '/curation/settings', json={'defaults': {'detection_profile': 'license_plate'}}
+    )
+    assert r.status_code == 200, r.text
 
-    # A detection_profile override stored before the axis became read-only
-    # must not change what is reported as active.
-    app_client.fake_os._docs[  # type: ignore[attr-defined]
-        (get_curation_config().settings_index, CURATION_SETTINGS_DOC_ID)
-    ] = {'defaults': {'detection_profile': 'something_else'}}
-    r = app_client.get('/curation/methods')
-    assert r.status_code == 200
-    entries = r.json()['strategies']
+    r2 = app_client_config_store.get('/curation/methods')
+    assert r2.status_code == 200
+    entries = r2.json()['strategies']
     by_axis: dict[str, set[bool]] = {}
     for e in entries:
         by_axis.setdefault(e['axis'], set()).add(e['settable'])
-    assert by_axis['detection_profile'] == {False}
+    assert by_axis['detection_profile'] == {True}
     assert by_axis['prompt_pack'] == {True}
     assert by_axis['cluster'] == {True}
     assert by_axis['score'] == {False}
     region = [e for e in entries if e['axis'] == 'detection_profile']
-    assert [(e['id'], e['default']) for e in region] == [('license_plate', True)]
+    assert ('license_plate', True) in [(e['id'], e['default']) for e in region]

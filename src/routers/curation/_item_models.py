@@ -172,6 +172,11 @@ class ItemDoc(BaseModel):
     region_detector_version: str | None = None
     region_detector_chain: list[str] | None = None
     region_detected_at: str | None = None
+    # Config-store provenance (W2): the activated region profile
+    # name/revision that produced this item's region write. Null for an
+    # item never touched by a config-store-hot-reloadable worker write.
+    region_profile: str | None = None
+    region_profile_revision: int | None = None
     # A detector box the verifier rejected (region_status verify_rejected),
     # kept for review: never an accepted region. A human confirm (PATCH
     # region_meta region_status=detected, or PUT region with this box)

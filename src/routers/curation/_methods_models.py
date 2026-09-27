@@ -36,12 +36,23 @@ class StrategyEntry(BaseModel):
     field_coverage_total: int | None = None
 
 
+class MethodAxis(BaseModel):
+    """One axis's served copy (W2, any_domain_plan.md §7.6 item 7):
+    Cropwright's dropdown/blurb text for an axis, instead of a
+    client-side hardcoded string per axis id."""
+
+    axis: str
+    label: str
+    description: str
+
+
 class MethodsResponse(BaseModel):
     """``GET /curation/methods`` response: every strategy across every axis
     plus the feature flags that gated each entry's status."""
 
     strategies: list[StrategyEntry]
     flags: dict[str, bool]
+    axes: list[MethodAxis] = []
 
 
 __all__ = ['MethodsResponse', 'StrategyEntry']

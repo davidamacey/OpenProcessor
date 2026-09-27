@@ -82,7 +82,7 @@ async def pipeline_auto_label_start(
 
     # Resolved here (422 before queueing) so the job args echo what runs.
     reject_detection_profile(detection_profile)
-    prompt_pack = await resolve_run_prompt_pack(opensearch, prompt_pack)
+    prompt_pack, prompt_pack_revision = await resolve_run_prompt_pack(opensearch, prompt_pack)
     try:
         return auto_label_job.start_job(
             pipeline_auto_label,
@@ -106,6 +106,7 @@ async def pipeline_auto_label_start(
                 'class_id': class_id,
                 'cluster_id': cluster_id,
                 'prompt_pack': prompt_pack,
+                'prompt_pack_revision': prompt_pack_revision,
             },
         )
     except RuntimeError as exc:
@@ -176,12 +177,13 @@ async def pipeline_auto_label(
     from src.services.labeling.vlm_labeler import ItemCrop
 
     reject_detection_profile(detection_profile)
-    prompt_pack = await resolve_run_prompt_pack(opensearch, prompt_pack)
+    prompt_pack, prompt_pack_revision = await resolve_run_prompt_pack(opensearch, prompt_pack)
     summary: dict[str, Any] = {
         'stages': {},
         'class_id': class_id,
         'cluster_id': cluster_id,
         'prompt_pack': prompt_pack,
+        'prompt_pack_revision': prompt_pack_revision,
     }
 
     # Snapshot counts at entry for a real before/after.
@@ -388,7 +390,7 @@ async def pipeline_auto_label(
         if not c.deprecated
     ]
     # The run's selected pack (resolve_prompt_pack() default when unset).
-    labeler = _get_vlm_labeler(prompt_pack)
+    labeler = _get_vlm_labeler(prompt_pack, prompt_pack_revision)
     class_catalog = format_class_catalog(class_dicts, labeler._pack)
 
     # Count how many crops bypass the synonym/fuzzy force-fit because the

@@ -81,6 +81,7 @@ class AppResources:
     arbiter_task: asyncio.Task[None] | None = None
     curation_knn_warmup_task: asyncio.Task[None] | None = None
     project_registry_poll_task: asyncio.Task[None] | None = None
+    config_store_poll_task: asyncio.Task[None] | None = None
     event_bus_started: bool = False
 
 
@@ -203,6 +204,11 @@ async def lifespan(app: FastAPI):
     from src.services.projects.bootstrap import startup_bootstrap_project_registry_safe
 
     AppResources.project_registry_poll_task = await startup_bootstrap_project_registry_safe()
+
+    # Config store poll task (W2, any_domain_plan.md §3.6/§9 W2).
+    from src.services.config_store import startup_bootstrap_config_store_safe
+
+    AppResources.config_store_poll_task = await startup_bootstrap_config_store_safe()
 
     # S-3: tail the shared cross-process event log so this uvicorn
     # worker's SSE clients see events published by any other worker or
@@ -365,6 +371,11 @@ async def lifespan(app: FastAPI):
 
     await shutdown_project_registry(AppResources.project_registry_poll_task)
     AppResources.project_registry_poll_task = None
+
+    from src.services.config_store import shutdown_config_store_poll
+
+    await shutdown_config_store_poll(AppResources.config_store_poll_task)
+    AppResources.config_store_poll_task = None
 
     # Stop the event-bus tail task.
     if AppResources.event_bus_started:
