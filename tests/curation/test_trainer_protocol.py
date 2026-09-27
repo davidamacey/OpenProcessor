@@ -62,6 +62,10 @@ def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     d = tmp_path / 'jobs'
     d.mkdir()
+    # P1R §6.1/D-A: project_jobs_dir() always nests /projects/<slug>,
+    # default included -- pre-create it for tests that hand-write a job
+    # file instead of going through the API's write_job.
+    (d / 'projects' / 'default').mkdir(parents=True)
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(d))
     # export_root is a PROJECT_SCOPED_FIELDS entry now (P1R §6.1/D-A):
     # OP_EXPORT_ROOT no longer exists. OP_PROJECTS_DATA_ROOT/<slug>/exports
@@ -141,7 +145,9 @@ def test_api_written_job_json_parses_in_trainer(jobs_dir: Path, export_dir: Path
         hyperparameters={'epochs': 3, 'batch': 4, 'optimizer': 'MuSGD'},
     )
 
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
 
     assert spec.job_id == job_id
     assert spec.dataset_export_dir == export_dir
@@ -157,7 +163,9 @@ def test_api_written_job_json_parses_in_trainer(jobs_dir: Path, export_dir: Path
 def test_trainer_sibling_paths_match_the_api_side(jobs_dir: Path, export_dir: Path) -> None:
     """status / cancel / log / manifest paths are a shared naming contract."""
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
 
     assert spec.status_path == train_jobs._status_path(job_id)
     assert spec.cancel_path == train_jobs._cancel_path(job_id)
@@ -167,7 +175,9 @@ def test_trainer_sibling_paths_match_the_api_side(jobs_dir: Path, export_dir: Pa
 
 def test_api_cancel_sentinel_is_seen_by_the_trainer(jobs_dir: Path, export_dir: Path) -> None:
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
     assert not spec.cancel_path.exists()
 
     asyncio.run(train_jobs.write_cancel(job_id))
@@ -210,7 +220,7 @@ def test_broken_job_json_is_rejected(
 
 def test_invalid_job_gets_a_terminal_failed_status(jobs_dir: Path) -> None:
     """Otherwise the watcher would re-read the same broken file forever."""
-    (jobs_dir / 'job-bad.job.json').write_text('{not json')
+    (jobs_dir / 'projects' / 'default' / 'job-bad.job.json').write_text('{not json')
 
     assert trainer.process_one(jobs_dir) is True
 
@@ -273,7 +283,9 @@ def test_on_fit_epoch_end_tells_the_best_checkpoint_revalidation_apart_from_a_re
 
 def test_trainer_status_payload_parses_in_the_api_reader(jobs_dir: Path, export_dir: Path) -> None:
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
 
     state = job_protocol.StatusState(job_id=job_id, state='running')
     state.current_epoch = 2
@@ -304,7 +316,9 @@ def test_every_trainer_state_is_accepted_by_the_api_model(
 ) -> None:
     """A state the trainer can write that the API rejects would blank the UI."""
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
 
     job_protocol.write_status_now(
         spec.status_path, job_protocol.StatusState(job_id=job_id, state=state_name)
@@ -317,7 +331,9 @@ def test_every_trainer_state_is_accepted_by_the_api_model(
 
 def test_run_log_is_tailable_by_the_api(jobs_dir: Path, export_dir: Path) -> None:
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
 
     with job_protocol.tee_to_run_log(spec.run_log_path):
         print('[trainer] epoch 1/3')
@@ -413,7 +429,9 @@ def test_class_remap_copy_reports_failure_loudly_for_a_subset_run(
     """
     monkeypatch.setattr(job_protocol, 'TMP_ROOT', tmp_path / 'tmp')
     job_id = _write_job(dataset_export_dir=str(export_dir), include_classes=[5], single_cls=False)
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
     save_dir = tmp_path / 'run'
     save_dir.mkdir()
 
@@ -438,7 +456,9 @@ def test_class_remap_copy_is_a_no_op_for_a_whole_export_run_missing_the_remap(
     export that predates the dense-id remap hits this same path for real."""
     monkeypatch.setattr(job_protocol, 'TMP_ROOT', tmp_path / 'tmp')
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
     save_dir = tmp_path / 'run'
     save_dir.mkdir()
 
@@ -462,7 +482,9 @@ def test_write_full_class_remap_for_a_whole_export_run_with_a_registry_gap(
     """
     monkeypatch.setattr(job_protocol, 'TMP_ROOT', tmp_path / 'tmp')
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
 
     written = dataset_prep.write_full_class_remap(spec)
     assert written == spec.full_class_remap_path
@@ -640,7 +662,9 @@ def test_text_classes_resolve_by_name_against_the_training_data_yaml(
         dataset_export_dir=str(export_dir),
         augmentation={'enabled': True, 'text_class_names': ['Serial_Plate']},
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
 
     # Matching is case-insensitive and lands in the data.yaml's id space.
     assert dataset_prep.resolve_text_classes(spec, export_dir / 'data.yaml') == {1}
@@ -659,7 +683,9 @@ def test_text_classes_follow_the_subset_renumbering(
         include_classes=[12, 9],
         augmentation={'enabled': True, 'text_class_names': ['serial_plate']},
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
 
     assert dataset_prep.resolve_text_classes(spec, out / 'data.yaml') == {1}
 
@@ -669,7 +695,9 @@ def test_text_classes_fall_back_to_the_deployment_default(
 ) -> None:
     monkeypatch.setenv('OP_TRAIN_TEXT_CLASS_NAMES', 'serial_plate,absent_class')
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
 
     # Unknown names are ignored rather than raising -- a subset run drops
     # classes legitimately.
@@ -715,7 +743,9 @@ def test_campaign_auto_skip_marks_queued_siblings_skipped(jobs_dir: Path, export
         dataset_export_dir=str(export_dir),
         stop_when={'map50_at_least': 0.5},
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{winner}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{winner}.job.json'
+    )
     state = job_protocol.StatusState(job_id=winner, campaign_id=campaign_id, state='finished')
     state.eval = {'map50': 0.8}
 
@@ -729,7 +759,9 @@ def test_campaign_auto_skip_marks_queued_siblings_skipped(jobs_dir: Path, export
 
 def test_campaign_hook_is_a_no_op_for_a_standalone_job(jobs_dir: Path, export_dir: Path) -> None:
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
     state = job_protocol.StatusState(job_id=job_id, state='finished')
     state.eval = {'map50': 0.9}
 
@@ -770,7 +802,9 @@ def test_auto_quantize_posts_the_bakeoff_run_request(
 
     monkeypatch.setattr(requests, 'post', _post)
     job_id = _write_job(dataset_export_dir=str(export_dir), auto_quantize_bakeoff=True)
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
     state = job_protocol.StatusState(job_id=job_id, state='finished')
     state.checkpoint_path = str(tmp_path / 'best.pt')
 
@@ -828,9 +862,11 @@ def test_trainer_calls_back_under_the_project_that_wrote_the_job(
 
     monkeypatch.setattr(requests, 'post', _post)
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    raw = json.loads((jobs_dir / f'{job_id}.job.json').read_text())
+    raw = json.loads((jobs_dir / 'projects' / 'default' / f'{job_id}.job.json').read_text())
     assert raw['project'] == 'default'
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
     assert spec.project == 'default'
 
     assert campaign._post_promote(spec.project, job_id, 'best')
@@ -1100,7 +1136,9 @@ def test_finalize_run_forces_the_end2end_head_for_yolo26_test_split_eval(
     ``.val()`` has no ``end2end=`` kwarg; the real toggle is the loaded
     model's own ``.end2end`` property."""
     job_id = _write_job(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
     state = job_protocol.StatusState(
         job_id=spec.job_id, campaign_id=spec.campaign_id, state='running'
     )
@@ -1168,7 +1206,9 @@ def test_finalize_run_does_not_force_end2end_on_a_non_dual_head_model(
     alone -- forcing end2end=True on it would break inference, since it
     has no one-to-one head to switch to."""
     job_id = _write_job(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
     state = job_protocol.StatusState(
         job_id=spec.job_id, campaign_id=spec.campaign_id, state='running'
     )
@@ -1220,7 +1260,9 @@ def test_run_job_drives_a_whole_export_run_to_finished(
         profile='probe',
         hyperparameters={'epochs': 1, 'batch': 2, 'optimizer': 'MuSGD', 'seed': 7},
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
 
     trainer.run_job(spec)
 
@@ -1336,7 +1378,9 @@ def test_normal_run_manifest_has_no_null_lineage(
         profile='probe',
         hyperparameters={'epochs': 1, 'batch': 2, 'optimizer': 'MuSGD', 'seed': 3},
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
 
     trainer.run_job(spec)
 
@@ -1359,7 +1403,9 @@ def test_run_job_propagates_class_remap_for_a_subset_run(
         include_classes=[12, 5],
         hyperparameters={'epochs': 1, 'optimizer': 'MuSGD'},
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
 
     trainer.run_job(spec)
 
@@ -1391,7 +1437,9 @@ def test_run_job_honors_the_cancel_sentinel(
     job_id = _write_job(
         dataset_export_dir=str(export_dir), hyperparameters={'epochs': 5, 'optimizer': 'MuSGD'}
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
     asyncio.run(train_jobs.write_cancel(job_id))
     # The real cancel path raises out of the on_train_epoch_end callback.
     stub_ultralytics.raise_on_train = trainer.CancelRequestedError('cancelled')
@@ -1413,7 +1461,9 @@ def test_run_job_records_a_training_failure_in_status_and_log(
     job_id = _write_job(
         dataset_export_dir=str(export_dir), hyperparameters={'epochs': 1, 'optimizer': 'MuSGD'}
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_protocol.parse_and_validate_job(
+        jobs_dir / 'projects' / 'default' / f'{job_id}.job.json'
+    )
     stub_ultralytics.raise_on_train = RuntimeError('dataset is corrupt')
 
     trainer.run_job(spec)
