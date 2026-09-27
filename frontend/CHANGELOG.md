@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Prompt-pack editor (OpenProcessor W3; test-on-crop W5).** New
+  `/settings/prompt-packs` lists the project's VLM prompt packs and
+  templates with the active pack (confirm-gated Rollback), Clone and
+  confirm-gated Delete; `/settings/prompt-packs/[name]` edits a pack from
+  the served schema with live server validation (issues shown under their
+  field), saves new revisions with `expected_revision` (a
+  `revision_conflict` offers reload or keep-my-edits), views and restores
+  old revisions, activates a pinned revision (confirm; "Activate anyway"
+  only when the served report allows force) and, for calls the schema
+  marks `testable`, runs test-on-crop showing the served prompt, raw
+  reply, parsed result and preview item. Absent until the backend serves
+  `GET /prompt_packs` (a one-shot probe per project). Built against the
+  frozen spec; the routes are in `PENDING_BACKEND_W3` until the W3/W5
+  contract sync.
 - **Cross-project model sharing on `/models` (OpenProcessor projects P2,
   §5.5).** The page lists other projects' shared models
   (`include_other_projects=true`) with a "from `<project>`" chip, and
