@@ -78,6 +78,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Ingest uploads get the ingest proxy limits again.** Every ingest route
+  is project-scoped (`/projects/<slug>/ingest/...`), but `nginx.conf`'s
+  ingest location still matched the removed unscoped path, so uploads fell
+  through to the general location's 120 s read timeout. The location now
+  matches the scoped path and keeps its 600 s timeout.
 - **`/export` says "1 class with no validated crops"**, not "1 classes",
   when a single class has none (seen on a fresh install whose registry
   held only the region class).

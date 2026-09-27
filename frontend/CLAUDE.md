@@ -172,7 +172,7 @@ record.
   `window.__CROPWRIGHT_INGEST_MAX_REQUEST_MB__` (`src/app.html`), so
   the client-side chunk planner and the actual proxy limit can never
   drift apart. `nginx.conf` also gained a dedicated
-  `^__API_PREFIX__/ingest/` location (declared before the general API
+  `^__API_PREFIX__/projects/[^/]+/ingest/` location (declared before the general API
   location, since nginx matches regex locations in declaration order)
   with a 600s `proxy_read_timeout` — a 128-image batch with detector +
   embedding inference can exceed the general API location's 120s.
