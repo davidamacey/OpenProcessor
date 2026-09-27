@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **P3 review fix pass (2026-09-27).** Addresses the independent P3 review's
+  blocker and majors:
+  - M1: `POST /projects` create is now storage-OCC-safe (`op_type='create'`);
+    a concurrent create of the same slug 409s `slug_taken` for the loser
+    instead of silently overwriting.
+  - M7 / m9: every clone-on-create refusal (unknown axis, clone into itself,
+    a source that is not `active`/`archived`) now runs *before* the first
+    write, so a refused clone burns no slug, creates no indexes and leaves
+    no `failed` record. Clone-into-itself is a clean 422 `combine_invalid`,
+    not a 500 `SameFileError`. New error code: `clone_source_not_ready`.
+  - M2: a read-only bind (archived project, or a stale registry) now
+    refuses every non-safe HTTP method at bind time (409 `project_archived`
+    / `project_read_only`) before the route handler runs, covering
+    file-backed writes the OpenSearch guard never saw.
+  - M6: `tests/curation/test_cross_project_leak.py`'s `leak_env` now seeds
+    the shared `op_projects` registry doc, so the leak sweep's lifecycle
+    mutations (PATCH/archive/unarchive/clone_settings) exercise a real
+    write behind the real guard instead of 404ing before ever reaching it;
+    added a create-then-real-delete pass asserting other projects' data is
+    untouched.
+  - Fixed the test suite's process-wide default project registry stub
+    (`tests/conftest.py`) so it is never reported `stale` by M2's new
+    read-only gate -- it is a deliberately frozen, authoritative-for-tests
+    snapshot, not an instance that fell behind.
+
 ### Added
 - **P3 finish pass, final merge.** Merged `cutover/projects-workers`
   (through `fix(projects): refresh detection-worker liveness on a
