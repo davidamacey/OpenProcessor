@@ -13,12 +13,13 @@ from __future__ import annotations
 import asyncio
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Path, Query, Response
+from fastapi import APIRouter, Depends, Query, Response
 
 from src.config import IndexRole
-from src.config.projects import DEFAULT_SLUG, PROJECT_SLUG_RE
+from src.config.project_context import bind_project
+from src.config.projects import DEFAULT_SLUG
 from src.core.logging import get_logger
-from src.routers.curation._config_common_models import api_error
+from src.routers.curation._config_common_models import ApiErrorResponse, api_error
 from src.routers.curation._project_deps import bind_path_project
 from src.routers.curation._project_models import (
     ArchiveRequest,
@@ -44,15 +45,26 @@ from src.services.projects.registry import get_project_registry
 
 logger = get_logger(__name__)
 
-global_router = APIRouter(tags=['Projects'])
+# Every error here is api_error()'s typed body. A path slug is matched as
+# a plain string: a malformed slug names no project, so it is a 404
+# project_not_found like any unknown slug, never a 422.
+global_router = APIRouter(
+    tags=['Projects'],
+    responses={
+        404: {'model': ApiErrorResponse, 'description': 'project_not_found'},
+        409: {'model': ApiErrorResponse, 'description': 'Refused (see detail.error)'},
+    },
+)
 
 
 async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, ProjectCounts]:
     """One ``_cat/indices`` call covering every project's images/items
     index (§4), the one cross-project read the guard allows, inside
-    :func:`bind_registry_admin`. ``validated`` is not computed in this
-    pass (it needs a per-project term query on the items index) and is
-    served as ``null``."""
+    :func:`bind_registry_admin`; plus one ``validated`` count per project
+    under that project's own read-only binding (``null`` when it could
+    not be counted, the same rule ``/stats`` uses)."""
+    from src.services.projects.stats import validated_count
+
     index_names: set[str] = set()
     for record in snapshot.values():
         index_names.add(record.resources.indexes[IndexRole.IMAGES])
@@ -77,9 +89,12 @@ async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, Proj
     for slug, record in snapshot.items():
         images_idx = record.resources.indexes[IndexRole.IMAGES]
         items_idx = record.resources.indexes[IndexRole.ITEMS]
+        with bind_project(record, read_only=True):
+            validated = await validated_count(client, items_idx)
         result[slug] = ProjectCounts(
             images=doc_counts.get(images_idx, 0),
             items=doc_counts.get(items_idx, 0),
+            validated=validated,
         )
     return result
 
@@ -131,7 +146,7 @@ async def list_projects(
 
 @global_router.get('/projects/{project}', response_model=ProjectRecordResponse)
 async def get_project(
-    project: Annotated[str, Path(pattern=PROJECT_SLUG_RE)],
+    project: str,
 ) -> ProjectRecordResponse:
     registry = get_project_registry()
     await registry.ensure_fresh()
@@ -177,7 +192,7 @@ async def create_project(body: CreateProjectRequest) -> ProjectLifecycleResponse
 
 @global_router.patch('/projects/{project}', response_model=ProjectLifecycleResponse)
 async def patch_project(
-    project: Annotated[str, Path(pattern=PROJECT_SLUG_RE)],
+    project: str,
     body: PatchProjectRequest,
 ) -> ProjectLifecycleResponse:
     client = await make_curation_opensearch()
@@ -193,7 +208,7 @@ async def patch_project(
 
 @global_router.post('/projects/{project}/archive', response_model=ProjectLifecycleResponse)
 async def archive_project(
-    project: Annotated[str, Path(pattern=PROJECT_SLUG_RE)],
+    project: str,
     body: ArchiveRequest,
 ) -> ProjectLifecycleResponse:
     client = await make_curation_opensearch()
@@ -205,7 +220,7 @@ async def archive_project(
 
 @global_router.post('/projects/{project}/unarchive', response_model=ProjectLifecycleResponse)
 async def unarchive_project(
-    project: Annotated[str, Path(pattern=PROJECT_SLUG_RE)],
+    project: str,
     body: ArchiveRequest,
 ) -> ProjectLifecycleResponse:
     client = await make_curation_opensearch()
@@ -217,34 +232,35 @@ async def unarchive_project(
 
 @global_router.post('/projects/{project}/clone_settings', response_model=ProjectLifecycleResponse)
 async def clone_settings_route(
-    project: Annotated[str, Path(pattern=PROJECT_SLUG_RE)],
+    project: str,
     body: CloneSettingsRequest,
 ) -> ProjectLifecycleResponse:
     client = await make_curation_opensearch()
-    record = await lifecycle.patch_project(
+    record = await lifecycle.clone_settings_into(
         client,
         slug=project,
-        display_name=None,
-        description=None,
+        from_slug=body.from_,
+        axes=body.axes,
         expected_revision=body.expected_revision,
     )
-    await lifecycle.clone_settings(
-        client, target_record=record, from_slug=body.from_, axes=body.axes
-    )
-    registry = get_project_registry()
-    await registry.ensure_fresh()
-    refreshed = registry.get(project) or record
-    return await _summary_response(refreshed)
+    return await _summary_response(record)
 
 
-@global_router.delete('/projects/{project}')
+@global_router.delete(
+    '/projects/{project}',
+    response_model=None,
+    responses={
+        200: {'model': DeleteDryRunResponse, 'description': 'Dry run (writes nothing)'},
+        202: {'model': ProjectLifecycleResponse, 'description': 'Delete accepted; finishing'},
+    },
+)
 async def delete_project(
-    project: Annotated[str, Path(pattern=PROJECT_SLUG_RE)],
+    project: str,
     response: Response,
     dry_run: Annotated[bool, Query()] = False,
     confirm: Annotated[str | None, Query()] = None,
     force: Annotated[bool, Query()] = False,
-) -> Any:
+) -> DeleteDryRunResponse | ProjectLifecycleResponse:
     """Dry run (200, writes nothing) or a guarded delete. A real delete
     answers **202** with the ``deleting`` record (delta 10): the drain
     wait, index/dir removal and tombstone run in the background so this
@@ -256,8 +272,6 @@ async def delete_project(
     if dry_run:
         report = await lifecycle.dry_run_delete(client, slug=project)
         return DeleteDryRunResponse(**report)
-    if confirm is None:
-        raise api_error(422, 'confirm_mismatch', 'confirm is required for a real delete')
     record = await lifecycle.delete_project(client, slug=project, confirm=confirm, force=force)
 
     async def _finish() -> None:

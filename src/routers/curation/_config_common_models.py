@@ -42,7 +42,26 @@ ErrorCode = Literal[
     'model_name_reserved',
     'internal_isolation_error',
     'revision_conflict',
+    'invalid_transition',
 ]
+
+
+class ProjectCapacityWire(BaseModel):
+    """The OpenSearch shard/heap capacity block (§2.3,
+    ``src.services.projects.capacity.ProjectCapacity.to_wire``): served on
+    ``GET /projects`` and on a 409 ``shard_budget_exceeded``."""
+
+    status: Literal['ok', 'warn', 'blocked']
+    active_shards: int
+    per_project_shards: int
+    soft_limit: int
+    hard_limit: int
+    heap_max_bytes: int
+    max_shards_per_node: int
+    data_nodes: int
+    projects_until_soft_limit: int
+    message: str
+    labels: dict[str, str]
 
 
 class ConfigErrorDetail(BaseModel):
@@ -67,7 +86,16 @@ class ConfigErrorDetail(BaseModel):
     # Delta 12: the full capacity object on shard_budget_exceeded (and in
     # the shard_budget_high warning), so a create form re-renders from
     # one response instead of a second GET /projects.
-    capacity: dict[str, Any] | None = None
+    capacity: ProjectCapacityWire | None = None
+    # invalid_transition: the status the project is in, and the action refused.
+    project_status: str | None = None
+    action: str | None = None
+
+
+class ApiErrorResponse(BaseModel):
+    """The body of every error :func:`api_error` raises."""
+
+    detail: ConfigErrorDetail
 
 
 def api_error(status: int, code: ErrorCode, message: str, **fields: Any) -> HTTPException:

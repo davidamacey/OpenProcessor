@@ -10,6 +10,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 from src.config.project_context import current_project
+from src.core.logging import get_logger
+
+
+logger = get_logger(__name__)
 
 
 _DISK_CACHE_TTL_SECONDS = 300.0
@@ -22,6 +26,22 @@ async def _term_count(client: Any, index: str, field: str, value: Any) -> int:
         return int(resp.get('count') or 0)
     except Exception:
         return 0
+
+
+# "Validated" everywhere a project's counts are served: a human-confirmed
+# class (the same filter the pipeline-health rollup counts).
+VALIDATED_ITEMS_QUERY: dict[str, Any] = {'term': {'class_validated': True}}
+
+
+async def validated_count(client: Any, items_index: str) -> int | None:
+    """Validated items in ``items_index``, or ``None`` when it could not
+    be counted -- never a made-up 0. Caller binds the owning project."""
+    try:
+        resp = await client.count(index=items_index, body={'query': VALIDATED_ITEMS_QUERY})
+        return int(resp.get('count') or 0)
+    except Exception as exc:
+        logger.warning('project_validated_count_unavailable', index=items_index, error=str(exc))
+        return None
 
 
 async def _index_count(client: Any, index: str) -> int:
@@ -67,7 +87,7 @@ async def project_stats(client: Any) -> dict[str, Any]:
 
     images_count = await _index_count(client, images_idx)
     items_count = await _index_count(client, items_idx)
-    validated = await _term_count(client, items_idx, 'label_validated', True)
+    validated = await validated_count(client, items_idx)
     from src.config.region_state import RegionStatus
 
     pending_detection = await _term_count(

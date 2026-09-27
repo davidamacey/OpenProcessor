@@ -53,6 +53,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dead safety net that violated the class-identity invariant (names come
   from the model's own labels, never another model's).
 
+### Changed
+- **Project lifecycle finish pass (P3 binding inputs).**
+  - `DELETE /curation/projects/{project}` documents typed responses:
+    200 `DeleteDryRunResponse` (dry run) and 202
+    `ProjectLifecycleResponse` (accepted). `ProjectsResponse.capacity` is
+    the typed `ProjectCapacityWire` (was an untyped object).
+  - Every projects-route error is the typed `ApiErrorResponse`
+    (`{detail: ConfigErrorDetail}`), now in the OpenAPI contract;
+    `ConfigErrorDetail.capacity` is `ProjectCapacityWire`, so a 409
+    `shard_budget_exceeded` carries the full capacity block on the wire.
+  - `ProjectSummary` serves `archivable` (status `active`) and
+    `unarchivable` (status `archived`). Archive and unarchive refuse any
+    other status with 409 `invalid_transition` (new error code;
+    `detail.project_status` / `detail.action` name what was refused), and
+    `clone_settings` refuses a non-active target the same way.
+  - `POST /projects/{project}/clone_settings` checks status, revision,
+    axes, source and target emptiness before writing anything and bumps
+    the revision only after the copy; a refused clone never changes the
+    revision (it used to bump it first, via PATCH).
+  - `counts.validated` (items with `class_validated: true`) is computed
+    on every route that serves project counts (list, get, lifecycle
+    envelopes, `/stats`) and is `null` on all of them when it cannot be
+    counted. `/stats` used to count a `label_validated` field no writer
+    sets and served 0 on failure.
+  - Deleting `default`: the dry run answers 200 with
+    `blocking: ["project_protected"]`; a real delete is 409
+    `project_protected` with or without `confirm`/`force` (it used to be
+    422 `confirm_mismatch` without `confirm`).
+  - The last-active-project rule is one helper used by the delete dry
+    run and the real archive/delete guards: only other `active` projects
+    count (the dry run used to count archived ones, the guards counted
+    building/failed/deleting ones).
+  - A malformed project slug in any `/curation/projects/{project}...`
+    path is 404 `project_not_found`, not a 422 validation error.
+
 ### Fixed
 - **Trainer capabilities are read from the trainer volume root.** The
   trainer writes `.trainer_capabilities.json` once at `OP_TRAIN_JOBS_DIR`

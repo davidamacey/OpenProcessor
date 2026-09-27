@@ -23,6 +23,11 @@ from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG, ProjectRecord, is_valid_slug, resources_for_new
 from src.core.logging import get_logger
 from src.routers.curation._config_common_models import api_error
+from src.routers.curation._project_models import (
+    ARCHIVABLE_STATUSES,
+    CLONEABLE_AXES,
+    UNARCHIVABLE_STATUSES,
+)
 from src.services.projects.capacity import capacity_status
 from src.services.projects.registry import get_project_registry, get_record_with_seq, write_record
 
@@ -32,8 +37,6 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
-
-CLONEABLE_AXES: tuple[str, ...] = ('settings_defaults', 'classes')
 
 # How long delete waits for the detection worker's per-project inflight
 # count to drain before giving up and rolling back (plan §4 step 3).
@@ -205,14 +208,7 @@ async def patch_project(
     ``expected_revision`` against the record's own ``revision`` field
     (not the registry-wide counter)."""
     record, seq, term = await _get_mutable_record(client, slug)
-    if record.revision != expected_revision:
-        raise api_error(
-            409,
-            'revision_conflict',
-            f'expected revision {expected_revision}, current is {record.revision}',
-            project=slug,
-            current_revision=record.revision,
-        )
+    _require_revision(record, expected_revision)
     updated = replace(
         record,
         display_name=display_name if display_name is not None else record.display_name,
@@ -266,38 +262,54 @@ async def running_jobs(record: ProjectRecord) -> list[JobRef]:
     return jobs
 
 
+def _other_active_slugs(snapshot: dict[str, ProjectRecord], slug: str) -> list[str]:
+    """Every *other* project that is ``active``. Archived, building,
+    failed, deleting and deleted projects do not count: none of them can
+    take writes. The one rule both the delete dry run and the real
+    archive/delete guards use, so the dry run never disagrees."""
+    return [s for s, r in snapshot.items() if s != slug and r.status == 'active']
+
+
+_LAST_ACTIVE_MESSAGE = 'this is the only active project; leave at least one'
+
+
 async def _last_active_check(record: ProjectRecord) -> None:
-    """§4: "the only non-archived project" -- counts anything that is
-    not itself archived/deleted, matching the plan's delete-guard
-    wording verbatim and reused for archive (a project cannot become
-    the deployment's last writable project)."""
+    """Refuse an archive or delete that would leave no active project."""
     registry = get_project_registry()
     await registry.ensure_fresh()
-    snapshot = registry.snapshot()
-    others_active = [
-        s
-        for s, r in snapshot.items()
-        if s != record.slug and r.status not in ('archived', 'deleted')
-    ]
-    if not others_active:
+    if not _other_active_slugs(dict(registry.snapshot()), record.slug):
+        raise api_error(409, 'last_active_project', _LAST_ACTIVE_MESSAGE, project=record.slug)
+
+
+def _require_transition(record: ProjectRecord, action: str, allowed: frozenset[str]) -> None:
+    if record.status not in allowed:
         raise api_error(
             409,
-            'last_active_project',
-            'this is the only remaining project; leave at least one',
+            'invalid_transition',
+            f"cannot {action} '{record.slug}' while it is {record.status}",
             project=record.slug,
+            project_status=record.status,
+            action=action,
         )
 
 
-async def archive_project(client: Any, *, slug: str, expected_revision: int) -> ProjectRecord:
-    record, seq, term = await _get_mutable_record(client, slug)
+def _require_revision(record: ProjectRecord, expected_revision: int) -> None:
     if record.revision != expected_revision:
         raise api_error(
             409,
             'revision_conflict',
             f'expected revision {expected_revision}, current is {record.revision}',
-            project=slug,
+            project=record.slug,
             current_revision=record.revision,
         )
+
+
+async def archive_project(client: Any, *, slug: str, expected_revision: int) -> ProjectRecord:
+    """``active`` -> ``archived`` only (409 ``invalid_transition``
+    otherwise), never the last active project."""
+    record, seq, term = await _get_mutable_record(client, slug)
+    _require_transition(record, 'archive', ARCHIVABLE_STATUSES)
+    _require_revision(record, expected_revision)
     jobs = await running_jobs(record)
     if jobs:
         raise api_error(
@@ -315,43 +327,34 @@ async def archive_project(client: Any, *, slug: str, expected_revision: int) -> 
 
 
 async def unarchive_project(client: Any, *, slug: str, expected_revision: int) -> ProjectRecord:
+    """``archived`` -> ``active`` only (409 ``invalid_transition`` otherwise)."""
     record, seq, term = await _get_mutable_record(client, slug)
-    if record.revision != expected_revision:
-        raise api_error(
-            409,
-            'revision_conflict',
-            f'expected revision {expected_revision}, current is {record.revision}',
-            project=slug,
-            current_revision=record.revision,
-        )
+    _require_transition(record, 'unarchive', UNARCHIVABLE_STATUSES)
+    _require_revision(record, expected_revision)
     updated = replace(record, status='active', revision=record.revision + 1, updated_at=_now())
     await write_record(client, updated, if_seq_no=seq, if_primary_term=term)
     await get_project_registry().ensure_fresh()
     return updated
 
 
-async def clone_settings(
+async def _validate_clone(
     client: Any,
     *,
     target_record: ProjectRecord,
     from_slug: str,
     axes: list[str] | None,
-) -> None:
-    """§4 ``clone_settings``: copy the source project's settings and/or
-    class registry into ``target_record``. Reads the source under a
-    read-only bind so the guard rejects any accidental write to it.
-    Never partially unbinds a class: ``classes`` is refused (422→409
-    ``target_not_empty``) unless the target has zero items, so a clone
-    is always a byte-identical starting point, not a merge."""
-    from src.clients.curation_opensearch import get_curation_settings, update_curation_settings
-
+) -> tuple[ProjectRecord, list[str]]:
+    """Every refusal a clone can hit, checked before anything is written:
+    unknown axis (422 ``combine_invalid``), unknown source (404), and
+    ``classes`` into a target that already has items (409
+    ``target_not_empty`` -- a clone is always a byte-identical starting
+    point, never a merge). Returns the source record and resolved axes."""
     resolved_axes = axes if axes else list(CLONEABLE_AXES)
     for axis in resolved_axes:
         if axis not in CLONEABLE_AXES:
             raise api_error(422, 'combine_invalid', f"unknown clone axis '{axis}'")
 
-    source = await _resolve_existing(from_slug)
-    source = _require_found(source, from_slug)
+    source = _require_found(await _resolve_existing(from_slug), from_slug)
 
     if 'classes' in resolved_axes:
         with bind_project(target_record):
@@ -365,14 +368,23 @@ async def clone_settings(
                 f"'{target_record.slug}' already has items; classes cannot be cloned",
                 project=target_record.slug,
             )
+    return source, resolved_axes
 
-    if 'settings_defaults' in resolved_axes:
+
+async def _apply_clone(
+    client: Any, *, target_record: ProjectRecord, source: ProjectRecord, axes: list[str]
+) -> None:
+    """Copy the validated axes. Reads the source under a read-only bind so
+    the guard rejects any accidental write to it."""
+    from src.clients.curation_opensearch import get_curation_settings, update_curation_settings
+
+    if 'settings_defaults' in axes:
         with bind_project(source, read_only=True):
             source_settings = await get_curation_settings(client)
         with bind_project(target_record):
             await update_curation_settings(client, dict(source_settings.get('defaults', {})))
 
-    if 'classes' in resolved_axes:
+    if 'classes' in axes:
         src_path = source.resources.class_registry_path
         dst_path = target_record.resources.class_registry_path
         if src_path.exists():
@@ -383,6 +395,47 @@ async def clone_settings(
 
             registry = ClassRegistry(dst_path)
             await registry.sync_to_opensearch(client)
+
+
+async def clone_settings(
+    client: Any,
+    *,
+    target_record: ProjectRecord,
+    from_slug: str,
+    axes: list[str] | None,
+) -> None:
+    """§4 ``clone_settings`` into a project being created: validate every
+    refusal first, then copy."""
+    source, resolved_axes = await _validate_clone(
+        client, target_record=target_record, from_slug=from_slug, axes=axes
+    )
+    await _apply_clone(client, target_record=target_record, source=source, axes=resolved_axes)
+
+
+async def clone_settings_into(
+    client: Any,
+    *,
+    slug: str,
+    from_slug: str,
+    axes: list[str] | None,
+    expected_revision: int,
+) -> ProjectRecord:
+    """§4 ``POST /projects/{project}/clone_settings`` into an existing
+    ``active`` project. Every check (status, revision, axes, source,
+    target emptiness) runs before anything is written, and the revision
+    is bumped only after the copy succeeded -- a refused clone never
+    changes the target's revision."""
+    record, seq, term = await _get_mutable_record(client, slug)
+    _require_transition(record, 'clone settings into', frozenset({'active'}))
+    _require_revision(record, expected_revision)
+    source, resolved_axes = await _validate_clone(
+        client, target_record=record, from_slug=from_slug, axes=axes
+    )
+    await _apply_clone(client, target_record=record, source=source, axes=resolved_axes)
+    updated = replace(record, revision=record.revision + 1, updated_at=_now())
+    await write_record(client, updated, if_seq_no=seq, if_primary_term=term)
+    await get_project_registry().ensure_fresh()
+    return updated
 
 
 async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
@@ -401,14 +454,8 @@ async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
         blocking.append({'code': 'project_busy', 'message': f'{len(jobs)} job(s) still running'})
     registry = get_project_registry()
     await registry.ensure_fresh()
-    snapshot = registry.snapshot()
-    others_active = [
-        s for s, r in snapshot.items() if s != slug and r.status in ('active', 'archived')
-    ]
-    if not others_active:
-        blocking.append(
-            {'code': 'last_active_project', 'message': 'this is the only remaining project'}
-        )
+    if not _other_active_slugs(dict(registry.snapshot()), slug):
+        blocking.append({'code': 'last_active_project', 'message': _LAST_ACTIVE_MESSAGE})
 
     indexes: list[dict[str, Any]] = []
     for name in sorted(set(record.resources.indexes.values())):
@@ -512,7 +559,7 @@ async def delete_project(
     client: Any,
     *,
     slug: str,
-    confirm: str,
+    confirm: str | None,
     force: bool = False,
 ) -> ProjectRecord:
     """§4 guarded delete, background-completing (delta 10): the caller
@@ -530,6 +577,8 @@ async def delete_project(
             'The default project can be archived but not deleted.',
             project=slug,
         )
+    if confirm is None:
+        raise api_error(422, 'confirm_mismatch', 'confirm is required for a real delete')
     if confirm != slug:
         raise api_error(422, 'confirm_mismatch', f"confirm must equal the slug '{slug}'")
 
