@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
-from .conftest import FakeLifecycleOpenSearch, seed_default_project
+from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes, seed_default_project
 
 
 @pytest.fixture(autouse=True)
@@ -43,7 +43,10 @@ def _noop_ensure_indexes():
     machinery P1 already owns and tests -- stub the (heavy, already
     covered elsewhere) index bootstrap so these tests exercise only
     lifecycle.py's own decisions."""
-    with patch('src.routers.curation._common._ensure_indexes', new=AsyncMock()):
+    with patch(
+        'src.routers.curation._common._ensure_indexes',
+        new=AsyncMock(side_effect=fake_ensure_indexes),
+    ):
         yield
 
 
@@ -368,3 +371,50 @@ def test_create_cloning_from_a_building_source_is_refused() -> None:
             )
         )
     assert exc_info.value.detail['error'] == 'clone_source_not_ready'
+
+
+def test_write_record_is_visible_to_a_search_immediately_after_create() -> None:
+    """B2 (live bug, 2026-09-27): on opfinal, 3 of 5 live creates ended
+    'active' with no indexes. Root cause: ``registry.write_record``
+    wrote the new project's doc with a plain (near-real-time) index
+    write, then bumped the revision; ``ensure_fresh()`` saw the bumped
+    revision via a real-time GET but re-read the project docs with a
+    ``_search``, which -- being near-real-time, not read-your-writes --
+    could still miss the just-written doc. The guard maps index name ->
+    owning project from that snapshot, so it refused the new project's
+    own ``op_prj_<slug>__*`` index creation as belonging to no known
+    project, moments after the doc write that should have made it known.
+
+    ``FakeRegistryOpenSearch``/``FakeLifecycleOpenSearch`` now model this
+    (a doc written without ``refresh='wait_for'``/``'true'`` is invisible
+    to ``search()`` until an explicit refresh), so this test would have
+    gone red on the old plain ``client.index(...)`` call before the fix
+    added ``refresh='wait_for'``."""
+    client = FakeLifecycleOpenSearch()
+    registry = ProjectRegistry(lambda: client)
+    set_project_registry(registry)
+
+    from datetime import UTC, datetime
+
+    from src.config.curation import base_curation_config
+    from src.config.projects import ProjectRecord, resources_for_new
+
+    now = datetime.now(UTC).isoformat()
+    record = ProjectRecord(
+        slug='zeta',
+        display_name='Zeta',
+        description='',
+        status='active',
+        revision=1,
+        created_at=now,
+        updated_at=now,
+        origin=None,
+        resources=resources_for_new('zeta', base_curation_config()),
+    )
+    asyncio.run(lifecycle.write_record(client, record, op_type='create'))
+    asyncio.run(registry.ensure_fresh())
+
+    assert registry.get('zeta') is not None, (
+        "the new project's doc must be visible to the very next ensure_fresh() "
+        "-- registry.write_record must use refresh='wait_for' (B2)"
+    )

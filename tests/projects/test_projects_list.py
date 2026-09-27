@@ -197,6 +197,7 @@ SUMMARY_KEYS = {
     'updated_at',
     'counts',
     'origin',
+    'paused',
 }
 
 

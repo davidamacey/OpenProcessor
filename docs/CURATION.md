@@ -701,8 +701,12 @@ above the "Curation / Labeling Subsystem" header) gathers the handful of
 vars every curation tier actually needs to get running — ingest
 detector, segmenter URL, VLM endpoint, feature flags, GPU placement, and
 the optional region profile path — into one copy-pasteable block. The
-one-line installer writes exactly that block. Start there; the rest of
-this section and `env.template` cover every advanced/per-field override.
+one-line installer writes exactly that block (see
+[INSTALLATION.md: Curation quick-config](../INSTALLATION.md#curation-quick-config);
+the install itself is in the [README Quick Start](../README.md#quick-start)).
+Start there; the rest of this section and `env.template` cover every
+advanced/per-field override. On an installed stack, `./openprocessor sample
+coco` fetches the public COCO sample to try it on.
 
 **Import-time only:** curation routers build their mount prefix and
 index names at *module import time*. Any `OP_*` var here must be set in

@@ -100,3 +100,58 @@ def test_result_is_cached_for_ttl() -> None:
     first_call_count = len(calls)
     asyncio.run(capacity_status(client))
     assert len(calls) == first_call_count  # cache hit, no new transport calls
+
+
+def test_heap_sum_excludes_non_data_nodes() -> None:
+    """m8: a master/coordinating-only node's heap must not inflate the
+    shard-serving capacity this cluster actually has."""
+    from src.services.projects.capacity import invalidate_capacity_cache
+
+    health = {'active_shards': 1, 'number_of_data_nodes': 1}
+    settings = {'persistent': {'cluster.max_shards_per_node': 1000}, 'transient': {}}
+    jvm = {
+        'nodes': {
+            'data1': {'roles': ['data'], 'jvm': {'mem': {'heap_max_in_bytes': 2 * 1024**3}}},
+            'master1': {'roles': ['master'], 'jvm': {'mem': {'heap_max_in_bytes': 6 * 1024**3}}},
+        }
+    }
+    client = _FakeClient(_FakeTransport(health, settings, jvm))
+    invalidate_capacity_cache()
+    result = asyncio.run(capacity_status(client))
+    assert result is not None
+    assert result.heap_max_bytes == 2 * 1024**3, 'the master-only node must not count'
+
+
+def test_warn_message_rounds_a_half_gb_heap_honestly() -> None:
+    """m8: a real 0.5 GB heap must not format as "0 GB"."""
+    client = _client(active_shards=9, max_shards_per_node=1000, heap_bytes=int(0.5 * 1024**3))
+    result = asyncio.run(capacity_status(client, extra_shards=7))
+    assert result is not None
+    assert result.status == 'warn'
+    assert '0.5 GB' in result.message, result.message
+
+
+def test_invalidate_capacity_cache_forces_a_fresh_read() -> None:
+    """m7: create/delete must bust the 10s cache immediately, not leave a
+    concurrent caller reading a stale active_shards for up to 10s after
+    a write that already landed."""
+    from src.services.projects.capacity import invalidate_capacity_cache
+
+    calls: list[str] = []
+
+    class _CountingTransport(_FakeTransport):
+        async def perform_request(self, method, url, params=None, **kwargs):
+            calls.append(url)
+            return await super().perform_request(method, url, params=params, **kwargs)
+
+    client = _client(active_shards=1, max_shards_per_node=1000, heap_bytes=2 * 1024**3)
+    client.transport = _CountingTransport(
+        {'active_shards': 1, 'number_of_data_nodes': 1},
+        {'persistent': {'cluster.max_shards_per_node': 1000}, 'transient': {}},
+        {'nodes': {'n1': {'jvm': {'mem': {'heap_max_in_bytes': 2 * 1024**3}}}}},
+    )
+    asyncio.run(capacity_status(client))
+    first_call_count = len(calls)
+    invalidate_capacity_cache()
+    asyncio.run(capacity_status(client))
+    assert len(calls) > first_call_count, 'invalidation must force a real re-read, not a cache hit'

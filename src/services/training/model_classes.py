@@ -104,6 +104,20 @@ def model_owner_project(triton_name: str) -> str | None:
     return str(project) if project else None
 
 
+def model_sharing_revision(triton_name: str) -> int | None:
+    """``promote.json.sharing_revision`` -- ``None`` for a model with no
+    promote.json (Cropwright BA-P2-1: only an owned promoted model has a
+    revision the sharing PUT can be conditioned on)."""
+    from src.services.training.promote_json import sharing_revision
+
+    path = _promote_json_path(triton_name)
+    try:
+        raw = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    return sharing_revision(raw)
+
+
 def model_classes(triton_name: str) -> list[ModelClass]:
     """This model's own classes, in model-output order.
 
@@ -190,4 +204,5 @@ __all__ = [
     'model_class_mapping',
     'model_classes',
     'model_owner_project',
+    'model_sharing_revision',
 ]

@@ -1,0 +1,340 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "OpenProcessor System Overview",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "core-path",
+        "label": "Core inference path",
+        "focus": [
+          "client",
+          "api",
+          "triton",
+          "opensearch"
+        ],
+        "note": "The core services: the API calls Triton over gRPC and indexes into OpenSearch."
+      },
+      {
+        "id": "curation-workers",
+        "label": "Curation workers",
+        "focus": [
+          "workers",
+          "triton",
+          "opensearch",
+          "segmenter",
+          "vlm"
+        ],
+        "note": "Workers read and write the same OpenSearch items, calling Triton, the segmenter and the VLM."
+      },
+      {
+        "id": "training",
+        "label": "Training and model comparison",
+        "focus": [
+          "api",
+          "jobs",
+          "trainer",
+          "evaluator",
+          "mlflow",
+          "triton"
+        ],
+        "note": "The API writes job files; trainer and evaluator pick them up. Promote loads the run into Triton."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "client",
+      "type": "external",
+      "label": "Clients",
+      "sublabel": "curl / SDK / Cropwright",
+      "pos": [
+        40,
+        250
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "monitoring",
+      "type": "cloud",
+      "label": "Monitoring",
+      "sublabel": "Prometheus / Grafana",
+      "pos": [
+        280,
+        90
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "profile: monitoring"
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "yolo-api",
+      "sublabel": "FastAPI :4603",
+      "pos": [
+        280,
+        250
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "core + /curation"
+    },
+    {
+      "id": "triton",
+      "type": "backend",
+      "label": "triton-server",
+      "sublabel": "TensorRT :4600-4602",
+      "pos": [
+        540,
+        90
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "GPU"
+    },
+    {
+      "id": "opensearch",
+      "type": "database",
+      "label": "OpenSearch",
+      "sublabel": "k-NN :4607",
+      "pos": [
+        540,
+        250
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "jobs",
+      "type": "database",
+      "label": "Job volumes",
+      "sublabel": "/jobs + state dir",
+      "pos": [
+        540,
+        410
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "workers",
+      "type": "backend",
+      "label": "Curation workers",
+      "sublabel": "detection / VLM / auto-label",
+      "pos": [
+        800,
+        250
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "profile: curation"
+    },
+    {
+      "id": "segmenter",
+      "type": "backend",
+      "label": "segmenter",
+      "sublabel": "SAM 3 :4611",
+      "pos": [
+        1060,
+        170
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "profile: segmenter"
+    },
+    {
+      "id": "vlm",
+      "type": "external",
+      "label": "VLM",
+      "sublabel": "OpenAI-compatible",
+      "pos": [
+        1060,
+        330
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "profile: vlm or BYO"
+    },
+    {
+      "id": "trainer",
+      "type": "backend",
+      "label": "curation-trainer",
+      "sublabel": "Ultralytics",
+      "pos": [
+        800,
+        410
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "profile: training"
+    },
+    {
+      "id": "evaluator",
+      "type": "backend",
+      "label": "curation-evaluator",
+      "sublabel": "bake-off harness",
+      "pos": [
+        800,
+        560
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "profile: curation"
+    },
+    {
+      "id": "mlflow",
+      "type": "database",
+      "label": "MLflow",
+      "sublabel": ":4609",
+      "pos": [
+        1060,
+        490
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "profile: training"
+    }
+  ],
+  "connections": [
+    {
+      "id": "client-api",
+      "from": "client",
+      "to": "api",
+      "label": "HTTP",
+      "variant": "emphasis"
+    },
+    {
+      "id": "api-triton",
+      "from": "api",
+      "to": "triton",
+      "label": "gRPC infer + load",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "api-opensearch",
+      "from": "api",
+      "to": "opensearch",
+      "label": "index + k-NN"
+    },
+    {
+      "id": "api-jobs",
+      "from": "api",
+      "to": "jobs",
+      "label": "job.json"
+    },
+    {
+      "id": "monitoring-api",
+      "from": "monitoring",
+      "to": "api",
+      "label": "scrape",
+      "variant": "dashed",
+      "labelDy": 24
+    },
+    {
+      "id": "workers-opensearch",
+      "from": "workers",
+      "to": "opensearch",
+      "label": "items"
+    },
+    {
+      "id": "workers-triton",
+      "from": "workers",
+      "to": "triton",
+      "label": "region models",
+      "fromSide": "top",
+      "toSide": "right"
+    },
+    {
+      "id": "workers-segmenter",
+      "from": "workers",
+      "to": "segmenter",
+      "label": "segment",
+      "variant": "dashed"
+    },
+    {
+      "id": "workers-vlm",
+      "from": "workers",
+      "to": "vlm",
+      "label": "chat/completions",
+      "variant": "dashed"
+    },
+    {
+      "id": "jobs-trainer",
+      "from": "jobs",
+      "to": "trainer",
+      "label": "claim job"
+    },
+    {
+      "id": "jobs-evaluator",
+      "from": "jobs",
+      "to": "evaluator",
+      "label": "bake-off jobs"
+    },
+    {
+      "id": "trainer-mlflow",
+      "from": "trainer",
+      "to": "mlflow",
+      "label": "metrics",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Core (always on)",
+      "items": [
+        "yolo-api, triton-server and opensearch are the only services without a compose profile",
+        "One shared Triton gRPC client lets Triton's dynamic batcher form batches",
+        "No authentication on any route: run behind your own proxy"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Opt-in profiles",
+      "items": [
+        "curation: detection, VLM, auto-label and cluster-refresh workers plus the evaluator",
+        "segmenter, vlm and training each start their own GPU service",
+        "The API also calls the VLM directly for /curation/vlm/* routes"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "File protocols",
+      "items": [
+        "Training: job.json in, status.json / run.log / manifest.json out",
+        "Bake-off jobs are files the evaluator watches",
+        "Promote writes the model repository and asks Triton to load it"
+      ]
+    }
+  ]
+}

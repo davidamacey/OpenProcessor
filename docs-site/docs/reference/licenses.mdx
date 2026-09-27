@@ -1,0 +1,85 @@
+---
+sidebar_position: 1
+title: Licenses
+---
+
+# Licenses
+
+## OpenProcessor itself
+
+OpenProcessor's own code is licensed **AGPL-3.0-or-later**. It was
+previously MIT-badged and was re-licensed because it vendors an AGPL-3.0
+Ultralytics fork (`src/ultralytics_patches/`, from
+`levipereira/ultralytics`, for end2end TensorRT export), and AGPL's
+copyleft terms propagate to the combined work. Third-party components keep
+their own licenses. The authoritative per-component record is
+`ATTRIBUTION.md` in the repository.
+
+## Model weights
+
+Code licenses and **weight** licenses differ, and several weights are not
+redistributable. This project does not ship those weights; you download
+them yourself and are bound by their terms directly. Verify each model
+card before any commercial deployment.
+
+| Model (Triton name) | Weights source | Weight license | Redistributable? |
+|---|---|---|---|
+| YOLO11s end2end (`yolov11_small_trt_end2end`) | Ultralytics release assets | AGPL-3.0 | Yes, under AGPL |
+| YOLO26 (`yolo26_small_trt`, trainer bases `yolo26s.pt`, `yolo26n.pt`) | Ultralytics | AGPL-3.0 | Yes, under AGPL |
+| SCRFD-10G (`scrfd_10g_bnkps`), ArcFace w600k_r50 (`arcface_w600k_r50`) | InsightFace model zoo (`buffalo_l`) | Non-commercial research only | No, you download them |
+| MobileCLIP2-S2 image/text | `apple/MobileCLIP2-S2` on HuggingFace | Apple ML Research (`apple-amlr`), research-only | No, you download them |
+| PE-Core-L14-336 (`pe_image_encoder`, `pe_text_encoder`) | `facebook/PE-Core-L14-336` on HuggingFace (not gated) | Apache-2.0 | Yes |
+| PP-OCRv5 det/rec (`paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline`) | PaddleOCR, via third-party ONNX repackaging | Apache-2.0 | Yes |
+| SAM 3 (segmenter) | `facebook/sam3` on HuggingFace (gated, needs `HF_TOKEN`) | SAM License | Yes with the SAM License attached, but gated |
+| VLM (bring your own) | Whatever OpenAI-compatible model you configure | Depends on the model | Check the model card you deploy |
+
+Notes:
+
+- **InsightFace**: the MIT license covers InsightFace's *code*. The
+  `buffalo_l` pretrained weights used for SCRFD and ArcFace are published
+  for non-commercial research use only. For commercial face features,
+  swap in commercially licensed detector and embedding weights.
+- **MobileCLIP**: the `ml-mobileclip` code is under the Apple Sample Code
+  License; the MobileCLIP2-S2 *weights* are under `apple-amlr`, a
+  research-only term. `make export-mobileclip` fetches them on your
+  machine.
+- **SAM 3**: the code is Apache-2.0; the weights are under Meta's SAM
+  License (commercial use and redistribution allowed with the license
+  attached) and gated on HuggingFace. See `docker/segmenter/NOTICE`.
+
+## Software components
+
+| Component | License |
+|---|---|
+| NVIDIA Triton Inference Server | BSD 3-Clause |
+| NVIDIA TensorRT | NVIDIA software license |
+| Ultralytics YOLO, `levipereira/ultralytics` fork | AGPL-3.0 |
+| InsightFace code (SCRFD, ArcFace) | MIT |
+| Apple MobileCLIP code | Apple Sample Code License |
+| OpenCLIP | MIT |
+| PaddleOCR | Apache-2.0 |
+| Meta Perception Encoder (PE-Core) code | Apache-2.0 |
+| Meta SAM 3 code | Apache-2.0 |
+| OpenSearch | Apache-2.0 |
+
+## Sample datasets
+
+Fetched on demand by `make sample-coco`, `make sample-coco-readme` and
+`make sample-plates`; nothing is bundled in the repository.
+
+| Dataset | Annotations | Images |
+|---|---|---|
+| COCO 2017 | CC BY 4.0 (COCO Consortium) | Per-image Flickr licenses, filtered to Attribution, Attribution-ShareAlike, "No known copyright restrictions" and "United States Government Work"; per-image credit in the fetched `ATTRIBUTION.csv` |
+| Open Images V7 | CC BY 4.0 (Google LLC) | Listed CC BY 2.0 and verified per image; per-image credit in the fetched `ATTRIBUTION.csv` |
+| Ultralytics test images (`bus.jpg`, `zidane.jpg`) | | AGPL-3.0 (`make download-test-images`) |
+
+Citations: Lin, T.-Y. et al. (2014), "Microsoft COCO: Common Objects in
+Context," ECCV; Kuznetsova, A. et al. (2020), "The Open Images Dataset
+V4," IJCV.
+
+## These docs
+
+The screenshots in this documentation were captured from
+[Cropwright](https://github.com/attevon-llc/cropwright), a frontend for
+this backend, running against public sample data only. See
+[Screenshots and image credits](../developer-guide/screenshots.mdx).

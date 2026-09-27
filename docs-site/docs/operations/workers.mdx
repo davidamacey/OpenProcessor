@@ -1,0 +1,101 @@
+---
+sidebar_position: 3
+title: Workers and heartbeats
+---
+
+# Workers and heartbeats
+
+The synchronous curation API (browse, label, cluster, export) works with no
+workers at all. The workers keep a dataset moving without a person driving
+every step. They run the same `openprocessor` image as the API with a
+different entrypoint, so none of them needs an image rebuild.
+
+```bash
+docker compose --profile curation up -d        # or: make curation-up
+make curation-status                           # which worker containers are up
+make curation-logs                             # follow all worker logs
+make curation-down
+```
+
+## The workers
+
+| Service | Entrypoint | What it does |
+|---|---|---|
+| `curation-detection-worker` | `python -m scripts.curation.worker --continuous` | Pulls `pending_detection` / `pending_verification` items and runs the active region profile's cascade: detector, optional segmenter leg, VLM verification, text reading. Idles when no region profile is active. |
+| `curation-vlm-worker` | `python -m scripts.curation.vlm_worker --continuous` | Continuously asks the VLM for class suggestions on unvalidated items that have a `pe_embedding`, on its own schedule. |
+| `curation-auto-label-worker` | `scripts.curation.auto_label_worker` | Claims jobs queued by `POST /curation/pipeline/auto_label/start` from the shared `/jobs` volume and runs them: clustering, and VLM labeling only when the job says `run_vlm=true`. Can also trigger a centroid retrain when the pool has grown. |
+| `curation-cluster-refresh` | `scripts/curation/cluster_refresh_daemon.py` | Polls the items index (every 2 minutes by default) and calls `POST /curation/clusters/auto_promote` once it has grown by the threshold (1000 new items by default); optional incremental auto-label. |
+| `curation-evaluator` | its own image | Watches `OP_BAKEOFF_JOBS_DIR` and runs model comparisons. Long-lived: start with `up -d`, not `run --rm`. |
+
+The detection worker and `yolo-api` must mount the **same** source
+directory at the same container path (`OP_SOURCE_ROOT_HOST` →
+`/data/source`). If only the API has it, ingest succeeds but every worker
+read fails with `detection_failed` / `image_unavailable`.
+
+## Heartbeats instead of `pgrep`
+
+A process can look alive to `pgrep` while its event loop is deadlocked.
+Every worker therefore runs a heartbeat task next to its real work
+(`src/services/curation/worker_liveness.py`) that writes
+`{ts, pid, tasks}` to `$OP_HEARTBEAT_DIR/<name>.json` on a fixed interval,
+including while idle. `tasks` is a liveness map of the worker's own
+sub-tasks (producer, consumers, writer); a sub-task that has died fails
+the check even when the file is fresh.
+
+The compose healthcheck runs, inside the same container:
+
+```bash
+python /app/src/services/curation/worker_liveness.py check detection_worker --max-age 120
+```
+
+exiting `0` (healthy) or `1` (unhealthy) and printing the reason. The
+names are `detection_worker`, `vlm_worker`, `auto_label_worker` and
+`cluster_refresh`. `OP_HEARTBEAT_DIR` defaults to a
+container-local path, so no volume is needed.
+
+`docker compose ps` shows the result as `healthy` / `unhealthy`; a worker
+that is `unhealthy` is stuck, not merely idle.
+
+The trainer has a separate heartbeat, `.trainer_capabilities.json` on the
+shared `/jobs` volume, which the API reads for training preflight (see
+[Health and stall reasons](./health-and-stalls.mdx#training-reachability)).
+
+## Pausing
+
+The VLM worker idles while its pause sentinel file exists
+(`OP_PAUSE_SENTINEL` / `OP_WORKER_PAUSE_SENTINEL`, default
+`/var/lib/openprocessor/vlm_worker/pause.sentinel`). The GPU arbiter
+creates it before a single-GPU training run so the worker doesn't compete
+with the trainer; for a multi-GPU claim the arbiter stops configured
+containers instead (`OP_GPU_ARBITER_CONTAINERS`). You can create and
+remove the file by hand to pause and resume without stopping the
+container.
+
+## Multi-process state
+
+`yolo-api` runs many uvicorn worker processes, and any of them can answer
+a given request. Every piece of job state that must look the same from
+all of them lives in files on the shared `/jobs` volume, not in process
+memory:
+
+| Job | Directory (default) |
+|---|---|
+| Training | `/jobs` (`OP_TRAIN_JOBS_DIR`) |
+| Auto-label | `/jobs/auto_label` |
+| Probe | `/jobs/probe` |
+| Scores | `/jobs/scores` |
+| Diverse selection | `/jobs/select` |
+| Visualization | `/jobs/viz` |
+| Region drain streak | `/jobs/region_drain` |
+
+Events work the same way: with `OP_EVENT_BUS=file` (the default) every
+uvicorn process tails one shared, rotated JSONL log, so a client on
+`GET /curation/events` sees events published by any process, including
+the detection worker's `POST /curation/events/publish` calls.
+
+## Worker metrics
+
+The detection worker serves its own Prometheus `/metrics` on
+`OP_REGION_WORKER_METRICS_PORT`. Stage concurrency is set by
+`OP_REGION_WORKER_VLM_CONCURRENCY` and
+`OP_REGION_WORKER_VLM_VISIBLE_CONCURRENCY`.

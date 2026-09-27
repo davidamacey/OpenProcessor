@@ -1485,17 +1485,6 @@ require_external_vlm_consent() {
 }
 
 # -----------------------------------------------------------------------------
-# 11.1 #8 OpenSearch heap: RAM/8, clamped to 1..8 GB
-# -----------------------------------------------------------------------------
-opensearch_heap_gb() {
-    local ram_gb=$(( $1 / 1024 / 1024 )) heap
-    heap=$(( ram_gb / 8 ))
-    (( heap < 1 )) && heap=1
-    (( heap > 8 )) && heap=8
-    echo "$heap"
-}
-
-# -----------------------------------------------------------------------------
 # 3.2 Images: images.lock digests, or an explicit tag for local-only builds
 # -----------------------------------------------------------------------------
 _lock_line_valid() {
@@ -1520,6 +1509,33 @@ validate_images_lock() {
     return "$bad"
 }
 
+# check_lock_repos LOCK -- every key the table knows must name the repo
+# scripts/lib/image_keys.sh names for it (build images under
+# OP_IMAGE_NAMESPACE). Catches a release-script mix-up; the lock's own
+# integrity comes from SHA256SUMS, and neither is an authenticity check.
+check_lock_repos() {
+    local lock="$1" line key ref repo want kind bad=0
+    while IFS= read -r line; do
+        [[ -z "$line" || "$line" == \#* ]] && continue
+        key="${line%%=*}"
+        kind="$(image_key_field "$key" kind 2>/dev/null)" || continue
+        ref="${line#*=}"
+        repo="${ref%%@*}"
+        [[ "${repo##*/}" == *:* ]] && repo="${repo%:*}"
+        if [[ "$kind" == build ]]; then
+            want="${OP_IMAGE_NAMESPACE}/$(image_key_field "$key" image)"
+        else
+            want="$(image_key_field "$key" source)"
+            [[ "${want##*/}" == *:* ]] && want="${want%:*}"
+        fi
+        if [[ "$repo" != "$want" ]]; then
+            log_error "images.lock '${key}' names ${repo}, not ${want} (scripts/lib/image_keys.sh). This is an integrity check against a release-script mistake, not a signature check; the release is inconsistent, so nothing was pulled."
+            bad=1
+        fi
+    done < "$lock"
+    return "$bad"
+}
+
 # apply_image_pins -- lock mode: every images.lock key (scripts/lib/image_keys.sh,
 # the table the release script writes from) is written to its *_IMAGE var,
 # third-party images included. Tag mode: OP_IMAGE_REPO/TAG for our images,
@@ -1527,6 +1543,9 @@ validate_images_lock() {
 apply_image_pins() {
     local lock="${OP_DIR}/images.lock" key envk ref vkey
     PINNED_IMAGES=()
+    if [[ -f "$lock" ]]; then
+        check_lock_repos "$lock" || die "images.lock does not match scripts/lib/image_keys.sh" "$EXIT_VERIFY"
+    fi
     if [[ "$IMAGE_MODE" == lock ]]; then
         validate_images_lock "$lock" \
             || die "images.lock is not fully digest-pinned; this release cannot be installed reproducibly (for a local build use --image-tag)" "$EXIT_VERIFY"
@@ -1727,13 +1746,17 @@ _version_ge() {
 # the web UI is for this computer AND the local LAN, so it binds 0.0.0.0 by
 # default; --local-only, or "no" at the prompt, keeps it on 127.0.0.1. The
 # backend ports stay on OP_BIND_ADDRESS (127.0.0.1); LAN browsers reach the
-# API through Cropwright's nginx on the docker network.
+# API through Cropwright's nginx on the docker network. A specific
+# non-loopback --bind (say 10.0.0.5) narrows Cropwright to that interface
+# too: never wider than the one the user chose.
 choose_cropwright_bind() {
     local reply prev
     prev="$(read_env_var "${OP_DIR}/cropwright/.env" CROPWRIGHT_BIND_ADDRESS 2>/dev/null || true)"
     if [[ "$OP_LOCAL_ONLY" == 1 ]]; then
         CROPWRIGHT_BIND=127.0.0.1
-    elif [[ "$prev" == 0.0.0.0 || "$prev" == 127.0.0.1 ]]; then
+    elif [[ "$OP_BIND_ADDRESS" != 0.0.0.0 ]] && ! is_loopback_ipv4 "$OP_BIND_ADDRESS"; then
+        CROPWRIGHT_BIND="$OP_BIND_ADDRESS"
+    elif [[ -n "$prev" ]] && is_ipv4 "$prev"; then
         CROPWRIGHT_BIND="$prev"
     elif [[ "$OP_UNATTENDED" != 1 ]] && tty_usable; then
         prompt_line reply "Let other computers on your LAN open the Cropwright web UI? [Y/n]: " "--local-only"
@@ -1757,7 +1780,15 @@ setup_cropwright() {
     fi
     mkdir -p "$dir"
     cw_base="${CW_ARTIFACT_BASE_URL:-https://github.com/${CW_GH_REPO}/releases/download}/${tag}"
-    [[ -n "${OP_RELEASE_DIR:-}" ]] && cw_base="file://${OP_RELEASE_DIR}/cropwright/${tag}"
+    if [[ -n "${OP_RELEASE_DIR:-}" ]]; then
+        # build_deploy_bundle.sh stages these when given CW_RELEASE_DIR.
+        if [[ -f "${OP_RELEASE_DIR}/cropwright/${tag}/SHA256SUMS" ]]; then
+            cw_base="file://${OP_RELEASE_DIR}/cropwright/${tag}"
+            log_info "Cropwright ${tag}: using the files from the release dir"
+        else
+            log_warn "the release dir has no cropwright/${tag}/: fetching Cropwright from the network (this install is not offline); still verified against cropwright.lock"
+        fi
+    fi
     # Cropwright's release assets carry the section 3 names; its SHA256SUMS is
     # itself pinned by cropwright.lock, which this release's checksums cover.
     for f in SHA256SUMS docker-compose.yml .env.example; do
@@ -2193,8 +2224,21 @@ remove_install_images() {
 # -----------------------------------------------------------------------------
 do_rollback() {
     require_owned_install
-    local newest env_project rel
-    newest="$(find "${OP_DIR}/backups" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort | tail -n1 || true)"
+    local newest="" env_project rel current b bver
+    # The newest backup of a DIFFERENT version: a same-version re-run or
+    # `openprocessor upgrade` also backs up, and rolling back to that would
+    # land on the version already installed. With no older version on
+    # record, the newest backup (a config rollback) is used.
+    current="$(state_get version || true)"
+    while IFS= read -r b; do
+        [[ -z "$newest" ]] && newest="$b"
+        bver="$(STATE_FILE="${b}/.install/state.json" state_get version || true)"
+        if [[ -n "$current" && -n "$bver" && "$bver" != "$current" ]]; then
+            newest="$b"
+            log_info "rolling back to the previous version ${bver} (installed: ${current}); skipping same-version backups"
+            break
+        fi
+    done < <(find "${OP_DIR}/backups" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -r || true)
     [[ -n "$newest" ]] || die "no backups/ entry to roll back to"
     env_project="$(read_env_var "${newest}/.env" COMPOSE_PROJECT_NAME || true)"
     [[ "$env_project" == "$OP_PROJECT" ]] || die "backup ${newest} belongs to project '${env_project:-none}', not '${OP_PROJECT}'" "$EXIT_COLLISION"
@@ -2260,6 +2304,12 @@ print_summary() {
     echo "  tiers       : ${SELECTED_TIERS}"
     echo "  GPU plan    : ${GPU_PLAN_SUMMARY:-none}"
     echo "  health      : ${HEALTH_RESULT}"
+    local heap per_gb budget
+    heap="$(read_env_var "$ENV_FILE" OPENSEARCH_HEAP || true)"
+    per_gb="$(read_env_var "$ENV_FILE" OP_SHARDS_PER_HEAP_GB || true)"
+    [[ "$per_gb" =~ ^[0-9]+$ ]] || per_gb=20
+    budget="$(opensearch_shard_budget "$heap" "$per_gb" || echo unknown)"
+    echo "  OpenSearch  : heap ${heap:-unset}, soft shard budget ${budget} (${per_gb} shards per heap GB)"
     echo ""
     echo "  URLs:"
     echo "    API docs    http://${h}:${api}/docs"
@@ -2270,9 +2320,9 @@ print_summary() {
     if _has_tier trainer; then ml="$(read_env_var "$ENV_FILE" MLFLOW_PORT)"; echo "    MLflow      http://${h}:${ml}"; fi
     if _has_tier cropwright; then
         echo "    Cropwright  http://${h}:${CROPWRIGHT_PORT}"
-        if [[ "${CROPWRIGHT_BIND:-}" == 0.0.0.0 ]]; then
-            local lan
-            lan="$(hostname -I 2>/dev/null | awk '{ print $1 }' || true)"
+        if ! is_loopback_ipv4 "${CROPWRIGHT_BIND:-127.0.0.1}"; then
+            local lan="$CROPWRIGHT_BIND"
+            [[ "$lan" == 0.0.0.0 ]] && lan="$(hostname -I 2>/dev/null | awk '{ print $1 }' || true)"
             echo "    Cropwright on your LAN: http://${lan:-<this-computer-ip>}:${CROPWRIGHT_PORT}"
             log_warn "Cropwright is reachable from your LAN and has NO login: use it only on a trusted network,"
             log_warn "never port-forward it to the internet, and put a reverse proxy with authentication in front"
@@ -2289,6 +2339,9 @@ print_summary() {
     fi
     if ! is_loopback_ipv4 "$OP_BIND_ADDRESS"; then
         log_warn "SECURITY: services are published on ${OP_BIND_ADDRESS} with NO authentication. See SECURITY.md."
+    elif _has_tier cropwright && ! is_loopback_ipv4 "${CROPWRIGHT_BIND:-127.0.0.1}"; then
+        echo "  Security: every OpenProcessor API port is bound to ${OP_BIND_ADDRESS}; Cropwright is the exception (your LAN, above)."
+        echo "            The API has no auth; use a reverse proxy before exposing it."
     else
         echo "  Security: every port is bound to ${OP_BIND_ADDRESS} only. The API has no auth; use a reverse proxy before exposing it."
     fi
@@ -2317,13 +2370,15 @@ Usage: setup-openprocessor.sh [options]
   --version vX.Y.Z        pinned release (default: latest published release)
   --branch REF            testing install from a branch head (not reproducible)
   --image-tag TAG         run images by tag (OP_IMAGE_REPO prefix) instead of images.lock digests
-  --release-dir DIR       install from locally built release assets (still checksum-verified)
+  --release-dir DIR       install from locally built release assets (still checksum-verified;
+                          offline for cropwright only if the bundle staged it)
   --tiers LIST | --all    core,curation,segmenter,vlm,trainer,cropwright
   --gpu-plan K=V,...      override placement: triton=1,segmenter=0,vlm=2,trainer=0
   --profile NAME          minimal|standard|full (Triton instance profile)
   --vlm-remote URL --vlm-model NAME [--vlm-key-file PATH]
   --vlm-model-id ID       choose a VLM catalog entry explicitly
-  --bind ADDR             publish address (default 127.0.0.1)
+  --bind ADDR             publish address (default 127.0.0.1); a specific non-loopback
+                          address also narrows Cropwright to that interface
   --port-base N           shift the 46xx port block to N..N+12
   --with-monitoring       add Prometheus/Grafana/Loki (default-open dashboards)
   --sample-data           fetch the public COCO sample after install
@@ -2337,6 +2392,7 @@ Usage: setup-openprocessor.sh [options]
   --yes                   confirm destructive steps (uninstall, rollback, upgrade) without a prompt
   --cpu [--control-plane-only]
   --repair | --rollback | --uninstall [--purge-volumes] [--purge-data] [--remove-images]
+                          (--rollback restores the newest backup of a different version)
   --reset-hf-token        ask for a new HuggingFace token
   -h | --help
 EOF
@@ -2686,6 +2742,8 @@ do_install() {
     source "${OP_DIR}/scripts/lib/model_setup.sh"
     # shellcheck source=scripts/lib/image_keys.sh
     source "${OP_DIR}/scripts/lib/image_keys.sh"
+    # shellcheck source=scripts/lib/opensearch_heap.sh
+    source "${OP_DIR}/scripts/lib/opensearch_heap.sh"
 
     env_create_or_merge
     env_set COMPOSE_PROJECT_NAME "$OP_PROJECT"
@@ -2828,10 +2886,9 @@ do_install() {
     done
     [[ "$OP_WITH_MONITORING" == 1 ]] && profiles+=(monitoring)
     env_set COMPOSE_PROFILES "$(IFS=,; echo "${profiles[*]:-}")"
-    local mem_kib heap
-    mem_kib="$(awk '/^MemTotal:/ { print $2 }' /proc/meminfo)"
-    heap="$(opensearch_heap_gb "$mem_kib")"
-    env_set_default OPENSEARCH_HEAP "${heap}g"
+    local heap
+    heap="$(opensearch_heap_for_host)" || die "could not read host memory from ${OP_MEMINFO_PATH:-/proc/meminfo} to size the OpenSearch heap"
+    env_set_default OPENSEARCH_HEAP "$heap"
     env_set_default OP_SOURCE_ROOT_HOST ./data
 
     ensure_hf_token

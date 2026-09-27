@@ -22,7 +22,7 @@ from src.services.projects.registry import (
     write_record,
 )
 
-from .conftest import FakeLifecycleOpenSearch, seed_default_project
+from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes, seed_default_project
 
 
 if TYPE_CHECKING:
@@ -59,7 +59,10 @@ def _env(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _noop_ensure_indexes():
-    with patch('src.routers.curation._common._ensure_indexes', new=AsyncMock()):
+    with patch(
+        'src.routers.curation._common._ensure_indexes',
+        new=AsyncMock(side_effect=fake_ensure_indexes),
+    ):
         yield
 
 

@@ -313,6 +313,178 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     docstring) and Minor 3 (the `except` accommodation, reversing this
     pass's "too risky" call). **Still open, deferred to W3 by design:**
     `name@rev` pinning remains a no-op.
+- **Docs site: one-line installer.** New `getting-started/installer` page
+  (tiers, `--unattended`, verifying `SHA256SUMS` with integrity-not-
+  authenticity wording, the Cropwright LAN default and `--local-only`,
+  OpenSearch heap sizing, upgrade / rollback / uninstall, exit codes).
+  `quick-start` now leads with the installer, with install-from-source below;
+  `deployment/security` covers LAN access.
+- **Installer docs.** README Quick Start is now the one-line installer
+  (tiers, `--unattended`, verifying `SHA256SUMS`, the LAN/Cropwright
+  network decision), with "Install from source" below it. `INSTALLATION.md`
+  documents every installer flag and consent variable, upgrade / repair /
+  rollback / uninstall, offline `--release-dir` bundles, OpenSearch heap
+  sizing and troubleshooting by exit code. `SECURITY.md` states that release
+  checksums prove integrity, not authenticity. Static tests pin the network
+  wording and that every `--help` flag is documented.
+
+### Changed
+- **OpenSearch heap is sized from host RAM in one place.** New
+  `scripts/lib/opensearch_heap.sh` (`opensearch_heap_for_host`: RAM/8,
+  clamped to 1-8 GB; `opensearch_shard_budget`) is used by both
+  `setup-openprocessor.sh` and `scripts/lib/config.sh`. `config.sh` no
+  longer takes the heap from the GPU profile, keeps an `OPENSEARCH_HEAP`
+  the user already set on a forced regeneration, and its compose override
+  interpolates `${OPENSEARCH_HEAP}` instead of a baked value. The
+  installer summary prints the heap and the soft shard budget (heap GB x
+  `OP_SHARDS_PER_HEAP_GB`, new advanced knob, default 20).
+
+### Fixed
+- **P3F finish pass 4 (2026-09-27).** Closes the pass-3 confirmation
+  re-review's two remaining small items (F1, F2) plus a nit (n-f):
+  - **F1 (the important one -- a genuine data-loss bug under the real
+    production topology)**: pass 3's `delete._FINISH_IN_PROGRESS` guard
+    is per-WORKER-PROCESS only, and `yolo-api` runs `--workers=32`. A
+    retried DELETE that lands on a different worker (31 times out of 32
+    in production) had its own, empty copy of that guard and could not
+    see that a finish for the same slug was already running elsewhere.
+    The review's cross-worker probe showed the exact failure: finish A
+    timed out on its drain wait and rolled the record back to `active`,
+    while finish B -- on the simulated second worker, unaware of A --
+    went on to unload the project's models and delete all 7 of its
+    indexes anyway, refusing only at the very last step (the tombstone
+    write), by which point the data was already gone. Fix:
+    `delete_project_finish` now claims exclusive ownership of the finish
+    with a real cross-process primitive, right after the drain succeeds
+    and before the first irreversible step (model unload) --
+    `_refetch_for_write(expect_status='deleting')` followed by an
+    OCC-guarded `write_record`. A peer finish that already moved the
+    record off `deleting` (e.g. a sibling's rollback) makes this claim
+    raise 409 `invalid_transition` before anything destructive runs; two
+    finishes whose claim reads race each other resolve via ordinary
+    OpenSearch document-version OCC (`RevisionConflictError` -> 409
+    `revision_conflict`). This works across all 32 worker processes
+    because it is backed by OpenSearch's own document versioning, not an
+    in-memory set any one process can see. The now-inaccurate
+    "process-wide" wording describing the pass-3 guard (`delete.py`,
+    `_FINISH_IN_PROGRESS`'s docstring, and this file's own pass-3 entry
+    above) is corrected to say what it actually protects: one worker
+    process, not the deployment.
+  - **F2 (known gap, documented + best-effort cleanup)**: a losing
+    resurrection attempt -- a create that loses the MA1
+    `expect_status='building'` race on its final `active`/`failed` write
+    because a concurrent stale-`building` DELETE won and tombstoned the
+    slug first -- can leave up to 7 freshly created
+    `op_prj_<slug>__*` indexes unreachable under a now-retired slug
+    (needs a create running past `_BUILDING_STALE_SECONDS`, 120s, with a
+    DELETE landing inside that exact window; rare, and it costs only
+    shards, never a correctness bug). This was previously silent.
+    `create_project` now logs `project_create_orphaned_after_delete`
+    with the exact orphaned index names whenever this fires, and
+    best-effort deletes them itself (any failure to do so is logged and
+    swallowed -- this is cleanup, not a correctness path) since the
+    retired slug can never own them again anyway.
+  - **Nit (m5 job.json label parsing)**: `_train_job_label` (`busy.py`)
+    guards against a `job.json` that is valid JSON but not an object
+    (e.g. a bare list) -- it used to call `.get(...)` unconditionally and
+    raise `AttributeError`, failing the busy preflight (and with it
+    delete/archive) for a hand-edited or corrupted `job.json`. Now
+    treated the same as missing/unreadable: falls back to the job id.
+
+- **P3F finish pass 3 (2026-09-27).** Closes the "MERGE AFTER FIXES"
+  re-review's two majors and its m-a path-escape gap:
+  - **MA1**: a status-transition write now re-validates the status it
+    still owns, not just the storage-level OCC token. `_refetch_for_write`
+    takes an `expect_status` argument and raises 409 `invalid_transition`
+    if a fresh re-read is no longer in that status -- applied to create's
+    `active`/`failed` writes (`expect_status='building'`) and
+    `delete_project_finish`'s drain-timeout rollback and tombstone
+    (`expect_status='deleting'`). Without this, a re-read taken
+    immediately before a write always has a trivially-current seq/term
+    (nothing else was writing at that exact instant), so OCC alone never
+    caught a slow create's late `active` write resurrecting a slug a
+    stale-building delete had already tombstoned. `delete_project` itself
+    now reads the record ONCE (`_get_mutable_record`) and runs every
+    precondition check plus the write against that same read's seq/term,
+    instead of checking against a possibly-stale registry snapshot and
+    then re-reading fresh only at write time. A new `delete._FINISH_IN_PROGRESS`
+    guard (plus a router-level `_BACKGROUND_DELETE_TASKS` keyed by slug)
+    also ensures only one `delete_project_finish` genuinely runs to
+    completion per slug at a time -- **within one worker process**. As
+    pass 4 below found, this guard is per-worker-process only and does
+    NOT protect across `yolo-api`'s `--workers=32`; the real cross-process
+    fix landed in pass 4.
+  - **MA2**: `delete_project_finish`'s model-unload step (and
+    `dry_run_delete`'s `promoted_models` report) now enumerate EVERY
+    model a project owns (`_owned_models`, keyed on
+    `promote.json.project`), not just the `shared=True` subset
+    (`_shared_model_users`, now used only for the `in_use` refusal). A
+    project's own models -- private ones included, the common case --
+    are always unloaded on a normal delete; `force` only bypasses the
+    `in_use` 409 for the shared subset, never whether unload runs.
+  - **m-a**: the delete path-escape guard (m1, previous pass) covered
+    only `train_jobs_dir`/`autolabel_dir`. The other 6 of the project's
+    8 dirs still accepted `path == shared_root` itself (a corrupted
+    resources record pointing at the multi-project root could wipe every
+    sibling project's dir tree). One guard
+    (`_require_project_scoped_path`) now covers all 8, each requiring a
+    strict `<shared_root>/<slug>`-rooted path, always raising
+    `path_escape`. Path validation (`_validate_delete_paths`) also now
+    runs as a preflight in `delete_project_finish`, before the drain
+    wait and the irreversible index delete -- previously it ran only
+    inside dir removal, itself after indexes were already gone, so a
+    `path_escape` left the record wedged `deleting` forever.
+  - **m5 (partial, from the prior pass)**: a train job's `JobRef.label`
+    is now its submitted `mlflow_run_name` (read from the companion
+    `<job_id>.job.json`) when one was set, falling back to the internal
+    job id only when it wasn't -- documented explicitly rather than
+    always silently treating the job id as a human label.
+
+- **P3F finish pass 2 (2026-09-27).** Closes every item the P3 re-review
+  still marked open (verdict FIX-FIRST):
+  - **M4 retry**: a re-issued `DELETE ?confirm=<slug>` on a record already
+    `deleting` (a prior finish attempt's index or model-unload step
+    failed) now answers 202 and re-triggers the finish, instead of 409
+    `invalid_transition`.
+  - **N1**: a `building` record left by a mid-create failure no longer
+    wedges forever. `create_project` catches a failure in its own initial
+    `write_record` (distinguishing a genuine storage-level slug conflict,
+    propagated untouched, from its own `bump_revision` failing after the
+    doc landed, which now flips the record to `failed`). A delete-side
+    escape hatch also allows deleting a `building` record whose
+    `updated_at` is stale (>120s); a fresh one still 409s.
+  - **B2(a) residual**: `create_project` now calls `registry.refresh_strict()`
+    (raises) right after the `building` write, and verifies every one of
+    its own indexes actually exists before ever writing `active` --
+    `_ensure_indexes` is itself fail-open, so refresh_strict alone did
+    not close the gap that let a live create return `active` with zero
+    real indexes.
+  - **M5 step 4**: `delete_project_finish` now unloads the project's own
+    promoted, shared models via P2's `unload_triton_model` primitive
+    (after the drain wait, before index deletion); `dry_run_delete`
+    reports them in `promoted_models` instead of a hardcoded `[]`.
+  - **B2(b)**: the `FakeLifecycleOpenSearch`/`_noop_ensure_indexes` test
+    stub across `tests/projects/*` now really creates the bound
+    project's indexes (`fake_ensure_indexes`), so `create_project`'s
+    index-verification check has real state to check, and a genuine
+    `indices.create` failure (simulated) is proven to still end the
+    create `failed`.
+  - **Minors**: m1 (the delete-path directory guard for
+    `train_jobs_dir`/`autolabel_dir` was checked against a root derived
+    from the same path, which could never refuse anything -- now guards
+    against the real shared root with a `path_escape` refusal), m2 (every
+    status-transition write rebuilds its doc from a fresh read, not a
+    stale closure snapshot, so a concurrent write landing during a
+    delete's up-to-60s drain wait is no longer silently discarded), m5
+    (`JobRef.started_at` is now a real timestamp or `null`, never an
+    always-`''` filler), m7 (the 10s capacity cache is now busted on
+    every create/delete), m8 (heap sum excludes non-data nodes; the warn
+    message no longer rounds 0.5 GB down to "0 GB"), m10 (dry-run index
+    counts report `null`, not `0`, when uncountable). m4 (cross-document
+    races on `_last_active_check`) and m12 (`GET /projects`'s per-project
+    `validated_count` N+1) are documented as deferred, not fixed --
+    both need infra (distributed locking; a cross-index aggregation the
+    test fakes don't model) this pass does not add.
 - **P3 review fix pass (2026-09-27).** Addresses the independent P3 review's
   blocker and majors:
   - M1: `POST /projects` create is now storage-OCC-safe (`op_type='create'`);
@@ -388,6 +560,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`test_region_worker.py`, `test_region_text_worker.py`, and five other
   worker suites) pass with the wiring live -- no monkeypatch bypass, no
   per-cycle swap spam.
+- **P3 finish pass, Cropwright backend asks (2026-09-27).** `GET
+  {prefix}/models/status` now serves `owned: bool` (this route's own
+  ownership check, never inferred client-side from `project`) and
+  `sharing_revision: int | None` (only for an owned entry -- the value
+  `PUT .../sharing` needs as `expected_revision`) on every entry; a
+  foreign shared entry is served `unloadable: false`. `GET {prefix}/pause`
+  now also reports `paused_by: list[str]` (`'project'` / `'gpu_training'`)
+  and `reason: str | None` for the global GPU/training claim
+  (`gpu_arbiter.read_training_lock`); `ProjectSummary.paused` lets `GET
+  /projects` render a per-row paused chip with no extra reads.
+  Pause/resume now publish `project.paused` / `project.resumed` on the
+  global event stream (BA-P2-1, BA-P2-2, BA-P2-4, BA-P2-5, BA-P2-7).
 - **P3 finish pass, final merge.** Merged `cutover/projects-workers`
   (through `fix(projects): refresh detection-worker liveness on a
   timer`) into `cutover/projects-lifecycle`: the detection-worker
@@ -575,6 +759,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inside the background task.
 
 ### Removed
+- `opensearch_heap` from the GPU profiles (`config_templates/profiles/*.json`)
+  and `PROFILE_HEAP` from `scripts/lib/gpu.sh`: the heap is a host-RAM
+  fact, not a GPU fact.
 - **COCO special-case in class-name resolution.** `class_names.py`'s
   `_STOCK_COCO_MODEL_NAMES` fallback (borrowing COCO's vocabulary for the
   stock YOLO11 detector names if `labels.txt` was ever missing) is gone —
@@ -618,6 +805,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     path is 404 `project_not_found`, not a 422 validation error.
 
 ### Fixed
+- **Installer review round-3 follow-ups (s1-s5).**
+  - The install summary no longer claims "every port is bound to
+    127.0.0.1" when Cropwright is on the LAN; it names Cropwright as the
+    exception.
+  - A specific non-loopback `--bind <ip>` now narrows Cropwright to that
+    interface instead of leaving it on `0.0.0.0` (`--local-only` still wins).
+  - `build_deploy_bundle.sh` stages Cropwright's release files into
+    `<out>/cropwright/<tag>/` when given `CW_RELEASE_DIR` (checked against
+    `cropwright.lock`), so a `--release-dir` install of the cropwright tier
+    is offline. Without them the installer now says it is fetching Cropwright
+    from the network instead of doing so silently.
+  - An `images.lock` line whose repo differs from the one
+    `scripts/lib/image_keys.sh` names for that key is refused (exit 7, nothing
+    pulled). This is a consistency check against a release-script mistake,
+    not an authenticity check.
+  - `--rollback` restores the newest backup of a *different* version, so a
+    same-version re-run after an upgrade no longer makes rollback land on the
+    version already installed.
 - **Trainer capabilities are read from the trainer volume root.** The
   trainer writes `.trainer_capabilities.json` once at `OP_TRAIN_JOBS_DIR`
   (it serves every project), but preflight's `trainer_gpus` check and the

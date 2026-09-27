@@ -61,6 +61,14 @@ ErrorCode = Literal[
     'invalid_transition',
     'export_outside_project',
     'model_not_found',
+    # P3F m1: a delete-path directory guard refused because the persisted
+    # record's own path pointed outside its expected root -- distinct
+    # from internal_isolation_error (an OpenSearch-guard refusal).
+    'path_escape',
+    # P3F pass-3 MA1: a second delete_project_finish for the same slug
+    # was refused because a first finish for it is still in flight --
+    # distinct from project_busy (a step *inside* one finish failed).
+    'finish_in_progress',
 ]
 
 # Seeded with the codes W2 raises (none yet -- W2 has no validated
@@ -97,7 +105,9 @@ class JobRefWire(BaseModel):
     kind_label: str
     id: str
     label: str
-    started_at: str
+    # P3F m5: a real timestamp when the job source has one, else null --
+    # never the empty-string filler this used to always carry.
+    started_at: str | None = None
 
 
 class ConfigErrorDetail(BaseModel):

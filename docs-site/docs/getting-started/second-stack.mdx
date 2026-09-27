@@ -1,0 +1,91 @@
+---
+sidebar_position: 5
+title: Running a second, isolated stack
+---
+
+# Running a second, isolated stack
+
+You can run two independent OpenProcessor stacks on one host (for example
+a stable deployment and a development clone). Isolation comes from four
+things, all set in each clone's own `.env`.
+
+## 1. Compose project name
+
+`docker-compose.yml` sets `name: ${COMPOSE_PROJECT_NAME:-openprocessor}`,
+and every `container_name` is `${COMPOSE_PROJECT_NAME:-openprocessor}-<role>`.
+Give the second clone its own name and it gets its own container names,
+network (`<name>_triton_net`) and named volumes automatically:
+
+```bash
+# second clone's .env
+COMPOSE_PROJECT_NAME=opdev
+```
+
+:::warning
+A clone with no `COMPOSE_PROJECT_NAME` (and no `-p`) falls back to the
+project name `openprocessor`. If the first stack also uses the default,
+`docker compose` commands in the second clone act on the **first**
+stack's containers. Set the variable, or always pass `-p <name>`.
+:::
+
+## 2. Host ports
+
+Every published port is interpolated from `.env`. Remap all of them in the
+second clone so nothing collides:
+
+```bash
+API_PORT=4703
+TRITON_HTTP_PORT=4700
+TRITON_GRPC_PORT=4701
+TRITON_METRICS_PORT=4702
+OPENSEARCH_PORT=4707
+OPENSEARCH_DASHBOARDS_PORT=4708
+PROMETHEUS_PORT=4704
+GRAFANA_PORT=4705
+LOKI_PORT=4706
+MLFLOW_PORT=4709
+DCGM_PORT=4710
+SEGMENTER_PORT=4711
+VLM_PORT=4712
+```
+
+`make` reads `.env` too (`-include .env`), so `make up`, `make test-detect`
+and friends target the remapped ports without extra flags. The HTTP test
+scripts read `API_PORT`, `TRITON_HTTP_PORT` and `OPENSEARCH_PORT` from the
+environment.
+
+## 3. Image tag
+
+Every built service's `image:` is `${OP_IMAGE_REPO}/<image>:${OP_IMAGE_TAG:-latest}`.
+If both clones build with the default tag, `docker compose build` in one
+retags the `:latest` the other stack's containers reference, and the next
+restart of the other stack silently picks up the foreign build. Give each
+clone its own tag:
+
+```bash
+OP_IMAGE_TAG=dev
+```
+
+## 4. GPUs
+
+Pin each GPU-using service of the second stack to the card(s) you want
+(see [GPU sizing](../deployment/gpu-sizing.mdx#gpu-ids)):
+
+```bash
+TRITON_GPU_ID=1
+API_GPU_ID=1
+EVALUATOR_GPU_ID=1
+SEGMENTER_GPU_ID=1
+VLM_GPU_ID=1
+OP_TRAIN_GPU_ORDER=1
+```
+
+## Checklist
+
+```bash
+cp env.template .env        # in the second clone
+# set COMPOSE_PROJECT_NAME, all *_PORT values, OP_IMAGE_TAG, *_GPU_ID
+docker compose config | grep -E 'container_name|published'   # sanity check
+docker compose up -d
+curl http://localhost:4703/health
+```

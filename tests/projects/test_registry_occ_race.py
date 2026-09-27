@@ -50,9 +50,14 @@ def test_two_concurrent_writers_one_loses_with_revision_conflict() -> None:
 
     async def _run() -> tuple[list[str], list[BaseException]]:
         client = FakeLifecycleOpenSearch()
+        # P3F item 3 (B2(a) residual): create_project's own registry
+        # refresh_strict() now needs a real, reachable registry bound
+        # during the create itself -- unlike the old soft ensure_fresh(),
+        # it raises rather than degrading, so the registry must be set
+        # before create_project runs, not after.
+        set_project_registry(ProjectRegistry(lambda: client))
         await seed_default_project(client)
         _, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
-        set_project_registry(ProjectRegistry(lambda: client))
 
         stored, seq, term = await get_record_with_seq(client, 'cars')
         assert stored is not None

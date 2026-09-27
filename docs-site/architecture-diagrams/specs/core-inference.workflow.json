@@ -1,0 +1,263 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Core Inference Through Triton",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "detect",
+        "label": "Object detection",
+        "focus": [
+          "detect_route",
+          "yolo"
+        ],
+        "note": "One gRPC call: the end2end engine returns boxes already NMS'd on the GPU."
+      },
+      {
+        "id": "faces",
+        "label": "Faces",
+        "focus": [
+          "faces_route",
+          "scrfd",
+          "align",
+          "arcface"
+        ],
+        "note": "SCRFD boxes and landmarks, CPU alignment, then ArcFace embeddings."
+      },
+      {
+        "id": "ocr",
+        "label": "OCR pipeline",
+        "focus": [
+          "ocr_route",
+          "ocr_bls",
+          "ocr_det",
+          "ocr_rec"
+        ],
+        "note": "One call to the ocr_pipeline BLS model, which calls detection and recognition inside Triton."
+      }
+    ],
+    "legend": {
+      "entries": {
+        "backend": {
+          "label": "API CPU"
+        },
+        "cloud": {
+          "label": "Triton GPU"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "detect",
+      "label": "POST /detect"
+    },
+    {
+      "id": "faces",
+      "label": "POST /faces/*"
+    },
+    {
+      "id": "embed",
+      "label": "POST /embed/*"
+    },
+    {
+      "id": "ocr",
+      "label": "POST /ocr/*"
+    }
+  ],
+  "mainPath": [
+    "detect_route",
+    "yolo"
+  ],
+  "nodes": [
+    {
+      "id": "detect_route",
+      "lane": "detect",
+      "col": 0,
+      "type": "backend",
+      "label": "Decode + letterbox",
+      "sublabel": "640x640",
+      "width": 140
+    },
+    {
+      "id": "yolo",
+      "lane": "detect",
+      "col": 1,
+      "type": "cloud",
+      "label": "YOLO end2end",
+      "sublabel": "yolov11 / yolo26",
+      "tag": "GPU NMS",
+      "width": 140
+    },
+    {
+      "id": "faces_route",
+      "lane": "faces",
+      "col": 0,
+      "type": "backend",
+      "label": "Decode + resize",
+      "sublabel": "640x640",
+      "width": 140
+    },
+    {
+      "id": "scrfd",
+      "lane": "faces",
+      "col": 1,
+      "type": "cloud",
+      "label": "SCRFD-10G",
+      "sublabel": "boxes + landmarks",
+      "width": 140
+    },
+    {
+      "id": "align",
+      "lane": "faces",
+      "col": 2,
+      "type": "backend",
+      "label": "Align (CPU)",
+      "sublabel": "Umeyama 112x112",
+      "width": 140
+    },
+    {
+      "id": "arcface",
+      "lane": "faces",
+      "col": 3,
+      "type": "cloud",
+      "label": "ArcFace",
+      "sublabel": "512-dim",
+      "width": 140
+    },
+    {
+      "id": "embed_route",
+      "lane": "embed",
+      "col": 0,
+      "type": "backend",
+      "label": "Preprocess",
+      "sublabel": "image or tokens",
+      "width": 140
+    },
+    {
+      "id": "clip",
+      "lane": "embed",
+      "col": 1,
+      "type": "cloud",
+      "label": "MobileCLIP2-S2",
+      "sublabel": "image / text, 512-dim",
+      "width": 140
+    },
+    {
+      "id": "ocr_route",
+      "lane": "ocr",
+      "col": 0,
+      "type": "backend",
+      "label": "Preprocess",
+      "sublabel": "OCR input",
+      "width": 140
+    },
+    {
+      "id": "ocr_bls",
+      "lane": "ocr",
+      "col": 1,
+      "type": "cloud",
+      "label": "ocr_pipeline",
+      "sublabel": "Python BLS",
+      "width": 140
+    },
+    {
+      "id": "ocr_det",
+      "lane": "ocr",
+      "col": 2,
+      "type": "cloud",
+      "label": "PP-OCRv5 det",
+      "sublabel": "text regions",
+      "width": 140
+    },
+    {
+      "id": "ocr_rec",
+      "lane": "ocr",
+      "col": 3,
+      "type": "cloud",
+      "label": "PP-OCRv5 rec",
+      "sublabel": "CTC decode",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "detect-infer",
+      "from": "detect_route",
+      "to": "yolo",
+      "label": "gRPC",
+      "variant": "emphasis"
+    },
+    {
+      "id": "faces-infer",
+      "from": "faces_route",
+      "to": "scrfd",
+      "label": "gRPC"
+    },
+    {
+      "id": "faces-align",
+      "from": "scrfd",
+      "to": "align",
+      "label": "decode + NMS"
+    },
+    {
+      "id": "faces-embed",
+      "from": "align",
+      "to": "arcface",
+      "label": "gRPC"
+    },
+    {
+      "id": "embed-infer",
+      "from": "embed_route",
+      "to": "clip",
+      "label": "gRPC"
+    },
+    {
+      "id": "ocr-infer",
+      "from": "ocr_route",
+      "to": "ocr_bls",
+      "label": "gRPC"
+    },
+    {
+      "id": "ocr-det",
+      "from": "ocr_bls",
+      "to": "ocr_det",
+      "label": "BLS"
+    },
+    {
+      "id": "ocr-rec",
+      "from": "ocr_det",
+      "to": "ocr_rec",
+      "label": "crops (BLS)"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "One gRPC client",
+      "items": [
+        "Every route shares one Triton gRPC client, so Triton's dynamic batcher sees concurrent requests together",
+        "Boxes come back normalized to 0-1",
+        "Green steps run on the API CPU; orange steps are Triton models on the GPU"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Composed routes",
+      "items": [
+        "/analyze runs detection, faces, CLIP and OCR on one image",
+        "/ingest also writes global, face, object and OCR documents to OpenSearch for /search/*"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "Runtime model control",
+      "items": [
+        "Triton runs in explicit model-control mode",
+        "?model_name= selects any loaded detector; POST /models/{name}/load|unload"
+      ]
+    }
+  ]
+}

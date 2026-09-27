@@ -1,0 +1,72 @@
+/**
+ * OpenProcessor Documentation — Custom Theme
+ * Dark-first. Apple system colors as accent. No gradients, no emoji.
+ */
+
+:root {
+  --ifm-color-primary: #0071e3;
+  --ifm-color-primary-dark: #0064cc;
+  --ifm-color-primary-darker: #005ebf;
+  --ifm-color-primary-darkest: #004d9e;
+  --ifm-color-primary-light: #1a7ee6;
+  --ifm-color-primary-lighter: #3390ea;
+  --ifm-color-primary-lightest: #66aef0;
+  --ifm-code-font-size: 95%;
+  --ifm-font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --ifm-heading-font-weight: 700;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --cw-bg: #ffffff;
+  --cw-surface: #f5f5f7;
+  --cw-border: #d2d2d7;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #0a84ff;
+  --ifm-color-primary-dark: #0074e8;
+  --ifm-color-primary-darker: #006edb;
+  --ifm-color-primary-darkest: #005bb4;
+  --ifm-color-primary-light: #2b91ff;
+  --ifm-color-primary-lighter: #429aff;
+  --ifm-color-primary-lightest: #71b4ff;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.35);
+  --ifm-background-color: #09090b;
+  --ifm-background-surface-color: #18181b;
+  --cw-bg: #09090b;
+  --cw-surface: #18181b;
+  --cw-border: #27272a;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.cw-placeholder {
+  border: 1px dashed var(--cw-border);
+  border-radius: 8px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  color: var(--ifm-color-emphasis-600);
+  background: var(--cw-surface);
+  margin: 1.5rem 0;
+}
+
+.cw-placeholder code {
+  font-size: 0.85em;
+}
+
+/* Screenshot thumbnails are buttons that open the Lightbox. */
+.cw-zoomable {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  border-radius: 8px;
+}
+
+.cw-zoomable:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 3px;
+}

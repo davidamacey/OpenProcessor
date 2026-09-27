@@ -524,7 +524,15 @@ async def models_status(
         if entry['kind'] == 'triton':
             entry.update(listing_fields(entry['name'], registry))
         else:
-            entry.update({'project': None, 'shared': False, 'class_mapping': None})
+            entry.update(
+                {
+                    'project': None,
+                    'shared': False,
+                    'class_mapping': None,
+                    'owned': False,
+                    'sharing_revision': None,
+                }
+            )
     return {'models': models}
 
 
