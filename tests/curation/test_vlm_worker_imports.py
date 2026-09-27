@@ -94,4 +94,7 @@ def test_bare_script_invocation_reproduces_the_original_bug() -> None:
     )
     assert result.returncode != 0
     assert 'ModuleNotFoundError' in result.stderr
-    assert "'src'" in result.stderr
+    # vlm_worker.py now also imports scripts.curation._project_worker_utils
+    # at module scope, so the bare-script sys.path bug can surface as a
+    # missing 'scripts' or 'src' package depending on import order.
+    assert "'src'" in result.stderr or "'scripts'" in result.stderr

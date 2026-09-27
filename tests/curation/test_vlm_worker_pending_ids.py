@@ -47,6 +47,7 @@ async def test_fetch_pending_ids_returns_ids_without_loading_source() -> None:
     ids = await fetch_pending_ids(
         client,  # type: ignore[arg-type]
         opensearch_url='http://os:9200',
+        items_index='op_items',
         batch_size=2,
         classifier_skip_conf=0.9,
     )

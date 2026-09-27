@@ -64,39 +64,32 @@ class _RecordingClient:
         return _Resp()
 
 
-_ENV_READING_MODULES = ('scripts.curation.vlm_worker', 'scripts.curation.cluster_refresh_daemon')
-
-
-@pytest.fixture
-def custom_prefix() -> Any:
-    """OP_API_PREFIX=/custom-mount for the test, then the env-reading
-    modules are reloaded with the real env so no other test inherits the
-    custom module-level prefix."""
-    mp = pytest.MonkeyPatch()
-    mp.setenv('OP_API_PREFIX', '/custom-mount')
-    yield '/custom-mount'
-    mp.undo()
-    for name in _ENV_READING_MODULES:
-        importlib.reload(importlib.import_module(name))
+# vlm_worker.py/cluster_refresh_daemon.py no longer read OP_API_PREFIX
+# directly -- the caller resolves the prefix (from get_curation_config()
+# while a project is bound) and passes it in explicitly per project, so
+# these now exercise that explicit-prefix contract directly instead of
+# monkeypatching the env and reloading the module.
 
 
 @pytest.mark.asyncio
-async def test_vlm_worker_uses_configured_prefix(custom_prefix: str) -> None:
-    mod = importlib.reload(importlib.import_module('scripts.curation.vlm_worker'))
+async def test_vlm_worker_uses_configured_prefix() -> None:
+    mod = importlib.import_module('scripts.curation.vlm_worker')
     client = _RecordingClient()
-    await mod.label_batch(client, api='http://api', crop_ids=['c1'])  # type: ignore[arg-type]
-    assert client.urls == [f'http://api{custom_prefix}/vlm/label_batch']
+    await mod.label_batch(
+        client, api='http://api', api_prefix='/custom-mount', slug='alpha', crop_ids=['c1']
+    )
+    assert client.urls == ['http://api/custom-mount/projects/alpha/vlm/label_batch']
 
 
 @pytest.mark.asyncio
-async def test_cluster_refresh_daemon_uses_configured_prefix(custom_prefix: str) -> None:
-    mod = importlib.reload(importlib.import_module('scripts.curation.cluster_refresh_daemon'))
+async def test_cluster_refresh_daemon_uses_configured_prefix() -> None:
+    mod = importlib.import_module('scripts.curation.cluster_refresh_daemon')
     client = _RecordingClient()
-    await mod._trigger_auto_promote(client, 'http://api')  # type: ignore[arg-type]
-    await mod._trigger_auto_label(client, 'http://api')  # type: ignore[arg-type]
+    await mod._trigger_auto_promote(client, 'http://api', '/custom-mount', 'alpha')
+    await mod._trigger_auto_label(client, 'http://api', '/custom-mount', 'alpha')
     assert client.urls == [
-        f'http://api{custom_prefix}/clusters/auto_promote',
-        f'http://api{custom_prefix}/pipeline/auto_label',
+        'http://api/custom-mount/projects/alpha/clusters/auto_promote',
+        'http://api/custom-mount/projects/alpha/pipeline/auto_label',
     ]
 
 

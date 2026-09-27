@@ -105,6 +105,7 @@ async def test_vlm_worker_fetch_pending_ids_query_shape() -> None:
     ids = await vlm_worker.fetch_pending_ids(
         _FakeClient(),
         opensearch_url='http://os:9200',
+        items_index='op_items',
         batch_size=64,
         classifier_skip_conf=0.8,
         exclude_ids=['x1', 'x2'],
