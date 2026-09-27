@@ -19,7 +19,8 @@ the served keymap applies to real keypresses end to end.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, wait_for_paint
+from playwright.sync_api import expect
 
 import copy
 import json
@@ -231,7 +232,10 @@ def test_keymap_absent_when_404(stub, page, app_url):
 
     page.goto(f"{app_url}/settings", wait_until="domcontentloaded")
     page.wait_for_selector("text=Curation scores", timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(200)
+    # Real wait for the page to finish firing its on-mount requests
+    # (including the 404'd GET /keymap this assertion depends on) instead
+    # of an arbitrary settle sleep.
+    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
     assert page.locator("text=Keyboard shortcuts").count() == 0
 
     dismiss_calls: list[str] = []
@@ -255,8 +259,8 @@ def test_keymap_absent_when_404(stub, page, app_url):
     # The hint strip renders from the same registrations the key handler
     # uses, so once it shows the discard hint the key is live.
     page.wait_for_selector("text=discard", timeout=ACTION_TIMEOUT_MS)
-    with page.expect_request(
-        lambda r: r.method == "POST" and "/review_dismiss" in r.url,
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/review_dismiss" in r.url,
         timeout=ACTION_TIMEOUT_MS,
     ):
         page.keyboard.press("d")
@@ -304,18 +308,26 @@ def test_keymap_rebind_persists_and_applies_live(stub, page, app_url):
     # Find the Discard row, remove the default 'd' key, add 'x' instead.
     discard_row = page.locator("tr", has_text="Discard").first
     discard_row.get_by_role("button", name="remove d").click()
-    page.wait_for_timeout(100)
+    expect(discard_row.get_by_role("button", name="remove d")).to_have_count(
+        0, timeout=ACTION_TIMEOUT_MS
+    )
     discard_row.get_by_role("button", name="Change").click()
     page.wait_for_selector("[data-capture]", timeout=ACTION_TIMEOUT_MS)
-    page.keyboard.press("x")
-    page.wait_for_timeout(400)  # validate debounce
+    # The validate call is debounced (~350ms) — wait for the real request
+    # instead of guessing a duration past the debounce.
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/keymap/validate" in r.url, timeout=ACTION_TIMEOUT_MS
+    ):
+        page.keyboard.press("x")
 
     assert any("review.queue.discard" in v.get("overrides", {}) for v in validate_calls)
 
     page.get_by_role("button", name="Save", exact=True).first.click()
     page.wait_for_selector("text=Save keyboard shortcuts?", timeout=ACTION_TIMEOUT_MS)
-    page.get_by_role("dialog").get_by_role("button", name="Save", exact=True).click()
-    page.wait_for_timeout(200)
+    with page.expect_response(
+        lambda r: r.request.method == "PUT" and r.url.endswith("/keymap"), timeout=ACTION_TIMEOUT_MS
+    ):
+        page.get_by_role("dialog").get_by_role("button", name="Save", exact=True).click()
 
     assert len(put_calls) == 1
     assert put_calls[0]["overrides"]["review.queue.discard"] == ["x"]
@@ -337,15 +349,21 @@ def test_keymap_rebind_persists_and_applies_live(stub, page, app_url):
 
     page.goto(f"{app_url}/review", wait_until="domcontentloaded")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(200)
+    # The hint strip's own key glyph proves the rebound keymap has loaded
+    # before either key is tested below.
+    page.wait_for_selector("kbd:has-text('X')", timeout=ACTION_TIMEOUT_MS)
 
     page.keyboard.press("d")
-    page.wait_for_timeout(200)
+    # 'd' is a no-op now; let its (non-)handling settle onto the DOM/event
+    # loop via a real paint tick rather than an arbitrary sleep before
+    # checking the negative.
+    wait_for_paint(page)
     assert len(dismiss_calls) == 0, "the old key must no longer discard"
 
-    page.wait_for_selector("kbd:has-text('X')", timeout=ACTION_TIMEOUT_MS)
-    page.keyboard.press("x")
-    page.wait_for_timeout(200)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/review_dismiss" in r.url, timeout=ACTION_TIMEOUT_MS
+    ):
+        page.keyboard.press("x")
     assert len(dismiss_calls) == 1
 
     stub.assert_fail_closed()
@@ -435,11 +453,16 @@ def test_keymap_per_context_override(stub, page, app_url):
     group_details.get_by_text("Customize per page").click()
     member_row = page.locator('[data-testid="member-cluster.discard"]')
     member_row.get_by_role("button", name="remove d").click()
-    page.wait_for_timeout(100)
+    expect(member_row.get_by_role("button", name="remove d")).to_have_count(
+        0, timeout=ACTION_TIMEOUT_MS
+    )
     member_row.get_by_role("button", name="Change").click()
     page.wait_for_selector("[data-capture]", timeout=ACTION_TIMEOUT_MS)
-    page.keyboard.press("x")
-    page.wait_for_timeout(400)  # validate debounce
+    # The validate call is debounced (~350ms) — wait for the real request.
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/keymap/validate" in r.url, timeout=ACTION_TIMEOUT_MS
+    ):
+        page.keyboard.press("x")
 
     # The detached marker shows on the cluster row, not the review row.
     assert page.locator('[data-testid="detached-cluster.discard"]').count() == 1
@@ -447,8 +470,10 @@ def test_keymap_per_context_override(stub, page, app_url):
 
     page.get_by_role("button", name="Save", exact=True).first.click()
     page.wait_for_selector("text=Save keyboard shortcuts?", timeout=ACTION_TIMEOUT_MS)
-    page.get_by_role("dialog").get_by_role("button", name="Save", exact=True).click()
-    page.wait_for_timeout(200)
+    with page.expect_response(
+        lambda r: r.request.method == "PUT" and r.url.endswith("/keymap"), timeout=ACTION_TIMEOUT_MS
+    ):
+        page.get_by_role("dialog").get_by_role("button", name="Save", exact=True).click()
 
     assert len(put_calls) == 1
     assert put_calls[0]["overrides"]["cluster.discard"] == ["x"]
@@ -469,9 +494,10 @@ def test_keymap_per_context_override(stub, page, app_url):
 
     page.goto(f"{app_url}/review", wait_until="domcontentloaded")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(200)
-    page.keyboard.press("d")
-    page.wait_for_timeout(200)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/review_dismiss" in r.url, timeout=ACTION_TIMEOUT_MS
+    ):
+        page.keyboard.press("d")
     assert len(dismiss_calls) == 1, "the untouched context must keep the group's default key"
 
     # /clusters/[id] discards on the new key ('x') and ignores 'd'.
@@ -489,16 +515,20 @@ def test_keymap_per_context_override(stub, page, app_url):
 
     page.goto(f"{app_url}/clusters/1", wait_until="domcontentloaded")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
     page.locator("img").nth(1).click()
-    page.wait_for_timeout(150)
+    expect(page.get_by_text("1 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
     page.keyboard.press("d")
-    page.wait_for_timeout(200)
+    # 'd' is a no-op in this detached context; let it settle via a real
+    # paint tick, then prove the app is still live and listening with the
+    # real key below rather than sleeping and hoping.
+    wait_for_paint(page)
     assert len(discard_calls) == 0, "the detached context's old default key must no longer discard"
 
-    page.keyboard.press("x")
-    page.wait_for_timeout(300)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/discard" in r.url, timeout=ACTION_TIMEOUT_MS
+    ):
+        page.keyboard.press("x")
     assert len(discard_calls) == 1
 
     stub.assert_fail_closed()

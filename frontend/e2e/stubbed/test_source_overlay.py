@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
 
+from playwright.sync_api import expect
+
 from fixtures.wire import make_item
 
 CLASSES = [
@@ -91,13 +93,11 @@ def test_review_source_panel_draws_client_side_boxes(stub, page, app_url):
 
     toggle = panel.get_by_role("button", name="hide boxes")
     toggle.first.click()
-    page.wait_for_timeout(200)
-    assert panel.get_by_test_id("overlay-box").count() == 0, "hide boxes removes the overlay layer"
+    expect(panel.get_by_test_id("overlay-box")).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
 
     toggle_back = panel.get_by_role("button", name="show boxes")
     toggle_back.first.click()
-    page.wait_for_timeout(200)
-    assert panel.get_by_test_id("overlay-box").count() == 3, "show boxes restores it"
+    expect(panel.get_by_test_id("overlay-box")).to_have_count(3, timeout=ACTION_TIMEOUT_MS)
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert errors == [], errors

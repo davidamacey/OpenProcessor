@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
 
+from playwright.sync_api import expect
+
 import json
 
 CLASSES = [
@@ -53,11 +55,10 @@ def test_dashboard_stats_unavailable(stub, page, app_url):
 
     page.goto(f"{app_url}/dashboard")
     page.get_by_text("Stats unavailable:", exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
 
-    assert page.get_by_text("Stats unavailable: stats unavailable (503)", exact=False).count() > 0, (
-        "the exact server error text should render inline"
-    )
+    expect(
+        page.get_by_text("Stats unavailable: stats unavailable (503)", exact=False).first
+    ).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, f"a stats 503 must not throw a page error: {errors[:3]}"

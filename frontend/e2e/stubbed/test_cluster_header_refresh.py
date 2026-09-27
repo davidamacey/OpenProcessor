@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
 
+from playwright.sync_api import expect
+
 import json
 
 from fixtures.wire import make_item
@@ -117,25 +119,28 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
 
     page.goto(f"{app_url}/clusters/{CLUSTER_ID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(400)
 
     header = page.get_by_title("validated · labeled · cluster total")
     header.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert "0" in header.inner_text(), f"expected the pre-label count first: {header.inner_text()!r}"
 
     page.locator("img").first.click()
-    page.wait_for_timeout(150)
+    expect(page.get_by_text("1 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     # 'q' is this class's own hotkey_letter (not one of the reserved
     # single-char action keys — g n d z x u a m /), routed by the
     # layout's class-letter keydown listener.
-    page.keyboard.press("q")
-    page.wait_for_timeout(600)
+    with page.expect_response(
+        lambda r: r.request.method == "PUT" and r.url.endswith("/batch_label"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press("q")
 
+    # The header text only updates once the post-label GET /classes
+    # refetch lands, so waiting on it first (a retrying expect) also
+    # guarantees classes_calls has already been incremented below.
+    expect(header).to_contain_text("34", timeout=ACTION_TIMEOUT_MS)
     assert len(classes_calls) >= 2, (
         "labeling a crop must re-fetch GET /classes so the header picks up the server's new count"
-    )
-    assert "34" in header.inner_text(), (
-        f"header should show the refreshed server count without a reload: {header.inner_text()!r}"
     )
     # K1 (visual audit 2026-09-24): the class registry's counts (161
     # labeled) and the cluster's own size (2) are different scopes; each

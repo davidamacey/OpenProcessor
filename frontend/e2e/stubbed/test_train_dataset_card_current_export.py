@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
 
+from playwright.sync_api import expect
 from test_train_gpus import register_train_mount
 
 CURRENT = "/exports/20260924T233203Z"
@@ -52,21 +53,26 @@ def test_card_shows_current_export_contents_for_explicit_pick(stub, page, app_ur
     page.get_by_text("images: train", exact=False).first.wait_for(timeout=10000)
 
     select.select_option(CURRENT)
-    page.wait_for_timeout(300)
+    # #36 item 6: the served classes_with_objects (5 of 84), not just the
+    # registry size, renders on the dataset card — wait for it as the real
+    # proof the card re-rendered for this selection.
+    expect(
+        page.get_by_text("5 of 84 classes with objects", exact=False).first
+    ).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text("images: train", exact=False).count() > 0, (
         "an explicit pick of the current export must still show its own split counts"
     )
     assert page.get_by_text("global pool", exact=False).count() == 0
-    # #36 item 6: the served classes_with_objects (5 of 84), not just the
-    # registry size, renders on the dataset card.
-    assert page.get_by_text("5 of 84 classes with objects", exact=False).count() > 0
 
     select.select_option(PAST)
-    page.wait_for_timeout(300)
+    # Wait for the real "global pool" fallback text to appear before
+    # checking the negative below.
+    expect(page.get_by_text("global pool", exact=False).first).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
     assert page.get_by_text("images: train", exact=False).count() == 0, (
         "a past version must not show the current export's counts"
     )
-    assert page.get_by_text("global pool", exact=False).count() > 0
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, f"no pageerror expected: {errors[:3]}"

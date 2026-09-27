@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
 
+from playwright.sync_api import expect
+
 from fixtures.wire import make_item
 
 CLASSES = [
@@ -90,7 +92,6 @@ def test_cluster_bulk_label_then_single_undo_sends_one_batch_call(stub, page, ap
 
     page.goto(f"{app_url}/clusters/1")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(400)
 
     # Select two crops, then bulk-label them via the class hotkey (no
     # drag — the layout-level keydown listener dispatches with an empty
@@ -100,18 +101,24 @@ def test_cluster_bulk_label_then_single_undo_sends_one_batch_call(stub, page, ap
     page.keyboard.down("Shift")
     page.locator("img").nth(1).click()
     page.keyboard.up("Shift")
-    page.wait_for_timeout(150)
+    expect(page.get_by_text("2 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
-    page.keyboard.press("k")
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "PUT" and r.url.endswith("/batch_label"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press("k")
 
     assert len(label_calls) == 1, f"bulk label should PUT exactly once: {label_calls}"
     _, _, label_body = label_calls[0]
     labeled_ids = label_body.get("crop_ids", [])
     assert len(labeled_ids) == 2, f"expected 2 crops in the bulk label request: {label_body}"
 
-    page.keyboard.press("z")
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.endswith("/label/undo_batch"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press("z")
 
     assert len(undo_single_calls) == 0, (
         f"one Z over a 2-crop write must not fall back to single-crop undo: {undo_single_calls}"

@@ -12,6 +12,8 @@ from conftest import ACTION_TIMEOUT_MS
 
 import re
 
+from playwright.sync_api import expect
+
 COVERAGE_BEFORE = {
     "coverage": {
         "uniqueness": {"field": "uniqueness_score", "n_scored": 0, "total": 7961, "pct": 0.0},
@@ -128,7 +130,7 @@ def test_scores_card_absent_on_404(stub, page, app_url):
 
     page.goto(f"{app_url}/settings")
     page.get_by_text("Deployment defaults").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(400)
+    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
 
     assert not [c for c in stub.console_errors if c.startswith("pageerror")]
     assert page.get_by_text("Curation scores").count() == 0, (
@@ -142,19 +144,21 @@ def test_scores_card_compute_all_flow(stub, page, app_url):
 
     page.goto(f"{app_url}/settings")
     page.get_by_text("Curation scores").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
+    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
 
     assert not [c for c in stub.console_errors if c.startswith("pageerror")]
     assert page.get_by_text("uniqueness").count() > 0
     assert page.get_by_text("near_dup").count() > 0
 
     page.get_by_role("button", name="Compute all").click()
-    page.wait_for_timeout(200)
 
     dialog = page.get_by_role("dialog", name="Confirm compute curation scores")
-    assert dialog.count() > 0, "confirm dialog should appear before any write"
-    dialog.get_by_role("button", name="Confirm").click()
-    page.wait_for_timeout(300)
+    expect(dialog).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.endswith("/scores/compute"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        dialog.get_by_role("button", name="Confirm").click()
 
     assert len(compute_calls) == 1, f"exactly one compute POST expected: {compute_calls}"
     _url, body = compute_calls[0]
@@ -162,16 +166,15 @@ def test_scores_card_compute_all_flow(stub, page, app_url):
 
     page.get_by_text(re.compile(r"Computing")).first.wait_for(timeout=5000)
 
-    # Poll interval is 3s; wait past two ticks so the job resolves to
-    # 'completed' and the coverage reload lands.
-    page.wait_for_timeout(6500)
-
-    assert page.get_by_text(re.compile(r"7,961\s*/\s*7,961")).count() > 0, (
-        "coverage should reload with the post-compute numbers once the job completes"
+    # Poll interval is 3s; two live polls are needed before the job
+    # resolves to 'completed'. `expect(...)` retries on its own schedule
+    # until the real text shows up (or the shared action-timeout budget
+    # is exhausted), instead of guessing a fixed multiple of the interval.
+    expect(page.get_by_text(re.compile(r"7,961\s*/\s*7,961")).first).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
     )
-    assert page.get_by_text(re.compile(r"Computing")).count() == 0, (
-        "the in-progress indicator should clear once the job is done"
-    )
+    # the in-progress indicator should clear once the job is done
+    expect(page.get_by_text(re.compile(r"Computing"))).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
 
 
 def test_scores_card_compute_selected_and_cancel(stub, page, app_url):
@@ -179,27 +182,32 @@ def test_scores_card_compute_selected_and_cancel(stub, page, app_url):
 
     page.goto(f"{app_url}/settings")
     page.get_by_text("Curation scores").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
+    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
 
     page.get_by_label("Select near_dup").check()
-    page.wait_for_timeout(150)
-    page.get_by_role("button", name=re.compile(r"^Compute selected")).click()
-    page.wait_for_timeout(200)
+    compute_selected_btn = page.get_by_role("button", name=re.compile(r"^Compute selected"))
+    expect(compute_selected_btn).to_be_enabled(timeout=ACTION_TIMEOUT_MS)
+    compute_selected_btn.click()
 
     dialog = page.get_by_role("dialog", name="Confirm compute curation scores")
+    expect(dialog).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert dialog.get_by_text("near_dup").count() > 0
-    dialog.get_by_role("button", name="Confirm").click()
-    page.wait_for_timeout(300)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.endswith("/scores/compute"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        dialog.get_by_role("button", name="Confirm").click()
 
     assert len(compute_calls) == 1
     _url, body = compute_calls[0]
     assert body == '{"scorers":["near_dup"]}', body
 
-    page.get_by_role("button", name="Cancel").first.wait_for(timeout=5000)
-    page.get_by_role("button", name="Cancel").click()
-    page.wait_for_timeout(300)
+    cancel_btn = page.get_by_role("button", name="Cancel")
+    cancel_btn.first.wait_for(timeout=5000)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.endswith("/scores/cancel"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        cancel_btn.click()
 
-    assert page.get_by_role("button", name="Cancel").count() == 0, (
-        "cancel should clear the in-progress state (no more Cancel button) without "
-        "waiting for the next poll"
-    )
+    expect(page.get_by_role("button", name="Cancel")).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
