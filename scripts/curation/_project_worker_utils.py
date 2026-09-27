@@ -1,54 +1,63 @@
-"""Shared per-project discovery/dispatch helpers for the round-robin
-curation workers (``vlm_worker.py``, ``cluster_refresh_daemon.py``) that
-run in multi-project mode (no ``--project``) instead of binding one
-project for the whole process.
+"""Per-project discovery helpers shared by the multi-project curation
+workers (``vlm_worker.py``, ``cluster_refresh_daemon.py`` and the
+detection worker in ``scripts/curation/worker/``).
 
-Split out of those two scripts so each stays under the repo's 700 LOC
-ratchet. Resolution here is always fresh (never cached at import time
-or across cycles) -- ``PROJECT_SCOPED_FIELDS`` must be read while the
-target project's ``bind_project`` block is active.
+A worker process is not bound to one project: each cycle it discovers
+the active projects, skips paused ones, and binds each project only
+around that project's own work (projects_plan.md §5.1/§5.2).
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from src.services.projects.script_binding import only_project
 
 
 if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
 
-
-def project_items_index(record: ProjectRecord | Any) -> str:
-    """``record``'s own items index name."""
-    from src.config.curation import IndexRole, get_curation_config, index_name
-    from src.config.project_context import bind_project
-
-    with bind_project(record):
-        return index_name(get_curation_config(), IndexRole.ITEMS)
+PIPELINE_PAUSED_FLAG_NAME = 'pipeline_paused.flag'
 
 
-def project_api_prefix() -> str:
-    """The deployment's curation API prefix (a global field -- no bind needed)."""
-    from src.config.curation import get_curation_config
+def is_project_paused(record: ProjectRecord) -> bool:
+    """A project's pipeline is paused while
+    ``<project_state_dir>/pipeline_paused.flag`` exists. Workers skip a
+    paused project's fetches and keep serving the others; the global GPU
+    pause sentinel still pauses everything."""
+    return (Path(record.resources.project_state_dir) / PIPELINE_PAUSED_FLAG_NAME).exists()
 
-    return get_curation_config().api_prefix.rstrip('/')
+
+async def unpaused_projects(registry: Any, only_slug: str | None) -> list[ProjectRecord]:
+    """The active, unpaused projects this worker serves this cycle
+    (just ``only_slug`` when the worker runs with ``--project``)."""
+    await registry.ensure_fresh()
+    return [
+        record
+        for record in only_project(registry.active_projects(), only_slug)
+        if not is_project_paused(record)
+    ]
 
 
-def project_paused(record: ProjectRecord | Any) -> bool:
-    """Minimal per-project pause primitive: presence of
-    ``<project_state_dir>/pipeline_paused.flag``. No ``pipeline.paused``
-    flag or route exists elsewhere in this codebase to reuse -- this is
-    the simplest thing that lets a round-robin worker skip one paused
-    project without touching the others."""
-    from src.config.curation import get_curation_config
-    from src.config.project_context import bind_project
+def rotated(records: list[ProjectRecord], start: int) -> list[ProjectRecord]:
+    """``records`` starting at ``start`` (mod len): the round-robin order
+    for one cycle; callers advance ``start`` by one per cycle."""
+    if not records:
+        return []
+    start %= len(records)
+    return records[start:] + records[:start]
 
-    with bind_project(record):
-        return (get_curation_config().project_state_dir / 'pipeline_paused.flag').exists()
+
+def curation_api_prefix() -> str:
+    """The deployment's curation API mount (a global setting)."""
+    from src.config.curation import base_curation_config
+
+    return base_curation_config().api_prefix.rstrip('/')
 
 
 def scoped_url(api: str, api_prefix: str, slug: str, path: str) -> str:
-    """``{api}{api_prefix}/projects/{slug}{path}`` -- mirrors the scoped
-    mount formula (``src.routers.curation._mounting.scoped_prefix``)
-    since a script has no request context for ``project_api_base()``."""
+    """``{api}{api_prefix}/projects/{slug}{path}``: the project-scoped
+    route a script calls (it has no request context for
+    ``project_api_base()``)."""
     return f'{api}{api_prefix}/projects/{slug}{path}'

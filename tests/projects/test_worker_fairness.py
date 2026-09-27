@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 
+from scripts.curation._project_worker_utils import PIPELINE_PAUSED_FLAG_NAME
 from scripts.curation.worker import cascade, fairness
 from scripts.curation.worker.fairness import FairnessScheduler, fetch_pending_multi_project
 from scripts.curation.worker.state import _ItemTask
@@ -224,7 +225,7 @@ async def test_paused_project_stops_while_others_continue(
     projects: list[ProjectRecord], backlog: _Backlog, clock: _Clock
 ) -> None:
     heavy = projects[0]
-    (heavy.resources.project_state_dir / fairness.PIPELINE_PAUSED_FLAG_NAME).write_text('1')
+    (heavy.resources.project_state_dir / PIPELINE_PAUSED_FLAG_NAME).write_text('1')
     scheduler = FairnessScheduler()
     fetched: dict[str, int] = {}
     for _ in range(2):

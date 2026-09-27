@@ -19,11 +19,12 @@ Designed to run as a long-lived process (``python -m
 scripts.curation.cluster_refresh_daemon``) or as a cron job invoking
 ``--once``.
 
-Multi-project mode (default): with no ``--project``, each iteration
-discovers every active project and refreshes one of them (rotating one
-per iteration), skipping a project whose ``pipeline_paused.flag`` is
-set. ``--project SLUG`` restricts to (and whole-process-binds) one
-project -- the original single-project growth-tracking loop, unchanged.
+Projects: each iteration discovers the active projects, skips paused
+ones (``<project_state_dir>/pipeline_paused.flag``) and checks every
+other one in rotating order, with a growth counter per project. A
+project's count reads its own items index (guarded client, bound to that
+project); its refresh calls its own ``{prefix}/projects/{slug}/...``
+routes. ``--project SLUG`` restricts the daemon to one project.
 """
 
 from __future__ import annotations
@@ -46,13 +47,19 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from scripts.curation._project_worker_utils import (
-    project_api_prefix,
-    project_items_index,
-    project_paused,
+    curation_api_prefix,
+    rotated,
     scoped_url,
+    unpaused_projects,
 )
+from src.config.project_context import bind_project
 from src.services.curation.worker_liveness import write_heartbeat
-from src.services.projects.script_binding import add_project_argument, bind_script_project
+from src.services.projects.guard import make_script_opensearch
+from src.services.projects.script_binding import (
+    add_project_argument,
+    bind_script_project,
+    script_project_registry,
+)
 
 
 # S-2: container healthcheck liveness. The daemon's real poll interval
@@ -98,14 +105,16 @@ def _parse_args() -> argparse.Namespace:
         help='Run a single iteration and exit (cron-friendly).',
     )
     add_project_argument(p)
-    p.set_defaults(project=None)  # multi-project mode is the new default
+    p.set_defaults(project=None)  # every active project; --project restricts to one
     return p.parse_args()
 
 
-async def _crop_count(client: httpx.AsyncClient, opensearch: str, items_index: str) -> int:
-    r = await client.get(f'{opensearch}/{items_index}/_count', timeout=10.0)
-    r.raise_for_status()
-    return int(r.json().get('count', 0))
+async def _crop_count(opensearch: Any) -> int:
+    """The bound project's item count."""
+    from src.config.curation import items_index
+
+    resp = await opensearch.count(index=items_index())
+    return int(resp.get('count', 0))
 
 
 async def _trigger_auto_promote(
@@ -144,17 +153,18 @@ async def _iteration(
     *,
     api: str,
     api_prefix: str,
-    slug: str,
-    opensearch: str,
-    items_index: str,
+    record: Any,
+    opensearch: Any,
     last_count: int,
     threshold: int,
     auto_label: bool,
 ) -> int:
-    """One poll + (maybe) refresh. Returns the new ``last_count``."""
+    """One poll + (maybe) refresh of ``record``. Returns its new ``last_count``."""
+    slug = record.slug
     try:
-        count = await _crop_count(client, opensearch, items_index)
-    except httpx.HTTPError as exc:
+        with bind_project(record):
+            count = await _crop_count(opensearch)
+    except Exception as exc:
         print(f'[cluster-refresh] project={slug} crop_count failed: {exc}', flush=True)
         return last_count
     growth = count - last_count
@@ -212,47 +222,10 @@ async def _sleep_with_heartbeat(stop: asyncio.Event, sleep_s: float) -> None:
 
 
 async def run(args: argparse.Namespace) -> int:
-    # Single, --project-bound project: the original growth-tracking loop.
-    from src.config.project_context import current_project
-
-    bound = current_project()
-    items_index = project_items_index(bound.record)
-    api_prefix = project_api_prefix()
-    slug = bound.record.slug
-
     stop, _ = _make_signal_stop()
-    last_count = 0
-    write_heartbeat('cluster_refresh', {'loop': True})
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        while not stop.is_set():
-            t0 = time.monotonic()
-            last_count = await _iteration(
-                client,
-                api=args.api,
-                api_prefix=api_prefix,
-                slug=slug,
-                opensearch=args.opensearch,
-                items_index=items_index,
-                last_count=last_count,
-                threshold=args.growth_threshold,
-                auto_label=args.auto_label,
-            )
-            write_heartbeat('cluster_refresh', {'loop': True})
-            if args.once:
-                break
-            await _sleep_with_heartbeat(
-                stop, max(args.interval_seconds - (time.monotonic() - t0), 1.0)
-            )
-    return 0
-
-
-async def run_multi_project(args: argparse.Namespace) -> int:
-    # Round-robins every active project, one at a time per iteration.
-    from src.services.projects.registry import get_project_registry
-
-    stop, _ = _make_signal_stop()
-    registry = get_project_registry()
-    api_prefix = project_api_prefix()
+    registry = script_project_registry(args.opensearch)
+    opensearch = make_script_opensearch([args.opensearch], timeout=30)
+    api_prefix = curation_api_prefix()
     last_counts: dict[str, int] = {}
     rotation = 0
     write_heartbeat('cluster_refresh', {'loop': True})
@@ -260,52 +233,39 @@ async def run_multi_project(args: argparse.Namespace) -> int:
         while not stop.is_set():
             t0 = time.monotonic()
             try:
-                await registry.ensure_fresh()
-                active = registry.active_projects()
+                projects = rotated(await unpaused_projects(registry, args.project), rotation)
             except Exception as exc:
                 print(f'[cluster-refresh] registry unavailable: {exc}', flush=True)
-                active = []
-
-            if active:
-                rotation %= len(active)
-                record = active[rotation]
-                rotation += 1
-                try:
-                    paused = project_paused(record)
-                    items_index = project_items_index(record) if not paused else ''
-                except Exception as exc:
-                    print(f'[cluster-refresh] project {record.slug} unavailable: {exc}', flush=True)
-                    paused, items_index = True, ''
-                if paused:
-                    print(f'[cluster-refresh] project={record.slug} paused, skipping', flush=True)
-                else:
-                    last_counts[record.slug] = await _iteration(
-                        client,
-                        api=args.api,
-                        api_prefix=api_prefix,
-                        slug=record.slug,
-                        opensearch=args.opensearch,
-                        items_index=items_index,
-                        last_count=last_counts.get(record.slug, 0),
-                        threshold=args.growth_threshold,
-                        auto_label=args.auto_label,
-                    )
-
+                projects = []
+            rotation += 1
+            for record in projects:
+                last_counts[record.slug] = await _iteration(
+                    client,
+                    api=args.api,
+                    api_prefix=api_prefix,
+                    record=record,
+                    opensearch=opensearch,
+                    last_count=last_counts.get(record.slug, 0),
+                    threshold=args.growth_threshold,
+                    auto_label=args.auto_label,
+                )
+                write_heartbeat('cluster_refresh', {'loop': True})
             write_heartbeat('cluster_refresh', {'loop': True})
             if args.once:
                 break
             await _sleep_with_heartbeat(
                 stop, max(args.interval_seconds - (time.monotonic() - t0), 1.0)
             )
+    await opensearch.close()
     return 0
 
 
 def main() -> int:
     args = _parse_args()
     if args.project:
+        # Fails fast on an unknown/unbindable slug.
         bind_script_project(args.project, opensearch_url=args.opensearch)
-        return asyncio.run(run(args))
-    return asyncio.run(run_multi_project(args))
+    return asyncio.run(run(args))
 
 
 if __name__ == '__main__':

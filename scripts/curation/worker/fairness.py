@@ -39,23 +39,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from scripts.curation._project_worker_utils import is_project_paused
+
 
 if TYPE_CHECKING:
     from scripts.curation.worker.state import _ItemTask
     from src.config.projects import ProjectRecord
 
-PIPELINE_PAUSED_FLAG_NAME = 'pipeline_paused.flag'
-
 _IDLE_BACKOFF_MIN_S = 5.0
 _IDLE_BACKOFF_MAX_S = 60.0
-
-
-def is_project_paused(record: ProjectRecord) -> bool:
-    """A project is paused iff ``<project_state_dir>/pipeline_paused.flag``
-    exists. Minimal primitive -- no HTTP route in this task (see module
-    docstring); a later task can add one that just writes/removes this
-    file."""
-    return (record.resources.project_state_dir / PIPELINE_PAUSED_FLAG_NAME).exists()
 
 
 @dataclass
