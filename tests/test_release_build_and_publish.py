@@ -53,6 +53,12 @@ def sandbox(tmp_path: Path) -> Path:
 
     release_dir = repo / 'scripts' / 'release'
     release_dir.mkdir(parents=True)
+    (repo / 'scripts' / 'lib').mkdir(parents=True)
+    shutil.copy(
+        REPO_ROOT / 'scripts' / 'lib' / 'image_keys.sh', repo / 'scripts' / 'lib' / 'image_keys.sh'
+    )
+    # The installer's file list: the release script must never touch it (K-2).
+    (repo / 'release-manifest.txt').write_text('docker-compose.yml\nimages.lock\n')
     shutil.copy(SCRIPT, release_dir / 'build_and_publish.sh')
     (release_dir / 'build_and_publish.sh').chmod(0o755)
     (release_dir / 'trivy-allowlist.txt').write_text('# no waivers\n')
@@ -132,7 +138,7 @@ def test_dry_run_builds_and_scans_never_pushes(sandbox: Path, fake_bin: Path) ->
     assert 'build' in calls
     assert 'push' not in calls
     assert not (sandbox / 'images.lock').exists()
-    assert not (sandbox / 'release-manifest.txt').exists()
+    assert (sandbox / 'release-manifest.txt').read_text() == 'docker-compose.yml\nimages.lock\n'
 
 
 def test_dry_run_refuses_push_without_explicit_flag(sandbox: Path, fake_bin: Path) -> None:
@@ -143,30 +149,46 @@ def test_dry_run_refuses_push_without_explicit_flag(sandbox: Path, fake_bin: Pat
     assert not (sandbox / 'images.lock').exists()
 
 
-def test_push_writes_images_lock_and_manifest(sandbox: Path, fake_bin: Path) -> None:
+def test_push_writes_images_lock_with_every_key_and_leaves_the_manifest(
+    sandbox: Path, fake_bin: Path
+) -> None:
+    manifest_before = (sandbox / 'release-manifest.txt').read_text()
     result = _run(sandbox, fake_bin, ['--push', '--only', 'api,triton'])
     assert result.returncode == 0, result.stderr
 
     lock = sandbox / 'images.lock'
-    manifest = sandbox / 'release-manifest.txt'
-    assert lock.exists()
-    assert manifest.exists()
+    entries = dict(line.split('=', 1) for line in lock.read_text().strip().splitlines())
+    keys = subprocess.run(
+        ['bash', '-c', f'source "{REPO_ROOT}/scripts/lib/image_keys.sh"; image_keys third'],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split()
+    assert set(entries) == {'api', 'triton', *keys}
+    for key in ('api', 'triton'):
+        assert entries[key].startswith('davidamacey/openprocessor')  # default namespace
+    assert entries['opensearch'].startswith('opensearchproject/opensearch:3.6.0@sha256:')
+    for ref in entries.values():
+        assert '@sha256:' in ref
+        assert ':latest' not in ref
 
-    lock_lines = sorted(lock.read_text().strip().splitlines())
-    assert len(lock_lines) == 2
-    for line in lock_lines:
-        key, rest = line.split('=', 1)
-        assert key in {'api', 'triton'}
-        assert '@sha256:' in rest
-        assert rest.startswith('davidamacey/openprocessor')  # default namespace
+    # K-2: the installer's file list is untouched; the lock checksum has its own file.
+    assert (sandbox / 'release-manifest.txt').read_text() == manifest_before
+    sums = (sandbox / 'images.lock.sha256').read_text().split()
+    assert sums == [hashlib.sha256(lock.read_bytes()).hexdigest(), 'images.lock']
+    calls = (fake_bin.parent / 'docker_calls.log').read_text()
+    assert 'pull opensearchproject/opensearch:3.6.0' in calls
 
-    # release-manifest.txt round trip: the recorded sha256 matches the file.
-    manifest_lines = manifest.read_text().strip().splitlines()
-    assert len(manifest_lines) == 1
-    name, recorded_sha = manifest_lines[0].split('\t')
-    assert name == 'images.lock'
-    actual_sha = hashlib.sha256(lock.read_bytes()).hexdigest()
-    assert recorded_sha == actual_sha
+
+def test_refuses_to_write_the_installer_manifest(sandbox: Path, fake_bin: Path) -> None:
+    result = _run(
+        sandbox,
+        fake_bin,
+        ['--push', '--only', 'api'],
+        env_extra={'IMAGES_LOCK_SUMS_FILE': str(sandbox / 'release-manifest.txt')},
+    )
+    assert result.returncode == 2
+    assert not (sandbox / 'images.lock').exists()
 
 
 def test_namespace_override_applies_to_lock(sandbox: Path, fake_bin: Path) -> None:
@@ -264,3 +286,41 @@ esac
     )
     assert result.returncode == 0, result.stderr
     assert 'not found' in result.stderr.lower()
+
+
+def test_release_lock_round_trips_through_the_installer_parser(
+    sandbox: Path, fake_bin: Path
+) -> None:
+    """K-1: the lock the release script writes is exactly what the installer
+    reads: same key names (both come from scripts/lib/image_keys.sh), every
+    key present and digest-pinned, none rejected by the installer's validator."""
+    result = _run(sandbox, fake_bin, ['--push'])
+    assert result.returncode == 0, result.stderr
+    lock = sandbox / 'images.lock'
+    check = subprocess.run(
+        [
+            'bash',
+            '-c',
+            f'OP_SOURCE_ONLY=1 source "{REPO_ROOT}/setup-openprocessor.sh"; '
+            f'source "{REPO_ROOT}/scripts/lib/image_keys.sh"; '
+            'validate_images_lock "$1" || exit 10; '
+            'for k in $(image_keys); do '
+            '  ref="$(lock_value "$1" "$k")"; _lock_line_valid "$k=$ref" || { echo "bad $k"; exit 11; }; '
+            '  echo "$k $(image_key_field "$k" env) $ref"; '
+            'done',
+            '_',
+            str(lock),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert check.returncode == 0, check.stdout + check.stderr
+    rows = [line.split() for line in check.stdout.splitlines()]
+    by_key = {key: (env, ref) for key, env, ref in rows}
+    assert by_key['api'][0] == 'OP_API_IMAGE'
+    assert by_key['api'][1].startswith('davidamacey/openprocessor:1.2.3@sha256:')
+    assert by_key['triton'][1].startswith('davidamacey/openprocessor-triton:1.2.3@sha256:')
+    assert by_key['opensearch'] == ('OPENSEARCH_IMAGE', by_key['opensearch'][1])
+    assert by_key['opensearch'][1].startswith('opensearchproject/opensearch:3.6.0@sha256:')
+    assert len(rows) == len(lock.read_text().splitlines())

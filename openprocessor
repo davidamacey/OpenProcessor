@@ -1,0 +1,1001 @@
+#!/bin/bash
+# =============================================================================
+# OpenProcessor Management CLI
+# =============================================================================
+# Unified command-line interface for managing OpenProcessor deployments.
+# Ships at the root of every install dir (installer plan section 5.5); a
+# checkout keeps a 3-line exec shim at scripts/openprocessor.sh so existing
+# muscle memory / docs keep working.
+#
+# Usage: ./openprocessor <command> [options]
+# =============================================================================
+
+set -eo pipefail
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
+# Physical path (-P): compose records the resolved working_dir, and the
+# installer compares against the same form.
+PROJECT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="${PROJECT_DIR}/scripts"
+export PROJECT_DIR
+
+# Source library functions
+source "${SCRIPT_DIR}/lib/colors.sh"
+source "${SCRIPT_DIR}/lib/gpu.sh"
+source "${SCRIPT_DIR}/lib/ports.sh"
+source "${SCRIPT_DIR}/lib/vlm_catalog.sh"
+
+# Installer plan section 5.1: every compose call goes through dc(), which
+# always passes -p, --env-file and --project-directory. Section 5.5:
+# PROJECT_DIR is the directory holding docker-compose.yml, whether that's a
+# checkout or an install dir; in a checkout (src/main.py exists next to the
+# compose file) it adds the dev overlay for hot-reload.
+DC_FILES=(-f "$PROJECT_DIR/docker-compose.yml")
+if [[ -f "$PROJECT_DIR/src/main.py" ]]; then
+    DC_FILES+=(-f "$PROJECT_DIR/docker-compose.dev.yml")
+    IS_CHECKOUT=1
+else
+    IS_CHECKOUT=0
+fi
+if [[ -f "$PROJECT_DIR/docker-compose.cpu.yml" ]]; then
+    DC_FILES+=(-f "$PROJECT_DIR/docker-compose.cpu.yml")
+fi
+
+_env_value() {
+    local key="$1" file="${2:-$PROJECT_DIR/.env}"
+    [[ -f "$file" ]] || return 0
+    awk -v k="$key" '{ i = index($0, "=") } i > 1 && substr($0, 1, i - 1) == k { v = substr($0, i + 1) } END { print v }' "$file"
+}
+
+# B3: the project name comes from this directory's own .env (and must match
+# .install/state.json), never from a default. With nothing resolvable the
+# CLI refuses: a default name could be another stack's.
+_PROJECT_RESOLVED=""
+resolve_project() {
+    [[ -n "$_PROJECT_RESOLVED" ]] && return 0
+    local from_env from_state=""
+    from_env="$(_env_value COMPOSE_PROJECT_NAME)"
+    if [[ "$IS_CHECKOUT" != 1 ]]; then
+        [[ -f "$PROJECT_DIR/.env" ]] || { log_error "no .env in ${PROJECT_DIR}: not an OpenProcessor install dir"; exit 3; }
+        [[ -n "$from_env" ]] || { log_error "${PROJECT_DIR}/.env has no COMPOSE_PROJECT_NAME; refusing to guess a compose project"; exit 3; }
+        # The install's own state.json is the proof this directory (and so
+        # this project) was created by setup-openprocessor.sh.
+        local state="$PROJECT_DIR/.install/state.json" from_dir
+        [[ -f "$state" ]] || { log_error "${PROJECT_DIR} has no .install/state.json: not an install made by setup-openprocessor.sh"; exit 3; }
+        from_state="$(sed -n -E 's/^  "project": "([^"]*)",?$/\1/p' "$state" | head -n1)"
+        from_dir="$(sed -n -E 's/^  "install_dir": "([^"]*)",?$/\1/p' "$state" | head -n1)"
+        if [[ "$from_state" != "$from_env" ]]; then
+            log_error "project mismatch: .env says '${from_env}', .install/state.json says '${from_state}'"
+            exit 3
+        fi
+        if [[ "$from_dir" != "$PROJECT_DIR" ]]; then
+            log_error ".install/state.json belongs to ${from_dir:-another dir}, not ${PROJECT_DIR}"
+            exit 3
+        fi
+    fi
+    if [[ -n "$from_env" ]]; then
+        if [[ -n "${OP_PROJECT:-}" && "$OP_PROJECT" != "$from_env" ]]; then
+            log_error "OP_PROJECT=${OP_PROJECT} conflicts with this directory's project '${from_env}'"
+            exit 3
+        fi
+        OP_PROJECT="$from_env"
+    elif [[ -z "${OP_PROJECT:-}" ]]; then
+        log_error "no compose project: set COMPOSE_PROJECT_NAME in ${PROJECT_DIR}/.env (or OP_PROJECT)"
+        exit 3
+    fi
+    if [[ ! "$OP_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+        log_error "invalid compose project name '${OP_PROJECT}'"
+        exit 3
+    fi
+    _PROJECT_RESOLVED=1
+}
+
+_dc_is_readonly() {
+    while (( $# > 0 )); do
+        case "$1" in
+            --profile) shift 2 ;;
+            -*) shift ;;
+            config|ps|version|images|ls|logs|port|top) return 0 ;;
+            *) return 1 ;;
+        esac
+    done
+    return 1
+}
+
+# assert_project_owned PROJECT DIR -- every container labelled with PROJECT
+# was created from DIR. Fails closed when Docker cannot be queried.
+declare -A _OWNED_OK=()
+assert_project_owned() {
+    local project="$1" dir="$2" out wd
+    [[ -n "${_OWNED_OK[$project]:-}" ]] && return 0
+    if ! out="$(docker ps -a --filter "label=com.docker.compose.project=${project}" \
+            --format '{{.Names}}|{{.Label "com.docker.compose.project.working_dir"}}' 2>&1)"; then
+        log_error "cannot query Docker (${out}); refusing to change project '${project}'"
+        exit 5
+    fi
+    [[ -z "$out" ]] && { _OWNED_OK[$project]=1; return 0; }
+    while IFS= read -r wd; do
+        wd="${wd#*|}"
+        if [[ -z "$wd" ]]; then
+            log_error "a container of project '${project}' has no working_dir label; cannot prove ownership, refusing"
+            exit 3
+        fi
+        if [[ "$wd" != "$dir" ]]; then
+            log_error "compose project '${project}' belongs to ${wd}, not ${dir}; refusing"
+            exit 3
+        fi
+    done <<< "$out"
+    _OWNED_OK[$project]=1
+}
+
+# m12: a non-loopback bind must be the one recorded (consented) in .env.
+assert_bind_consented() {
+    local recorded shell_value="${OP_BIND_ADDRESS:-}"
+    recorded="$(_env_value OP_BIND_ADDRESS)"
+    [[ -z "$shell_value" || "$shell_value" == "$recorded" || "$shell_value" == 127.* ]] && return 0
+    log_error "OP_BIND_ADDRESS=${shell_value} in your shell differs from this install's .env (${recorded:-127.0.0.1});"
+    log_error "a public bind needs consent: re-run ./setup-openprocessor.sh --bind ${shell_value}"
+    exit 9
+}
+
+dc() {
+    resolve_project
+    local -a cmd=(docker compose -p "$OP_PROJECT")
+    [[ -f "$PROJECT_DIR/.env" ]] && cmd+=(--env-file "$PROJECT_DIR/.env")
+    cmd+=(--project-directory "$PROJECT_DIR" "${DC_FILES[@]}" "$@")
+    if ! _dc_is_readonly "$@"; then
+        assert_project_owned "$OP_PROJECT" "$PROJECT_DIR"
+        assert_bind_consented
+    fi
+    if [[ "$IS_CHECKOUT" == 1 ]]; then
+        COMPOSE_PROJECT_NAME="$OP_PROJECT" "${cmd[@]}"
+    else
+        env -u COMPOSE_PROFILES -u COMPOSE_FILE -u COMPOSE_ENV_FILES \
+            COMPOSE_PROJECT_NAME="$OP_PROJECT" "${cmd[@]}"
+    fi
+}
+
+dc_cw() {
+    resolve_project
+    local dir="${PROJECT_DIR}/cropwright"
+    [[ -f "${dir}/docker-compose.yml" ]] || { log_error "no Cropwright in this install (${dir})"; return 1; }
+    local -a cmd=(docker compose -p "${OP_PROJECT}-cw" --env-file "${dir}/.env"
+        --project-directory "$dir" -f "${dir}/docker-compose.yml" "$@")
+    if ! _dc_is_readonly "$@"; then
+        assert_project_owned "${OP_PROJECT}-cw" "$dir"
+    fi
+    env -u COMPOSE_PROFILES -u COMPOSE_FILE -u COMPOSE_ENV_FILES -u CROPWRIGHT_BIND_ADDRESS \
+        -u CROPWRIGHT_IMAGE -u CROPWRIGHT_PORT COMPOSE_PROJECT_NAME="${OP_PROJECT}-cw" "${cmd[@]}"
+}
+
+require_checkout() {
+    if [[ "$IS_CHECKOUT" != "1" ]]; then
+        log_error "'$1' requires a source checkout"
+        return 1
+    fi
+}
+
+# F-66: resolve every port from THIS deployment's .env (falling back to the
+# stock defaults) instead of hardcoding localhost:4603/4600/4607/4605. On a
+# shared host running a second isolated stack (remapped ports via .env),
+# the hardcoded literals used to report ANOTHER stack's /health as this
+# one's.
+API_PORT="$(env_port API_PORT 4603)"
+TRITON_HTTP_PORT="$(env_port TRITON_HTTP_PORT 4600)"
+OPENSEARCH_PORT="$(env_port OPENSEARCH_PORT 4607)"
+GRAFANA_PORT="$(env_port GRAFANA_PORT 4605)"
+
+# Source optional libraries only when needed
+load_download_lib() {
+    source "${SCRIPT_DIR}/lib/download.sh"
+}
+
+load_export_lib() {
+    source "${SCRIPT_DIR}/lib/export.sh"
+}
+
+load_config_lib() {
+    source "${SCRIPT_DIR}/lib/config.sh"
+}
+
+# =============================================================================
+# Service Management
+# =============================================================================
+
+cmd_start() {
+    log_step "Starting OpenProcessor services..."
+    cd "$PROJECT_DIR"
+    dc up -d
+    log_success "Services started"
+    echo ""
+    cmd_status
+}
+
+cmd_stop() {
+    log_step "Stopping OpenProcessor services..."
+    cd "$PROJECT_DIR"
+    dc down
+    log_success "Services stopped"
+}
+
+cmd_restart() {
+    local service="${1:-}"
+
+    if [[ -n "$service" ]]; then
+        log_step "Restarting $service..."
+        cd "$PROJECT_DIR"
+        dc restart "$service"
+        log_success "$service restarted"
+    else
+        log_step "Restarting all services..."
+        cd "$PROJECT_DIR"
+        dc restart
+        log_success "All services restarted"
+    fi
+}
+
+cmd_logs() {
+    local service="${1:-}"
+    local follow="${2:-}"
+
+    cd "$PROJECT_DIR"
+
+    if [[ -n "$service" ]]; then
+        if [[ "$follow" == "-f" ]] || [[ "$follow" == "--follow" ]]; then
+            dc logs -f "$service"
+        else
+            dc logs --tail=100 "$service"
+        fi
+    else
+        if [[ "$1" == "-f" ]] || [[ "$1" == "--follow" ]]; then
+            dc logs -f
+        else
+            dc logs --tail=50
+        fi
+    fi
+}
+
+cmd_status() {
+    print_header "OpenProcessor Status"
+
+    cd "$PROJECT_DIR"
+
+    # Container status
+    echo -e "${BOLD}Containers:${NC}"
+    dc ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || \
+        dc ps
+
+    echo ""
+
+    # Health checks
+    echo -e "${BOLD}Health Checks:${NC}"
+
+    # API health
+    local api_status
+    api_status=$(curl -s -o /dev/null -w "%{http_code}" "localhost:${API_PORT}/health" 2>/dev/null || echo "000")
+    if [[ "$api_status" == "200" ]]; then
+        echo -e "  API (${API_PORT}):       ${GREEN}healthy${NC}"
+    else
+        echo -e "  API (${API_PORT}):       ${RED}unavailable${NC} (HTTP $api_status)"
+    fi
+
+    # Triton health
+    local triton_status
+    triton_status=$(curl -s -o /dev/null -w "%{http_code}" "localhost:${TRITON_HTTP_PORT}/v2/health/ready" 2>/dev/null || echo "000")
+    if [[ "$triton_status" == "200" ]]; then
+        echo -e "  Triton (${TRITON_HTTP_PORT}):    ${GREEN}healthy${NC}"
+    else
+        echo -e "  Triton (${TRITON_HTTP_PORT}):    ${RED}unavailable${NC} (HTTP $triton_status)"
+    fi
+
+    # OpenSearch health
+    local opensearch_status
+    opensearch_status=$(curl -s -o /dev/null -w "%{http_code}" "localhost:${OPENSEARCH_PORT}" 2>/dev/null || echo "000")
+    if [[ "$opensearch_status" == "200" ]]; then
+        echo -e "  OpenSearch (${OPENSEARCH_PORT}): ${GREEN}healthy${NC}"
+    else
+        echo -e "  OpenSearch (${OPENSEARCH_PORT}): ${RED}unavailable${NC} (HTTP $opensearch_status)"
+    fi
+
+    # Grafana health
+    local grafana_status
+    grafana_status=$(curl -s -o /dev/null -w "%{http_code}" "localhost:${GRAFANA_PORT}/api/health" 2>/dev/null || echo "000")
+    if [[ "$grafana_status" == "200" ]]; then
+        echo -e "  Grafana (${GRAFANA_PORT}):   ${GREEN}healthy${NC}"
+    else
+        echo -e "  Grafana (${GRAFANA_PORT}):   ${YELLOW}unavailable${NC}"
+    fi
+
+    echo ""
+
+    # GPU status
+    if command -v nvidia-smi &> /dev/null; then
+        echo -e "${BOLD}GPU:${NC}"
+        check_gpu_memory_usage 0
+    fi
+}
+
+cmd_health() {
+    log_info "Checking API health..."
+
+    local response
+    response=$(curl -s "localhost:${API_PORT}/health" 2>/dev/null)
+
+    if [[ -n "$response" ]]; then
+        echo "$response" | python3 -m json.tool 2>/dev/null || echo "$response"
+    else
+        log_error "API not responding"
+        return 1
+    fi
+}
+
+# =============================================================================
+# Model Management
+# =============================================================================
+
+cmd_models() {
+    local sub="${1:-status}"
+    shift 2>/dev/null || true
+    case "$sub" in
+        status|list) cmd_models_status ;;
+        install|repair)
+            local only=""
+            if [[ "${1:-}" == "--only" ]]; then
+                only="${2:?--only needs a group name}"
+            fi
+            cmd_models_install "$only"
+            ;;
+        *)
+            log_error "usage: openprocessor models status|install [--only GROUP]|repair"
+            return 2
+            ;;
+    esac
+}
+
+cmd_models_status() {
+    log_info "Fetching the model repository index from Triton..."
+    local response
+    response=$(curl -s -X POST "localhost:${TRITON_HTTP_PORT}/v2/repository/index" 2>/dev/null)
+    if [[ -z "$response" ]]; then
+        log_error "Triton not responding"
+        return 1
+    fi
+    echo ""
+    echo -e "${BOLD}Models:${NC}"
+    # No host Python: split the JSON array into objects with sed.
+    printf '%s\n' "$response" | sed 's/},{/}\n{/g' | while IFS= read -r obj; do
+        local name state
+        name="$(printf '%s' "$obj" | sed -n -E 's/.*"name":"([^"]*)".*/\1/p')"
+        state="$(printf '%s' "$obj" | sed -n -E 's/.*"state":"([^"]*)".*/\1/p')"
+        [[ -z "$name" ]] && continue
+        if [[ "$state" == READY ]]; then
+            echo -e "  ${GREEN}[READY]${NC} ${name}"
+        else
+            echo -e "  ${YELLOW}[${state:-UNAVAILABLE}]${NC} ${name}"
+        fi
+    done
+}
+
+# One implementation with the installer: scripts/lib/model_setup.sh.
+cmd_models_install() {
+    local only="$1" tiers="core" profiles
+    # shellcheck source=scripts/lib/model_setup.sh
+    source "${SCRIPT_DIR}/lib/model_setup.sh"
+    profiles="$(_env_value COMPOSE_PROFILES)"
+    [[ ",${profiles}," == *",curation,"* ]] && tiers="core curation"
+    OP_DIR="$PROJECT_DIR"
+    OP_HEALTH_HOST=127.0.0.1
+    GPU_PROFILE="$(_env_value GPU_PROFILE)"
+    MODEL_SETUP_TRITON_DIGEST="$(sed -n -E 's/^  "triton_image_digest": "([^"]*)",?$/\1/p' "$PROJECT_DIR/.install/state.json" 2>/dev/null | head -n1)"
+    export OP_DIR OP_HEALTH_HOST GPU_PROFILE MODEL_SETUP_TRITON_DIGEST
+    dc up -d triton-server
+    if model_setup_run_groups "$tiers" "$only"; then
+        log_success "model groups done"
+    else
+        log_error "some model groups failed; see ${PROJECT_DIR}/.install/logs"
+        return 1
+    fi
+    if [[ -z "$only" || "$only" == pe ]] && [[ "$tiers" == *curation* ]]; then
+        dc restart yolo-api
+    fi
+}
+
+cmd_export() {
+    local model="${1:-all}"
+
+    load_export_lib
+
+    case "$model" in
+        all)
+            export_all_models
+            ;;
+        essential)
+            export_essential_models
+            ;;
+        status)
+            check_exported_models
+            ;;
+        *)
+            export_model "$model"
+            ;;
+    esac
+}
+
+cmd_download() {
+    local target="${1:-all}"
+
+    load_download_lib
+
+    case "$target" in
+        all)
+            download_all_models
+            ;;
+        essential)
+            download_essential_models
+            ;;
+        ocr|paddleocr)
+            download_paddleocr_models
+            ;;
+        status)
+            check_downloaded_models
+            ;;
+        *)
+            download_model "$target"
+            ;;
+    esac
+}
+
+# =============================================================================
+# Profile Management
+# =============================================================================
+
+cmd_profile() {
+    local profile="${1:-}"
+
+    if [[ -z "$profile" ]]; then
+        # Show current profile
+        if [[ -f "$PROJECT_DIR/.env" ]]; then
+            local current
+            current=$(grep "^GPU_PROFILE=" "$PROJECT_DIR/.env" | cut -d'=' -f2)
+            echo "Current profile: $current"
+        else
+            echo "No profile configured. Run: ./scripts/setup.sh"
+        fi
+        echo ""
+        echo "Available profiles:"
+        echo "  minimal   - 6-8GB VRAM (RTX 3060, RTX 4060)"
+        echo "  standard  - 12-24GB VRAM (RTX 3080, RTX 4090)"
+        echo "  full      - 48GB+ VRAM (A6000, A100)"
+        return 0
+    fi
+
+    # Validate profile
+    if [[ ! "$profile" =~ ^(minimal|standard|full)$ ]]; then
+        log_error "Invalid profile: $profile"
+        echo "Valid profiles: minimal, standard, full"
+        return 1
+    fi
+
+    load_config_lib
+
+    local gpu_id="${2:-0}"
+
+    log_step "Switching to profile: $profile"
+
+    # Generate new configs
+    generate_all_configs "$profile" "$gpu_id"
+    generate_env_file "$profile" "$gpu_id"
+    generate_compose_override "$profile" "$gpu_id"
+
+    log_success "Profile switched to: $profile"
+    log_info "Restart services to apply: ./scripts/openprocessor.sh restart"
+}
+
+# =============================================================================
+# Testing
+# =============================================================================
+
+cmd_test() {
+    local test_type="${1:-quick}"
+
+    cd "$PROJECT_DIR"
+
+    case "$test_type" in
+        quick|smoke)
+            log_step "Running quick smoke tests..."
+            # Simple curl tests
+            echo ""
+            echo "Health check:"
+            curl -s "localhost:${API_PORT}/health" | python3 -m json.tool 2>/dev/null || curl -s "localhost:${API_PORT}/health"
+            echo ""
+            ;;
+        full)
+            log_step "Running full test suite..."
+            if [[ ! -x "$PROJECT_DIR/.venv/bin/python" ]]; then
+                log_error "$PROJECT_DIR/.venv/bin/python not found — create the venv first"
+                return 1
+            fi
+            if [[ -f "$PROJECT_DIR/tests/test_full_system.py" ]]; then
+                "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/tests/test_full_system.py"
+            else
+                log_error "Test suite not found"
+                return 1
+            fi
+            ;;
+        visual)
+            log_step "Running visual validation..."
+            if [[ ! -x "$PROJECT_DIR/.venv/bin/python" ]]; then
+                log_error "$PROJECT_DIR/.venv/bin/python not found — create the venv first"
+                return 1
+            fi
+            if [[ -f "$PROJECT_DIR/tests/validate_visual_results.py" ]]; then
+                "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/tests/validate_visual_results.py"
+            else
+                log_error "Visual validation script not found"
+                return 1
+            fi
+            ;;
+        *)
+            log_error "Unknown test type: $test_type"
+            echo "Available: quick, full, visual"
+            return 1
+            ;;
+    esac
+}
+
+# =============================================================================
+# Curation subsystem — EXPERIMENTAL, opt-in compose profile
+# =============================================================================
+# Mirrors the `curation-*` Makefile targets. The curation worker services
+# (curation-detection-worker, curation-vlm-worker, curation-auto-label-worker,
+# curation-cluster-refresh) all carry `profiles: [curation]` in
+# docker-compose.yml, so `start`/`stop` above never touch them.
+
+cmd_curation() {
+    local subcommand="${1:-status}"
+    shift 2>/dev/null || true
+
+    cd "$PROJECT_DIR"
+
+    case "$subcommand" in
+        up)
+            log_step "Starting curation subsystem (profile: curation)..."
+            dc --profile curation up -d
+            log_success "Curation services starting. Check with: $0 curation status"
+            ;;
+        down)
+            log_step "Stopping curation subsystem (profile: curation)..."
+            dc --profile curation down
+            log_success "Curation services stopped"
+            ;;
+        logs)
+            dc --profile curation logs -f \
+                curation-detection-worker curation-vlm-worker \
+                curation-auto-label-worker curation-cluster-refresh
+            ;;
+        status)
+            dc --profile curation ps \
+                curation-detection-worker curation-vlm-worker \
+                curation-auto-label-worker curation-cluster-refresh curation-evaluator
+            ;;
+        seed)
+            log_warn "curation seed: not yet implemented."
+            echo "scripts/curation/seed_live_harness.py does not exist on this branch yet"
+            echo "(live write-path verification harness). Nothing was run."
+            ;;
+        *)
+            log_error "Unknown curation subcommand: $subcommand"
+            echo "Available: up, down, logs, status, seed"
+            return 1
+            ;;
+    esac
+}
+
+cmd_bench() {
+    local mode="${1:-quick}"
+
+    cd "$PROJECT_DIR"
+
+    if [[ ! -f "$PROJECT_DIR/benchmarks/triton_bench" ]]; then
+        log_info "Building benchmark tool..."
+        cd "$PROJECT_DIR/benchmarks"
+        ./build.sh
+        cd "$PROJECT_DIR"
+    fi
+
+    log_step "Running benchmark ($mode mode)..."
+    "$PROJECT_DIR/benchmarks/triton_bench" --mode "$mode"
+}
+
+# =============================================================================
+# Cleanup
+# =============================================================================
+
+cmd_clean() {
+    local target="${1:-cache}"
+
+    case "$target" in
+        cache)
+            log_step "Cleaning caches..."
+            rm -rf "$PROJECT_DIR/.mypy_cache"
+            rm -rf "$PROJECT_DIR/.ruff_cache"
+            rm -rf "$PROJECT_DIR/.pytest_cache"
+            find "$PROJECT_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+            log_success "Caches cleaned"
+            ;;
+        models)
+            log_warn "This will remove downloaded PyTorch models."
+            read -r -p "Continue? [y/N]: " reply
+            if [[ "$reply" =~ ^[Yy]$ ]]; then
+                rm -rf "$PROJECT_DIR/pytorch_models"/*.pt
+                rm -rf "$PROJECT_DIR/pytorch_models"/*.onnx
+                log_success "Models cleaned"
+            fi
+            ;;
+        exports)
+            log_warn "This will remove TensorRT exports."
+            read -r -p "Continue? [y/N]: " reply
+            if [[ "$reply" =~ ^[Yy]$ ]]; then
+                find "$PROJECT_DIR/models" -name "model.plan" -delete
+                log_success "Exports cleaned"
+            fi
+            ;;
+        all)
+            cmd_clean cache
+            cmd_clean models
+            cmd_clean exports
+            ;;
+        *)
+            log_error "Unknown target: $target"
+            echo "Available: cache, models, exports, all"
+            return 1
+            ;;
+    esac
+}
+
+# =============================================================================
+# Update
+# =============================================================================
+
+cmd_update() {
+    if [[ "$IS_CHECKOUT" != 1 ]]; then
+        cmd_upgrade "$@"
+        return
+    fi
+    log_step "Updating OpenProcessor (checkout)..."
+
+    cd "$PROJECT_DIR"
+
+    # Pull latest images
+    log_info "Pulling latest Docker images..."
+    dc pull
+
+    # Rebuild if needed
+    log_info "Rebuilding containers..."
+    dc build
+
+    log_success "Update complete"
+    log_info "Restart to apply: ./scripts/openprocessor.sh restart"
+}
+
+# =============================================================================
+# Help
+# =============================================================================
+
+show_help() {
+    cat << EOF
+OpenProcessor Management CLI
+
+Usage: ./scripts/openprocessor.sh <command> [options]
+
+Service Commands:
+  start               Start all services
+  stop                Stop all services
+  restart [service]   Restart service(s)
+  logs [service] [-f] View logs (optionally follow)
+  status              Show service status and health
+  health              Check API health endpoint
+
+Model Commands:
+  models [status]     List Triton models and their state
+  models install [--only GROUP]
+                      Export/load model groups (skips up-to-date ones)
+  models repair       Same as install: re-runs failed or missing groups
+  export <model>      Export model to TensorRT
+                      Options: yolo, scrfd, arcface, clip-image, clip-text, ocr, all, essential, status
+  download <model>    Download model
+                      Options: all, essential, ocr, status, <model-name>
+
+Configuration:
+  profile [name]      Show/switch GPU profile
+                      Options: minimal, standard, full
+
+Testing:
+  test [type]         Run tests
+                      Options: quick (default), full, visual
+  bench [mode]        Run benchmarks
+                      Options: quick (default), full
+
+Curation (experimental, opt-in compose profile):
+  curation [action]   Manage the curation worker services
+                      Options: up, down, logs, status (default), seed
+
+Maintenance:
+  clean [target]      Clean files
+                      Options: cache (default), models, exports, all
+  update              Checkout: pull + rebuild. Install dir: same as upgrade
+  upgrade [--version vX.Y.Z]   Upgrade this install (setup-openprocessor.sh)
+  repair              Re-verify files, re-pull images, re-run failed model groups
+  uninstall [--purge-volumes] [--purge-data] [--remove-images]
+
+Deploy:
+  sample coco [--full]  Fetch the public COCO sample (inside the API image)
+  config show           Print .env with every secret redacted
+  gpu plan              Show the GPU placement from .env
+  vlm list|key set <slug>
+  train-mode on|off     Stop/start the VLM (and a co-located segmenter) for training
+
+Setup:
+  setup               Run initial setup wizard
+
+Examples:
+  ./scripts/openprocessor.sh status
+  ./scripts/openprocessor.sh logs yolo-api -f
+  ./scripts/openprocessor.sh export all
+  ./scripts/openprocessor.sh profile standard
+  ./scripts/openprocessor.sh test full
+  ./scripts/openprocessor.sh clean cache
+
+EOF
+}
+
+# =============================================================================
+# New in the deploy-mode CLI (installer plan section 5.5)
+# =============================================================================
+
+cmd_sample() {
+    local sub="${1:-coco}"
+    shift 2>/dev/null || true
+    case "$sub" in
+        coco)
+            # shellcheck source=scripts/lib/model_setup.sh
+            source "${SCRIPT_DIR}/lib/model_setup.sh"
+            log_step "Fetching the public COCO sample (writes to /app/data/samples, no host Python)..."
+            model_setup_sample_coco "${1:-}"
+            ;;
+        *)
+            log_error "unknown sample: $sub (only 'coco' is supported)"
+            return 1
+            ;;
+    esac
+}
+
+cmd_config() {
+    local sub="${1:-show}"
+    case "$sub" in
+        show)
+            local env_file="${PROJECT_DIR}/.env"
+            [[ -f "$env_file" ]] || { log_error "no .env at ${env_file}"; return 1; }
+            # Redact every token/key/secret/password value, with or
+            # without a leading `export`.
+            sed -E 's/^([[:space:]]*(export[[:space:]]+)?[A-Z0-9_]*(TOKEN|KEY|SECRET|PASSWORD)[A-Z0-9_]*)=.*/\1=***/' "$env_file"
+            ;;
+        *)
+            log_error "unknown config subcommand: $sub"
+            return 1
+            ;;
+    esac
+}
+
+cmd_gpu() {
+    local sub="${1:-plan}"
+    case "$sub" in
+        plan)
+            log_step "GPU plan (from .env)"
+            for key in TRITON_GPU_ID API_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID EVALUATOR_GPU_ID GPU_PROFILE; do
+                local value
+                value="$(_env_value "$key")"
+                echo "  ${key}=${value:-<unset>}"
+            done
+            ;;
+        *)
+            log_error "unknown gpu subcommand: $sub"
+            return 1
+            ;;
+    esac
+}
+
+cmd_vlm() {
+    local sub="${1:-list}"
+    shift 2>/dev/null || true
+    case "$sub" in
+        list)
+            log_step "VLM catalog"
+            printf '%-20s %-10s %-8s %-10s\n' "id" "licence" "vram_gb" "status"
+            while IFS=$'\t' read -r id _repo licence vram _sctx _mctx _maximg status _rank _gated _key; do
+                printf '%-20s %-10s %-8s %-10s\n' "$id" "$licence" "$vram" "$status"
+            done < <(vlm_catalog_rows)
+            ;;
+        status|use|apply|probe)
+            log_error "'vlm $sub' requires the model-selection API (any-domain W9, cutover/model-selection), which has not merged yet."
+            return 3
+            ;;
+        key)
+            local action="${1:-}" slug="${2:-}"
+            if [[ "$action" != "set" || -z "$slug" ]]; then
+                log_error "usage: openprocessor vlm key set <slug>"
+                return 2
+            fi
+            if [[ ! "$slug" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
+                log_error "slug must match [a-z0-9][a-z0-9_-]{0,63}"
+                return 2
+            fi
+            if ! { : </dev/tty; } 2>/dev/null; then
+                log_error "no terminal to read the key from"
+                return 2
+            fi
+            ( umask 077; mkdir -p "${PROJECT_DIR}/secrets/vlm" )
+            chmod 700 "${PROJECT_DIR}/secrets" "${PROJECT_DIR}/secrets/vlm"
+            local key_value=""
+            printf "VLM API key for '%s' (input hidden): " "$slug" >/dev/tty
+            IFS= read -rs key_value </dev/tty || true
+            printf '\n' >/dev/tty
+            [[ -n "$key_value" ]] || { log_error "empty key"; return 2; }
+            ( umask 077; printf '%s' "$key_value" > "${PROJECT_DIR}/secrets/vlm/${slug}" )
+            key_value=""
+            chmod 600 "${PROJECT_DIR}/secrets/vlm/${slug}"
+            log_success "stored secrets/vlm/${slug} (mode 600); reference it as secret:${slug}"
+            ;;
+        *)
+            log_error "unknown vlm subcommand: $sub"
+            return 1
+            ;;
+    esac
+}
+
+cmd_train_mode() {
+    local mode="${1:-}" state="${PROJECT_DIR}/.install/train_mode" trn seg services=(vlm)
+    trn="$(_env_value OP_TRAIN_GPU_ORDER)"
+    seg="$(_env_value SEGMENTER_GPU_ID)"
+    if [[ -n "$trn" && "$trn" == "$seg" ]]; then
+        services+=(segmenter)
+    fi
+    case "$mode" in
+        on)
+            log_step "train-mode on: stopping ${services[*]} for the training run"
+            dc stop "${services[@]}"
+            ( umask 077; mkdir -p "${PROJECT_DIR}/.install"; printf 'on %s\n' "${services[*]}" > "$state" )
+            log_success "train-mode on (stopped: ${services[*]})"
+            ;;
+        off)
+            if [[ -f "$state" ]]; then
+                read -r _ services_line < "$state" || true
+                read -ra services <<< "${services_line:-vlm}"
+            fi
+            log_step "train-mode off: starting ${services[*]}"
+            dc up -d "${services[@]}"
+            ( umask 077; printf 'off\n' > "$state" )
+            log_success "train-mode off (started: ${services[*]})"
+            ;;
+        *)
+            log_error "usage: openprocessor train-mode on|off"
+            return 2
+            ;;
+    esac
+}
+
+# One code path: lifecycle commands run this install's own verified
+# setup-openprocessor.sh against this directory.
+_run_setup() {
+    if [[ "$IS_CHECKOUT" == 1 || ! -x "$PROJECT_DIR/setup-openprocessor.sh" ]]; then
+        log_error "this is not an installer-managed directory (use git + make in a checkout)"
+        return 1
+    fi
+    resolve_project
+    exec "$PROJECT_DIR/setup-openprocessor.sh" --dir "$PROJECT_DIR" "$@"
+}
+
+cmd_upgrade() { _run_setup "$@"; }
+cmd_repair() { _run_setup --repair "$@"; }
+cmd_uninstall() { _run_setup --uninstall "$@"; }
+
+# =============================================================================
+# Main
+# =============================================================================
+
+main() {
+    local command="${1:-help}"
+    shift 2>/dev/null || true
+
+    case "$command" in
+        start)
+            cmd_start "$@"
+            ;;
+        stop)
+            cmd_stop "$@"
+            ;;
+        restart)
+            cmd_restart "$@"
+            ;;
+        logs)
+            cmd_logs "$@"
+            ;;
+        status)
+            cmd_status "$@"
+            ;;
+        health)
+            cmd_health "$@"
+            ;;
+        models)
+            cmd_models "$@"
+            ;;
+        export)
+            cmd_export "$@"
+            ;;
+        download)
+            cmd_download "$@"
+            ;;
+        profile)
+            require_checkout "profile" && cmd_profile "$@"
+            ;;
+        test)
+            require_checkout "test" && cmd_test "$@"
+            ;;
+        curation)
+            cmd_curation "$@"
+            ;;
+        bench)
+            require_checkout "bench" && cmd_bench "$@"
+            ;;
+        clean)
+            cmd_clean "$@"
+            ;;
+        update)
+            cmd_update "$@"
+            ;;
+        setup)
+            require_checkout "setup" && exec "${SCRIPT_DIR}/setup.sh" "$@"
+            ;;
+        sample)
+            cmd_sample "$@"
+            ;;
+        config)
+            cmd_config "$@"
+            ;;
+        gpu)
+            cmd_gpu "$@"
+            ;;
+        vlm)
+            cmd_vlm "$@"
+            ;;
+        train-mode)
+            cmd_train_mode "$@"
+            ;;
+        upgrade)
+            cmd_upgrade "$@"
+            ;;
+        repair)
+            cmd_repair "$@"
+            ;;
+        uninstall)
+            cmd_uninstall "$@"
+            ;;
+        version)
+            echo "openprocessor CLI ${OP_CLI_VERSION:-0.1.0}"
+            ;;
+        help|--help|-h)
+            show_help
+            ;;
+        *)
+            log_error "Unknown command: $command"
+            echo ""
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
