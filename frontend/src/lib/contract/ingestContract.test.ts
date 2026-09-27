@@ -106,7 +106,13 @@ describe('ingest contract', () => {
   });
 
   it('the upload multipart body field names match the served request schema', () => {
-    const schema = schemas['Body_curation_ingest_upload_curation_ingest_upload_post'];
+    // P1 projects cutover: the operation moved to the scoped path
+    // (`/curation/projects/{project}/ingest/upload`), which changes
+    // FastAPI's auto-generated schema name to match.
+    const schema =
+      schemas[
+        'Body_curation_ingest_upload_curation_projects__project__ingest_upload_post'
+      ];
     // BA-4 added an optional `run_id` form field (client identifier for
     // an upload run, echoed on `GET /ingest/status?run_id=`) — not sent
     // by `ingestUpload()` today (no run_id UI yet), but it's a real,

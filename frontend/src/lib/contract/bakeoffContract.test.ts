@@ -22,7 +22,6 @@ const CASES: [string, string[]][] = [
       eval_class_id: true,
       name: true,
       registry_class_id: true,
-      registry_class_name: true,
       n_objects: true,
       n_images: true,
     } satisfies Record<keyof T.EvalDatasetClass, true>),
@@ -114,7 +113,6 @@ const CASES: [string, string[]][] = [
       default_backend: true,
       triton_model: true,
       context_class_ids: true,
-      context_class_names: true,
       baselines_path: true,
     } satisfies Record<keyof T.BakeoffProfile, true>),
   ],
@@ -220,7 +218,6 @@ const CASES: [string, string[]][] = [
     keys({
       method: true,
       model_to_eval: true,
-      model_to_eval_names: true,
       unmapped_model_classes: true,
       not_covered_eval_classes: true,
       warnings: true,

@@ -32,7 +32,6 @@ function dataset(over: Partial<EvalDataset> & Pick<EvalDataset, 'id'>): EvalData
         eval_class_id: 0,
         name: 'gear',
         registry_class_id: 10,
-        registry_class_name: 'gear',
         n_objects: 5,
         n_images: 5,
       },
@@ -40,7 +39,6 @@ function dataset(over: Partial<EvalDataset> & Pick<EvalDataset, 'id'>): EvalData
         eval_class_id: 1,
         name: 'bolt',
         registry_class_id: 11,
-        registry_class_name: 'bolt',
         n_objects: 4,
         n_images: 4,
       },
@@ -304,7 +302,6 @@ export const ACCEPTED: BakeoffRunAccepted = {
         [DS_CURRENT]: {
           method: 'run_class_remap',
           model_to_eval: { '0': 0 },
-          model_to_eval_names: { '0': 'gear' },
           unmapped_model_classes: [],
           not_covered_eval_classes: [{ eval_class_id: 1, name: 'bolt' }],
           warnings: [],

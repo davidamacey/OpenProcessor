@@ -140,10 +140,13 @@ function maskNonCode(src: string): string {
 }
 
 /** Every backtick template literal in `src` whose text contains the
- *  literal `${scoped()}` marker, skipping comments and ordinary
- *  string literals so JSDoc examples don't count. */
+ *  literal `marker` (`${scoped()}` by default, or `${globalApi()}` for
+ *  the small set of routes that stay global — P1 projects cutover),
+ *  skipping comments and ordinary string literals so JSDoc examples
+ *  don't count. */
 export function findApiPrefixTemplates(
   src: string,
+  marker: string = '${scoped()}',
 ): Array<{ start: number; end: number; text: string }> {
   const results: Array<{ start: number; end: number; text: string }> = [];
   let i = 0;
@@ -167,7 +170,7 @@ export function findApiPrefixTemplates(
       const start = i;
       const end = skipTemplateLiteral(src, i);
       const text = src.slice(start, end);
-      if (text.includes('${scoped()}')) {
+      if (text.includes(marker)) {
         results.push({ start, end, text });
       }
       i = end;
@@ -358,8 +361,11 @@ function findStringConstants(src: string): Map<string, string> {
   return map;
 }
 
-export function scanApiCallSites(src: string): ApiCallSite[] {
-  const templates = findApiPrefixTemplates(src);
+export function scanApiCallSites(
+  src: string,
+  marker: string = '${scoped()}',
+): ApiCallSite[] {
+  const templates = findApiPrefixTemplates(src, marker);
   const consts = findStringConstants(src);
   const sites: ApiCallSite[] = [];
 
@@ -373,11 +379,9 @@ export function scanApiCallSites(src: string): ApiCallSite[] {
     for (const [name, value] of consts) {
       normInner = normInner.split(`\${${name}}`).join(value);
     }
-    const markerIdx = inner.indexOf('${scoped()}');
-    const afterPrefix = inner.slice(markerIdx + '${scoped()}'.length);
-    let normAfterPrefix = normInner.slice(
-      normInner.indexOf('${scoped()}') + '${scoped()}'.length,
-    );
+    const markerIdx = inner.indexOf(marker);
+    const afterPrefix = inner.slice(markerIdx + marker.length);
+    let normAfterPrefix = normInner.slice(normInner.indexOf(marker) + marker.length);
 
     // Cut the path off at the query-string composition, if any.
     const qsMarker = '${qs(';
@@ -385,7 +389,7 @@ export function scanApiCallSites(src: string): ApiCallSite[] {
     let queryParams: string[] | null = [];
     if (qsIdx !== -1) {
       const openParen =
-        t.start + 1 + markerIdx + '${scoped()}'.length + qsIdx + qsMarker.length - 1;
+        t.start + 1 + markerIdx + marker.length + qsIdx + qsMarker.length - 1;
       const closeParen = skipBalanced(src, openParen, '(', ')');
       const argText = src.slice(openParen + 1, closeParen - 1);
       queryParams = extractQsKeys(src, argText, t.start);
