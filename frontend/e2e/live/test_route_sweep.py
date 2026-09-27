@@ -66,6 +66,15 @@ _IN_VIEWPORT_IMAGES_SETTLED = """
 }
 """
 
+# True once no line of the page reads as a bare loading placeholder. The
+# review queue counter renders before its first page lands, so the ready
+# selector alone let the sweep screenshot "Loading..." on every tab.
+_NO_LOADING_PLACEHOLDER = r"""
+() => !document.body.innerText
+  .split('\n')
+  .some((line) => /^\s*Loading(\.\.\.|…)\s*$/.test(line))
+"""
+
 
 def _route_slug(path: str) -> str:
     """`/review?tab=model_disagreements` -> `review-tab-model_disagreements`."""
@@ -171,6 +180,7 @@ def _assert_route_clean(gp: Any, path: str, screenshot_run_dir: Path) -> None:
     # tier's "no fixed sleep" rule — there is no DOM condition to wait on
     # for "the post-resize reflow has settled" the way there is for a
     # fetch or an image load.
+    page.wait_for_function(_NO_LOADING_PLACEHOLDER, timeout=15_000)
     default_viewport = page.viewport_size
     slug = _route_slug(path)
     narrow_overflow: bool | None = None
