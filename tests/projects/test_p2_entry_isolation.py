@@ -79,10 +79,14 @@ def test_default_does_not_inherit_a_model_whose_project_left_the_registry(
 
 def test_pausing_one_project_leaves_the_others_running(leak_env: LeakEnv) -> None:
     client = _client(leak_env)
-    assert client.post(f'{API}/beta/pause').json() == {'project': 'beta', 'paused': True}
+    paused_resp = client.post(f'{API}/beta/pause').json()
+    assert paused_resp['project'] == 'beta'
+    assert paused_resp['paused'] is True
     assert client.get(f'{API}/beta/pause').json()['paused'] is True
     for other in ('alpha', 'default'):
-        assert client.get(f'{API}/{other}/pause').json() == {'project': other, 'paused': False}
+        other_resp = client.get(f'{API}/{other}/pause').json()
+        assert other_resp['project'] == other
+        assert other_resp['paused'] is False
     assert client.post(f'{API}/beta/resume').json()['paused'] is False
 
 

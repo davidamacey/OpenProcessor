@@ -6350,9 +6350,28 @@
             "title": "Paused",
             "type": "boolean"
           },
+          "paused_by": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Paused By",
+            "type": "array"
+          },
           "project": {
             "title": "Project",
             "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "required": [
@@ -6901,6 +6920,11 @@
             ],
             "title": "Origin"
           },
+          "paused": {
+            "default": false,
+            "title": "Paused",
+            "type": "boolean"
+          },
           "prefix": {
             "title": "Prefix",
             "type": "string"
@@ -7102,6 +7126,11 @@
               }
             ],
             "title": "Origin"
+          },
+          "paused": {
+            "default": false,
+            "title": "Paused",
+            "type": "boolean"
           },
           "prefix": {
             "title": "Prefix",

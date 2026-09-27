@@ -74,6 +74,10 @@ class ProjectSummary(BaseModel):
     updated_at: str
     counts: ProjectCounts
     origin: dict[str, Any] | None = None
+    # Cropwright BA-P2-4: the per-project pause flag, read straight off
+    # this record's own state dir so GET /projects needs no per-row
+    # GET .../pause call to render a "paused" chip.
+    paused: bool = False
 
 
 def list_membership(status: str, *, include_archived: bool) -> bool:
@@ -85,6 +89,7 @@ def list_membership(status: str, *, include_archived: bool) -> bool:
 
 
 def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
+    from scripts.curation._project_worker_utils import PIPELINE_PAUSED_FLAG_NAME
     from src.config.project_context import bind_project
     from src.config.projects import DEFAULT_SLUG
 
@@ -93,6 +98,7 @@ def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
 
         prefix = project_api_base()
     is_default = record.slug == DEFAULT_SLUG
+    paused = (record.resources.project_state_dir / PIPELINE_PAUSED_FLAG_NAME).exists()
     return ProjectSummary(
         slug=record.slug,
         display_name=record.display_name,
@@ -110,6 +116,7 @@ def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
         updated_at=record.updated_at,
         counts=counts,
         origin=record.origin,
+        paused=paused,
     )
 
 
