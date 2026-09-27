@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import { PackActive } from '$lib/packs/packActive.svelte';
 import { activeFixture } from '$lib/test/fixtures/promptPacks';
-import type { ActiveConfigResponse } from '$lib/types_packs';
+import type { ActiveConfigResponse } from '$lib/types_config';
 import PackActivePanel from './PackActivePanel.svelte';
 
 let target: HTMLDivElement;

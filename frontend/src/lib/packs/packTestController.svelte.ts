@@ -10,14 +10,10 @@
  * response is rendered as served; nothing here parses a reply.
  */
 import { untrack } from 'svelte';
-import { packErrorDetail, packErrorText, testPromptPack } from '$lib/api';
+import { configErrorDetail, configErrorText, testPromptPack } from '$lib/api';
 import type { Crop } from '$lib/types';
-import type {
-  PackTestRequest,
-  PackTestResponse,
-  PromptPackBody,
-  ValidationReport,
-} from '$lib/types_packs';
+import type { PackTestRequest, PackTestResponse, PromptPackBody } from '$lib/types_packs';
+import type { ValidationReport } from '$lib/types_config';
 
 export type PackTestSource = 'draft' | 'saved';
 
@@ -101,8 +97,8 @@ export class PackTest {
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       this.result = null;
-      this.error = packErrorText(e);
-      this.errorReport = packErrorDetail(e)?.report ?? null;
+      this.error = configErrorText(e);
+      this.errorReport = configErrorDetail(e)?.report ?? null;
     } finally {
       if (this.#abort === ctl) {
         this.running = false;

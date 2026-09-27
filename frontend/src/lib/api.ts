@@ -113,18 +113,20 @@ import type {
 import type {
   ActiveConfigResponse,
   ActiveRef,
-  PackActivateRequest,
-  PackCloneRequest,
-  PackErrorDetail,
+  ConfigActivateRequest,
+  ConfigCloneRequest,
+  ConfigErrorDetail,
+  ConfigRevisionList,
+  ValidationReport,
+} from './types_config';
+import type {
   PackTestRequest,
   PackTestResponse,
   PackUpdateRequest,
   PackValidateRequest,
   PromptPackDoc,
   PromptPackList,
-  PromptPackRevisionList,
   PromptPackSchema,
-  ValidationReport,
 } from './types_packs';
 import type {
   BakeoffComparison,
@@ -5022,8 +5024,8 @@ export function getPromptPack(
 export function getPromptPackRevisions(
   name: string,
   signal?: AbortSignal,
-): Promise<PromptPackRevisionList> {
-  return apiFetch<PromptPackRevisionList>(
+): Promise<ConfigRevisionList> {
+  return apiFetch<ConfigRevisionList>(
     `${scoped()}/prompt_packs/${encodeURIComponent(name)}/revisions`,
     {},
     signal,
@@ -5045,7 +5047,7 @@ export function getPromptPackRevision(
 /** `POST /prompt_packs/{name}/clone` → 201 the new stored pack. */
 export function clonePromptPack(
   name: string,
-  body: PackCloneRequest,
+  body: ConfigCloneRequest,
 ): Promise<PromptPackDoc> {
   return apiFetch<PromptPackDoc>(
     `${scoped()}/prompt_packs/${encodeURIComponent(name)}/clone`,
@@ -5085,7 +5087,7 @@ export function getActivePromptPack(signal?: AbortSignal): Promise<ActiveConfigR
 /** `POST /prompt_packs/{name}/activate` (OCC on `expected_active`). */
 export function activatePromptPack(
   name: string,
-  body: PackActivateRequest,
+  body: ConfigActivateRequest,
 ): Promise<ActiveConfigResponse> {
   return apiFetch<ActiveConfigResponse>(
     `${scoped()}/prompt_packs/${encodeURIComponent(name)}/activate`,
@@ -5127,9 +5129,10 @@ export async function testPromptPack(
   };
 }
 
-/** The structured pack refusal (`{detail: ConfigErrorDetail}`), or `null`
- *  when the error isn't one. The UI shows `message`, branches on `error`. */
-export function packErrorDetail(e: unknown): PackErrorDetail | null {
+/** The structured config-store refusal (`{detail: ConfigErrorDetail}`,
+ *  §7.1) of a prompt-pack or region-profile route, or `null` when the
+ *  error isn't one. The UI shows `message`, branches on `error`. */
+export function configErrorDetail(e: unknown): ConfigErrorDetail | null {
   if (!(e instanceof ApiError)) return null;
   const body = e.body;
   if (!body || typeof body !== 'object') return null;
@@ -5137,12 +5140,12 @@ export function packErrorDetail(e: unknown): PackErrorDetail | null {
   if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
   const d = detail as Record<string, unknown>;
   if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
-  return d as unknown as PackErrorDetail;
+  return d as unknown as ConfigErrorDetail;
 }
 
-/** The served `message` of a pack refusal, else the generic detail. */
-export function packErrorText(e: unknown): string {
-  const d = packErrorDetail(e);
+/** The served `message` of a config-store refusal, else the generic detail. */
+export function configErrorText(e: unknown): string {
+  const d = configErrorDetail(e);
   if (d) return d.message;
   if (e instanceof ApiError && e.detail) return e.detail;
   return (e as Error)?.message ?? String(e);

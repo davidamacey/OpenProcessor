@@ -258,7 +258,7 @@ def test_edit_validate_save_and_resolve_a_conflict(stub, page, app_url):
     expect(field.get_by_test_id("placeholder-chip")).to_have_text("{class_names_csv} required")
     with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/prompt_packs/validate")):
         field.locator("textarea").fill("Pick one class.")
-    expect(field.get_by_test_id("pack-issue")).to_contain_text(
+    expect(field.get_by_test_id("config-issue")).to_contain_text(
         "class_user_template must contain {class_names_csv}", timeout=ACTION_TIMEOUT_MS
     )
     assert validated[-1] == {"name": None, "body": {**BODY, "class_user_template": "Pick one class."}}

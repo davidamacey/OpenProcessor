@@ -6,9 +6,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import { issue, schemaFixture } from '$lib/test/fixtures/promptPacks';
-import type { PackFieldValue, PackSchemaField, ValidationIssue } from '$lib/types_packs';
+import type { ValidationIssue } from '$lib/types_config';
+import type { PackFieldValue, PackSchemaField } from '$lib/types_packs';
 import PackFieldEditor from './PackFieldEditor.svelte';
-import PackIssueList from './PackIssueList.svelte';
+import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
 
 let target: HTMLDivElement;
 let instance: Record<string, unknown> | undefined;
@@ -126,7 +127,7 @@ describe('PackFieldEditor', () => {
       value: 'x',
       issues: [issue()],
     });
-    const rows = target.querySelectorAll('[data-testid="pack-issue"]');
+    const rows = target.querySelectorAll('[data-testid="config-issue"]');
     expect(rows).toHaveLength(1);
     expect(rows[0]!.getAttribute('data-code')).toBe('pack_placeholder_missing');
     expect(rows[0]!.textContent).toContain(
@@ -135,11 +136,11 @@ describe('PackFieldEditor', () => {
   });
 });
 
-describe('PackIssueList', () => {
+describe('ConfigIssueList', () => {
   it('renders severity, message, code, field on request and the served bypassable flag', () => {
     target = document.createElement('div');
     document.body.appendChild(target);
-    instance = mount(PackIssueList, {
+    instance = mount(ConfigIssueList, {
       target,
       props: {
         showField: true,
@@ -155,7 +156,7 @@ describe('PackIssueList', () => {
       },
     });
     flushSync();
-    const rows = [...target.querySelectorAll('[data-testid="pack-issue"]')];
+    const rows = [...target.querySelectorAll('[data-testid="config-issue"]')];
     expect(rows.map((r) => r.getAttribute('data-severity'))).toEqual(['error', 'info']);
     expect(rows[0]!.textContent).toContain('class_user_template');
     expect(rows[0]!.textContent).toContain('(can be overridden)');
@@ -166,8 +167,8 @@ describe('PackIssueList', () => {
   it('renders nothing for no issues', () => {
     target = document.createElement('div');
     document.body.appendChild(target);
-    instance = mount(PackIssueList, { target, props: { issues: [] } });
+    instance = mount(ConfigIssueList, { target, props: { issues: [] } });
     flushSync();
-    expect(target.querySelector('[data-testid="pack-issues"]')).toBeNull();
+    expect(target.querySelector('[data-testid="config-issues"]')).toBeNull();
   });
 });

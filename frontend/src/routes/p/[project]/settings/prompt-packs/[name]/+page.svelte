@@ -12,15 +12,12 @@
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import PackActivePanel from '$components/packs/PackActivePanel.svelte';
   import PackFieldEditor from '$components/packs/PackFieldEditor.svelte';
-  import PackIssueList from '$components/packs/PackIssueList.svelte';
+  import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
   import PackTestPanel from '$components/packs/PackTestPanel.svelte';
-  import PacksGate from '$components/packs/PacksGate.svelte';
+  import ConfigGate from '$components/config/ConfigGate.svelte';
   import { formatTimestamp } from '$lib/formatDate';
-  import {
-    createPackEditor,
-    issuesForField,
-    unplacedIssues,
-  } from '$lib/packs/packEditorController.svelte';
+  import { issuesForField, unplacedIssues } from '$lib/config/validationIssues';
+  import { createPackEditor } from '$lib/packs/packEditorController.svelte';
   import { createPackList } from '$lib/packs/packListController.svelte';
   import { packsAvailability } from '$lib/packs/packsAvailability.svelte';
   import { projectHref } from '$lib/projectPaths';
@@ -151,7 +148,12 @@
     >
   </header>
 
-  <PacksGate>
+  <ConfigGate
+    store={packsAvailability}
+    what="prompt packs"
+    unavailableText="Prompt-pack editing is not available on this backend."
+    testid="packs-unavailable"
+  >
     {#if ed.loadError && !ed.doc}
       <p class="text-sm text-red-300" data-testid="pack-load-error">{ed.loadError}</p>
     {:else if !ed.doc || !ed.schema}
@@ -233,7 +235,7 @@
             </details>
           {/if}
 
-          <PackIssueList issues={unplacedIssues(shownReport, fieldIds)} showField />
+          <ConfigIssueList issues={unplacedIssues(shownReport, fieldIds)} showField />
 
           {#each groups as g (g.id)}
             <section
@@ -410,7 +412,7 @@
         />
       {/key}
     {/if}
-  </PacksGate>
+  </ConfigGate>
 </div>
 
 {#if activating}
@@ -450,7 +452,7 @@
       </p>
     {/if}
     {#if rep}
-      <PackIssueList issues={[...rep.errors, ...rep.warnings]} showField />
+      <ConfigIssueList issues={[...rep.errors, ...rep.warnings]} showField />
     {/if}
     {#if ed.active.actionError}
       <p class="text-red-300" data-testid="activate-error">{ed.active.actionError}</p>
@@ -499,7 +501,7 @@
     </label>
     {#if cloner.cloneError}<p class="text-red-300">{cloner.cloneError}</p>{/if}
     {#if cloner.cloneReport}
-      <PackIssueList
+      <ConfigIssueList
         issues={[...cloner.cloneReport.errors, ...cloner.cloneReport.warnings]}
         showField
       />

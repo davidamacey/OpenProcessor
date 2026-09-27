@@ -9,11 +9,12 @@
   import { resolve } from '$app/paths';
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import PackActivePanel from '$components/packs/PackActivePanel.svelte';
-  import PackIssueList from '$components/packs/PackIssueList.svelte';
-  import PacksGate from '$components/packs/PacksGate.svelte';
+  import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
+  import ConfigGate from '$components/config/ConfigGate.svelte';
   import { formatTimestamp } from '$lib/formatDate';
   import { packsAvailability } from '$lib/packs/packsAvailability.svelte';
-  import { createPackList, type CloneSource } from '$lib/packs/packListController.svelte';
+  import type { CloneSource } from '$lib/config/configList.svelte';
+  import { createPackList } from '$lib/packs/packListController.svelte';
   import { projectHref } from '$lib/projectPaths';
   import type { PromptPackSummary } from '$lib/types_packs';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -78,7 +79,12 @@
     regions. Open a pack to edit it, test it on a crop and make it the active one.
   </p>
 
-  <PacksGate>
+  <ConfigGate
+    store={packsAvailability}
+    what="prompt packs"
+    unavailableText="Prompt-pack editing is not available on this backend."
+    testid="packs-unavailable"
+  >
     <PackActivePanel ctl={list.active} onrollback={() => list.rollback()} />
 
     {#if list.loadError && !list.list}
@@ -183,7 +189,7 @@
         </section>
       {/if}
     {/if}
-  </PacksGate>
+  </ConfigGate>
 </div>
 
 {#if cloneFrom}
@@ -211,7 +217,7 @@
       <p class="text-red-300" data-testid="clone-error">{list.cloneError}</p>
     {/if}
     {#if list.cloneReport}
-      <PackIssueList
+      <ConfigIssueList
         issues={[...list.cloneReport.errors, ...list.cloneReport.warnings]}
         showField
       />
