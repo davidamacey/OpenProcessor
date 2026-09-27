@@ -8,12 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- **Cropwright publishes on `127.0.0.1` by default.** The compose port is
-  now `${CROPWRIGHT_BIND_ADDRESS:-127.0.0.1}:${CROPWRIGHT_PORT:-5184}`; set
-  `CROPWRIGHT_BIND_ADDRESS=0.0.0.0` to reach it from other machines. Each
-  GitHub release now attaches `docker-compose.yml`, `.env.example` and a
-  `SHA256SUMS` for them, taken from the tagged commit, for OpenProcessor's
-  one-line installer.
+- **Bind address is configurable.** The compose port is now
+  `${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}`. The
+  default serves this machine and the local network; set `127.0.0.1` to
+  limit it to this machine. Each GitHub release now attaches
+  `docker-compose.yml`, `.env.example` and a `SHA256SUMS` for them, taken
+  from the tagged commit, for OpenProcessor's one-line installer.
 - **Faster test runs.** `npm run test:e2e` now builds and serves the app
   once, then runs the stubbed Playwright suite across parallel pytest-xdist
   workers. That's about 40 s instead of about 160 s for 101 tests, and the

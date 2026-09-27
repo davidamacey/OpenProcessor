@@ -46,7 +46,7 @@ services:
       # Deployment-owned nginx upload cap for /ingest, in MB (default 256).
       - CROPWRIGHT_INGEST_MAX_REQUEST_MB=${CROPWRIGHT_INGEST_MAX_REQUEST_MB:-256}
     ports:
-      - '${CROPWRIGHT_BIND_ADDRESS:-127.0.0.1}:${CROPWRIGHT_PORT:-5184}:8080'
+      - '${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}:8080'
     healthcheck:
       # 127.0.0.1, not localhost: localhost resolves to ::1 here and
       # nginx only listens on IPv4. The image runs nginx as uid 101 on 8080.
