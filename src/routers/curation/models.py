@@ -524,8 +524,16 @@ def _project_owns_model(model_name: str) -> bool:
     """
     from src.config.projects import DEFAULT_SLUG
     from src.services.projects.registry import get_project_registry
+    from src.services.training.model_classes import model_owner_project
 
-    own_prefix = get_curation_config().model_prefix
+    cfg = get_curation_config()
+    # promote.json names the owner outright; the prefix rule alone would
+    # hand `default` another project's model once that project is missing
+    # from the registry snapshot (deleted, or a stale snapshot).
+    recorded_owner = model_owner_project(model_name)
+    if recorded_owner is not None and recorded_owner != cfg.project_slug:
+        return False
+    own_prefix = cfg.model_prefix
     if own_prefix:
         return model_name.startswith(own_prefix)
     other_prefixes = (
