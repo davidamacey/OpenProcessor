@@ -8,6 +8,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **P3F finish pass 2 (2026-09-27).** Closes every item the P3 re-review
+  still marked open (verdict FIX-FIRST):
+  - **M4 retry**: a re-issued `DELETE ?confirm=<slug>` on a record already
+    `deleting` (a prior finish attempt's index or model-unload step
+    failed) now answers 202 and re-triggers the finish, instead of 409
+    `invalid_transition`.
+  - **N1**: a `building` record left by a mid-create failure no longer
+    wedges forever. `create_project` catches a failure in its own initial
+    `write_record` (distinguishing a genuine storage-level slug conflict,
+    propagated untouched, from its own `bump_revision` failing after the
+    doc landed, which now flips the record to `failed`). A delete-side
+    escape hatch also allows deleting a `building` record whose
+    `updated_at` is stale (>120s); a fresh one still 409s.
+  - **B2(a) residual**: `create_project` now calls `registry.refresh_strict()`
+    (raises) right after the `building` write, and verifies every one of
+    its own indexes actually exists before ever writing `active` --
+    `_ensure_indexes` is itself fail-open, so refresh_strict alone did
+    not close the gap that let a live create return `active` with zero
+    real indexes.
+  - **M5 step 4**: `delete_project_finish` now unloads the project's own
+    promoted, shared models via P2's `unload_triton_model` primitive
+    (after the drain wait, before index deletion); `dry_run_delete`
+    reports them in `promoted_models` instead of a hardcoded `[]`.
+  - **B2(b)**: the `FakeLifecycleOpenSearch`/`_noop_ensure_indexes` test
+    stub across `tests/projects/*` now really creates the bound
+    project's indexes (`fake_ensure_indexes`), so `create_project`'s
+    index-verification check has real state to check, and a genuine
+    `indices.create` failure (simulated) is proven to still end the
+    create `failed`.
+  - **Minors**: m1 (the delete-path directory guard for
+    `train_jobs_dir`/`autolabel_dir` was checked against a root derived
+    from the same path, which could never refuse anything -- now guards
+    against the real shared root with a `path_escape` refusal), m2 (every
+    status-transition write rebuilds its doc from a fresh read, not a
+    stale closure snapshot, so a concurrent write landing during a
+    delete's up-to-60s drain wait is no longer silently discarded), m5
+    (`JobRef.started_at` is now a real timestamp or `null`, never an
+    always-`''` filler), m7 (the 10s capacity cache is now busted on
+    every create/delete), m8 (heap sum excludes non-data nodes; the warn
+    message no longer rounds 0.5 GB down to "0 GB"), m10 (dry-run index
+    counts report `null`, not `0`, when uncountable). m4 (cross-document
+    races on `_last_active_check`) and m12 (`GET /projects`'s per-project
+    `validated_count` N+1) are documented as deferred, not fixed --
+    both need infra (distributed locking; a cross-index aggregation the
+    test fakes don't model) this pass does not add.
+
 - **P3 review fix pass (2026-09-27).** Addresses the independent P3 review's
   blocker and majors:
   - M1: `POST /projects` create is now storage-OCC-safe (`op_type='create'`);
