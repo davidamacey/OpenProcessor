@@ -31,7 +31,7 @@
     if (t.call === '' && testable.length > 0) t.call = testable[0]!.id;
   });
   $effect(() => {
-    if (savedOnly) t.source = 'saved';
+    t.setSavedOnly(savedOnly);
   });
   $effect(() => () => t.stop());
 

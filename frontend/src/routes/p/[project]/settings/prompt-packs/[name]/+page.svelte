@@ -255,7 +255,9 @@
           {/each}
         </section>
 
-        <aside class="flex min-w-0 flex-col gap-4">
+        <aside
+          class="order-first flex min-w-0 flex-col gap-4 lg:sticky lg:top-4 lg:order-none lg:self-start"
+        >
           <section class="surface flex flex-col gap-2 p-4 text-sm" aria-label="Save">
             <div
               class="flex flex-wrap items-center gap-2 text-xs"
@@ -422,7 +424,10 @@
     danger={force}
     busy={ed.active.busy}
     onconfirm={() => void doActivate()}
-    oncancel={() => (activating = null)}
+    oncancel={() => {
+      activating = null;
+      ed.active.clearAction();
+    }}
   >
     <p data-testid="activate-from-to">
       <span class="font-mono"

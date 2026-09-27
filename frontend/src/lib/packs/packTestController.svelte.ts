@@ -9,6 +9,7 @@
  * default (registry classes, active profile, active VLM endpoint). The
  * response is rendered as served; nothing here parses a reply.
  */
+import { untrack } from 'svelte';
 import { packErrorDetail, packErrorText, testPromptPack } from '$lib/api';
 import type { Crop } from '$lib/types';
 import type {
@@ -48,6 +49,21 @@ export class PackTest {
 
   constructor(test: typeof testPromptPack = testPromptPack) {
     this.#test = test;
+  }
+
+  #forcedFrom: PackTestSource | null = null;
+
+  /** No draft to test (a read-only pack, or a revision being viewed):
+   *  forces the saved source; when a draft is back, restores what the
+   *  operator had before, never overriding a choice they made. */
+  setSavedOnly(savedOnly: boolean): void {
+    if (savedOnly && this.#forcedFrom == null) {
+      this.#forcedFrom = untrack(() => this.source);
+      this.source = 'saved';
+    } else if (!savedOnly && this.#forcedFrom != null) {
+      this.source = this.#forcedFrom;
+      this.#forcedFrom = null;
+    }
   }
 
   get cropIds(): string[] {

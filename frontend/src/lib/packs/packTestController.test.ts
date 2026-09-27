@@ -27,6 +27,22 @@ describe('PackTest', () => {
     expect(t.canRun).toBe(true);
   });
 
+  it('savedOnly forces the saved source and gives back the operator choice after', () => {
+    const t = createPackTest(vi.fn());
+    expect(t.source).toBe('draft');
+    t.setSavedOnly(true);
+    expect(t.source).toBe('saved');
+    t.setSavedOnly(true);
+    t.setSavedOnly(false);
+    expect(t.source).toBe('draft');
+    t.source = 'saved';
+    t.setSavedOnly(true);
+    t.setSavedOnly(false);
+    expect(t.source).toBe('saved');
+    t.setSavedOnly(false);
+    expect(t.source).toBe('saved');
+  });
+
   it('draft source sends the draft body and nothing else', async () => {
     const test = vi.fn().mockResolvedValue(testResponseFixture());
     const t = createPackTest(test);
