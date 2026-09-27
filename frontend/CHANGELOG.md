@@ -8,6 +8,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Projects UI: every page under `/p/[project]`, a project switcher and
+  `/projects` management (P1–P3 surface).** The active project lives in
+  the URL path only (owner decision; nothing in localStorage).
+  - Every page moved to `/p/<slug>/<section>`. `/` and the bare old
+    paths (`/review?tab=x`, `/clusters/12`) redirect under the served
+    default project with the query string kept, and `/p/<slug>` lands on
+    the dashboard. An unknown or non-selectable slug shows a "project not
+    found / not available" page with links to the project list and the
+    default project, and fires no scoped call.
+  - A top-bar project switcher lists the served selectable projects with
+    served status labels and a "custom keys" badge. Switching keeps the
+    current section and drops ids that don't carry across projects. An
+    archived (not writable) project shows a read-only banner.
+  - On a switch, every per-project cache resets (undo stack, class
+    registry, vocabularies, region profile with no reload notice,
+    settings, keymap, availability probes, source-overlay cache), and a
+    scoped response that lands after the switch is dropped.
+  - `/projects`: the served list with a Show-archived toggle, the served
+    shard capacity, and create / edit / archive / unarchive / copy
+    settings / delete. Every action is gated on served flags only.
+    Refusals render the served message verbatim, a `revision_conflict`
+    offers a reload, delete shows the served dry run and blocking reasons
+    first, and lifecycle warnings become toasts.
+  - Vendored OpenAPI re-synced from the backend's projects-lifecycle
+    branch (purely additive: the P3 routes and schemas);
+    `types_projects.ts` is pinned to it by `projectsContract.test.ts`.
+  - Tests: unit and mount tests for the path helpers, the store, the
+    stale-response guard, the switcher, the routing loads and every
+    management action's served-error handling (each mutation-checked);
+    stubbed e2e for two-project switching, redirects and `/projects`
+    CRUD, and every existing e2e test moved to `/p/default/...`.
+
 - **Projects P1 follow-up: a real prefix-boundary e2e test.** Every
   other stubbed e2e route pattern matches by path suffix (`r"/health$"`
   matches both the global and the scoped health), so none of them could
