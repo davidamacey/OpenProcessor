@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated
 
-from fastapi import Path
+from fastapi import Path, Request
 from fastapi.responses import JSONResponse
 
 from src.config.project_context import set_bound_project, try_current_project
@@ -19,10 +19,17 @@ from src.services.projects.registry import get_project_registry
 
 
 if TYPE_CHECKING:
-    from fastapi import FastAPI, Request
+    from fastapi import FastAPI
 
 
 logger = get_logger(__name__)
+
+# M2: a read-only bind (archived, or a stale registry) refuses every
+# non-safe method BEFORE the handler runs -- the guard's ProjectReadOnly
+# stays as defence in depth for the OpenSearch calls, but file-backed
+# writes (e.g. POST /classes rewriting class_registry.json) never went
+# through the guard at all, so they need this earlier gate.
+_SAFE_METHODS = frozenset({'GET', 'HEAD', 'OPTIONS'})
 
 
 async def _resolve_and_bind(slug: str) -> ProjectRecord:
@@ -51,10 +58,26 @@ async def _resolve_and_bind(slug: str) -> ProjectRecord:
     return record
 
 
-async def bind_path_project(project: Annotated[str, Path()]) -> ProjectRecord:
+async def bind_path_project(request: Request, project: Annotated[str, Path()]) -> ProjectRecord:
     """A malformed slug names no project: 404 ``project_not_found`` like
-    any unknown slug, never a bare 422."""
-    return await _resolve_and_bind(project)
+    any unknown slug, never a bare 422.
+
+    M2: a read-only bind refuses every non-safe method here, before the
+    route handler runs -- a file-backed write (``class_registry.json``,
+    a settings snapshot, ...) never reaches the OpenSearch guard at all,
+    so relying on :class:`ProjectReadOnly` alone let those through on an
+    archived or stale-registry project."""
+    record = await _resolve_and_bind(project)
+    if request.method not in _SAFE_METHODS:
+        bound = try_current_project()
+        if bound is not None and bound.read_only:
+            raise api_error(
+                409,
+                'project_archived' if record.status == 'archived' else 'project_read_only',
+                f"project '{project}' is bound read-only; refusing a {request.method}",
+                project=project,
+            )
+    return record
 
 
 def install_project_exception_handlers(app: FastAPI) -> None:

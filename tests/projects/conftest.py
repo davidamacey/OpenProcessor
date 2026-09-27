@@ -234,3 +234,26 @@ async def seed_default_project(client: Any) -> Any:
     from src.services.projects.bootstrap import bootstrap_default_project
 
     return await bootstrap_default_project(client)
+
+
+@pytest.fixture
+def not_stale_registry(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """M2 made a stale registry refuse every non-GET route at bind time
+    (``project_read_only``, defence for file-backed writes the guard
+    never saw). The process-wide default test registry
+    (``tests/conftest.py::_requests_start_unbound``) never successfully
+    refreshes on purpose, so it is always ``stale`` -- fine for tests
+    that only read, but any write-route test now needs one that
+    actually succeeds. Opt in with this fixture."""
+    from src.services.projects import registry as registry_mod
+    from src.services.projects.registry import ProjectRegistry
+
+    registry = ProjectRegistry(lambda: None)
+    registry._by_slug = dict(registry_mod.get_project_registry().snapshot())
+
+    async def _fresh(self: ProjectRegistry) -> None:
+        return None
+
+    monkeypatch.setattr(ProjectRegistry, 'ensure_fresh', _fresh)
+    registry_mod.set_project_registry(registry)
+    return registry

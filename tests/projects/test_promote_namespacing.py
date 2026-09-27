@@ -149,10 +149,16 @@ async def test_default_promote_name_is_unprefixed(
     assert result.triton_name == 'detector_v3'
 
 
-def test_requested_name_with_reserved_separator_is_rejected(tmp_path, monkeypatch) -> None:
+def test_requested_name_with_reserved_separator_is_rejected(
+    tmp_path, monkeypatch, not_stale_registry
+) -> None:
     """The router-level guard (curation_train.promote_run) 422s before
     even looking up the job -- a requested name containing '__' would
-    spoof the namespacing separator once prefixed."""
+    spoof the namespacing separator once prefixed. POST is a write, so
+    M2's read-only gate needs a registry that actually refreshes (the
+    process-wide default test registry is permanently stale by
+    design), or it 409s before the router's own validation runs."""
+    del not_stale_registry
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
 
     from _curation_app import SCOPED, curation_test_app

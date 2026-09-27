@@ -20,6 +20,12 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+@pytest.fixture(autouse=True)
+def _writable(not_stale_registry: object) -> None:
+    """pause/resume are writes; M2 refuses them on the process-wide
+    default test registry, which is permanently stale by design."""
+
+
 @pytest.fixture
 def app_client():
     import src.routers.curation._project_pause as pause_mod
