@@ -117,7 +117,7 @@ class SegmenterClient:
         timeout_s: float = 30.0,
         max_candidates: int = 4,
         text_prompt: str = '',
-        source_name: str = 'sam3',
+        source_name: str,
     ) -> None:
         urls = [u.strip().rstrip('/') for u in (base_url or '').split(',') if u.strip()]
         # No segmenter configured is a supported deployment shape, not
