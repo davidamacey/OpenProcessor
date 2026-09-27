@@ -93,7 +93,9 @@ def client(fake_os: QueryFakeOpenSearch) -> Any:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     with TestClient(app) as c:
         yield c
@@ -107,11 +109,14 @@ def test_undo_box_edit_restores_detector_provenance(
     client: TestClient, fake_os: QueryFakeOpenSearch
 ) -> None:
     before = _state(_doc(fake_os, 'c1'))
-    resp = client.put('/curation/crops/c1/region', json={'region_bbox_norm': [0.1, 0.1, 0.3, 0.3]})
+    resp = client.put(
+        '/curation/projects/default/crops/c1/region',
+        json={'region_bbox_norm': [0.1, 0.1, 0.3, 0.3]},
+    )
     assert resp.status_code == 200, resp.text
     assert _doc(fake_os, 'c1')[F.detector] != 'det_model'
 
-    resp = client.post('/curation/crops/c1/region/undo')
+    resp = client.post('/curation/projects/default/crops/c1/region/undo')
     assert resp.status_code == 200, resp.text
     assert _state(_doc(fake_os, 'c1')) == before
     assert resp.json()['region_score'] == 0.894
@@ -130,9 +135,12 @@ def test_undo_status_write(
     client: TestClient, fake_os: QueryFakeOpenSearch, body: dict[str, Any]
 ) -> None:
     before = _state(_doc(fake_os, 'c1'))
-    assert client.patch('/curation/crops/c1/region_meta', json=body).status_code == 200
+    assert (
+        client.patch('/curation/projects/default/crops/c1/region_meta', json=body).status_code
+        == 200
+    )
     assert _state(_doc(fake_os, 'c1')) != before
-    resp = client.post('/curation/crops/c1/region/undo')
+    resp = client.post('/curation/projects/default/crops/c1/region/undo')
     assert resp.status_code == 200, resp.text
     assert _state(_doc(fake_os, 'c1')) == before
     assert _doc(fake_os, 'c1').get(F.rejection_reason) is None
@@ -140,23 +148,25 @@ def test_undo_status_write(
 
 def test_repeated_undo_steps_back(client: TestClient, fake_os: QueryFakeOpenSearch) -> None:
     original = _state(_doc(fake_os, 'c1'))
-    client.patch('/curation/crops/c1/region_meta', json={'region_status': 'false_positive'})
+    client.patch(
+        '/curation/projects/default/crops/c1/region_meta', json={'region_status': 'false_positive'}
+    )
     after_fp = _state(_doc(fake_os, 'c1'))
-    client.put('/curation/crops/c1/region', json={'region_bbox_norm': None})
+    client.put('/curation/projects/default/crops/c1/region', json={'region_bbox_norm': None})
 
-    assert client.post('/curation/crops/c1/region/undo').status_code == 200
+    assert client.post('/curation/projects/default/crops/c1/region/undo').status_code == 200
     assert _state(_doc(fake_os, 'c1')) == after_fp
-    assert client.post('/curation/crops/c1/region/undo').status_code == 200
+    assert client.post('/curation/projects/default/crops/c1/region/undo').status_code == 200
     assert _state(_doc(fake_os, 'c1')) == original
-    assert client.post('/curation/crops/c1/region/undo').status_code == 409
+    assert client.post('/curation/projects/default/crops/c1/region/undo').status_code == 409
 
 
 def test_undo_with_no_region_write_is_409(client: TestClient) -> None:
-    assert client.post('/curation/crops/fresh/region/undo').status_code == 409
+    assert client.post('/curation/projects/default/crops/fresh/region/undo').status_code == 409
 
 
 def test_undo_unknown_crop_is_404(client: TestClient) -> None:
-    assert client.post('/curation/crops/nope/region/undo').status_code == 404
+    assert client.post('/curation/projects/default/crops/nope/region/undo').status_code == 404
 
 
 def test_undo_batch_reports_per_crop_outcomes(
@@ -164,13 +174,13 @@ def test_undo_batch_reports_per_crop_outcomes(
 ) -> None:
     before = {cid: _state(_doc(fake_os, cid)) for cid in ('c1', 'c2')}
     resp = client.post(
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         json={'crop_ids': ['c1', 'c2'], 'region_status': 'false_positive'},
     )
     assert resp.status_code == 200, resp.text
 
     resp = client.post(
-        '/curation/crops/region/undo_batch',
+        '/curation/projects/default/crops/region/undo_batch',
         json={'crop_ids': ['c1', 'c2', 'fresh', 'nope']},
     )
     assert resp.status_code == 200, resp.text
@@ -186,14 +196,21 @@ def test_undo_batch_reports_per_crop_outcomes(
 
 def test_undo_batch_of_bulk_box_clear(client: TestClient, fake_os: QueryFakeOpenSearch) -> None:
     before = _state(_doc(fake_os, 'c2'))
-    client.put('/curation/crops/batch_region', json={'crop_ids': ['c2'], 'region_bbox_norm': None})
-    resp = client.post('/curation/crops/region/undo_batch', json={'crop_ids': ['c2']})
+    client.put(
+        '/curation/projects/default/crops/batch_region',
+        json={'crop_ids': ['c2'], 'region_bbox_norm': None},
+    )
+    resp = client.post(
+        '/curation/projects/default/crops/region/undo_batch', json={'crop_ids': ['c2']}
+    )
     assert resp.status_code == 200, resp.text
     assert _state(_doc(fake_os, 'c2')) == before
 
 
 def test_undo_batch_nothing_anywhere_is_409(client: TestClient) -> None:
-    resp = client.post('/curation/crops/region/undo_batch', json={'crop_ids': ['fresh']})
+    resp = client.post(
+        '/curation/projects/default/crops/region/undo_batch', json={'crop_ids': ['fresh']}
+    )
     assert resp.status_code == 409
 
 
@@ -201,8 +218,10 @@ def test_region_undo_leaves_class_untouched(
     client: TestClient, fake_os: QueryFakeOpenSearch
 ) -> None:
     _doc(fake_os, 'c1').update({'class_id': 4, 'class_source': 'human', 'class_validated': True})
-    client.patch('/curation/crops/c1/region_meta', json={'region_status': 'false_positive'})
-    client.post('/curation/crops/c1/region/undo')
+    client.patch(
+        '/curation/projects/default/crops/c1/region_meta', json={'region_status': 'false_positive'}
+    )
+    client.post('/curation/projects/default/crops/c1/region/undo')
     doc = _doc(fake_os, 'c1')
     assert (doc['class_id'], doc['class_source'], doc['class_validated']) == (4, 'human', True)
 
@@ -213,18 +232,18 @@ def test_region_undo_leaves_class_untouched(
 def test_vlm_dismiss_undo_restores_suggestion(
     client: TestClient, fake_os: QueryFakeOpenSearch
 ) -> None:
-    resp = client.post('/curation/crops/vlm-1/vlm_dismiss')
+    resp = client.post('/curation/projects/default/crops/vlm-1/vlm_dismiss')
     assert resp.status_code == 200, resp.text
     assert _doc(fake_os, 'vlm-1')['vlm_dismissed_class_name'] == 'alpha'
 
-    resp = client.post('/curation/crops/vlm-1/vlm_dismiss/undo')
+    resp = client.post('/curation/projects/default/crops/vlm-1/vlm_dismiss/undo')
     assert resp.status_code == 200, resp.text
     doc = _doc(fake_os, 'vlm-1')
     assert doc.get('vlm_dismissed_class_name') is None
     assert doc.get('vlm_dismissed_class_id') is None
     assert resp.json()['vlm_proposed_class_name'] == 'alpha'
-    assert client.post('/curation/crops/vlm-1/vlm_dismiss/undo').status_code == 409
+    assert client.post('/curation/projects/default/crops/vlm-1/vlm_dismiss/undo').status_code == 409
 
 
 def test_vlm_dismiss_undo_without_dismissal_is_409(client: TestClient) -> None:
-    assert client.post('/curation/crops/vlm-1/vlm_dismiss/undo').status_code == 409
+    assert client.post('/curation/projects/default/crops/vlm-1/vlm_dismiss/undo').status_code == 409

@@ -106,18 +106,13 @@ def _require_found(record: ProjectRecord | None, slug: str) -> ProjectRecord:
 async def _get_mutable_record(
     client: Any, slug: str
 ) -> tuple[ProjectRecord, int | None, int | None]:
-    """Like :func:`get_record_with_seq`, but ``default`` always resolves
-    even before its registry doc has ever been written (first-boot /
-    test processes that never ran the startup bootstrap) -- it is
-    synthesized from the env, with no seq/term, so the following write
-    creates the doc unconditionally."""
+    """The stored record plus its OCC seq/term. ``default`` is now an
+    ordinary project record (``bootstrap_default_project`` writes it at
+    startup like any other project), so there is no synthesis fallback
+    here -- a missing doc is a genuine 404."""
     stored, seq, term = await get_record_with_seq(client, slug)
     if stored is not None:
         return stored, seq, term
-    if slug == DEFAULT_SLUG:
-        from src.services.projects.registry import default_project_record
-
-        return default_project_record(), None, None
     raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
 
 

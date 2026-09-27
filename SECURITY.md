@@ -26,6 +26,21 @@ no-authentication model.
 enforces authentication, and do not map its ports directly to a public
 interface.**
 
+### LAN access from the one-line installer
+
+`setup-openprocessor.sh` targets one computer **and** its local network
+(homelab, small office). With the `cropwright` tier, the Cropwright web UI
+is published on all interfaces (`CROPWRIGHT_BIND_ADDRESS=0.0.0.0`) so other
+computers on the LAN can open it; its nginx proxies to the API over the
+Docker network. Every backend port (API, Triton, OpenSearch, ...) stays
+bound to `127.0.0.1` unless you pass `--bind` and confirm it.
+
+The UI has **no login**, and it can reach every API route above. Use it only
+on a network you trust, never port-forward it to the internet, and put a
+reverse proxy with authentication in front for anything wider. Install with
+`--local-only` (or answer "no" to the LAN question) to keep it on this
+computer.
+
 ### Other default-open components in the shipped `docker-compose.yml`
 
 - **Grafana** ships with the default credentials `admin` / `admin`

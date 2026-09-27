@@ -31,6 +31,7 @@ def _make_hub(log_path: Path, max_bytes: int | None = None) -> EventHub:
     hub._subscribers = set()
     hub._lock = asyncio.Lock()
     hub._published = 0
+    hub._published_by_project = {}
     hub._dropped = 0
     hub._bus = 'file'
     hub._log = _EventLog(path=log_path, max_bytes=max_bytes)
@@ -139,7 +140,7 @@ def test_line_over_max_size_is_dropped_not_written(tmp_path: Path) -> None:
 
 def test_stats_report_file_bus_and_log_path(tmp_path: Path) -> None:
     hub = _make_hub(tmp_path / 'events.jsonl')
-    stats = hub.stats()
+    stats = hub.stats('default')
     assert stats['bus'] == 'file'
     assert stats['log_path'] == str(tmp_path / 'events.jsonl')
     assert stats['subscribers'] == 0
@@ -160,8 +161,8 @@ def test_unwritable_state_dir_falls_back_to_process_bus(
     try:
         hub = EventHub()
         assert hub._bus == 'process'
-        assert hub.stats()['bus'] == 'process'
-        assert hub.stats()['log_path'] is None
+        assert hub.stats('default')['bus'] == 'process'
+        assert hub.stats('default')['log_path'] is None
     finally:
         ro_dir.chmod(0o755)
 

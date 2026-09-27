@@ -63,7 +63,9 @@ def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         AsyncMock(return_value=None),
     )
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -79,11 +81,15 @@ def _docs(tab: str) -> dict[str, dict[str, Any]]:
 @pytest.mark.parametrize('tab', sorted(_QUALIFYING))
 def test_max_rank_limits_every_tab(tab: str, monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs(tab)}), monkeypatch)
-    r = client.get(f'/curation/review/{tab}', params={'max_rank': 1, 'page_size': 50})
+    r = client.get(
+        f'/curation/projects/default/review/{tab}', params={'max_rank': 1, 'page_size': 50}
+    )
     assert r.status_code == 200, r.text
     assert {i['crop_id'] for i in r.json()['items']} == {'rank1'}
 
-    r3 = client.get(f'/curation/review/{tab}', params={'max_rank': 3, 'page_size': 50})
+    r3 = client.get(
+        f'/curation/projects/default/review/{tab}', params={'max_rank': 3, 'page_size': 50}
+    )
     assert {i['crop_id'] for i in r3.json()['items']} == {'rank1', 'rank2', 'rank3'}
 
 
@@ -92,14 +98,14 @@ def test_max_rank_limits_every_tab(tab: str, monkeypatch: pytest.MonkeyPatch) ->
 )
 def test_no_max_rank_serves_every_rank(tab: str, monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs(tab)}), monkeypatch)
-    r = client.get(f'/curation/review/{tab}', params={'page_size': 50})
+    r = client.get(f'/curation/projects/default/review/{tab}', params={'page_size': 50})
     assert r.json()['total'] == 4
 
 
 @pytest.mark.parametrize('tab', ['primary_low_conf', 'classifier_blind_spots'])
 def test_primary_tabs_keep_their_served_default(tab: str, monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs(tab)}), monkeypatch)
-    r = client.get(f'/curation/review/{tab}', params={'page_size': 50})
+    r = client.get(f'/curation/projects/default/review/{tab}', params={'page_size': 50})
     assert {i['crop_id'] for i in r.json()['items']} == {'rank1', 'rank2'}
     served = {t['id']: t for t in review_tab_catalog()}[tab]
     assert served['filter_defaults'] == {'max_rank': 2}
@@ -108,7 +114,7 @@ def test_primary_tabs_keep_their_served_default(tab: str, monkeypatch: pytest.Mo
 def test_locate_uses_the_same_max_rank(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs('all')}), monkeypatch)
     body = client.get(
-        '/curation/review/all/locate', params={'crop_id': 'rank3', 'max_rank': 2}
+        '/curation/projects/default/review/all/locate', params={'crop_id': 'rank3', 'max_rank': 2}
     ).json()
     assert body['in_queue'] is False
     assert body['reason'] == 'filtered_out'
@@ -118,7 +124,7 @@ def test_locate_uses_the_same_max_rank(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.usefixtures('reference_region_profile')
 def test_tabs_catalog_serves_filters_per_tab(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: {}}), monkeypatch)
-    tabs = {t['id']: t for t in client.get('/curation/review/tabs').json()['tabs']}
+    tabs = {t['id']: t for t in client.get('/curation/projects/default/review/tabs').json()['tabs']}
     assert set(tabs) == set(KNOWN_TABS)
     for tab_id, tab in tabs.items():
         assert tab['filters'] == list(tab_filters(tab_id))
@@ -130,5 +136,7 @@ def test_tabs_catalog_serves_filters_per_tab(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_text_is_ignored_off_the_regions_tab(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs('all')}), monkeypatch)
-    r = client.get('/curation/review/all', params={'text': 'nothing-matches', 'page_size': 50})
+    r = client.get(
+        '/curation/projects/default/review/all', params={'text': 'nothing-matches', 'page_size': 50}
+    )
     assert r.json()['total'] == 4

@@ -51,22 +51,23 @@ from pathlib import Path
 
 import httpx
 
+from src.config.project_context import project_api_base
 from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 DEFAULT_API = os.environ.get('OP_API', 'http://localhost:4603')
-# Same env + default as CurationConfig.api_prefix, so the worker follows the API's mount.
-API_PREFIX = os.environ.get('OP_API_PREFIX', '/curation').rstrip('/')
 DEFAULT_OS = os.environ.get('OPENSEARCH_URL', 'http://localhost:4607')
-# This script polls OpenSearch directly (bypassing yolo-api), so it needs
-# the same override the src/ modules read via
-# src.clients.curation_opensearch / src.config.CurationConfig.items_index.
-# Kept as a bare os.environ.get (no src import) so this lightweight
-# httpx-only worker doesn't pull in the full src.clients import chain.
-ITEMS_INDEX = os.environ.get('OP_ITEMS_INDEX_OVERRIDE') or 'op_items'
-# Mirrors src.config.curation.ITEM_EMBEDDING_FIELD for the same no-src-import
-# reason; tests/curation/test_item_embedding_field.py pins the two together.
+
+
+def _items_index() -> str:
+    """The bound project's items index (``--project``), read per call."""
+    from src.config.curation import IndexRole, get_curation_config, index_name
+
+    return index_name(get_curation_config(), IndexRole.ITEMS)
+
+
+# Mirrors src.config.curation.ITEM_EMBEDDING_FIELD (kept a plain literal); tests/curation/test_item_embedding_field.py pins the two together.
 ITEM_EMBEDDING_FIELD = 'pe_embedding'
 
 # How long a released-then-not-yet-refreshed crop id stays in the
@@ -224,7 +225,7 @@ async def fetch_pending_ids(
         'sort': [{'created_at': {'order': 'asc', 'unmapped_type': 'date'}}, {'crop_id': 'asc'}],
     }
     r = await client.post(
-        f'{opensearch_url}/{ITEMS_INDEX}/_search',
+        f'{opensearch_url}/{_items_index()}/_search',
         json=body,
         timeout=30.0,
     )
@@ -240,7 +241,7 @@ async def label_batch(
 ) -> dict:
     """Call /curation/vlm/label_batch for one chunk."""
     r = await client.post(
-        f'{api}{API_PREFIX}/vlm/label_batch',
+        f'{api}{project_api_base()}/vlm/label_batch',
         json={'crop_ids': crop_ids},
         timeout=300.0,
     )
@@ -602,10 +603,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     # This literal 'vlm_worker/pause.sentinel' path must stay in
     # sync with CurationConfig.pause_sentinel_path (src/config/curation.py),
     # which gpu_arbiter.py and scripts/curation/worker/state.py both
-    # resolve through. Duplicated here (rather than importing
-    # src.config) deliberately — this script stays a lightweight
-    # httpx-only worker with no src import (see the module docstring's
-    # ITEMS_INDEX/ITEM_EMBEDDING_FIELD precedent above).
+    # resolve through.
     p.add_argument(
         '--pause-sentinel',
         default=os.environ.get(

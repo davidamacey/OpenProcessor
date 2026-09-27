@@ -201,7 +201,9 @@ def _crops_client(fake_os: Any) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     return TestClient(app)
 
@@ -218,7 +220,7 @@ class _FakeOS:
 def test_classifier_conf_lt_filter_uses_confidence_field() -> None:
     fake = _FakeOS()
     client = _crops_client(fake)
-    resp = client.get('/curation/crops', params={'classifier_conf_lt': 0.5})
+    resp = client.get('/curation/projects/default/crops', params={'classifier_conf_lt': 0.5})
     assert resp.status_code == 200, resp.text
 
     body = fake.bodies[-1]

@@ -156,7 +156,9 @@ def app_client(fake_os: _FakeRegionOS) -> Any:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
 
     with TestClient(app) as client:
@@ -172,7 +174,7 @@ def test_set_crop_region_stamps_verifier_fields(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.put(
-        '/curation/crops/crop-1/region',
+        '/curation/projects/default/crops/crop-1/region',
         json={'region_bbox_norm': [0.1, 0.2, 0.3, 0.4], 'region_label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -194,7 +196,9 @@ def test_set_crop_region_stamps_verifier_fields(
 def test_set_crop_region_null_bbox_marks_no_region_visible(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
-    resp = app_client.put('/curation/crops/crop-1/region', json={'region_bbox_norm': None})
+    resp = app_client.put(
+        '/curation/projects/default/crops/crop-1/region', json={'region_bbox_norm': None}
+    )
     assert resp.status_code == 200, resp.text
     assert resp.json()['region_status'] == 'no_region_visible'
     written = fake_os._docs['crop-1']
@@ -205,7 +209,7 @@ def test_set_crop_region_null_bbox_marks_no_region_visible(
 
 def test_set_crop_region_rejects_out_of_range_bbox(app_client: TestClient) -> None:
     resp = app_client.put(
-        '/curation/crops/crop-1/region',
+        '/curation/projects/default/crops/crop-1/region',
         json={'region_bbox_norm': [1.5, 0.2, 0.3, 0.4]},
     )
     assert resp.status_code == 400
@@ -213,7 +217,7 @@ def test_set_crop_region_rejects_out_of_range_bbox(app_client: TestClient) -> No
 
 def test_set_crop_region_rejects_degenerate_bbox(app_client: TestClient) -> None:
     resp = app_client.put(
-        '/curation/crops/crop-1/region',
+        '/curation/projects/default/crops/crop-1/region',
         json={'region_bbox_norm': [0.5, 0.5, 0.5, 0.5]},
     )
     assert resp.status_code == 400
@@ -221,7 +225,7 @@ def test_set_crop_region_rejects_degenerate_bbox(app_client: TestClient) -> None
 
 def test_set_crop_region_missing_crop_returns_404(app_client: TestClient) -> None:
     resp = app_client.put(
-        '/curation/crops/does-not-exist/region',
+        '/curation/projects/default/crops/does-not-exist/region',
         json={'region_bbox_norm': [0.1, 0.2, 0.3, 0.4]},
     )
     assert resp.status_code == 404
@@ -236,7 +240,7 @@ def test_patch_region_meta_rejects_status_outside_human_settable_set(
     app_client: TestClient,
 ) -> None:
     resp = app_client.patch(
-        '/curation/crops/crop-1/region_meta',
+        '/curation/projects/default/crops/crop-1/region_meta',
         json={'region_status': 'pending_detection'},  # pipeline-only status
     )
     assert resp.status_code == 400
@@ -247,7 +251,7 @@ def test_patch_region_meta_accepts_human_settable_status(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.patch(
-        '/curation/crops/crop-1/region_meta',
+        '/curation/projects/default/crops/crop-1/region_meta',
         json={'region_status': 'verify_rejected', 'region_label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -261,7 +265,7 @@ def test_patch_region_meta_false_positive_routes_to_fp_bucket(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.patch(
-        '/curation/crops/crop-1/region_meta',
+        '/curation/projects/default/crops/crop-1/region_meta',
         json={'region_status': 'false_positive', 'region_label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -274,7 +278,7 @@ def test_patch_region_meta_text_only_does_not_touch_cluster_fields(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.patch(
-        '/curation/crops/crop-1/region_meta',
+        '/curation/projects/default/crops/crop-1/region_meta',
         json={'region_text': 'ABC123'},
     )
     assert resp.status_code == 200, resp.text
@@ -285,7 +289,7 @@ def test_patch_region_meta_text_only_does_not_touch_cluster_fields(
 
 
 def test_patch_region_meta_requires_at_least_one_field(app_client: TestClient) -> None:
-    resp = app_client.patch('/curation/crops/crop-1/region_meta', json={})
+    resp = app_client.patch('/curation/projects/default/crops/crop-1/region_meta', json={})
     assert resp.status_code == 400
 
 
@@ -295,7 +299,7 @@ def test_patch_region_meta_response_reports_wire_names(
     """``updated_fields`` echoes the fixed ``region_*`` wire names, never
     storage keys (docs/design/curation_api_contract.md)."""
     resp = app_client.patch(
-        '/curation/crops/crop-1/region_meta',
+        '/curation/projects/default/crops/crop-1/region_meta',
         json={'region_text': 'ABC123', 'region_status': 'detected', 'region_label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -307,10 +311,10 @@ def test_get_crop_returns_shared_wire_item(app_client: TestClient, fake_os: _Fak
     """``GET /crops/{id}`` returns the shared wire item, never the raw
     OpenSearch ``_source``."""
     app_client.patch(
-        '/curation/crops/crop-1/region_meta',
+        '/curation/projects/default/crops/crop-1/region_meta',
         json={'region_text': 'ABC123', 'region_status': 'detected', 'region_label_source': 'human'},
     )
-    resp = app_client.get('/curation/crops/crop-1')
+    resp = app_client.get('/curation/projects/default/crops/crop-1')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['region_text'] == 'ABC123'
@@ -327,7 +331,7 @@ def test_batch_set_region_status_rejects_non_human_settable_status(
     app_client: TestClient,
 ) -> None:
     resp = app_client.post(
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         json={'crop_ids': ['crop-1'], 'region_status': 'detection_failed'},
     )
     assert resp.status_code == 400
@@ -337,7 +341,7 @@ def test_batch_set_region_status_updates_every_crop_and_refreshes(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.post(
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         json={
             'crop_ids': ['crop-1', 'crop-2'],
             'region_status': 'detected',
@@ -362,7 +366,7 @@ def test_batch_set_region_status_false_positive_marks_fp_bucket_for_every_crop(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.post(
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         json={'crop_ids': ['crop-1', 'crop-2'], 'region_status': 'false_positive'},
     )
     assert resp.status_code == 200, resp.text
@@ -372,7 +376,7 @@ def test_batch_set_region_status_false_positive_marks_fp_bucket_for_every_crop(
 
 def test_batch_set_region_status_empty_crop_ids_is_a_noop(app_client: TestClient) -> None:
     resp = app_client.post(
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         json={'crop_ids': [], 'region_status': 'detected'},
     )
     assert resp.status_code == 200
@@ -383,7 +387,7 @@ def test_batch_set_region_status_missing_crop_reports_conflict_not_500(
     app_client: TestClient,
 ) -> None:
     resp = app_client.post(
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         json={'crop_ids': ['crop-1', 'does-not-exist'], 'region_status': 'detected'},
     )
     assert resp.status_code == 200, resp.text

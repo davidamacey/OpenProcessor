@@ -70,7 +70,9 @@ def client(fake_os: _FakeRegionOS) -> Any:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     with TestClient(app) as c:
         yield c
@@ -80,7 +82,7 @@ def test_bulk_false_positive_on_false_positive_keeps_verified(
     client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = client.post(
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         json={'crop_ids': ['fp-1'], 'region_status': 'false_positive'},
     )
     assert resp.status_code == 200, resp.text
@@ -92,7 +94,8 @@ def test_bulk_false_positive_on_false_positive_keeps_verified(
 
 def test_patch_same_status_keeps_verified(client: TestClient, fake_os: _FakeRegionOS) -> None:
     resp = client.patch(
-        '/curation/crops/fp-1/region_meta', json={'region_status': 'false_positive'}
+        '/curation/projects/default/crops/fp-1/region_meta',
+        json={'region_status': 'false_positive'},
     )
     assert resp.status_code == 200, resp.text
     assert fake_os._docs['fp-1'][F.verified] is True
@@ -102,7 +105,7 @@ def test_reconfirm_detected_keeps_region_cluster(
     client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = client.post(
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         json={'crop_ids': ['det-1'], 'region_status': 'detected'},
     )
     assert resp.status_code == 200, resp.text

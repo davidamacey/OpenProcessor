@@ -33,9 +33,9 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
-    d = tmp_path / 'probe'
-    monkeypatch.setenv('OP_PROBE_JOBS_DIR', str(d))
-    yield d
+    monkeypatch.setenv('OP_PROBE_JOBS_DIR', str(tmp_path / 'probe'))
+    # Job state nests per project (project_jobs_dir).
+    yield tmp_path / 'probe' / 'projects' / 'default'
     probe_job._reset_for_tests()
 
 

@@ -569,7 +569,7 @@ def atomic_symlink_flip(symlink_path: Path, target: Path) -> None:
 
     F-38 (fresh-start E2E findings 2026-09-25): a relative, non-absolute
     ``target`` (e.g. ``data/exports/20260925T143527Z``, from the default
-    relative ``OP_EXPORT_ROOT=./data/exports``) used to be passed straight
+    relative export root such as ``./data/projects/default/exports``) used to be passed straight
     to ``symlink_to`` verbatim. Symlink targets resolve relative to the
     *link's own directory*, not the process cwd -- so
     ``data/exports/current`` ended up pointing at

@@ -55,7 +55,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.delenv('OP_SEMANTIC_SEARCH_ENABLED', raising=False)
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     client = TestClient(app)
     client.fake_os = fake_os  # type: ignore[attr-defined]
@@ -65,7 +67,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 def test_cluster_methods_are_stable_and_ivf_is_default(app_client: TestClient) -> None:
     from src.services.curation.clustering.methods import DEFAULT_METHOD, available_methods
 
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
     body = r.json()
     cluster_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'cluster'}
@@ -80,7 +82,7 @@ def test_cluster_methods_are_stable_and_ivf_is_default(app_client: TestClient) -
 def test_score_entries_disabled_by_default(app_client: TestClient) -> None:
     from src.services.curation.item_scores import available_scorers
 
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     score_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'score'}
     assert set(score_entries) == set(available_scorers())
@@ -103,7 +105,7 @@ def test_score_entries_shadow_when_enabled_and_shadow(
 
     monkeypatch.setenv('OP_SCORES_ENABLED', '1')
     monkeypatch.setenv('OP_SCORES_SHADOW', '1')
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     score_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'score'}
     for scorer_id, entry in score_entries.items():
@@ -129,7 +131,7 @@ def test_score_entries_experimental_when_enabled_not_shadow(
 ) -> None:
     monkeypatch.setenv('OP_SCORES_ENABLED', '1')
     monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     score_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'score'}
     for entry in score_entries.values():
@@ -140,7 +142,7 @@ def test_every_advertised_id_resolves(app_client: TestClient) -> None:
     from src.services.curation.clustering.methods import get_method
     from src.services.curation.item_scores import get_scorer
 
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     for entry in body['strategies']:
         if entry['axis'] == 'cluster':
@@ -150,7 +152,7 @@ def test_every_advertised_id_resolves(app_client: TestClient) -> None:
 
 
 def test_diverse_overlay_entry_present_and_disabled_by_default(app_client: TestClient) -> None:
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     overlay_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'overlay'}
     assert set(overlay_entries) == {'diverse', 'viz_projection', 'semantic_search'}
@@ -169,7 +171,7 @@ def test_diverse_overlay_experimental_when_flag_on_but_never_stable(
     has not run, so this overlay must never advertise 'stable' regardless
     of OP_SELECT_DIVERSE_ENABLED."""
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     entry = next(s for s in body['strategies'] if s['id'] == 'diverse')
     assert entry['status'] == 'experimental'
@@ -178,7 +180,7 @@ def test_diverse_overlay_experimental_when_flag_on_but_never_stable(
 
 
 def test_viz_projection_entry_present_and_disabled_by_default(app_client: TestClient) -> None:
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     entry = next(s for s in body['strategies'] if s['id'] == 'viz_projection')
     assert entry['axis'] == 'overlay'
@@ -198,7 +200,7 @@ def test_viz_projection_experimental_when_flag_on_but_never_stable(
     backend-only pass never ran -- same "capped at experimental" reasoning
     ``diverse`` uses for its own still-outstanding gate half."""
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     entry = next(s for s in body['strategies'] if s['id'] == 'viz_projection')
     assert entry['status'] == 'experimental'
@@ -211,7 +213,7 @@ def test_viz_projection_carries_measured_purity_and_banner_flag(app_client: Test
     pass, not a placeholder) plus the frontend-facing banner flag --
     ``requires_banner`` is False because the measured purity landed in the
     "ship plain" tier (>=0.30), not the 0.15-0.30 banner tier."""
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     entry = next(s for s in body['strategies'] if s['id'] == 'viz_projection')
     # Literal expected values (not re-imported from the module under
@@ -231,7 +233,7 @@ def test_export_axis_advertises_yolo_and_single_class_and_omits_lpr(
     ``single_class`` is the generic narrowed export (G2); ``lpr`` must not
     appear at all, not even as a disabled entry -- a domain-named export
     kind is exactly the hardcoding this axis exists to avoid."""
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
     body = r.json()
     export_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'export'}
@@ -250,7 +252,7 @@ def test_detection_profile_axis_is_empty_by_default(app_client: TestClient) -> N
     from src.services.detection import profile_registry
 
     profile_registry._reset_registry_for_tests()
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
     body = r.json()
     assert [s for s in body['strategies'] if s['axis'] == 'detection_profile'] == []
@@ -267,7 +269,7 @@ def test_detection_profile_axis_advertises_the_selected_profile(
         EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE,
     )
 
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
     body = r.json()
     profile_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'detection_profile'}
@@ -318,7 +320,7 @@ def test_prompt_pack_axis_advertises_the_resolved_pack(app_client: TestClient) -
     own ``name`` field."""
     from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, GENERIC_REGION_PACK
 
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
     body = r.json()
     pack_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'prompt_pack'}
@@ -348,7 +350,7 @@ def test_prompt_pack_axis_advertises_a_deployment_supplied_pack(
     custom_cfg = CurationConfig(prompt_pack_path=pack_path)
     monkeypatch.setattr('src.config.curation.get_curation_config', lambda: custom_cfg)
 
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
     body = r.json()
     pack_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'prompt_pack'}
@@ -384,7 +386,7 @@ def test_prompt_pack_axis_advertises_every_configured_pack(
     )
     monkeypatch.setattr('src.config.curation.get_curation_config', lambda: custom_cfg)
 
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
     pack_entries = {s['id']: s for s in r.json()['strategies'] if s['axis'] == 'prompt_pack'}
     assert set(pack_entries) == {
@@ -399,7 +401,7 @@ def test_prompt_pack_axis_advertises_every_configured_pack(
 
 def test_writes_never_include_cluster_fields(app_client: TestClient) -> None:
     forbidden = {'cluster_id', 'cluster_subid', 'cluster_distance'}
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     for entry in body['strategies']:
         writes = set(entry.get('writes') or [])
@@ -430,7 +432,7 @@ def test_methods_emits_field_coverage_per_entry(app_client: TestClient) -> None:
         total=347_837, per_field={'cluster_distance': 124_921, 'crop_area_norm': 347_837}
     )
 
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
     body = r.json()
     assert body['strategies'], 'sanity: the registry is non-empty'
@@ -467,7 +469,7 @@ def test_methods_reports_zero_coverage_for_a_genuinely_inert_sort(
         },
     )
 
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     by_id = {s['id']: s for s in body['strategies']}
     assert by_id['uncertainty_entropy']['field_coverage'] == 0
@@ -485,7 +487,7 @@ def test_methods_coverage_is_null_not_zero_on_opensearch_failure(
     test."""
     app_client.fake_os.search = AsyncMock(side_effect=RuntimeError('opensearch unreachable'))  # type: ignore[attr-defined]
 
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
     body = r.json()
     for entry in body['strategies']:
@@ -503,7 +505,7 @@ def test_methods_does_not_query_per_entry(app_client: TestClient) -> None:
     TTL must not issue any new OpenSearch queries at all."""
     app_client.fake_os.search = _fake_field_counts(total=1000)  # type: ignore[attr-defined]
 
-    r1 = app_client.get('/curation/methods')
+    r1 = app_client.get('/curation/projects/default/methods')
     assert r1.status_code == 200
     n_entries = len(r1.json()['strategies'])
     first_call_count = app_client.fake_os.search.call_count  # type: ignore[attr-defined]
@@ -512,7 +514,7 @@ def test_methods_does_not_query_per_entry(app_client: TestClient) -> None:
         '_search covering every distinct field via filter aggs'
     )
 
-    r2 = app_client.get('/curation/methods')
+    r2 = app_client.get('/curation/projects/default/methods')
     assert r2.status_code == 200
     assert app_client.fake_os.search.call_count == first_call_count, (  # type: ignore[attr-defined]
         'a second request inside the TTL window must be served from cache'
@@ -546,7 +548,7 @@ def test_every_sort_with_requires_field_has_integer_coverage(app_client: TestCli
     because a sort happens to declare one."""
     app_client.fake_os.search = _fake_field_counts(total=1000)  # type: ignore[attr-defined]
 
-    r = app_client.get('/curation/methods')
+    r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
     body = r.json()
     bad = [

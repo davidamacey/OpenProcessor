@@ -1,0 +1,10 @@
+#!/bin/bash
+# Test double for nvidia-smi: GPU rows come from $SHIM_STATE/gpus.csv.
+printf 'nvidia-smi %s\n' "$*" >> "${SHIM_LOG:?}"
+case "$*" in
+    *--query-gpu*)
+        [[ -f "${SHIM_STATE:?}/gpus.csv" ]] || { echo "NVIDIA-SMI has failed" >&2; exit 9; }
+        cat "${SHIM_STATE}/gpus.csv"
+        ;;
+    *) ;;
+esac

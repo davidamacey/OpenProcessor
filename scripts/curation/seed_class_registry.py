@@ -41,7 +41,7 @@ Drift findings:
 
 Usage::
 
-    # First-time seed from a detector export (registry path from OP_REGISTRY_PATH)
+    # First-time seed from a detector export (the bound project's registry path)
     python3 scripts/curation/seed_class_registry.py --model detector.onnx
 
     # Seed from a dataset's data.yaml and append one post-model class
@@ -367,7 +367,7 @@ def build_parser() -> argparse.ArgumentParser:
         '--registry',
         type=Path,
         default=None,
-        help='class_registry.json path (default: OP_REGISTRY_PATH / CurationConfig)',
+        help='class_registry.json path (default: the --project registry path)',
     )
     p.add_argument(
         '--group-map',

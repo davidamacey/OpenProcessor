@@ -42,6 +42,11 @@ class EvalDatasetClass(BaseModel):
         description='Class-registry id (inverse of class_registry.json export_id_map); '
         'null when the export has no registry mapping for it'
     )
+    registry_class_name: str | None = Field(
+        description='Live registry name for registry_class_id, resolved by id lookup, '
+        'never assumed equal to the eval dataset name; null when registry_class_id is '
+        'null or no longer present in the registry (e.g. deleted, not merely deprecated)'
+    )
     n_objects: int
     n_images: int
 
@@ -159,6 +164,10 @@ class BakeoffProfileRow(BaseModel):
     default_backend: str
     triton_model: str
     context_class_ids: list[int]
+    context_class_names: list[str] = Field(
+        description='Registry names for context_class_ids, same order/length, resolved by '
+        "id lookup; an entry is the id's string form when it's no longer in the registry"
+    )
     baselines_path: str
 
 
@@ -287,6 +296,11 @@ class ClassMapping(BaseModel):
     method: MappingMethod
     model_to_eval: dict[str, int] | None = Field(
         description='{"<model class id>": <eval class id>}; null = matched by name in the evaluator'
+    )
+    model_to_eval_names: dict[str, str] | None = Field(
+        description='{"<model class id>": "<eval class name>"}; same keys as model_to_eval, '
+        'paired by name (never by raw index) so a consumer never has to re-derive the name '
+        'from the eval class id; null under the same condition as model_to_eval'
     )
     unmapped_model_classes: list[UnmappedModelClass]
     not_covered_eval_classes: list[NotCoveredClass]

@@ -29,6 +29,7 @@ from src.clients.occ import OCCFinalConflictError
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_settings
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
+from src.core.error_handlers import triton_unavailable_response
 from src.core.logging import (
     bind_request_id,
     configure_logging,
@@ -52,6 +53,7 @@ from src.routers import (
     v1_router,
 )
 from src.routers.curation._mounting import mount_all_curation_routers
+from src.utils.retry import RetryExhaustedError
 
 
 # Request correlation IDs (request_id_ctx / get_request_id) live in
@@ -164,9 +166,9 @@ async def lifespan(app: FastAPI):
 
     reject_retired_env()
 
-    from src.services.projects.bootstrap import bind_default_for_lifespan
-
-    bind_default_for_lifespan()  # startup work + background loops act on `default`
+    # The lifespan runs unbound: a global loop never acts on a project by
+    # default. Startup steps that touch project data bind each project in
+    # turn (src.services.projects.bootstrap).
     # Resolve the region profile before serving: a bad profile file fails
     # startup, and no request ever races its first-use resolution.
     from src.services.detection.profile_registry import ensure_env_region_profile
@@ -192,17 +194,17 @@ async def lifespan(app: FastAPI):
     await AppResources.async_triton_pool.initialize()
     logger.info('triton_pool_initialized', channels=4, max_concurrent=64)
 
-    # Best-effort: create the core + curation OpenSearch indexes (F-25) and
-    # kick off the background kNN-warmup task. See
-    # dependencies.bootstrap_opensearch_indexes for the full rationale.
-    from src.core.dependencies import bootstrap_opensearch_indexes
-
-    AppResources.curation_knn_warmup_task = await bootstrap_opensearch_indexes()
-
     # Projects foundation (P1): default record + poll loop, best-effort.
     from src.services.projects.bootstrap import startup_bootstrap_project_registry_safe
 
     AppResources.project_registry_poll_task = await startup_bootstrap_project_registry_safe()
+
+    # Best-effort: create the core + every project's curation OpenSearch
+    # indexes (F-25) and kick off the background kNN-warmup task. See
+    # dependencies.bootstrap_opensearch_indexes for the full rationale.
+    from src.core.dependencies import bootstrap_opensearch_indexes
+
+    AppResources.curation_knn_warmup_task = await bootstrap_opensearch_indexes()
 
     # S-3: tail the shared cross-process event log so this uvicorn
     # worker's SSE clients see events published by any other worker or
@@ -226,15 +228,22 @@ async def lifespan(app: FastAPI):
     from src.services.curation.autolabel import job as autolabel_job
     from src.services.curation.item_scores import job as item_scores_job
     from src.services.curation.selection import job as selection_job
+    from src.services.projects.bootstrap import for_each_project
 
     for _module in (item_scores_job, selection_job, embedding_viz, autolabel_job, probe_job):
-        try:
-            if _module.reconcile_orphaned_jobs():
-                logger.warning('orphaned_job_reconciled', module=_module.__name__)
-        except Exception as exc:
-            logger.warning(
-                'orphaned_job_reconcile_skipped', module=_module.__name__, error=str(exc)
-            )
+        for _slug in for_each_project():
+            try:
+                if _module.reconcile_orphaned_jobs():
+                    logger.warning(
+                        'orphaned_job_reconciled', module=_module.__name__, project=_slug
+                    )
+            except Exception as exc:
+                logger.warning(
+                    'orphaned_job_reconcile_skipped',
+                    module=_module.__name__,
+                    project=_slug,
+                    error=str(exc),
+                )
 
     # Gap 2 (model export): same idea, different shape — see
     # src.services.model_export's module docstring.
@@ -589,6 +598,8 @@ def create_app() -> FastAPI:
             headers={'X-Request-ID': req_id},
         )
 
+    application.exception_handler(RetryExhaustedError)(triton_unavailable_response)
+
     # Global Exception Handler - include request ID for debugging
     @application.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
@@ -670,7 +681,7 @@ def create_app() -> FastAPI:
     application.include_router(query_router)  # /query - Data retrieval
     application.include_router(ocr_router)  # /ocr - Text extraction
     application.include_router(models_router)  # /models - Model management
-    mount_all_curation_routers(application)  # /curation: global, scoped, default alias
+    mount_all_curation_routers(application)  # /curation: global routes + /projects/{project}/...
 
     # Versioned API - All endpoints also available under /v1
     application.include_router(v1_router)  # /v1/* - Versioned API

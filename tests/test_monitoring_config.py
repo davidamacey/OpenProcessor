@@ -1,140 +1,156 @@
-"""Pin the Grafana Alloy log-shipper config's container-name filters.
+"""Pin the Grafana Alloy log-shipper config's container filters.
 
-Bug (installer plan, Wave 0): docker-compose.yml's container_name is
-``${COMPOSE_PROJECT_NAME:-openprocessor}-triton`` /
-``${COMPOSE_PROJECT_NAME:-openprocessor}-api``, never a bare
-``triton-server`` or ``yolo-api``/``pytorch-api`` container. The old
-Alloy regexes (``/triton-server.*``, ``/(yolo-api|pytorch-api).*``)
-never matched THIS compose project's own containers under any project
-name, so Loki only ever received a different stack's logs (or nothing).
+History: the first filters matched container names (``/triton-server.*``),
+which never matched this compose's ``${COMPOSE_PROJECT_NAME}-triton``
+names; the Wave 0 fix matched the ``-triton`` / ``-api`` suffix, which
+also matched every other OpenProcessor stack on the host, so one install
+collected another's logs (installer acceptance item K-4).
 
-Alloy's config format (``.alloy``, River/HCL-like) has no lightweight,
-already-vendored Python parser in this repo, and this file's structure
-is simple enough (flat blocks, no interpolation) that adding an HCL
-dependency just for this test isn't worth it. Instead this test:
-
-(a) parses the file into its ``discovery.relabel "<name>" { ... }``
-    blocks with a structural (brace-balance) check, so a syntactically
-    broken config fails loudly instead of silently at container startup;
-(b) extracts each block's `regex = "..."` filter value(s) and compiles
-    them as regexes;
-(c) asserts those regexes actually match this compose's own
-    ``container_name`` pattern (``${COMPOSE_PROJECT_NAME:-openprocessor}-*``)
-    for several project names, including the default and a custom one;
-(d) asserts the old, broken literal patterns are gone.
+The filter is now the ``com.docker.compose.project`` label compared with
+``OP_LOG_PROJECT`` (docker-compose.yml sets it from COMPOSE_PROJECT_NAME),
+then the ``com.docker.compose.service`` label. This test parses the
+relabel blocks (no HCL dependency: the file is flat), simulates Alloy's
+keep rules (fully anchored RE2) against containers of this and other
+stacks, and checks the rendered compose config wires the variable.
 """
 
 from __future__ import annotations
 
+import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ALLOY_CONFIG_PATH = REPO_ROOT / 'monitoring' / 'alloy-config.alloy'
 
-_BLOCK_RE = re.compile(
-    r'discovery\.relabel\s+"(?P<name>[^"]+)"\s*\{(?P<body>.*?)\n\}',
-    re.DOTALL,
-)
-_REGEX_VALUE_RE = re.compile(r'regex\s*=\s*"(?P<pattern>[^"]+)"')
-
-# Project names an operator might reasonably run this stack under --
-# the default (unset COMPOSE_PROJECT_NAME) and a couple of installer-style
-# isolated-stack names (see docs/design/openprocessor_internal
-# /one_line_installer_plan.md §5.1 -- `opinst-<id>` is the live-test
-# convention).
-_PROJECT_NAMES = ('openprocessor', 'opinst-w0', 'opfinal', 'op_fresh2')
+_BLOCK_RE = re.compile(r'discovery\.relabel\s+"(?P<name>[^"]+)"\s*\{(?P<body>.*?)\n\}', re.DOTALL)
+_RULE_RE = re.compile(r'rule\s*\{(?P<body>.*?)\}', re.DOTALL)
+_PROJECT_LABEL = '__meta_docker_container_label_com_docker_compose_project'
+_SERVICE_LABEL = '__meta_docker_container_label_com_docker_compose_service'
 
 
 def _read_config() -> str:
     return ALLOY_CONFIG_PATH.read_text(encoding='utf-8')
 
 
-def test_config_file_exists() -> None:
-    assert ALLOY_CONFIG_PATH.is_file(), f'missing {ALLOY_CONFIG_PATH}'
-
-
 def test_config_braces_are_balanced() -> None:
-    """Minimal structural parse: a stray/missing brace is the most common
-    way a hand-edited .alloy file breaks silently at container start."""
-    text = _read_config()
     depth = 0
-    for i, ch in enumerate(text):
+    for i, ch in enumerate(_read_config()):
         if ch == '{':
             depth += 1
         elif ch == '}':
             depth -= 1
             assert depth >= 0, f"unbalanced '}}' at offset {i}"
-    assert depth == 0, f'unbalanced braces: depth ended at {depth}'
+    assert depth == 0
 
 
-def _relabel_blocks() -> dict[str, str]:
-    text = _read_config()
-    blocks = {m.group('name'): m.group('body') for m in _BLOCK_RE.finditer(text)}
-    assert blocks, 'no discovery.relabel blocks found -- config parsing regex is stale'
+def _keep_rules(block: str) -> list[tuple[str, str]]:
+    """(source_label, regex) of every `action = "keep"` rule; a regex given
+    as sys.env("X") is returned as the placeholder ENV:X."""
+    rules = []
+    for m in _RULE_RE.finditer(block):
+        body = m.group('body')
+        if 'action' not in body or '"keep"' not in body:
+            continue
+        label = re.search(r'source_labels\s*=\s*\["([^"]+)"\]', body).group(1)  # type: ignore[union-attr]
+        env = re.search(r'regex\s*=\s*sys\.env\("([A-Z_]+)"\)', body)
+        lit = re.search(r'regex\s*=\s*"([^"]+)"', body)
+        rules.append((label, f'ENV:{env.group(1)}' if env else lit.group(1)))  # type: ignore[union-attr]
+    return rules
+
+
+def _blocks() -> dict[str, str]:
+    blocks = {m.group('name'): m.group('body') for m in _BLOCK_RE.finditer(_read_config())}
+    assert set(blocks) == {'triton', 'fastapi'}, blocks
     return blocks
 
 
-def test_expected_relabel_blocks_present() -> None:
-    blocks = _relabel_blocks()
-    assert set(blocks) == {'triton', 'fastapi'}, blocks
+def _kept(block: str, labels: dict[str, str], env: dict[str, str]) -> bool:
+    for label, regex in _keep_rules(block):
+        pattern = env[regex[4:]] if regex.startswith('ENV:') else regex
+        if not re.fullmatch(pattern, labels.get(label, '')):
+            return False
+    return True
 
 
-def _keep_regexes(block_body: str) -> list[re.Pattern[str]]:
-    """The container-name `keep` rule is always the block's first
-    `regex = "..."` (the later `stream`/`job` rules don't filter by name)."""
-    matches = _REGEX_VALUE_RE.findall(block_body)
-    assert matches, 'no regex = "..." filters found in block'
-    return [re.compile(pattern) for pattern in matches]
+def _container(project: str, service: str) -> dict[str, str]:
+    return {
+        _PROJECT_LABEL: project,
+        _SERVICE_LABEL: service,
+        '__meta_docker_container_name': f'/{project}-{"triton" if service == "triton-server" else "api"}',
+    }
 
 
-def test_triton_filter_matches_this_composes_container_under_any_project_name() -> None:
-    blocks = _relabel_blocks()
-    keep_regex = _keep_regexes(blocks['triton'])[0]
-    for project in _PROJECT_NAMES:
-        container_name = f'/{project}-triton'
-        assert keep_regex.search(container_name), (
-            f'triton filter {keep_regex.pattern!r} does not match {container_name!r}'
-        )
+@pytest.mark.parametrize('project', ['openprocessor', 'opinst-w0', 'op_fresh2'])
+def test_only_this_projects_triton_and_api_are_kept(project: str) -> None:
+    blocks = _blocks()
+    env = {'OP_LOG_PROJECT': project}
+    assert _kept(blocks['triton'], _container(project, 'triton-server'), env)
+    assert _kept(blocks['fastapi'], _container(project, 'yolo-api'), env)
+    for other in ('openprocessor', 'opfinal', 'opinst-other'):
+        if other == project:
+            continue
+        # Same suffixes, another stack: must not be collected.
+        assert not _kept(blocks['triton'], _container(other, 'triton-server'), env)
+        assert not _kept(blocks['fastapi'], _container(other, 'yolo-api'), env)
+    assert not _kept(blocks['triton'], _container(project, 'yolo-api'), env)
+    assert not _kept(blocks['fastapi'], _container(project, 'triton-server'), env)
+    assert not _kept(blocks['fastapi'], _container(project, 'curation-detection-worker'), env)
 
 
-def test_fastapi_filter_matches_this_composes_container_under_any_project_name() -> None:
-    blocks = _relabel_blocks()
-    keep_regex = _keep_regexes(blocks['fastapi'])[0]
-    for project in _PROJECT_NAMES:
-        container_name = f'/{project}-api'
-        assert keep_regex.search(container_name), (
-            f'fastapi filter {keep_regex.pattern!r} does not match {container_name!r}'
-        )
+def test_every_block_is_scoped_by_the_project_label_not_the_name() -> None:
+    for name, block in _blocks().items():
+        rules = _keep_rules(block)
+        assert (_PROJECT_LABEL, 'ENV:OP_LOG_PROJECT') in rules, name
+        assert all(label != '__meta_docker_container_name' for label, _ in rules), name
 
 
-def test_filters_do_not_cross_match_unrelated_services() -> None:
-    """The two filters must stay disjoint -- Triton logs tagged `job=fastapi`
-    (or vice versa) would be a quieter, harder-to-notice regression than a
-    filter that matches nothing at all."""
-    blocks = _relabel_blocks()
-    triton_regex = _keep_regexes(blocks['triton'])[0]
-    fastapi_regex = _keep_regexes(blocks['fastapi'])[0]
-    for project in _PROJECT_NAMES:
-        assert not fastapi_regex.search(f'/{project}-triton')
-        assert not triton_regex.search(f'/{project}-api')
-        # Unrelated curation worker containers must not be swept up by
-        # either filter (they aren't shipped to Loki by this config today).
-        assert not triton_regex.search(f'/{project}-detection-worker')
-        assert not fastapi_regex.search(f'/{project}-detection-worker')
+def test_compose_passes_the_project_to_alloy() -> None:
+    compose = (REPO_ROOT / 'docker-compose.yml').read_text()
+    alloy = compose[compose.index('\n  alloy:\n') :]
+    alloy = alloy[: alloy.index('\n  # ====')]
+    assert '- OP_LOG_PROJECT=${COMPOSE_PROJECT_NAME:-openprocessor}' in alloy
 
 
-def test_old_broken_literal_patterns_are_gone() -> None:
-    """Checks the actual `regex = "..."` filter values (not just any
-    occurrence in the file, which would also match this module's/the
-    config's own explanatory comments about the old bug)."""
-    blocks = _relabel_blocks()
-    triton_patterns = [p.pattern for p in _keep_regexes(blocks['triton'])]
-    fastapi_patterns = [p.pattern for p in _keep_regexes(blocks['fastapi'])]
-    assert '/triton-server.*' not in triton_patterns, (
-        f'old bug: bare triton-server filter still present: {triton_patterns}'
+def test_rendered_compose_config_sets_the_alloy_project(tmp_path: Path) -> None:
+    docker = shutil.which('docker') or ''
+    if not docker:
+        pytest.skip('docker CLI not installed')
+    shutil.copy(REPO_ROOT / 'docker-compose.yml', tmp_path / 'docker-compose.yml')
+    (tmp_path / '.env').write_text(
+        'COMPOSE_PROJECT_NAME=opinst-test\nCOMPOSE_PROFILES=monitoring\n'
     )
-    assert '/(yolo-api|pytorch-api).*' not in fastapi_patterns, (
-        f'old bug: bare yolo-api/pytorch-api filter still present: {fastapi_patterns}'
+    result = subprocess.run(
+        [
+            docker,
+            'compose',
+            '-p',
+            'opinst-test',
+            '--env-file',
+            str(tmp_path / '.env'),
+            '--project-directory',
+            str(tmp_path),
+            '-f',
+            str(tmp_path / 'docker-compose.yml'),
+            'config',
+            '--format',
+            'json',
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
     )
+    if result.returncode != 0:
+        pytest.skip(f'docker compose config unavailable: {result.stderr[:200]}')
+    alloy = json.loads(result.stdout)['services']['alloy']
+    assert alloy['environment']['OP_LOG_PROJECT'] == 'opinst-test'
+    blocks = _blocks()
+    env = {'OP_LOG_PROJECT': alloy['environment']['OP_LOG_PROJECT']}
+    assert _kept(blocks['triton'], _container('opinst-test', 'triton-server'), env)
+    assert not _kept(blocks['triton'], _container('openprocessor', 'triton-server'), env)

@@ -1,7 +1,8 @@
-"""Route mounting (projects_plan.md §3.2, review delta 1): every curation
-route is scoped under ``/curation/projects/{project}`` or global; the
-unscoped ``default`` alias is hidden from OpenAPI; the global ``/health``
-and ``/events`` win over the alias."""
+"""Route mounting (projects_plan.md §3.2, owner decision "no backwards
+compatibility", review delta 1): every curation route is scoped under
+``/curation/projects/{project}`` or is one of the global routes; there is
+no unscoped alias, so an unscoped curation path is a 404, and the global
+routes answer with nothing bound."""
 
 from __future__ import annotations
 
@@ -46,7 +47,7 @@ def _curation_routes() -> list[APIRoute]:
     return [r for r in app.routes if isinstance(r, APIRoute) and r.path.startswith(f'{API}')]
 
 
-def test_every_curation_route_is_scoped_global_or_hidden_alias() -> None:
+def test_every_curation_route_is_scoped_or_global() -> None:
     from src.main import app  # noqa: F401 - assembling the app registers the global routes
     from src.routers.curation.projects import global_router
 
@@ -58,33 +59,15 @@ def test_every_curation_route_is_scoped_global_or_hidden_alias() -> None:
         pairs = {(m, route.path) for m in route.methods}
         if route.endpoint in global_endpoints and pairs <= GLOBAL_ROUTES:
             continue
-        if not route.include_in_schema:
-            continue  # the unscoped `default` alias
         unexpected.append(f'{sorted(route.methods)} {route.path}')
     assert unexpected == []
 
 
-def test_alias_mirrors_every_scoped_route_hidden_from_openapi() -> None:
-    routes = _curation_routes()
-    # P3's lifecycle mutations (archive/unarchive/clone_settings/stats)
-    # textually start with the SCOPED prefix (their path *is*
-    # `/projects/{project}/...`) but are global_router routes, not
-    # part of the scoped/alias double-mount -- exclude anything already
-    # named in GLOBAL_ROUTES before comparing the two mount points.
-    scoped = {
-        (m, r.path[len(SCOPED) :])
-        for r in routes
-        if r.path.startswith(f'{SCOPED}/')
-        for m in r.methods
-        if (m, r.path) not in GLOBAL_ROUTES
-    }
-    alias = {
-        (m, r.path[len(API) :])
-        for r in routes
-        if not r.include_in_schema and not r.path.startswith(f'{API}/projects')
-        for m in r.methods
-    }
-    assert scoped == alias
+def test_no_route_is_hidden_from_openapi() -> None:
+    hidden = [
+        f'{sorted(r.methods)} {r.path}' for r in _curation_routes() if not r.include_in_schema
+    ]
+    assert hidden == []
 
 
 def test_openapi_documents_only_scoped_or_global_paths() -> None:
@@ -170,3 +153,69 @@ def test_unknown_or_reserved_slug_is_404_not_a_scoped_route(client: TestClient) 
         response = client.get(f'{API}/projects/{slug}/health')
         assert response.status_code == 404
         assert response.json()['detail']['error'] == 'project_not_found'
+
+
+def test_unscoped_curation_path_is_404(client: TestClient) -> None:
+    """No alias: the old unscoped form of a scoped route does not exist."""
+    for path in ('/crops', '/classes', '/methods', '/train/runs', '/settings'):
+        assert client.get(f'{API}{path}').status_code == 404, path
+
+
+def test_global_routes_answer_with_nothing_bound(client: TestClient) -> None:
+    """Requests start unbound (tests/conftest.py runs each in a fresh
+    context, as uvicorn does); the global routes must not need a binding."""
+    from src.config.project_context import is_project_bound
+
+    assert client.get(f'{API}/projects').status_code == 200
+    assert client.get(f'{API}/health').status_code == 200
+    from src.main import app
+
+    events = next(r for r in app.routes if isinstance(r, APIRoute) and r.path == f'{API}/events')
+    assert 'project' not in {p.name for p in events.dependant.path_params}
+    assert is_project_bound()  # the test's own binding is untouched
+
+
+def test_request_does_not_inherit_the_test_binding() -> None:
+    """A route that forgets to bind must fail in tests the way it fails
+    under uvicorn: the test's autouse binding never reaches the app."""
+    from fastapi import FastAPI
+
+    from src.config.project_context import is_project_bound
+
+    app = FastAPI()
+
+    @app.get('/probe')
+    async def _probe_async() -> dict[str, bool]:
+        return {'bound': is_project_bound()}
+
+    @app.get('/probe_sync')
+    def _probe_sync() -> dict[str, bool]:
+        return {'bound': is_project_bound()}
+
+    assert is_project_bound()
+    client = TestClient(app)
+    assert client.get('/probe').json() == {'bound': False}
+    assert client.get('/probe_sync').json() == {'bound': False}
+    with TestClient(app) as managed:
+        assert managed.get('/probe').json() == {'bound': False}
+
+
+def test_a_failed_project_does_not_bind(client: TestClient) -> None:
+    """A ``failed`` project's index set may be half-created: 409, never a
+    (writable) binding."""
+    import dataclasses
+
+    from src.config.curation import base_curation_config, base_curation_config as _base
+    from src.config.projects import new_project_record, resources_for_new
+    from src.services.projects import registry as registry_mod
+
+    failed = dataclasses.replace(
+        new_project_record('default', _base()),
+        slug='broken',
+        status='failed',
+        resources=resources_for_new('broken', base_curation_config()),
+    )
+    registry_mod.get_project_registry()._by_slug['broken'] = failed
+    response = client.get(f'{API}/projects/broken/classes')
+    assert response.status_code == 409
+    assert response.json()['detail']['error'] == 'project_failed'

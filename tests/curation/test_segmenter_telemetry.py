@@ -45,7 +45,7 @@ def _hist_obs_count(hist, *, host: str, outcome: str) -> float:
 def _build_client(handler):
     transport = httpx.MockTransport(handler)
     httpx_client = httpx.AsyncClient(transport=transport, timeout=5.0)
-    return SegmenterClient(base_url=_HOST, client=httpx_client)
+    return SegmenterClient(base_url=_HOST, client=httpx_client, source_name='sam3')
 
 
 async def test_wait_inflight_response_histograms_observed():
@@ -117,7 +117,7 @@ async def test_outcome_label_correct_on_hit_miss_error():
 
     transport = httpx.MockTransport(handler)
     httpx_client = httpx.AsyncClient(transport=transport, timeout=5.0)
-    sam = SegmenterClient(base_url=host, client=httpx_client)
+    sam = SegmenterClient(base_url=host, client=httpx_client, source_name='sam3')
 
     before = {
         outcome: _hist_obs_count(OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS, host=host, outcome=outcome)

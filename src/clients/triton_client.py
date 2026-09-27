@@ -261,7 +261,7 @@ class TritonClient:
         clip_inputs[0].set_data_from_numpy(clip_input)
         clip_outputs = [InferRequestedOutput('image_embeddings')]
         clip_response = self._infer_with_retry(
-            'mobileclip2_s2_image_encoder', clip_inputs, clip_outputs
+            TritonModelConfig.CLIP_IMAGE_MODEL, clip_inputs, clip_outputs
         )
 
         # Parse outputs
@@ -367,7 +367,8 @@ class TritonClient:
         input_tensor.set_data_from_numpy(img_array)
 
         output = InferRequestedOutput('image_embeddings')
-        response = self._infer_with_retry('mobileclip2_s2_image_encoder', [input_tensor], [output])
+        clip_image_model = TritonModelConfig.CLIP_IMAGE_MODEL
+        response = self._infer_with_retry(clip_image_model, [input_tensor], [output])
 
         return response.as_numpy('image_embeddings')[0]
 
@@ -377,7 +378,8 @@ class TritonClient:
         input_tensor.set_data_from_numpy(tokens.astype(np.int64))
 
         output = InferRequestedOutput('text_embeddings')
-        response = self._infer_with_retry('mobileclip2_s2_text_encoder', [input_tensor], [output])
+        clip_text_model = TritonModelConfig.CLIP_TEXT_MODEL
+        response = self._infer_with_retry(clip_text_model, [input_tensor], [output])
 
         return response.as_numpy('text_embeddings')[0]
 
@@ -491,18 +493,7 @@ class TritonClient:
             InferRequestedOutput('rec_scores'),
         ]
 
-        try:
-            response = self._infer_with_retry('ocr_pipeline', inputs, outputs)
-        except Exception as e:
-            logger.error(f'OCR inference failed: {e}')
-            return {
-                'num_texts': 0,
-                'texts': [],
-                'text_boxes': np.array([]),
-                'text_boxes_normalized': np.array([]),
-                'text_scores': np.array([]),
-                'rec_scores': np.array([]),
-            }
+        response = self._infer_with_retry(TritonModelConfig.OCR_PIPELINE_MODEL, inputs, outputs)
 
         num_texts_raw = response.as_numpy('num_texts')
         logger.info(
@@ -512,7 +503,7 @@ class TritonClient:
         text_boxes = response.as_numpy('text_boxes')[:num_texts]
         text_boxes_norm = response.as_numpy('text_boxes_normalized')[:num_texts]
         text_scores = response.as_numpy('text_scores')[:num_texts]
-        rec_scores = response.as_numpy('rec_scores')[:num_texts]
+        rec_scores_raw = response.as_numpy('rec_scores')[:num_texts]
 
         texts_raw = response.as_numpy('texts')[:num_texts]
         texts = []
@@ -524,6 +515,21 @@ class TritonClient:
             else:
                 texts.append(str(t))
 
+        # The BLS (models/ocr_pipeline/1/model.py) emits -1.0 for a crop
+        # whose recognition inference itself failed -- distinguishable from
+        # a real CTC confidence, which is always in [0, 1]. -1.0 must never
+        # leave this method: every caller gets None + an explicit reason
+        # instead, so a served field can never read as a fake low score.
+        rec_scores: list[float | None] = []
+        rec_errors: list[str | None] = []
+        for s in rec_scores_raw:
+            if float(s) < 0.0:
+                rec_scores.append(None)
+                rec_errors.append('recognition_failed')
+            else:
+                rec_scores.append(float(s))
+                rec_errors.append(None)
+
         return {
             'num_texts': num_texts,
             'texts': texts,
@@ -531,6 +537,7 @@ class TritonClient:
             'text_boxes_normalized': text_boxes_norm,
             'text_scores': text_scores,
             'rec_scores': rec_scores,
+            'rec_errors': rec_errors,
             'image_width': orig_w,
             'image_height': orig_h,
         }
@@ -591,7 +598,7 @@ class TritonClient:
             output = InferRequestedOutput('image_embeddings')
 
             response = self._infer_with_retry(
-                'mobileclip2_s2_image_encoder', [input_tensor], [output]
+                TritonModelConfig.CLIP_IMAGE_MODEL, [input_tensor], [output]
             )
 
             embeddings = response.as_numpy('image_embeddings')
@@ -628,7 +635,9 @@ class TritonClient:
             input_tensor.set_data_from_numpy(batch.astype(np.float32))
 
             output = InferRequestedOutput('output')
-            response = self._infer_with_retry('arcface_w600k_r50', [input_tensor], [output])
+            response = self._infer_with_retry(
+                TritonModelConfig.ARCFACE_MODEL, [input_tensor], [output]
+            )
 
             embeddings = response.as_numpy('output')
             all_embeddings.append(embeddings)

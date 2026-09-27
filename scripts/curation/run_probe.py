@@ -49,13 +49,14 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 
 from src.config import get_curation_config
+from src.services.curation.probe_models import PROBE_ARCHITECTURES
 from src.services.curation.probe_predictions import count_probe_candidates, run_probe_inference
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
-ARCHITECTURES = ('yolo11', 'yolo26', 'yolov5_objectness')
+ARCHITECTURES = PROBE_ARCHITECTURES
 
 logging.basicConfig(
     level=logging.INFO,

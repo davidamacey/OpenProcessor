@@ -1,0 +1,4 @@
+#!/bin/bash
+# Test double for df: always ~2 TB free (the disk check is not under test).
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+printf 'shimfs 4000000000 1000000000 2000000000 33%% /\n'

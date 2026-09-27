@@ -54,7 +54,9 @@ def app_client(
     from src.routers.curation_train import router as curation_train_router
 
     app = FastAPI()
-    app.include_router(curation_train_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_train_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
 
     with TestClient(app) as client:
@@ -157,7 +159,7 @@ def test_labels_txt_uses_pinned_registry_not_live(
     # (5) isn't contiguous from 0, so this also needs force -- the pin-vs-
     # live distinction under test is orthogonal to that gate.
     r = app_client.post(
-        f'/curation/train/promote/{job_id}',
+        f'/curation/projects/default/train/promote/{job_id}',
         json={'triton_name': 'yolo26m_pin_test', 'force': True},
     )
     assert r.status_code == 200, r.text
@@ -224,14 +226,14 @@ def test_labels_txt_falls_back_to_live_registry_without_a_pin(
     # id (5) is not contiguous from 0 -- the identity map is unprovable, so
     # this now 422s unless forced (the class-remap correctness fix).
     r = app_client.post(
-        f'/curation/train/promote/{job_id}',
+        f'/curation/projects/default/train/promote/{job_id}',
         json={'triton_name': 'yolo26m_no_pin'},
     )
     assert r.status_code == 422, r.text
     assert r.json()['detail']['failures'][0]['code'] == 'class_remap_missing_full_class'
 
     r = app_client.post(
-        f'/curation/train/promote/{job_id}',
+        f'/curation/projects/default/train/promote/{job_id}',
         json={'triton_name': 'yolo26m_no_pin', 'force': True},
     )
     assert r.status_code == 200, r.text

@@ -25,13 +25,15 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from src.config.settings import TritonModelConfig
+
 
 _PE_INPUT_SIZE = 336
 # Must equal src/services/detection/pe_preprocess.PE_MEAN/PE_STD (PE-Core's own
 # 0.5/0.5 normalization); tests/curation/test_pe_preprocess.py pins the two together.
 _PE_MEAN = np.array([0.5, 0.5, 0.5], dtype=np.float32).reshape(3, 1, 1)
 _PE_STD = np.array([0.5, 0.5, 0.5], dtype=np.float32).reshape(3, 1, 1)
-_PE_MODEL = 'pe_image_encoder'
+_PE_MODEL = TritonModelConfig.PE_IMAGE_MODEL
 _IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp'}
 
 

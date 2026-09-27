@@ -111,13 +111,15 @@ def _client(monkeypatch: pytest.MonkeyPatch, storage: RegionFields) -> TestClien
 
     fake = _FakeItemsOS(_stored_doc(storage))
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
 
 def _endpoint_items(client: TestClient) -> dict[str, dict[str, Any]]:
-    prefix = _common.config.api_prefix
+    prefix = f'{_common.config.api_prefix}/projects/default'
     out: dict[str, dict[str, Any]] = {}
     r = client.get(f'{prefix}/crops')
     assert r.status_code == 200, r.text
@@ -178,13 +180,13 @@ def test_semantic_search_item_matches(monkeypatch: pytest.MonkeyPatch) -> None:
     assert set(item) == ITEM_WIRE_KEYS | SEARCH_EXTRA_KEYS
     assert item['semantic_score'] == 0.77
     with _client(monkeypatch, storage) as client:
-        crop = client.get(f'{_common.config.api_prefix}/crops/crop-1').json()
+        crop = client.get(f'{_common.config.api_prefix}/projects/default/crops/crop-1').json()
     assert {k: item[k] for k in ITEM_WIRE_KEYS} == crop
 
 
 def test_region_values_reach_the_wire(monkeypatch: pytest.MonkeyPatch) -> None:
     with _client(monkeypatch, RegionFields()) as client:
-        crop = client.get(f'{_common.config.api_prefix}/crops/crop-1').json()
+        crop = client.get(f'{_common.config.api_prefix}/projects/default/crops/crop-1').json()
     for attr, value in _region_values().items():
         assert crop[wire.region_wire_key(attr)] == value, attr
     assert crop['vlm_confidence'] == 'medium'
@@ -218,10 +220,12 @@ def _review_item(monkeypatch: pytest.MonkeyPatch, **overrides: Any) -> dict[str,
 
     fake = _FakeItemsOS({**_stored_doc(RegionFields()), **overrides})
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as client:
-        r = client.get(f'{_common.config.api_prefix}/review/all')
+        r = client.get(f'{_common.config.api_prefix}/projects/default/review/all')
     assert r.status_code == 200, r.text
     return r.json()['items'][0]
 
@@ -281,11 +285,13 @@ def test_region_write_responses_use_wire_names(monkeypatch: pytest.MonkeyPatch) 
 
     fake = _WritableOS(_stored_doc(_OVERRIDE_STORAGE))
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as client:
         r = client.put(
-            f'{_common.config.api_prefix}/crops/crop-1/region',
+            f'{_common.config.api_prefix}/projects/default/crops/crop-1/region',
             json={'region_bbox_norm': [0.1, 0.1, 0.2, 0.2]},
         )
     assert r.status_code == 200, r.text
@@ -310,7 +316,9 @@ def test_region_request_bodies_reject_old_key_names(
     monkeypatch: pytest.MonkeyPatch, method: str, path: str, body: dict[str, Any]
 ) -> None:
     with _client(monkeypatch, RegionFields()) as client:
-        r = getattr(client, method)(f'{_common.config.api_prefix}{path}', json=body)
+        r = getattr(client, method)(
+            f'{_common.config.api_prefix}/projects/default{path}', json=body
+        )
     assert r.status_code == 422, r.text
 
 
@@ -356,7 +364,7 @@ class _RecordingHub:
 
 
 def _event_data_keys(event: dict[str, Any]) -> set[str]:
-    return set(event) - {'type', 'topic', 'ts'}
+    return set(event) - {'type', 'topic', 'ts', 'project'}
 
 
 def test_publish_endpoint_carries_region_status(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -366,7 +374,7 @@ def test_publish_endpoint_carries_region_status(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(events, 'get_event_hub', lambda: hub)
     with _client(monkeypatch, _OVERRIDE_STORAGE) as client:
         r = client.post(
-            f'{_common.config.api_prefix}/events/publish',
+            f'{_common.config.api_prefix}/projects/default/events/publish',
             json=wire.region_event_payload('crop-1', region_status='detected', region_text='AB'),
         )
     assert r.status_code == 200, r.text
@@ -381,7 +389,7 @@ def test_publish_endpoint_rejects_unknown_keys(monkeypatch: pytest.MonkeyPatch) 
     """The S7 bug: an unknown status key was silently dropped (200, empty event)."""
     with _client(monkeypatch, RegionFields()) as client:
         r = client.post(
-            f'{_common.config.api_prefix}/events/publish',
+            f'{_common.config.api_prefix}/projects/default/events/publish',
             json={'type': 'crop.region_verified', 'crop_id': 'c', 'plate_status': 'detected'},
         )
     assert r.status_code == 422
@@ -416,7 +424,9 @@ async def test_worker_region_events_reach_subscribers_with_status(
     from src.routers.curation import router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     api = TestClient(app)
 
     class _ForwardingClient:

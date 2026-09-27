@@ -56,7 +56,9 @@ def app_client(
     from src.routers.curation_train import router as curation_train_router
 
     app = FastAPI()
-    app.include_router(curation_train_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_train_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
 
     with TestClient(app) as client:
@@ -159,7 +161,9 @@ def test_full_class_promote_uses_class_remap_over_a_registry_gap(
     captured: dict[str, Any] = {}
     _mock_promote(monkeypatch, captured, 'yolo26m_gap_test')
 
-    r = app_client.post('/curation/train/promote/gap-job', json={'triton_name': 'yolo26m_gap_test'})
+    r = app_client.post(
+        '/curation/projects/default/train/promote/gap-job', json={'triton_name': 'yolo26m_gap_test'}
+    )
     assert r.status_code == 200, r.text
 
     class_id_to_name = captured['class_id_to_name']
@@ -192,7 +196,8 @@ def test_full_class_promote_without_remap_refuses_when_registry_has_a_gap(
     monkeypatch.setattr('src.services.training.jobs.read_status', _fake_read_status)
 
     r = app_client.post(
-        '/curation/train/promote/gap-no-remap-job', json={'triton_name': 'yolo26m_gap_no_remap'}
+        '/curation/projects/default/train/promote/gap-no-remap-job',
+        json={'triton_name': 'yolo26m_gap_no_remap'},
     )
     assert r.status_code == 422, r.text
     assert r.json()['detail']['failures'][0]['code'] == 'class_remap_missing_full_class'
@@ -200,7 +205,7 @@ def test_full_class_promote_without_remap_refuses_when_registry_has_a_gap(
     captured: dict[str, Any] = {}
     _mock_promote(monkeypatch, captured, 'yolo26m_gap_no_remap')
     r = app_client.post(
-        '/curation/train/promote/gap-no-remap-job',
+        '/curation/projects/default/train/promote/gap-no-remap-job',
         json={'triton_name': 'yolo26m_gap_no_remap', 'force': True},
     )
     assert r.status_code == 200, r.text
@@ -250,7 +255,7 @@ def test_full_class_promote_without_remap_allowed_when_registry_is_contiguous(
     _mock_promote(monkeypatch, captured, 'yolo26m_contiguous')
 
     r = app_client.post(
-        '/curation/train/promote/contiguous-no-remap-job',
+        '/curation/projects/default/train/promote/contiguous-no-remap-job',
         json={'triton_name': 'yolo26m_contiguous'},
     )
     assert r.status_code == 200, r.text

@@ -449,7 +449,9 @@ def status_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = AsyncMock
     return TestClient(app)
 
@@ -471,7 +473,7 @@ async def test_status_counts_match_the_files_on_disk(
         'src.routers.curation.export._resolve_current_export_dir',
         lambda: resolve_current_export_dir(service.config),
     )
-    body = status_client.get('/curation/export/status').json()
+    body = status_client.get('/curation/projects/default/export/status').json()
 
     export_dir = Path(result.export_dir)
     image_files = {s: len(list((export_dir / 'labels' / s).glob('*.txt'))) for s in SPLITS}

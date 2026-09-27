@@ -8,9 +8,12 @@ OpenSearch, no browser, no frontend checkout required at test time):
    (``tests/fixtures/labeler_call_sites.txt`` — a snapshot of Cropwright's
    executable ``/curation/...`` call sites, prefix-stripped and
    param-normalized) resolves to a route actually registered under
-   ``CurationConfig.api_prefix``.
+   ``CurationConfig.api_prefix``: a global route (``/projects``,
+   ``/health``, ``/events``) as-is, every other path under the project
+   prefix Cropwright builds (``/projects/{project}/...``).
 2. **The critical clause** (this is what would have caught the
-   ``plate_thumbnail`` bug): every ``f'{config.api_prefix}/...'``
+   ``plate_thumbnail`` bug): every ``f'{config.api_prefix}/...'`` or
+   ``f'{project_api_base()}/...'``
    literal found in a curation router's *response payload* (as opposed to
    an ``APIRouter(prefix=...)`` declaration, which legitimately builds the
    route table itself) is scanned and checked against the same route
@@ -128,13 +131,22 @@ def test_known_gaps_are_not_present_in_the_fixture() -> None:
     assert not overlap, f'known-gap path(s) present in the fixture: {sorted(overlap)}'
 
 
+_PROJECT_PREFIX = '/projects/{param}'
+
+
+def _resolves_global_or_scoped(path: str, routes: list[list[str]]) -> bool:
+    """A global route answers the path as-is; every other curation route
+    is reached under the project prefix (``{api}/projects/{slug}``)."""
+    return _path_resolves(path, routes) or _path_resolves(f'{_PROJECT_PREFIX}{path}', routes)
+
+
 def test_every_frontend_call_site_resolves_to_a_registered_route() -> None:
     """Every fixture entry (Cropwright's executable call paths,
     prefix-stripped + param-normalized) must resolve to something this
     backend actually serves."""
     routes = _registered_relative_routes()
     fixture = _load_fixture()
-    unresolved = [p for p in fixture if not _path_resolves(p, routes)]
+    unresolved = [p for p in fixture if not _resolves_global_or_scoped(p, routes)]
     assert not unresolved, (
         'frontend call site(s) do not resolve to any registered /curation '
         f'route: {unresolved}. If this is a newly-decided, permanent gap, '
@@ -152,7 +164,7 @@ def _extract_response_payload_prefix_literals() -> list[tuple[str, int, str]]:
     tuples, e.g. ``('src/routers/curation/regions.py', 80,
     '/crops/{param}/region_thumbnail')``.
     """
-    fstring_re = re.compile(r"f(['\"])\{config\.api_prefix\}([^'\"]*)\1")
+    fstring_re = re.compile(r"f(['\"])\{(config\.api_prefix|project_api_base\(\))\}([^'\"]*)\1")
     interp_re = re.compile(r'\{[^{}]+\}')
     router_kwarg_re = re.compile(r'\bprefix\s*=\s*$')
 
@@ -164,7 +176,9 @@ def _extract_response_payload_prefix_literals() -> list[tuple[str, int, str]]:
                 before = line[: m.start()]
                 if router_kwarg_re.search(before):
                     continue  # router registration (builds the route table itself)
-                suffix = m.group(2)
+                suffix = m.group(3)
+                if m.group(2) != 'config.api_prefix':
+                    suffix = f'{_PROJECT_PREFIX}{suffix}'
                 normalized = interp_re.sub('{param}', suffix)
                 found.append((str(path.relative_to(REPO_ROOT)), lineno, normalized))
     return found

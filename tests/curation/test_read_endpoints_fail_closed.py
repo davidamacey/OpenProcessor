@@ -22,7 +22,9 @@ def _client(fake: Any) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -39,11 +41,11 @@ def _down() -> AsyncMock:
 @pytest.mark.parametrize(
     'path',
     [
-        '/curation/ingest/region_drain',
-        '/curation/ingest/status',
-        '/curation/classes',
-        '/curation/review/regions/locate?crop_id=c1',
-        '/curation/crops/c1/history',
+        '/curation/projects/default/ingest/region_drain',
+        '/curation/projects/default/ingest/status',
+        '/curation/projects/default/classes',
+        '/curation/projects/default/review/regions/locate?crop_id=c1',
+        '/curation/projects/default/crops/c1/history',
     ],
 )
 def test_outage_is_503(path: str) -> None:
@@ -59,11 +61,11 @@ def test_stats_classes_registry_failure_is_503(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: _BrokenRegistry())
     fake = AsyncMock()
     fake.search = AsyncMock(return_value={'aggregations': {'by_class': {'buckets': []}}})
-    r = _client(fake).get('/curation/stats/classes')
+    r = _client(fake).get('/curation/projects/default/stats/classes')
     assert r.status_code == 503, r.text
 
 
 def test_missing_item_is_still_404() -> None:
     fake = AsyncMock()
     fake.get = AsyncMock(side_effect=KeyError('c1'))
-    assert _client(fake).get('/curation/crops/c1/history').status_code == 404
+    assert _client(fake).get('/curation/projects/default/crops/c1/history').status_code == 404

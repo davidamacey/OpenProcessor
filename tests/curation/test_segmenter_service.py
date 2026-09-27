@@ -176,7 +176,9 @@ class TestClientServerContract:
     async def test_roundtrip_returns_the_top_candidate(self, served: _FakeProcessor) -> None:
         """The leg is not a no-op: a real client call yields a real candidate."""
         async with _asgi_client() as http:
-            client = SegmenterClient(base_url='http://segmenter', client=http, text_prompt=_PROMPT)
+            client = SegmenterClient(
+                base_url='http://segmenter', client=http, text_prompt=_PROMPT, source_name='sam3'
+            )
             candidate = await client.segment(_make_jpeg())
 
         assert candidate is not None
@@ -214,7 +216,10 @@ class TestClientServerContract:
         try:
             async with _asgi_client() as http:
                 client = SegmenterClient(
-                    base_url='http://segmenter', client=http, text_prompt=_PROMPT
+                    base_url='http://segmenter',
+                    client=http,
+                    text_prompt=_PROMPT,
+                    source_name='sam3',
                 )
                 assert await client.segment(_make_jpeg()) is None
         finally:
@@ -238,7 +243,10 @@ class TestClientServerContract:
                 assert resp.status_code == 503
 
                 client = SegmenterClient(
-                    base_url='http://segmenter', client=http, text_prompt=_PROMPT
+                    base_url='http://segmenter',
+                    client=http,
+                    text_prompt=_PROMPT,
+                    source_name='sam3',
                 )
                 assert await client.segment(_make_jpeg()) is None
         finally:
@@ -433,7 +441,7 @@ class TestCascadeWithTheShippedSegmenter:
         F = get_region_fields()
         async with _asgi_client() as http:
             segmenter = SegmenterClient(
-                base_url='http://segmenter', client=http, text_prompt=_PROMPT
+                base_url='http://segmenter', client=http, text_prompt=_PROMPT, source_name='sam3'
             )
             assert segmenter.enabled is True
 

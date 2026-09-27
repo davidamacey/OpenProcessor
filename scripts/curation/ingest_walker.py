@@ -18,7 +18,7 @@ the progress file is skipped before rescanning — a crashed walker
 never re-POSTs work it already handed to the server. A single failed
 image ingest inside an otherwise-successful batch does *not* have its
 error re-driven by this walker; it is reported and left in the
-`op_items`/`op_images` write path's own results.
+items/images write path's own results.
 
 Usage:
     python3 scripts/curation/ingest_walker.py \\
@@ -168,7 +168,8 @@ def main() -> None:
     parser.add_argument(
         '--api-base',
         default=f'http://localhost:4603{get_curation_config().api_prefix}',
-        help='Curation API base URL (no trailing slash)',
+        help='Curation API mount (no trailing slash); requests go to '
+        '<api-base>/projects/<--project>/...',
     )
     parser.add_argument('--source', default='ingest_walker', help='source tag for ingested images')
     parser.add_argument('--batch-size', type=int, default=32)
@@ -201,7 +202,7 @@ def main() -> None:
     asyncio.run(
         run(
             root=args.root,
-            api_base=args.api_base.rstrip('/'),
+            api_base=f'{args.api_base.rstrip("/")}/projects/{args.project}',
             source=args.source,
             batch_size=args.batch_size,
             concurrency=args.concurrency,

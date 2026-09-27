@@ -66,7 +66,9 @@ def client(fake_os: _FakeRegionOS) -> Any:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     with TestClient(app) as c:
         yield c
@@ -79,7 +81,7 @@ def test_batch_status_no_region_visible_clears_box(
     client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = client.post(
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         json={'crop_ids': ['boxed-1', 'boxed-2'], 'region_status': 'no_region_visible'},
     )
     assert resp.status_code == 200, resp.text
@@ -94,7 +96,8 @@ def test_patch_meta_no_region_visible_clears_box(
     client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = client.patch(
-        '/curation/crops/boxed-1/region_meta', json={'region_status': 'no_region_visible'}
+        '/curation/projects/default/crops/boxed-1/region_meta',
+        json={'region_status': 'no_region_visible'},
     )
     assert resp.status_code == 200, resp.text
     doc = fake_os._docs['boxed-1']
@@ -105,7 +108,8 @@ def test_patch_meta_no_region_visible_clears_box(
 
 def test_false_positive_keeps_box(client: TestClient, fake_os: _FakeRegionOS) -> None:
     resp = client.patch(
-        '/curation/crops/boxed-1/region_meta', json={'region_status': 'false_positive'}
+        '/curation/projects/default/crops/boxed-1/region_meta',
+        json={'region_status': 'false_positive'},
     )
     assert resp.status_code == 200, resp.text
     doc = fake_os._docs['boxed-1']
@@ -121,7 +125,7 @@ def test_batch_status_detected_derives_verified_ignoring_client_value(
 ) -> None:
     fake_os._docs['boxed-1'][F.verified] = False
     resp = client.post(
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         json={'crop_ids': ['boxed-1'], 'region_status': 'detected', 'region_verified': False},
     )
     assert resp.status_code == 200, resp.text
@@ -130,7 +134,7 @@ def test_batch_status_detected_derives_verified_ignoring_client_value(
 
 def test_batch_status_rejection_unsets_verified(client: TestClient, fake_os: _FakeRegionOS) -> None:
     resp = client.post(
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         json={'crop_ids': ['boxed-1'], 'region_status': 'verify_rejected', 'region_verified': True},
     )
     assert resp.status_code == 200, resp.text
@@ -140,7 +144,9 @@ def test_batch_status_rejection_unsets_verified(client: TestClient, fake_os: _Fa
 
 def test_patch_meta_detected_sets_verified(client: TestClient, fake_os: _FakeRegionOS) -> None:
     fake_os._docs['boxed-1'][F.verified] = False
-    resp = client.patch('/curation/crops/boxed-1/region_meta', json={'region_status': 'detected'})
+    resp = client.patch(
+        '/curation/projects/default/crops/boxed-1/region_meta', json={'region_status': 'detected'}
+    )
     assert resp.status_code == 200, resp.text
     assert fake_os._docs['boxed-1'][F.verified] is True
 
@@ -148,7 +154,9 @@ def test_patch_meta_detected_sets_verified(client: TestClient, fake_os: _FakeReg
 def test_patch_meta_detected_without_box_is_refused(
     client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
-    resp = client.patch('/curation/crops/empty-1/region_meta', json={'region_status': 'detected'})
+    resp = client.patch(
+        '/curation/projects/default/crops/empty-1/region_meta', json={'region_status': 'detected'}
+    )
     assert resp.status_code == 422, resp.text
     assert fake_os._docs['empty-1'][F.status] == 'pending_detection'
 
@@ -157,7 +165,7 @@ def test_batch_status_detected_without_box_is_reported_invalid(
     client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = client.post(
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         json={'crop_ids': ['boxed-1', 'empty-1'], 'region_status': 'detected'},
     )
     assert resp.status_code == 200, resp.text
@@ -172,7 +180,8 @@ def test_batch_status_detected_without_box_is_reported_invalid(
 
 def test_patch_meta_returns_post_write_item(client: TestClient) -> None:
     resp = client.patch(
-        '/curation/crops/boxed-1/region_meta', json={'region_status': 'no_region_visible'}
+        '/curation/projects/default/crops/boxed-1/region_meta',
+        json={'region_status': 'no_region_visible'},
     )
     item = resp.json()['item']
     assert set(item) == ITEM_WIRE_KEYS
@@ -184,7 +193,7 @@ def test_patch_meta_returns_post_write_item(client: TestClient) -> None:
 
 def test_batch_status_returns_post_write_items(client: TestClient) -> None:
     resp = client.post(
-        '/curation/regions/batch_status',
+        '/curation/projects/default/regions/batch_status',
         json={'crop_ids': ['boxed-1', 'boxed-2'], 'region_status': 'false_positive'},
     )
     items = resp.json()['items']
@@ -194,7 +203,9 @@ def test_batch_status_returns_post_write_items(client: TestClient) -> None:
 
 
 def test_put_region_returns_post_write_item(client: TestClient) -> None:
-    resp = client.put('/curation/crops/empty-1/region', json={'region_bbox_norm': BOX})
+    resp = client.put(
+        '/curation/projects/default/crops/empty-1/region', json={'region_bbox_norm': BOX}
+    )
     assert resp.status_code == 200, resp.text
     item = resp.json()['item']
     assert set(item) == ITEM_WIRE_KEYS
@@ -204,7 +215,9 @@ def test_put_region_returns_post_write_item(client: TestClient) -> None:
 
 
 def test_put_region_null_unsets_verified(client: TestClient, fake_os: _FakeRegionOS) -> None:
-    resp = client.put('/curation/crops/boxed-1/region', json={'region_bbox_norm': None})
+    resp = client.put(
+        '/curation/projects/default/crops/boxed-1/region', json={'region_bbox_norm': None}
+    )
     assert resp.status_code == 200, resp.text
     assert fake_os._docs['boxed-1'][F.verified] is False
     assert resp.json()['item']['region_status'] == 'no_region_visible'
@@ -212,7 +225,7 @@ def test_put_region_null_unsets_verified(client: TestClient, fake_os: _FakeRegio
 
 def test_batch_region_returns_post_write_items(client: TestClient) -> None:
     resp = client.put(
-        '/curation/crops/batch_region',
+        '/curation/projects/default/crops/batch_region',
         json={'crop_ids': ['boxed-1', 'boxed-2'], 'region_bbox_norm': None},
     )
     assert resp.status_code == 200, resp.text
@@ -225,7 +238,7 @@ def test_batch_region_returns_post_write_items(client: TestClient) -> None:
 
 
 def test_status_catalog_covers_every_status(client: TestClient) -> None:
-    resp = client.get('/curation/regions/statuses')
+    resp = client.get('/curation/projects/default/regions/statuses')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     values = [s['value'] for s in body['statuses']]

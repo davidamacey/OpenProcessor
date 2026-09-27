@@ -10,6 +10,7 @@ the query construction, not just a trusted assertion.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -419,3 +420,76 @@ async def test_disagreement_is_null_for_a_class_the_probe_cannot_predict(
     by_id = {u['id']: u['doc'] for u in fake_os.updates}
     assert by_id['in']['probe_disagreement'] is True
     assert by_id['out']['probe_disagreement'] is None
+
+
+@pytest.mark.asyncio
+async def test_probe_pred_class_id_is_the_registry_id_not_the_model_dense_id(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, tiny_image: Path
+) -> None:
+    """End-to-end (default ``class_ids=None`` path): for the yolo11/yolo26
+    predictor family, ``probe_pred_class_id`` must be the *registry*
+    class_id resolved by name -- never the model's own dense output index
+    -- even when the registry has gaps (deprecated classes keep their old
+    id, so ids are non-contiguous)."""
+    from src.config import get_curation_config
+    from src.services.curation import probe_predictions as pp
+
+    registry_path = tmp_path / 'class_registry.json'
+    registry_path.write_text(
+        json.dumps(
+            {
+                'version': 1,
+                'classes': [
+                    {'class_id': 0, 'class_name': 'sedan'},
+                    {'class_id': 1, 'class_name': 'suv'},
+                    # gap at 2 (deprecated/removed) -- registry ids are
+                    # append-only and never renumbered.
+                    {'class_id': 3, 'class_name': 'motorcycle'},
+                    {'class_id': 7, 'class_name': 'truck'},
+                ],
+            }
+        )
+    )
+
+    def predict(_crop: Any) -> tuple[str, float, float, float]:
+        # The model's own dense output index for 'truck' would be 3 (its
+        # 4th of 4 classes) -- nothing like its registry id of 7.
+        return ('truck', 0.9, 0.2, 0.7)
+
+    predict.class_names = ('sedan', 'suv', 'motorcycle', 'truck')  # type: ignore[attr-defined]
+
+    def build_predictor(_model_path: Path, _architecture: str) -> tuple[Any, str]:
+        return predict, 'v'
+
+    def resolve_image(_image_path: str, *, config: Any) -> Path:
+        return tiny_image
+
+    monkeypatch.setattr(pp, '_build_predictor', build_predictor)
+    monkeypatch.setattr(pp, '_resolve_image', resolve_image)
+    docs = [
+        {'crop_id': 'c1', 'image_path': 'x.jpg', 'bbox_norm': [0, 0, 1, 1], 'class_name': 'truck'}
+    ]
+    fake_os = _FakeOpenSearch(docs)
+
+    import dataclasses
+
+    from src.config.curation import base_curation_config as _base
+    from src.config.project_context import bind_project
+    from src.config.projects import new_project_record
+
+    record = new_project_record('default', _base())
+    record = dataclasses.replace(
+        record, resources=dataclasses.replace(record.resources, class_registry_path=registry_path)
+    )
+    with bind_project(record):
+        await pp.run_probe_inference(
+            tmp_path / 'ckpt.pt',
+            fake_os,  # type: ignore[arg-type]
+            config=get_curation_config(),
+            model_version=None,
+            architecture='yolo11',
+        )
+
+    [update] = fake_os.updates
+    assert update['doc']['probe_pred_class'] == 'truck'
+    assert update['doc']['probe_pred_class_id'] == 7  # registry id, not dense index 3

@@ -1,8 +1,9 @@
-"""Event fan-out is project-scoped (projects_plan.md §2.5, review deltas 1
-and 4): a project's events reach only that project's subscribers, global
-(``project: null``) events reach everyone, and the global stream carries
-only global events -- including ``combine.*`` progress, addressed by
-``target``."""
+"""Event fan-out is project-scoped and fails closed (projects_plan.md
+§2.5, review deltas 1 and 4, P1 review B2): a project's events reach only
+that project's subscribers; ``project: null`` events reach only the
+global stream; an unbound publish is refused; an event that names another
+project is refused; an unstamped event reaches no one. ``combine.*``
+progress rides the global stream, addressed by ``target``."""
 
 from __future__ import annotations
 
@@ -75,17 +76,51 @@ async def test_publish_stamps_the_bound_project(hub: EventHub) -> None:
     assert event['project'] == 'alpha'
 
 
+def test_unbound_publish_is_refused(hub: EventHub) -> None:
+    """No implicit global fallback: a project event published from a
+    context that lost its binding raises instead of broadcasting."""
+    from src.config.project_context import ProjectNotBound
+
+    with pytest.raises(ProjectNotBound):
+        hub.publish({'type': 'crop.created', 'topic': 'crop', 'crop_id': 'x'})
+    assert hub.stats(None)['events_published'] == 0
+
+
 @pytest.mark.asyncio
-async def test_unbound_publish_is_a_global_event_for_everyone(hub: EventHub) -> None:
+@pytest.mark.parametrize('injected', ['alpha', None])
+async def test_publish_cannot_name_another_project(hub: EventHub, injected: str | None) -> None:
     alpha_sub = await hub.subscribe(project='alpha')
-    beta_sub = await hub.subscribe(project='beta')
     global_sub = await hub.subscribe(project=GLOBAL_STREAM)
+    with bind_project(_record('beta')), pytest.raises(event_hub_mod.EventProjectMismatchError):
+        hub.publish({'type': 'crop.created', 'crop_id': 'beta-item-0001', 'project': injected})
+    assert _drain(alpha_sub) == []
+    assert _drain(global_sub) == []
 
-    hub.publish({'type': 'config.changed', 'topic': 'config'})
 
-    for sub in (alpha_sub, beta_sub, global_sub):
-        (event,) = _drain(sub)
-        assert event['project'] is None
+@pytest.mark.asyncio
+async def test_unstamped_event_reaches_no_one(hub: EventHub) -> None:
+    """A log line with no ``project`` key (a stale or foreign writer) is
+    dispatched by the tail loop without stamping; it must go nowhere."""
+    subs = [await hub.subscribe(project=p) for p in ('alpha', 'beta', GLOBAL_STREAM)]
+    hub._dispatch({'type': 'crop.created', 'crop_id': 'x'})
+    assert all(_drain(sub) == [] for sub in subs)
+
+
+def test_only_global_families_may_go_global(hub: EventHub) -> None:
+    with pytest.raises(ValueError, match='not a global event type'):
+        publish_global_event('crop.created', crop_id='x')
+
+
+@pytest.mark.asyncio
+async def test_stats_count_only_the_asked_stream(hub: EventHub) -> None:
+    await hub.subscribe(project='alpha')
+    await hub.subscribe(project='beta')
+    await hub.subscribe(project='beta')
+    with bind_project(_record('alpha')):
+        hub.publish({'type': 'crop.created', 'crop_id': 'a'})
+    assert hub.stats('beta')['subscribers'] == 2
+    assert hub.stats('beta')['events_published'] == 0
+    assert hub.stats('alpha')['events_published'] == 1
 
 
 @pytest.mark.asyncio
@@ -104,7 +139,7 @@ async def test_combine_progress_goes_global_with_target(hub: EventHub) -> None:
     assert event['target'] == 'cars-all'
     assert event['topic'] == 'project'
     assert (event['job_id'], event['done'], event['total']) == ('cmb_1', 3, 9)
-    assert _drain(beta_sub) == [event]  # global events reach scoped streams too
+    assert _drain(beta_sub) == []  # global events never reach a project stream
 
 
 @pytest.mark.asyncio

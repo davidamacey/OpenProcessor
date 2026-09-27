@@ -46,7 +46,9 @@ def app_client(fake_os: _FakeRegionOS, text_free: Any) -> Any:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
-    app.include_router(curation_router)
+    from _curation_app import mount_curation_routers
+
+    mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     with TestClient(app) as client:
         yield client
@@ -57,7 +59,7 @@ def test_region_text_edit_is_rejected_without_a_write(
 ) -> None:
     before = dict(fake_os._docs['crop-1'])
     resp = app_client.patch(
-        '/curation/crops/crop-1/region_meta',
+        '/curation/projects/default/crops/crop-1/region_meta',
         json={
             'region_text': 'ABC1234',
             'region_status': 'detected',
@@ -73,7 +75,7 @@ def test_region_text_edit_is_rejected_without_a_write(
 
 def test_other_region_meta_still_patches(app_client: TestClient, fake_os: _FakeRegionOS) -> None:
     resp = app_client.patch(
-        '/curation/crops/crop-1/region_meta',
+        '/curation/projects/default/crops/crop-1/region_meta',
         json={'region_status': 'verify_rejected', 'region_label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text

@@ -70,6 +70,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
 from src.services.detection.pe_preprocess import (
     normalize_chw,
@@ -90,12 +91,12 @@ PE_CROP_MAX_BATCH = 32
 logger = get_logger(__name__)
 
 
-PE_IMAGE_MODEL = 'pe_image_encoder'
+PE_IMAGE_MODEL = TritonModelConfig.PE_IMAGE_MODEL
 PE_TEXT_CHECKPOINT = 'PE-Core-L14-336'
 PE_EMBEDDING_DIM = 1024
 
 # Text-tower graph contract — shared with export/export_pe_text_encoder.py.
-PE_TEXT_TRITON_MODEL = 'pe_text_encoder'
+PE_TEXT_TRITON_MODEL = TritonModelConfig.PE_TEXT_MODEL
 PE_TEXT_INPUT = 'text_tokens'
 PE_TEXT_OUTPUT = 'text_embeddings'
 PE_TEXT_CONTEXT_LENGTH = 32

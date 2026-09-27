@@ -260,7 +260,7 @@ def test_build_sha_baked_into_the_final_stage_of_every_dockerfile() -> None:
 
 def test_evaluator_sees_exports_at_the_api_path() -> None:
     """Bake-off eval datasets are exports: the evaluator must read them at the
-    path the API resolved (default ``OP_EXPORT_ROOT=./data/exports`` -> ``/app/data``)."""
+    path the API resolved (``./data/projects/<project>/exports`` -> ``/app/data``)."""
     services = _services()
     api_mounts = services['yolo-api'].get('volumes') or []
     evaluator_mounts = services['curation-evaluator'].get('volumes') or []
@@ -662,7 +662,8 @@ _HTTP_CLIENT_ONLY_CURATION_SERVICES = ('curation-vlm-worker', 'curation-cluster-
 
 
 def test_class_registry_data_mounted_where_needed() -> None:
-    """F-34b: OP_REGISTRY_PATH defaults to ./data/class_registry.json.
+    """F-34b: each project's class registry lives under OP_PROJECTS_DATA_ROOT
+    (default ./data/projects/<project>/class_registry.json).
     Without ./data mounted, the registry loads empty and any class-aware
     stage (the VLM auto-label stage, training, promote, eval) raises
     'class_names or class_catalog must be supplied' or reads no classes
