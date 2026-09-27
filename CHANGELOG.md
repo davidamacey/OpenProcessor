@@ -37,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `src/services/projects/clone.py`: `clone_settings`/`clone_settings_into`
   split out of `lifecycle.py` (700-LOC ratchet); re-exported from
   `lifecycle` for existing callers.
+- `ensure_region_class()` now also runs at the end of `create_project`,
+  and inside `clone.py`'s `_apply_clone` whenever `'classes'` was not
+  one of the cloned axes -- `bootstrap.py`'s startup seed only ever
+  covered projects that existed when the process booted, so a project
+  created (or cloned without its classes) afterward had an empty
+  registry until the next restart.
 - Confirmed already-correct and covered with new regression tests:
   delete's 202/background-completing shape (delta 10), and the
   registry's `search_after` pagination past OpenSearch's 1000-hit
