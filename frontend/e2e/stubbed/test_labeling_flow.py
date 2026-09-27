@@ -19,15 +19,15 @@ from fixtures.wire import make_item
 
 ROUTES = [
     "/",
-    "/dashboard",
-    "/clusters",
-    "/clusters/1",
-    "/review",
-    "/classes",
-    "/export",
-    "/models",
-    "/train",
-    "/bakeoff",
+    "/p/default/dashboard",
+    "/p/default/clusters",
+    "/p/default/clusters/1",
+    "/p/default/review",
+    "/p/default/classes",
+    "/p/default/export",
+    "/p/default/models",
+    "/p/default/train",
+    "/p/default/bakeoff",
 ]
 
 CLASSES = [
@@ -175,7 +175,7 @@ def test_labeling_flow(stub, page, app_url):
     register_base(stub)
 
     # ---- cluster detail page ------------------------------------
-    page.goto(f"{app_url}/clusters/1")
+    page.goto(f"{app_url}/p/default/clusters/1")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(600)
     assert page.locator("article, li, div").count() > 0, "grid did not render"
@@ -230,7 +230,7 @@ def test_labeling_flow(stub, page, app_url):
 
     # ---- review page --------------------------------------------
     register_base(stub, fail_put_label=True)
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(700)
@@ -259,7 +259,7 @@ def test_labeling_flow(stub, page, app_url):
         )
 
     # ---- modal backdrops -----------------------------------------
-    page.goto(f"{app_url}/classes")
+    page.goto(f"{app_url}/p/default/classes")
     page.wait_for_timeout(400)
     page.get_by_role("button", name="+ Add Class").first.click()
     dialog = page.get_by_role("dialog", name="Add class")

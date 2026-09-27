@@ -84,7 +84,7 @@ def test_clusters_fetch_representatives_in_display_order(stub, page, app_url):
 
     stub.on("GET", r"/clusters(\?|$)", clusters_handler)
 
-    page.goto(f"{app_url}/clusters")
+    page.goto(f"{app_url}/p/default/clusters")
     page.wait_for_timeout(2000)
 
     # The 6 clusters (ids 25-30) that are in the purity-asc first window

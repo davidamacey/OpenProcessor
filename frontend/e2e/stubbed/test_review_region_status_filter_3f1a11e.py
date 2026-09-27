@@ -153,7 +153,7 @@ def test_region_status_filter_forwards_the_param_and_needs_human_reason_never_re
 
     stub.on("GET", r"/review/regions(\?|$)", review_handler)
 
-    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(500)
@@ -205,7 +205,7 @@ def test_region_status_from_the_url_reaches_the_queue_request(stub, page, app_ur
 
     stub.on("GET", r"/review/regions(\?|$)", review_handler)
 
-    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected")
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected")
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(1500)
 

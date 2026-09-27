@@ -115,7 +115,7 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
 
     stub.on("PUT", r"/crops/batch_label$", batch_label_handler)
 
-    page.goto(f"{app_url}/clusters/{CLUSTER_ID}")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_ID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(400)
 

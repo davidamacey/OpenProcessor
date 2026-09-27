@@ -1,9 +1,15 @@
 import { redirect } from '@sveltejs/kit';
+import { legacyRedirectTarget } from '$lib/projectPaths';
+import { projectsStore } from '$stores/projects.svelte';
+import type { PageLoad } from './$types';
 
-// The legacy `/` page was merged into `/dashboard` (2026-09) — nothing was
-// dropped, see the comment at the top of src/routes/dashboard/+page.svelte
-// for exactly where each piece landed. This redirect keeps old bookmarks
-// and the top-bar logo (which points at /dashboard directly) consistent.
-export const load = () => {
-  throw redirect(307, '/dashboard');
+// `/` is not a page: it redirects to the served default project's
+// dashboard (`/p/<default_slug>/dashboard`), query string kept. With no
+// selectable project at all, the project list is the only useful place.
+export const load: PageLoad = async ({ parent, url }) => {
+  const { projectsError } = await parent();
+  if (projectsError) return;
+  const target = projectsStore.defaultProject;
+  if (!target) redirect(307, '/projects');
+  redirect(307, legacyRedirectTarget('/', url.search, target.slug)!);
 };

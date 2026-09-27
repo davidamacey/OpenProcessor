@@ -200,7 +200,7 @@ def test_keymap_absent_when_404(stub, page, app_url):
     # The shared default stub (conftest.py) already serves a 404 for
     # `GET {prefix}/keymap` — no override needed to exercise that path.
 
-    page.goto(f"{app_url}/settings", wait_until="domcontentloaded")
+    page.goto(f"{app_url}/p/default/settings", wait_until="domcontentloaded")
     page.wait_for_selector("text=Curation scores", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
     assert page.locator("text=Keyboard shortcuts").count() == 0
@@ -221,7 +221,7 @@ def test_keymap_absent_when_404(stub, page, app_url):
         dismiss_handler,
     )
 
-    page.goto(f"{app_url}/review", wait_until="domcontentloaded")
+    page.goto(f"{app_url}/p/default/review", wait_until="domcontentloaded")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
     page.keyboard.press("d")
@@ -264,7 +264,7 @@ def test_keymap_rebind_persists_and_applies_live(stub, page, app_url):
     stub.on("POST", r"/keymap/validate(\?|$)", keymap_validate)
     stub.on("PUT", r"/keymap(\?|$)", keymap_put)
 
-    page.goto(f"{app_url}/settings", wait_until="domcontentloaded")
+    page.goto(f"{app_url}/p/default/settings", wait_until="domcontentloaded")
     page.wait_for_selector("text=Keyboard shortcuts", timeout=ACTION_TIMEOUT_MS)
 
     # Find the Discard row, remove the default 'd' key, add 'x' instead.
@@ -301,7 +301,7 @@ def test_keymap_rebind_persists_and_applies_live(stub, page, app_url):
     stub.on("GET", r"/review/all(\?|$)", review_handler)
     stub.on("POST", r"/crops/[^/]+/review_dismiss$", dismiss_handler)
 
-    page.goto(f"{app_url}/review", wait_until="domcontentloaded")
+    page.goto(f"{app_url}/p/default/review", wait_until="domcontentloaded")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 

@@ -39,7 +39,7 @@ describe('routes wired to <StrategyBar> keep their keydown listener count unchan
     // Backspace keys into the region bbox canvas while in edit mode. If
     // wiring in <StrategyBar> ever adds a second window.addEventListener
     // call here, this catches it.
-    const src = read('../../routes/review/+page.svelte');
+    const src = read('../../routes/p/[project]/review/+page.svelte');
     const matches = src.match(/window\.addEventListener\(['"]keydown['"]/g) ?? [];
     expect(matches).toHaveLength(1);
   });
@@ -47,7 +47,7 @@ describe('routes wired to <StrategyBar> keep their keydown listener count unchan
   it('clusters/[id]/+page.svelte registers zero direct window/document keydown listeners', () => {
     // All of this route's shortcuts go through keyboardStore.register(),
     // not a direct addEventListener call in the component itself.
-    const src = read('../../routes/clusters/[id]/+page.svelte');
+    const src = read('../../routes/p/[project]/clusters/[id]/+page.svelte');
     expect(src).not.toMatch(/(window|document)\.addEventListener\(['"]keydown['"]/);
   });
 });
@@ -92,7 +92,7 @@ describe('Phase 4 (diverse overlay + k stepper) adds no new listeners', () => {
   });
 
   it('clusters/[id]/+page.svelte still registers zero direct keydown listeners with diverse wiring present', () => {
-    const src = read('../../routes/clusters/[id]/+page.svelte');
+    const src = read('../../routes/p/[project]/clusters/[id]/+page.svelte');
     expect(src).not.toMatch(/(window|document)\.addEventListener\(['"]keydown['"]/);
     expect(src).toMatch(/diverseAvailable/);
   });

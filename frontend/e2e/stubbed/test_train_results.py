@@ -120,7 +120,7 @@ def test_finished_run_results_render(stub, page, app_url):
     stub.on("GET", r"/train/runs(\?|$)", {"items": [FINISHED_STATUS], "total": 1})
     stub.on("GET", r"/train/manifest/[^/]+(\?|$)", MANIFEST)
 
-    page.goto(f"{app_url}/train")
+    page.goto(f"{app_url}/p/default/train")
     page.get_by_text(JOB_ID, exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     results_button = page.get_by_role("button", name="Results")
@@ -177,7 +177,7 @@ def test_failed_run_shows_served_error(stub, page, app_url):
     stub.on("GET", r"/train/runs(\?|$)", {"items": [failed_status], "total": 1})
     stub.on("GET", r"/train/manifest/[^/]+(\?|$)", (404, {"detail": "not found"}))
 
-    page.goto(f"{app_url}/train")
+    page.goto(f"{app_url}/p/default/train")
     page.get_by_text(failed_job_id, exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     results_button = page.get_by_role("button", name="Results")

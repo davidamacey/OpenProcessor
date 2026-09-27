@@ -61,7 +61,9 @@ export interface EmptyQueueMessage {
   /** Set when the served `emptyState` says the prerequisite this queue
    *  needs (probe predictions or item scores) has never been computed —
    *  a link target the page renders as an anchor. */
-  link?: { href: string; text: string };
+  /** A project section path; the page builds the full link with
+   *  `projectHref()`. */
+  link?: { href: '/train' | '/settings'; text: string };
 }
 
 /**

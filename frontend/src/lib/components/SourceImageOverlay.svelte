@@ -1,6 +1,7 @@
 <script module lang="ts">
   import type { CropContextResponse } from '$lib/types';
   import { activeProjectKey } from '$lib/api';
+  import { onProjectChange } from '$lib/projectChange';
 
   // Per-(project, cropId) cache, shared across every mounted instance:
   // several call sites (review, cluster modal, lightbox) can open the
@@ -17,13 +18,15 @@
     return `${activeProjectKey()}:${cropId}`;
   }
 
-  /** Clears every cached context. Called by the (future) project
-   *  switcher so a project change never shows stale, cross-project
-   *  data — see `resetForProjectChange()` on `$lib/stores/undo.svelte`'s
-   *  `undoStore` for the sibling reset on the undo ring buffer. */
+  /** Clears every cached context. Registered below with the
+   *  project-change registry so a project switch never shows stale,
+   *  cross-project data — see `resetForProjectChange()` on
+   *  `$lib/stores/undo.svelte`'s `undoStore` for the sibling reset on
+   *  the undo ring buffer. */
   export function resetForProjectChange(): void {
     contextCache.clear();
   }
+  onProjectChange(resetForProjectChange);
 </script>
 
 <script lang="ts">

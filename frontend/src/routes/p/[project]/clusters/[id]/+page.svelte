@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
+  import { projectHref } from '$lib/projectPaths';
   import { page } from '$app/state';
   import { trapFocus } from '$lib/actions/trapFocus';
   import { cohesionText, COHESION_TOOLTIP } from '$lib/clusters/clusterCardText';
@@ -811,7 +813,11 @@
   <!-- Toolbar — title + summary + bulk-action buttons + class assignment.
        Drag-and-drop onto the left ClassSidebar is the alternative path. -->
   <div class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-2.5">
-    <a href="/clusters" class="btn shrink-0" title="Back to all clusters">
+    <a
+      href={resolve(projectHref('/clusters'))}
+      class="btn shrink-0"
+      title="Back to all clusters"
+    >
       ← All clusters
     </a>
     <h1 class="flex items-baseline gap-2 text-lg font-semibold">
@@ -1350,8 +1356,10 @@
       </h3>
       <p class="mb-3 text-xs text-zinc-400">
         Move these from cluster #{clusterId} to another cluster, by its id (the #N on each
-        <a class="text-blue-400 underline" href="/clusters">/clusters</a> card).
-        Reversible with {kg('cluster.undo')}.
+        <a class="text-blue-400 underline" href={resolve(projectHref('/clusters'))}
+          >/clusters</a
+        >
+        card). Reversible with {kg('cluster.undo')}.
       </p>
       <p class="mb-3 text-xs text-zinc-400" data-testid="move-relabel-hint">
         To change their <strong>class</strong> instead, close this and pick a class, then

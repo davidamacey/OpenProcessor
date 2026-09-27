@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
+  import { projectHref } from '$lib/projectPaths';
   /**
    * /train — model training cockpit (Phase 2 of the training pipeline
    * design doc).
@@ -945,10 +947,16 @@
     if (cohort.reviewTarget === 'slotQueue') {
       const slot = slotRegistry.forClass(group.classId, classesById)[0];
       const urlId = slot?.capabilities.queue?.urlId ?? 'all';
-      void goto(`/review?tab=${urlId}&crop_id=${encodeURIComponent(cropId)}`);
+      void goto(
+        resolve(
+          projectHref(`/review?tab=${urlId}&crop_id=${encodeURIComponent(cropId)}`),
+        ),
+      );
       return;
     }
-    void goto(`/review?tab=all&crop_id=${encodeURIComponent(cropId)}`);
+    void goto(
+      resolve(projectHref(`/review?tab=all&crop_id=${encodeURIComponent(cropId)}`)),
+    );
   }
 </script>
 

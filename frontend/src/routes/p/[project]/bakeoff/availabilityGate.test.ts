@@ -39,7 +39,7 @@ describe('/bakeoff availability gate', () => {
 
   it('+layout.svelte wraps the /bakeoff anchor in a conditional referencing bakeoffAvailability', () => {
     const anchorMatch = layoutSrc.match(
-      /\{#if[^}]*bakeoffAvailability[^}]*\}\s*<a\s+href="\/bakeoff"/,
+      /\{#if[^}]*bakeoffAvailability[^}]*\}\s*<a\s+href=\{resolve\(projectHref\('\/bakeoff'\)\)\}/,
     );
     expect(anchorMatch).not.toBeNull();
   });

@@ -23,6 +23,7 @@ import {
   type ReviewFilterSpec,
   type ReviewTabVocabularyEntry,
 } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
 
 class ReviewTabsVocabularyStore {
   list = $state<ReviewTabVocabularyEntry[]>([]);
@@ -33,23 +34,30 @@ class ReviewTabsVocabularyStore {
   emptyState = $state<ReviewEmptyState | null>(null);
   #byId = $derived(new Map(this.list.map((t) => [t.id, t])));
   #inflight: Promise<void> | null = null;
+  #gen = 0;
 
   async init(): Promise<void> {
     if (this.loaded) return;
     if (this.#inflight) return this.#inflight;
+    const gen = this.#gen;
     this.#inflight = (async () => {
       try {
         const [tabs, emptyState] = await Promise.all([
           getReviewTabsVocabulary(),
           getReviewEmptyState().catch(() => null),
         ]);
+        // A load started for the previous project never lands.
+        if (gen !== this.#gen) return;
         this.list = tabs;
         this.emptyState = emptyState;
       } catch {
+        if (gen !== this.#gen) return;
         this.list = [];
       } finally {
-        this.loaded = true;
-        this.#inflight = null;
+        if (gen === this.#gen) {
+          this.loaded = true;
+          this.#inflight = null;
+        }
       }
     })();
     return this.#inflight;
@@ -97,6 +105,16 @@ class ReviewTabsVocabularyStore {
   filterSpecsFor(endpointId: string): ReviewFilterSpec[] {
     return this.#byId.get(endpointId)?.filter_specs ?? [];
   }
+
+  /** Project switch: the vocabulary is per project. */
+  resetForProjectChange(): void {
+    this.#gen += 1;
+    this.#inflight = null;
+    this.list = [];
+    this.emptyState = null;
+    this.loaded = false;
+  }
 }
 
 export const reviewTabsVocabularyStore = new ReviewTabsVocabularyStore();
+onProjectChange(() => reviewTabsVocabularyStore.resetForProjectChange());

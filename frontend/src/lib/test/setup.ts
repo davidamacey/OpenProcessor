@@ -1,14 +1,17 @@
 /**
- * Global vitest setup. Seeds `scoped()`'s active-project prefix to
- * `API_PREFIX` before any test runs — P1 projects cutover made `scoped()`
- * throw `ProjectNotSelectedError` until `setScopedPrefix()` has been
- * called (normally by `projectsStore.load()` at app boot). The vast
- * majority of existing tests exercise scoped call sites directly and
- * don't care about project bootstrap at all, so this keeps them
- * byte-identical to pre-cutover behavior; a test that specifically
- * exercises project switching calls `setScopedPrefix()`/`projectsStore`
- * itself.
+ * Global vitest setup. Selects a test project before any test runs —
+ * `scoped()` throws `ProjectNotSelectedError` and `projectHref()` refuses
+ * to build a link until a project is active (normally the `/p/[project]`
+ * layout's `projectsStore.select()`). The test project's `prefix` is
+ * `API_PREFIX` itself, so every existing scoped-call test keeps asserting
+ * against `API_PREFIX` literals unchanged, and its slug is `default`, so
+ * project links read `/p/default/...`. A test that exercises project
+ * switching drives `projectsStore`/`setScopedPrefix()` itself.
  */
-import { API_PREFIX, setScopedPrefix } from '$lib/api';
+import { API_PREFIX } from '$lib/api';
+import { projectsStore } from '$stores/projects.svelte';
+import { testProject } from './fixtures/projects';
 
-setScopedPrefix(API_PREFIX);
+projectsStore.select(
+  testProject({ slug: 'default', prefix: API_PREFIX, is_default: true }),
+);

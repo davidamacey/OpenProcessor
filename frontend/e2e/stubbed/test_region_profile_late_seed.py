@@ -34,7 +34,7 @@ def test_failed_boot_health_then_success_shows_region_tab_without_toast(stub, pa
 
     stub.on("GET", r"/health$", health)
 
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     page.get_by_test_id("review-tabs").get_by_role("button", name=REGION_TAB_LABEL).wait_for(
         timeout=ACTION_TIMEOUT_MS
     )

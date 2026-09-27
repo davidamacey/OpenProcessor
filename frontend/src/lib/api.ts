@@ -108,7 +108,17 @@ import type {
   EvalDatasetList,
   TrainedModelList,
 } from './types_bakeoff';
-import type { ProjectsResponse } from './types_projects';
+import type {
+  ArchiveRequest,
+  CloneSettingsRequest,
+  CreateProjectRequest,
+  DeleteDryRunResponse,
+  PatchProjectRequest,
+  ProjectErrorDetail,
+  ProjectLifecycleResponse,
+  ProjectRecordResponse,
+  ProjectsResponse,
+} from './types_projects';
 
 // Vite exposes only PUBLIC_-prefixed env vars to the client. SvelteKit uses
 // `$env/dynamic/public` but importing that here would force every consumer
@@ -164,7 +174,10 @@ export const API_PREFIX: string = normalizeApiPrefix(RAW_API_PREFIX);
  * resolves the default project, and every scoped call made before that
  * throws (fails closed, matching the backend's `ProjectNotBound`).
  */
-const scopeHolder: { prefix: string | null } = { prefix: null };
+const scopeHolder: { prefix: string | null; generation: number } = {
+  prefix: null,
+  generation: 0,
+};
 
 export class ProjectNotSelectedError extends Error {
   constructor() {
@@ -181,7 +194,26 @@ export class ProjectNotSelectedError extends Error {
  * served project list every load.
  */
 export function setScopedPrefix(prefix: string): void {
+  if (scopeHolder.prefix === prefix) return;
   scopeHolder.prefix = prefix;
+  scopeHolder.generation += 1;
+}
+
+/** Bumped every time the active project's scoped prefix changes — the
+ *  stale-response guard in `apiFetch` compares a request's start
+ *  generation against the current one. */
+export function scopeGeneration(): number {
+  return scopeHolder.generation;
+}
+
+/**
+ * A scoped response that arrives after the active project changed. It
+ * is an `AbortError` (every call site already treats an abort as "drop
+ * it silently"), so a late answer from the previous project never
+ * renders in the new one.
+ */
+export function staleProjectError(): DOMException {
+  return new DOMException('response from a previous project', 'AbortError');
 }
 
 /**
@@ -402,12 +434,31 @@ export function resolveApiUrl(url: string): string {
   return `${apiBase}${url}`;
 }
 
+export interface ApiFetchOptions {
+  /** A GLOBAL route (`/projects*`, global `/health`): never dropped as
+   *  stale when the active project changes mid-request. */
+  global?: boolean;
+}
+
 export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
   signal?: AbortSignal,
+  opts: ApiFetchOptions = {},
 ): Promise<T> {
   const url = resolveApiUrl(path);
+  // Stale-project guard (review §7.1): a scoped request remembers the
+  // project it was built for; if the active project changed before its
+  // response lands, the response is dropped as an AbortError.
+  const startPrefix = scopeHolder.prefix;
+  const startGeneration = scopeHolder.generation;
+  const isScopedCall =
+    !opts.global && startPrefix !== null && path.startsWith(`${startPrefix}/`);
+  const assertFresh = (): void => {
+    if (isScopedCall && scopeHolder.generation !== startGeneration) {
+      throw staleProjectError();
+    }
+  };
   let attempt = 0;
   let lastError: unknown;
   // 1 initial + 3 retries on 5xx => 4 attempts max.
@@ -429,11 +480,15 @@ export async function apiFetch<T>(
           ...(init.headers ?? {}),
         },
       });
+      assertFresh();
       if (res.ok) {
         if (res.status === 204) return undefined as T;
         const ct = res.headers.get('content-type') ?? '';
-        if (ct.includes('application/json')) return (await res.json()) as T;
-        return (await res.text()) as unknown as T;
+        const out = ct.includes('application/json')
+          ? ((await res.json()) as T)
+          : ((await res.text()) as unknown as T);
+        assertFresh();
+        return out;
       }
       let body: unknown = null;
       try {
@@ -459,6 +514,9 @@ export async function apiFetch<T>(
       if (e instanceof DOMException && e.name === 'AbortError') throw e;
       lastError = e;
     }
+    // A retry after the project changed would fetch the OLD project's
+    // URL again — stop instead.
+    assertFresh();
     if (attempt < RETRY_DELAYS_MS.length) {
       // A served `Retry-After` (503 only) replaces this attempt's fixed
       // backoff delay, clamped to MAX_RETRY_AFTER_MS — it never adds an
@@ -495,14 +553,151 @@ export function getHealth(signal?: AbortSignal): Promise<ApiHealth> {
 /** `GET {globalApi()}/health` — unscoped, no project bound. Feeds only
  *  the top-bar API status chip. */
 export function getGlobalHealth(signal?: AbortSignal): Promise<GlobalHealth> {
-  return apiFetch<GlobalHealth>(`${globalApi()}/health`, {}, signal);
+  return apiFetch<GlobalHealth>(`${globalApi()}/health`, {}, signal, { global: true });
 }
 
 /** `GET {globalApi()}/projects` — the switcher vocabulary, global
  *  (unscoped). The one read every project-scoped call depends on: a
- *  project's `prefix` here is what `setScopedPrefix()` is seeded with. */
-export function getProjects(signal?: AbortSignal): Promise<ProjectsResponse> {
-  return apiFetch<ProjectsResponse>(`${globalApi()}/projects`, {}, signal);
+ *  project's `prefix` here is what `setScopedPrefix()` is seeded with.
+ *  `includeArchived` adds the served `archived` projects (the list
+ *  membership per status is the server's, never filtered here). */
+export function getProjects(
+  signal?: AbortSignal,
+  includeArchived = false,
+): Promise<ProjectsResponse> {
+  return apiFetch<ProjectsResponse>(
+    `${globalApi()}/projects${qs({ include_archived: includeArchived ? true : undefined })}`,
+    {},
+    signal,
+    { global: true },
+  );
+}
+
+// -- project lifecycle (P3; all GLOBAL, never scoped) ---------------------
+
+/** `GET {globalApi()}/projects/{slug}` — the record for a slug the
+ *  default list doesn't carry (an archived project's deep link). */
+export function getProject(
+  slug: string,
+  signal?: AbortSignal,
+): Promise<ProjectRecordResponse> {
+  return apiFetch<ProjectRecordResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}`,
+    {},
+    signal,
+    { global: true },
+  );
+}
+
+export function createProject(
+  body: CreateProjectRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects`,
+    { method: 'POST', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+export function patchProject(
+  slug: string,
+  body: PatchProjectRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}`,
+    { method: 'PATCH', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+export function archiveProject(
+  slug: string,
+  body: ArchiveRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}/archive`,
+    { method: 'POST', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+export function unarchiveProject(
+  slug: string,
+  body: ArchiveRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}/unarchive`,
+    { method: 'POST', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+export function cloneProjectSettings(
+  slug: string,
+  body: CloneSettingsRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}/clone_settings`,
+    { method: 'POST', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+/** `DELETE …?dry_run=true` — the served report, writes nothing. */
+export function deleteProjectDryRun(slug: string): Promise<DeleteDryRunResponse> {
+  return apiFetch<DeleteDryRunResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}${qs({ dry_run: true })}`,
+    { method: 'DELETE' },
+    undefined,
+    { global: true },
+  );
+}
+
+/** `DELETE …?confirm=<slug>` — a real, guarded delete. Answers 202 with
+ *  the `deleting` record; the removal finishes in the background. */
+export function deleteProject(
+  slug: string,
+  confirm: string,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}${qs({ confirm })}`,
+    { method: 'DELETE' },
+    undefined,
+    { global: true },
+  );
+}
+
+/**
+ * The structured `{detail: {error, message, ...}}` body every project
+ * route answers an error with (`ConfigErrorDetail`), or `null` when the
+ * error isn't one (a network failure, a plain-string detail, a pydantic
+ * validation list). The UI renders `message` verbatim and branches only
+ * on the served `error` code.
+ */
+export function projectErrorDetail(e: unknown): ProjectErrorDetail | null {
+  if (!(e instanceof ApiError)) return null;
+  const body = e.body;
+  if (!body || typeof body !== 'object') return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  const d = detail as Record<string, unknown>;
+  if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
+  return d as unknown as ProjectErrorDetail;
+}
+
+/** The text to show for a failed project action: the served `message`
+ *  when the error is structured, else the generic `ApiError.detail`
+ *  (e.g. a joined pydantic validation list), else the error's message. */
+export function projectErrorText(e: unknown): string {
+  const d = projectErrorDetail(e);
+  if (d) return d.message;
+  if (e instanceof ApiError && e.detail) return e.detail;
+  return (e as Error)?.message ?? String(e);
 }
 
 /**

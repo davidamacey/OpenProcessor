@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
+  import { projectHref } from '$lib/projectPaths';
   import {
     apiBase,
     scoped,
@@ -693,7 +695,9 @@
       </div>
       {#if exportState.status === 'success'}
         <p class="mt-2 text-xs text-zinc-400">
-          Next: <a href="/train" class="text-blue-400 underline hover:text-blue-300"
+          Next: <a
+            href={resolve(projectHref('/train'))}
+            class="text-blue-400 underline hover:text-blue-300"
             >train on this export from the Train cockpit</a
           >.
         </p>

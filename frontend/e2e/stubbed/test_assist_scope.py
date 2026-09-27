@@ -136,7 +136,7 @@ def test_assist_scope(stub, page, app_url):
     # ================================================================
     starts1 = register_base(stub, METHODS_TODAY)
 
-    page.goto(f"{app_url}/dashboard")
+    page.goto(f"{app_url}/p/default/dashboard")
     start_btn = page.get_by_role("button", name="Recluster now")
     start_btn.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
@@ -164,7 +164,7 @@ def test_assist_scope(stub, page, app_url):
     starts2 = register_base(stub, METHODS_WITH_PROMPT_PACK)
 
     stub.console_errors.clear()
-    page.goto(f"{app_url}/dashboard")
+    page.goto(f"{app_url}/p/default/dashboard")
     chip = page.get_by_text(re.compile(r"^assist:\s*whole dataset"))
     chip.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
@@ -216,7 +216,7 @@ def test_assist_scope(stub, page, app_url):
     ), qs
 
     # Re-expand, reset — chip and button return to the unscoped defaults.
-    page.goto(f"{app_url}/dashboard")
+    page.goto(f"{app_url}/p/default/dashboard")
     chip2 = page.get_by_text(re.compile(r"^assist:"))
     chip2.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     chip2.first.click()

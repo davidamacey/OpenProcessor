@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
+  import { projectHref } from '$lib/projectPaths';
   import {
     cancelSelect,
     reviewUndismissCrop,
@@ -170,7 +172,7 @@
     } else {
       url.searchParams.delete('preset');
     }
-    replaceState(url, {});
+    replaceState(resolve(projectHref(`/review${url.search}`)), {});
   }
   const pageSize = 30;
   let cursor = $state<number>(0); // index within accumulated items
@@ -498,7 +500,7 @@
     } else {
       url.searchParams.delete(param);
     }
-    replaceState(url, {});
+    replaceState(resolve(projectHref(`/review${url.search}`)), {});
   }
 
   // Primary-subject controls (primary_low_conf / classifier_blind_spots tabs).
@@ -1741,7 +1743,7 @@
               url.searchParams.delete(param);
             }
             enumFilterValues = {};
-            replaceState(url, {});
+            replaceState(resolve(projectHref(`/review${url.search}`)), {});
             // Presets only make sense on the All tab — switching to any
             // other tab (or re-landing on All from one) always starts
             // from plain All rather than silently carrying a stale chip.
@@ -2136,7 +2138,8 @@
           <p class="mt-2 text-xs">
             <a
               class="text-blue-400 underline hover:text-blue-300"
-              href={emptyMessage.link.href}>{emptyMessage.link.text}</a
+              href={resolve(projectHref(emptyMessage.link.href))}
+              >{emptyMessage.link.text}</a
             >
           </p>
         {/if}

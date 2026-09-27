@@ -8,27 +8,41 @@
  */
 
 import { getClassSources, type ClassSource, type ClassSourceRole } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
 
 class ClassSourcesStore {
   list = $state<ClassSource[]>([]);
   loaded = $state<boolean>(false);
   #byId = $derived(new Map(this.list.map((c) => [c.id, c])));
   #inflight: Promise<void> | null = null;
+  #gen = 0;
 
   async init(): Promise<void> {
     if (this.loaded) return;
     if (this.#inflight) return this.#inflight;
+    const gen = this.#gen;
     this.#inflight = (async () => {
+      let list: ClassSource[];
       try {
-        this.list = await getClassSources();
+        list = await getClassSources();
       } catch {
-        this.list = [];
-      } finally {
-        this.loaded = true;
-        this.#inflight = null;
+        list = [];
       }
+      // A load started for the previous project never lands.
+      if (gen !== this.#gen) return;
+      this.list = list;
+      this.loaded = true;
+      this.#inflight = null;
     })();
     return this.#inflight;
+  }
+
+  /** Project switch: the catalog is per project. */
+  resetForProjectChange(): void {
+    this.#gen += 1;
+    this.#inflight = null;
+    this.list = [];
+    this.loaded = false;
   }
 
   /** Human label for a `class_source` id; the id itself when unknown. */
@@ -44,3 +58,4 @@ class ClassSourcesStore {
 }
 
 export const classSourcesStore = new ClassSourcesStore();
+onProjectChange(() => classSourcesStore.resetForProjectChange());

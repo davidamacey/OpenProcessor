@@ -115,7 +115,9 @@ describe('no bare /curation literal composes a URL outside api.ts', () => {
     expect(scanned.length).toBeGreaterThan(80);
     expect(scanned).toContain(path.join('lib', 'api.ts'));
     expect(scanned).toContain(path.join('lib', 'sse.ts'));
-    expect(scanned).toContain(path.join('routes', 'export', '+page.svelte'));
+    expect(scanned).toContain(
+      path.join('routes', 'p', '[project]', 'export', '+page.svelte'),
+    );
     expect(scanned).toContain(path.join('lib', 'annotations', 'registeredSlots.ts'));
   });
 
@@ -194,8 +196,11 @@ describe('${apiBase} is always followed by ${scoped()}', () => {
     ['lib/api.ts', apiSrc],
     ['lib/sse.ts', sseSrc],
     [
-      'routes/export/+page.svelte',
-      readFileSync(path.resolve(srcRoot, 'routes/export/+page.svelte'), 'utf-8'),
+      'routes/p/[project]/export/+page.svelte',
+      readFileSync(
+        path.resolve(srcRoot, 'routes/p/[project]/export/+page.svelte'),
+        'utf-8',
+      ),
     ],
   ];
 

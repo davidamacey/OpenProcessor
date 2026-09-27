@@ -96,7 +96,7 @@ def _base_ingest_stubs(
 
 
 def _select_folder(page, app_url) -> None:
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     folder_input = page.locator("input[type=file]").nth(1)
     folder_input.set_input_files(str(FIXTURES))
@@ -238,7 +238,7 @@ def test_drain_gate(stub, page, app_url):
     start_calls = []
     stub.on("POST", r"/pipeline/auto_label/start", lambda *_: start_calls.append(1) or IDLE_JOB)
 
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     page.wait_for_selector("text=4")
 
@@ -262,7 +262,7 @@ def test_drain_gate(stub, page, app_url):
             "observed_at": "2026-09-25T00:00:01Z",
         },
     )
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     recluster_btn = page.get_by_role("button", name="Recluster now", exact=True)
     recluster_btn.wait_for()
@@ -282,7 +282,7 @@ def test_drain_gate(stub, page, app_url):
             "observed_at": "2026-09-25T00:00:30Z",
         },
     )
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
 
     recluster_btn = page.get_by_role("button", name="Recluster now", exact=True)
@@ -334,7 +334,7 @@ def test_server_path_batch_panel(stub, page, app_url):
 
     stub.on("POST", r"/ingest/batch", batch_handler)
 
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     page.wait_for_selector("text=Server-path ingest")
     assert "/data/archive" in page.locator("body").inner_text()
@@ -349,7 +349,7 @@ def test_server_path_batch_panel(stub, page, app_url):
 
 def test_server_path_batch_panel_absent_without_source_roots(stub, page, app_url):
     _base_ingest_stubs(stub)  # batch_source_roots defaults to []
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     page.wait_for_selector("text=Upload")
     assert "Server-path ingest" not in page.locator("body").inner_text()
@@ -359,7 +359,7 @@ def test_ingest_absent(stub, page, app_url):
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
     stub.on("GET", r"/ingest/status(\?|$)", (404, {"detail": "not found"}, "application/json"))
 
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector("text=This backend does not provide ingest.")
     expect(page.locator('nav[aria-label="Primary"] a[href="/ingest"]')).to_have_count(0)
 
@@ -387,7 +387,7 @@ def test_region_drain_shows_served_stall_reason(stub, page, app_url):
             }
         ],
     )
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     expect(page.get_by_test_id("region-drain-stall-reason")).to_contain_text(reason)
     expect(page.get_by_test_id("region-drain-dependencies")).to_contain_text("seg_b")

@@ -153,12 +153,12 @@ describe('EmbeddingPlot.svelte: side-by-side layout + click-to-enlarge', () => {
 
 describe('/clusters wiring adds zero new keydown listeners', () => {
   it('routes/clusters/+page.svelte still registers zero direct window/document keydown listeners', () => {
-    const src = read('../../routes/clusters/+page.svelte');
+    const src = read('../../routes/p/[project]/clusters/+page.svelte');
     expect(src).not.toMatch(/(window|document)\.addEventListener\(['"]keydown['"]/);
   });
 
   it('the embedding-plot toggle exists and the component is mounted behind an {#if} (lazy, never eager)', () => {
-    const src = read('../../routes/clusters/+page.svelte');
+    const src = read('../../routes/p/[project]/clusters/+page.svelte');
     expect(src).toMatch(/EmbeddingPlot/);
     // Lazily mounted: the component tag must be inside a conditional
     // block keyed on the toggle state, not rendered unconditionally at
@@ -167,7 +167,7 @@ describe('/clusters wiring adds zero new keydown listeners', () => {
   });
 
   it('the toggle button is gated on isEmbeddingVizAvailable (absent, not just disabled, for a backend that has not shipped it)', () => {
-    const src = read('../../routes/clusters/+page.svelte');
+    const src = read('../../routes/p/[project]/clusters/+page.svelte');
     expect(src).toMatch(/isEmbeddingVizAvailable/);
     expect(src).toMatch(/embeddingVizAvailable/);
   });

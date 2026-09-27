@@ -126,7 +126,7 @@ def register(stub, *, coverage_status=200, coverage_body=None):
 def test_scores_card_absent_on_404(stub, page, app_url):
     register(stub, coverage_status=404)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Deployment defaults").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(400)
 
@@ -140,7 +140,7 @@ def test_scores_card_absent_on_404(stub, page, app_url):
 def test_scores_card_compute_all_flow(stub, page, app_url):
     compute_calls = register(stub)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Curation scores").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 
@@ -177,7 +177,7 @@ def test_scores_card_compute_all_flow(stub, page, app_url):
 def test_scores_card_compute_selected_and_cancel(stub, page, app_url):
     compute_calls = register(stub)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Curation scores").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 

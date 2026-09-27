@@ -35,7 +35,9 @@ describe('ClusterBadge.svelte', () => {
   });
 
   it('navigates via goto, not a raw anchor tag', () => {
-    expect(src).toMatch(/goto\(`\/clusters\/\$\{clusterId\}`\)/);
+    expect(src).toMatch(
+      /goto\(resolve\(projectHref\(`\/clusters\/\$\{clusterId\}`\)\)\)/,
+    );
     expect(src).not.toMatch(/<a\s/);
   });
 

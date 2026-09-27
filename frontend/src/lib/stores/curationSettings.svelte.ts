@@ -21,6 +21,7 @@
  */
 
 import { getCurationSettings, putCurationDefaults, ApiError } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
 import {
   EMPTY_CURATION_SETTINGS,
   axisSpec,
@@ -40,17 +41,23 @@ class CurationSettingsStore {
   saving = $state<string | null>(null);
 
   #inflight: Promise<void> | null = null;
+  #gen = 0;
 
   async init(): Promise<void> {
     if (this.loaded) return;
     if (this.#inflight) return this.#inflight;
     this.loading = true;
+    const gen = this.#gen;
     this.#inflight = (async () => {
       try {
-        this.settings = await getCurationSettings();
+        const settings = await getCurationSettings();
+        // A load started for the previous project never lands.
+        if (gen !== this.#gen) return;
+        this.settings = settings;
         this.supported = true;
         this.error = null;
       } catch (e) {
+        if (gen !== this.#gen) return;
         if ((e as Error)?.name === 'AbortError') return;
         this.settings = EMPTY_CURATION_SETTINGS;
         if (e instanceof ApiError && e.status === 404) {
@@ -61,9 +68,11 @@ class CurationSettingsStore {
           this.error = (e as Error)?.message ?? 'failed to load settings';
         }
       } finally {
-        this.loading = false;
-        this.loaded = true;
-        this.#inflight = null;
+        if (gen === this.#gen) {
+          this.loading = false;
+          this.loaded = true;
+          this.#inflight = null;
+        }
       }
     })();
     return this.#inflight;
@@ -73,6 +82,8 @@ class CurationSettingsStore {
    *  page's explicit "Reload" button — the only refresh path, since
    *  there is no poll. */
   reset(): void {
+    this.#gen += 1;
+    this.loading = false;
     this.settings = EMPTY_CURATION_SETTINGS;
     this.loaded = false;
     this.supported = null;
@@ -147,3 +158,5 @@ class CurationSettingsStore {
 }
 
 export const curationSettingsStore = new CurationSettingsStore();
+// Settings are per project: a switch re-reads them.
+onProjectChange(() => curationSettingsStore.reset());

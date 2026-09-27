@@ -114,7 +114,7 @@ def test_export_completes_without_polling_and_refreshes_registry_buttons(stub, p
 
     stub.on("POST", r"/export/yolo$", export_yolo_handler)
 
-    page.goto(f"{app_url}/export")
+    page.goto(f"{app_url}/p/default/export")
     page.get_by_text("No frozen multi-class export yet").wait_for(timeout=ACTION_TIMEOUT_MS)
 
     export_button = page.get_by_role("button", name="Export", exact=True)

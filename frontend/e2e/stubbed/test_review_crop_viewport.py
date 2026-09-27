@@ -77,7 +77,7 @@ def test_review_actions_stay_within_1280x720_viewport(stub, page, app_url):
 
     stub.on("GET", r"/review/", review_handler)
 
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
 
     confirm_btn = page.get_by_role("button", name="Confirm", exact=True)
     confirm_btn.wait_for(timeout=ACTION_TIMEOUT_MS)
@@ -128,7 +128,7 @@ def test_review_meta_pane_not_squeezed_at_800(stub, page, app_url):
     Below lg the body scrolls as a whole, so the pane shows all its rows."""
     page.set_viewport_size({"width": 800, "height": 760})
     _stub_review(stub)
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     page.get_by_role("button", name="Confirm", exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
     pane = page.get_by_test_id("review-meta-pane")
     dims = pane.evaluate("el => ({h: el.clientHeight, sh: el.scrollHeight})")
@@ -141,7 +141,7 @@ def test_review_source_image_top_aligned(stub, page, app_url):
     not centered mid-way down an empty panel."""
     page.set_viewport_size({"width": 1600, "height": 2400})
     _stub_review(stub)
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     page.get_by_role("button", name="Confirm", exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
     panel = page.get_by_test_id("review-source-panel")
     aligns = panel.evaluate(

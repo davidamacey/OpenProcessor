@@ -81,7 +81,7 @@ def test_classes_flagged_terms_are_listed_with_no_create_action(stub, page, app_
     )
     stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
 
-    page.goto(f"{app_url}/classes")
+    page.goto(f"{app_url}/p/default/classes")
 
     # F-53: the proposals list sits below the registry in a collapsed
     # <details>; open it first.
@@ -133,7 +133,7 @@ def test_classes_table_fits_800px(stub, page, app_url):
         {"total": 5, "by_class": [{"key": CLASSES[0]["id"], "doc_count": 5}]},
     )
     page.set_viewport_size({"width": 800, "height": 1000})
-    page.goto(f"{app_url}/classes")
+    page.goto(f"{app_url}/p/default/classes")
     table = page.locator("table").first
     table.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("validated-test-suffix").first.wait_for(timeout=10000)
@@ -163,7 +163,7 @@ def test_class_table_keeps_its_height_under_a_long_proposals_list(stub, page, ap
     stub.on("GET", r"/review/new_class_proposals/summary(\?|$)", many)
     stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
     page.set_viewport_size({"width": 800, "height": 1000})
-    page.goto(f"{app_url}/classes")
+    page.goto(f"{app_url}/p/default/classes")
     table = page.locator("table").first
     table.wait_for(timeout=ACTION_TIMEOUT_MS)
     section = page.get_by_test_id("proposals-section")

@@ -29,10 +29,10 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { registeredSlots } from '../../lib/annotations/registeredSlots';
-import { reservedHotkeyLetters } from '../../lib/classHotkey';
-import { REVIEW_TABS, tabFromUrlId } from '../../lib/reviewTabs';
-import { classesStore } from '../../lib/stores/classes.svelte';
+import { registeredSlots } from '$lib/annotations/registeredSlots';
+import { reservedHotkeyLetters } from '$lib/classHotkey';
+import { REVIEW_TABS, tabFromUrlId } from '$lib/reviewTabs';
+import { classesStore } from '$lib/stores/classes.svelte';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const reviewPageSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');

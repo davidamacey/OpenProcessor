@@ -12,6 +12,7 @@
  */
 
 import { getRegionStatuses, type RegionStatusEntry } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
 
 class RegionStatusesStore {
   list = $state<RegionStatusEntry[]>([]);
@@ -20,6 +21,7 @@ class RegionStatusesStore {
   falsePositiveStatus = $state<string | null>(null);
   loaded = $state<boolean>(false);
   #inflight: Promise<void> | null = null;
+  #gen = 0;
 
   /** The served label for a stored status value, or `null` when the
    *  vocabulary isn't loaded or doesn't know the value (callers fall back
@@ -32,25 +34,43 @@ class RegionStatusesStore {
   async init(): Promise<void> {
     if (this.loaded) return;
     if (this.#inflight) return this.#inflight;
+    const gen = this.#gen;
     this.#inflight = (async () => {
       try {
         const res = await getRegionStatuses();
+        // A load started for the previous project never lands.
+        if (gen !== this.#gen) return;
         this.list = res.statuses ?? [];
         this.confirmStatus = res.confirm_status ?? null;
         this.rejectStatus = res.reject_status ?? null;
         this.falsePositiveStatus = res.false_positive_status ?? null;
       } catch {
+        if (gen !== this.#gen) return;
         this.list = [];
         this.confirmStatus = null;
         this.rejectStatus = null;
         this.falsePositiveStatus = null;
       } finally {
-        this.loaded = true;
-        this.#inflight = null;
+        if (gen === this.#gen) {
+          this.loaded = true;
+          this.#inflight = null;
+        }
       }
     })();
     return this.#inflight;
   }
+
+  /** Project switch: the vocabulary is per project. */
+  resetForProjectChange(): void {
+    this.#gen += 1;
+    this.#inflight = null;
+    this.list = [];
+    this.confirmStatus = null;
+    this.rejectStatus = null;
+    this.falsePositiveStatus = null;
+    this.loaded = false;
+  }
 }
 
 export const regionStatusesStore = new RegionStatusesStore();
+onProjectChange(() => regionStatusesStore.resetForProjectChange());

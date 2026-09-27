@@ -48,7 +48,7 @@ def _open(stub, page, app_url, item) -> None:
         r"/review/",
         lambda _r, _m: (200, {"items": [item], "total": 1, "page": 1, "page_size": 30}),
     )
-    page.goto(f"{app_url}/review?tab=model_disagreements")
+    page.goto(f"{app_url}/p/default/review?tab=model_disagreements")
     page.get_by_role("button", name="Confirm", exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
 
 

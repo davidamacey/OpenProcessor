@@ -34,6 +34,7 @@ import {
   undoLabelBatch,
   undoVlmDismiss,
 } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
 import { toastStore } from '$stores/toast.svelte';
 import type { Crop, UndoEntry } from '$lib/types';
 
@@ -92,7 +93,8 @@ class UndoStore {
   }
 
   /**
-   * Called by the (future) project switcher on every project change.
+   * Registered with the project-change registry (bottom of this file):
+   * runs on every project switch.
    * The stack is cleared outright rather than filtered down to the new
    * project's own entries: a project's undo history is session-scoped
    * curation UI state, not something worth carrying across a switch, and
@@ -199,3 +201,6 @@ class UndoStore {
 }
 
 export const undoStore = new UndoStore();
+
+// Z must never revert a different project's write.
+onProjectChange(() => undoStore.resetForProjectChange());

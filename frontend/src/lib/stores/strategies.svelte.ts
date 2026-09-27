@@ -19,6 +19,7 @@
  */
 
 import { getMethods } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
 import { FALLBACK_METHODS, type MethodsResponse } from '$lib/strategies';
 
 class StrategiesStore {
@@ -36,6 +37,7 @@ class StrategiesStore {
   );
 
   #inflight: Promise<void> | null = null;
+  #gen = 0;
 
   /**
    * Idempotent load. The first caller triggers the fetch; concurrent or
@@ -49,33 +51,43 @@ class StrategiesStore {
     if (this.loaded) return;
     if (this.#inflight) return this.#inflight;
     this.loading = true;
+    const gen = this.#gen;
     this.#inflight = (async () => {
       try {
-        this.methods = await getMethods();
+        const methods = await getMethods();
+        // A load started for the previous project never lands.
+        if (gen !== this.#gen) return;
+        this.methods = methods;
         this.error = null;
       } catch (e) {
+        if (gen !== this.#gen) return;
         if ((e as Error)?.name === 'AbortError') return;
         this.methods = FALLBACK_METHODS;
         this.error =
           (e as Error)?.message ?? 'failed to load the /methods capability list';
       } finally {
-        this.loading = false;
-        this.loaded = true;
-        this.#inflight = null;
+        if (gen === this.#gen) {
+          this.loading = false;
+          this.loaded = true;
+          this.#inflight = null;
+        }
       }
     })();
     return this.#inflight;
   }
 
-  /** Drop the cache and re-fetch on the next `init()` call. Not wired to
-   *  anything yet — provided for symmetry with classesStore's
-   *  clearAndRefetch so Phase 3 doesn't need to touch this file again
-   *  just to invalidate after a deploy. */
+  /** Drop the cache and re-fetch on the next `init()` call. Runs on
+   *  every project switch (`/methods` coverage and `settable` are per
+   *  project); a load in flight for the previous project is discarded. */
   reset(): void {
+    this.#gen += 1;
+    this.#inflight = null;
     this.methods = FALLBACK_METHODS;
+    this.loading = false;
     this.loaded = false;
     this.error = null;
   }
 }
 
 export const strategiesStore = new StrategiesStore();
+onProjectChange(() => strategiesStore.reset());

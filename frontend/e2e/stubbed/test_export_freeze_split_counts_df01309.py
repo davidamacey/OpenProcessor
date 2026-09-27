@@ -120,7 +120,7 @@ def test_export_status_renders_served_split_counts_and_highlights_zero_classes(
 ):
     register_export_mount(stub)
 
-    page.goto(f"{app_url}/export")
+    page.goto(f"{app_url}/p/default/export")
     page.get_by_text("620", exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     assert page.get_by_text("objects in", exact=False).count() > 0
@@ -156,7 +156,7 @@ def test_freeze_modal_has_no_seed_field_and_posts_percent_only(stub, page, app_u
 
     stub.on("POST", r"/test_holdout/freeze(\?|$)", freeze_handler)
 
-    page.goto(f"{app_url}/export")
+    page.goto(f"{app_url}/p/default/export")
     freeze_button = page.get_by_role("button", name="Freeze test set", exact=True)
     freeze_button.wait_for(timeout=ACTION_TIMEOUT_MS)
     freeze_button.click()
@@ -193,7 +193,7 @@ def test_require_fully_labeled_images_checkbox_sends_the_flag(stub, page, app_ur
 
     stub.on("POST", r"/export/yolo(\?|$)", export_handler)
 
-    page.goto(f"{app_url}/export")
+    page.goto(f"{app_url}/p/default/export")
     checkbox = page.get_by_text("Only images whose every object is labeled", exact=False)
     checkbox.wait_for(timeout=ACTION_TIMEOUT_MS)
     checkbox.click()
@@ -247,7 +247,7 @@ def test_export_shows_trainable_vs_held_out_and_classes_with_objects(stub, page,
     stub.on("GET", r"/export/status(\?|$)", status)
     stub.on("GET", r"/export/datasets(\?|$)", {"datasets": []})
 
-    page.goto(f"{app_url}/export")
+    page.goto(f"{app_url}/p/default/export")
     bmw = page.locator("table tr", has_text="bmw").first
     bmw.wait_for(timeout=ACTION_TIMEOUT_MS)
     cells = [c.strip() for c in bmw.locator("td").all_inner_texts()]
@@ -304,7 +304,7 @@ def test_export_class_count_chip_prefers_served_classes_with_objects(
     stub.on("GET", r"/export/status(\?|$)", status)
     stub.on("GET", r"/export/datasets(\?|$)", {"datasets": []})
 
-    page.goto(f"{app_url}/export")
+    page.goto(f"{app_url}/p/default/export")
     bmw = page.locator("table tr", has_text="bmw").first
     bmw.wait_for(timeout=ACTION_TIMEOUT_MS)
 

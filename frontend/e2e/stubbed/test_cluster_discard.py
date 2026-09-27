@@ -70,7 +70,7 @@ def test_cluster_single_discard(stub, page, app_url):
     # `discard_calls` catches that class of bug instead.
     stub.on("POST", r"/crops/discard_batch$", lambda req, m: (200, {"items": [], "discarded": 0, "conflicts": [], "not_found": []}))
 
-    page.goto(f"{app_url}/clusters/1")
+    page.goto(f"{app_url}/p/default/clusters/1")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(400)
 

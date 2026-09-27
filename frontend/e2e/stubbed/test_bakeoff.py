@@ -276,7 +276,7 @@ def test_bakeoff_select_run_poll_results(stub, page, app_url):
     stub.on("GET", r"/bakeoff/matrix/job-1$", MATRIX)
     stub.on("GET", r"/bakeoff/results/job-1$", COMPARISON)
 
-    page.goto(f"{app_url}/bakeoff")
+    page.goto(f"{app_url}/p/default/bakeoff")
     page.locator('[data-testid="run-row"][data-run-id="run-b"]').wait_for(timeout=ACTION_TIMEOUT_MS)
 
     current = page.locator(f'[data-dataset-id="{DS_CURRENT}"] input[type="checkbox"]')
@@ -336,7 +336,7 @@ def test_bakeoff_previous_run_predating_v2(stub, page, app_url):
     stub.on("GET", r"/bakeoff/matrix/old-job$", unsupported)
     stub.on("GET", r"/bakeoff/results/old-job$", unsupported)
 
-    page.goto(f"{app_url}/bakeoff")
+    page.goto(f"{app_url}/p/default/bakeoff")
     page.locator('[data-job-id="old-job"]').click(timeout=ACTION_TIMEOUT_MS)
     note = page.get_by_test_id("comparison-legacy")
     note.wait_for(timeout=5000)
@@ -350,7 +350,7 @@ def test_bakeoff_run_rejection_shows_served_detail(stub, page, app_url):
     detail = "single_cls run over 2 classes cannot be scored per class; compare it on a single-class export"
     stub.on("POST", r"/bakeoff/run$", (422, {"detail": detail}))
 
-    page.goto(f"{app_url}/bakeoff")
+    page.goto(f"{app_url}/p/default/bakeoff")
     page.locator('[data-run-id="run-a"] input[type="checkbox"]').check(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("run-open").click()
     dialog = page.get_by_role("dialog", name="Confirm model comparison")

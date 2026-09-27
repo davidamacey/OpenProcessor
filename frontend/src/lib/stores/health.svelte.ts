@@ -13,6 +13,7 @@
  */
 
 import { getGlobalHealth, getHealth } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
 import type { ApiHealth, GlobalHealth } from '$lib/types';
 import { regionProfileStore } from '$stores/regionProfile.svelte';
 
@@ -74,6 +75,14 @@ class HealthStore {
     }
   }
 
+  /** Project switch: the scoped half of the poll is per project. Drops
+   *  it and, while the poll is running, re-polls at once (which aborts
+   *  the previous project's in-flight read). */
+  resetForProjectChange(): void {
+    this.scopedHealth = null;
+    if (this.#timer) void this.poll();
+  }
+
   #onVis = (): void => {
     if (document.visibilityState === 'visible') void this.poll();
   };
@@ -127,3 +136,4 @@ export const HEALTH_CHIP_TEXT: Record<HealthChip, string> = {
 };
 
 export const healthStore = new HealthStore();
+onProjectChange(() => healthStore.resetForProjectChange());

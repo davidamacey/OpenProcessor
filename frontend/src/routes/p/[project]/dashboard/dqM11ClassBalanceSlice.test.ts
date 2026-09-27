@@ -18,7 +18,7 @@ const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
 // Visual audit D2 moved the chart into ClassBalanceChart /
 // buildClassBalance(); the tiebreak must still go through sortClassBalance.
 const balanceSrc = readFileSync(
-  path.join(here, '../../lib/dashboard/classBalance.ts'),
+  path.join(here, '../../../../lib/dashboard/classBalance.ts'),
   'utf-8',
 );
 

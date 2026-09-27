@@ -19,6 +19,7 @@
  */
 
 import { ApiError, getKeymap } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
 import { formatCompactKey, formatShortcutKey } from '$lib/keyboardDisplay';
 import {
   FALLBACK_KEYMAP,
@@ -300,3 +301,11 @@ export async function loadKeymap(): Promise<void> {
     }
   }
 }
+
+// The keymap is a per-project axis: a switch drops back to the fallback
+// document and re-probes availability; the /p/[project] layout then
+// loads the new project's served keymap.
+onProjectChange(() => {
+  keymapStore.resetToFallback();
+  keymapAvailability.reset();
+});

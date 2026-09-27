@@ -37,6 +37,7 @@
  */
 
 import { ApiError, bakeoffRuns } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
 
 class BakeoffAvailabilityStore {
   /** `null` = not yet determined (optimistic — render as available). */
@@ -44,6 +45,7 @@ class BakeoffAvailabilityStore {
 
   #loaded = false;
   #inflight: Promise<void> | null = null;
+  #gen = 0;
 
   /**
    * Idempotent, never-rejecting load — same shape as
@@ -56,22 +58,38 @@ class BakeoffAvailabilityStore {
   async init(): Promise<void> {
     if (this.#loaded) return;
     if (this.#inflight) return this.#inflight;
+    const gen = this.#gen;
     this.#inflight = (async () => {
       try {
         await bakeoffRuns();
+        // A probe started for the previous project never lands.
+        if (gen !== this.#gen) return;
         this.available = true;
       } catch (e) {
+        if (gen !== this.#gen) return;
         if (e instanceof ApiError && (e.status === 404 || e.status === 501)) {
           this.available = false;
         }
         // Any other error: leave `available` unchanged (fail open).
       } finally {
-        this.#loaded = true;
-        this.#inflight = null;
+        if (gen === this.#gen) {
+          this.#loaded = true;
+          this.#inflight = null;
+        }
       }
     })();
     return this.#inflight;
   }
+
+  /** Project switch: whether a router is mounted can differ per
+   *  project's backend view; re-probe from the optimistic state. */
+  resetForProjectChange(): void {
+    this.#gen += 1;
+    this.#inflight = null;
+    this.#loaded = false;
+    this.available = null;
+  }
 }
 
 export const bakeoffAvailability = new BakeoffAvailabilityStore();
+onProjectChange(() => bakeoffAvailability.resetForProjectChange());

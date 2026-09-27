@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
+  import { projectHref } from '$lib/projectPaths';
   import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
   import { page } from '$app/state';
@@ -316,7 +318,10 @@
     const url = new URL(page.url);
     if (q) url.searchParams.set('q', q);
     else url.searchParams.delete('q');
-    void goto(`${url.pathname}${url.search}`, { replaceState: true, keepFocus: true });
+    void goto(resolve(projectHref(`/clusters${url.search}`)), {
+      replaceState: true,
+      keepFocus: true,
+    });
   }
 
   function exitSearchMode(): void {
@@ -855,11 +860,11 @@
       const target = (c.dominant_class_name ?? '').toLowerCase();
       const cls = classesStore.classes.find((k) => k.name.toLowerCase() === target);
       if (cls) {
-        void goto(`/clusters?class=${cls.id}`);
+        void goto(resolve(projectHref(`/clusters?class=${cls.id}`)));
         return;
       }
     }
-    void goto(`/clusters/${c.id}`);
+    void goto(resolve(projectHref(`/clusters/${c.id}`)));
   }
 
   // Infinite scroll owns pagination — totalPages no longer needed.

@@ -70,7 +70,7 @@ def test_region_confirm_unchanged_box_sends_patch_region_meta(stub, page, app_ur
 
     stub.on("PATCH", r"/crops/([^/]+)/region_meta$", region_meta_handler)
 
-    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
 

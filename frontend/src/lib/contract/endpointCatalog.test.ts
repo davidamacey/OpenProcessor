@@ -34,7 +34,7 @@ const srcRoot = path.resolve(here, '..', '..');
 const SCANNED_FILES = [
   'lib/api.ts',
   'lib/sse.ts',
-  'routes/export/+page.svelte',
+  'routes/p/[project]/export/+page.svelte',
   'lib/components/SlotCard.svelte',
 ] as const;
 

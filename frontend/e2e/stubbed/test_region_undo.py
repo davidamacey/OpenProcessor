@@ -69,7 +69,7 @@ def test_region_reject_then_z_calls_region_undo(stub, page, app_url):
 
     stub.on("POST", r"/crops/([^/]+)/region/undo$", region_undo_handler)
 
-    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(500)
@@ -115,7 +115,7 @@ def test_region_reject_z_before_any_write_does_not_call_region_undo(stub, page, 
     stub.on("GET", r"/review/", lambda *_: (200, {"items": [tag_item()], "total": 1, "page": 1, "page_size": 30}))
     stub.on("POST", r"/crops/([^/]+)/region/undo$", lambda request, match: undo_calls.append(match.string) or (200, tag_item()))
 
-    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(500)

@@ -45,7 +45,9 @@ describe('3f1a11e: generic served-enum filter bar (no tab/param-specific code)',
     const fnBody = src.slice(fnStart, src.indexOf('\n  }\n', fnStart));
     expect(fnBody).toMatch(/url\.searchParams\.set\(param, value\)/);
     expect(fnBody).toMatch(/url\.searchParams\.delete\(param\)/);
-    expect(fnBody).toMatch(/replaceState\(url, \{\}\)/);
+    expect(fnBody).toMatch(
+      /replaceState\(resolve\(projectHref\(`\/review\$\{url\.search\}`\)\), \{\}\)/,
+    );
   });
 
   it('enumFilterValues resets (state + URL) on every tab-click, not just on mount', () => {

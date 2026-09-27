@@ -66,7 +66,7 @@ def register_train_mount(stub):
 def test_train_gpu_options(stub, page, app_url):
     register_train_mount(stub)
 
-    page.goto(f"{app_url}/train")
+    page.goto(f"{app_url}/p/default/train")
     page.get_by_text("GPUs", exact=True).first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 
@@ -93,7 +93,7 @@ def test_train_gpu_options_unrestricted(stub, page, app_url):
     register_train_mount(stub)
     stub.on("GET", r"/train/gpus(\?|$)", {"options": [], "allowed_ids": [], "unrestricted": True})
 
-    page.goto(f"{app_url}/train")
+    page.goto(f"{app_url}/p/default/train")
     page.locator("input[aria-label='CUDA visible devices']").wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 

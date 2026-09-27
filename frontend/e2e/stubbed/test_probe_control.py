@@ -37,7 +37,7 @@ NO_CHECKPOINT_STATUS = {
 
 
 def _open_results(page, app_url, job_id: str):
-    page.goto(f"{app_url}/train")
+    page.goto(f"{app_url}/p/default/train")
     page.get_by_text(job_id, exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
     results_button = page.get_by_role("button", name="Results")
     results_button.wait_for(timeout=10000)

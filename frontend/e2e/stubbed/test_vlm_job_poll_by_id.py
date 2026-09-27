@@ -125,7 +125,7 @@ def test_dashboard_run_vlm_polls_the_per_job_status_endpoint(stub, page, app_url
 
     stub.on("GET", r"/pipeline/auto_label/status/job-real-cluster-26$", job_status_handler)
 
-    page.goto(f"{app_url}/dashboard")
+    page.goto(f"{app_url}/p/default/dashboard")
     open_btn = page.get_by_role("button", name="Run VLM Labeling")
     open_btn.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)

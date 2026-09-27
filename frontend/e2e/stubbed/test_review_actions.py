@@ -73,7 +73,7 @@ def test_review_assign_then_undo(stub, page, app_url):
 
     stub.on("POST", r"/crops/([^/]+)/label/undo$", undo_handler)
 
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     before = counter.first.inner_text()

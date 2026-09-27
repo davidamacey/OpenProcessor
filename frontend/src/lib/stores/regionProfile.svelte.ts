@@ -28,6 +28,7 @@
 
 import { getHealth } from '$lib/api';
 import { installServedRegionProfile } from '$lib/annotations/registeredSlots';
+import { onProjectChange } from '$lib/projectChange';
 import { setRegionProfileUnavailableListener } from '$lib/regionProfileUnavailable';
 import type { ServedRegionProfile } from '$lib/types';
 import { toastStore } from '$stores/toast.svelte';
@@ -117,6 +118,22 @@ class RegionProfileStore {
     toastStore.push({ kind: 'warn', text: REGION_PROFILE_CHANGED_NOTICE, ttl_ms: 0 });
   }
 
+  /**
+   * Project switch (review §3.8): the served profile is per project, so
+   * a different project's profile is NOT a "change" — the store goes back
+   * to unseeded (no region slot installed, no region route called) and
+   * the `/p/[project]` layout's `loadRegionProfile()` seeds it for the new
+   * project with no reload notice. `seedVersion` keeps counting up so the
+   * keyed page re-mounts.
+   */
+  resetForProjectChange(): void {
+    this.profile = null;
+    this.loaded = false;
+    this.unknown = false;
+    this.changed = false;
+    this.seedVersion += 1;
+  }
+
   /** Test-only. */
   reset(): void {
     this.profile = null;
@@ -132,6 +149,16 @@ export const regionProfileStore = new RegionProfileStore();
 setRegionProfileUnavailableListener(() => regionProfileStore.observe(null));
 
 let inflight: Promise<ServedRegionProfile | null> | null = null;
+/** Bumped on a project switch: a boot load started for the previous
+ *  project must never seed the new one. */
+let loadGeneration = 0;
+
+onProjectChange(() => {
+  loadGeneration += 1;
+  inflight = null;
+  regionProfileStore.resetForProjectChange();
+  installServedRegionProfile(null);
+});
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -150,13 +177,16 @@ export function loadRegionProfile(
 ): Promise<ServedRegionProfile | null> {
   if (regionProfileStore.loaded) return Promise.resolve(regionProfileStore.profile);
   if (inflight) return inflight;
-  inflight = (async () => {
+  const gen = loadGeneration;
+  const run = (async () => {
     for (let attempt = 0; attempt <= retryDelaysMs.length; attempt++) {
       if (attempt > 0) await delay(retryDelaysMs[attempt - 1]!);
+      if (gen !== loadGeneration) return null;
       // A health poll may have seeded the store while we waited.
       if (regionProfileStore.loaded) break;
       try {
         const h = await fetchHealth(AbortSignal.timeout(REGION_PROFILE_TIMEOUT_MS));
+        if (gen !== loadGeneration) return null;
         regionProfileStore.seed(normalize(h?.region_profile));
         installServedRegionProfile(regionProfileStore.profile);
         break;
@@ -164,9 +194,11 @@ export function loadRegionProfile(
         // Timeout / network error: unknown, not "no profile". Retry.
       }
     }
+    if (gen !== loadGeneration) return null;
     if (!regionProfileStore.loaded) regionProfileStore.markUnknown();
     inflight = null;
     return regionProfileStore.profile;
   })();
-  return inflight;
+  inflight = run;
+  return run;
 }

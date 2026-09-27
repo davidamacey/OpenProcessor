@@ -96,7 +96,7 @@ def test_tier2_profile_absent(stub, page, app_url):
     register_curation(stub)
     register_profile_route(page, status=200, body=None, content_type="text/html")
 
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     labels = tab_labels(page)
     assert "Pallet labels" not in labels, f"no 'Pallet labels' tab expected: {labels}"
     assert REGION_TAB_LABEL in labels, f"the region tab should still be present: {labels}"
@@ -114,7 +114,7 @@ def test_tier2_profile_served(stub, page, app_url):
     stub.on("GET", r"/review/tabs(\?|$)", {"tabs": []})
     register_profile_route(page, status=200, body=json.dumps(EXAMPLE_PROFILE), content_type="application/json")
 
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     labels = tab_labels(page)
     assert "Pallet labels" in labels, f"'Pallet labels' tab should be present: {labels}"
     assert REGION_TAB_LABEL not in labels, f"the example replaces the served slot: {labels}"
@@ -140,7 +140,7 @@ def test_tier2_profile_malformed(stub, page, app_url):
     register_curation(stub)
     register_profile_route(page, status=200, body=json.dumps(MALFORMED_PROFILE), content_type="application/json")
 
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     labels = tab_labels(page)
     assert REGION_TAB_LABEL in labels, f"the page should still render the core tabs + the region tab: {labels}"
     assert "Pallet labels" not in labels, f"no 'Pallet labels' tab from a malformed document: {labels}"
@@ -164,7 +164,7 @@ def test_tier2_profile_malformed(stub, page, app_url):
 
 def _assert_dropped(stub, page, app_url, *, expect_region_tab: bool, reason: str) -> None:
     register_profile_route(page, status=200, body=json.dumps(EXAMPLE_PROFILE), content_type="application/json")
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     labels = tab_labels(page)
     assert "Pallet labels" not in labels, f"the example must be dropped: {labels}"
     assert (REGION_TAB_LABEL in labels) is expect_region_tab, labels

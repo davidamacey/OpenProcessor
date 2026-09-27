@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const classesSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
 const addClassModalSrc = readFileSync(
-  path.resolve(here, '..', '..', 'lib', 'components', 'AddClassModal.svelte'),
+  path.resolve(here, '..', '..', '..', '..', 'lib', 'components', 'AddClassModal.svelte'),
   'utf-8',
 );
 

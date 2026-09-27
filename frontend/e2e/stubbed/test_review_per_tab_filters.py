@@ -79,7 +79,7 @@ def test_review_filter_bar_hides_controls_the_active_tab_does_not_serve(stub, pa
     stub.on("GET", r"/review/", review_handler)
     _stub_common(stub)
 
-    page.goto(f"{app_url}/review?tab=all")
+    page.goto(f"{app_url}/p/default/review?tab=all")
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(800)
 
@@ -101,7 +101,7 @@ def test_review_subject_toggle_label_reflects_served_max_rank_default(stub, page
     stub.on("GET", r"/review/", review_handler)
     _stub_common(stub)
 
-    page.goto(f"{app_url}/review?tab=all&preset=primary_low_conf")
+    page.goto(f"{app_url}/p/default/review?tab=all&preset=primary_low_conf")
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(800)
 

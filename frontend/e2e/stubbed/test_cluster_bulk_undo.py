@@ -88,7 +88,7 @@ def test_cluster_bulk_label_then_single_undo_sends_one_batch_call(stub, page, ap
 
     stub.on("POST", r"/crops/([^/]+)/label/undo$", undo_single_handler)
 
-    page.goto(f"{app_url}/clusters/1")
+    page.goto(f"{app_url}/p/default/clusters/1")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(400)
 

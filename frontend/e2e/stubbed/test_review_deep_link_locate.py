@@ -146,7 +146,7 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
 
     stub.on("PUT", r"/crops/([^/]+)/label$", label_handler)
 
-    page.goto(f"{app_url}/review?tab=all&crop_id=crop-target")
+    page.goto(f"{app_url}/p/default/review?tab=all&crop_id=crop-target")
 
     # This is the one page.* call proven to complete BEFORE a held-open
     # route handler can block the driver's dispatch loop for later

@@ -85,7 +85,7 @@ def test_curation_settings(stub, page, app_url):
     # ================================================================
     register(stub, METHODS_TODAY, 404, None)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text(re.compile(r"does not support shared curation defaults")).first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 
@@ -99,7 +99,7 @@ def test_curation_settings(stub, page, app_url):
     stub.console_errors.clear()
     put_calls = register(stub, METHODS_TODAY, 200, SETTINGS_EMPTY, put_response=SETTINGS_MERGED)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Clustering method").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 
@@ -144,7 +144,7 @@ def test_curation_settings(stub, page, app_url):
     stub.console_errors.clear()
     register(stub, METHODS_WITH_ASSIST_AXES, 200, SETTINGS_EMPTY)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Set by the backend's startup config").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 
@@ -164,7 +164,7 @@ def test_curation_settings(stub, page, app_url):
     stub.console_errors.clear()
     register(stub, METHODS_TODAY, 200, SETTINGS_EMPTY, put_response=SETTINGS_422, put_status=422)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Clustering method").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 

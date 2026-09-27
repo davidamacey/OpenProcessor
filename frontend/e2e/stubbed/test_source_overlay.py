@@ -79,7 +79,7 @@ def test_review_source_panel_draws_client_side_boxes(stub, page, app_url):
     # image response, not JSON, so the <img> element actually loads.
     stub.on("GET", r"/crops/[^/]+/image(\?|$)", stub._image)
 
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
