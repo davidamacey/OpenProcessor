@@ -125,7 +125,7 @@ def test_tier2_profile_served(stub, page, app_url):
     review_calls.clear()
     pallet_tab.first.click()
     page.wait_for_timeout(800)
-    assert any("/curation/review/regions" in c for c in review_calls), (
+    assert any(c.endswith("/review/regions") or "/review/regions?" in c for c in review_calls), (
         f"clicking it should drive GET /curation/review/regions: {review_calls}"
     )
 

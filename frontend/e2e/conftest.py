@@ -33,7 +33,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
-from fixtures.wire import REGION_PROFILE, REGION_TAB_LABEL
+from fixtures.wire import REGION_PROFILE, REGION_TAB_LABEL, projects_response
 
 import pytest
 
@@ -195,6 +195,17 @@ class Stub:
         # The served region profile gates every region feature; the
         # default deployment has one (the neutral widget/tag domain).
         # e2e/stubbed/test_no_region_profile.py overrides it with None.
+        # P1 projects cutover: the GLOBAL project list, read once by the
+        # root layout's bootstrap before anything scoped fires. Every
+        # scoped request in the app is then built from this project's own
+        # served `prefix` (`{api_prefix}/projects/default`) — matched by
+        # every OTHER `.on(...)` pattern below purely by suffix, so this
+        # is the only project-aware default the stub needs.
+        self.on(
+            "GET",
+            rf"^{re.escape(api_prefix)}/projects$",
+            projects_response(api_prefix),
+        )
         self.on("GET", r"/health$", {"status": "ok", "region_profile": REGION_PROFILE})
         self.on("GET", r"(thumbnail|region_thumbnail|/source)(/|$|\?)", self._image)
         # K6 (docs/design/k6-frontend-overlay-plan-2026-09-24.md):

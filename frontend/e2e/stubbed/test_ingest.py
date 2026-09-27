@@ -365,7 +365,9 @@ def test_ingest_absent(stub, page, app_url):
 
     ingest_calls = [c for c in stub.calls if "/ingest/" in c[1]]
     assert ingest_calls == []
-    assert not any("/ingest/" in path for _, path in stub.handled if path != "/curation/ingest/status")
+    assert not any(
+        "/ingest/" in path for _, path in stub.handled if not path.endswith("/ingest/status")
+    )
 
 
 def test_region_drain_shows_served_stall_reason(stub, page, app_url):

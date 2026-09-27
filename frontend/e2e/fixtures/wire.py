@@ -57,6 +57,66 @@ REGION_TAB_URL_ID = "regions"
 REGION_TAB_LABEL = REGION_PROFILE["display_name"]
 REGION_SINGULAR_LABEL = REGION_PROFILE["display_name_singular"]
 
+# P1 projects cutover (docs/design/
+# any-domain-rev3-and-projects-contract-review-2026-09-26.md): the
+# GLOBAL `GET {api_prefix}/projects` response every test's root-layout
+# bootstrap reads before anything scoped fires. Every scoped call in the
+# app is then built from this project's own served `prefix` — never
+# assembled client-side — so a stubbed test never has to know the
+# `/projects/{slug}` shape itself beyond this fixture.
+DEFAULT_PROJECT_SLUG = "default"
+
+
+def default_project(api_prefix: str) -> dict[str, Any]:
+    return {
+        "slug": DEFAULT_PROJECT_SLUG,
+        "display_name": "Default",
+        "description": "",
+        "prefix": f"{api_prefix}/projects/{DEFAULT_PROJECT_SLUG}",
+        "status": "active",
+        "writable": True,
+        "selectable": True,
+        "is_default": True,
+        "deletable": False,
+        "revision": 1,
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "counts": {"images": 0, "items": 0, "validated": 0},
+        "origin": None,
+    }
+
+
+def projects_response(api_prefix: str) -> dict[str, Any]:
+    return {
+        "default_slug": DEFAULT_PROJECT_SLUG,
+        "projects": [default_project(api_prefix)],
+        "capacity": {
+            "status": "ok",
+            "active_shards": 6,
+            "per_project_shards": 6,
+            "soft_limit": 40,
+            "hard_limit": 1000,
+            "heap_max_bytes": 2147483648,
+            "max_shards_per_node": 1000,
+            "data_nodes": 1,
+            "projects_until_soft_limit": 5,
+            "message": "Room for more projects.",
+            "labels": {
+                "ok": "Room for more projects",
+                "warn": "Near the recommended shard budget",
+                "blocked": "No room for another project",
+            },
+        },
+        "limits": {
+            "slug_pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+            "slug_min": 2,
+            "slug_max": 32,
+            "reserved_slugs": ["all", "combine", "global", "health", "new", "none", "projects", "settings", "vlm"],
+            "cloneable_axes": ["settings_defaults", "classes"],
+        },
+        "include_archived": False,
+    }
+
 # Every non-default value below is distinct on purpose (same rationale as
 # makeItem.ts): a mapping bug that drops a field to a hardcoded default is
 # visible via a plain equality check on the field, not just "the UI looked

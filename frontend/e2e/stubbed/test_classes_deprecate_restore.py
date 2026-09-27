@@ -81,7 +81,7 @@ def test_deprecate_empty_class_succeeds_and_refreshes(stub, page, app_url):
     row.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("deprecate-10").click()
 
-    assert any(c[1] == "/curation/classes/10/deprecate" for c in stub.calls)
+    assert any(c[1].endswith("/classes/10/deprecate") for c in stub.calls)
     toast = page.get_by_text("Deprecated coupe.")
     toast.wait_for(timeout=ACTION_TIMEOUT_MS)
 
@@ -142,7 +142,7 @@ def test_restore_succeeds_and_row_disappears(stub, page, app_url):
     assert restore_btn.is_enabled()
     restore_btn.click()
 
-    assert any(c[1] == "/curation/classes/99/restore" for c in stub.calls)
+    assert any(c[1].endswith("/classes/99/restore") for c in stub.calls)
 
 
 def test_restore_conflict_shows_plain_string_detail_verbatim(stub, page, app_url):
