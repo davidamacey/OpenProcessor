@@ -187,7 +187,6 @@ PORTED_PATHS: tuple[str, ...] = (
     'src/services/curation/probe_predictions.py',
     'src/services/curation/export.py',
     'src/services/curation/autolabel/job.py',
-    'src/services/curation/autolabel/cli.py',
     'tests/curation/test_semantic_search.py',
     'tests/curation/test_probe_predictions.py',
     'tests/curation/test_export_service.py',

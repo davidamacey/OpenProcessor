@@ -38,14 +38,13 @@ owning project's own ``autolabel_dir``:
   POST /curation/projects/{slug}/pipeline/auto_label/cancel; checked
   at stage boundaries.
 
-Multi-project mode (default, no ``--project``): every poll cycle,
-scans every ``active`` project's own ``autolabel_dir`` for a pending
-``trigger.json``, and runs only the single OLDEST one (by trigger
-mtime) this cycle — never two projects' jobs concurrently (the
-pipeline is GPU/CPU heavy). The other pending triggers wait for the
-next cycle. ``--project SLUG`` restricts discovery to one project
-(and whole-process-binds it) -- a dedicated per-project worker
-container.
+Projects: every poll cycle scans each active, unpaused project's own
+``autolabel_dir`` for a pending ``trigger.json`` and runs only the
+OLDEST one (by trigger mtime) -- one job at a time across all projects
+(the pipeline is GPU/CPU heavy); the rest wait their turn. When nothing
+is pending, each project's IVF centroids are checked for staleness on
+its own interval and a stale project gets a retrain run. Every run binds
+its project. ``--project SLUG`` restricts the worker to one project.
 
 Usage:
 
@@ -81,10 +80,10 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
+from scripts.curation._project_worker_utils import unpaused_projects
 from src.services.curation.autolabel.job import (
     _atomic_write,
     _cancel_flag,
-    _ensure_dir,
     _heartbeat_file,
     _JobState,
     _Progress,
@@ -92,7 +91,12 @@ from src.services.curation.autolabel.job import (
     _trigger_file,
 )
 from src.services.curation.worker_liveness import write_heartbeat as _write_container_heartbeat
-from src.services.projects.script_binding import add_project_argument, bind_script_project
+from src.services.projects.guard import make_script_opensearch
+from src.services.projects.script_binding import (
+    add_project_argument,
+    bind_script_project,
+    script_project_registry,
+)
 
 
 if TYPE_CHECKING:
@@ -119,9 +123,8 @@ POLL_INTERVAL_S = 1.0
 # inside the pipeline doesn't false-positive a "worker is dead" verdict.
 HEARTBEAT_INTERVAL_S = 5.0
 
-# How often (seconds) the idle worker checks whether the IVF centroids
-# should be retrained (single-project mode only -- see main()'s
-# docstring). 0 disables auto-retrain entirely.
+# How often (seconds) the idle worker checks whether a project's IVF
+# centroids should be retrained. 0 disables auto-retrain entirely.
 AUTO_RETRAIN_CHECK_INTERVAL_S = float(os.getenv('OP_IVF_RETRAIN_CHECK_S', '1800'))
 
 _IVF_PIPELINE_PATH = 'src.routers.curation.pipeline:pipeline_auto_label'
@@ -139,18 +142,19 @@ def _resolve_pipeline_fn(pipeline_path: str):
     return obj
 
 
-async def _build_opensearch():
-    """Async OpenSearch client.
+def _opensearch_url() -> str:
+    from src.config.settings import get_settings
 
-    The curation pipeline code talks raw search/bulk/indices — pass the
-    inner ``AsyncOpenSearch`` instance, not the project's higher-level
-    ``OpenSearchClient`` wrapper. Mirrors the same pattern
-    ``auto_label_cli._build_opensearch`` used.
-    """
-    from src.core.dependencies import OpenSearchClientFactory
+    return get_settings().opensearch_url
 
-    wrapper = await OpenSearchClientFactory.get_client()
-    return getattr(wrapper, 'client', wrapper)
+
+def _build_opensearch() -> Any:
+    """The guarded OpenSearch client the pipelines run against (raw
+    ``AsyncOpenSearch``; every run binds its project, so the guard keeps
+    each run inside its own indexes)."""
+    from src.config.settings import get_settings
+
+    return make_script_opensearch([_opensearch_url()], timeout=get_settings().opensearch_timeout)
 
 
 def _touch_heartbeat() -> None:
@@ -312,10 +316,10 @@ def _oldest_pending_trigger(
     active: list[ProjectRecord],
 ) -> tuple[ProjectRecord, float] | None:
     """Among every active project with a pending (unclaimed)
-    ``trigger.json``, the one whose trigger is oldest by mtime. Doesn't
-    claim it -- callers still race a project's own worker in
-    single-project mode, so claiming happens separately via
-    :func:`_claim_trigger_for`."""
+    ``trigger.json``, the one whose trigger is oldest by mtime. Claiming
+    is separate (:func:`_claim_trigger_for`): the file can vanish in
+    between (an API-side cancel), which the caller treats as nothing
+    pending."""
     from src.config.project_context import bind_project
 
     best: tuple[ProjectRecord, float] | None = None
@@ -350,8 +354,8 @@ def _ivf_retrain_trigger() -> dict[str, Any]:
 
 
 async def _maybe_auto_retrain(opensearch: Any) -> dict[str, Any] | None:
-    """Return a retrain trigger if IVF centroids are stale, else None.
-    Single-project mode only -- see the module docstring.
+    """Return a retrain trigger if the bound project's IVF centroids are
+    stale, else None.
 
     Cheap count query; the growth + 24h cooldown gate lives in
     should_retrain_centroids. Failures are swallowed (logged) so a
@@ -370,63 +374,44 @@ async def _maybe_auto_retrain(opensearch: Any) -> dict[str, Any] | None:
     return None
 
 
-async def _main_loop_single(stop: asyncio.Event, record: ProjectRecord) -> None:
-    """Single, ``--project``-bound project: the original loop, plus IVF
-    auto-retrain (multi-project mode does not do auto-retrain -- see
-    module docstring)."""
+async def _next_retrain(
+    projects: list[ProjectRecord],
+    opensearch: Any,
+    last_check: dict[str, float],
+    started: float,
+) -> tuple[ProjectRecord, dict[str, Any]] | None:
+    """The first project (in ``projects`` order) whose retrain check is due
+    and whose centroids are stale, with its retrain trigger. Each project
+    is checked at most once per ``AUTO_RETRAIN_CHECK_INTERVAL_S``."""
     from src.config.project_context import bind_project
 
-    with bind_project(record):
-        _ensure_dir()
-    opensearch = await _build_opensearch()
+    if AUTO_RETRAIN_CHECK_INTERVAL_S <= 0:
+        return None
+    for record in projects:
+        now = time.monotonic()
+        if now - last_check.get(record.slug, started) < AUTO_RETRAIN_CHECK_INTERVAL_S:
+            continue
+        last_check[record.slug] = now
+        with bind_project(record):
+            trigger = await _maybe_auto_retrain(opensearch)
+        if trigger is not None:
+            return record, trigger
+    return None
+
+
+async def _main_loop(stop: asyncio.Event, only_slug: str | None) -> None:
+    """One job at a time across every served project: the oldest pending
+    trigger first, else a due IVF retrain."""
+    registry = script_project_registry(_opensearch_url())
+    opensearch = _build_opensearch()
     logger.info(
         'worker ready project=%s poll_s=%s retrain_check_s=%s',
-        record.slug,
+        only_slug or '*',
         POLL_INTERVAL_S,
         AUTO_RETRAIN_CHECK_INTERVAL_S,
     )
-
-    last_retrain_check = time.monotonic()
-    last_liveness_heartbeat = 0.0
-    try:
-        while not stop.is_set():
-            now_monotonic = time.monotonic()
-            if now_monotonic - last_liveness_heartbeat >= 15.0:
-                last_liveness_heartbeat = now_monotonic
-                _write_container_heartbeat('auto_label_worker', {'poll': True})
-            trigger = _claim_trigger_for(record)
-            if (
-                trigger is None
-                and AUTO_RETRAIN_CHECK_INTERVAL_S > 0
-                and time.monotonic() - last_retrain_check >= AUTO_RETRAIN_CHECK_INTERVAL_S
-            ):
-                last_retrain_check = time.monotonic()
-                trigger = await _maybe_auto_retrain(opensearch)
-            if trigger is not None:
-                try:
-                    await _run_one(record, trigger, opensearch)
-                except asyncio.CancelledError:
-                    raise
-                continue
-            try:
-                await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL_S)
-            except TimeoutError:
-                continue
-    finally:
-        with contextlib.suppress(Exception):
-            await opensearch.close()
-
-
-async def _main_loop_multi(stop: asyncio.Event) -> None:
-    """Discovers every active project's pending trigger each cycle and
-    runs only the single oldest one (by trigger mtime) -- never two
-    projects' jobs concurrently. No IVF auto-retrain (see module
-    docstring)."""
-    from src.services.projects.registry import get_project_registry
-
-    registry = get_project_registry()
-    opensearch = await _build_opensearch()
-    logger.info('worker ready (multi-project) poll_s=%s', POLL_INTERVAL_S)
+    started = time.monotonic()
+    last_retrain_check: dict[str, float] = {}
     last_liveness_heartbeat = 0.0
     try:
         while not stop.is_set():
@@ -436,22 +421,22 @@ async def _main_loop_multi(stop: asyncio.Event) -> None:
                 _write_container_heartbeat('auto_label_worker', {'poll': True})
 
             try:
-                await registry.ensure_fresh()
-                active = registry.active_projects()
+                projects = await unpaused_projects(registry, only_slug)
             except Exception as exc:
                 logger.warning('registry unavailable: %s', exc)
-                active = []
+                projects = []
 
-            oldest = _oldest_pending_trigger(active)
+            job: tuple[ProjectRecord, dict[str, Any]] | None = None
+            oldest = _oldest_pending_trigger(projects)
             if oldest is not None:
                 record, _mtime = oldest
                 trigger = _claim_trigger_for(record)
-                if trigger is not None:
-                    try:
-                        await _run_one(record, trigger, opensearch)
-                    except asyncio.CancelledError:
-                        raise
-                    continue
+                job = (record, trigger) if trigger is not None else None
+            if job is None and oldest is None:
+                job = await _next_retrain(projects, opensearch, last_retrain_check, started)
+            if job is not None:
+                await _run_one(job[0], job[1], opensearch)
+                continue
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL_S)
             except TimeoutError:
@@ -464,15 +449,15 @@ async def _main_loop_multi(stop: asyncio.Event) -> None:
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     add_project_argument(p)
-    p.set_defaults(project=None)  # multi-project mode is the new default
+    p.set_defaults(project=None)  # every active project; --project restricts to one
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    record = None
     if args.project:
-        record = bind_script_project(args.project)
+        # Fails fast on an unknown/unbindable slug.
+        bind_script_project(args.project)
 
     stop = asyncio.Event()
 
@@ -487,10 +472,7 @@ def main(argv: list[str] | None = None) -> int:
             with contextlib.suppress(NotImplementedError, ValueError):
                 loop.add_signal_handler(sig, _on_signal)
         with contextlib.suppress(asyncio.CancelledError):
-            if record is not None:
-                await _main_loop_single(stop, record)
-            else:
-                await _main_loop_multi(stop)
+            await _main_loop(stop, args.project)
         return 0
 
     try:
