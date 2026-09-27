@@ -54,6 +54,7 @@
   <div class="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
     <span class="text-zinc-500">Dashboards:</span>
     {#if mlflowHref}
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- external MLflow server URL, not a SvelteKit route; resolve() only handles in-app routes -->
       <a
         href={mlflowHref}
         target="_blank"
@@ -64,8 +65,10 @@
       >
         MLflow ↗
       </a>
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
     {/if}
     {#each links as l (l.label)}
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- external monitoring dashboard URL (Grafana/Prometheus/OpenSearch), not a SvelteKit route -->
       <a
         href={l.href}
         target="_blank"
@@ -74,6 +77,7 @@
       >
         {l.label} ↗
       </a>
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
     {/each}
   </div>
 {/if}

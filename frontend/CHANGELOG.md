@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Lint debt (#83): `svelte/prefer-svelte-reactivity` and
+  `svelte/no-navigation-without-resolve` restored to `error`.** Both
+  rules were downgraded to `warn` during the eslint-plugin-svelte 3
+  upgrade; all 67 warnings (63 reactivity, 4 navigation) are now fixed
+  and the downgrade override in `eslint.config.js` is gone.
+  - Reactivity: genuinely reactive Map/Set state (`sel.ids` in
+    `$lib/selection.svelte.ts`, the `/clusters` badge-lookup cache, the
+    stale-fetch exclusion guard) converted to `SvelteSet`/`SvelteMap`
+    from `svelte/reactivity`, mutated in place rather than
+    rebuilt-and-reassigned. `selection.svelte.ts`'s selection set is now
+    a single long-lived `SvelteSet`. Every other flagged site was a
+    local, synchronous temporary (a dedup/lookup set or tally map built
+    and consumed within one function/computation, never held in
+    reactive state) or a plain non-reactive cache (module-level promise
+    cache, memoized controller instances, an internal undo-bookkeeping
+    map) — each left as a native `Set`/`Map` with a
+    `eslint-disable-next-line` and a one-line reason, per file.
+  - Navigation: the four flagged `<a href>`s are all external dashboard
+    links (MLflow, Grafana, Prometheus, OpenSearch) that `resolve()`
+    cannot handle (it only resolves in-app SvelteKit routes) — wrapped
+    in `eslint-disable`/`eslint-enable` pairs with a reason instead.
+
 ### Added
 
 - **Projects UI: every page under `/p/[project]`, a project switcher and

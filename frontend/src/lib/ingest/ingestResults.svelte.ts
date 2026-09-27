@@ -114,6 +114,7 @@ export function createIngestResults(): IngestResults {
       return filtered.slice(offset, offset + limit);
     },
     errorKindCounts() {
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local tally map consumed synchronously within this call, never stored in reactive state
       const counts = new Map<string, number>();
       for (const [, r] of entriesByKind('failed')) {
         const kind = r.error_kind ?? 'unknown';

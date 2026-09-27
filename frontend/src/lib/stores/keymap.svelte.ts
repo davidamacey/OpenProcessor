@@ -41,6 +41,7 @@ const FALLBACK_BY_ID = new Map(FALLBACK_KEYMAP.actions.map((a) => [a.id, a]));
 
 /** An action's effective keys under the document's locked-key rules. */
 export function effectiveKeys(action: KeymapAction, doc: KeymapDocument): string[] {
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local lookup set consumed synchronously within this function, never stored in reactive state
   const lockedGrammar = new Set(doc.grammar.locked_keys);
   const own = action.locked_keys ?? [];
   const requested = (action.modifiable ? action.keys : action.default).map((k) =>
@@ -64,6 +65,7 @@ class KeymapStore {
 
   #byId = $derived.by(() => {
     const doc = this.#doc;
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- rebuilt from scratch on every $derived recompute and returned as an immutable value; reactivity comes from the surrounding $derived.by, not per-key mutation
     const map = new Map<string, KeymapAction & { keys: string[] }>();
     for (const a of doc.actions) {
       // A served id this build doesn't know is ignored: nothing here

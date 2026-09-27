@@ -12,6 +12,8 @@
  * the anchor has scrolled out of the ordered list.
  */
 
+import { SvelteSet } from 'svelte/reactivity';
+
 export type PlainClickMode = 'replace' | 'toggle';
 
 export interface Selection {
@@ -30,15 +32,25 @@ export interface Selection {
 export function createSelection(
   opts: { plainClick: PlainClickMode } = { plainClick: 'replace' },
 ): Selection {
-  let selected = $state<Set<string>>(new Set());
+  // A single long-lived SvelteSet, always mutated in place (never
+  // reassigned) — SvelteSet is already reactive on `.add`/`.delete`/
+  // `.clear`, so wrapping it in `$state` too would be redundant
+  // (svelte/no-unnecessary-state-wrap) as well as pointless churn on
+  // every click.
+  const selected = new SvelteSet<string>();
   let anchorId = $state<string | null>(null);
+
+  function replaceWith(ids: Iterable<string>): void {
+    selected.clear();
+    for (const id of ids) selected.add(id);
+  }
 
   return {
     get ids() {
       return selected;
     },
     set ids(next: Set<string>) {
-      selected = next;
+      replaceWith(next);
     },
     get anchorId() {
       return anchorId;
@@ -61,31 +73,27 @@ export function createSelection(
         const b = orderedIds.indexOf(id);
         if (a !== -1 && b !== -1) {
           const [lo, hi] = a <= b ? [a, b] : [b, a];
-          const next = new Set(selected);
-          for (let i = lo; i <= hi; i++) next.add(orderedIds[i]!);
-          selected = next;
+          for (let i = lo; i <= hi; i++) selected.add(orderedIds[i]!);
           return;
         }
         // Anchor no longer visible — fall through.
       }
 
       if (isToggle || opts.plainClick === 'toggle') {
-        const next = new Set(selected);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        selected = next;
+        if (selected.has(id)) selected.delete(id);
+        else selected.add(id);
         anchorId = id;
         return;
       }
 
-      selected = new Set([id]);
+      replaceWith([id]);
       anchorId = id;
     },
     selectAll(ids: string[]): void {
-      selected = new Set(ids);
+      replaceWith(ids);
     },
     clear(): void {
-      selected = new Set();
+      selected.clear();
       anchorId = null;
     },
   };

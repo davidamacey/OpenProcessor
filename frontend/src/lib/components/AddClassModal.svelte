@@ -23,6 +23,7 @@
   let errorText = $state<string | null>(null);
 
   const groups = $derived.by(() => {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local set built and consumed within this computation, never stored in reactive state (only the resulting sorted array is)
     const set = new Set<string>();
     for (const c of classesStore.classes) {
       const g = c.group ?? '';

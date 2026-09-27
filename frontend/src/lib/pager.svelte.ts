@@ -157,6 +157,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
         if (myEpoch !== epoch) return;
         // Dedup: the server collection shrinks as crops are relabeled, so a
         // later page can repeat an item an earlier page already returned.
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local dedup set consumed synchronously within this call, never stored in reactive state
         const seen = new Set(items.map(opts.keyOf));
         const fresh = (res?.items ?? []).filter(
           (i) => !seen.has(opts.keyOf(i)) && (opts.accept?.(i) ?? true),

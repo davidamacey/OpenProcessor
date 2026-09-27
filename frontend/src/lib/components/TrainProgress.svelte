@@ -78,6 +78,7 @@
     </span>
     <span class="grow"></span>
     {#if status.mlflow_run_url}
+      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external MLflow server URL, not a SvelteKit route -->
       <a href={status.mlflow_run_url} target="_blank" rel="noopener" class="btn">
         Open MLflow run
       </a>

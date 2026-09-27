@@ -182,6 +182,7 @@
       allowedIds || offerDiverse
         ? [...strategiesStore.methods.review_sorts, ...diverseOverlayOnly]
         : strategiesStore.methods.review_sorts;
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local dedup set consumed synchronously within this computation, never stored in reactive state
     const seen = new Set<string>();
     const deduped = source.filter((s) => {
       if (seen.has(s.id)) return false;

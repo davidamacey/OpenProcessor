@@ -332,12 +332,14 @@
           <dt class="text-[11px] uppercase tracking-wide text-zinc-500">MLflow run</dt>
           <dd class="break-all font-mono text-zinc-100">
             {#if mlflowRunUrl}
+              <!-- eslint-disable svelte/no-navigation-without-resolve -- external MLflow server URL, not a SvelteKit route -->
               <a
                 href={mlflowRunUrl}
                 target="_blank"
                 rel="noopener"
                 class="text-blue-300 underline">{mlflowRunUrl}</a
               >
+              <!-- eslint-enable svelte/no-navigation-without-resolve -->
               <!-- TODO: backend is being asked to serve mlflow_run_url as
                    null unless OP_MLFLOW_PUBLIC_URL is set (never the
                    docker-internal hostname) — once that lands every
