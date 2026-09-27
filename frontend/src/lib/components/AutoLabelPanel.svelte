@@ -92,8 +92,8 @@
   // scoped — see isScopedAssistAvailable's doc comment.
   const scope = createAssistScope();
 
-  // Idempotent, never-rejecting, cached one-shot (degrades to
-  // FALLBACK_METHODS on any failure) — same call StrategyBar and /train
+  // Idempotent, never-rejecting, cached one-shot (a failed load
+  // leaves EMPTY_METHODS) — same call StrategyBar and /train
   // make. `scopeAvailable` is false for the first frames after mount;
   // that is correct (hide, then reveal) and must not be "fixed" with a
   // spinner or an await.

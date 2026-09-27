@@ -145,8 +145,8 @@
     pinnedSortId = null,
   }: Props = $props();
 
-  // getMethods()/init() never throws (404 or any error degrades to
-  // FALLBACK_METHODS) and init() itself is idempotent — safe to call on
+  // init() never throws (a failed load leaves EMPTY_METHODS) and is
+  // idempotent — safe to call on
   // every mount without a guard. No listener is installed by this call.
   $effect(() => {
     void strategiesStore.init();

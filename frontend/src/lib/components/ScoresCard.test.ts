@@ -7,7 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
-import { FALLBACK_METHODS } from '$lib/strategies';
+import { EMPTY_METHODS } from '$lib/strategies';
 import type { ScoreCoverageEntry, ScoresCoverage, ScoresJob } from '$lib/api';
 
 const getScoresCoverage = vi.fn();
@@ -84,7 +84,7 @@ beforeEach(() => {
   getScoresStatus.mockReset();
   cancelScores.mockReset();
   getMethods.mockReset();
-  getMethods.mockResolvedValue(FALLBACK_METHODS);
+  getMethods.mockResolvedValue(EMPTY_METHODS);
   // Adoption effect: no job in flight unless a test says otherwise.
   getScoresStatus.mockResolvedValue(idleJob());
 });
@@ -98,23 +98,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('ScoresCard: absence on a pre-/scores backend', () => {
-  it('renders nothing when /scores/coverage 404s', async () => {
-    getScoresCoverage.mockRejectedValue(new FakeApiError(404, null));
-    const el = renderCard();
-    await flushAsync();
-    expect(el.textContent?.trim()).toBe('');
-  });
-
-  it('never polls /scores/status on a backend that 404s /scores/coverage', async () => {
-    getScoresStatus.mockClear();
-    getScoresCoverage.mockRejectedValue(new FakeApiError(404, null));
-    renderCard();
-    await flushAsync();
-    expect(getScoresStatus).not.toHaveBeenCalled();
-  });
-
-  it('shows a retry banner (not absence) on a transient failure', async () => {
+describe('ScoresCard: load failure', () => {
+  it('shows a retry banner on a failed coverage load', async () => {
     getScoresCoverage.mockRejectedValue(new Error('network down'));
     const el = renderCard();
     await flushAsync();

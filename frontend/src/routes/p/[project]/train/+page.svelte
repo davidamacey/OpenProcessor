@@ -125,8 +125,8 @@
     .find((s) => s !== undefined);
 
   // Capability discovery is a cached, never-rejecting one-shot
-  // (strategiesStore.init() is idempotent; getMethods() degrades to
-  // FALLBACK_METHODS on any failure), so calling it from an $effect is
+  // (strategiesStore.init() is idempotent; a failed load leaves
+  // EMPTY_METHODS), so calling it from an $effect is
   // the same pattern /clusters uses for the embedding-plot toggle.
   $effect(() => {
     void strategiesStore.init();

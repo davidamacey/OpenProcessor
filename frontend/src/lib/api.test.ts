@@ -38,7 +38,6 @@ import {
   selectDiverse,
   startAutoLabel,
 } from './api';
-import { FALLBACK_METHODS } from './strategies';
 
 const URL = `http://localhost:4603${API_PREFIX}/crops/batch_label`;
 
@@ -81,10 +80,8 @@ describe('ApiError', () => {
 });
 
 /**
- * getMethods() must never throw — {API_PREFIX}/methods is optional capability
- * discovery (plan §5.3). A 404 or any other failure resolves to the
- * hardcoded FALLBACK_METHODS instead of rejecting, so a backend that
- * hasn't shipped the endpoint yet can't break app boot.
+ * getMethods() rejects on failure like every other read — there is no
+ * hardcoded capability list to fall back to.
  */
 describe('getMethods', () => {
   const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
@@ -146,11 +143,9 @@ describe('getMethods', () => {
         default: undefined,
       },
     ]);
-    // Real backend response, not the hardcoded fallback.
-    expect(result).not.toEqual(FALLBACK_METHODS);
   });
 
-  it('resolves to FALLBACK_METHODS on a 404, without throwing or retrying', async () => {
+  it('rejects with the ApiError on a 404, without retrying', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -158,21 +153,21 @@ describe('getMethods', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(getMethods()).resolves.toEqual(FALLBACK_METHODS);
+    await expect(getMethods()).rejects.toMatchObject({ status: 404 });
     // No retry on 4xx — matches apiFetch's documented "don't retry on 4xx" rule.
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('resolves to FALLBACK_METHODS on a network failure, after the normal 5xx/network retry budget', async () => {
+  it('rejects on a network failure, after the normal 5xx/network retry budget', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(getMethods()).resolves.toEqual(FALLBACK_METHODS);
+    await expect(getMethods()).rejects.toThrow();
     // apiFetch's retry loop: 1 initial + 3 retries = 4 attempts.
     expect(fetchMock).toHaveBeenCalledTimes(4);
   }, 10_000);
 
-  it('resolves to FALLBACK_METHODS (not throws) on a malformed 200 body', async () => {
+  it('parses a malformed 200 body to empty lists (not a crash)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response('not json', {
         status: 200,
@@ -2304,7 +2299,7 @@ describe('getCurationSettings / putCurationDefaults', () => {
     expect(result.defaults).toEqual({});
   });
 
-  it('getCurationSettings THROWS on 404 (unlike getMethods, which falls back)', async () => {
+  it('getCurationSettings throws on 404', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -2314,10 +2309,6 @@ describe('getCurationSettings / putCurationDefaults', () => {
 
     await expect(getCurationSettings()).rejects.toBeInstanceOf(ApiError);
     await expect(getCurationSettings()).rejects.toMatchObject({ status: 404 });
-
-    // Contrast: getMethods() on the identical 404 response resolves rather
-    // than rejecting. Same fetch mock, different endpoint contract.
-    await expect(getMethods()).resolves.toEqual(FALLBACK_METHODS);
   });
 });
 

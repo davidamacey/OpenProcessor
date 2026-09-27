@@ -9,7 +9,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { strategiesStore } from './strategies.svelte';
-import { FALLBACK_METHODS, isScopedAssistAvailable } from '$lib/strategies';
+import { EMPTY_METHODS, isScopedAssistAvailable } from '$lib/strategies';
 
 // Same METHODS_TODAY / METHODS_WITH_ASSIST_AXES fixtures as
 // strategies.test.ts (this plan §6) — inlined rather than cross-imported
@@ -107,8 +107,8 @@ describe('strategiesStore', () => {
     expect(docSpy).not.toHaveBeenCalled();
   });
 
-  it('starts with the fallback list before init() resolves', () => {
-    expect(strategiesStore.methods).toEqual(FALLBACK_METHODS);
+  it('starts with an empty capability list before init() resolves', () => {
+    expect(strategiesStore.methods).toEqual(EMPTY_METHODS);
     expect(strategiesStore.loaded).toBe(false);
   });
 
@@ -149,7 +149,7 @@ describe('strategiesStore', () => {
     expect(strategiesStore.defaultClusterMethodId).toBe('ivf');
   });
 
-  it('falls back to FALLBACK_METHODS (never throws) when {API_PREFIX}/methods 404s', async () => {
+  it('keeps EMPTY_METHODS and records the error (never throws) when {API_PREFIX}/methods fails', async () => {
     vi.stubGlobal(
       'fetch',
       vi
@@ -161,8 +161,9 @@ describe('strategiesStore', () => {
 
     await expect(strategiesStore.init()).resolves.toBeUndefined();
 
-    expect(strategiesStore.methods).toEqual(FALLBACK_METHODS);
+    expect(strategiesStore.methods).toEqual(EMPTY_METHODS);
     expect(strategiesStore.loaded).toBe(true);
+    expect(strategiesStore.error).toBeTruthy();
   });
 
   it('only fetches once across repeated init() calls (idempotent load)', async () => {
@@ -188,7 +189,7 @@ describe('strategiesStore', () => {
 
     strategiesStore.reset();
     expect(strategiesStore.loaded).toBe(false);
-    expect(strategiesStore.methods).toEqual(FALLBACK_METHODS);
+    expect(strategiesStore.methods).toEqual(EMPTY_METHODS);
   });
 
   it('loads the assist axes and flips isScopedAssistAvailable true once {API_PREFIX}/methods advertises them', async () => {

@@ -189,13 +189,6 @@
 
   {#if curationSettingsStore.loading && !curationSettingsStore.loaded}
     <section class="surface p-6 text-sm text-zinc-500">Loading settings…</section>
-  {:else if curationSettingsStore.supported === false}
-    <section class="surface p-6 text-sm text-zinc-400">
-      This backend does not support shared curation defaults. <code
-        class="text-xs text-zinc-500">GET {'{API_PREFIX}'}/settings</code
-      > returned 404 — the server predates the feature. Per-session defaults on /clusters and
-      /review are unaffected.
-    </section>
   {:else if curationSettingsStore.error}
     <section class="surface flex flex-col gap-3 p-6 text-sm">
       <p class="text-red-300">{curationSettingsStore.error}</p>

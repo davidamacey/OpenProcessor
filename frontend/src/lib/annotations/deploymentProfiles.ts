@@ -14,10 +14,9 @@
  * not status, and produces zero warnings: every stock Cropwright
  * deployment takes this path on every page load.
  *
- * This function never throws and never rejects. Same posture as
- * `getMethods()`/`FALLBACK_METHODS` (`../strategies.ts`): a missing or
- * broken optional capability degrades to the built-in behavior, it
- * never becomes an error surface the operator has to dismiss.
+ * This function never throws and never rejects: a missing or broken
+ * optional deployment file degrades to the built-in behavior, it never
+ * becomes an error surface the operator has to dismiss.
  */
 
 import type { SlotSpec } from './types';

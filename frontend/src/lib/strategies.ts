@@ -171,9 +171,7 @@ export interface DatasetExportInfo extends MethodInfoBase {
  * `_detection_profile_strategies` unconditionally and yields exactly one
  * entry — one profile selected per backend process at startup — so
  * `isDetectionProfileAvailable`/`isScopedAssistAvailable` can return
- * `true` against a real backend today. `FALLBACK_METHODS.detection_profiles`
- * stays `[]` regardless: that list models the 404/network-failure path,
- * which this correction does not change.
+ * `true` against a real backend today.
  *
  * Deliberately carries no `requires_field`/`field_coverage`: a
  * detection profile is a model/config selection, not a backfilled
@@ -425,11 +423,9 @@ export function isEmbeddingVizBannerRequired(overlays: OverlayInfo[]): boolean {
  * (same axis as `diverse`/`viz_projection`), not `review_sorts` — it's an
  * alternate crop pool, not an ordering over the existing one.
  *
- * `FALLBACK_METHODS.overlays` deliberately has no `semantic_search` entry
- * (it doesn't exist in the pre-P2-14 backend this fallback models), so an
- * old/flag-off backend hides the search box entirely rather than showing
- * a control that 404s — same graceful-degradation contract as every other
- * overlay gate in this file.
+ * A flag-off backend advertises no usable `semantic_search` entry, so the
+ * search box stays hidden — same contract as every other overlay gate in
+ * this file.
  */
 export function isSemanticSearchAvailable(overlays: OverlayInfo[]): boolean {
   return overlays.some(
@@ -540,63 +536,16 @@ export function hasFieldCoverage(entry: { field_coverage?: number | null }): boo
 }
 
 /**
- * Hardcoded fallback for when `{API_PREFIX}/methods` 404s, or the request fails
- * for any other reason (plan §5.3 — graceful degradation is required so
- * the two repos can deploy independently). This must mirror what's
- * actually implemented **today**, not the target end-state:
- *
- * - `cluster_methods`: only IVF is real as a selectable default
- *   (`cluster_methods/ivf.py`, `DEFAULT_METHOD = 'ivf'` in
- *   `cluster_methods/__init__.py`). AHC/HDBSCAN exist in the backend
- *   registry but are not operator-facing defaults, so they're
- *   deliberately left out rather than guessed at.
- * - `review_sorts`: `review.py` hardcodes `sort = [{updated_at:
- *   desc}]` per tab today; there is no named alternative sort yet
- *   (`review_sorts.py` is Phase 3). One `'default'` entry, marked
- *   default+stable — this is NOT `'representativeness'` /
- *   `'uncertainty'` / any of the Phase-3 sort ids from the plan, since
- *   those don't exist in the backend yet.
- * - `overlays` / `scores`: none of `crop_scores/`, `selection/`,
- *   `embedding_viz.py` exist yet (Phase 1/4/5) — both lists are empty.
+ * The capability list before `GET {API_PREFIX}/methods` has loaded, or
+ * after a failed load: nothing is advertised, so every optional control
+ * stays hidden. Never a guessed stand-in for the served list.
  */
-export const FALLBACK_METHODS: MethodsResponse = {
-  cluster_methods: [
-    {
-      id: 'ivf',
-      label: 'FAISS IVF-512 (production)',
-      status: 'stable',
-      default: true,
-    },
-  ],
-  review_sorts: [
-    {
-      id: 'default',
-      label: 'Recent first',
-      status: 'stable',
-      default: true,
-      // Explicit null, not omitted (audit-remediation plan Phase 6): this
-      // is the 404-fallback path, so field_coverage is "unknown," not
-      // "empty" -- hasFieldCoverage() must keep rendering this entry.
-      field_coverage: null,
-    },
-  ],
+export const EMPTY_METHODS: MethodsResponse = {
+  cluster_methods: [],
+  review_sorts: [],
   overlays: [],
   scores: [],
-  // Empty, NOT `[{id: 'yolo', …}]`. This is the 404/network-failure path,
-  // and the entire point of the export axis is that an optional export
-  // panel stays hidden unless the server affirmatively says it works.
-  // Guessing a kind here would re-introduce exactly the "render a button
-  // that 404s" failure the gate exists to prevent, on the one code path
-  // where we have no information at all. Same reasoning as
-  // `overlays`/`scores` being empty above.
   dataset_exports: [],
-  // Both empty, and for the same reason `dataset_exports` is: this is the
-  // 404/network-failure path, neither axis exists on any backend that
-  // ships today, and the whole point of an optional scoping control is
-  // that it stays invisible unless the server affirmatively says it
-  // works. Guessing a profile/pack id here would make the dashboard
-  // offer a scope the pipeline silently ignores — the exact failure
-  // isScopedAssistAvailable exists to prevent.
   detection_profiles: [],
   prompt_packs: [],
 };

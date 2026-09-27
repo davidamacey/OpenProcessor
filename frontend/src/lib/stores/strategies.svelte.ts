@@ -11,19 +11,18 @@
  * offers.
  *
  * Unlike classesStore/healthStore there is no polling loop: capability
- * lists change on deploy, not per-session, and `getMethods()` already
- * degrades gracefully to `FALLBACK_METHODS` on any 404/network failure
- * (plan §5.3) — so a failed load isn't something a retry-on-a-timer would
- * fix. This store adds no window/document event listeners; it is purely
+ * lists change on deploy, not per-session. A failed load leaves
+ * `EMPTY_METHODS` (every optional control hidden) and records `error`;
+ * `apiFetch` has already retried transient failures. This store adds no window/document event listeners; it is purely
  * a data cache, not a UI concern.
  */
 
 import { getMethods } from '$lib/api';
 import { onProjectChange } from '$lib/projectChange';
-import { FALLBACK_METHODS, type MethodsResponse } from '$lib/strategies';
+import { EMPTY_METHODS, type MethodsResponse } from '$lib/strategies';
 
 class StrategiesStore {
-  methods = $state<MethodsResponse>(FALLBACK_METHODS);
+  methods = $state<MethodsResponse>(EMPTY_METHODS);
   loading = $state<boolean>(false);
   loaded = $state<boolean>(false);
   error = $state<string | null>(null);
@@ -62,7 +61,7 @@ class StrategiesStore {
       } catch (e) {
         if (gen !== this.#gen) return;
         if ((e as Error)?.name === 'AbortError') return;
-        this.methods = FALLBACK_METHODS;
+        this.methods = EMPTY_METHODS;
         this.error =
           (e as Error)?.message ?? 'failed to load the /methods capability list';
       } finally {
@@ -82,7 +81,7 @@ class StrategiesStore {
   reset(): void {
     this.#gen += 1;
     this.#inflight = null;
-    this.methods = FALLBACK_METHODS;
+    this.methods = EMPTY_METHODS;
     this.loading = false;
     this.loaded = false;
     this.error = null;

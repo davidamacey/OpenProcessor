@@ -15,11 +15,7 @@
  * All endpoint URL patterns come from Section "Phase 2D" of the v7 plan.
  */
 
-import {
-  FALLBACK_METHODS,
-  parseMethodsResponse,
-  type MethodsResponse,
-} from './strategies';
+import { parseMethodsResponse, type MethodsResponse } from './strategies';
 import { parseCurationSettings, type CurationSettings } from '$lib/curationSettings';
 import { mapCropSlots } from './annotations/cropSlots';
 import type { KeymapDocument, KeymapValidationIssue } from './keymapFallback';
@@ -701,29 +697,15 @@ export function projectErrorText(e: unknown): string {
 }
 
 /**
- * Capability discovery for the curation-strategy registries (plan §3/§5.3):
- * which cluster methods / review sorts / overlays / scores the backend
- * currently offers, each with a `stable | experimental | shadow |
- * disabled` status. Phase 0 plumbing only — nothing consumes this yet.
- *
- * **Never rejects.** `{API_PREFIX}/methods` may not exist yet (backend Phase 0
- * lands independently — see `strategies.ts`'s header), and this endpoint
- * is pure capability discovery, not something a caller should have to
- * try/catch around. `apiFetch` already applies the house retry rule (no
- * retry on 4xx, 3 retries with backoff on 5xx/network errors); once that
- * settles, a 404 or any other failure here resolves to `FALLBACK_METHODS`
- * — the hardcoded stable-only list matching what's actually implemented
- * today — instead of throwing. A caller-initiated abort still propagates,
- * since that's a cancellation, not a backend failure.
+ * Capability discovery for the curation-strategy registries: which
+ * cluster methods / review sorts / overlays / scores / exports / assist
+ * axes the backend currently offers, each with a `stable | experimental
+ * | shadow | disabled` status. Rejects on failure like every other read;
+ * `strategiesStore` is the one caller that catches.
  */
 export async function getMethods(signal?: AbortSignal): Promise<MethodsResponse> {
-  try {
-    const raw = await apiFetch<unknown>(`${scoped()}/methods`, {}, signal);
-    return parseMethodsResponse(raw);
-  } catch (e) {
-    if (e instanceof DOMException && e.name === 'AbortError') throw e;
-    return FALLBACK_METHODS;
-  }
+  const raw = await apiFetch<unknown>(`${scoped()}/methods`, {}, signal);
+  return parseMethodsResponse(raw);
 }
 
 // -- shared curation defaults (GET,PUT {API_PREFIX}/settings) -----------
@@ -733,25 +715,10 @@ export async function getMethods(signal?: AbortSignal): Promise<MethodsResponse>
 // docs/design/curation-settings-ui-plan-2026-09-21.md §1.3.
 
 /**
- * Read the deployment's shared curation defaults.
- *
- * **Unlike `getMethods()`, this DOES reject.** That asymmetry is
- * deliberate: `getMethods` is fired from many component mounts and its
- * absence has a meaningful fallback (`FALLBACK_METHODS`), so swallowing
- * failures there is right. This endpoint is fired from exactly one page,
- * and that page must distinguish three outcomes an opaque fallback would
- * fuse into one:
- *
- *   404  -> this backend predates the feature; show "not supported",
- *           render no controls at all
- *   5xx/net -> transient; show the error and offer a retry
- *   200  -> real record (possibly `defaults: {}` when nothing has ever
- *           been written — that is the normal first-run response, NOT an
- *           error)
- *
- * Throwing preserves `ApiError.status`, which is the only thing that can
- * tell those apart. `curationSettingsStore` is the single place that
- * catches.
+ * Read the deployment's shared curation defaults. A `defaults: {}`
+ * record (nothing written yet) is the normal first-run response, not an
+ * error. Rejects on failure; `curationSettingsStore` is the one caller
+ * that catches.
  */
 export async function getCurationSettings(
   signal?: AbortSignal,
