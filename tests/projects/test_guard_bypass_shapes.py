@@ -142,6 +142,19 @@ def test_shape11_url_encoded_index_name_refused(snapshot) -> None:
     _refused(snapshot, 'POST', '/op%5Fprj%5Falpha__items/_search', {'query': {'match_all': {}}})
 
 
+@pytest.mark.parametrize('indices', [[ALPHA_ITEMS], ALPHA_ITEMS])
+def test_shape12_msearch_header_indices_key_refused(snapshot, indices: Any) -> None:
+    """A header's ``indices`` overrides the URL index just like ``index``
+    (re-review R1): an msearch on beta's URL must not read alpha."""
+    body = json.dumps({'indices': indices}) + '\n{"query": {"match_all": {}}}\n'
+    _refused(snapshot, 'POST', f'/{BETA_ITEMS}/_msearch', body)
+
+
+def test_shape13_msearch_unknown_header_key_refused(snapshot) -> None:
+    body = json.dumps({'index': BETA_ITEMS, 'expand_wildcards': 'all'}) + '\n{}\n'
+    _refused(snapshot, 'POST', f'/{BETA_ITEMS}/_msearch', body)
+
+
 # --- Other shapes the allowlist must keep refusing ---------------------------
 
 

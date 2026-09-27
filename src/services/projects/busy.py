@@ -82,7 +82,8 @@ def _autolabel_jobs(record: ProjectRecord) -> list[JobRef]:
     """Auto-label worker state (``src.services.curation.autolabel.job``).
 
     ``autolabel_dir`` is a PROJECT_SCOPED_FIELDS entry
-    (``resources_for_new``/``resources_for_default``); the worker/job
+    (``resources_for_new`` -- every project, ``default`` included); the
+    worker/job
     module resolves it from the *bound* project context, so reading
     another project's state without binding means reading its
     ``state.json`` directly here rather than calling ``get_state()``

@@ -275,3 +275,50 @@ def test_default_is_an_ordinary_bootstrapped_project(fake_registry_client) -> No
     }
     assert record.resources.class_registry_path.parts[-2:] == ('default', 'class_registry.json')
     assert record.resources.model_prefix == 'default__'
+
+
+def test_bootstrap_never_resets_an_existing_default_on_a_read_error(fake_registry_client) -> None:
+    """Re-review R2: a transient read failure (503 right after the cluster
+    starts, a timeout) is not "first boot". The bootstrap raises (startup
+    retries later) and the archived record is untouched."""
+    import dataclasses
+
+    import pytest
+
+    from src.services.projects.registry import doc_to_record, record_to_doc
+
+    client = fake_registry_client
+    archived = asyncio.run(bootstrap_default_project(client))
+    archived = dataclasses.replace(archived, status='archived', revision=5)
+    client.docs['project:default'] = record_to_doc(archived)
+    real_get = client.get
+
+    async def _flaky_get(**kwargs: Any) -> Any:
+        if kwargs.get('id') == 'project:default':
+            raise ConnectionError('503 no_shard_available_action_exception')
+        return await real_get(**kwargs)
+
+    client.get = _flaky_get
+    with pytest.raises(ConnectionError):
+        asyncio.run(bootstrap_default_project(client))
+    client.get = real_get
+    stored = doc_to_record(client.docs['project:default'])
+    assert (stored.status, stored.revision) == ('archived', 5)
+    assert asyncio.run(bootstrap_default_project(client)).status == 'archived'
+
+
+def test_concurrent_default_bootstrap_creates_one_record(fake_registry_client) -> None:
+    """Two workers booting together: exactly one create wins, the other
+    returns the winner's record instead of overwriting it."""
+    client = fake_registry_client
+
+    async def _run() -> list[Any]:
+        return list(
+            await asyncio.gather(
+                bootstrap_default_project(client), bootstrap_default_project(client)
+            )
+        )
+
+    first, second = asyncio.run(_run())
+    assert first.created_at == second.created_at
+    assert client.docs['meta:projects_revision'] == {'revision': 1}

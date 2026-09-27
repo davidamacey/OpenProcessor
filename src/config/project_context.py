@@ -164,4 +164,4 @@ async def run_in_executor_bound[T](
 def project_env() -> dict[str, str]:
     """Env additions for a subprocess launch (``Popen(env=...)``) so a
     worker/trainer child process binds the same project as its parent."""
-    return {'OP_PROJECT': current_project().record.slug}
+    return {'OP_CURATION_PROJECT': current_project().record.slug}

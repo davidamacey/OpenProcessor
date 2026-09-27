@@ -8,7 +8,7 @@ so a client's "largest subject only" control changed nothing.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -20,10 +20,6 @@ from src.config import get_region_fields
 from src.config.curation import base_curation_config
 from src.services.curation.ingest_class_sources import unlabeled_proposal_class_sources
 from src.services.curation.review_queries import KNOWN_TABS, review_tab_catalog, tab_filters
-
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
 
 
 ITEMS = base_curation_config().items_index
@@ -41,17 +37,6 @@ _QUALIFYING: dict[str, dict[str, Any]] = {
     'primary_low_conf': {'class_source': sorted(unlabeled_proposal_class_sources())[0]},
     'classifier_blind_spots': {'class_source': sorted(unlabeled_proposal_class_sources())[0]},
 }
-
-
-@pytest.fixture(autouse=True)
-def _fresh_sort_coverage() -> Iterator[None]:
-    # These fakes lack most sort fields; never leak a 0%-coverage cache
-    # (and so a fallback sort) into other tests, or inherit one.
-    from src.services.curation.strategy_registry import _reset_field_coverage_cache
-
-    _reset_field_coverage_cache()
-    yield
-    _reset_field_coverage_cache()
 
 
 def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:

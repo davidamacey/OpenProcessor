@@ -151,6 +151,11 @@ _MULTI_DOC_SHAPES: dict[str, frozenset[str]] = {
 _QUERY_ACTIONS = frozenset({'_search', '_count', '_update_by_query', '_delete_by_query', '_mget'})
 _READ_ACTIONS = frozenset({'_search', '_count', '_mget', '_msearch', '_refresh', '_source'})
 _INDEX_REF_KEYS = frozenset({'index', '_index', 'indices'})
+# msearch header keys (a header may override the URL's index with either
+# ``index`` or ``indices``; both are read, anything else is refused).
+_MSEARCH_HEADER_KEYS = frozenset(
+    {'index', 'indices', 'preference', 'routing', 'request_cache', 'search_type'}
+)
 _FORBIDDEN_NAME_CHARS = frozenset('*?:<>|"\\ #')
 
 
@@ -422,9 +427,18 @@ def _body_targets(action: str, body: Any, *, require_each: bool = False) -> list
         for header in lines[0::2]:
             if not isinstance(header, dict):
                 raise _refuse('msearch header is not an object')
-            name = header.get('index')
-            if name:
-                targets.extend(name.split(',') if isinstance(name, str) else name)
+            unknown = set(header) - _MSEARCH_HEADER_KEYS
+            if unknown:
+                raise _refuse(f'msearch header key(s) {sorted(unknown)} are not allowed')
+            named = [
+                part
+                for key in ('index', 'indices')
+                for value in [header.get(key)]
+                if value
+                for part in (value.split(',') if isinstance(value, str) else value)
+            ]
+            if named:
+                targets.extend(named)
             elif require_each:
                 raise _refuse('an msearch header names no index')
         for query in lines[1::2]:

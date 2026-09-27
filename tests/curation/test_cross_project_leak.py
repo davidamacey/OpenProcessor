@@ -37,9 +37,12 @@ mutating route fails the test until it is mapped below.
 
 from __future__ import annotations
 
+import base64
+import collections
 import hashlib
 import inspect
 import json
+import os
 import re
 import subprocess  # nosec B404 - only patched to refuse, never called
 from dataclasses import dataclass, field
@@ -51,8 +54,11 @@ import httpx
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from integration.ingest_fakes import FakePEEncoder, FakeTritonPool, jpeg_bytes
 from opensearchpy import AsyncOpenSearch
 from opensearchpy.exceptions import NotFoundError
+
+from curation.query_fakes import _aggregate, matches
 
 
 if TYPE_CHECKING:
@@ -91,7 +97,13 @@ def route_bodies(slug: str) -> dict[tuple[str, str], dict[str, Any]]:
     here that answers 422 fails with "unmapped body"."""
     item = f'{slug}-item-0001'
     proposal = f'{slug}-item-0002'
-    img = f'/data/{slug}/{slug}-img-0001.jpg'
+    # Ingest takes a server path under the source root; import matches
+    # the stored (relative) image_path of an already-ingested image.
+    source = f'{_source_root()}/{slug}'
+    img = f'{source}/{slug}-new-0001.jpg'
+    labeled = f'{source}/{slug}-lab-0001.jpg'
+    b64 = base64.b64encode(jpeg_bytes(len(slug))).decode('ascii')
+    force = {'force': 'true'}
     return {
         ('POST', '/bakeoff/run'): {'json': {'job_id': f'{slug}-job-0001'}},
         ('PUT', '/crops/{crop_id}/label'): {'json': {'class_id': 1}},
@@ -103,30 +115,38 @@ def route_bodies(slug: str) -> dict[tuple[str, str], dict[str, Any]]:
         ('POST', '/classes'): {'json': {'name': f'{slug}_newclass'}},
         ('PUT', '/classes/{class_id}'): {'json': {'group': f'{slug}_group'}},
         ('POST', '/classes/merge'): {'json': {'source_id': 2, 'target_id': 1}},
-        ('POST', '/crops/label/undo_batch'): {'json': {'crop_ids': [item]}},
+        ('POST', '/crops/label/undo_batch'): {'json': {'crop_ids': [f'{slug}-item-0003']}},
         ('POST', '/crops/{crop_id}/discard'): {'json': {}},
         ('POST', '/crops/discard_batch'): {'json': {'crop_ids': [item]}},
-        ('POST', '/crops/region/undo_batch'): {'json': {'crop_ids': [item]}},
+        ('POST', '/crops/region/undo_batch'): {'json': {'crop_ids': [f'{slug}-item-0006']}},
         ('POST', '/events/publish'): {
             'json': {'type': 'crop.classified', 'crop_id': item, 'class_id': 1}
         },
         ('POST', '/export/yolo'): {'json': {'version_tag': f'{slug}-v1'}},
         ('POST', '/export/single_class'): {'json': {'version_tag': f'{slug}-v1', 'class_ids': [1]}},
         ('POST', '/vlm/label_batch'): {'json': {'crop_ids': [item]}},
-        ('POST', '/vlm/verify_regions'): {'json': {'crop_ids': [item]}},
-        ('POST', '/vlm/verify_region_batch'): {'json': {'items': [{'crop_id': item}]}},
-        ('POST', '/vlm/region_visible_batch'): {'json': {'items': [{'crop_id': item}]}},
+        ('POST', '/vlm/verify_regions'): {'json': {'crop_ids': [f'{slug}-item-0004']}},
+        ('POST', '/vlm/verify_region_batch'): {
+            'json': {'items': [{'crop_id': item, 'region_image_b64': b64}]}
+        },
+        ('POST', '/vlm/region_visible_batch'): {
+            'json': {'items': [{'crop_id': item, 'image_b64': b64}]}
+        },
         ('POST', '/ingest/image'): {'json': {'path': img}},
-        ('POST', '/ingest/batch'): {'json': {'items': [{'path': img}]}},
+        ('POST', '/ingest/batch'): {'json': {'items': [{'path': f'{source}/{slug}-new-0002.jpg'}]}},
         ('POST', '/import_labels'): {
-            'json': {'image_path': img, 'label_txt_path': img.replace('.jpg', '.txt')}
+            'json': {'image_path': labeled, 'label_txt_path': labeled.replace('.jpg', '.txt')}
         },
         ('POST', '/import_labels/batch'): {
-            'json': {'items': [{'image_path': img, 'label_txt_path': img.replace('.jpg', '.txt')}]}
+            'json': {
+                'items': [
+                    {'image_path': labeled, 'label_txt_path': labeled.replace('.jpg', '.txt')}
+                ]
+            }
         },
         ('POST', '/ingest/path_lookup'): {'json': {'image_paths': [img]}},
         ('POST', '/ingest/upload'): {
-            'files': [('images', (f'{slug}-up.jpg', b'\xff\xd8\xff\xd9', 'image/jpeg'))],
+            'files': [('images', (f'{slug}-up.jpg', jpeg_bytes(len(slug)), 'image/jpeg'))],
         },
         ('POST', '/probe/run'): {'json': {'job_id': f'{slug}-job-0001'}},
         ('PUT', '/crops/{crop_id}/region'): {'json': {'region_bbox_norm': [0.1, 0.1, 0.4, 0.4]}},
@@ -145,75 +165,51 @@ def route_bodies(slug: str) -> dict[tuple[str, str], dict[str, Any]]:
         ('POST', '/select/diverse'): {'json': {'k': 1}},
         ('PUT', '/settings'): {'json': {'defaults': {}}},
         ('POST', '/train/preflight'): {'json': {}},
-        ('POST', '/train/start'): {'json': {}},
+        # force: the preflight's class-balance/disk gates are not what
+        # this test is about; the job files written are.
+        ('POST', '/train/start'): {'params': force, 'json': {}},
         ('POST', '/train/start_campaign'): {
+            'params': force,
             'json': {
+                'campaign_id': f'{slug}-campaign-0001',
                 'dataset_export_dir': f'/exports/{slug}-v1',
-                'runs': [{'model_size': 'n'}],
-            }
+                'runs': [{'profile': 'probe', 'model_size': 'n'}],
+            },
         },
-        ('POST', '/train/promote/{job_id}'): {'json': {'triton_name': f'{slug}_model'}},
+        ('POST', '/train/promote/{job_id}'): {
+            'json': {'triton_name': f'{slug}_model', 'force': True}
+        },
     }
 
 
-# Mutating routes that legitimately issue no write in the fixture, and why.
+# Mutating routes that write nothing by design (read-only work under POST,
+# or an event with no data write), and why. Every other mutating route must
+# really write in the sweep.
 NO_WRITE: dict[tuple[str, str], str] = {
-    ('POST', '/bakeoff/run'): 'needs a finished training run; answers 404/409 first',
+    ('POST', '/events/publish'): 'publishes an event (checked separately), writes no data',
+    ('POST', '/ingest/path_lookup'): 'read-only lookup under POST',
+    ('POST', '/train/preflight'): 'read-only validation under POST',
+    ('POST', '/train/reload_promoted'): 'asks Triton to load promoted models; stores nothing',
     (
         'POST',
-        '/classes/merge',
-    ): 'the fake search returns every doc, so the frozen-holdout guard fires',
-    ('POST', '/crops/{crop_id}/vlm_dismiss'): 'the seeded item carries no VLM suggestion',
-    ('POST', '/classes/{class_id}/deprecate'): (
-        'the fake search ignores the query, so every class looks referenced (409)'
-    ),
-    ('POST', '/clusters/refine/{cluster_id}'): 'one item: nothing to refine',
-    ('POST', '/clusters/auto_promote'): 'no cluster reaches the promote purity bar',
-    ('POST', '/crops/label/undo_batch'): 'no label history to undo',
-    ('POST', '/crops/{crop_id}/region/undo'): 'no region history to undo',
-    ('POST', '/crops/region/undo_batch'): 'no region history to undo',
-    ('POST', '/crops/{crop_id}/vlm_dismiss/undo'): 'nothing dismissed to undo',
-    ('POST', '/events/publish'): 'publishes an event (checked separately), writes no data',
-    ('POST', '/vlm/label_batch'): 'the VLM is unreachable (network disabled)',
-    ('POST', '/vlm/verify_regions'): 'the VLM is unreachable (network disabled)',
-    ('POST', '/vlm/verify_region_batch'): 'the VLM is unreachable (network disabled)',
-    ('POST', '/vlm/region_visible_batch'): 'the VLM is unreachable (network disabled)',
-    ('POST', '/vlm/label_cluster/{cluster_id}'): 'the VLM is unreachable (network disabled)',
-    ('POST', '/ingest/image'): 'Triton is down in the fixture: ingest fails before a write',
-    ('POST', '/ingest/batch'): 'Triton is down in the fixture: ingest fails before a write',
-    ('POST', '/import_labels'): 'the label file does not exist on disk',
-    ('POST', '/import_labels/batch'): 'the label file does not exist on disk',
-    ('POST', '/ingest/path_lookup'): 'read-only lookup under POST',
-    ('POST', '/ingest/upload'): 'the upload is not a decodable image: refused before a write',
-    ('DELETE', '/models/{model_name}'): 'no such promoted model: 404',
-    ('POST', '/pipeline/auto_label/cancel'): 'no auto-label job running',
-    ('POST', '/probe/run'): 'no finished training run to probe',
-    ('POST', '/probe/cancel'): 'no probe job running',
-    ('POST', '/regions/clusters/refine/{cluster_id}'): 'one region: nothing to refine',
-    ('POST', '/review/new_class_proposals/resolve'): 'no pending proposal with that label',
-    ('POST', '/scores/cancel'): 'no scoring job running',
-    ('POST', '/select/cancel'): 'no selection job running',
-    ('POST', '/viz/projection/cancel'): 'no projection job running',
-    ('POST', '/train/preflight'): 'read-only validation under POST',
-    ('POST', '/train/start'): 'no export to train on: refused by preflight',
-    ('POST', '/train/start_campaign'): 'the export dir does not exist: refused by preflight',
-    ('POST', '/train/cancel/{job_id}'): 'no such run',
-    ('POST', '/train/cancel_campaign/{campaign_id}'): 'no such campaign',
-    ('POST', '/train/promote/{job_id}'): 'no such run',
-    ('POST', '/train/reload_promoted'): 'Triton is down in the fixture',
-    ('POST', '/test_holdout/freeze'): 'one image: 10% of it freezes nothing',
-    ('POST', '/viz/projection/rebuild'): 'the background job is refused by the pool floor',
-    ('POST', '/cluster/umap/rebuild'): 'the background job is refused by the pool floor',
-    ('POST', '/select/diverse'): 'runs as a background job; the job reads only',
+        '/vlm/verify_region_batch',
+    ): "returns the VLM's verdicts to the caller; stores nothing",
+    (
+        'POST',
+        '/vlm/region_visible_batch',
+    ): "returns the VLM's verdicts to the caller; stores nothing",
+}
+
+# Routes whose ``{crop_id}`` is a seeded item other than ``-item-0001``,
+# because they act on state that item does not have.
+CROP_FOR: dict[tuple[str, str], str] = {
+    ('POST', '/crops/{crop_id}/vlm_dismiss'): 'item-0004',
+    ('POST', '/crops/{crop_id}/vlm_dismiss/undo'): 'item-0004',
+    ('POST', '/crops/{crop_id}/region/undo'): 'item-0005',
 }
 
 # Routes that answer 5xx in the fixture for a reason that is not isolation.
-EXPECTED_5XX: dict[tuple[str, str], str] = {
-    ('POST', '/train/reload_promoted'): 'Triton is down in the fixture',
-    ('POST', '/ingest/batch'): 'no PE encoder in the fixture (Triton is down)',
-    ('POST', '/ingest/upload'): 'no PE encoder in the fixture (Triton is down)',
-    ('POST', '/cluster/umap/rebuild'): 'UMAP spectral init needs more points than the fixture has',
-}
+EXPECTED_5XX: dict[tuple[str, str], str] = {}
 
 # Known leaks owned by P2 (cutover/projects-workers, projects_plan.md §5):
 # process-global state P1 did not create and P2 makes per project. Each
@@ -223,54 +219,165 @@ P2_DEFERRED: dict[tuple[str, str], str] = {
     ('POST', '/pipeline/auto_label/start'): 'global auto-label trigger/state dir (P2)',
     ('POST', '/pipeline/auto_label'): 'global auto-label trigger/state dir (P2)',
     ('GET', '/pipeline/auto_label/status'): 'global auto-label state dir (P2)',
-    ('GET', '/pipeline/auto_label/history'): 'global auto-label state dir (P2)',
-    ('GET', '/pipeline/auto_label/history/{job_id}'): 'global auto-label state dir (P2)',
-    ('GET', '/pipeline/stats'): 'global auto-label state dir (P2)',
     ('GET', '/train/runs'): 'global training staging dir (P2)',
     ('GET', '/train/status'): 'global training staging dir (P2)',
     ('POST', '/vlm/label_cluster/{cluster_id}'): 'queues the global auto-label job (P2)',
+    ('POST', '/pipeline/auto_label/cancel'): 'global auto-label state dir (P2)',
+    ('POST', '/bakeoff/run'): 'global bake-off jobs dir and GPU claim (P2, plan §5.3)',
+    ('POST', '/train/promote/{job_id}'): 'promoted-model ownership in the shared Triton repo (P2)',
+    ('DELETE', '/models/{model_name}'): 'promoted-model ownership in the shared Triton repo (P2)',
 }
+
+
+def _running_job(job_dir: str) -> Any:
+    """A cancel acts on a running job: mark ``slug``'s one running (a
+    fresh state, no heartbeat yet) right before its cancel is called."""
+
+    def prepare(env: LeakEnv, slug: str) -> None:
+        state = env.root / 'jobs' / job_dir / 'projects' / slug / 'state.json'
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text(
+            json.dumps({'job_id': f'{slug}-job-running', 'status': 'running'}), encoding='utf-8'
+        )
+        (state.parent / 'heartbeat').unlink(missing_ok=True)
+
+    return prepare
+
+
+PREPARE: dict[tuple[str, str], Any] = {
+    ('POST', '/probe/cancel'): _running_job('probe'),
+    ('POST', '/scores/cancel'): _running_job('scores'),
+    ('POST', '/select/cancel'): _running_job('select'),
+    ('POST', '/viz/projection/cancel'): _running_job('viz'),
+}
+
+
+# Routes that read the trainer's jobs dir, which is still shared across
+# projects until P2 scopes it (plan §5.3): another project's job ids may
+# show in their responses. They must still write (and stay off every
+# other project's indexes and dirs).
+P2_SHARED_TRAIN_JOBS: dict[tuple[str, str], str] = {
+    ('GET', '/bakeoff/trained_models'): 'lists every run in the shared trainer jobs dir (P2)',
+    ('POST', '/train/preflight'): 'the active-run check scans the shared trainer jobs dir (P2)',
+    ('POST', '/train/start'): 'the active-run check scans the shared trainer jobs dir (P2)',
+}
+
 
 # Long-lived SSE streams: the per-project delivery they serve is proven by
 # the event checks below and tests/projects/test_event_hub_project_filter.py.
 STREAMING_ROUTES: frozenset[str] = frozenset({f'{SCOPED}/events', f'{SCOPED}/pipeline/events'})
 
 
+def _source_root() -> str:
+    """The shared source-image root (``OP_SOURCE_ROOT``, set by the fixture)."""
+    return os.environ.get('OP_SOURCE_ROOT', '/images')
+
+
+def _vec(i: int) -> list[float]:
+    """A distinct unit embedding per seeded item (the same across projects,
+    so both passes see the same data shapes)."""
+    v = np.random.default_rng(i).normal(size=EMBED_DIM)
+    return (v / np.linalg.norm(v)).tolist()
+
+
 def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
-    """One project's seed data, keyed by IndexRole value -> doc id -> doc."""
-    item_id = f'{slug}-item-0001'
+    """One project's seed data, keyed by IndexRole value -> doc id -> doc.
+
+    Beyond a validated item and an unlabeled proposal, it seeds the state
+    each write route acts on (so every one of them really writes): a
+    human label to undo, a VLM suggestion to dismiss, region edits to
+    undo, a region to verify, a high-purity candidate cluster to promote,
+    a pending new-class proposal, a residual pool to refit UMAP on, and
+    an ingested image whose label file can be imported."""
+    from src.config.region_fields import get_region_fields
+    from src.services.curation.class_sources import VLM_NEW_CLASS_PENDING_CLASS_SOURCE
+    from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
+    from src.services.curation.history import record_class_snapshot
+
+    F = get_region_fields()
     image_id = f'{slug}-img-0001'
-    embedding = [1.0] + [0.0] * (EMBED_DIM - 1)
-    item: dict[str, Any] = {
-        'crop_id': item_id,
-        'image_id': image_id,
-        'image_path': f'/data/{slug}/{image_id}.jpg',
-        'class_id': 1,
-        'class_name': CLASS_NAMES[slug],
-        'class_source': 'human',
-        'validated': True,
-        'bbox': [0.1, 0.1, 0.5, 0.5],
-        'bbox_norm': [0.1, 0.1, 0.5, 0.5],
-        'cluster_id': 1,
-        'pe_embedding': embedding,
-        'region_embedding': embedding,
-    }
-    # An unlabeled proposal: the batch label/move/region routes refuse to
-    # overwrite a human decision, so they act on this one.
-    proposal: dict[str, Any] = {
-        **item,
-        'crop_id': f'{slug}-item-0002',
+
+    def crop(n: int, **fields: Any) -> dict[str, Any]:
+        return {
+            'crop_id': f'{slug}-item-{n:04d}',
+            'image_id': image_id,
+            'image_path': f'{slug}/{image_id}.jpg',
+            'class_id': 1,
+            'class_name': CLASS_NAMES[slug],
+            'class_source': 'human',
+            'class_validated': True,
+            'bbox': [0.1, 0.1, 0.5, 0.5],
+            'bbox_norm': [0.1, 0.1, 0.5, 0.5],
+            'cluster_id': 1,
+            'pe_embedding': _vec(n),
+            'region_embedding': _vec(n),
+            **fields,
+        }
+
+    unlabeled = {
         'class_id': None,
         'class_name': None,
         'class_source': 'proposal',
-        'validated': False,
+        'class_validated': False,
     }
+    region_before = {F.bbox_norm: None}
+    items = [
+        crop(1),
+        # An unlabeled proposal: the batch label/move/region routes refuse
+        # to overwrite a human decision, so they act on this one.
+        crop(2, **unlabeled),
+        crop(
+            3,
+            class_id_history=record_class_snapshot(
+                crop(3, **unlabeled), writer='human:label_crop', restorable=True
+            ),
+        ),
+        crop(
+            4,
+            class_source='vlm',
+            class_validated=False,
+            vlm_confidence='high',
+            **{F.bbox_norm: [0.2, 0.2, 0.3, 0.3]},
+        ),
+        *(
+            crop(
+                n,
+                **{
+                    F.bbox_norm: [0.2, 0.2, 0.3, 0.3],
+                    EDIT_HISTORY_FIELD: record_edit(
+                        region_before, kind=EditKind.REGION, writer='human:set_region'
+                    ),
+                },
+            )
+            for n in (5, 6)
+        ),
+        *(
+            crop(n, class_source='vlm', class_validated=False, cluster_id=10001)
+            for n in range(7, 11)
+        ),
+        crop(
+            11,
+            **{
+                **unlabeled,
+                'class_source': VLM_NEW_CLASS_PENDING_CLASS_SOURCE,
+                'vlm_proposed_class': f'{slug}-proposal',
+            },
+        ),
+        *(crop(n, **unlabeled, cluster_id=None) for n in range(12, 18)),
+    ]
+    labeled_image = f'{slug}-img-0002'
     return {
-        'items': {item_id: item, proposal['crop_id']: proposal},
-        'images': {image_id: {'image_id': image_id, 'image_path': item['image_path']}},
+        'items': {doc['crop_id']: doc for doc in items},
+        'images': {
+            image_id: {'image_id': image_id, 'image_path': f'{slug}/{image_id}.jpg'},
+            labeled_image: {
+                'image_id': labeled_image,
+                'image_path': f'{_source_root()}/{slug}/{slug}-lab-0001.jpg',
+            },
+        },
         'labels_confirmed': {
             f'{slug}-label-0001': {
-                'crop_id': item_id,
+                'crop_id': f'{slug}-item-0001',
                 'class_id': 1,
                 'class_name': CLASS_NAMES[slug],
             }
@@ -324,10 +431,13 @@ def touched_indexes(url: str, body: Any) -> set[str]:
                     out.add(line[op].get('_index') or ('' if url_index else '*'))
     elif action == '_msearch':
         for header in _body_lines(body)[0::2]:
-            target = header.get('index')
-            if target:
-                out |= set(target.split(',') if isinstance(target, str) else target)
-            elif not url_index:
+            named = False
+            for key in ('index', 'indices'):
+                target = header.get(key)
+                if target:
+                    named = True
+                    out |= set(target.split(',') if isinstance(target, str) else target)
+            if not named and not url_index:
                 out.add('*')
     elif action in ('_search', '_count') and not url_index and parts[:2] != ['_search', 'scroll']:
         out.add('*')
@@ -335,11 +445,71 @@ def touched_indexes(url: str, body: Any) -> set[str]:
     return out
 
 
+_FAKE_VLM_HOST = 'vlm.leak-test'
+
+
+def _fake_vlm_reply(request: httpx.Request) -> httpx.Response:
+    """An OpenAI-shaped chat completion answering every image in the
+    request with one confident verdict: the first catalog class, region
+    visible and verified, a short text read."""
+    payload = json.loads(request.content or b'{}')
+    n_images = sum(
+        1
+        for message in payload.get('messages', [])
+        if isinstance(message.get('content'), list)
+        for part in message['content']
+        if isinstance(part, dict) and part.get('type') == 'image_url'
+    )
+    answers = [
+        {
+            'img': i + 1,
+            'class_id': 0,
+            'confidence': 'high',
+            'region_visible': True,
+            'is_region': True,
+            'is_plate': True,
+            'region_text': 'AB12',
+            'text': 'AB12',
+            'reason': 'clear',
+        }
+        for i in range(max(n_images, 1))
+    ]
+    body = {
+        'id': 'leak-test',
+        'object': 'chat.completion',
+        'model': payload.get('model', 'fake'),
+        'choices': [
+            {
+                'index': 0,
+                'message': {'role': 'assistant', 'content': json.dumps(answers)},
+                'finish_reason': 'stop',
+            }
+        ],
+        'usage': {'prompt_tokens': 1, 'completion_tokens': 1, 'total_tokens': 2},
+    }
+    return httpx.Response(200, json=body, request=request)
+
+
+def _query_matches(doc_id: str, doc: dict[str, Any], query: Any) -> bool:
+    """Evaluate the query DSL subset ``tests/curation/query_fakes.py``
+    understands (plus ``ids``); an unsupported clause matches everything, so
+    a route that reaches an index still sees (and would leak) its docs."""
+    if not query:
+        return True
+    if 'ids' in query:
+        return doc_id in (query['ids'].get('values') or [])
+    try:
+        return matches({**doc, '_id': doc_id, 'crop_id': doc.get('crop_id', doc_id)}, query)
+    except (NotImplementedError, KeyError, TypeError, ValueError):
+        return True
+
+
 class _FakeTransport:
     """The bottom of the fake: answers OpenSearch REST calls from a per-
-    index doc store, and applies writes to it. Queries are not evaluated
-    -- a search returns every doc of the index it names -- which is what a
-    leak test wants: any index a route reaches shows up in its response."""
+    index doc store, and applies writes to it. Queries, sizes and
+    aggregations are evaluated (``tests/curation/query_fakes.py``) so each
+    write route finds the state it acts on; an unsupported clause matches
+    every doc of the index it names, so a reached index still shows up."""
 
     def __init__(self, store: dict[str, dict[str, dict[str, Any]]]) -> None:
         from opensearchpy.serializer import JSONSerializer
@@ -351,12 +521,38 @@ class _FakeTransport:
         self._scrolls = 0
         self._tasks: dict[str, Any] = {}
 
-    def _hits(self, indices: list[str]) -> list[dict[str, Any]]:
+    def _hits(self, indices: list[str], query: Any = None) -> list[dict[str, Any]]:
         return [
             {'_index': idx, '_id': doc_id, '_source': doc, '_seq_no': 1, '_primary_term': 1}
             for idx in indices
             for doc_id, doc in self.store.get(idx, {}).items()
+            if _query_matches(doc_id, doc, query)
         ]
+
+    def _search(self, indices: list[str], body: Any, params: Any) -> dict[str, Any]:
+        spec = _body_json(body) or {}
+        spec = spec if isinstance(spec, dict) else {}
+        hits = self._hits(indices, spec.get('query'))
+        aggs: dict[str, Any] = {}
+        if spec.get('aggs') or spec.get('aggregations'):
+            try:
+                aggs = _aggregate(
+                    [h['_source'] for h in hits], spec.get('aggs') or spec['aggregations']
+                )
+            except (NotImplementedError, KeyError, TypeError, ValueError):
+                aggs = {}
+        size = spec.get('size', 10)
+        resp: dict[str, Any] = {
+            'hits': {
+                'total': {'value': len(hits), 'relation': 'eq'},
+                'hits': hits[: size if isinstance(size, int) else 10],
+            },
+            'aggregations': aggs,
+        }
+        if (params or {}).get('scroll'):
+            self._scrolls += 1
+            resp['_scroll_id'] = f'scroll-{self._scrolls}'
+        return resp
 
     def _write(self, index: str, doc_id: str, doc: dict[str, Any] | None, *, merge: bool) -> None:
         self.writes.append(index)
@@ -399,20 +595,20 @@ class _FakeTransport:
                 '_seq_no': 1,
                 '_primary_term': 1,
             }
-        if action in ('_search', '_msearch'):
-            hits = self._hits(indices)
-            resp: dict[str, Any] = {
-                'hits': {'total': {'value': len(hits), 'relation': 'eq'}, 'hits': hits},
-                'aggregations': {},
-            }
-            if (params or {}).get('scroll'):
-                self._scrolls += 1
-                resp['_scroll_id'] = f'scroll-{self._scrolls}'
-            if action == '_msearch':
-                return {'responses': [resp]}
-            return resp
+        if action == '_search':
+            return self._search(indices, body, params)
+        if action == '_msearch':
+            lines = _body_lines(body)
+            responses = []
+            for header, query in zip(lines[0::2], lines[1::2], strict=False):
+                named = header.get('index') or header.get('indices') or indices
+                targets = named.split(',') if isinstance(named, str) else list(named)
+                responses.append(self._search(targets, query, None))
+            return {'responses': responses}
         if action == '_count':
-            return {'count': len(self._hits(indices))}
+            spec = _body_json(body) or {}
+            query = spec.get('query') if isinstance(spec, dict) else None
+            return {'count': len(self._hits(indices, query))}
         if action == '_mget':
             return {'docs': self._mget(indices, body)}
         if action == '_bulk':
@@ -535,7 +731,9 @@ def _record(slug: str, resources: Any) -> Any:
 
 def _job_dirs(slug: str, tmp_path: Path) -> list[Path]:
     """The per-project job dirs P1 routes through ``project_jobs_dir``."""
-    roots = [tmp_path / 'jobs' / name for name in ('probe', 'select', 'scores', 'viz')]
+    roots = [
+        tmp_path / 'jobs' / name for name in ('probe', 'select', 'scores', 'viz', 'region_drain')
+    ]
     return [root / 'projects' / slug for root in roots]
 
 
@@ -565,17 +763,33 @@ def _seed_files(record: Any, tmp_path: Path) -> list[Path]:
         'status': 'completed',
         'result': {'crop_ids': [f'{slug}-item-0001']},
     }
+    # Source images every project may ingest from (the shared source root).
+    images = tmp_path / 'images' / slug
+    images.mkdir(parents=True, exist_ok=True)
+    for i, name in enumerate(('img-0001', 'new-0001', 'new-0002', 'lab-0001')):
+        (images / f'{slug}-{name}.jpg').write_bytes(jpeg_bytes(i + len(slug)))
+    (images / f'{slug}-lab-0001.txt').write_text('1 0.5 0.5 0.4 0.4\n', encoding='utf-8')
     own_dirs = list(_job_dirs(slug, tmp_path))
     for job_dir in own_dirs:
         job_dir.mkdir(parents=True, exist_ok=True)
         (job_dir / 'state.json').write_text(json.dumps(state), encoding='utf-8')
-    res.train_jobs_dir.mkdir(parents=True, exist_ok=True)
-    (res.train_jobs_dir / f'{slug}-job-0001.status.json').write_text(
-        json.dumps(
-            {'job_id': f'{slug}-job-0001', 'state': 'finished', 'classes': [CLASS_NAMES[slug]]}
-        ),
-        encoding='utf-8',
-    )
+    # A finished training run with its checkpoint, in the project's own
+    # jobs dir and (until P2 scopes the trainer, plan §5.3) in the shared
+    # one the training service still reads.
+    checkpoint = tmp_path / 'state' / 'training_runs' / slug / 'weights' / 'best.pt'
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint.write_bytes(b'fake checkpoint')
+    finished = {
+        'job_id': f'{slug}-job-0001',
+        'state': 'finished',
+        'classes': [CLASS_NAMES[slug]],
+        'checkpoint_path': str(checkpoint),
+    }
+    for jobs_dir in (res.train_jobs_dir, tmp_path / 'jobs' / 'train'):
+        jobs_dir.mkdir(parents=True, exist_ok=True)
+        (jobs_dir / f'{slug}-job-0001.status.json').write_text(
+            json.dumps(finished), encoding='utf-8'
+        )
     res.autolabel_dir.mkdir(parents=True, exist_ok=True)
     (res.autolabel_dir / 'state.json').write_text(
         json.dumps({'job_id': f'{slug}-job-autolabel', 'status': 'completed'}), encoding='utf-8'
@@ -600,6 +814,22 @@ def _seed_files(record: Any, tmp_path: Path) -> list[Path]:
     ]
 
 
+class _LeakPEEncoder(FakePEEncoder):
+    """The ingest fake, at the seed data's embedding width (so the
+    clustering and scoring routes see one consistent pool)."""
+
+    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+        return np.array([_vec(100 + i) for i in range(len(crops))], dtype=np.float32)
+
+    async def embed_whole_frame(self, path: str) -> np.ndarray | None:
+        self.whole_frame_paths.append(path)
+        return np.array(_vec(200), dtype=np.float32)
+
+    async def embed_whole_frame_bytes(self, data: bytes) -> np.ndarray | None:
+        self.whole_frame_bytes.append(data)
+        return np.array(_vec(201), dtype=np.float32)
+
+
 @dataclass
 class LeakEnv:
     app: Any
@@ -607,6 +837,7 @@ class LeakEnv:
     accesses: list[tuple[str | None, str, str, str]]
     transport: _FakeTransport
     own_dirs: dict[str, list[Path]]
+    root: Path
     events: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -642,17 +873,30 @@ def leak_env(
         'HEARTBEAT_DIR': 'state/heartbeats',
         'TRAIN_RUNS_ROOT': 'state/training_runs',
         'BAKEOFF_OUT_DIR': 'state/bakeoff_out',
+        'SOURCE_ROOT': 'images',
+        'TRITON_MODEL_REPO': 'models',
     }.items():
         monkeypatch.setenv(f'OP_{name}', str(tmp_path / sub))
     monkeypatch.setenv('OP_EVENT_BUS', 'process')
-    monkeypatch.setenv('OP_SCORES_ENABLED', '1')
+    for flag in ('SCORES_ENABLED', 'SELECT_DIVERSE_ENABLED', 'VIZ_PROJECTION_ENABLED'):
+        monkeypatch.setenv(f'OP_{flag}', '1')
+    # Diverse selection over the job path (the one that writes); the
+    # inline path answers from memory.
+    monkeypatch.setenv('OP_SELECT_SYNC_MAX_OPS', '1')
     monkeypatch.setenv('OP_REGION_FIELD_EMBEDDING', 'pe_embedding')
+    monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'fake_item_detector')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     monkeypatch.setattr(curation_opensearch, '_registries', {})
     monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', set())
     # Keyed by index (audited), but its 5 s TTL would let wall-clock time
     # change which index roles a route reaches between the two passes.
     monkeypatch.setattr(curation_opensearch, '_SETTINGS_CACHE_TTL_SECONDS', 0.0)
+    # A UMAP fit the fixture's small pool supports (the defaults need
+    # more points than the fixture seeds).
+    from src.services.curation.clustering import embedding_reduce
+
+    monkeypatch.setattr(embedding_reduce, 'UMAP_N_COMPONENTS', 2)
+    monkeypatch.setattr(embedding_reduce, 'UMAP_N_NEIGHBORS', 3)
     # Import-time constants of the (P2-owned) auto-label module: keep them
     # inside tmp_path so the sweep never touches the host's /jobs.
     al_dir = tmp_path / 'jobs' / 'auto_label'
@@ -701,7 +945,14 @@ def leak_env(
     wrapper.client = raw
     monkeypatch.setattr(app_state, '_opensearch_client', wrapper)
 
-    env = LeakEnv(app=None, records=records, accesses=accesses, transport=fake, own_dirs=own_dirs)
+    env = LeakEnv(
+        app=None,
+        records=records,
+        accesses=accesses,
+        transport=fake,
+        own_dirs=own_dirs,
+        root=tmp_path,
+    )
     monkeypatch.setattr(event_hub, '_HUB', None)
     hub = event_hub.get_event_hub()
     real_dispatch = hub._dispatch
@@ -715,8 +966,23 @@ def leak_env(
     def _no_network(*_a: Any, **_k: Any) -> Any:
         raise httpx.ConnectError('network disabled in the leak test')
 
-    monkeypatch.setattr(httpx.AsyncHTTPTransport, 'handle_async_request', _no_network)
+    async def _only_the_fake_vlm(_self: Any, request: httpx.Request) -> httpx.Response:
+        if request.url.host == _FAKE_VLM_HOST:
+            return _fake_vlm_reply(request)
+        return _no_network()
+
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, 'handle_async_request', _only_the_fake_vlm)
     monkeypatch.setattr(httpx.HTTPTransport, 'handle_request', _no_network)
+    # Every VLM route talks to the in-process fake VLM (a real
+    # OpenAI-shaped reply), so the labeling/verify routes really write.
+    from src.routers.curation import vlm as vlm_router
+    from src.services.labeling.vlm_labeler import VlmLabeler
+
+    defaults = VlmLabeler.__init__.__defaults__ or ()
+    monkeypatch.setattr(
+        VlmLabeler.__init__, '__defaults__', (f'http://{_FAKE_VLM_HOST}/v1', *defaults[1:])
+    )
+    monkeypatch.setitem(vlm_router._get_vlm_labeler.__dict__, '_insts', {})
 
     def _no_subprocess(*_a: Any, **_k: Any) -> Any:
         raise OSError('subprocesses disabled in the leak test')
@@ -739,15 +1005,26 @@ def leak_env(
         def __getattr__(self, name: str) -> Any:
             raise ConnectionError(f'triton disabled in the leak test ({name})')
 
+    import src.main as main_module
     from src.main import app
 
     env.app = app
     app.dependency_overrides[get_async_triton] = lambda: _DeadTriton()
+    # Ingest runs end to end: a fake detector pool and PE encoder at the
+    # service boundary (the same fakes the ingest integration tests use).
+    monkeypatch.setattr(main_module, 'get_async_triton_pool', lambda: FakeTritonPool())
+    had_encoder = hasattr(app.state, 'pe_encoder')
+    previous_encoder = getattr(app.state, 'pe_encoder', None)
+    app.state.pe_encoder = _LeakPEEncoder()
     try:
         yield env
     finally:
         app.dependency_overrides.pop(get_async_triton, None)
         registry_mod.set_project_registry(None)
+        if had_encoder:
+            app.state.pe_encoder = previous_encoder
+        else:
+            del app.state.pe_encoder
 
 
 # --- The sweep ---------------------------------------------------------------
@@ -775,8 +1052,10 @@ def _scoped_routes(app: Any) -> list[tuple[str, str]]:
     return out
 
 
-def _fill(path: str, slug: str) -> str:
+def _fill(path: str, slug: str, key: tuple[str, str] | None = None) -> str:
     params = route_params(slug)
+    if key in CROP_FOR:
+        params['crop_id'] = f'{slug}-{CROP_FOR[key]}'
 
     def _sub(match: re.Match[str]) -> str:
         name = match.group(1)
@@ -818,11 +1097,21 @@ def _dir_digest(dirs: list[Path]) -> dict[str, str]:
     return digest
 
 
+Shape = tuple[str, str, str]  # (index role, HTTP verb, OpenSearch action)
+
+
+def _shape(role_of: dict[str, str], verb: str, os_url: str, index: str) -> Shape:
+    parts = [p for p in os_url.split('?', 1)[0].split('/') if p]
+    action = next((p for p in parts if p.startswith('_')), '<index>')
+    return role_of.get(index, 'foreign'), verb, action
+
+
 def _sweep(
-    env: LeakEnv, slug: str
-) -> tuple[list[str], set[tuple[str, str]], dict[tuple[str, str], frozenset[str]]]:
-    """Call every scoped route as ``slug``. Returns (leaks, routes that
-    wrote, the index roles each route reached)."""
+    env: LeakEnv, slug: str, only: Any = None
+) -> tuple[list[str], set[tuple[str, str]], dict[tuple[str, str], collections.Counter[Shape]]]:
+    """Call every scoped route (or those ``only`` accepts) as ``slug``.
+    Returns (leaks, routes that wrote, the OpenSearch request shapes each
+    route issued, counted per index role)."""
     app, records = env.app, env.records
     own_indexes = set(records[slug].resources.indexes.values())
     foreign_indexes = {
@@ -833,12 +1122,11 @@ def _sweep(
     }
     foreign_markers = [m for other in SLUGS if other != slug for m in _markers(other)]
     bodies = route_bodies(slug)
-    own_dir_list = env.own_dirs[slug]
 
     role_of = {name: role.value for role, name in records[slug].resources.indexes.items()}
     leaks: list[str] = []
     wrote: set[tuple[str, str]] = set()
-    roles: dict[tuple[str, str], frozenset[str]] = {}
+    roles: dict[tuple[str, str], collections.Counter[Shape]] = {}
     client = TestClient(app, raise_server_exceptions=False)
     # Reads first, against the seeded state; then every write.
     ordered = sorted(_scoped_routes(app), key=lambda route: route[0] != 'GET')
@@ -846,21 +1134,27 @@ def _sweep(
         if template in STREAMING_ROUTES:
             continue
         key = (method, template[len(SCOPED) :])
+        if only is not None and not only(key):
+            continue
         deferred = key in P2_DEFERRED
-        url = _fill(template, slug)
+        url = _fill(template, slug, key)
         before_access, before_write, before_events = (
             len(env.accesses),
             len(env.transport.writes),
             len(env.events),
         )
-        own_before = _dir_digest(own_dir_list)
+        if key in PREPARE:
+            PREPARE[key](env, slug)
+        tree_before = _dir_digest([env.root]) if method != 'GET' else {}
         kwargs = bodies.get(key, {} if method in ('GET', 'DELETE') else {'json': {}})
         response = client.request(method, url, **kwargs)
         route_accesses = env.accesses[before_access:]
         route_writes = env.transport.writes[before_write:]
         route_events = env.events[before_events:]
         tag = f'[{slug}] {method} {key[1]}'
-        roles[key] = frozenset(role_of.get(index, 'foreign') for *_x, index in route_accesses)
+        roles[key] = collections.Counter(
+            _shape(role_of, verb, os_url, index) for _b, verb, os_url, index in route_accesses
+        )
 
         for bound, _verb, os_url, index in route_accesses:
             if index == '*' or index in foreign_indexes:
@@ -877,7 +1171,7 @@ def _sweep(
         )
 
         body = response.text
-        if not deferred:
+        if not deferred and key not in P2_SHARED_TRAIN_JOBS:
             leaks.extend(f'{tag}: response carries {m!r}' for m in foreign_markers if m in body)
         if response.headers.get('content-type', '').startswith('application/json'):
             leaks.extend(
@@ -890,9 +1184,11 @@ def _sweep(
         if method != 'GET':
             if response.status_code == 422 and key not in NO_WRITE:
                 leaks.append(f'{tag}: unmapped body (422 {body[:200]})')
+            # A write is an OpenSearch write to its own index or any file it
+            # created/changed (another project's dirs are checked apart).
             if (
                 any(w in own_indexes for w in route_writes)
-                or _dir_digest(own_dir_list) != own_before
+                or _dir_digest([env.root]) != tree_before
             ):
                 wrote.add(key)
             elif key not in NO_WRITE and not deferred:
@@ -900,6 +1196,25 @@ def _sweep(
                     f'{tag}: mutating route wrote nothing ({response.status_code} {body[:200]})'
                 )
     return leaks, wrote, roles
+
+
+def _cache_parity(
+    first: str,
+    second: str,
+    shapes_first: dict[tuple[str, str], collections.Counter[Shape]],
+    shapes_second: dict[tuple[str, str], collections.Counter[Shape]],
+) -> list[str]:
+    """A process cache keyed without the project answers the second project
+    from the first one's data, so the route skips (some of) its own
+    queries. Each route is the first call of its kind for each project, so
+    the same route must issue the same requests, per index role and
+    OpenSearch action, as either project."""
+    return [
+        f'[{second}] {m} {p}: issued {sorted(shapes_second.get((m, p), {}).items())}, '
+        f'but as {first} {sorted(shapes_first[(m, p)].items())} (unkeyed cache?)'
+        for (m, p) in shapes_first
+        if shapes_first[(m, p)] != shapes_second.get((m, p)) and (m, p) not in P2_DEFERRED
+    ]
 
 
 @pytest.mark.parametrize(('first', 'second'), [('alpha', 'beta'), ('beta', 'alpha')])
@@ -912,21 +1227,15 @@ def test_every_scoped_route_stays_inside_the_bound_project(
     streaming_unmapped = sorted({p for _m, p in routes if _is_streaming(app, p)} - STREAMING_ROUTES)
     assert not streaming_unmapped, f'unmapped streaming route(s): {streaming_unmapped}'
     mutating = {(m, p[len(SCOPED) :]) for m, p in routes if m != 'GET'}
-    stale = sorted((set(NO_WRITE) | set(route_bodies('x'))) - mutating)
-    assert not stale, f'NO_WRITE/route_bodies entries for routes that no longer exist: {stale}'
+    every = {(m, p[len(SCOPED) :]) for m, p in routes}
+    mapped = set(NO_WRITE) | set(route_bodies('x')) | set(CROP_FOR) | set(PREPARE)
+    stale = sorted((mapped - mutating) | ((set(P2_DEFERRED) | set(P2_SHARED_TRAIN_JOBS)) - every))
+    assert not stale, f'entries for routes that no longer exist: {stale}'
 
     leaks_first, _, roles_first = _sweep(leak_env, first)
     first_dirs = _dir_digest(leak_env.own_dirs[first])
     leaks_second, wrote, roles_second = _sweep(leak_env, second)
-    # A process cache keyed without the project answers the second project
-    # from the first one's data, so the route skips its own query: the
-    # same route, as the other project, must reach the same index roles.
-    skipped = [
-        f'[{second}] {m} {p}: reached {sorted(roles_second[(m, p)])}, '
-        f'but as {first} reached {sorted(roles_first[(m, p)])} (unkeyed cache?)'
-        for (m, p) in roles_first
-        if roles_first[(m, p)] != roles_second.get((m, p)) and (m, p) not in P2_DEFERRED
-    ]
+    skipped = _cache_parity(first, second, roles_first, roles_second)
     changed = sorted(
         path
         for path, digest in _dir_digest(leak_env.own_dirs[first]).items()
@@ -941,7 +1250,6 @@ def test_every_scoped_route_stays_inside_the_bound_project(
     assert expected_writers <= wrote, f'routes that never wrote: {sorted(expected_writers - wrote)}'
     stale_excuses = sorted(set(NO_WRITE) & wrote)
     assert not stale_excuses, f'these routes do write; drop them from NO_WRITE: {stale_excuses}'
-    assert len(wrote) >= 20, f'only {len(wrote)} mutating routes wrote to {second}'
 
 
 def test_a_misrouted_mget_is_refused_before_it_reaches_opensearch(
@@ -991,3 +1299,42 @@ def test_publish_cannot_redirect_an_event(leak_env: LeakEnv, injected: str | Non
     )
     assert response.status_code == 422, response.text
     assert all(event.get('project') == 'beta' for event in leak_env.events[before:])
+
+
+@pytest.mark.parametrize('event_type', ['project.created', 'combine.finished'])
+def test_publish_refuses_global_event_types(leak_env: LeakEnv, event_type: str) -> None:
+    """Re-review R11: a client cannot spoof a lifecycle/combine event, not
+    even on its own project's stream."""
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    before = len(leak_env.events)
+    response = client.post(f'{API}/projects/beta/events/publish', json={'type': event_type})
+    assert response.status_code == 422, response.text
+    assert leak_env.events[before:] == []
+
+
+def test_a_planted_unkeyed_cache_behind_a_shared_helper_is_caught(
+    leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Re-review R3: an unkeyed cache around the review-sort coverage helper
+    (``strategy_registry.field_coverage``) serves the second project the
+    first one's coverage while the route still searches its own items
+    index. The per-role request parity must catch it."""
+    from src.services.curation import strategy_registry
+
+    planted: dict[str, Any] = {}
+    real = strategy_registry.field_coverage
+
+    async def _unkeyed(opensearch: Any, fields: frozenset[str]) -> Any:
+        if 'hit' not in planted:
+            planted['hit'] = await real(opensearch, fields)
+        return planted['hit']
+
+    monkeypatch.setattr(strategy_registry, 'field_coverage', _unkeyed)
+
+    def only(key: tuple[str, str]) -> bool:
+        return key[0] == 'GET' and key[1].startswith('/review/')
+
+    _, _, shapes_alpha = _sweep(leak_env, 'alpha', only)
+    _, _, shapes_beta = _sweep(leak_env, 'beta', only)
+    caught = _cache_parity('alpha', 'beta', shapes_alpha, shapes_beta)
+    assert any('/review/' in line for line in caught), 'the planted unkeyed cache went unnoticed'

@@ -181,7 +181,7 @@ def test_ingest_walker_default_api_base_follows_prefix(monkeypatch: pytest.Monke
     mod = importlib.import_module('scripts.curation.ingest_walker')
     monkeypatch.setattr(mod, 'get_curation_config', lambda: _Cfg())
     monkeypatch.setattr('sys.argv', ['ingest_walker', '--root', '/tmp'])
-    monkeypatch.delenv('OP_PROJECT', raising=False)
+    monkeypatch.delenv('OP_CURATION_PROJECT', raising=False)
     seen: dict[str, Any] = {}
 
     def _fake_run(**kwargs: Any) -> None:

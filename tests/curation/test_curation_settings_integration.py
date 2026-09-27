@@ -29,15 +29,6 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(autouse=True)
-def _reset_field_coverage_cache() -> Iterator[None]:
-    from src.services.curation.strategy_registry import _reset_field_coverage_cache
-
-    _reset_field_coverage_cache()
-    yield
-    _reset_field_coverage_cache()
-
-
-@pytest.fixture(autouse=True)
 def _reset_settings_cache() -> Iterator[None]:
     """See test_curation_settings_router.py's fixture of the same name."""
     from src.clients import curation_opensearch

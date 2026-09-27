@@ -79,11 +79,9 @@ def test_model_prefix_matches_resources_for_new_convention() -> None:
     beta = resources_for_new('beta', base_curation_config())
     assert beta.model_prefix == 'beta__'
     default_prefix = resources_for_new('default', base_curation_config()).model_prefix
-    # default's own resources come from resources_for_default, not
-    # resources_for_new -- but resources_for_new('default', ...) would
-    # still compute 'default__', proving the empty default_prefix on
-    # the real default record comes specifically from
-    # resources_for_default, not from the slug happening to be 'default'.
+    # default is an ordinary project (P1: no special-casing) -- its
+    # resources come from resources_for_new like any other slug's, so it
+    # gets the same 'default__' convention.
     assert default_prefix == 'default__'
 
 

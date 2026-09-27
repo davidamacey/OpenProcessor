@@ -538,18 +538,25 @@ def publish_region_verified(
     )
 
 
+_GLOBAL_EVENT_RESERVED_KEYS = frozenset({'type', 'topic', 'project'})
+
+
 def publish_global_event(event_type: str, *, target: str | None = None, **fields: Any) -> None:
     """Publish a ``project: null`` event onto the global stream, whatever
     project (if any) is bound. Only the global families in
-    :data:`GLOBAL_EVENT_PREFIXES` may go there. ``target`` names the
-    project a ``combine.*`` / ``project.*`` event is about; it is on the
-    wire as ``null`` when not given, so a client can always read it."""
+    :data:`GLOBAL_EVENT_PREFIXES` may go there, and ``fields`` can never
+    override the envelope (``type``/``topic``/``project``/``target``).
+    ``target`` names the project a ``combine.*`` / ``project.*`` event is
+    about; it is on the wire as ``null`` when not given."""
     if not event_type.startswith(GLOBAL_EVENT_PREFIXES):
         raise ValueError(f'{event_type!r} is not a global event type')
+    reserved = _GLOBAL_EVENT_RESERVED_KEYS & fields.keys()
+    if reserved:
+        raise ValueError(f'fields may not set the event envelope: {sorted(reserved)}')
     event: dict[str, Any] = {
+        **fields,
         'type': event_type,
         'topic': GLOBAL_EVENT_TOPIC,
-        **fields,
         'project': None,
         'target': target,
     }
