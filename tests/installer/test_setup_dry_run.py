@@ -9,13 +9,22 @@ from __future__ import annotations
 
 import shutil
 import stat
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-from installer_harness import GPU_HOST, PROJECT, RELEASE, build_fake_release, fake_digest
+import pytest
+from installer_harness import (
+    GPU_HOST,
+    PROJECT,
+    RELEASE,
+    build_fake_release,
+    fake_digest,
+    image_key_refs,
+)
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from installer_harness import Shimmed
 
 
@@ -253,13 +262,34 @@ def test_port_base_moves_the_whole_block(shimmed: Shimmed) -> None:
 # --- .env content ------------------------------------------------------------------
 
 
+def _meminfo(shimmed: Shimmed, ram_gib: int) -> str:
+    f = shimmed.root / f'meminfo_{ram_gib}'
+    f.write_text(f'MemTotal:       {ram_gib * 1024 * 1024} kB\nMemFree:  1 kB\n')
+    return str(f)
+
+
 def test_opensearch_heap_is_ram_over_8_clamped(shimmed: Shimmed) -> None:
-    result = configure(shimmed)
+    result = configure(shimmed, OP_MEMINFO_PATH=_meminfo(shimmed, 32))
     assert result.returncode == 0, result.stderr
-    meminfo = Path('/proc/meminfo').read_text().splitlines()
-    mem_kib = next(int(ln.split()[1]) for ln in meminfo if ln.startswith('MemTotal:'))
-    expected = min(8, max(1, mem_kib // 1024 // 1024 // 8))
-    assert env_file(shimmed)['OPENSEARCH_HEAP'] == f'{expected}g'
+    assert env_file(shimmed)['OPENSEARCH_HEAP'] == '4g'
+
+
+def test_summary_prints_heap_and_soft_shard_budget(shimmed: Shimmed) -> None:
+    result = configure(shimmed, OP_MEMINFO_PATH=_meminfo(shimmed, 16))
+    assert result.returncode == 0, result.stderr
+    assert 'OpenSearch  : heap 2g, soft shard budget 40 (20 shards per heap GB)' in result.stdout
+
+
+def test_summary_budget_uses_the_user_heap_and_shard_knob(shimmed: Shimmed) -> None:
+    mem = _meminfo(shimmed, 16)
+    assert configure(shimmed, OP_MEMINFO_PATH=mem).returncode == 0
+    env_path = shimmed.root / 'inst' / '.env'
+    text = env_path.read_text().replace('OPENSEARCH_HEAP=2g', 'OPENSEARCH_HEAP=3g', 1)
+    env_path.write_text(text + 'OP_SHARDS_PER_HEAP_GB=25\n')
+    result = configure(shimmed, OP_MEMINFO_PATH=mem)
+    assert result.returncode == 0, result.stderr
+    assert env_file(shimmed)['OPENSEARCH_HEAP'] == '3g'
+    assert 'OpenSearch  : heap 3g, soft shard budget 75 (25 shards per heap GB)' in result.stdout
 
 
 def test_rerun_is_idempotent_and_keeps_user_values(shimmed: Shimmed) -> None:
@@ -546,6 +576,64 @@ def test_cropwright_compose_that_ignores_the_bind_is_refused(shimmed: Shimmed) -
     assert 'must honour CROPWRIGHT_BIND_ADDRESS' in result.stderr
 
 
+def test_summary_security_line_excepts_a_lan_cropwright(shimmed: Shimmed) -> None:
+    # Review s1: "every port is bound to 127.0.0.1" contradicted the LAN line.
+    result = configure(shimmed, tiers='cropwright')
+    assert result.returncode == 0, result.stderr
+    assert 'every port is bound to' not in result.stdout
+    assert (
+        'Security: every OpenProcessor API port is bound to 127.0.0.1; '
+        'Cropwright is the exception (your LAN, above).'
+    ) in result.stdout
+
+
+def test_summary_security_line_is_plain_when_everything_is_local(shimmed: Shimmed) -> None:
+    result = configure(shimmed, '--local-only', tiers='cropwright')
+    assert result.returncode == 0, result.stderr
+    assert 'Security: every port is bound to 127.0.0.1 only.' in result.stdout
+    assert 'Cropwright is the exception' not in result.stdout
+
+
+def test_specific_bind_address_also_applies_to_cropwright(shimmed: Shimmed) -> None:
+    # Review s2: --bind 10.10.10.20 must not leave Cropwright on 0.0.0.0.
+    result = configure(
+        shimmed, '--bind', '10.10.10.20', tiers='cropwright', OP_ALLOW_PUBLIC_BIND='1'
+    )
+    assert result.returncode == 0, result.stderr
+    assert 'CROPWRIGHT_BIND_ADDRESS=10.10.10.20' in _cw_env(shimmed)
+    assert 'Cropwright on your LAN: http://10.10.10.20:' in result.stdout
+    assert 'reachable from your LAN and has NO login' in result.stderr
+
+
+def test_rerun_without_bind_keeps_a_specific_cropwright_bind(shimmed: Shimmed) -> None:
+    first = configure(
+        shimmed, '--bind', '10.10.10.20', tiers='cropwright', OP_ALLOW_PUBLIC_BIND='1'
+    )
+    assert first.returncode == 0, first.stderr
+    again = configure(shimmed, tiers='cropwright')
+    assert again.returncode == 0, again.stderr
+    assert 'CROPWRIGHT_BIND_ADDRESS=10.10.10.20' in _cw_env(shimmed)
+
+
+def test_local_only_wins_over_a_specific_bind_for_cropwright(shimmed: Shimmed) -> None:
+    result = configure(
+        shimmed,
+        '--bind',
+        '10.10.10.20',
+        '--local-only',
+        tiers='cropwright',
+        OP_ALLOW_PUBLIC_BIND='1',
+    )
+    assert result.returncode == 0, result.stderr
+    assert 'CROPWRIGHT_BIND_ADDRESS=127.0.0.1' in _cw_env(shimmed)
+
+
+def test_wildcard_bind_keeps_cropwright_on_every_interface(shimmed: Shimmed) -> None:
+    result = configure(shimmed, '--bind', '0.0.0.0', tiers='cropwright', OP_ALLOW_PUBLIC_BIND='1')
+    assert result.returncode == 0, result.stderr
+    assert 'CROPWRIGHT_BIND_ADDRESS=0.0.0.0' in _cw_env(shimmed)
+
+
 def test_cropwright_file_with_wrong_checksum_is_refused(shimmed: Shimmed, tmp_path: Path) -> None:
     release = tmp_path / 'rel'
     shutil.copytree(shimmed.release, release)
@@ -612,6 +700,43 @@ def test_images_lock_with_latest_is_rejected(shimmed: Shimmed, tmp_path: Path) -
     result = dry(shimmed)
     assert result.returncode == 7
     assert 'images.lock' in result.stderr
+
+
+def _lock_with(key: str, ref: str) -> str:
+    lines = []
+    for k, r in image_key_refs():
+        lines.append(f'{k}={ref if k == key else r}@{fake_digest(k)}')
+    return '\n'.join(lines) + '\n'
+
+
+@pytest.mark.parametrize(
+    ('key', 'ref', 'expected'),
+    [
+        ('opensearch', 'evil/opensearch:3.6.0', 'opensearchproject/opensearch'),
+        ('api', 'davidamacey/openprocessor-triton', 'davidamacey/openprocessor'),
+        ('grafana', 'grafana/loki:3.6.12', 'grafana/grafana'),
+    ],
+)
+def test_lock_line_with_the_wrong_repo_for_its_key_is_refused(
+    shimmed: Shimmed, tmp_path: Path, key: str, ref: str, expected: str
+) -> None:
+    # Review s4: a well-formed, checksum-covered lock line whose repo is not
+    # the one scripts/lib/image_keys.sh names for that key.
+    shimmed.release = build_fake_release(tmp_path / 'r', lock_override=_lock_with(key, ref))
+    result = dry(shimmed)
+    assert result.returncode == 7, result.stderr[-2000:]
+    assert f"images.lock '{key}' names {ref.split(':')[0]}, not {expected}" in result.stderr
+    assert 'integrity check' in result.stderr
+    assert shimmed.mutating_docker_calls() == []
+    assert [ln for ln in shimmed.log_lines('docker') if ' pull ' in f' {ln} '] == []
+
+
+def test_lock_repo_check_accepts_a_tagged_build_image(shimmed: Shimmed, tmp_path: Path) -> None:
+    shimmed.release = build_fake_release(
+        tmp_path / 'r', lock_override=_lock_with('api', 'davidamacey/openprocessor:v9.9.9')
+    )
+    result = dry(shimmed)
+    assert result.returncode == 0, result.stderr[-2000:]
 
 
 def test_committed_placeholder_lock_is_refused_not_installed(
