@@ -47,18 +47,18 @@ async def bootstrap_default_project(client: Any) -> ProjectRecord:
     record (a later env change must not remap a live project), and never
     touches any data index."""
     from src.services.projects.guard import bind_registry_admin
+    from src.services.projects.registry import doc_to_record
 
     doc_id = f'project:{DEFAULT_SLUG}'
     with bind_registry_admin():
         await ensure_projects_index(client)
-        try:
-            existing = await client.get(index=projects_index(), id=doc_id)
-            if existing.get('found', True):
-                from src.services.projects.registry import doc_to_record
-
-                return doc_to_record(existing['_source'])
-        except Exception:  # nosec B110 - the client raises on a missing doc; that's first-boot, not an error
-            logger.debug('no existing default project doc; bootstrapping one')
+        # Only a definite "not found" means first boot. Any other failure
+        # (a 503 right after the cluster starts, a timeout, a malformed
+        # doc) propagates, so startup retries later instead of resetting
+        # an existing record (e.g. an archived ``default``).
+        existing = await _get_or_none(client, doc_id)
+        if existing is not None:
+            return doc_to_record(existing)
 
         record = new_project_record(
             DEFAULT_SLUG,
@@ -67,10 +67,43 @@ async def bootstrap_default_project(client: Any) -> ProjectRecord:
             description='The project every fresh install starts with.',
             now=datetime.now(UTC).isoformat(),
         )
-        await client.index(index=projects_index(), id=doc_id, body=record_to_doc(record))
+        try:
+            await client.index(
+                index=projects_index(), id=doc_id, body=record_to_doc(record), op_type='create'
+            )
+        except Exception as exc:
+            if not _is_conflict(exc):
+                raise
+            # Another worker created it first: its record wins.
+            winner = await _get_or_none(client, doc_id)
+            if winner is None:
+                raise
+            return doc_to_record(winner)
         await bump_revision(client)
     logger.info('bootstrapped default project record')
     return record
+
+
+def _is_not_found(exc: BaseException) -> bool:
+    return getattr(exc, 'status_code', None) == 404 or 'NotFound' in type(exc).__name__
+
+
+def _is_conflict(exc: BaseException) -> bool:
+    return getattr(exc, 'status_code', None) == 409 or 'Conflict' in type(exc).__name__
+
+
+async def _get_or_none(client: Any, doc_id: str) -> dict[str, Any] | None:
+    """The stored doc's ``_source``, or ``None`` only when OpenSearch says
+    the doc does not exist. Every other failure is raised."""
+    try:
+        existing = await client.get(index=projects_index(), id=doc_id)
+    except Exception as exc:
+        if _is_not_found(exc):
+            return None
+        raise
+    if not existing.get('found', True):
+        return None
+    return existing['_source']
 
 
 # ``dynamic: false``: the registry stores whole records, but only these
@@ -111,7 +144,7 @@ async def bump_revision(client: Any) -> int:
         try:
             current = await client.get(index=projects_index(), id=REVISION_DOC_ID)
         except Exception as exc:
-            if getattr(exc, 'status_code', None) != 404 and 'NotFound' not in type(exc).__name__:
+            if not _is_not_found(exc):
                 raise
             current = {'found': False}
         try:
@@ -133,7 +166,7 @@ async def bump_revision(client: Any) -> int:
                     op_type='create',
                 )
         except Exception as exc:
-            if getattr(exc, 'status_code', None) == 409 or 'Conflict' in type(exc).__name__:
+            if _is_conflict(exc):
                 continue
             raise
         return revision
