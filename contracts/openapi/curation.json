@@ -12763,7 +12763,7 @@
     },
     "/curation/projects/{project}/events": {
       "get": {
-        "description": "SSE stream of advisory crop-state events for the bound project,\nplus every global (``project: null``) event.\n\nThe connection stays open until the client disconnects. A heartbeat\ncomment line is sent every 15s so reverse-proxies don't kill the\nsocket. Subscribers each get their own bounded queue (capped at\n1000 events; oldest drops on overflow — events are advisory).",
+        "description": "SSE stream of advisory crop-state events for the bound project\nonly (global ``project: null`` events go to ``{api}/events``).\n\nThe connection stays open until the client disconnects. A heartbeat\ncomment line is sent every 15s so reverse-proxies don't kill the\nsocket. Subscribers each get their own bounded queue (capped at\n1000 events; oldest drops on overflow — events are advisory).",
         "operationId": "curation_events_curation_projects__project__events_get",
         "parameters": [
           {
@@ -12897,7 +12897,7 @@
     },
     "/curation/projects/{project}/events/stats": {
       "get": {
-        "description": "Ops counters: subscribers, events_published, events_dropped, plus\nthe active ``bus`` (``file``/``process``) and its ``log_path``.",
+        "description": "Ops counters for the bound project's stream: its subscribers and\npublishes, plus the hub's ``events_dropped``, active ``bus``\n(``file``/``process``) and ``log_path``.",
         "operationId": "curation_events_stats_curation_projects__project__events_stats_get",
         "parameters": [
           {
