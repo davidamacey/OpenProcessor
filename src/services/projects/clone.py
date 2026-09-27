@@ -105,9 +105,12 @@ async def _validate_clone(
 
 async def _apply_clone(
     client: Any, *, target_record: ProjectRecord, source: ProjectRecord, axes: list[str]
-) -> None:
+) -> list[dict[str, Any]]:
     """Copy the validated axes. Reads the source under a read-only bind so
-    the guard rejects any accidental write to it."""
+    the guard rejects any accidental write to it. Returns the ``keymap``
+    axis's dropped-action conflicts (``[]`` for every other axis/outcome)
+    -- a structured report, never a silent unbind."""
+    conflicts: list[dict[str, Any]] = []
     from src.clients.curation_opensearch import get_curation_settings, update_curation_settings
 
     if 'settings_defaults' in axes:
@@ -181,6 +184,15 @@ async def _apply_clone(
             overrides_to_write = {
                 aid: combos for aid, combos in overrides_to_write.items() if aid not in dropped
             }
+            conflicts = [
+                {
+                    'action_id': c.action_id,
+                    'combo': c.combo,
+                    'class_id': c.class_id,
+                    'class_name': c.class_name,
+                }
+                for c in class_conflicts
+            ]
             if class_conflicts or not report.ok:
                 logger.warning(
                     'keymap_clone_conflicts_dropped',
@@ -204,6 +216,8 @@ async def _apply_clone(
 
     if 'activations' in axes:
         await _clone_activations(client, target_record=target_record, source=source)
+
+    return conflicts
 
 
 async def _clone_activations(
@@ -284,13 +298,19 @@ async def clone_settings(
     target_record: ProjectRecord,
     from_slug: str,
     axes: list[str] | None,
-) -> None:
+) -> list[dict[str, Any]]:
     """§4 ``clone_settings`` into a project being created: validate every
-    refusal first, then copy."""
+    refusal first, then copy. Returns the ``keymap`` axis's dropped-action
+    conflicts (a structured report, never a silent unbind) -- ``[]`` for
+    every other axis/outcome. ``create_project`` (M7) logs these today
+    rather than threading them through its own return shape, which every
+    other project-lifecycle test call site also unpacks."""
     source, resolved_axes = await _validate_clone(
         client, target_record=target_record, from_slug=from_slug, axes=axes
     )
-    await _apply_clone(client, target_record=target_record, source=source, axes=resolved_axes)
+    return await _apply_clone(
+        client, target_record=target_record, source=source, axes=resolved_axes
+    )
 
 
 async def clone_settings_into(
@@ -300,7 +320,7 @@ async def clone_settings_into(
     from_slug: str,
     axes: list[str] | None,
     expected_revision: int,
-) -> ProjectRecord:
+) -> tuple[ProjectRecord, list[dict[str, Any]]]:
     """§4 ``POST /projects/{project}/clone_settings`` into an existing
     ``active`` project. Every check (status, revision, axes, source,
     target emptiness) runs before anything is written, and the revision
@@ -321,11 +341,11 @@ async def clone_settings_into(
     source, resolved_axes = await _validate_clone(
         client, target_record=record, from_slug=from_slug, axes=axes
     )
-    await _apply_clone(client, target_record=record, source=source, axes=resolved_axes)
+    conflicts = await _apply_clone(client, target_record=record, source=source, axes=resolved_axes)
     updated = replace(record, revision=record.revision + 1, updated_at=_now())
     await write_record(client, updated, if_seq_no=seq, if_primary_term=term)
     await get_project_registry().ensure_fresh()
-    return updated
+    return updated, conflicts
 
 
 __all__ = ['clone_settings', 'clone_settings_into']

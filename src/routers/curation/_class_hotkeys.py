@@ -64,9 +64,12 @@ def validated_hotkey(
     """Normalize a requested hotkey; ``None`` = clear. 400 not one char,
     422 ``hotkey_reserved`` (a keymap action's key, CW-K §3.3), 409
     ``hotkey_taken`` (bound to another active class). ``keymap_overrides``
-    is the bound project's *stored* keymap overrides -- omitted only by
-    callers with no OpenSearch client in scope, which fall back to the
-    default keymap's reserved set."""
+    is the bound project's *stored* keymap overrides -- every route that
+    can actually write a hotkey (``POST/PUT /classes``) fetches and
+    passes it; ``None`` falls back to the default keymap's reserved set,
+    which only ever matters for the new-class-proposal resolve route
+    (``review_resolve.py``), whose request has no ``hotkey_letter`` field
+    at all today, so this branch never runs for it."""
     from src.services.curation.keymap import reserved_hotkeys
 
     stripped = raw.strip()

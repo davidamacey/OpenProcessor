@@ -213,6 +213,7 @@ def create_registry_class(
     group: str = 'unknown',
     notes: str = '',
     hotkey_letter: str | None = None,
+    keymap_overrides: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
     """Shared class-creation path: ``POST /classes`` and the new-class
     proposal resolve route (``POST /review/new_class_proposals/resolve``)
@@ -220,13 +221,18 @@ def create_registry_class(
     that adds a class and writes its optional hotkey.
 
     ``hotkey_letter`` (if given) is validated the same way as on
-    ``PUT /classes/{id}`` *before* anything is written. Raises
-    ``ClassRegistryError`` on a duplicate (non-deprecated) name — the
-    caller maps that to ``409``.
+    ``PUT /classes/{id}`` *before* anything is written, against the
+    bound project's *stored* keymap overrides (``keymap_overrides``) --
+    omitted only by the new-class-proposal resolve route, which has no
+    ``hotkey_letter`` field on its request at all today, so this branch
+    never runs there. Raises ``ClassRegistryError`` on a duplicate
+    (non-deprecated) name — the caller maps that to ``409``.
     """
     letter = None
     if hotkey_letter is not None:
-        letter = validated_hotkey(hotkey_letter, class_id=None, registry_obj=reg.load())
+        letter = validated_hotkey(
+            hotkey_letter, class_id=None, registry_obj=reg.load(), keymap_overrides=keymap_overrides
+        )
     new_id = reg.add_class(name, group=group, notes=notes)
     if letter is not None:
         registry_obj = reg.load()
@@ -243,11 +249,14 @@ def create_registry_class(
 
 
 @router.post('/classes', status_code=status.HTTP_201_CREATED)
-async def create_class(payload: ClassCreateRequest) -> dict[str, Any]:
+async def create_class(payload: ClassCreateRequest, opensearch: OpenSearchDep) -> dict[str, Any]:
     """Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422);
     an optional ``hotkey_letter`` is validated like on update before
-    anything is written."""
+    anything is written, against the bound project's stored keymap."""
     reg = get_class_registry()
+    keymap_overrides = (
+        await project_keymap_overrides(opensearch) if payload.hotkey_letter is not None else None
+    )
     try:
         return create_registry_class(
             reg,
@@ -255,6 +264,7 @@ async def create_class(payload: ClassCreateRequest) -> dict[str, Any]:
             group=payload.group,
             notes=payload.notes,
             hotkey_letter=payload.hotkey_letter,
+            keymap_overrides=keymap_overrides,
         )
     except ClassRegistryError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

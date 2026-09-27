@@ -85,6 +85,22 @@ def validate_keymap(
                 )
             )
             continue
+        # An action whose default already includes a locked key keeps
+        # that key forever (owner rule): it may still be rebound/extended
+        # otherwise, but dropping its own locked key or another action
+        # claiming that key is always an error.
+        own_locked = registry.locked_action_default(action)
+        if own_locked and not own_locked.issubset(set(combos)):
+            errors.append(
+                ValidationIssue(
+                    code='keymap_key_locked',
+                    severity='error',
+                    field=field,
+                    message=(f"'{action_id}' cannot lose its locked key(s) {sorted(own_locked)}."),
+                    detail={'combo': sorted(own_locked)},
+                )
+            )
+
         # 3: grammar.
         if len(combos) > registry.grammar.max_combos_per_action:
             errors.append(
@@ -115,7 +131,7 @@ def validate_keymap(
                     )
                 )
                 continue
-            if combo in registry.grammar.locked_keys:
+            if combo in registry.grammar.locked_keys and combo not in own_locked:
                 errors.append(
                     ValidationIssue(
                         code='keymap_key_locked',

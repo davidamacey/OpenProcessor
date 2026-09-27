@@ -5769,6 +5769,35 @@
         "title": "KeymapActionWire",
         "type": "object"
       },
+      "KeymapCloneConflictWire": {
+        "description": "W2b: one action the ``keymap`` clone axis dropped from the copy\nbecause its combo collides with the target's class hotkey -- a\nreport, never a silent unbind (CW-K §0 clause 1).",
+        "properties": {
+          "action_id": {
+            "title": "Action Id",
+            "type": "string"
+          },
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "combo": {
+            "title": "Combo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_id",
+          "combo",
+          "class_id",
+          "class_name"
+        ],
+        "title": "KeymapCloneConflictWire",
+        "type": "object"
+      },
       "KeymapContextWire": {
         "properties": {
           "class_hotkeys_live": {
@@ -7476,6 +7505,13 @@
       "ProjectLifecycleResponse": {
         "description": "Every project lifecycle mutation (create 201, PATCH, archive,\nunarchive, clone_settings; P3) answers this envelope, so the switcher\nadopts the returned summary without a re-read.",
         "properties": {
+          "keymap_clone_conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/KeymapCloneConflictWire"
+            },
+            "title": "Keymap Clone Conflicts",
+            "type": "array"
+          },
           "project": {
             "$ref": "#/components/schemas/ProjectSummary"
           },
@@ -11995,7 +12031,7 @@
         ]
       },
       "post": {
-        "description": "Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422);\nan optional ``hotkey_letter`` is validated like on update before\nanything is written.",
+        "description": "Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422);\nan optional ``hotkey_letter`` is validated like on update before\nanything is written, against the bound project's stored keymap.",
         "operationId": "create_class_curation_projects__project__classes_post",
         "parameters": [
           {

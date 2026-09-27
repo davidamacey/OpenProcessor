@@ -6,10 +6,10 @@
         "`",
         "shift+~"
       ],
-      "description": "Toggle the shortcut panel.",
+      "description": "Show or hide the keyboard-shortcuts overlay.",
       "group": null,
       "id": "global.shortcuts_overlay",
-      "label": "Show keyboard shortcuts",
+      "label": "Toggle this panel",
       "modifiable": true
     },
     {
@@ -17,44 +17,11 @@
       "default": [
         "escape"
       ],
-      "description": "Close the shortcut panel.",
+      "description": "Close the shortcut overlay.",
       "group": "cancel",
       "id": "global.close_overlay",
-      "label": "Close panel",
+      "label": "Close this panel / cancel",
       "modifiable": false
-    },
-    {
-      "context": "global",
-      "default": [
-        "/"
-      ],
-      "description": "Open the class-assignment picker.",
-      "group": null,
-      "id": "global.class_picker",
-      "label": "Open class picker",
-      "modifiable": true
-    },
-    {
-      "context": "review",
-      "default": [
-        "enter"
-      ],
-      "description": "Confirm the current item.",
-      "group": "confirm",
-      "id": "review.confirm",
-      "label": "Confirm",
-      "modifiable": false
-    },
-    {
-      "context": "review",
-      "default": [
-        "z"
-      ],
-      "description": "Undo the last action.",
-      "group": "undo",
-      "id": "review.undo",
-      "label": "Undo",
-      "modifiable": true
     },
     {
       "context": "review",
@@ -70,57 +37,24 @@
     {
       "context": "review",
       "default": [
-        "m"
+        "z"
       ],
-      "description": "Move this item to another project.",
-      "group": "move",
-      "id": "review.move",
-      "label": "Move",
+      "description": "Undo the last action.",
+      "group": "undo",
+      "id": "review.undo",
+      "label": "Undo last",
       "modifiable": true
     },
     {
-      "context": "review",
+      "context": "review.queue",
       "default": [
-        "u"
+        "enter"
       ],
-      "description": "Restore an ignored item.",
-      "group": null,
-      "id": "review.undo_ignore",
-      "label": "Undo ignore",
+      "description": "Confirm the proposed label and advance.",
+      "group": "confirm",
+      "id": "review.queue.confirm",
+      "label": "Confirm proposed & advance (or search classes if blank)",
       "modifiable": true
-    },
-    {
-      "context": "review",
-      "default": [
-        "f"
-      ],
-      "description": "Accept the VLM-proposed label.",
-      "group": null,
-      "id": "review.accept_vlm",
-      "label": "Accept VLM label",
-      "modifiable": true
-    },
-    {
-      "context": "review",
-      "default": [
-        "arrowleft"
-      ],
-      "description": "Go to the previous item.",
-      "group": "prev",
-      "id": "review.prev",
-      "label": "Previous",
-      "modifiable": false
-    },
-    {
-      "context": "review",
-      "default": [
-        "arrowright"
-      ],
-      "description": "Go to the next item.",
-      "group": "next",
-      "id": "review.next",
-      "label": "Next",
-      "modifiable": false
     },
     {
       "context": "review.queue",
@@ -136,23 +70,45 @@
     {
       "context": "review.queue",
       "default": [
-        "a"
+        "/"
       ],
-      "description": "Select every visible item.",
-      "group": "select_all",
-      "id": "review.queue.select_all",
-      "label": "Select all",
+      "description": "Open the class-assignment picker.",
+      "group": null,
+      "id": "review.queue.class_picker",
+      "label": "Search all classes...",
       "modifiable": true
     },
     {
       "context": "review.queue",
       "default": [
-        "e"
+        "arrowleft"
       ],
-      "description": "Exclude this item from training.",
-      "group": null,
-      "id": "review.queue.exclude",
-      "label": "Exclude",
+      "description": "Go to the previous item.",
+      "group": "prev",
+      "id": "review.queue.prev",
+      "label": "Previous item",
+      "modifiable": true
+    },
+    {
+      "context": "review.queue",
+      "default": [
+        "arrowright"
+      ],
+      "description": "Go to the next item.",
+      "group": "next",
+      "id": "review.queue.next",
+      "label": "Next item",
+      "modifiable": true
+    },
+    {
+      "context": "review.region",
+      "default": [
+        "enter"
+      ],
+      "description": "Confirm the region and advance.",
+      "group": "confirm",
+      "id": "review.region.confirm",
+      "label": "Confirm region & advance",
       "modifiable": true
     },
     {
@@ -169,12 +125,46 @@
     {
       "context": "review.region",
       "default": [
+        "f"
+      ],
+      "description": "Mark the region a false positive but keep its box.",
+      "group": null,
+      "id": "review.region.false_positive",
+      "label": "False positive (keep box)",
+      "modifiable": true
+    },
+    {
+      "context": "review.region",
+      "default": [
+        "e"
+      ],
+      "description": "Enter box-edit mode for this region.",
+      "group": null,
+      "id": "review.region.edit_box",
+      "label": "Edit region box",
+      "modifiable": true
+    },
+    {
+      "context": "review.region",
+      "default": [
+        "arrowleft",
         "b"
       ],
       "description": "Step back one region.",
       "group": "prev",
       "id": "review.region.back",
-      "label": "Step back",
+      "label": "Step back to last confirmed region",
+      "modifiable": true
+    },
+    {
+      "context": "review.region",
+      "default": [
+        "arrowright"
+      ],
+      "description": "Go to the next item.",
+      "group": "next",
+      "id": "review.region.next",
+      "label": "Next item",
       "modifiable": true
     },
     {
@@ -185,7 +175,7 @@
       "description": "Set the selected box to accepted.",
       "group": null,
       "id": "review.region.accept_box",
-      "label": "Accept selected box",
+      "label": "Accept selected region box",
       "modifiable": true
     },
     {
@@ -196,7 +186,106 @@
       "description": "Set the selected box to rejected.",
       "group": null,
       "id": "review.region.reject_box",
-      "label": "Reject selected box",
+      "label": "Reject selected region box",
+      "modifiable": true
+    },
+    {
+      "context": "box_edit",
+      "default": [
+        "enter"
+      ],
+      "description": "Save the box and leave edit mode.",
+      "group": "confirm",
+      "id": "box_edit.save",
+      "label": "Save region & exit edit",
+      "modifiable": true
+    },
+    {
+      "context": "box_edit",
+      "default": [
+        "escape"
+      ],
+      "description": "Cancel box editing.",
+      "group": "cancel",
+      "id": "box_edit.cancel",
+      "label": "Cancel edit",
+      "modifiable": false
+    },
+    {
+      "context": "box_edit",
+      "default": [
+        "arrowup"
+      ],
+      "description": "Nudge the box up.",
+      "group": "nudge",
+      "id": "box_edit.nudge_up",
+      "label": "Move box up",
+      "modifiable": true
+    },
+    {
+      "context": "box_edit",
+      "default": [
+        "arrowdown"
+      ],
+      "description": "Nudge the box down.",
+      "group": "nudge",
+      "id": "box_edit.nudge_down",
+      "label": "Move box down",
+      "modifiable": true
+    },
+    {
+      "context": "box_edit",
+      "default": [
+        "arrowleft"
+      ],
+      "description": "Nudge the box left.",
+      "group": "nudge",
+      "id": "box_edit.nudge_left",
+      "label": "Move box left",
+      "modifiable": true
+    },
+    {
+      "context": "box_edit",
+      "default": [
+        "arrowright"
+      ],
+      "description": "Nudge the box right.",
+      "group": "nudge",
+      "id": "box_edit.nudge_right",
+      "label": "Move box right",
+      "modifiable": true
+    },
+    {
+      "context": "box_edit",
+      "default": [
+        "["
+      ],
+      "description": "Shrink the box from the right.",
+      "group": null,
+      "id": "box_edit.shrink_right",
+      "label": "Move right edge left",
+      "modifiable": true
+    },
+    {
+      "context": "box_edit",
+      "default": [
+        "]"
+      ],
+      "description": "Grow the box to the right.",
+      "group": null,
+      "id": "box_edit.grow_right",
+      "label": "Move right edge right",
+      "modifiable": true
+    },
+    {
+      "context": "box_edit",
+      "default": [
+        "backspace"
+      ],
+      "description": "Delete the selected box.",
+      "group": null,
+      "id": "box_edit.delete_box",
+      "label": "Clear the box",
       "modifiable": true
     },
     {
@@ -207,24 +296,68 @@
       "description": "Select the next box.",
       "group": "next",
       "id": "box_edit.next_box",
-      "label": "Next box",
-      "modifiable": true
-    },
-    {
-      "context": "box_edit",
-      "default": [
-        "delete"
-      ],
-      "description": "Delete the selected box.",
-      "group": "discard",
-      "id": "box_edit.delete_box",
-      "label": "Delete box",
+      "label": "Select the next box",
       "modifiable": true
     },
     {
       "context": "cluster",
       "default": [
-        "x"
+        "enter"
+      ],
+      "description": "Confirm the selected crops.",
+      "group": "confirm",
+      "id": "cluster.confirm",
+      "label": "Confirm selected & advance",
+      "modifiable": true
+    },
+    {
+      "context": "cluster",
+      "default": [
+        "shift+enter"
+      ],
+      "description": "Accept every VLM suggestion on the page.",
+      "group": null,
+      "id": "cluster.accept_all_vlm",
+      "label": "Confirm all VLM suggestions on page",
+      "modifiable": true
+    },
+    {
+      "context": "cluster",
+      "default": [
+        "g"
+      ],
+      "description": "Accept the VLM suggestion for the selected crop.",
+      "group": null,
+      "id": "cluster.accept_vlm",
+      "label": "Accept VLM suggestion for selected",
+      "modifiable": true
+    },
+    {
+      "context": "cluster",
+      "default": [
+        "n"
+      ],
+      "description": "Skip the selected crops.",
+      "group": "skip",
+      "id": "cluster.skip",
+      "label": "Skip selected",
+      "modifiable": true
+    },
+    {
+      "context": "cluster",
+      "default": [
+        "shift+n"
+      ],
+      "description": "Flag the selection for curator review.",
+      "group": null,
+      "id": "cluster.flag_new_class",
+      "label": "Flag selected as needing new class",
+      "modifiable": true
+    },
+    {
+      "context": "cluster",
+      "default": [
+        "d"
       ],
       "description": "Discard the selected crops.",
       "group": "discard",
@@ -240,18 +373,95 @@
       "description": "Undo the last action.",
       "group": "undo",
       "id": "cluster.undo",
-      "label": "Undo",
+      "label": "Undo last action",
       "modifiable": true
     },
     {
       "context": "cluster",
       "default": [
-        "g"
+        "x"
       ],
       "description": "Ignore the selected crops.",
       "group": "ignore",
       "id": "cluster.ignore",
-      "label": "Ignore",
+      "label": "Ignore selected (exclude from training)",
+      "modifiable": true
+    },
+    {
+      "context": "cluster",
+      "default": [
+        "u"
+      ],
+      "description": "Restore the last ignored crop.",
+      "group": null,
+      "id": "cluster.unignore",
+      "label": "Undo last ignore",
+      "modifiable": true
+    },
+    {
+      "context": "cluster",
+      "default": [
+        "a"
+      ],
+      "description": "Select every visible crop.",
+      "group": "select_all",
+      "id": "cluster.select_all",
+      "label": "Select all on page",
+      "modifiable": true
+    },
+    {
+      "context": "cluster",
+      "default": [
+        "arrowleft"
+      ],
+      "description": "Go to the previous crop.",
+      "group": "prev",
+      "id": "cluster.prev",
+      "label": "Previous crop",
+      "modifiable": true
+    },
+    {
+      "context": "cluster",
+      "default": [
+        "arrowright"
+      ],
+      "description": "Go to the next crop.",
+      "group": "next",
+      "id": "cluster.next",
+      "label": "Next crop",
+      "modifiable": true
+    },
+    {
+      "context": "cluster",
+      "default": [
+        "m"
+      ],
+      "description": "Move the selection to another cluster.",
+      "group": null,
+      "id": "cluster.move",
+      "label": "Move selected to cluster...",
+      "modifiable": true
+    },
+    {
+      "context": "cluster",
+      "default": [
+        "escape"
+      ],
+      "description": "Cancel the current cluster interaction.",
+      "group": "cancel",
+      "id": "cluster.cancel",
+      "label": "Clear drag capture / close picker / clear selection",
+      "modifiable": false
+    },
+    {
+      "context": "clusters_search",
+      "default": [
+        "a"
+      ],
+      "description": "Select every search result.",
+      "group": "select_all",
+      "id": "clusters_search.select_all",
+      "label": "Select all results",
       "modifiable": true
     },
     {
@@ -262,19 +472,41 @@
       "description": "Cancel semantic search mode.",
       "group": "cancel",
       "id": "clusters_search.cancel",
-      "label": "Cancel search",
+      "label": "Clear selection",
       "modifiable": false
+    },
+    {
+      "context": "clusters_search",
+      "default": [
+        "x"
+      ],
+      "description": "Ignore the selected results.",
+      "group": "ignore",
+      "id": "clusters_search.ignore",
+      "label": "Ignore selected (exclude from training)",
+      "modifiable": true
+    },
+    {
+      "context": "clusters_search",
+      "default": [
+        "z"
+      ],
+      "description": "Undo the last action.",
+      "group": "undo",
+      "id": "clusters_search.undo",
+      "label": "Undo last action",
+      "modifiable": true
     },
     {
       "context": "region_gallery",
       "default": [
-        "arrowright"
+        "z"
       ],
-      "description": "Select the next region.",
-      "group": "next",
-      "id": "region_gallery.next",
-      "label": "Next region",
-      "modifiable": false
+      "description": "Undo the last region-gallery action.",
+      "group": "undo",
+      "id": "region_gallery.undo",
+      "label": "Undo last region action",
+      "modifiable": true
     }
   ],
   "contexts": [

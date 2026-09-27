@@ -11,6 +11,7 @@ from _curation_app import mount_curation_routers
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from curation._cropwright_action_ids import CROPWRIGHT_ACTION_IDS
 from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
 from src.services.curation.keymap import (
@@ -34,6 +35,17 @@ def test_registry_loads_and_w8_rows_present() -> None:
         assert action_id in registry.actions
     assert registry.actions['review.region.accept_box'].default == ('y',)
     assert registry.actions['review.region.reject_box'].default == ('r',)
+
+
+def test_registry_covers_every_action_id_cropwright_references() -> None:
+    """Every action id Cropwright's ``FALLBACK_KEYMAP`` registers or
+    displays must exist in the backend registry -- a client that binds
+    an action the server doesn't know about would silently never
+    receive a served key. Vendored id list:
+    ``tests/curation/_cropwright_action_ids.py``."""
+    registry = load_registry()
+    missing = [aid for aid in CROPWRIGHT_ACTION_IDS if aid not in registry.actions]
+    assert missing == []
 
 
 def test_active_set_transitive_closure() -> None:
@@ -116,6 +128,28 @@ def test_locked_key_cannot_move_to_another_action() -> None:
     assert report.errors[0].code == 'keymap_key_locked'
 
 
+def test_modifiable_action_can_extend_but_keeps_its_own_locked_key() -> None:
+    """review.queue.confirm's default (['enter']) includes a locked key
+    but the action itself is modifiable=true -- it may add extra combos
+    as long as 'enter' stays."""
+    report, _, resolved = validate_keymap(
+        {'review.queue.confirm': ['enter', 'c']},
+        project='default',
+        classes=[],
+        previous_overrides={},
+    )
+    assert report.ok, report.errors
+    assert resolved['review.queue.confirm'] == ['enter', 'c']
+
+
+def test_modifiable_action_cannot_drop_its_own_locked_key() -> None:
+    report, _, _ = validate_keymap(
+        {'review.queue.confirm': ['c']}, project='default', classes=[], previous_overrides={}
+    )
+    assert not report.ok
+    assert report.errors[0].code == 'keymap_key_locked'
+
+
 def test_browser_reserved_combo_rejected() -> None:
     report, _, _ = validate_keymap(
         {'review.skip': ['ctrl+w']}, project='default', classes=[], previous_overrides={}
@@ -125,14 +159,15 @@ def test_browser_reserved_combo_rejected() -> None:
 
 
 def test_context_collision_within_active_set() -> None:
-    # review.undo (z) and cluster.discard (x) don't collide (different
-    # active sets); moving cluster.ignore onto cluster.discard's 'x' does.
+    # cluster.move (default 'm') and cluster.ignore (default 'x') don't
+    # collide; moving cluster.move onto cluster.ignore's 'x' does, since
+    # both share the 'cluster' active set.
     report, _, _ = validate_keymap(
-        {'cluster.ignore': ['x']}, project='default', classes=[], previous_overrides={}
+        {'cluster.move': ['x']}, project='default', classes=[], previous_overrides={}
     )
     assert not report.ok
     assert report.errors[0].code == 'keymap_context_collision'
-    assert set(report.errors[0].detail['action_ids']) == {'cluster.ignore', 'cluster.discard'}
+    assert set(report.errors[0].detail['action_ids']) == {'cluster.move', 'cluster.ignore'}
 
 
 def test_overlay_cannot_be_left_with_no_key() -> None:
@@ -163,7 +198,7 @@ def test_preexisting_class_conflict_is_grandfathered_as_warning() -> None:
     previous: dict[str, list[str]] = {}
     classes = _classes(letter='b', class_id=12, name='bmw')
     report, conflicts, _ = validate_keymap(
-        {'review.region.back': ['b']},
+        {'review.region.back': ['arrowleft', 'b']},
         project='default',
         classes=classes,
         previous_overrides=previous,
@@ -275,7 +310,7 @@ def test_put_keymap_422_on_collision() -> None:
 def test_put_keymap_422_body_internal(client: TestClient) -> None:
     r = client.put(
         f'{PREFIX}/keymap',
-        json={'expected_revision': 0, 'overrides': {'cluster.ignore': ['x']}},
+        json={'expected_revision': 0, 'overrides': {'cluster.move': ['x']}},
     )
     assert r.status_code == 422, r.text
     assert r.json()['detail']['error'] == 'validation_failed'
@@ -320,7 +355,7 @@ def test_put_keymap_class_conflict_409_then_unbind(
 
 
 def test_validate_route_never_4xx_and_reports(client: TestClient) -> None:
-    r = client.post(f'{PREFIX}/keymap/validate', json={'overrides': {'cluster.ignore': ['x']}})
+    r = client.post(f'{PREFIX}/keymap/validate', json={'overrides': {'cluster.move': ['x']}})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['ok'] is False

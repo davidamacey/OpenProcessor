@@ -232,12 +232,26 @@ async def create_project(
             resources.project_state_dir.mkdir(parents=True, exist_ok=True)
             await _ensure_indexes(client)
         if clone_settings_from:
-            await clone_settings(
+            clone_conflicts = await clone_settings(
                 client,
                 target_record=record,
                 from_slug=clone_settings_from,
                 axes=clone_axes,
             )
+            if clone_conflicts:
+                # M7 (create-time clone): a dropped keymap conflict is
+                # logged, not threaded through this function's return --
+                # every other caller of create_project (tests included)
+                # unpacks a plain (record, warnings) pair. The standalone
+                # POST /projects/{project}/clone_settings route (clone.py's
+                # clone_settings_into) is the one that serves the
+                # structured report.
+                logger.warning(
+                    'project_create_keymap_clone_conflicts',
+                    slug=slug,
+                    from_slug=clone_settings_from,
+                    conflicts=clone_conflicts,
+                )
         # Idempotent: a clone that copied 'classes' (or _apply_clone's own
         # no-classes-copied branch) may already have seeded it, but every
         # new project gets one guaranteed call under its own binding.

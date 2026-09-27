@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from src.routers.curation import projects as projects_router
 from src.routers.curation._project_models import (
     ArchiveRequest,
+    CloneSettingsRequest,
     CreateProjectRequest,
     PatchProjectRequest,
 )
@@ -111,3 +112,76 @@ def test_archive_unarchive_route_envelope() -> None:
         )
     )
     assert unarchived.project.status == 'active'
+
+
+def test_clone_settings_route_serves_keymap_conflicts_structured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """W2b: a dropped keymap-clone conflict is served on the route
+    response as a structured ``keymap_clone_conflicts`` list (action_id,
+    combo, class), never silently swallowed."""
+    from src.config.project_context import try_current_project
+    from src.services.curation.keymap import KeymapDoc
+
+    source = asyncio.run(
+        projects_router.create_project(CreateProjectRequest(slug='source', display_name='Source'))
+    )
+    target = asyncio.run(
+        projects_router.create_project(CreateProjectRequest(slug='target', display_name='Target'))
+    )
+
+    source_doc = KeymapDoc(
+        overrides={'cluster.ignore': ['i']}, revision=1, updated_at=None, is_default=False
+    )
+    target_doc = KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
+
+    async def _fake_get(_client, _index) -> KeymapDoc:
+        current = try_current_project()
+        return source_doc if current and current.record.slug == 'source' else target_doc
+
+    async def _fake_save(_client, _index, *, overrides, expected_revision) -> KeymapDoc:
+        return KeymapDoc(
+            overrides=overrides,
+            revision=expected_revision + 1,
+            updated_at=None,
+            is_default=not overrides,
+        )
+
+    monkeypatch.setattr('src.services.curation.keymap.get_keymap_doc', _fake_get)
+    monkeypatch.setattr('src.services.curation.keymap.save_keymap_doc', _fake_save)
+
+    from src.config.project_context import bind_project
+    from src.services.projects.registry import get_project_registry
+
+    registry = get_project_registry()
+    asyncio.run(registry.ensure_fresh())
+    target_record = registry.get('target')
+    assert target_record is not None
+    with bind_project(target_record):
+        from src.routers.curation import get_class_registry
+
+        reg = get_class_registry()
+        reg.add_class('ice_cream_truck', group='vehicle')
+        loaded = reg.load()
+        for c in loaded.classes:
+            if c.class_name == 'ice_cream_truck':
+                c.hotkey_letter = 'i'
+        reg._atomic_write(loaded)
+
+    response = asyncio.run(
+        projects_router.clone_settings_route(
+            'target',
+            CloneSettingsRequest(
+                **{'from': 'source'}, axes=['keymap'], expected_revision=target.project.revision
+            ),
+        )
+    )
+    assert [c.model_dump() for c in response.keymap_clone_conflicts] == [
+        {
+            'action_id': 'cluster.ignore',
+            'combo': 'i',
+            'class_id': 0,
+            'class_name': 'ice_cream_truck',
+        }
+    ]
+    assert source.project.slug == 'source'

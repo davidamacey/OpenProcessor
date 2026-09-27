@@ -198,10 +198,19 @@ def test_clone_keymap_axis_copies_overrides_and_reports_class_conflicts(
                 c.hotkey_letter = 'i'
         reg._atomic_write(loaded)
 
-    asyncio.run(
+    conflicts = asyncio.run(
         lifecycle.clone_settings(client, target_record=target, from_slug='source', axes=['keymap'])
     )
 
     # The conflicting action (its combo 'i' is the target's ice_cream_truck
-    # hotkey) is dropped; the non-conflicting one copies.
+    # hotkey) is dropped; the non-conflicting one copies. The drop is a
+    # structured report, not silent.
     assert saved['target'] == {'review.skip': ['j']}
+    assert conflicts == [
+        {
+            'action_id': 'cluster.ignore',
+            'combo': 'i',
+            'class_id': 0,
+            'class_name': 'ice_cream_truck',
+        }
+    ]

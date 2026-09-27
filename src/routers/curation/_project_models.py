@@ -148,6 +148,17 @@ class ProjectWarning(BaseModel):
     message: str
 
 
+class KeymapCloneConflictWire(BaseModel):
+    """W2b: one action the ``keymap`` clone axis dropped from the copy
+    because its combo collides with the target's class hotkey -- a
+    report, never a silent unbind (CW-K §0 clause 1)."""
+
+    action_id: str
+    combo: str
+    class_id: int
+    class_name: str
+
+
 class ProjectLifecycleResponse(BaseModel):
     """Every project lifecycle mutation (create 201, PATCH, archive,
     unarchive, clone_settings; P3) answers this envelope, so the switcher
@@ -155,6 +166,7 @@ class ProjectLifecycleResponse(BaseModel):
 
     project: ProjectSummary
     warnings: list[ProjectWarning] = Field(default_factory=list)
+    keymap_clone_conflicts: list[KeymapCloneConflictWire] = Field(default_factory=list)
 
 
 class ProjectError(BaseModel):
