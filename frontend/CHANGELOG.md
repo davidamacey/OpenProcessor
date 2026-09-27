@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Projects P1 follow-up: a real prefix-boundary e2e test.** Every
+  other stubbed e2e route pattern matches by path suffix (`r"/health$"`
+  matches both the global and the scoped health), so none of them could
+  catch a call built from the wrong URL builder. New
+  `e2e/stubbed/test_project_scoping.py` records every request during a
+  `/review` mount and asserts the project list and status-chip health
+  hit the GLOBAL `/curation/projects`/`/curation/health`, region-profile
+  health/`/review/*`/`/classes` hit the scoped
+  `/curation/projects/default/...`, and nothing hits an unscoped
+  `/curation/<scoped-route>`. Mutation-checked: confirmed red when
+  `scoped()` is temporarily forced to return `API_PREFIX`.
+- Restored three bake-off fields (`EvalDatasetClass.registry_class_name`,
+  `BakeoffProfileRow.context_class_names`, `ClassMapping.model_to_eval_names`,
+  OpenProcessor 3cd4ca87, already adopted on this frontend) that the P1
+  contract sync had dropped only because the synced backend branch
+  (`cutover/projects-foundation` @ `dc2b4e0e`) predates that upstream
+  commit. `bakeoffContract.test.ts` now carries an explicit, commented
+  `PENDING_REBASE_FIELDS` allow-list for exactly these three, to be
+  deleted (not widened) once that branch is rebased onto `main` and
+  re-synced.
+
 - **Projects P1 — scoped-only wire, no backward compatibility (owner
   decision).** OpenProcessor's `cutover/projects-foundation` removes the
   unscoped `{API_PREFIX}/...` alias entirely: every scoped route now
