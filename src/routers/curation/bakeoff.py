@@ -49,6 +49,7 @@ from typing import Any, Literal, NoReturn
 from fastapi import HTTPException
 from pydantic import BaseModel, ValidationError
 
+from src.clients.curation_opensearch import get_class_registry
 from src.config import get_curation_config, get_gpu_arbiter_config
 from src.core.logging import get_logger
 from src.routers.curation._bakeoff_models import (
@@ -155,14 +156,27 @@ async def bakeoff_trained_models(
     return TrainedModelList(models=models, count=len(models))
 
 
+def _registry_names_by_id() -> dict[int, str]:
+    """Live registry id -> name, best-effort ({} on any load failure)."""
+    try:
+        return {c.class_id: c.class_name for c in get_class_registry().load().classes}
+    except Exception as exc:
+        logger.warning('bakeoff_profile_registry_unavailable', error=str(exc))
+        return {}
+
+
 def _profile_row(
     prof: Any, kind: Literal['registered', 'configured'], *, default: bool
 ) -> BakeoffProfileRow:
     d = prof.to_dict()
+    names_by_id = _registry_names_by_id()
+    context_class_ids = d.get('context_class_ids', [])
+    context_class_names = [names_by_id.get(cid, str(cid)) for cid in context_class_ids]
     return BakeoffProfileRow(
         **{k: d[k] for k in BakeoffProfileRow.model_fields if k in d},
         kind=kind,
         default=default,
+        context_class_names=context_class_names,
     )
 
 

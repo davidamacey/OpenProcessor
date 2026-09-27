@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from src.core.dependencies import VisualSearchDep
 from src.schemas.detection import ImageMetadata
 from src.services.inference import InferenceService
+from src.utils.retry import RetryExhaustedError
 
 
 logger = logging.getLogger(__name__)
@@ -198,6 +199,8 @@ def detect_faces(
 
     except HTTPException:
         raise
+    except RetryExhaustedError:
+        raise
     except Exception as e:
         logger.error(f'Face detection failed: {e}')
         raise HTTPException(500, f'Face detection failed: {e!s}') from e
@@ -262,6 +265,8 @@ def recognize_faces(
         )
 
     except HTTPException:
+        raise
+    except RetryExhaustedError:
         raise
     except Exception as e:
         logger.error(f'Face recognition failed: {e}')
@@ -345,6 +350,8 @@ def verify_faces(
         )
 
     except HTTPException:
+        raise
+    except RetryExhaustedError:
         raise
     except Exception as e:
         logger.error(f'Face verification failed: {e}')
@@ -458,6 +465,8 @@ async def search_faces(
         )
 
     except HTTPException:
+        raise
+    except RetryExhaustedError:
         raise
     except Exception as e:
         logger.error(f'Face search failed: {e}')
@@ -578,6 +587,8 @@ async def identify_faces(
         )
 
     except HTTPException:
+        raise
+    except RetryExhaustedError:
         raise
     except Exception as e:
         logger.error(f'Face identification failed: {e}')

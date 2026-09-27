@@ -457,6 +457,14 @@
             "title": "Context Class Ids",
             "type": "array"
           },
+          "context_class_names": {
+            "description": "Registry names for context_class_ids, same order/length, resolved by id lookup; an entry is the id's string form when it's no longer in the registry",
+            "items": {
+              "type": "string"
+            },
+            "title": "Context Class Names",
+            "type": "array"
+          },
           "default": {
             "title": "Default",
             "type": "boolean"
@@ -521,6 +529,7 @@
           "default_backend",
           "triton_model",
           "context_class_ids",
+          "context_class_names",
           "baselines_path"
         ],
         "title": "BakeoffProfileRow",
@@ -1372,6 +1381,21 @@
             "description": "{\"<model class id>\": <eval class id>}; null = matched by name in the evaluator",
             "title": "Model To Eval"
           },
+          "model_to_eval_names": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "{\"<model class id>\": \"<eval class name>\"}; same keys as model_to_eval, paired by name (never by raw index) so a consumer never has to re-derive the name from the eval class id; null under the same condition as model_to_eval",
+            "title": "Model To Eval Names"
+          },
           "not_covered_eval_classes": {
             "items": {
               "$ref": "#/components/schemas/NotCoveredClass"
@@ -1397,6 +1421,7 @@
         "required": [
           "method",
           "model_to_eval",
+          "model_to_eval_names",
           "unmapped_model_classes",
           "not_covered_eval_classes",
           "warnings"
@@ -2551,12 +2576,25 @@
             ],
             "description": "Class-registry id (inverse of class_registry.json export_id_map); null when the export has no registry mapping for it",
             "title": "Registry Class Id"
+          },
+          "registry_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Live registry name for registry_class_id, resolved by id lookup, never assumed equal to the eval dataset name; null when registry_class_id is null or no longer present in the registry (e.g. deleted, not merely deprecated)",
+            "title": "Registry Class Name"
           }
         },
         "required": [
           "eval_class_id",
           "name",
           "registry_class_id",
+          "registry_class_name",
           "n_objects",
           "n_images"
         ],

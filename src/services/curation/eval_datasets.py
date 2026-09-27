@@ -32,6 +32,7 @@ from typing import Any
 
 from scripts.curation.bakeoff.class_map import read_export_id_map, read_names
 from scripts.curation.bakeoff.freeze import LOCK_NAME, test_sha as freeze_test_sha
+from src.clients.curation_opensearch import get_class_registry
 from src.config import get_curation_config
 from src.services.curation.export_support import frozen_test_sha_of
 
@@ -61,6 +62,7 @@ class EvalClassCount:
     eval_class_id: int
     name: str
     registry_class_id: int | None
+    registry_class_name: str | None
     n_objects: int
     n_images: int
 
@@ -204,6 +206,19 @@ def _count_split(d: Path) -> tuple[Counter[int], Counter[int], int, int, frozens
     return objects, images_per_class, n_images, n_background, frozenset(stems)
 
 
+def _registry_names_by_id() -> dict[int, str]:
+    """Live class-registry id -> name, best-effort ({} on any load failure).
+
+    Looked up by id -- never assumed equal to the eval dataset's own class
+    name for that class -- so a registry rename shows up here and callers
+    never have to re-derive the name from the registry id themselves.
+    """
+    try:
+        return {c.class_id: c.class_name for c in get_class_registry().load().classes}
+    except Exception:
+        return {}
+
+
 _CACHE: dict[tuple[Any, ...], EvalDatasetRecord] = {}
 
 
@@ -229,18 +244,21 @@ def _build(
     names = read_names(d / 'data.yaml')
     export_id_map = read_export_id_map(d)
     registry_of = {e: r for r, e in export_id_map.items()}
+    registry_names_by_id = _registry_names_by_id()
     objects, images_per_class, n_images, n_background, stems = _count_split(d)
-    classes = tuple(
-        EvalClassCount(
+
+    def _eval_class_count(cid: int) -> EvalClassCount:
+        rid = registry_of.get(cid)
+        return EvalClassCount(
             eval_class_id=cid,
             name=names.get(cid, str(cid)),
-            registry_class_id=registry_of.get(cid),
+            registry_class_id=rid,
+            registry_class_name=registry_names_by_id.get(rid) if rid is not None else None,
             n_objects=objects[cid],
             n_images=images_per_class[cid],
         )
-        for cid in sorted(objects)
-        if objects[cid] > 0
-    )
+
+    classes = tuple(_eval_class_count(cid) for cid in sorted(objects) if objects[cid] > 0)
 
     current_label_sha = freeze_test_sha(d)[0]
     if source == 'export':
