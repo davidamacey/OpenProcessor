@@ -1849,35 +1849,65 @@ instead, clamped to `MAX_RETRY_AFTER_MS` (5s) so it can't stall the UI
 past the existing retry budget or add an extra attempt. Every caller
 still just sees the eventual `ApiError` with the served `detail` string.
 
-### Groundwork for multi-project support (2026-09-26)
+### Projects P1 — scoped-only wire, no backward compatibility (2026-09-26)
 
-The backend is moving every scoped route under
-`{API_PREFIX}/projects/{project}/...`, with a project's served `prefix`
-coming from a future `GET {API_PREFIX}/projects`; the unscoped routes
-stay as an alias bound to the `default` project
-(`docs/design/any-domain-rev3-and-projects-contract-review-2026-09-26.md`
-§7). Every scoped call in `api.ts`, `sse.ts`, `SlotCard.svelte` and
-`export/+page.svelte` now builds its URL through one function, `scoped()`
-— backed by a small module-level holder (`setScopedPrefix()`, never
-persisted) that defaults to `API_PREFIX`, so today every built URL is
-byte-identical to before this groundwork landed. A separate `globalApi()`
-builder is reserved for the (currently nonexistent) endpoints that will
-stay global once projects land — no call site uses it yet, since the
-backend hasn't said which endpoints those are.
+**OWNER DECISION: a fresh build, no backward compatibility.** There are
+no users yet, and OpenProcessor's `cutover/projects-foundation` removes
+the old unscoped `{API_PREFIX}/...` alias entirely — there is no
+`default`-prefix fallback anywhere in this build.
+
+- **GLOBAL routes** (never project-scoped): `{API_PREFIX}/projects` (the
+  list and CRUD), the global `{API_PREFIX}/health` and the global
+  `{API_PREFIX}/events`.
+- **Everything else** lives ONLY under a project's own served `prefix`:
+  `{API_PREFIX}/projects/{project}/...`
+  (`docs/design/any-domain-rev3-and-projects-contract-review-2026-09-26.md`
+  §7).
+
+`src/lib/stores/projects.svelte.ts`'s `projectsStore` is the one place
+that resolves the active project: `load()` reads
+`GET {globalApi()}/projects` once at boot (bounded retries, like
+`loadRegionProfile`), picks the served `is_default: true`/`selectable`
+project, and calls `setScopedPrefix()` with its served `prefix` — never
+assembled client-side. Every scoped call in `api.ts`, `sse.ts`,
+`SlotCard.svelte` and `export/+page.svelte` builds its URL through one
+function, `scoped()`, backed by a small module-level holder — it
+**throws `ProjectNotSelectedError`** until `setScopedPrefix()` has run
+(fails closed, matching the backend's `ProjectNotBound`), so a scoped
+call literally cannot fire before project bootstrap succeeds. A separate
+`globalApi()` builder is the only way to reach the three GLOBAL routes
+above; `getGlobalHealth()`/`getProjects()` (`api.ts`) are its two call
+sites today.
+
+A failed `projectsStore.load()` (no reachable backend, or no selectable
+project served) sets `projectsStore.error`; the root layout
+(`src/routes/+layout.svelte`) renders a full blocking error state
+(`data-testid="projects-blocking-error"`, with a Retry button) instead of
+a half-rendered app with every scoped call throwing. There is no URL
+param or switcher yet — exactly one active project per session, resolved
+fresh on every load. `npm run test:setup` (`src/lib/test/setup.ts`,
+vitest `setupFiles`) seeds `setScopedPrefix(API_PREFIX)` before every
+unit test so existing scoped-call tests don't each need their own
+project bootstrap.
 
 Client-side caches that must never bleed data across projects — crop ids
 are content-derived, so the same image gets the same `crop_id` in every
 project — are keyed by `activeProjectKey()` (mirrors `scoped()`'s
-current value) and expose a `resetForProjectChange()` hook for the
-future project switcher to call on every switch:
-`SourceImageOverlay.svelte`'s module-level crop-context cache, and
-`stores/undo.svelte.ts`'s undo ring buffer (which clears outright rather
-than filtering, so Z can never revert a different project's write).
+current value) and expose a `resetForProjectChange()` hook, wired into a
+central `onProjectChange()` registry in `projectsStore`: unused today (no
+switcher yet) but ready for one — `SourceImageOverlay.svelte`'s
+module-level crop-context cache, and `stores/undo.svelte.ts`'s undo ring
+buffer (which clears outright rather than filtering, so Z can never
+revert a different project's write).
 
 `apiCallScanner.ts`/`endpointCatalog.test.ts` (the contract catalog
-below) and the `apiPrefixScan` ratchet scan for `${scoped()}` rather than
-a literal `${API_PREFIX}`, so this stayed a zero-behavior-change refactor
-with no weakened test coverage.
+below) resolve every `${scoped()}` call against the scoped OpenAPI paths
+(`/curation/projects/{project}/...`) and every `${globalApi()}` call
+against the global ones (`/curation/...` directly), each with its own
+"no other file references this builder outside the scanned set"
+completeness guard. The `apiPrefixScan` ratchet accepts either builder,
+never a literal `${API_PREFIX}` or a hand-assembled `/projects/{slug}`
+path.
 
 ## API contract
 

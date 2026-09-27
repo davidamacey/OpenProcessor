@@ -8,6 +8,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Projects P1 — scoped-only wire, no backward compatibility (owner
+  decision).** OpenProcessor's `cutover/projects-foundation` removes the
+  unscoped `{API_PREFIX}/...` alias entirely: every scoped route now
+  lives under `{API_PREFIX}/projects/{project}/...`, and only
+  `/projects` (list/CRUD), `/health` and `/events` stay global.
+  - `src/lib/api.ts`'s `scoped()` now throws `ProjectNotSelectedError`
+    until `setScopedPrefix()` has run (fails closed, matching the
+    backend's `ProjectNotBound`) — no `default`-prefix fallback baked
+    in.
+  - New `projectsStore` (`src/lib/stores/projects.svelte.ts`) loads
+    `GET {globalApi()}/projects` once at boot, picks the served
+    `is_default: true`/`selectable` project, and seeds
+    `setScopedPrefix()` from its own `prefix` — every scoped call is
+    built from that served value, never assembled client-side. A
+    persistent load failure sets `projectsStore.error`; the root layout
+    (`src/routes/+layout.svelte`) renders a full blocking error state
+    (`data-testid="projects-blocking-error"`) instead of a
+    half-rendered app. No URL param or switcher yet — exactly one active
+    project per session (a later task).
+  - New `src/lib/types_projects.ts` (`ProjectSummary`, `ProjectsResponse`,
+    `ProjectCapacity`, `ProjectLimits`), `getProjects()`/`getGlobalHealth()`
+    (`api.ts`).
+  - **Health split**: the top-bar API status chip now reads the GLOBAL
+    `GET {globalApi()}/health` (`GlobalHealth`, `types.ts`);
+    `regionProfileStore`/project facts still read the project-scoped
+    `GET {scoped()}/health` (`ApiHealth`, now also carrying `project`).
+    `healthStore.poll()` fires both.
+  - **Events split**: new `subscribeGlobalEvents()` (`src/lib/sse.ts`)
+    opens the GLOBAL `GET {globalApi()}/events` stream (`project.*`
+    events, always `project: null`) — held by the root layout to
+    refresh the project list. Item/pipeline SSE
+    (`subscribeCurationEvents`/`subscribePipelineEvents`) stay scoped,
+    unchanged. K2's `config.changed axis=keymap` subscription stays on
+    the scoped stream (the keymap is per-project).
+  - `resetForProjectChange()` hooks (the undo ring buffer,
+    `SourceImageOverlay`'s crop-context cache) are now wired into a
+    central `onProjectChange()` registry in `projectsStore` — unused
+    today (no switcher yet) but ready for it.
+  - Contracts re-synced from OpenProcessor `cutover/projects-foundation`
+    @ `dc2b4e0e`. `endpointCatalog.test.ts`/`apiCallScanner.ts` resolve
+    every `${scoped()}` call against the scoped OpenAPI paths
+    (`/curation/projects/{project}/...`) and every `${globalApi()}` call
+    against the global ones, with the same completeness guard for both.
+  - `e2e/conftest.py`'s `Stub` serves the global `GET {api_prefix}/projects`
+    by default (`e2e/fixtures/wire.py`'s `projects_response()`, one
+    `default` project); every other stubbed route is unchanged since its
+    patterns already match by path suffix, not full path — the fail-closed
+    501 guard is untouched.
+
 - **Configurable keyboard shortcuts — editor + served keymap (K2 of
   `docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md`).**
   Built ahead of OpenProcessor W2b's `GET/PUT {prefix}/keymap`,
