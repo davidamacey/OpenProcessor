@@ -363,6 +363,11 @@ class Stub:
         # where every W10 surface is absent — so existing tests stay
         # green; test_dataset_import.py overrides it with served formats.
         self.on("GET", r"/datasets/formats(\?|$)", (404, {"detail": "Not Found"}))
+        # W3 (prompt-pack CRUD): /settings and the pack pages probe
+        # `GET {prefix}/prompt_packs` once per project. Defaults to a 404 —
+        # a backend without W3, where every pack surface is absent — so
+        # existing tests stay green; test_prompt_packs.py overrides it.
+        self.on("GET", r"/prompt_packs(\?|$)", (404, {"detail": "Not Found"}))
 
         page.route(f"**{api_prefix}/**", self._dispatch)
 
