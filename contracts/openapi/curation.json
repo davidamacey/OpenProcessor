@@ -9080,7 +9080,7 @@
   "paths": {
     "/curation/events": {
       "get": {
-        "description": "SSE stream of global events only (``project: null``): project\nlifecycle (``project.*``), VLM-registry ``config.changed`` and\n``combine.*``. A ``combine.*`` event names the project it builds in\n``target``. No project's own events are ever delivered here.",
+        "description": "SSE stream of global events only (``project: null``): project\nlifecycle (``project.*``) and ``combine.*`` (``GLOBAL_EVENT_PREFIXES``).\nA ``combine.*`` event names the project it builds in ``target``. No\nproject's own events are ever delivered here; a project's config\nchanges (``config.changed``) ride that project's own stream.",
         "operationId": "global_events_curation_events_get",
         "parameters": [
           {
