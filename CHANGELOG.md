@@ -45,6 +45,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ProjectNotBound` → 500 `internal_isolation_error`, `ProjectReadOnly` →
   409 `project_read_only`.
 
+- **Multi-project workers (P2).** One detection worker, VLM worker,
+  auto-label worker and cluster-refresh daemon serve every active project:
+  each cycle they list the active projects, skip paused ones, and bind
+  each project only around its own work; `--project SLUG` narrows a
+  worker to one project. The detection worker splits each fetch by
+  deficit round-robin (equal quota, rotating start, leftover capacity to
+  projects that filled theirs), caps each project's in-flight items at
+  `ceil(pipeline capacity / active projects)`, backs idle projects off
+  from 5 s to 60 s, keeps each batched VLM call to one project, classifies
+  against the item's own project registry, and flushes one `_bulk` per
+  project. The auto-label worker runs one job at a time across projects,
+  oldest trigger first, and checks each project's IVF centroids for a
+  retrain on its own interval.
+- Per-project pipeline pause: `<project_state_dir>/pipeline_paused.flag`
+  stops the workers' fetches for that project only (no route yet). The
+  detection worker writes `runtime_detection_worker_<host>.json`
+  (`inflight`, `applied`, `paused`) into each project's state dir.
+- `prune_exports.py` and `prune_training_runs.py` prune every active and
+  archived project under its own binding.
+
 ### Changed
 - **Unbound project-scoped config fails closed.** Reading a project-scoped
   `CurationConfig` field with no project bound raises `ProjectNotBound`
@@ -59,6 +79,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ITEMS_INDEX` constants). `default` keeps today's names and paths.
 - The event hub stamps every event with its `project`; a scoped stream
   delivers its own project's events plus global ones.
+- The IVF residual centroid store lives in each project's state dir
+  (it was one global store shared by every project), the pipeline SSE
+  stats cache is kept per project, and the auto-label trigger/state/
+  heartbeat/cancel files resolve under the bound project's `autolabel_dir`.
+- The pipeline SSE stream polls its own project's auto-label `state.json`
+  (1 s) instead of waiting on a process-wide event that nothing signalled.
+- Workers read OpenSearch only through the guarded client, against the
+  bound project's indexes; `OP_ITEMS_INDEX_OVERRIDE` is gone.
+
+### Removed
+- `src/services/curation/autolabel/cli.py` (nothing launched it) and the
+  unstarted auto-label `state.json` watcher.
 
 ### Added
 - **Text-free region mode.** A region profile with `text_reader: "none"`
