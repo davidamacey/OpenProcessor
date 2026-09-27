@@ -53,15 +53,27 @@ case "$INGEST_MAX_REQUEST_MB" in
     ;;
 esac
 
+# The dataset-archive upload cap (W10 `POST .../datasets/uploads`):
+# nginx's client_max_body_size for that one location, and
+# window.__CROPWRIGHT_DATASET_UPLOAD_MAX_MB__ for the client's pre-check.
+DATASET_UPLOAD_MAX_MB="${CROPWRIGHT_DATASET_UPLOAD_MAX_MB:-2048}"
+case "$DATASET_UPLOAD_MAX_MB" in
+  ''|*[!0-9]*)
+    echo "[entrypoint] CROPWRIGHT_DATASET_UPLOAD_MAX_MB must be a positive integer, got: $DATASET_UPLOAD_MAX_MB" >&2
+    exit 1
+    ;;
+esac
+
 find /usr/share/nginx/html -type f \( -name '*.js' -o -name '*.html' \) \
-    -exec sed -i "s|__RUNTIME__|${TARGET_URL}|g; s|__API_PREFIX__|${API_PREFIX}|g; s|__INGEST_MAX_REQUEST_MB__|${INGEST_MAX_REQUEST_MB}|g" {} +
+    -exec sed -i "s|__RUNTIME__|${TARGET_URL}|g; s|__API_PREFIX__|${API_PREFIX}|g; s|__INGEST_MAX_REQUEST_MB__|${INGEST_MAX_REQUEST_MB}|g; s|__DATASET_UPLOAD_MAX_MB__|${DATASET_UPLOAD_MAX_MB}|g" {} +
 
 # nginx's proxy `location` must track the same prefix, or the SPA asks
 # for {prefix}/... and nginx answers with index.html. This runs as
 # /docker-entrypoint.d/40-runtime-config.sh, i.e. before nginx starts.
-sed -i "s|__API_PREFIX__|${API_PREFIX}|g; s|__API_UPSTREAM__|${API_UPSTREAM}|g; s|__INGEST_MAX_REQUEST_MB__|${INGEST_MAX_REQUEST_MB}|g" /etc/nginx/conf.d/default.conf
+sed -i "s|__API_PREFIX__|${API_PREFIX}|g; s|__API_UPSTREAM__|${API_UPSTREAM}|g; s|__INGEST_MAX_REQUEST_MB__|${INGEST_MAX_REQUEST_MB}|g; s|__DATASET_UPLOAD_MAX_MB__|${DATASET_UPLOAD_MAX_MB}|g" /etc/nginx/conf.d/default.conf
 
 echo "[entrypoint] PUBLIC_TRITON_API_URL=${TARGET_URL:-<empty - relative URLs via nginx proxy>}"
 echo "[entrypoint] PUBLIC_API_PREFIX=${API_PREFIX}"
 echo "[entrypoint] API_UPSTREAM=${API_UPSTREAM}"
 echo "[entrypoint] CROPWRIGHT_INGEST_MAX_REQUEST_MB=${INGEST_MAX_REQUEST_MB}"
+echo "[entrypoint] CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${DATASET_UPLOAD_MAX_MB}"
