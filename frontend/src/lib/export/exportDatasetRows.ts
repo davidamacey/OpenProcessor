@@ -125,3 +125,23 @@ export function splitExportClasses<
   for (const c of counts) (c.train + c.val + c.test > 0 ? withObjects : empty).push(c);
   return { withObjects, empty };
 }
+
+/** Header tooltip for the Gap column: the served `trainable_gap`. */
+export const GAP_COLUMN_TITLE =
+  'Trainable crops still needed to reach the per-class minimum (served trainable_gap)';
+
+/** Header tooltip for the Trainable column: the served `trainable`. */
+export const TRAINABLE_COLUMN_TITLE =
+  'Validated crops training can use: the frozen test holdout and excluded crops are left out (served trainable)';
+
+/**
+ * Per-cell tooltip for the served `trainable_gap`: the shortfall of
+ * `trainable` against the served per-class hard minimum
+ * (`thresholds.block_below`, passed in when `/stats/classes` served it).
+ */
+export function gapCellTitle(gap: number, minimum: number | null): string {
+  const floor = minimum != null ? ` of ${minimum}` : '';
+  return gap <= 0
+    ? `meets the per-class minimum${floor}`
+    : `${gap} more trainable crops needed to reach the per-class minimum${floor}`;
+}

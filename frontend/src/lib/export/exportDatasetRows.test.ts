@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildExportRows,
+  gapCellTitle,
   hasCurrentMulticlassExport,
   registryArtifactsAvailable,
   isNothingExportable,
@@ -237,5 +238,20 @@ describe('E1/E2 (visual audit 2026-09-24): served trainable, classes with object
     ]);
     expect(withObjects.map((c) => c.class_id)).toEqual([2, 3]);
     expect(empty.map((c) => c.class_id)).toEqual([1]);
+  });
+});
+
+describe('gapCellTitle', () => {
+  it('names the served per-class minimum when known', () => {
+    expect(gapCellTitle(8, 20)).toBe(
+      '8 more trainable crops needed to reach the per-class minimum of 20',
+    );
+    expect(gapCellTitle(0, 20)).toBe('meets the per-class minimum of 20');
+  });
+
+  it('omits the number when the minimum was not served', () => {
+    expect(gapCellTitle(3, null)).toBe(
+      '3 more trainable crops needed to reach the per-class minimum',
+    );
   });
 });

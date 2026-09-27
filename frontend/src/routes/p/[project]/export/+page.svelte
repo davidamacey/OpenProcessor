@@ -17,6 +17,9 @@
   import type { ExportStatus, StatsSummary, TestHoldoutStats } from '$lib/types';
   import {
     buildExportRows,
+    GAP_COLUMN_TITLE,
+    gapCellTitle,
+    TRAINABLE_COLUMN_TITLE,
     registryArtifactsAvailable,
     isNothingExportable,
     splitExportClasses,
@@ -461,9 +464,7 @@
           class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(
             row.trainableGap,
           )}"
-          title={row.trainableGap <= 0
-            ? 'on target'
-            : `${row.trainableGap} more trainable crops needed`}
+          title={gapCellTitle(row.trainableGap, stats?.thresholds?.block_below ?? null)}
         >
           {row.trainableGap > 0 ? '+' : ''}{row.trainableGap.toLocaleString()}
         </span>
@@ -544,8 +545,7 @@
             <th
               class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
               onclick={() => setSort('trainable')}
-              title="Validated minus the frozen test holdout (GET {scoped()}/test_holdout/stats) — what training can actually use"
-              >Trainable</th
+              title={TRAINABLE_COLUMN_TITLE}>Trainable</th
             >
             <th
               class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
@@ -554,7 +554,7 @@
             <th
               class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
               onclick={() => setSort('trainableGap')}
-              title="Aug target minus trainable crops">Gap</th
+              title={GAP_COLUMN_TITLE}>Gap</th
             >
             <th class="px-3 py-2 text-right font-medium" title="Frozen test holdout crops"
               >Test (held out)</th

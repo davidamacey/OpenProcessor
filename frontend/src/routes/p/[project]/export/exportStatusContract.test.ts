@@ -459,3 +459,51 @@ describe('/export — class table puts classes with data first', () => {
     );
   });
 });
+
+describe('/export — Gap column describes the served trainable_gap', () => {
+  it('titles the Gap header and cells as the shortfall against the served per-class minimum', async () => {
+    vi.stubGlobal(
+      'fetch',
+      makeFetchMock([], EXPORT_STATUS_SUCCESS, [], {
+        classes: [
+          {
+            class_id: 3,
+            class_name: 'gamma_short',
+            count: 120,
+            validated_count: 35,
+            adequacy: 'warn',
+            aug_target: 500,
+            aug_gap: 465,
+            trainable: 12,
+            trainable_gap: 8,
+          },
+        ],
+        thresholds: {
+          block_below: 20,
+          warn_below: 100,
+          min_test_per_class: 5,
+          aug_target_min: 500,
+          aug_target_max: 3000,
+        },
+      }),
+    );
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(ExportPage, { target } as never);
+    flushSync();
+    await flushMicrotasks();
+    flushSync();
+
+    const header = Array.from(target.querySelectorAll('th')).find(
+      (th) => th.textContent?.trim() === 'Gap',
+    );
+    expect(header?.getAttribute('title')).toContain('per-class minimum');
+    expect(header?.getAttribute('title')).not.toMatch(/aug target/i);
+    const cell = Array.from(target.querySelectorAll('tbody span')).find(
+      (el) => el.textContent?.trim() === '+8',
+    );
+    expect(cell?.getAttribute('title')).toBe(
+      '8 more trainable crops needed to reach the per-class minimum of 20',
+    );
+  });
+});
