@@ -45,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-promote) and `class_remap_source`.
 
 ### Fixed
+- Bake-off queue docs (`docs/CURATION.md`, `env.template`, `bakeoff.py`,
+  `bakeoff_runner._pending_job_files`) described
+  `$OP_STATE_DIR/bakeoff_jobs` / `OP_BAKEOFF_JOBS_DIR` as the router's
+  queue. Every project, `default` included, queues in
+  `$OP_STATE_DIR/projects/<slug>/bakeoff_jobs`; the evaluator must watch
+  `$OP_STATE_DIR/bakeoff_jobs` on the API's state-dir path to find them.
 - `PUT .../models/{name}/sharing` answers its 404s through `api_error`
   (`{"detail": {"error": "model_not_found", "message", "project", ...}}`)
   instead of a bare string detail.

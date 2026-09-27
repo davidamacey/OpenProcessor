@@ -82,12 +82,13 @@ logger = get_logger(__name__)
 # another's. Resolved at call time (never a module-level constant) so a
 # later bind_project is always picked up.
 #
-# ``default``'s ``CurationConfig.bakeoff_jobs_dir`` already resolves via
-# the same ``OP_BAKEOFF_JOBS_DIR`` env var as ``GpuArbiterConfig``'s copy
-# (``src.config.projects.resources_for_new``, used for ``default`` like
-# every other project), so ``_jobs_dir()`` is
-# byte-for-byte the old module-level ``JOBS_DIR`` for ``default``.
-# ``_out_dir()`` keeps
+# Every project, ``default`` included, gets
+# ``<OP_STATE_DIR>/projects/<slug>/bakeoff_jobs``
+# (``src.config.projects.resources_for_new``); ``OP_BAKEOFF_JOBS_DIR`` does
+# not move it. The GPU arbiter scans every project's dir
+# (``arbiter_dirs.all_bakeoff_jobs_dirs``), and the evaluator finds them
+# from its ``--watch <OP_STATE_DIR>/bakeoff_jobs`` root (see
+# ``bakeoff_runner._pending_job_files``). ``_out_dir()`` keeps
 # ``default``'s exact old path/env var (``OP_BAKEOFF_OUT_DIR`` / a sibling
 # ``bakeoff_out`` dir, NOT nested under ``bakeoff_jobs``) and only nests a
 # project's outputs under its own ``bakeoff_jobs_dir`` for a non-default
