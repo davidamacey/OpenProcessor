@@ -3,9 +3,9 @@ projects_plan.md §5.4): what's currently running for one project, across
 every job-producing subsystem.
 
 Each source is its own small function so a unit test can fake one at a
-time. :func:`running_jobs` is the single entry point P3 (delete/archive
-busy checks) will consume -- wiring it into any lifecycle route is out of
-scope here; this module only builds the inventory.
+time. :func:`running_jobs` is the single entry point P3's delete/archive
+busy checks consume (``lifecycle.running_jobs`` adapts this module's
+``JobRef`` into the wire-shaped one; see that function).
 
 Every source reads *file-based* state scoped to the given project's own
 ``ProjectResources`` (never the live-bound ``current_project()`` context,
@@ -34,6 +34,27 @@ if TYPE_CHECKING:
 _TRAIN_NON_TERMINAL = frozenset({'queued', 'starting', 'running', 'exporting'})
 
 
+def _iso_or_none(value: object) -> str | None:
+    """A job source's raw ``started_at`` -- already an ISO string, a
+    numeric epoch (``time.time()``, as autolabel's ``state.json``
+    stores it), or absent -- normalized to an ISO string or ``None``
+    (P3F m5: never a fabricated ``''``)."""
+    if isinstance(value, str) and value:
+        return value
+    # A 0.0 (or negative) epoch is these dataclasses' own "not actually
+    # set yet" sentinel default (e.g. probe/scores/select/viz _JobState),
+    # not a real 1970 start time -- surface it as unknown, not a
+    # misleadingly precise fake timestamp.
+    if isinstance(value, int | float) and value > 0:
+        import datetime as _dt
+
+        try:
+            return _dt.datetime.fromtimestamp(value, _dt.UTC).isoformat()
+        except (OverflowError, OSError, ValueError):
+            return None
+    return None
+
+
 @dataclass(frozen=True)
 class JobRef:
     """One busy job, named well enough for a delete/archive busy-check
@@ -42,6 +63,9 @@ class JobRef:
 
     kind: str
     job_id: str
+    # P3F m5: a real ISO timestamp when the job source actually records a
+    # start time, else None -- never an always-empty-string filler.
+    started_at: str | None = None
 
 
 def _train_jobs(record: ProjectRecord) -> list[JobRef]:
@@ -60,7 +84,8 @@ def _train_jobs(record: ProjectRecord) -> list[JobRef]:
             continue
         if payload.get('state') in _TRAIN_NON_TERMINAL:
             job_id = status_file.name[: -len('.status.json')]
-            out.append(JobRef(kind='train', job_id=job_id))
+            started_at = _iso_or_none(payload.get('started_at'))
+            out.append(JobRef(kind='train', job_id=job_id, started_at=started_at))
     return out
 
 
@@ -69,14 +94,33 @@ def _bakeoff_jobs(record: ProjectRecord) -> list[JobRef]:
     ``bakeoff_jobs_dir`` -- a job file present (not yet moved to
     ``done/`` by the evaluator, see
     ``scripts.curation.bakeoff.bakeoff_runner``) means it's still
-    pending or in flight."""
+    pending or in flight.
+
+    ``started_at`` comes from the companion evaluator-written
+    ``<bakeoff_jobs_dir>/out/<job_id>/status.json`` (``BakeoffStatus``,
+    P3F m5) when it exists yet -- a still-``queued`` job (no ``status.json``
+    written) reports ``None``, which is honest: it has not started."""
+    import json
+
+    from src.services.training.run_retention import bakeoff_out_dir
+
     jobs_dir = record.resources.bakeoff_jobs_dir
     if not jobs_dir.is_dir():
         return []
-    return [
-        JobRef(kind='bakeoff', job_id=p.name[: -len('.job.json')])
-        for p in sorted(jobs_dir.glob('*.job.json'))
-    ]
+    out_root = bakeoff_out_dir(jobs_dir)
+    out: list[JobRef] = []
+    for p in sorted(jobs_dir.glob('*.job.json')):
+        job_id = p.name[: -len('.job.json')]
+        started_at = None
+        status_file = out_root / job_id / 'status.json'
+        if status_file.is_file():
+            try:
+                status_payload = json.loads(status_file.read_text(encoding='utf-8'))
+                started_at = _iso_or_none(status_payload.get('started_at'))
+            except (OSError, ValueError):
+                started_at = None
+        out.append(JobRef(kind='bakeoff', job_id=job_id, started_at=started_at))
+    return out
 
 
 def _autolabel_jobs(record: ProjectRecord) -> list[JobRef]:
@@ -102,7 +146,13 @@ def _autolabel_jobs(record: ProjectRecord) -> list[JobRef]:
         return []
     if payload.get('status') != 'running':
         return []
-    return [JobRef(kind='autolabel', job_id=str(payload.get('job_id') or 'autolabel'))]
+    return [
+        JobRef(
+            kind='autolabel',
+            job_id=str(payload.get('job_id') or 'autolabel'),
+            started_at=_iso_or_none(payload.get('started_at')),
+        )
+    ]
 
 
 def _export_jobs(record: ProjectRecord) -> list[JobRef]:  # noqa: ARG001 - see docstring
@@ -146,8 +196,10 @@ def _state_file_jobs(record: ProjectRecord) -> list[JobRef]:
         for kind, module_name in _STATE_JOB_MODULES.items():
             module = importlib.import_module(module_name)
             if module._is_busy():
-                job_id = module._read_state().job_id
-                out.append(JobRef(kind=kind, job_id=str(job_id or kind)))
+                state = module._read_state()
+                job_id = state.job_id
+                started_at = _iso_or_none(getattr(state, 'started_at', None))
+                out.append(JobRef(kind=kind, job_id=str(job_id or kind), started_at=started_at))
     return out
 
 
@@ -192,6 +244,8 @@ def _detection_worker_inflight(record: ProjectRecord) -> list[JobRef]:
         ):
             continue
         host = str(payload.get('host') or liveness_file.stem)
+        # started_at stays None: this is a liveness heartbeat
+        # (updated_at), never a job start time.
         out.append(JobRef(kind='detection_worker', job_id=host))
     return out
 
@@ -199,8 +253,10 @@ def _detection_worker_inflight(record: ProjectRecord) -> list[JobRef]:
 def running_jobs(record: ProjectRecord) -> list[JobRef]:
     """Every busy job for ``record``'s project, across every source.
 
-    Consumed by P3's delete/archive busy checks (not wired here). Each
-    source function above can be faked independently in a test.
+    Consumed by P3's delete/archive busy checks
+    (``lifecycle.running_jobs`` adapts these into the wire-shaped
+    ``JobRef``). Each source function above can be faked independently
+    in a test.
     """
     jobs: list[JobRef] = []
     jobs.extend(_train_jobs(record))

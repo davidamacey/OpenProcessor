@@ -41,6 +41,10 @@ def test_running_jobs_delegates_to_busy_module() -> None:
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
+        # P3F item 3 (B2(a) residual): create_project's registry
+        # refresh_strict() needs a real, reachable registry bound during
+        # the create itself -- set it before create_project runs.
+        set_project_registry(ProjectRegistry(lambda: client))
         await seed_default_project(client)
         record, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
 
@@ -70,9 +74,9 @@ def test_archive_busy_409_carries_typed_job_refs(monkeypatch) -> None:
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
+        set_project_registry(ProjectRegistry(lambda: client))
         await seed_default_project(client)
         record, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
-        set_project_registry(ProjectRegistry(lambda: client))
 
         monkeypatch.setattr(
             busy,
@@ -91,7 +95,7 @@ def test_archive_busy_409_carries_typed_job_refs(monkeypatch) -> None:
                 'kind_label': 'Bake-off',
                 'id': 'run-42',
                 'label': 'run-42',
-                'started_at': '',
+                'started_at': None,
             }
         ]
 
@@ -103,10 +107,10 @@ def test_delete_busy_409_carries_typed_job_refs(monkeypatch) -> None:
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
+        set_project_registry(ProjectRegistry(lambda: client))
         await seed_default_project(client)
         _record, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
-        set_project_registry(ProjectRegistry(lambda: client))
 
         monkeypatch.setattr(
             busy,
@@ -125,7 +129,7 @@ def test_delete_busy_409_carries_typed_job_refs(monkeypatch) -> None:
                 'kind_label': 'Training run',
                 'id': 'run-7',
                 'label': 'run-7',
-                'started_at': '',
+                'started_at': None,
             }
         ]
 
