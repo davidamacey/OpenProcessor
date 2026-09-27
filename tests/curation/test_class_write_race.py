@@ -322,7 +322,7 @@ async def test_worker_drops_class_fields_when_class_changed_after_read() -> None
     task = _ItemTask(
         crop_id='w1',
         image_path='/x.jpg',
-        vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
+        item_bbox_norm=(0.1, 0.1, 0.5, 0.5),
         region_status='pending_detection',
         class_name='',
         group='',
@@ -355,7 +355,7 @@ async def test_worker_writes_class_when_unchanged() -> None:
     task = _ItemTask(
         crop_id='w2',
         image_path='/x.jpg',
-        vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
+        item_bbox_norm=(0.1, 0.1, 0.5, 0.5),
         region_status='pending_detection',
         class_name='',
         group='',

@@ -3,8 +3,8 @@
 After the naming sweep, the
 worker's detector/segmenter/VLM identifiers come entirely from deployment
 config (``DetectionProfile``, ``OP_VLM_*``), so the frontend can no longer
-hardcode a label/palette map keyed on private model ids
-(``lpr_nanov11_640``, ``sam3``, ``gemma-4-e4b``, ...). This module is the
+hardcode a label/palette map keyed on deployment model ids
+(``my_region_det_640``, ``sam3``, ...). This module is the
 single catalog a client renders from instead — mirrors the
 ``class_sources.py`` / ``GET {prefix}/class_sources`` pattern.
 
@@ -19,7 +19,7 @@ from typing import Any
 
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.region_rejection import rejection_reason_catalog
-from src.config.region_source import CANDIDATE_SOURCES
+from src.config.region_source import CANDIDATE_SEGMENTER_TEXT_HINT, CANDIDATE_SOURCES
 from src.services.detection.profile_registry import get_active_region_profile
 
 
@@ -78,7 +78,8 @@ def _detectors(vlm_model: str) -> list[dict[str, Any]]:
         # The OCR text-detector only *locates* text to seed a segmenter
         # sub-crop re-pass; it never sets the region bbox itself, so it
         # never appears in region_detector -- filterable=False.
-        add(profile.ocr_det_model, 'OCR text hint', 'ocr', filterable=False)
+        if _text_hint_on(profile):
+            add(profile.ocr_det_model, 'OCR text hint', 'ocr', filterable=False)
     else:
         add('human', 'Human', 'human', filterable=True)
 
@@ -97,39 +98,49 @@ def _detectors(vlm_model: str) -> list[dict[str, Any]]:
     return out
 
 
-def _region_sources() -> list[dict[str, Any]]:
-    """Every ``region_source`` / ``candidate_source`` value, plus the
-    fixed ``human`` value (a human-drawn/edited box)."""
+def _text_hint_on(profile: Any) -> bool:
+    # The segmenter URL is worker config the API can't see; a profile with
+    # the hint on and an OCR pipeline is advertised as able to run it.
+    return profile.text_hint_active(segmenter_enabled=True)
+
+
+def _region_sources(profile: Any) -> list[dict[str, Any]]:
+    """Every ``region_source`` / ``candidate_source`` value the profile can
+    write, plus the fixed ``human`` value (a human-drawn/edited box)."""
     out: list[dict[str, Any]] = []
     for source_id in CANDIDATE_SOURCES:
+        if source_id == CANDIDATE_SEGMENTER_TEXT_HINT and not _text_hint_on(profile):
+            continue
         label, role = _CANDIDATE_SOURCE_LABELS[source_id]
         out.append({'id': source_id, 'label': label, 'role': role})
     out.append({'id': 'human', 'label': 'Human', 'role': 'human'})
     return out
 
 
-def _text_rules() -> dict[str, Any] | None:
-    """The active profile's region-text validity rules (with the resolved
-    prompt pack's example values as placeholders), or ``None`` without a
-    region profile."""
+def _text_rules(profile: Any) -> dict[str, Any] | None:
+    """The profile's region-text validity rules (with the resolved prompt
+    pack's example values as placeholders), or ``None`` for a text-free
+    profile."""
     from src.services.detection.region_text_rules import region_text_rules
 
-    profile = get_active_region_profile()
-    return None if profile is None else region_text_rules(profile).catalog()
+    return region_text_rules(profile).catalog() if profile.reads_text else None
 
 
 def region_profile_summary(profile: Any) -> dict[str, Any]:
     """``{name, display_name, display_name_singular, region_class_name,
-    text_reader}`` for one
+    text_reader, reads_text, text_hint_enabled}`` for one
     ``DetectionProfile`` -- served on ``GET /health`` and
     ``GET /regions/vocabulary``. THE signal a client keys on to decide
-    whether region-scoped UI/routes are available."""
+    whether region-scoped UI/routes are available; ``reads_text`` is the
+    one to key text UI on (``text_reader`` is ``'none'`` when false)."""
     return {
         'name': profile.name,
         'display_name': profile.display_name,
         'display_name_singular': profile.display_name_singular,
         'region_class_name': profile.region_class_name,
         'text_reader': profile.text_reader,
+        'reads_text': profile.reads_text,
+        'text_hint_enabled': profile.text_hint_enabled,
     }
 
 
@@ -141,7 +152,8 @@ def region_vocabulary_catalog() -> dict[str, Any]:
     No-profile gating contract: with no active region profile, every
     list is empty, ``text_rules`` and ``region_profile`` are ``None`` --
     this endpoint still 200s (never 404s); ``region_profile`` is the
-    signal a client checks first.
+    signal a client checks first. A text-free profile serves the same
+    empty text vocabulary (``text_rules: None``, ``text_choices: []``).
     """
     profile = get_active_region_profile()
     if profile is None:
@@ -159,7 +171,7 @@ def region_vocabulary_catalog() -> dict[str, Any]:
 
     vlm_model = os.environ.get('OP_VLM_MODEL', '')
     detectors = _detectors(vlm_model)
-    region_sources = _region_sources()
+    region_sources = _region_sources(profile)
     # chain_actors: the identifiers that can appear in a
     # detector_chain tag (``f'{actor}:hit'`` etc). Same underlying
     # identifiers as detectors, filterable dropped (chain tags aren't a
@@ -170,8 +182,8 @@ def region_vocabulary_catalog() -> dict[str, Any]:
         'detectors': detectors,
         'region_sources': region_sources,
         'chain_actors': chain_actors,
-        'text_rules': _text_rules(),
-        'text_choices': list(TEXT_CHOICES),
+        'text_rules': _text_rules(profile),
+        'text_choices': list(TEXT_CHOICES) if profile.reads_text else [],
         'rejection_reasons': rejection_reason_catalog(),
     }
 

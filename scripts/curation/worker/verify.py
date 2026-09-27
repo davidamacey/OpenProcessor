@@ -195,10 +195,12 @@ def _region_write_doc(
     # An accepted box supersedes any candidate an earlier pass rejected.
     doc.update(dict.fromkeys(candidate_fields(F)))
     doc[F.rejection_reason] = None
+    profile = region_profile_or_neutral()
+    if region_text_reply and not profile.reads_text:
+        logger.debug('region_text_ignored_text_free', profile=profile.name)
+        region_text_reply = None
     invalid = (
-        region_text_rules(region_profile_or_neutral()).invalid_reason(region_text_reply)
-        if region_text_reply
-        else None
+        region_text_rules(profile).invalid_reason(region_text_reply) if region_text_reply else None
     )
     if region_text_reply and invalid:
         # Not text (a prompt placeholder, a "can't read it" answer, ...):

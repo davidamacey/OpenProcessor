@@ -141,6 +141,27 @@ async def test_promote_fresh_model_uses_version_1(
 
 
 @pytest.mark.asyncio
+async def test_promote_result_flags_cold_start(
+    fake_status: TrainJobStatus,
+    scratch_models_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PromoteResult must surface the TensorRT-accelerator cold-start
+    caveat (final E2E run 2026-09-26: first post-promote inference took
+    ~85s because the onnxruntime+TensorRT config.pbtxt JIT-builds the
+    engine on first real inference, not on /load) so a caller doesn't
+    mistake it for a hang."""
+    monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=True))
+    promoter = _promoter(scratch_models_dir)
+    result = await promoter.promote(
+        status=fake_status,
+        triton_name='op_smoke_cold_start',
+        class_id_to_name=CLASS_MAP,
+    )
+    assert result.cold_start_expected_on_first_inference is True
+
+
+@pytest.mark.asyncio
 async def test_promote_without_overwrite_still_conflicts(
     fake_status: TrainJobStatus,
     scratch_models_dir: Path,

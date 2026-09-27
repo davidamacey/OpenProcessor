@@ -50,7 +50,7 @@ def _make_task(
     return _ItemTask(
         crop_id='crop-1',
         image_path='/dev/null/never-read',
-        vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
+        item_bbox_norm=(0.1, 0.1, 0.5, 0.5),
         region_status='pending',
         class_name='audi',
         group='cars',
@@ -455,7 +455,7 @@ class TestDetectionWorkerBulkWriterHumanGuard:
         t = _ItemTask(
             crop_id='crop-1',
             image_path='/dev/null/never-read',
-            vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
+            item_bbox_norm=(0.1, 0.1, 0.5, 0.5),
             region_status='pending',
             class_name='audi',
             group='cars',
@@ -505,7 +505,7 @@ class TestDetectionWorkerBulkWriterHumanGuard:
         t = _ItemTask(
             crop_id='crop-1',
             image_path='/dev/null/never-read',
-            vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
+            item_bbox_norm=(0.1, 0.1, 0.5, 0.5),
             region_status='pending',
             class_name='audi',
             group='cars',

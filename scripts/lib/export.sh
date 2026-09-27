@@ -53,14 +53,14 @@ declare -gA EXPORT_TIMES=(
 # Uses 'docker compose run --rm --no-deps -T' so the export works without
 # Triton running and without the yolo-api container already up.
 run_in_api_container() {
-    docker compose run --rm --no-deps -T yolo-api "$@"
+    dc run --rm --no-deps -T yolo-api "$@"
 }
 
 check_triton_container() {
     # G-03: check by compose SERVICE state, not a hardcoded container
     # name -- container_name is now ${COMPOSE_PROJECT_NAME}-triton, which
     # differs on a second isolated stack (or any COMPOSE_PROJECT_NAME).
-    if [[ -z "$(docker compose ps --status running --services triton-server 2>/dev/null)" ]]; then
+    if [[ -z "$(dc ps --status running --services triton-server 2>/dev/null)" ]]; then
         log_error "triton-server container not running"
         log_info "Start with: docker compose up -d triton-server"
         return 1

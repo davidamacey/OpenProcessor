@@ -206,6 +206,16 @@ class PromoteResult:
     triton_loaded: bool
     version: str = '1'
     class_remap_source: str = 'none'
+    # Always true for this promoter's onnxruntime+TensorRT-accelerator
+    # config.pbtxt (see yolo_triton_config.py): Triton's /load only
+    # loads the ONNX graph -- the TensorRT execution accelerator JIT-
+    # builds the actual engine on the model's first real inference
+    # request, synchronously, on that request's thread. Final E2E run
+    # 2026-09-26 measured ~85s for this on a toy single-class model; a
+    # caller scripting immediate post-promote verification should expect
+    # a slow (not hung) first call and can optionally issue a throwaway
+    # warm-up request before treating latency as representative.
+    cold_start_expected_on_first_inference: bool = True
 
 
 @dataclass(frozen=True)

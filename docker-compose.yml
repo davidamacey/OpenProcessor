@@ -8,16 +8,13 @@ name: ${COMPOSE_PROJECT_NAME:-openprocessor}
 
 services:
   triton-server:
-    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor-triton:${OP_IMAGE_TAG:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile.triton
+    image: ${OP_TRITON_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-triton:${OP_IMAGE_TAG:-0.3.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-triton
     restart: always
     ports:
-      - "${TRITON_HTTP_PORT:-4600}:8000"  # HTTP
-      - "${TRITON_GRPC_PORT:-4601}:8001"  # gRPC
-      - "${TRITON_METRICS_PORT:-4602}:8002"  # Metrics
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${TRITON_HTTP_PORT:-4600}:8000"  # HTTP
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${TRITON_GRPC_PORT:-4601}:8001"  # gRPC
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${TRITON_METRICS_PORT:-4602}:8002"  # Metrics
     volumes:
       - ./models:/models
     command:
@@ -71,14 +68,9 @@ services:
       - triton_net
 
   yolo-api:
-    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-latest}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.3.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-api
     restart: always
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     # CFG-5: previously the ONLY var reaching this container from .env was
     # OP_API_PREFIX (explicitly interpolated below) -- everything else in
     # .env (see env.template) was silently unreachable. env_file loads the
@@ -88,15 +80,8 @@ services:
       - path: ./.env
         required: false
     volumes:
-      - ./src:/app/src
-      - ./export:/app/export
-      - ./scripts:/app/scripts
-      - ./tests:/app/tests
-      - ./benchmarks:/app/benchmarks
       - ./models:/app/models
       - ./pytorch_models:/app/pytorch_models
-      - ./test_images:/app/test_images
-      - ./VERSION:/app/VERSION:ro
       - ./data:/app/data
       - openprocessor-state:/var/lib/openprocessor
       # Shared with the curation-auto-label-worker service (profile
@@ -121,7 +106,9 @@ services:
       - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
       # G-08: worked-example region profiles / bake-off baselines
       # (OP_REGION_PROFILE_PATH=/app/examples/region_profiles/license_plate.json).
-      - ./examples:/app/examples:ro
+      # examples/ ships baked into the image (see Dockerfile) for this
+      # deploy-safe base file; docker-compose.dev.yml overrides it with a
+      # writable-checkout mount for hot-reload editing.
     environment:
       # Triton gRPC endpoint (Docker service name)
       - TRITON_URL=triton-server:8001
@@ -187,7 +174,7 @@ services:
       - --access-log
       - --log-level=info
     ports:
-      - "${API_PORT:-4603}:8000"  # FastAPI
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-4603}:8000"  # FastAPI
     ulimits:
       memlock: -1
       stack: 67108864
@@ -235,13 +222,8 @@ services:
   # ===================================================================
 
   curation-detection-worker:
-    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-latest}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.3.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-detection-worker
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     restart: unless-stopped
@@ -249,8 +231,6 @@ services:
       - path: ./.env
         required: false
     volumes:
-      - ./src:/app/src:ro
-      - ./scripts:/app/scripts:ro
       - openprocessor-state:/var/lib/openprocessor
       # ST-1: shared with yolo-api -- see that service's mount comment.
       - openprocessor-crop-cache:/var/cache/openprocessor/crops
@@ -258,8 +238,9 @@ services:
       # worker resolves item source paths written at ingest time against
       # this mount. See docs/CURATION.md "Mounting your image source".
       - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
-      # G-08: region profile examples (OP_REGION_PROFILE_PATH).
-      - ./examples:/app/examples:ro
+      # G-08: region profile examples (OP_REGION_PROFILE_PATH) ship baked
+      # into the image (see Dockerfile); docker-compose.dev.yml overrides
+      # with a writable-checkout mount.
     environment:
       - TRITON_URL=triton-server:8001
       - OPENSEARCH_URL=http://opensearch:9200
@@ -301,13 +282,8 @@ services:
       - triton_net
 
   curation-vlm-worker:
-    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-latest}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.3.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-vlm-worker
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     restart: unless-stopped
@@ -315,8 +291,6 @@ services:
       - path: ./.env
         required: false
     volumes:
-      - ./src:/app/src:ro
-      - ./scripts:/app/scripts:ro
       - openprocessor-state:/var/lib/openprocessor
     environment:
       - OP_API=http://yolo-api:8000
@@ -345,13 +319,8 @@ services:
       - triton_net
 
   curation-auto-label-worker:
-    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-latest}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.3.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-auto-label-worker
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     restart: unless-stopped
@@ -359,8 +328,6 @@ services:
       - path: ./.env
         required: false
     volumes:
-      - ./src:/app/src:ro
-      - ./scripts:/app/scripts:ro
       # Shared with yolo-api: this is the trigger/state/heartbeat file
       # protocol POST /curation/pipeline/auto_label writes into (see
       # OP_AUTO_LABEL_STATE_DIR, default /jobs/auto_label).
@@ -382,8 +349,9 @@ services:
       - ./data:/app/data
       # Region profiles (OP_REGION_PROFILE_PATH): without this the worker
       # dies with FileNotFoundError the moment it claims a job that needs
-      # a region profile (e.g. license_plate.json).
-      - ./examples:/app/examples:ro
+      # a region profile (e.g. license_plate.json). Ships baked into the
+      # image (see Dockerfile); docker-compose.dev.yml overrides with a
+      # writable-checkout mount.
     environment:
       - OPENSEARCH_URL=http://opensearch:9200
       - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
@@ -410,22 +378,14 @@ services:
       - triton_net
 
   curation-cluster-refresh:
-    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-latest}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.3.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-cluster-refresh
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     restart: unless-stopped
     env_file:
       - path: ./.env
         required: false
-    volumes:
-      - ./src:/app/src:ro
-      - ./scripts:/app/scripts:ro
     command:
       - python
       - scripts/curation/cluster_refresh_daemon.py
@@ -452,13 +412,8 @@ services:
   # On-demand only (no `restart:` — see docker/evaluator/Dockerfile):
   # `docker compose --profile curation run --rm curation-evaluator`.
   curation-evaluator:
-    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor-evaluator:${OP_IMAGE_TAG:-latest}
+    image: ${OP_EVALUATOR_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-evaluator:${OP_IMAGE_TAG:-0.3.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-evaluator
-    build:
-      context: .
-      dockerfile: docker/evaluator/Dockerfile
-      args:
-        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - curation
     env_file:
@@ -473,8 +428,6 @@ services:
       - MLFLOW_TRACKING_URI=http://curation-mlflow:5000
       - MLFLOW_EXPERIMENT_NAME=${MLFLOW_EXPERIMENT_NAME:-openprocessor}
     volumes:
-      - ./scripts:/app/scripts:ro
-      - ./src:/app/src:ro
       # Exports are eval datasets: same /app/data path as yolo-api, where
       # the API resolved them (OP_EXPORT_ROOT defaults to ./data/exports).
       - ./data:/app/data:ro
@@ -499,11 +452,8 @@ services:
   #   OP_SEGMENTER_URL=http://segmenter:8000 \
   #     docker compose --profile curation --profile segmenter up -d
   segmenter:
-    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor-segmenter:${OP_IMAGE_TAG:-latest}
+    image: ${OP_SEGMENTER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-segmenter:${OP_IMAGE_TAG:-0.3.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-segmenter
-    build:
-      context: docker/segmenter
-      dockerfile: Dockerfile
     profiles:
       - segmenter
     restart: unless-stopped
@@ -511,7 +461,7 @@ services:
       - path: ./.env
         required: false
     ports:
-      - "${SEGMENTER_PORT:-4611}:8000"  # Segmentation HTTP API
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${SEGMENTER_PORT:-4611}:8000"  # Segmentation HTTP API
     volumes:
       - ./cache/huggingface:/home/appuser/.cache/huggingface  # ST-2: nvme-backed HF cache (appuser, matches yolo-api)
     environment:
@@ -569,13 +519,8 @@ services:
   # ===================================================================
 
   curation-trainer:
-    image: ${OP_IMAGE_REPO:-davidamacey}/openprocessor-trainer:${OP_IMAGE_TAG:-latest}
+    image: ${OP_TRAINER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-trainer:${OP_IMAGE_TAG:-0.3.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-trainer
-    build:
-      context: .
-      dockerfile: docker/trainer/Dockerfile
-      args:
-        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     profiles:
       - training
     restart: unless-stopped
@@ -658,7 +603,7 @@ services:
     volumes:
       - mlflow_data:/mlflow
     ports:
-      - "${MLFLOW_PORT:-4609}:5000"
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${MLFLOW_PORT:-4609}:5000"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\" || exit 1"]
       interval: 30s
@@ -697,7 +642,7 @@ services:
       memlock: -1
       stack: 67108864
     ports:
-      - "${VLM_PORT:-4612}:8000"
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${VLM_PORT:-4612}:8000"
     volumes:
       - ./cache/vllm:/root/.cache/huggingface
     environment:
@@ -741,7 +686,6 @@ services:
       - benchmark
     command: sleep infinity
     volumes:
-      - ./benchmarks:/workspace/benchmarks
       - ./models:/models
     networks:
       - triton_net
@@ -773,7 +717,7 @@ services:
     environment:
       - DCGM_EXPORTER_LISTEN=:9400
     ports:
-      - "${DCGM_PORT:-4610}:9400"  # DCGM GPU metrics
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${DCGM_PORT:-4610}:9400"  # DCGM GPU metrics
     deploy:
       resources:
         reservations:
@@ -791,7 +735,7 @@ services:
     profiles:
       - monitoring
     ports:
-      - "${PROMETHEUS_PORT:-4604}:9090"  # Prometheus
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${PROMETHEUS_PORT:-4604}:9090"  # Prometheus
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./monitoring/alerts:/etc/prometheus/alerts
@@ -814,7 +758,7 @@ services:
     profiles:
       - monitoring
     ports:
-      - "${GRAFANA_PORT:-4605}:3000"  # Grafana
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${GRAFANA_PORT:-4605}:3000"  # Grafana
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
@@ -844,7 +788,7 @@ services:
     profiles:
       - monitoring
     ports:
-      - "${LOKI_PORT:-4606}:3100"  # Loki
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${LOKI_PORT:-4606}:3100"  # Loki
     volumes:
       - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml
       - loki_data:/loki
@@ -895,7 +839,7 @@ services:
     volumes:
       - opensearch_data:/usr/share/opensearch/data
     ports:
-      - "${OPENSEARCH_PORT:-4607}:9200"  # REST API
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${OPENSEARCH_PORT:-4607}:9200"  # REST API
     healthcheck:
       test: ["CMD-SHELL", "curl -sS http://localhost:9200 || exit 1"]
       interval: 5s
@@ -914,7 +858,7 @@ services:
       - OPENSEARCH_HOSTS=["http://opensearch:9200"]
       - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true  # Must match OpenSearch security setting
     ports:
-      - "${OPENSEARCH_DASHBOARDS_PORT:-4608}:5601"  # OpenSearch Dashboards
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${OPENSEARCH_DASHBOARDS_PORT:-4608}:5601"  # OpenSearch Dashboards
     volumes:
       - opensearch_dashboards_data:/usr/share/opensearch-dashboards/data
     healthcheck:

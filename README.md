@@ -235,6 +235,23 @@ Docker Compose profile, and is disabled by default:
 docker compose --profile curation up -d
 ```
 
+**Rebuild the image before running any curation model-export target.**
+The Docker Hub `:latest` tag (pulled by `./scripts/setup.sh` and by a
+plain `docker compose up -d`) can predate the source checkout it's
+paired with. If `make export-pe` (or any curation export target that
+imports `perception_models`) fails with
+`ModuleNotFoundError: No module named 'core'`, the running `yolo-api`
+container is still on a stale pulled image that never installed that
+dependency — rebuild from this checkout first:
+
+```bash
+docker compose build yolo-api
+docker compose up -d --force-recreate yolo-api
+```
+
+then re-run the export target. Pulling a release tag that matches your
+checked-out SHA (instead of `:latest`) avoids this entirely.
+
 **Try it with a public sample.** No dataset ships in this repo (nothing
 proprietary is bundled anywhere) -- fetch a small, license-filtered COCO
 2017 subset instead:

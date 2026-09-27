@@ -516,6 +516,8 @@ def test_health_region_profile_reflects_the_active_profile(
         'display_name_singular': 'Plate',
         'region_class_name': 'license_plate',
         'text_reader': 'both',
+        'reads_text': True,
+        'text_hint_enabled': True,
     }
 
 

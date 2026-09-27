@@ -453,7 +453,9 @@ async def models_status() -> dict[str, Any]:
         *,
         job_id: str | None = None,
         promoted_at: str | None = None,
+        optional: bool = False,
     ) -> dict[str, Any]:
+        in_index = name in state_by_name
         state = state_by_name.get(name, {})
         ready = state.get('state') == 'READY'
         m = metrics_by_model.get(name, {})
@@ -464,6 +466,16 @@ async def models_status() -> dict[str, Any]:
             status = 'unavailable'
         elif ready:
             status = 'ready'
+        elif optional and not in_index:
+            # Only the profile's region detector is ever marked `optional`
+            # (when a segmenter is configured as its fallback -- see the
+            # `models_status` call site). A model that's simply absent from
+            # Triton's repository index entirely (never shipped/installed),
+            # as opposed to present-but-unloaded or present-but-failed
+            # (which stay `not_ready`, unchanged), isn't a stall when the
+            # cascade already falls back to a ready segmenter -- see
+            # region_dependency_health.stall_reason for the matching logic.
+            status = 'not_installed'
         else:
             status = 'not_ready'
         return {
@@ -487,6 +499,13 @@ async def models_status() -> dict[str, Any]:
             'requires_force_to_unload': name in _core_pipeline_models(),
             'job_id': job_id,
             'promoted_at': promoted_at,
+            # True only for the active region profile's detector when a
+            # segmenter is configured as its fallback (mirrors
+            # region_dependency_health.stall_reason's "ready segmenter
+            # means a down detector isn't a stall" semantics) -- the
+            # frontend uses this to render "optional, not installed"
+            # instead of a red NOT READY. False for every other entry.
+            'optional': optional,
             # A real Triton model repository entry — DELETE /models/{name}
             # can act on it (subject to the guard flags above). Contrast
             # with external-service entries (segmenter, VLM), which have
@@ -504,6 +523,17 @@ async def models_status() -> dict[str, Any]:
         # reported `not_ready` even while healthy. See build_segmenter_entry.
         if segmenter_name and name == segmenter_name:
             models.append(await build_segmenter_entry(name, friendly, role, mtype))
+        elif (
+            region is not None
+            and region.detector_model
+            and name == region.detector_model
+            and segmenter_name
+        ):
+            # The cascade falls back to the segmenter when the region
+            # detector is missing (see region_dependency_health's
+            # stall_reason) -- so a detector that isn't installed in
+            # Triton at all is not a red NOT READY here, it's optional.
+            models.append(_build_triton_entry(name, friendly, role, mtype, optional=True))
         else:
             models.append(_build_triton_entry(name, friendly, role, mtype))
 
@@ -552,6 +582,7 @@ async def models_status() -> dict[str, Any]:
             'last_error': vlm_error,
             'endpoint': os.environ.get('OP_VLM_URL', ''),
             'unloadable': False,
+            'optional': False,
         }
     )
 

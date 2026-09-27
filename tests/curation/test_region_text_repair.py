@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 import pytest
@@ -131,3 +132,37 @@ async def test_apply_rewrites_only_the_chosen_text_fields(fake_os: QueryFakeOpen
     assert docs['human'][F.text] == 'ABC123'
     again = await plan_region_text_repair(fake_os, index=INDEX, profile=PROFILE, rules=RULES)
     assert again.changes == {}
+
+
+TEXT_FREE = dataclasses.replace(PROFILE, text_reader='none')
+
+
+def test_text_free_profile_rederives_nothing() -> None:
+    assert rederive(_vlm_row('a', 'ABC123', 'VWY7977'), profile=TEXT_FREE, rules=RULES) is None
+
+
+@pytest.mark.asyncio
+async def test_text_free_profile_plans_nothing(fake_os: QueryFakeOpenSearch) -> None:
+    plan = await plan_region_text_repair(fake_os, index=INDEX, profile=TEXT_FREE, rules=RULES)
+    assert plan.scanned == 0
+    assert plan.changes == {}
+    result = await apply_region_text_repair(
+        fake_os, plan, index=INDEX, profile=TEXT_FREE, rules=RULES
+    )
+    assert result.get('updated', 0) == 0
+    assert fake_os.docs(INDEX)['ph'][F.text] == 'ABC123'
+
+
+@pytest.mark.asyncio
+async def test_rederive_script_exits_clean_on_a_text_free_profile(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import argparse
+
+    from scripts.curation import rederive_region_text as script
+
+    monkeypatch.setattr(script, 'get_active_region_profile', lambda: TEXT_FREE)
+    client = object()
+    rc = await script.run(argparse.Namespace(placeholder=[], prompt_pack=None), client)
+    assert rc == 0
+    assert 'does not read text' in capsys.readouterr().out

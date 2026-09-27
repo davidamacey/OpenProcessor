@@ -142,6 +142,14 @@ class JobSpec:
     def is_subset_run(self) -> bool:
         return bool(self.include_classes) or self.single_cls
 
+    @property
+    def full_class_remap_path(self) -> Path:
+        """Synthesized ``class_remap.json`` for a whole-export (non-subset)
+        run -- see ``dataset_prep.write_full_class_remap``. Lives directly
+        under ``tmp_root`` (not ``subset_dir``, which only exists for a
+        subset rewrite)."""
+        return self.tmp_root / 'full_class_remap.json'
+
 
 @dataclass
 class StatusState:

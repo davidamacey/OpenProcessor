@@ -28,6 +28,11 @@ Pipeline:
    ``data.yaml``, ``ATTRIBUTION.csv`` (ImageID, OriginalURL, Author,
    License), and ``SELECTION.json``.
 
+Run this on the **host** (e.g. via ``make sample-plates``, or directly
+with the project venv), never via ``docker compose exec`` — the same
+read-only-mount caveat as ``fetch_coco_subset.py`` applies if ``--out``
+resolves under ``/data/source`` inside a container.
+
 Usage::
 
     python scripts/datasets/fetch_openimages_plates.py --out data/samples/oi_plates \\

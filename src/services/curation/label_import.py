@@ -45,7 +45,7 @@ from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.history import record_class_history
 from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
-from src.services.curation.item_doc import region_seed_status
+from src.services.curation.item_doc import DetectedItem, region_seed_status
 from src.services.detection.cascade_detect import class_provenance
 from src.services.detection.geometry import crop_id as _geometry_crop_id, iou as _iou
 
@@ -325,8 +325,7 @@ async def import_yolo_labels(
     # Items this import creates (labels the detector missed) need region
     # detection like any ingest-created item; IoU-matched updates leave the
     # existing region status alone.
-    seed = region_seed_status()
-    region_seed = {get_region_fields().status: seed.value} if seed is not None else {}
+    status_field = get_region_fields().status
 
     bulk_body: list[dict[str, Any]] = []
     disagreements: list[dict[str, Any]] = []
@@ -413,6 +412,10 @@ async def import_yolo_labels(
                         'best_iou': best_iou,
                     }
                 )
+            seed = region_seed_status(
+                DetectedItem(bbox_pixel=(0, 0, 0, 0), score=1.0, class_name=class_name)
+            )
+            region_seed = {status_field: seed.value} if seed is not None else {}
             bulk_body.append({'index': {'_index': _items_index(), '_id': target_crop_id}})
             bulk_body.append(
                 {

@@ -281,19 +281,71 @@ def _build_yolo11_predictor(model_path: Path) -> tuple[_PredictFn, str]:
     return predict, model_path.name
 
 
+class ProbeLabelsMissingError(RuntimeError):
+    """No model-index -> name label source for this checkpoint.
+
+    Per the class identity invariant, a probe's dense output index is
+    local to that checkpoint and must never stand in for the project
+    registry's class_id. Raised instead of guessing (e.g. reusing the
+    registry's own, possibly gapped, id space as if it were the model's
+    dense order).
+    """
+
+
+def _onnx_metadata_names(session: Any) -> dict[int, str] | None:
+    """Class names from an Ultralytics ONNX export's ``names`` metadata.
+
+    Ultralytics writes a Python-literal dict (``"{0: 'a', 1: 'b'}"``),
+    keyed by the model's own dense output index -- never the project
+    registry's id space, which is append-only and gets gaps as classes
+    are deprecated/merged. Any other ONNX export has no such metadata.
+    """
+    import ast
+
+    try:
+        raw = session.get_modelmeta().custom_metadata_map.get('names')
+        names = ast.literal_eval(raw) if raw else None
+    except (AttributeError, SyntaxError, ValueError):
+        return None
+    if isinstance(names, dict):
+        try:
+            return {int(k): str(v) for k, v in names.items()}
+        except (TypeError, ValueError):
+            return None
+    if isinstance(names, list):
+        return {i: str(v) for i, v in enumerate(names)}
+    return None
+
+
 def _build_yolov5_objectness_predictor(model_path: Path) -> tuple[_PredictFn, str]:
     """``(predict_fn, default_version_tag)`` for the second (non-ultralytics)
-    architecture family."""
-    import onnxruntime as ort
+    architecture family.
 
-    from src.clients.curation_opensearch import get_class_registry
+    Class names come from the checkpoint's own embedded ``names`` metadata
+    (dense model-output order) -- never from the project class registry,
+    whose id space is sparse/gapped by design (append-only, deprecated
+    entries stay in place). Reusing the registry keyed by its own
+    ``class_id`` as if it were the model's dense output-index table would
+    silently mismap whenever the registry has a gap. The caller
+    (:func:`src.services.curation.probe_predictions.run_probe_inference`)
+    resolves the registry id afterward, by the *name* this predictor
+    returns -- so no registry lookup belongs in here at all.
+    """
+    import onnxruntime as ort
 
     session = ort.InferenceSession(str(model_path), providers=['CPUExecutionProvider'])
     input_name = session.get_inputs()[0].name
     output_name = session.get_outputs()[0].name
 
-    registry = get_class_registry()
-    class_names = {c.class_id: c.class_name for c in registry.load().classes}
+    class_names = _onnx_metadata_names(session)
+    if not class_names:
+        raise ProbeLabelsMissingError(
+            f'{model_path} has no embedded Ultralytics "names" ONNX metadata -- '
+            "cannot determine this checkpoint's model-output-index -> class-name "
+            'mapping. Re-export with the label metadata intact, or supply an '
+            "explicit class-names list; the project class registry's id space "
+            "must never be used as a stand-in for the model's own dense order."
+        )
 
     def predict(crop: Any) -> tuple[str | None, float, float, float]:
         chw = _letterbox_yolov5_objectness(crop, YOLOV5_OBJ_INPUT_SIZE)

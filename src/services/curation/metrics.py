@@ -50,12 +50,12 @@ OP_WORKER_SKIP_HUMAN_WON = Counter(
 
 OP_VLM_CALL_COMBINED_COUNT = Counter(
     'op_vlm_call_combined_count',
-    'VLM calls made via the combined verify+OCR prompt path.',
+    'VLM calls made via the combined verify(+read) prompt path.',
 )
 
 OP_VLM_CALL_SEPARATE_COUNT = Counter(
     'op_vlm_call_separate_count',
-    'VLM calls made via the legacy separate verify / OCR prompts.',
+    'VLM calls made via the legacy separate verify(+read) prompts.',
 )
 
 OP_VLM_COMBINED_PARSE_FAILURE = Counter(

@@ -62,7 +62,7 @@ def _make_task(
     status: str | None = 'pending',
     group: str = 'cars',
     class_name: str = 'audi',
-    vehicle_bbox: tuple[float, float, float, float] = (0.1, 0.1, 0.5, 0.5),
+    item_bbox: tuple[float, float, float, float] = (0.1, 0.1, 0.5, 0.5),
     detector_region_in_source: tuple[float, float, float, float] | None = None,
     detector_score: float = 0.0,
     crop_jpeg: bytes | None = None,
@@ -71,7 +71,7 @@ def _make_task(
     return worker._ItemTask(
         crop_id=crop_id,
         image_path='/dev/null/never-read',
-        vehicle_bbox_norm=vehicle_bbox,
+        item_bbox_norm=item_bbox,
         region_status=status,
         class_name=class_name,
         group=group,
@@ -179,7 +179,7 @@ class TestRouting:
             status='pending_verify',
             detector_region_in_source=(0.2, 0.2, 0.3, 0.22),
             detector_score=0.7,
-            vehicle_bbox=(0.0, 0.0, 1.0, 1.0),
+            item_bbox=(0.0, 0.0, 1.0, 1.0),
         )
         await worker._process_crop(
             task,
@@ -189,7 +189,7 @@ class TestRouting:
             vlm=vlm,
         )
         assert task.update_doc[F.status] == 'detected'
-        # Re-projected via crop_norm_to_source_norm: vehicle_bbox is the
+        # Re-projected via crop_norm_to_source_norm: item_bbox is the
         # full image so source == crop here.
         assert task.update_doc[F.bbox_norm] == list(sam_cand.bbox_norm)
         assert vlm.verify_region.await_count == 2
@@ -210,7 +210,7 @@ class TestRouting:
         task = _make_task(
             status='pending',
             class_name='some-class',
-            vehicle_bbox=(0.0, 0.0, 1.0, 1.0),
+            item_bbox=(0.0, 0.0, 1.0, 1.0),
         )
         await worker._process_crop(
             task,
@@ -234,7 +234,7 @@ class TestRouting:
             status='pending',
             class_name='audi',
             group='cars',
-            vehicle_bbox=(0.0, 0.0, 1.0, 1.0),
+            item_bbox=(0.0, 0.0, 1.0, 1.0),
         )
         await worker._process_crop(
             task,
@@ -263,7 +263,7 @@ class TestRouting:
         )
         vlm.aclose = AsyncMock()
         task = _make_task(
-            status='pending', class_name='audi', group='cars', vehicle_bbox=(0.0, 0.0, 1.0, 1.0)
+            status='pending', class_name='audi', group='cars', item_bbox=(0.0, 0.0, 1.0, 1.0)
         )
         await worker._process_crop(
             task,
@@ -332,7 +332,7 @@ class TestRouting:
             bbox_norm=(0.20, 0.30, 0.80, 0.60), score=0.74, source='sam3'
         )
         vlm = _vlm_mock(is_region=True)
-        task = _make_task(status='pending', group='cars', vehicle_bbox=(0.0, 0.0, 1.0, 1.0))
+        task = _make_task(status='pending', group='cars', item_bbox=(0.0, 0.0, 1.0, 1.0))
         await worker._process_crop(
             task,
             detector=_detector_mock([None]),
@@ -371,7 +371,7 @@ class TestNoVerdictLeavesItemPending:
             status='pending_verify',
             detector_region_in_source=(0.2, 0.2, 0.3, 0.22),
             detector_score=0.7,
-            vehicle_bbox=(0.0, 0.0, 1.0, 1.0),
+            item_bbox=(0.0, 0.0, 1.0, 1.0),
         )
         await worker._process_crop(
             task,
@@ -396,7 +396,7 @@ class TestNoVerdictLeavesItemPending:
         vlm.aclose = AsyncMock()
         segmenter = _segmenter_mock(RegionCandidate(bbox_norm=(0.6, 0.6, 0.7, 0.65), score=0.79))
         task = _make_task(
-            status='pending', class_name='audi', group='cars', vehicle_bbox=(0.0, 0.0, 1.0, 1.0)
+            status='pending', class_name='audi', group='cars', item_bbox=(0.0, 0.0, 1.0, 1.0)
         )
         await worker._process_crop(
             task,
@@ -425,7 +425,7 @@ class TestReprojection:
         sam_cand = RegionCandidate(bbox_norm=(0.5, 0.85, 0.9, 0.95), score=0.7, source='sam3')
         # Vehicle box covers the upper-left quadrant of the source.
         vehicle = (0.20, 0.10, 0.60, 0.50)
-        task = _make_task(status='pending', group='cars', vehicle_bbox=vehicle)
+        task = _make_task(status='pending', group='cars', item_bbox=vehicle)
         await worker._process_crop(
             task,
             detector=_detector_mock([None]),
@@ -456,7 +456,7 @@ class TestProvenance:
         task = _make_task(
             status='pending',
             group='cars',
-            vehicle_bbox=(0.0, 0.0, 1.0, 1.0),
+            item_bbox=(0.0, 0.0, 1.0, 1.0),
         )
         await worker._process_crop(
             task,
@@ -483,7 +483,7 @@ class TestProvenance:
         task = _make_task(
             status='pending',
             group='cars',
-            vehicle_bbox=(0.0, 0.0, 1.0, 1.0),
+            item_bbox=(0.0, 0.0, 1.0, 1.0),
         )
         await worker._process_crop(
             task,
@@ -515,7 +515,7 @@ class TestProvenance:
         task = _make_task(
             status='pending',
             group='cars',
-            vehicle_bbox=(0.0, 0.0, 1.0, 1.0),
+            item_bbox=(0.0, 0.0, 1.0, 1.0),
         )
         await worker._process_crop(
             task,

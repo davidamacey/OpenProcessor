@@ -11,7 +11,7 @@ concurrent readers can never disagree about which directory is current.
 
 Unlike the multi-class export, this one is *profile-scoped*: each
 ``profile_name`` gets its own output root and its own ``current``
-symlink, so a plate-detector export and a signage-detector export
+symlink, so a wheel-detector export and a signage-detector export
 coexist without either clobbering the other or the full multi-class
 dataset.
 """

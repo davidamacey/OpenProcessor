@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 
 from curation.test_pipeline import _FakeClassEntry, _FakeOpenSearch, _FakeRegistry
 from src.config.curation import CurationConfig
-from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, GENERIC_REGION_PACK
 
 
 if TYPE_CHECKING:
@@ -89,7 +89,9 @@ def test_start_unknown_prompt_pack_is_422_listing_valid_ids(client: TestClient) 
     detail = r.json()['detail']
     assert detail['axis'] == 'prompt_pack'
     assert detail['requested'] == 'nope'
-    assert detail['valid_ids'] == sorted({'pallet_v1', 'food_v2', GENERIC_ITEM_PACK.name})
+    assert detail['valid_ids'] == sorted(
+        {'pallet_v1', 'food_v2', GENERIC_ITEM_PACK.name, GENERIC_REGION_PACK.name}
+    )
 
 
 @pytest.mark.usefixtures('packs', 'job_dir', 'reference_region_profile')

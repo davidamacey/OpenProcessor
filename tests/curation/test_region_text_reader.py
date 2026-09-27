@@ -21,6 +21,7 @@ from src.services.detection.region_text import (
     ocr_engine_id,
     ocr_needed,
     read_dominant_text,
+    reads_text,
     resolve_region_text,
     texts_disagree,
     validate_text_reader,
@@ -209,6 +210,35 @@ class TestReaderModes:
 
     def test_engine_id(self) -> None:
         assert ocr_engine_id(NEUTRAL_REGION_PROFILE) == 'paddleocr_det_trt:1+paddleocr_rec_trt:1'
+
+
+class TestTextFreeMode:
+    def test_none_is_a_valid_mode(self) -> None:
+        assert validate_text_reader('none') == 'none'
+        assert reads_text('none') is False
+        assert reads_text('vlm_then_ocr') is True
+
+    @pytest.mark.parametrize('vlm_available', [True, False])
+    @pytest.mark.parametrize('vlm_text', [None, 'X'])
+    def test_ocr_never_needed(self, vlm_available: bool, vlm_text: str | None) -> None:
+        assert ocr_needed('none', vlm_text=vlm_text, vlm_available=vlm_available) is False
+
+    def test_resolve_writes_nothing(self) -> None:
+        reading = read_dominant_text([MAIN], REF)
+        out = resolve_region_text(
+            'none',
+            vlm_text='ABC1234',
+            vlm_confidence='high',
+            vlm_engine='vlm-model',
+            ocr=reading,
+            ocr_engine='det:1+rec:1',
+            normalizer=REF.normalizer,
+        )
+        assert out == {}
+
+    def test_profile_property(self) -> None:
+        assert DetectionProfile(name='p', text_reader='none').reads_text is False
+        assert DetectionProfile(name='p').reads_text is True
 
 
 class TestOcrFraming:

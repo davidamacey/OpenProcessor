@@ -261,6 +261,103 @@ GENERIC_ITEM_PACK = PromptPack(
 )
 
 
+# ---------------------------------------------------------------------------
+# Neutral text-free example pack — a region with nothing to read.
+#
+# Same structure as GENERIC_ITEM_PACK (classify the item, verify a
+# sub-region of interest on it), but no prompt asks for text: the pack a
+# text-free region profile (``text_reader='none'``) pairs with. The reply
+# parser treats every text key as optional, so leaving them out is all a
+# text-free pack has to do.
+# ---------------------------------------------------------------------------
+
+GENERIC_REGION_PACK = PromptPack(
+    name='generic_region_v1',
+    class_system=GENERIC_ITEM_PACK.class_system,
+    class_user_template=GENERIC_ITEM_PACK.class_user_template,
+    open_class_system=GENERIC_ITEM_PACK.open_class_system,
+    open_class_user_template=GENERIC_ITEM_PACK.open_class_user_template,
+    combined_system=(
+        'You are labeling an item crop. Return STRICT JSON with these keys: '
+        'class_id (int|null), class_confidence (high|medium|low|null), '
+        'region_visible (bool), region_bbox_correct (bool|null), '
+        'region_confidence (high|medium|low|null). '
+        'No prose, no markdown.'
+    ),
+    combined_user_template=(
+        '{class_block}'
+        '{region_block}'
+        'If asked to classify and no class matches, return class_id=-1.\n'
+        'If the proposed region bbox correctly outlines the sub-region of interest, set '
+        'region_bbox_correct=true.\n'
+        'If the proposed region bbox is wrong but the sub-region IS visible '
+        'elsewhere, set region_bbox_correct=false and region_visible=true.\n'
+        'If no such sub-region is visible, set region_visible=false and '
+        'region_bbox_correct=null.'
+    ),
+    combined_batch_system=(
+        'You are labeling numbered item crops. Return STRICT JSON: '
+        'a single object with key "results" whose value is an array of '
+        'per-image objects (one per numbered image, in input order). '
+        'Each per-image object has keys: img (1-based index), '
+        'class_id (int|null), class_confidence (high|medium|low|null), '
+        'region_visible (bool), region_bbox_correct (bool|null), '
+        'region_confidence (high|medium|low|null). '
+        'Output ONLY the JSON object — no prose, no markdown, no reasoning. '
+        'Skip the chain-of-thought.'
+    ),
+    combined_batch_rules=(
+        'Return STRICT JSON of the form '
+        '{"results": [{"img": 1, ...}, {"img": 2, ...}, ...]}. '
+        'Rules common to all images:\n'
+        '- If asked to classify and no class matches, return class_id=-1.\n'
+        '- If the proposed region bbox correctly outlines the sub-region of interest, set '
+        'region_bbox_correct=true.\n'
+        '- If the proposed region bbox is wrong but the sub-region IS visible '
+        'elsewhere, set region_bbox_correct=false and region_visible=true.\n'
+        '- If no such sub-region is visible, set region_visible=false and '
+        'region_bbox_correct=null.\n'
+        '- Respond ONLY with the JSON object above. No prose, no markdown, '
+        'no reasoning preamble.\n'
+        'Per-image directives follow with each image:'
+    ),
+    region_system=(
+        'You verify whether an image shows the sub-region of interest (a distinct part of '
+        'the item). Output ONLY a single JSON object on the last line — no reasoning, no '
+        'preamble, no markdown. Reasoning models: skip the chain-of-thought.'
+    ),
+    region_user=(
+        'Decide: does this crop show the sub-region of interest, or something else (a '
+        'different part of the item, background, an unrelated object)? Reply with exactly '
+        'one JSON object using these keys: is_region (boolean), confidence ("high" or '
+        '"medium" or "low"), reason (string up to 15 words).'
+    ),
+    region_batch_system=(
+        'You verify whether each numbered image shows the sub-region of interest. Output '
+        'ONLY a JSON array — one object per image, in input order — no reasoning, no '
+        'preamble, no markdown. Reasoning models: skip the chain-of-thought.'
+    ),
+    region_batch_user=(
+        'For each numbered crop decide: is this the sub-region of interest, or something '
+        'else? Respond as a JSON array:\n'
+        '[{"img": 1, "is_region": true, "confidence": "high|medium|low", '
+        '"reason": "<=15 words"}, ...]'
+    ),
+    region_visible_system=(
+        'You decide whether each numbered item crop contains a visible sub-region of '
+        'interest (even partial / angled / small). Output ONLY a JSON object of the form '
+        '{"results": [...]}, one entry per image in input order — no prose, no markdown. '
+        'Reasoning models: do not echo a chain-of-thought.'
+    ),
+    region_visible_user=(
+        'For each numbered crop, answer: is the sub-region of interest visible anywhere in '
+        'the image? Count partial, angled, or small regions as visible; count hidden or '
+        'missing regions as not visible. Respond as a JSON object whose ``results`` field '
+        'is an array of per-image verdicts in input order:\n'
+        '{"results": [{"img": 1, "visible": true|false}, ...]}'
+    ),
+)
+
 # A quoted value in a prompt: "..." or '...'. Double-quoted strings are
 # consumed first so an apostrophe inside one never opens a single-quoted
 # match.
@@ -294,6 +391,9 @@ def prompt_text_examples(pack: PromptPack) -> frozenset[str]:
             out.add(quoted)
     return frozenset(out)
 
+
+BUILT_IN_PACKS: tuple[PromptPack, ...] = (GENERIC_ITEM_PACK, GENERIC_REGION_PACK)
+_BUILT_IN_NAMES = frozenset(p.name for p in BUILT_IN_PACKS)
 
 _PACK_FILE_CACHE: dict[str, tuple[int, PromptPack]] = {}
 
@@ -355,7 +455,8 @@ def resolve_prompt_pack(cfg: Any | None = None) -> PromptPack:
 def available_prompt_packs(cfg: Any | None = None) -> dict[str, PromptPack]:
     """Every selectable pack, keyed by ``name``.
 
-    Always includes the built-in :data:`GENERIC_ITEM_PACK`, plus each
+    Always includes the built-in packs (:data:`GENERIC_ITEM_PACK`, and the
+    text-free :data:`GENERIC_REGION_PACK`), plus each
     loadable file in ``OP_PROMPT_PACK_PATHS`` and the default
     ``OP_PROMPT_PACK_PATH`` pack. Unloadable files are skipped with a
     logged warning (same degrade-not-crash contract as
@@ -363,13 +464,13 @@ def available_prompt_packs(cfg: Any | None = None) -> dict[str, PromptPack]:
     wins, then the earlier ``OP_PROMPT_PACK_PATHS`` entry.
     """
     config = _config(cfg)
-    packs: dict[str, PromptPack] = {GENERIC_ITEM_PACK.name: GENERIC_ITEM_PACK}
+    packs: dict[str, PromptPack] = {p.name: p for p in BUILT_IN_PACKS}
     default = resolve_prompt_pack(config)
     for path in getattr(config, 'prompt_pack_paths', ()) or ():
         pack = _load_pack_file(Path(path))
         if pack is None:
             continue
-        if pack.name in packs and pack.name != GENERIC_ITEM_PACK.name:
+        if pack.name in packs and pack.name not in _BUILT_IN_NAMES:
             logger.warning('prompt_pack_name_collision', name=pack.name, path=str(path))
             continue
         packs[pack.name] = pack
@@ -383,7 +484,9 @@ def get_prompt_pack(name: str, cfg: Any | None = None) -> PromptPack | None:
 
 
 __all__ = [
+    'BUILT_IN_PACKS',
     'GENERIC_ITEM_PACK',
+    'GENERIC_REGION_PACK',
     'PromptPack',
     'available_prompt_packs',
     'get_prompt_pack',

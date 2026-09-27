@@ -7,230 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- **Segmenter never became reachable on a stock install (F-75).** The
-  `segmenter` service's `env_file: .env` loaded the host-port variable
-  `SEGMENTER_PORT` (env.template default `4611`) straight into the
-  container, and `docker/segmenter/main.py` read that same name as its
-  uvicorn listen port -- so the container bound to `4611` while the port
-  mapping, healthcheck and `OP_SEGMENTER_URL` all still targeted `8000`.
-  The in-container variable is renamed `SEGMENTER_LISTEN_PORT` (default
-  `8000`, also set explicitly under `environment:` so it beats
-  `env_file`), and a new compose-contract test
-  (`test_no_service_reads_a_host_port_var_as_its_own_container_config`)
-  guards every other `env_file`-loading service against the same class of
-  bug. An audit of the remaining host-port vars (`API_PORT`,
-  `TRITON_*_PORT`, `PROMETHEUS_PORT`, `GRAFANA_PORT`, `LOKI_PORT`,
-  `DCGM_PORT`, `OPENSEARCH_PORT`, `OPENSEARCH_DASHBOARDS_PORT`,
-  `MLFLOW_PORT`, `VLM_PORT`) found no other container reading its own
-  host-port var name. **Requires rebuilding the segmenter image.**
-- **Region-dependency health check never saw a healthy segmenter (V-1
-  follow-up).** `check_region_dependencies` looked up the profile's
-  segmenter (e.g. `sam3`) in Triton's repository index, but SAM 3 runs as
-  the separate HTTP segmenter service (`OP_SEGMENTER_URL`), not in
-  Triton, so `stall_reason` never cleared even with a healthy segmenter.
-  Triton-served detectors still go through the Triton repository index;
-  the segmenter dependency now does a `GET {OP_SEGMENTER_URL}/health`
-  with a short timeout, requiring `loaded: true`.
-- **Training couldn't start on a stock install (F-72 regression).**
-  `OP_GPU_ARBITER_TRAINER_CONTAINER` defaulting to
-  `${COMPOSE_PROJECT_NAME}-trainer` (see the F-72 entry below) meant
-  `/train/preflight`'s trainer probe now always ran -- but the stock
-  `yolo-api` container has no docker socket/SDK, so the probe
-  unconditionally reported `block` ("docker SDK/socket unavailable"),
-  422ing `/train/start` even with a perfectly healthy trainer. The probe
-  (moved to `src/services/training/trainer_reachability.py`) now reads
-  the trainer's own heartbeat file (`.trainer_capabilities.json`, which
-  the trainer's watch loop refreshes every ~30s) as its primary signal --
-  no docker socket needed. A fresh heartbeat is `ok`; a missing or stale
-  one is `warn`, never `block`. The docker SDK/socket path (only present
-  behind the `docker-compose.gpu-arbiter.yml` overlay) is now a purely
-  optional, confirming extra: it's only consulted when the heartbeat
-  itself is missing/stale, and only then may it upgrade the warning to a
-  definitive `block`.
-- **API image builds again.** `perception_models` is installed with `--no-deps`
-  at a pinned commit (its requirements exact-pin `timm==1.0.15`, which
-  conflicts with `open-clip-torch>=3.2`'s `timm>=1.0.17`); the PE encoder's
-  real runtime deps (`einops`, `regex`) are declared in `requirements.txt`.
-- **Triton serves a partial model set.** `triton-server` now runs with
-  `--exit-on-error=false --strict-readiness=false`, so one missing or failed
-  engine (the minimal setup profile skips OCR; setup continues past a failed
-  export) leaves only that model unloaded instead of stopping the server.
-  The minimal profile's export now also builds the PE-Core image encoder that
-  curation ingest needs. `TRITON_GPU_ID` (default `0`) selects Triton's GPU.
-- **`vlm` profile image pinned by digest** to the vLLM Gemma 4 build this
-  stack is tested against (`vllm/vllm-openai:gemma4-cu130@sha256:0d1525...`);
-  the earlier `v0.11.0` default predates Gemma 4.
-
-### Changed (BREAKING)
-- **Compose/install portability (fresh-start gaps batch B).** `docker-compose.yml`
-  no longer hardcodes `name: openprocessor` or any `container_name:` — both are
-  now interpolated from `COMPOSE_PROJECT_NAME` (default `openprocessor`, so an
-  existing single-stack deployment behaves identically). **Migration hint:**
-  if you script against container names directly (e.g. `docker exec yolo-api
-  ...`, `docker logs triton-server`), switch to `docker compose exec
-  yolo-api ...` / `docker compose logs triton-server` — those already resolve
-  by service name regardless of the interpolated container name, and keep
-  working the same way after this change. Every host port
-  (`API_PORT`, `TRITON_HTTP_PORT`, `TRITON_GRPC_PORT`, `TRITON_METRICS_PORT`,
-  `PROMETHEUS_PORT`, `GRAFANA_PORT`, `LOKI_PORT`, `OPENSEARCH_PORT`,
-  `OPENSEARCH_DASHBOARDS_PORT`, plus new `MLFLOW_PORT`, `DCGM_PORT`,
-  `SEGMENTER_PORT`, `VLM_PORT`) is now interpolated from `.env`/the shell
-  instead of hardcoded, so a second isolated stack on the same host only
-  needs a `.env` with a different `COMPOSE_PROJECT_NAME` and remapped ports.
-  `env.template`'s `TRITON_HTTP`/`TRITON_GRPC`/`TRITON_METRICS` were renamed to
-  `TRITON_HTTP_PORT`/`TRITON_GRPC_PORT`/`TRITON_METRICS_PORT` to match the
-  Makefile's existing names — update any script/CI reading the old names.
-  `Makefile`'s port variables now use `?=` and load `.env` (`-include .env`),
-  so both `.env` and `make API_PORT=... TRITON_HTTP_PORT=... <target>` work.
-- **One generic curation wire vocabulary.** Every region field is `region_<attr>`
-  on the wire, fixed regardless of `OP_REGION_FIELD_*` storage overrides;
-  `plate_thumbnail_url` → `region_thumbnail_url`; `gemma_*` → `vlm_*` and `v6_*` →
-  `classifier_*` across item fields, `class_source` values, the `vlm_low_conf`
-  review tab, auto_label params, `/health` and `/stats/dataset` (`plates` →
-  `regions`); `coco_proposal_name` → `proposal_name`; ingest `n_plates` →
-  `n_regions`. Region write bodies use `region_*` keys and reject unknown keys.
-  Every item-returning endpoint (`/crops`, `/crops/{id}`, `/review/{tab}`,
-  `/regions`, training candidates, `/search/text`) returns the same serialized
-  item. Full old→new table: `docs/design/curation_api_contract.md` (B3).
-- **Region detection is off by default, and no profile ships built in.**
-  `src/services/detection/reference_profiles.py` is removed; the
-  license-plate example profile is a data file,
-  `examples/region_profiles/license_plate.json`, loaded via
-  `OP_REGION_PROFILE_PATH=<path>`. `OP_REGION_PROFILE=<name>` now only
-  resolves a profile a deployment's own startup code registered.
-  `DetectionProfile` gains `region_class_name`, `display_name` and
-  `display_name_singular` fields, served on `GET {prefix}/regions/vocabulary`.
-- **`OP_DETECTION_*` is retired**; ingest detectors use `OP_INGEST_PRIMARY_*` and
-  `OP_INGEST_SECONDARY_*` (leftover `OP_DETECTION_*` vars fail with a rename
-  message). The secondary detector is now actually wired into ingest.
-- **The ingest primary is a proposer by default** (`OP_INGEST_PRIMARY_ASSIGNS_CLASS=false`):
-  its detections are unlabeled `<name>_proposal` items carrying the model's own
-  label (`OP_INGEST_PRIMARY_LABELS_PATH`); the secondary assigns the class.
-- **`detection_profile` is read-only**: `?detection_profile=` on
-  `POST /pipeline/auto_label[/start]` and `PUT /settings` for that axis return
-  422. `GET /methods` entries carry `settable: bool`.
-- The detector bake-off harness is domain-neutral by default (`generic`
-  `BakeoffProfile`; `--backend triton` requires a model); plate baselines moved
-  to the `license_plate` example profile; paper-only scripts (a dedup-threshold
-  sweep and a LaTeX-number generator that hardcoded a private model id and a
-  live-deployment URL) removed from the public tree.
-- **Model comparison (bake-off) API v2, generic and multi-class** (clean break,
-  no compatibility fields; shapes in `docs/design/curation_api_contract.md`). Every
-  `/curation/bakeoff/*` route is typed and result files carry
-  `schema_version: 2` (older result files answer 409).
-  `POST /bakeoff/run` takes `datasets: [{id}]` (`export:<path>`,
-  `external:<group>/<name>`, or `run:<job_id>`) and `models[]` discriminated
-  on `source` (`run` / `baseline` / `custom`), plus
-  `quantize: {run_id, formats, n_calib, calib_split, throughput}`; removed:
-  `dataset`, `datasets[].path/name`, `verify_frozen`, free-form model specs
-  (`backend`/`profile`/`gt_class_id`/`gt_class_name`/`pred_class_id`/
-  `lpdnet_variant`/`primary_classes`), `quantize.coreml`. Responses: eval
-  datasets use `source` + `group` (no `n_test`/`frozen_sha`/`kind`);
-  `trained_models` serves `trainer_map50` / `trainer_map50_split` (were
-  `map50` / `map50_split`); comparison rows put metrics under `overall` /
-  `common` with `per_class` and `coverage`; `results` takes `?dataset_id=`;
-  matrix `best` values are lists of tied winners; job state adds `queued`.
-- **`BakeoffProfile` loses `target_class_id` / `target_class_name`**: a
-  profile scores every class in the eval split (`class_filter` narrows by
-  name). `OP_BAKEOFF_PROFILE_TARGET_CLASS_ID` / `_NAME` are retired (startup
-  fails with a pointer to `OP_BAKEOFF_PROFILE_CLASS_FILTER`). The
-  license-plate profile, baselines, converters and the `lpdnet` /
-  `open-image-models` backends moved to `examples/bakeoff/license_plate/`
-  and load only by profile path; `GET /bakeoff/profiles` no longer lists
-  example profiles and the default baseline registry is empty.
-- The trainer's opt-in auto-quantize posts `POST /curation/bakeoff/run`
-  (via `OP_API_BASE_URL` + `OP_API_PREFIX`) instead of writing a job file;
-  `campaign.py` no longer reads `OP_BAKEOFF_JOBS_DIR` / `OP_BAKEOFF_OUT_DIR`.
-- **Stored-data renames** (re-ingest required):
-  - Items index kNN field `v6_embedding` → `backbone_embedding`
-    (`CurationConfig.BACKBONE_EMBEDDING_FIELD`).
-  - Images + items ingest-source field `hdd_source` → `source`; `GET
-    /crops`'s `?hdd_source=` query param is removed (use the existing
-    `?source=`).
-  - Stored `region_source` / `candidate_source` provenance values:
-    `sam3` → `segmenter`, `sam3_text_hint` → `segmenter_text_hint`, `lpr` →
-    `detector`, `lpr_existing` → `detector_existing`.
-  - `class_id_history[].writer` value `sam_worker` → `region_worker`.
-  - `GET /curation/ingest/sam_drain` → `GET /curation/ingest/region_drain`;
-    its response and `GET /stats/dataset`'s `in_progress.*` drop the legacy
-    `pending`/`pending_verify` rollup keys (re-ingested data can never carry
-    those short names).
-  - Export manifest `dataset_kind` no longer accepts the alias
-    `lpr_single_class`; only `single_class` is recognized.
-  - No hardcoded model-id defaults: `OP_VLM_MODEL` has no default (was
-    `gemma-4-e4b`) and `VlmLabeler` construction fails loudly when a VLM
-    URL is configured without one; the reference license-plate profile's
-    `detector_model` is the neutral example id `license_plate_detector`
-    (was the proprietary Triton id `lpr_nanov11_640`).
-  - `DELETE /curation/models/{name}`'s unload guard drops its hardcoded
-    `lpr_` name prefix; a model is protected only via the active
-    `DetectionProfile`'s configured model ids or the fixed `paddleocr_`
-    prefix.
-  - `OPENWEBUI_BASE_URL` / `OPENWEBUI_MODEL` / `OPENWEBUI_API_KEY` /
-    `VLM_URL` / `GEMMA_URL` are retired; only `OP_VLM_URL` / `OP_VLM_MODEL`
-    / `OP_VLM_API_KEY` are read now.
-- **Wire surface renames**: `GET /curation/methods`'
-  operationId is `get_methods_curation_methods_get` (was a
-  company-initialed operation id); its `flags` keys drop the same
-  company-initialed prefix (`scores_enabled`, `scores_shadow`,
-  `select_diverse_enabled`, `viz_projection_enabled`,
-  `semantic_search_enabled`); the
-  `coco_blind_spots` review tab id and its default-sort id are renamed
-  to `classifier_blind_spots` / `classifier_blind_spots_default`.
-- **Env vars, clean break, no aliases.** A
-  startup guard (`src/config/retired_env.py`, called from `src/main.py`'s
-  lifespan and both worker `main()` entry points) now fails loudly,
-  naming the replacement, if any of these are still set:
-
-  | Old | New |
-  |---|---|
-  | `VLM_URL`, `GEMMA_URL`, `OPENWEBUI_BASE_URL` | `OP_VLM_URL` |
-  | `OPENWEBUI_MODEL` | `OP_VLM_MODEL` |
-  | `OPENWEBUI_API_KEY` | `OP_VLM_API_KEY` |
-  | `VLM_IMAGES_PER_CALL`, `GEMMA_IMAGES_PER_CALL` | `OP_VLM_OPEN_IMAGES_PER_CALL` |
-  | `VLM_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_MAX_CONNECTIONS` | `OP_VLM_HTTPX_MAX_CONNECTIONS` |
-  | `VLM_HTTPX_KEEPALIVE`, `GEMMA_HTTPX_KEEPALIVE` | `OP_VLM_HTTPX_KEEPALIVE` |
-  | `SAM3_URL` | `OP_SEGMENTER_URL` |
-  | `SAM3_URLS` | `OP_SEGMENTER_URLS` |
-  | `SAM3_HTTPX_MAX_CONNECTIONS` | `OP_SEGMENTER_HTTPX_MAX_CONNECTIONS` |
-  | `SAM3_HTTPX_KEEPALIVE` | `OP_SEGMENTER_HTTPX_KEEPALIVE` |
-  | `SAM3_SKIP_VLM_VERIFY_SCORE`, `SAM3_SKIP_GEMMA_VERIFY_SCORE` | `OP_SEGMENTER_SKIP_VERIFY_SCORE` |
-  | `SAM_WORKER_VLM_CONCURRENCY`, `SAM_WORKER_GEMMA_CONCURRENCY` | `OP_REGION_WORKER_VLM_CONCURRENCY` |
-  | `SAM_WORKER_VLM_VISIBLE_CONCURRENCY`, `SAM_WORKER_GEMMA_VISIBLE_CONCURRENCY` | `OP_REGION_WORKER_VLM_VISIBLE_CONCURRENCY` |
-  | `SAM_WORKER_METRICS_PORT` | `OP_REGION_WORKER_METRICS_PORT` |
-  | `OP_REGION_DETECTION_SAM_TEXT_PROMPT` | `OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT` |
-  | `GEMMA_CROP_CACHE_DIR` | `OP_CROP_CACHE_DIR` |
-
-  Also: the region worker's `--gemma-url` CLI flag is now `--vlm-url`;
-  the segmenter service's `/sam3/segment_plate` and
-  `/sam3/segment_plate_batch` path aliases are removed (`POST /segment`
-  and `POST /segment/batch` are the only paths now; the shipped client
-  posts to `/segment`).
-- **Prometheus metric name cleanup.** Every metric
-  constant and name in `src/services/curation/metrics.py` moved off the
-  legacy metric prefix onto `OP_*`/`op_*`, and
-  domain/vendor-named metrics were renamed alongside the prefix swap
-  (for example, the combined/separate VLM call counters, the
-  segmenter-leg duration and circuit-breaker metrics, and the
-  region-detector stage duration). Metrics that carried no domain name
-  (`occ_retry_count`, `worker_skip_human_won`, `shm_crop_cache_*`,
-  `source_image_*`, `thumbnail_cache_*`, …) kept their name and only
-  gained the `op_` prefix.
-- **Structured log events use a `curation_` prefix** instead of the
-  retired company-initialed one, across the OpenSearch client, ingest,
-  index bootstrap, and job/status logging.
-- **Training run status fields renamed**: `TrainJobStatus`'s
-  `best_metric` / `last_metric` pair is replaced by two distinct rows,
-  `last_epoch_metric` (the true last training epoch's metrics) and
-  `best_checkpoint_metric` (the best checkpoint's own re-validation
-  metrics) — see `docs/design/curation_api_contract.md`'s "Training run
-  status" section for why two fields are needed. `Job.migrate_status`
-  drops the retired keys from any pre-rename `status.json` on read
-  rather than migrating their values, since the two were never the same
-  measurement.
-
 ### Added
+- **Text-free region mode.** A region profile with `text_reader: "none"`
+  stores region boxes and no region text: the region OCR reader never
+  runs, a VLM reading is dropped, and `PATCH /crops/{id}/region_meta`
+  answers 422 `{"error": "region_text_disabled"}` for a `region_text`
+  edit. `GET /regions/vocabulary` then serves `text_rules: null` and
+  `text_choices: []`, and the region-profile summary (also on `/health`)
+  gains `reads_text` and `text_hint_enabled`. The `regions` review tab
+  drops its `text` filter for such a profile, and the text-repair tools
+  (`rederive_region_text.py`) exit cleanly with nothing to do.
+- **Optional OCR text hint.** New profile fields `text_hint_enabled`
+  (default `true`) and `text_hint_require_letters_and_digits` (default
+  `false`). The text-hint re-pass after a segmenter miss runs only when it
+  is enabled, an `ocr_pipeline_model` is set and the segmenter leg is on;
+  otherwise the chain ends at `<segmenter>:miss`. The `OCR text hint`
+  actor and the `segmenter_text_hint` region source are only listed in
+  the vocabulary when the hint can run.
+- **`parent_classes` region-profile field.** Restricts the region stage
+  to items whose `class_name` or `proposal_name` matches (case-insensitive;
+  empty = every item). Ingest seeds only matching items and the detection
+  worker skips non-matching ones already pending.
+- **Built-in text-free prompt pack `generic_region_v1`**, plus a public
+  car -> wheel example: `examples/region_profiles/vehicle_wheel.json`
+  (segmenter-only, text-free) and `examples/prompt_packs/vehicle_wheel.json`.
 - **`GET /classes` exposes `merged_into`.** A class merged via `POST
   /classes/merge` has always tracked its `merged_into` target internally
   (`RegistryClassEntry.merged_into`), but the wire model never served it,
@@ -450,6 +250,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   experiment tracking of those runs.
 
 ### Changed
+- **`docker-compose.yml` is now pull-only and deploy-safe** (one-line
+  installer plan, Wave 0). It no longer has any `build:` block or any
+  bind mount of `./src`, `./scripts`, `./export`, `./tests`,
+  `./benchmarks`, `./test_images`, `./VERSION` or `./examples` — dropping
+  it into an empty directory with no git checkout and running
+  `docker compose pull && up -d` no longer gets Docker silently creating
+  empty host directories that shadow the image's `/app/src`,
+  `/app/export`, etc. Every `build:` block and every one of those source
+  mounts moved to a new opt-in overlay, **`docker-compose.dev.yml`**,
+  which restores today's checkout hot-reload workflow unchanged. `make`
+  (via the `COMPOSE` variable), `scripts/setup.sh` and
+  `scripts/openprocessor.sh` all detect a checkout (`src/main.py` next to
+  the compose file) and add the dev overlay automatically — **no action
+  needed for existing checkout users of `make`/`./scripts/setup.sh`.** A
+  bare `docker compose` invocation now needs
+  `-f docker-compose.yml -f docker-compose.dev.yml` explicitly to build
+  from source or hot-reload; `docker compose up -d` alone now only pulls.
+- **`Dockerfile` bakes in `export/`, `examples/` and a model-repo seed**
+  (`/opt/openprocessor/model_repo_seed`, from the tracked `models/`
+  config tree) so the deploy-safe compose file above doesn't need to
+  bind-mount any of them. `docker/evaluator/Dockerfile` gains the same
+  `examples/` copy (read by the opt-in bake-off baseline path).
+- **Published ports default to loopback-only.** Every `ports:` entry in
+  `docker-compose.yml` is now
+  `"${OP_BIND_ADDRESS:-127.0.0.1}:<host-port>:<container-port>"`. The API
+  has no auth and OpenSearch security is off by default, so this is a
+  behavior change for anyone who was relying on the old bare
+  `${PORT}:<container-port>` binding on `0.0.0.0` — set
+  `OP_BIND_ADDRESS=0.0.0.0` (and put a reverse proxy with auth in front;
+  see `SECURITY.md`) to restore the old exposure.
+- **Custom images are pinned per-service and never fall back to `latest`.**
+  `triton-server`, `yolo-api` (and its curation workers), the evaluator,
+  segmenter and trainer images each gained their own override var
+  (`OP_TRITON_IMAGE`, `OP_API_IMAGE`, `OP_EVALUATOR_IMAGE`,
+  `OP_SEGMENTER_IMAGE`, `OP_TRAINER_IMAGE`), falling back to
+  `${OP_IMAGE_REPO:-davidamacey}/<image>:${OP_IMAGE_TAG:-<VERSION>}` — the
+  fallback tag now tracks the `VERSION` file instead of `latest`
+  (`test_compose_default_tag_matches_version` pins this).
+- **`env.template` gained a consolidated "Curation quick-config" block**
+  (the handful of vars every curation tier actually needs to get
+  running) plus `OP_BIND_ADDRESS` and the new per-service `OP_*_IMAGE`
+  vars. `docs/CURATION.md`'s environment-variables section now links to
+  that block instead of repeating scattered paragraphs.
+- **Letters-and-digits text-hint rule is opt-in.** A text-hint candidate no
+  longer has to mix letters and digits unless the profile sets
+  `text_hint_require_letters_and_digits: true`
+  (`examples/region_profiles/license_plate.json` does).
+- **`examples/region_profiles/license_plate.json` is segmenter-only**
+  (`detector_model: ""`) and sets its text-hint flags explicitly.
+- Segmenter candidates carry the profile's `segmenter_name` as their
+  source instead of a hardcoded `sam3`. New geometry rejects are recorded
+  as `parent_bbox_unpack_failed` / `parent_bbox_degenerate` (were
+  `vehicle_bbox_*`). `VlmLabeler.label_vehicle_batch` is renamed
+  `label_item_batch`.
 - The GPU arbiter now decides which containers to stop by **GPU scope**, not
   claim size: a single-GPU training claim that intersects a scoped
   container's GPU set stops that container (it no longer takes a multi-GPU
@@ -461,6 +315,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restricted allowlist that excludes GPU 0 no longer rejects the default spec.
 
 ### Fixed
+- **Three Grafana/Prometheus monitoring panels/alerts queried metrics
+  this Triton version never exports, so they were always empty and could
+  never fire.** `monitoring/dashboards/triton-unified-dashboard.json`'s
+  "Model Ready" panel and `monitoring/alerts/triton-alerts.yml`'s
+  `ModelNotReady` alert both queried `nv_model_ready_state`, which
+  Triton's `/metrics` doesn't export (confirmed against a live server's
+  actual exposition) — removed; there is no honest Triton or
+  DCGM/nvidia-exporter equivalent for per-model readiness (it's a
+  Triton-internal concept, not a GPU one), so use `GET
+  /v2/repository/index` or `/curation/health` instead. The "GPU
+  Temperature" panel queried `nv_gpu_temperature` (also never exported)
+  — switched to `DCGM_FI_DEV_GPU_TEMP` from the already-scraped
+  `dcgm-exporter` service. Also found and fixed while auditing this: the
+  "Model Track Latency Comparison" panel's P95/P99 lines used
+  `histogram_quantile(...,
+  nv_inference_request_duration_us_bucket)`, but
+  `nv_inference_request_duration_us` is a plain counter, not a histogram
+  (Triton exposes no `_bucket` series for it) — dropped, keeping only the
+  Avg line. New `tests/test_monitoring_metrics.py` pins every
+  dashboard/alert metric name against a fixture of metrics actually
+  exported by this stack's pinned Triton/dcgm-exporter/node-exporter
+  images (confirmed red against the old queries, green against the fix).
+- **Alloy's log-collection filters never matched this compose's own
+  containers.** `container_name` in `docker-compose.yml` has always been
+  `${COMPOSE_PROJECT_NAME:-openprocessor}-triton` /
+  `${COMPOSE_PROJECT_NAME:-openprocessor}-api`, never a bare
+  `triton-server` or `yolo-api`/`pytorch-api` container, so
+  `monitoring/alloy-config.alloy`'s old `/triton-server.*` and
+  `/(yolo-api|pytorch-api).*` `discovery.relabel` regexes never matched
+  under any `COMPOSE_PROJECT_NAME` — Loki only ever received a different
+  stack's logs (or nothing) from the monitoring profile. Both regexes now
+  match on the `-triton` / `-api` container-name suffix instead, which is
+  independent of the project name. New `tests/test_monitoring_config.py`
+  pins the fix (and confirms it fails red against the old patterns).
+- **An empty `detector_model` no longer calls Triton.** It used to run
+  inference against model `''` on every item, log `region_infer_failed`
+  and append a `':miss'` trace tag with an empty actor; the detector leg
+  is now skipped entirely.
+- **Segmenter never became reachable on a stock install (F-75).** The
+  `segmenter` service's `env_file: .env` loaded the host-port variable
+  `SEGMENTER_PORT` (env.template default `4611`) straight into the
+  container, and `docker/segmenter/main.py` read that same name as its
+  uvicorn listen port -- so the container bound to `4611` while the port
+  mapping, healthcheck and `OP_SEGMENTER_URL` all still targeted `8000`.
+  The in-container variable is renamed `SEGMENTER_LISTEN_PORT` (default
+  `8000`, also set explicitly under `environment:` so it beats
+  `env_file`), and a new compose-contract test
+  (`test_no_service_reads_a_host_port_var_as_its_own_container_config`)
+  guards every other `env_file`-loading service against the same class of
+  bug. An audit of the remaining host-port vars (`API_PORT`,
+  `TRITON_*_PORT`, `PROMETHEUS_PORT`, `GRAFANA_PORT`, `LOKI_PORT`,
+  `DCGM_PORT`, `OPENSEARCH_PORT`, `OPENSEARCH_DASHBOARDS_PORT`,
+  `MLFLOW_PORT`, `VLM_PORT`) found no other container reading its own
+  host-port var name. **Requires rebuilding the segmenter image.**
+- **Region-dependency health check never saw a healthy segmenter (V-1
+  follow-up).** `check_region_dependencies` looked up the profile's
+  segmenter (e.g. `sam3`) in Triton's repository index, but SAM 3 runs as
+  the separate HTTP segmenter service (`OP_SEGMENTER_URL`), not in
+  Triton, so `stall_reason` never cleared even with a healthy segmenter.
+  Triton-served detectors still go through the Triton repository index;
+  the segmenter dependency now does a `GET {OP_SEGMENTER_URL}/health`
+  with a short timeout, requiring `loaded: true`.
+- **Training couldn't start on a stock install (F-72 regression).**
+  `OP_GPU_ARBITER_TRAINER_CONTAINER` defaulting to
+  `${COMPOSE_PROJECT_NAME}-trainer` (see the F-72 entry below) meant
+  `/train/preflight`'s trainer probe now always ran -- but the stock
+  `yolo-api` container has no docker socket/SDK, so the probe
+  unconditionally reported `block` ("docker SDK/socket unavailable"),
+  422ing `/train/start` even with a perfectly healthy trainer. The probe
+  (moved to `src/services/training/trainer_reachability.py`) now reads
+  the trainer's own heartbeat file (`.trainer_capabilities.json`, which
+  the trainer's watch loop refreshes every ~30s) as its primary signal --
+  no docker socket needed. A fresh heartbeat is `ok`; a missing or stale
+  one is `warn`, never `block`. The docker SDK/socket path (only present
+  behind the `docker-compose.gpu-arbiter.yml` overlay) is now a purely
+  optional, confirming extra: it's only consulted when the heartbeat
+  itself is missing/stale, and only then may it upgrade the warning to a
+  definitive `block`.
+- **API image builds again.** `perception_models` is installed with `--no-deps`
+  at a pinned commit (its requirements exact-pin `timm==1.0.15`, which
+  conflicts with `open-clip-torch>=3.2`'s `timm>=1.0.17`); the PE encoder's
+  real runtime deps (`einops`, `regex`) are declared in `requirements.txt`.
+- **Triton serves a partial model set.** `triton-server` now runs with
+  `--exit-on-error=false --strict-readiness=false`, so one missing or failed
+  engine (the minimal setup profile skips OCR; setup continues past a failed
+  export) leaves only that model unloaded instead of stopping the server.
+  The minimal profile's export now also builds the PE-Core image encoder that
+  curation ingest needs. `TRITON_GPU_ID` (default `0`) selects Triton's GPU.
+- **`vlm` profile image pinned by digest** to the vLLM Gemma 4 build this
+  stack is tested against (`vllm/vllm-openai:gemma4-cu130@sha256:0d1525...`);
+  the earlier `v0.11.0` default predates Gemma 4.
 - Run lineage recorded the frozen test-split hash as `lineage.dataset_sha`
   and nothing for multi-class exports; `code_versions.api_sha` /
   `trainer_image` were always null (read from the trainer's own env, which
@@ -540,6 +485,174 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `POST /crops/batch_unexclude` returns an unvalidated item to the
   candidate cluster it was excluded from while that cluster still has
   members, instead of leaving it outside every cluster until a recluster.
+
+### Changed (BREAKING)
+- **Compose/install portability (fresh-start gaps batch B).** `docker-compose.yml`
+  no longer hardcodes `name: openprocessor` or any `container_name:` — both are
+  now interpolated from `COMPOSE_PROJECT_NAME` (default `openprocessor`, so an
+  existing single-stack deployment behaves identically). **Migration hint:**
+  if you script against container names directly (e.g. `docker exec yolo-api
+  ...`, `docker logs triton-server`), switch to `docker compose exec
+  yolo-api ...` / `docker compose logs triton-server` — those already resolve
+  by service name regardless of the interpolated container name, and keep
+  working the same way after this change. Every host port
+  (`API_PORT`, `TRITON_HTTP_PORT`, `TRITON_GRPC_PORT`, `TRITON_METRICS_PORT`,
+  `PROMETHEUS_PORT`, `GRAFANA_PORT`, `LOKI_PORT`, `OPENSEARCH_PORT`,
+  `OPENSEARCH_DASHBOARDS_PORT`, plus new `MLFLOW_PORT`, `DCGM_PORT`,
+  `SEGMENTER_PORT`, `VLM_PORT`) is now interpolated from `.env`/the shell
+  instead of hardcoded, so a second isolated stack on the same host only
+  needs a `.env` with a different `COMPOSE_PROJECT_NAME` and remapped ports.
+  `env.template`'s `TRITON_HTTP`/`TRITON_GRPC`/`TRITON_METRICS` were renamed to
+  `TRITON_HTTP_PORT`/`TRITON_GRPC_PORT`/`TRITON_METRICS_PORT` to match the
+  Makefile's existing names — update any script/CI reading the old names.
+  `Makefile`'s port variables now use `?=` and load `.env` (`-include .env`),
+  so both `.env` and `make API_PORT=... TRITON_HTTP_PORT=... <target>` work.
+- **One generic curation wire vocabulary.** Every region field is `region_<attr>`
+  on the wire, fixed regardless of `OP_REGION_FIELD_*` storage overrides;
+  `plate_thumbnail_url` → `region_thumbnail_url`; `gemma_*` → `vlm_*` and `v6_*` →
+  `classifier_*` across item fields, `class_source` values, the `vlm_low_conf`
+  review tab, auto_label params, `/health` and `/stats/dataset` (`plates` →
+  `regions`); `coco_proposal_name` → `proposal_name`; ingest `n_plates` →
+  `n_regions`. Region write bodies use `region_*` keys and reject unknown keys.
+  Every item-returning endpoint (`/crops`, `/crops/{id}`, `/review/{tab}`,
+  `/regions`, training candidates, `/search/text`) returns the same serialized
+  item. Full old→new table: `docs/design/curation_api_contract.md` (B3).
+- **Region detection is off by default, and no profile ships built in.**
+  `src/services/detection/reference_profiles.py` is removed; the
+  license-plate example profile is a data file,
+  `examples/region_profiles/license_plate.json`, loaded via
+  `OP_REGION_PROFILE_PATH=<path>`. `OP_REGION_PROFILE=<name>` now only
+  resolves a profile a deployment's own startup code registered.
+  `DetectionProfile` gains `region_class_name`, `display_name` and
+  `display_name_singular` fields, served on `GET {prefix}/regions/vocabulary`.
+- **`OP_DETECTION_*` is retired**; ingest detectors use `OP_INGEST_PRIMARY_*` and
+  `OP_INGEST_SECONDARY_*` (leftover `OP_DETECTION_*` vars fail with a rename
+  message). The secondary detector is now actually wired into ingest.
+- **The ingest primary is a proposer by default** (`OP_INGEST_PRIMARY_ASSIGNS_CLASS=false`):
+  its detections are unlabeled `<name>_proposal` items carrying the model's own
+  label (`OP_INGEST_PRIMARY_LABELS_PATH`); the secondary assigns the class.
+- **`detection_profile` is read-only**: `?detection_profile=` on
+  `POST /pipeline/auto_label[/start]` and `PUT /settings` for that axis return
+  422. `GET /methods` entries carry `settable: bool`.
+- The detector bake-off harness is domain-neutral by default (`generic`
+  `BakeoffProfile`; `--backend triton` requires a model); plate baselines moved
+  to the `license_plate` example profile; paper-only scripts (a dedup-threshold
+  sweep and a LaTeX-number generator that hardcoded a private model id and a
+  live-deployment URL) removed from the public tree.
+- **Model comparison (bake-off) API v2, generic and multi-class** (clean break,
+  no compatibility fields; shapes in `docs/design/curation_api_contract.md`). Every
+  `/curation/bakeoff/*` route is typed and result files carry
+  `schema_version: 2` (older result files answer 409).
+  `POST /bakeoff/run` takes `datasets: [{id}]` (`export:<path>`,
+  `external:<group>/<name>`, or `run:<job_id>`) and `models[]` discriminated
+  on `source` (`run` / `baseline` / `custom`), plus
+  `quantize: {run_id, formats, n_calib, calib_split, throughput}`; removed:
+  `dataset`, `datasets[].path/name`, `verify_frozen`, free-form model specs
+  (`backend`/`profile`/`gt_class_id`/`gt_class_name`/`pred_class_id`/
+  `lpdnet_variant`/`primary_classes`), `quantize.coreml`. Responses: eval
+  datasets use `source` + `group` (no `n_test`/`frozen_sha`/`kind`);
+  `trained_models` serves `trainer_map50` / `trainer_map50_split` (were
+  `map50` / `map50_split`); comparison rows put metrics under `overall` /
+  `common` with `per_class` and `coverage`; `results` takes `?dataset_id=`;
+  matrix `best` values are lists of tied winners; job state adds `queued`.
+- **`BakeoffProfile` loses `target_class_id` / `target_class_name`**: a
+  profile scores every class in the eval split (`class_filter` narrows by
+  name). `OP_BAKEOFF_PROFILE_TARGET_CLASS_ID` / `_NAME` are retired (startup
+  fails with a pointer to `OP_BAKEOFF_PROFILE_CLASS_FILTER`). The
+  license-plate profile, baselines, converters and the `lpdnet` /
+  `open-image-models` backends moved to `examples/bakeoff/license_plate/`
+  and load only by profile path; `GET /bakeoff/profiles` no longer lists
+  example profiles and the default baseline registry is empty.
+- The trainer's opt-in auto-quantize posts `POST /curation/bakeoff/run`
+  (via `OP_API_BASE_URL` + `OP_API_PREFIX`) instead of writing a job file;
+  `campaign.py` no longer reads `OP_BAKEOFF_JOBS_DIR` / `OP_BAKEOFF_OUT_DIR`.
+- **Stored-data renames** (re-ingest required):
+  - Items index kNN field `v6_embedding` → `backbone_embedding`
+    (`CurationConfig.BACKBONE_EMBEDDING_FIELD`).
+  - Images + items ingest-source field `hdd_source` → `source`; `GET
+    /crops`'s `?hdd_source=` query param is removed (use the existing
+    `?source=`).
+  - Stored `region_source` / `candidate_source` provenance values:
+    `sam3` → `segmenter`, `sam3_text_hint` → `segmenter_text_hint`, `lpr` →
+    `detector`, `lpr_existing` → `detector_existing`.
+  - `class_id_history[].writer` value `sam_worker` → `region_worker`.
+  - `GET /curation/ingest/sam_drain` → `GET /curation/ingest/region_drain`;
+    its response and `GET /stats/dataset`'s `in_progress.*` drop the legacy
+    `pending`/`pending_verify` rollup keys (re-ingested data can never carry
+    those short names).
+  - Export manifest `dataset_kind` no longer accepts the alias
+    `lpr_single_class`; only `single_class` is recognized.
+  - No hardcoded model-id defaults: `OP_VLM_MODEL` has no default (was
+    `gemma-4-e4b`) and `VlmLabeler` construction fails loudly when a VLM
+    URL is configured without one; the reference license-plate profile's
+    `detector_model` is the neutral example id `license_plate_detector`
+    (was the proprietary Triton id `lpr_nanov11_640`).
+  - `DELETE /curation/models/{name}`'s unload guard drops its hardcoded
+    `lpr_` name prefix; a model is protected only via the active
+    `DetectionProfile`'s configured model ids or the fixed `paddleocr_`
+    prefix.
+  - `OPENWEBUI_BASE_URL` / `OPENWEBUI_MODEL` / `OPENWEBUI_API_KEY` /
+    `VLM_URL` / `GEMMA_URL` are retired; only `OP_VLM_URL` / `OP_VLM_MODEL`
+    / `OP_VLM_API_KEY` are read now.
+- **Wire surface renames**: `GET /curation/methods`'
+  operationId is `get_methods_curation_methods_get` (was a
+  company-initialed operation id); its `flags` keys drop the same
+  company-initialed prefix (`scores_enabled`, `scores_shadow`,
+  `select_diverse_enabled`, `viz_projection_enabled`,
+  `semantic_search_enabled`); the
+  `coco_blind_spots` review tab id and its default-sort id are renamed
+  to `classifier_blind_spots` / `classifier_blind_spots_default`.
+- **Env vars, clean break, no aliases.** A
+  startup guard (`src/config/retired_env.py`, called from `src/main.py`'s
+  lifespan and both worker `main()` entry points) now fails loudly,
+  naming the replacement, if any of these are still set:
+
+  | Old | New |
+  |---|---|
+  | `VLM_URL`, `GEMMA_URL`, `OPENWEBUI_BASE_URL` | `OP_VLM_URL` |
+  | `OPENWEBUI_MODEL` | `OP_VLM_MODEL` |
+  | `OPENWEBUI_API_KEY` | `OP_VLM_API_KEY` |
+  | `VLM_IMAGES_PER_CALL`, `GEMMA_IMAGES_PER_CALL` | `OP_VLM_OPEN_IMAGES_PER_CALL` |
+  | `VLM_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_MAX_CONNECTIONS` | `OP_VLM_HTTPX_MAX_CONNECTIONS` |
+  | `VLM_HTTPX_KEEPALIVE`, `GEMMA_HTTPX_KEEPALIVE` | `OP_VLM_HTTPX_KEEPALIVE` |
+  | `SAM3_URL` | `OP_SEGMENTER_URL` |
+  | `SAM3_URLS` | `OP_SEGMENTER_URLS` |
+  | `SAM3_HTTPX_MAX_CONNECTIONS` | `OP_SEGMENTER_HTTPX_MAX_CONNECTIONS` |
+  | `SAM3_HTTPX_KEEPALIVE` | `OP_SEGMENTER_HTTPX_KEEPALIVE` |
+  | `SAM3_SKIP_VLM_VERIFY_SCORE`, `SAM3_SKIP_GEMMA_VERIFY_SCORE` | `OP_SEGMENTER_SKIP_VERIFY_SCORE` |
+  | `SAM_WORKER_VLM_CONCURRENCY`, `SAM_WORKER_GEMMA_CONCURRENCY` | `OP_REGION_WORKER_VLM_CONCURRENCY` |
+  | `SAM_WORKER_VLM_VISIBLE_CONCURRENCY`, `SAM_WORKER_GEMMA_VISIBLE_CONCURRENCY` | `OP_REGION_WORKER_VLM_VISIBLE_CONCURRENCY` |
+  | `SAM_WORKER_METRICS_PORT` | `OP_REGION_WORKER_METRICS_PORT` |
+  | `OP_REGION_DETECTION_SAM_TEXT_PROMPT` | `OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT` |
+  | `GEMMA_CROP_CACHE_DIR` | `OP_CROP_CACHE_DIR` |
+
+  Also: the region worker's `--gemma-url` CLI flag is now `--vlm-url`;
+  the segmenter service's `/sam3/segment_plate` and
+  `/sam3/segment_plate_batch` path aliases are removed (`POST /segment`
+  and `POST /segment/batch` are the only paths now; the shipped client
+  posts to `/segment`).
+- **Prometheus metric name cleanup.** Every metric
+  constant and name in `src/services/curation/metrics.py` moved off the
+  legacy metric prefix onto `OP_*`/`op_*`, and
+  domain/vendor-named metrics were renamed alongside the prefix swap
+  (for example, the combined/separate VLM call counters, the
+  segmenter-leg duration and circuit-breaker metrics, and the
+  region-detector stage duration). Metrics that carried no domain name
+  (`occ_retry_count`, `worker_skip_human_won`, `shm_crop_cache_*`,
+  `source_image_*`, `thumbnail_cache_*`, …) kept their name and only
+  gained the `op_` prefix.
+- **Structured log events use a `curation_` prefix** instead of the
+  retired company-initialed one, across the OpenSearch client, ingest,
+  index bootstrap, and job/status logging.
+- **Training run status fields renamed**: `TrainJobStatus`'s
+  `best_metric` / `last_metric` pair is replaced by two distinct rows,
+  `last_epoch_metric` (the true last training epoch's metrics) and
+  `best_checkpoint_metric` (the best checkpoint's own re-validation
+  metrics) — see `docs/design/curation_api_contract.md`'s "Training run
+  status" section for why two fields are needed. `Job.migrate_status`
+  drops the retired keys from any pre-rename `status.json` on read
+  rather than migrating their values, since the two were never the same
+  measurement.
 
 ### Removed
 - `DETECTION_YOLOV5_FORK`; the bake-off CoreML leg and `OP_COREML_HOST`

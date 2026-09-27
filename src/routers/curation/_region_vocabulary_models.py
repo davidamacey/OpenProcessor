@@ -54,7 +54,15 @@ class RegionProfileSummary(BaseModel):
     display_name: str
     display_name_singular: str
     region_class_name: str
-    text_reader: str
+    text_reader: str = Field(
+        description="The profile's text reader; 'none' for a text-free profile."
+    )
+    reads_text: bool = Field(
+        description='False for a text-free profile: no region text is read, stored or editable.'
+    )
+    text_hint_enabled: bool = Field(
+        description='Whether the OCR text-hint re-pass is enabled after a segmenter miss.'
+    )
 
 
 class RegionVocabularyResponse(BaseModel):
@@ -65,7 +73,10 @@ class RegionVocabularyResponse(BaseModel):
     region_sources: list[VocabularyEntry]
     chain_actors: list[VocabularyEntry]
     text_rules: dict[str, Any] | None = Field(
-        description='Which readings count as region text; null without a region profile.'
+        description=(
+            'Which readings count as region text; null without a region profile '
+            'or for a text-free one.'
+        )
     )
     text_choices: list[str]
     rejection_reasons: list[RejectionReasonEntry]

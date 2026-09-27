@@ -9,7 +9,13 @@
 SHELL := /bin/bash
 
 # Variables
-COMPOSE := docker compose
+# Installer plan §1: docker-compose.yml is deploy-safe (no `build:`, no
+# source mounts); every `build:` block and source mount lives in
+# docker-compose.dev.yml instead. The Makefile only ever runs from a
+# checkout, so it always adds that overlay -- detected by src/main.py
+# existing next to the compose file (same check scripts/setup.sh and
+# scripts/openprocessor.sh use).
+COMPOSE := docker compose $(if $(wildcard src/main.py),-f docker-compose.yml -f docker-compose.dev.yml,-f docker-compose.yml)
 V := .venv/bin
 # Prefer the project venv's interpreter when it exists; fall back to
 # system python3 for a fresh checkout that hasn't created .venv yet.
@@ -265,6 +271,18 @@ contracts: ## Regenerate the committed API contracts under contracts/
 .PHONY: contracts-check
 contracts-check: ## Fail if any committed API contract under contracts/ is stale
 	$(PYTHON) scripts/codegen/generate_contracts.py --check
+
+# ==================================================================================
+# Release (local, not CI -- see installer plan §11.1 item 2)
+# ==================================================================================
+
+.PHONY: release-dry-run
+release-dry-run: ## Build + Trivy-scan every published image; push nothing
+	scripts/release/build_and_publish.sh --dry-run
+
+.PHONY: release
+release: ## Build + Trivy-scan + push every published image; writes images.lock
+	scripts/release/build_and_publish.sh --push
 
 # ==================================================================================
 # Benchmarking
@@ -720,7 +738,7 @@ load-face-models: ## Load face models into Triton (SCRFD + ArcFace)
 	@echo "Face models loaded."
 
 .PHONY: setup-face-pipeline
-setup-face-pipeline: download-face-models export-face-recognition export-scrfd ## Complete face pipeline setup (SCRFD + ArcFace)
+setup-face-pipeline: download-face-models export-face-recognition export-scrfd restart-triton load-face-models ## Complete face pipeline setup (SCRFD + ArcFace)
 	@echo "Face pipeline setup complete!"
 	@echo ""
 	@echo "Loaded models:"

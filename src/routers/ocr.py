@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from src.schemas.detection import ImageMetadata
 from src.services.ocr_service import OcrService
+from src.utils.retry import RetryExhaustedError
 
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,13 @@ class TextRegion(BaseModel):
         ..., description='Axis-aligned box [x1,y1,x2,y2] normalized [0,1]'
     )
     det_score: float = Field(..., description='Detection confidence score')
-    rec_score: float = Field(..., description='Recognition confidence score')
+    rec_score: float | None = Field(
+        ..., description='Recognition confidence score; null when recognition failed'
+    )
+    rec_error: str | None = Field(
+        default=None,
+        description="Reason rec_score is null, e.g. 'recognition_failed'; null otherwise",
+    )
 
 
 class OcrPredictResponse(BaseModel):
@@ -168,6 +175,7 @@ def ocr_predict(
         boxes_normalized = result.get('boxes_normalized', [])
         det_scores = result.get('det_scores', [])
         rec_scores = result.get('rec_scores', [])
+        rec_errors = result.get('rec_errors', [])
 
         regions = [
             TextRegion(
@@ -175,7 +183,10 @@ def ocr_predict(
                 box=boxes[i] if i < len(boxes) else [],
                 box_normalized=boxes_normalized[i] if i < len(boxes_normalized) else [],
                 det_score=det_scores[i] if i < len(det_scores) else 0.0,
-                rec_score=rec_scores[i] if i < len(rec_scores) else 0.0,
+                # None (never the BLS's internal -1.0 sentinel) when
+                # recognition failed for this crop -- see rec_error.
+                rec_score=rec_scores[i] if i < len(rec_scores) else None,
+                rec_error=rec_errors[i] if i < len(rec_errors) else None,
             )
             for i in range(result.get('num_texts', 0))
         ]
@@ -194,6 +205,8 @@ def ocr_predict(
         )
 
     except HTTPException:
+        raise
+    except RetryExhaustedError:
         raise
     except Exception as e:
         logger.error(f'OCR failed for {filename}: {e}')
@@ -433,6 +446,8 @@ async def search_by_ocr(
             'results': results,
         }
 
+    except RetryExhaustedError:
+        raise
     except Exception as e:
         logger.error(f'OCR search failed for "{text}": {e}')
         raise HTTPException(status_code=500, detail=f'Search failed: {e!s}') from e
