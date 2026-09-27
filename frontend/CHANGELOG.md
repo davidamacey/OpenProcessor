@@ -92,6 +92,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Confirm dialogs close on Esc again after a busy Confirm.** While a
+  dialog's Confirm button is busy it is disabled, which drops keyboard focus
+  out of the dialog, so Esc and Tab stopped reaching it. Keys that land
+  outside every open dialog now go to the topmost one.
 - **Ingest uploads get the ingest proxy limits again.** Every ingest route
   is project-scoped (`/projects/<slug>/ingest/...`), but `nginx.conf`'s
   ingest location still matched the removed unscoped path, so uploads fell
