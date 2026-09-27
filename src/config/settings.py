@@ -33,16 +33,21 @@ class TritonModelConfig:
     YOLO_MODEL = os.environ.get('YOLO_MODEL', 'yolov11_small_trt_end2end')
 
     # Face Detection/Recognition (SCRFD + Umeyama alignment + ArcFace)
-    FACE_DETECT_MODEL = 'scrfd_10g_bnkps'
-    ARCFACE_MODEL = 'arcface_w600k_r50'
+    FACE_DETECT_MODEL = os.environ.get('FACE_DETECT_MODEL', 'scrfd_10g_bnkps')
+    ARCFACE_MODEL = os.environ.get('ARCFACE_MODEL', 'arcface_w600k_r50')
 
     # CLIP Embeddings
-    CLIP_IMAGE_MODEL = 'mobileclip2_s2_image_encoder'
-    CLIP_TEXT_MODEL = 'mobileclip2_s2_text_encoder'
+    CLIP_IMAGE_MODEL = os.environ.get('CLIP_IMAGE_MODEL', 'mobileclip2_s2_image_encoder')
+    CLIP_TEXT_MODEL = os.environ.get('CLIP_TEXT_MODEL', 'mobileclip2_s2_text_encoder')
 
     # OCR
-    OCR_DET_MODEL = 'paddleocr_det_trt'
-    OCR_REC_MODEL = 'paddleocr_rec_trt'
+    OCR_DET_MODEL = os.environ.get('OCR_DET_MODEL', 'paddleocr_det_trt')
+    OCR_REC_MODEL = os.environ.get('OCR_REC_MODEL', 'paddleocr_rec_trt')
+    OCR_PIPELINE_MODEL = os.environ.get('OCR_PIPELINE_MODEL', 'ocr_pipeline')
+
+    # PE-Core (semantic search / curation embeddings)
+    PE_IMAGE_MODEL = os.environ.get('PE_IMAGE_MODEL', 'pe_image_encoder')
+    PE_TEXT_MODEL = os.environ.get('PE_TEXT_MODEL', 'pe_text_encoder')
 
 
 class Settings(BaseSettings):

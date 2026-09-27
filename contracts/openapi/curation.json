@@ -5676,6 +5676,7 @@
         "properties": {
           "architecture": {
             "default": "yolo26",
+            "description": "One of ('yolo11', 'yolo26', 'yolov5_objectness').",
             "title": "Architecture",
             "type": "string"
           },
@@ -13298,7 +13299,7 @@
     },
     "/curation/probe/run": {
       "post": {
-        "description": "Start a probe pass from a finished training run's export.\n\n``409`` when: the referenced training job isn't finished or has no\nexported checkpoint, or a probe job is already running. GPU claim\n(when ``gpu`` is given) goes through the same arbiter\n``POST /train/start`` uses; a claim failure is also ``409`` (never\nsilent -- see ``src.services.curation.probe_job``).",
+        "description": "Start a probe pass from a finished training run's export.\n\n``409`` when: the referenced training job isn't finished or has no\nexported checkpoint, or a probe job is already running. ``422`` when\n``architecture`` is outside\n:data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`. GPU\nclaim (when ``gpu`` is given) goes through the same arbiter\n``POST /train/start`` uses; a claim failure is also ``409`` (never\nsilent -- see ``src.services.curation.probe_job``).",
         "operationId": "probe_run_curation_probe_run_post",
         "requestBody": {
           "content": {

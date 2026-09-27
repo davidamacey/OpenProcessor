@@ -123,19 +123,18 @@ class TestConfigLabelFilenameFallback:
 
 
 class TestStockCocoFallback:
-    def test_stock_detector_falls_back_to_coco_when_labels_txt_is_missing(
+    def test_stock_detector_with_missing_labels_txt_renders_placeholders(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Safety net only -- the real stock model ships its own
-        labels.txt (resolution step 1 handles it); this proves the
-        fallback still works if that file is ever absent."""
+        """No COCO special case remains (class identity invariant): even
+        the stock detector name gets class_{id} placeholders if its
+        labels.txt is ever absent, exactly like any other model."""
         _point_at(tmp_path, monkeypatch)
 
         names = cn.get_class_names('yolov11_small_trt_end2end')
 
-        assert names[0] == 'person'
-        assert names[2] == 'car'
-        assert len(names) == 80
+        assert names == {}
+        assert cn.resolve_class_name('yolov11_small_trt_end2end', 0) == 'class_0'
 
     def test_an_unrecognized_model_with_no_labels_never_gets_coco_names(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
