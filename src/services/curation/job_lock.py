@@ -66,4 +66,24 @@ def exclusive_start_lock(lock_file: Path) -> Iterator[bool]:
         os.close(fd)
 
 
-__all__ = ['exclusive_start_lock']
+@contextlib.contextmanager
+def exclusive_file_lock(lock_file: Path) -> Iterator[None]:
+    """Blocking sibling of :func:`exclusive_start_lock`: waits for the
+    same cross-process ``flock`` instead of giving up. For short
+    read-compare-write sections on one shared file (a model's
+    ``promote.json``), where every caller must eventually get its turn.
+    Blocks the calling thread -- run it off the event loop. The lock
+    file's directory must already exist (``FileNotFoundError`` otherwise),
+    so locking a model that was never promoted creates nothing."""
+    fd = os.open(str(lock_file), os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
+__all__ = ['exclusive_file_lock', 'exclusive_start_lock']

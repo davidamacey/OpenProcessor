@@ -92,6 +92,8 @@ def test_sharing_on_a_model_this_project_does_not_own_404s(
         json={'shared': True, 'expected_revision': 1},
     )
     assert r.status_code == 404
+    assert r.json()['detail']['error'] == 'model_not_found'
+    assert r.json()['detail']['project'] == 'default'
 
 
 def test_sharing_a_model_with_no_promote_json_404s(
@@ -104,3 +106,61 @@ def test_sharing_a_model_with_no_promote_json_404s(
         json={'shared': True, 'expected_revision': 1},
     )
     assert r.status_code == 404
+    assert r.json()['detail']['error'] == 'model_not_found'
+    assert not (tmp_path / 'never_promoted').exists()
+
+
+def test_concurrent_puts_on_the_same_revision_one_wins_one_409s(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two API workers handling PUTs with the same ``expected_revision`` at
+    the same moment: exactly one may win. Each request below runs on its
+    own event loop in its own thread (a TestClient used outside ``with``
+    opens a portal per request), like two uvicorn worker processes sharing
+    the model repo, and each read of promote.json is slowed so both reads
+    land before either write unless the check-and-write is locked."""
+    import threading
+    import time
+    from pathlib import Path as _Path
+
+    from _curation_app import mount_curation_routers
+
+    import src.routers.curation._models_sharing as sharing_mod
+    import src.routers.curation.models as models_mod
+
+    monkeypatch.setenv('OP_TRITON_MODEL_REPO', str(tmp_path))
+    _promote(tmp_path, 'cars_det_v3')
+
+    class _SlowReadPath(type(_Path())):  # type: ignore[misc]
+        def read_text(self, *args: object, **kwargs: object) -> str:
+            text = super().read_text(*args, **kwargs)  # type: ignore[arg-type]
+            if self.name == 'promote.json':
+                time.sleep(0.3)
+            return text
+
+    real = sharing_mod._promote_json_path
+    monkeypatch.setattr(sharing_mod, '_promote_json_path', lambda n: _SlowReadPath(real(n)))
+
+    app = FastAPI()
+    mount_curation_routers(app, models_mod.router)
+    client = TestClient(app)
+    barrier = threading.Barrier(2)
+    codes: list[int] = []
+
+    def _put(shared: bool) -> None:
+        barrier.wait()
+        r = client.put(
+            '/curation/projects/default/models/cars_det_v3/sharing',
+            json={'shared': shared, 'expected_revision': 1},
+        )
+        codes.append(r.status_code)
+
+    threads = [threading.Thread(target=_put, args=(flag,)) for flag in (True, False)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+
+    assert sorted(codes) == [200, 409]
+    saved = json.loads((tmp_path / 'cars_det_v3' / 'promote.json').read_text())
+    assert saved['sharing_revision'] == 2

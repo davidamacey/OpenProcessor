@@ -47,6 +47,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   delete's 202/background-completing shape (delta 10), and the
   registry's `search_after` pagination past OpenSearch's 1000-hit
   default result window (P1R minor 4).
+- `GET /curation/projects/{project}/models/status?include_other_projects=true`
+  also lists other projects' promoted models whose owner shared them
+  (§5.5 #3). Every Triton entry now carries `project` (owner slug, null
+  for base models), `shared` and `class_mapping: {mapped_count,
+  unmapped}` (null for a model with no class list); external entries
+  carry `project: null, shared: false, class_mapping: null`.
+- `GET /curation/projects/{project}/models/{name}/class_mapping`: the full
+  name mapping of a model onto the bound project's registry (`model`,
+  `model_project`, `project`, `entries[{model_id, model_name, class_id,
+  class_name, match}]`, `unmapped`, `not_covered`, `labels.match`), 404
+  `model_not_found` for another project's unshared model (Cropwright
+  delta 8).
 - **Cross-project model sharing (§5.5, owner D1).** New
   `src/services/training/model_classes.py`: `model_classes()` reads a
   model's own classes from `promote.json.classes` (model order), else
@@ -72,6 +84,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-promote) and `class_remap_source`.
 
 ### Fixed
+- Bake-off queue docs (`docs/CURATION.md`, `env.template`, `bakeoff.py`,
+  `bakeoff_runner._pending_job_files`) described
+  `$OP_STATE_DIR/bakeoff_jobs` / `OP_BAKEOFF_JOBS_DIR` as the router's
+  queue. Every project, `default` included, queues in
+  `$OP_STATE_DIR/projects/<slug>/bakeoff_jobs`; the evaluator must watch
+  `$OP_STATE_DIR/bakeoff_jobs` on the API's state-dir path to find them.
+- `PUT .../models/{name}/sharing` answers its 404s through `api_error`
+  (`{"detail": {"error": "model_not_found", "message", "project", ...}}`)
+  instead of a bare string detail.
+- `PUT .../models/{name}/sharing`'s revision check is atomic: the
+  read-compare-write of `promote.json` holds a per-model `flock`
+  (`job_lock.exclusive_file_lock`, new blocking sibling of
+  `exclusive_start_lock`) and writes via temp file + rename
+  (`src/services/training/promote_json.py`). Two concurrent PUTs on the
+  same `expected_revision` now give one 200 and one 409
+  `revision_conflict` instead of two 200s. A re-promote takes the same
+  lock and keeps `sharing_revision` (it used to drop it back to 1).
 - `src/services/projects/busy.py`'s `running_jobs()` now reports running
   probe, item-scores, selection and viz jobs (each module's own
   `state.json` + heartbeat busy rule, read for the given project), so a

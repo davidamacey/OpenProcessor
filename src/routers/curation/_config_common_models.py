@@ -44,6 +44,7 @@ ErrorCode = Literal[
     'revision_conflict',
     'invalid_transition',
     'export_outside_project',
+    'model_not_found',
 ]
 
 

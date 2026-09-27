@@ -7,15 +7,16 @@ ratchet.
 
 from __future__ import annotations
 
-import json
+import asyncio
 from typing import Annotated, Any
 
-from fastapi import HTTPException, Query
+from fastapi import Query
 from pydantic import BaseModel
 
 from src.config.curation import get_curation_config
 from src.routers.curation._common import logger, router
 from src.routers.curation._config_common_models import api_error
+from src.services.training.promote_json import SharingRevisionConflictError, update_sharing
 
 
 def _promote_json_path(model_name: str) -> Any:
@@ -56,31 +57,13 @@ async def set_model_sharing(
     every other ownership check in this router."""
     from src.routers.curation.models import _project_owns_model
 
+    project = get_curation_config().project_slug
     if not _project_owns_model(model_name):
-        raise HTTPException(
-            status_code=404,
-            detail=f'{model_name!r} is not a model owned by this project',
-        )
-
-    path = _promote_json_path(model_name)
-    try:
-        raw = json.loads(path.read_text(encoding='utf-8'))
-    except (OSError, ValueError) as exc:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                f'{model_name!r} has no promote.json to share (not promoted through this pipeline)'
-            ),
-        ) from exc
-
-    current_revision = int(raw.get('sharing_revision') or 1)
-    if payload.expected_revision != current_revision:
         raise api_error(
-            409,
-            'revision_conflict',
-            f'{model_name!r} sharing revision is {current_revision}, '
-            f'not {payload.expected_revision}',
-            current_revision=current_revision,
+            404,
+            'model_not_found',
+            f'{model_name!r} is not a model owned by this project',
+            project=project,
         )
 
     # Unsharing while another project's active detector profile still
@@ -105,15 +88,34 @@ async def set_model_sharing(
             projects=[u.project for u in used_by],
         )
 
-    raw['shared'] = payload.shared
-    raw['sharing_revision'] = current_revision + 1
-    path.write_text(json.dumps(raw, indent=2, sort_keys=True), encoding='utf-8')
+    try:
+        revision = await asyncio.to_thread(
+            update_sharing,
+            _promote_json_path(model_name),
+            shared=payload.shared,
+            expected_revision=payload.expected_revision,
+        )
+    except SharingRevisionConflictError as exc:
+        raise api_error(
+            409,
+            'revision_conflict',
+            f'{model_name!r} sharing revision is {exc.current_revision}, '
+            f'not {payload.expected_revision}',
+            current_revision=exc.current_revision,
+        ) from exc
+    except (OSError, ValueError) as exc:
+        raise api_error(
+            404,
+            'model_not_found',
+            f'{model_name!r} has no promote.json to share (not promoted through this pipeline)',
+            project=project,
+        ) from exc
 
     return ModelSharingResponse(
         name=model_name,
-        project=get_curation_config().project_slug,
+        project=project,
         shared=payload.shared,
-        revision=current_revision + 1,
+        revision=revision,
         used_by=used_by,
     )
 

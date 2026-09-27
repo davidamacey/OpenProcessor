@@ -27,6 +27,11 @@ from src.config.curation import get_curation_config
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
 from src.routers.curation._common import logger, router
+from src.routers.curation._models_class_mapping import (
+    bound_registry,
+    discover_foreign_shared_models,
+    listing_fields,
+)
 from src.routers.curation._models_segmenter import build_segmenter_entry
 from src.routers.curation.vlm import _get_vlm_labeler
 from src.services.detection.profile_registry import get_active_region_profile
@@ -256,10 +261,9 @@ def _discover_promoted_models(
             continue
         # Project scoping (docs/design/openprocessor_internal/
         # projects_plan.md §5.3, D1): the shared Triton repo holds every
-        # project's promoted models side by side; §5.5 opt-in cross-project
-        # sharing is out of scope here, so /models/status never lists a
-        # model this project doesn't own, with or without
-        # include_other_projects.
+        # project's promoted models side by side. Only this project's own
+        # are listed here; another project's shared ones come from
+        # discover_foreign_shared_models, on request only.
         if not _project_owns_model(entry.name):
             continue
         promote_json = entry / 'promote.json'
@@ -320,14 +324,21 @@ def _parse_triton_metrics(text: str) -> dict[str, dict[str, float]]:
 
 
 @router.get('/models/status')
-async def models_status() -> dict[str, Any]:
+async def models_status(
+    include_other_projects: Annotated[
+        bool,
+        Query(description="Also list other projects' promoted models their owners shared"),
+    ] = False,
+) -> dict[str, Any]:
     """Status + usage stats for the models that drive the curation labeling pipeline.
 
     Returns a single ``{"models": [...]}`` object describing each Triton model
     the labeler depends on, plus the external VLM and segmenter services.
     Each entry carries enough metadata for the labeler ``/models`` page to
     render a self-explanatory card without requiring access to
-    Triton/Prometheus directly.
+    Triton/Prometheus directly. Every Triton entry also carries
+    ``project``, ``shared`` and ``class_mapping`` (§5.5: its classes
+    matched by name onto this project's registry).
     """
     triton_http = resolve_triton_http_url()
     triton_metrics_url = os.environ.get('TRITON_METRICS_URL', 'http://triton-server:8002/metrics')
@@ -461,6 +472,18 @@ async def models_status() -> dict[str, Any]:
         )
         for promoted in _discover_promoted_models()
     )
+    if include_other_projects:
+        models.extend(
+            _build_triton_entry(
+                shared['name'],
+                f'{shared["name"]} (shared by {shared["project"]})',
+                f'Promoted in project {shared["project"]} and shared with other projects',
+                'Promoted checkpoint',
+                job_id=shared.get('job_id'),
+                promoted_at=shared.get('promoted_at'),
+            )
+            for shared in discover_foreign_shared_models()
+        )
 
     vlm_status: str = 'unavailable'
     vlm_error: str | None = None
@@ -494,6 +517,14 @@ async def models_status() -> dict[str, Any]:
         }
     )
 
+    # External services (segmenter, VLM) belong to no project and have no
+    # class list of their own.
+    registry = bound_registry()
+    for entry in models:
+        if entry['kind'] == 'triton':
+            entry.update(listing_fields(entry['name'], registry))
+        else:
+            entry.update({'project': None, 'shared': False, 'class_mapping': None})
     return {'models': models}
 
 

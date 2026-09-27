@@ -382,12 +382,20 @@ def run_job(spec: dict[str, Any]) -> dict[str, Any]:
 
 
 def _pending_job_files(jobs_dir: Path) -> list[Path]:
-    """Every project's queued ``*.job.json`` (``default`` included), each
-    in its own ``<state_dir>/projects/<slug>/bakeoff_jobs`` (see
-    ``src.config.projects.resources_for_new``), plus any dropped directly
-    in the ``jobs_dir`` watch root (``<state_dir>/bakeoff_jobs``; a manual
-    one-off). Sorted by mtime so one project's queue can't starve
-    another's (FIFO, one job at a time)."""
+    """``*.job.json`` in ``jobs_dir`` plus every project's own bake-off job
+    dir (docs/design/openprocessor_internal/projects_plan.md §5.3).
+
+    The API writes every project's jobs, ``default`` included, to
+    ``<state_dir>/projects/<slug>/bakeoff_jobs``
+    (``src.config.projects.resources_for_new``). Those are found as
+    ``jobs_dir.parent / 'projects' / '*' / 'bakeoff_jobs'``, so the
+    evaluator's ``--watch`` dir must be ``<OP_STATE_DIR>/bakeoff_jobs`` on
+    the same path as the API's state dir (the evaluator image watches
+    ``/var/lib/openprocessor/bakeoff_jobs``, matching the default
+    ``OP_STATE_DIR``). A different watch dir finds no project's jobs.
+    Sorted by mtime across all dirs so one project's queue can't starve
+    another's (FIFO, one job at a time, matching the trainer's
+    cross-project fairness)."""
     project_dirs_glob = jobs_dir.parent / 'projects' / '*' / 'bakeoff_jobs'
     candidates = list(jobs_dir.glob('*.job.json')) + list(
         project_dirs_glob.parent.glob('*/bakeoff_jobs/*.job.json')
