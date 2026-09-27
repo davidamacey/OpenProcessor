@@ -9,25 +9,16 @@
 import { describe, expect, it } from 'vitest';
 import { resolveStatsUpdate, summarizeStatsError } from './datasetStats';
 import type { DatasetStats } from './api';
+import { datasetStatsFixture } from './test/fixtures/datasetStats';
 
-const GOOD: DatasetStats = {
-  as_of: '2026-09-24T00:00:00Z',
+const GOOD: DatasetStats = datasetStatsFixture({
   total_crops: 422,
   validated: 297,
   test_holdout: 12,
   by_source: [{ key: 'tag_holdout_sample', doc_count: 300 }],
   labeled: { by_human: 100, by_vlm: 50, by_classifier: 10, other: 0 },
-  regions: { total_detected: 0, by_detector: 0, by_segmenter: 0, by_human: 0 },
-  unlabeled: { pending_detection: 0, pending_verification: 0, no_label_source: 0 },
-  in_progress: { region_drain_total_unfinished: 3 },
-  clusters: {
-    last_run_at: null,
-    cluster_count: 0,
-    residual_count: 0,
-    noise_count: 0,
-    method: null,
-  },
-};
+  in_progress: { region_drain_total_unfinished: 3, region_stall_reason: null },
+});
 
 describe('resolveStatsUpdate', () => {
   it('accepts a real DatasetStats payload and clears any prior error', () => {

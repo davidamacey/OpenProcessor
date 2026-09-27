@@ -23,11 +23,12 @@ from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
 CLASSES = [
     {
-        "id": 1,
-        "name": REGION_CLASS,
+        "class_id": 1,
+        "class_name": REGION_CLASS,
+        "kind": "region",
         "group": "widgets",
         "hotkey_letter": "l",
-        "count": 40,
+        "sample_count": 40,
         "validated_count": 12,
         "cluster_size": 44,
         "deprecated": False,
@@ -89,7 +90,7 @@ def _setup(stub, items_provider):
     stub.on("GET", r"/crops/[^/]+/image$", (200, b"", "image/jpeg"))
     stub.on(
         "GET",
-        r"/review/",
+        r"/review/(?!tabs)",
         lambda _r, _m: (
             200,
             {"items": [items_provider()], "total": 1, "page": 1, "page_size": 30},
@@ -122,7 +123,7 @@ def test_enter_confirms_only_proposed_boxes_and_leaves_rejected_untouched(
 
     stub.on("PUT", r"/crops/([^/]+)/regions$", region_put)
 
-    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
@@ -164,7 +165,7 @@ def test_per_box_accept_and_reject_keys_patch_immediately_without_removing_from_
 
     stub.on("PATCH", r"/crops/([^/]+)/regions/([^/]+)$", region_patch)
 
-    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
     counter_before = page.get_by_test_id("queue-counter").first.inner_text()
@@ -210,7 +211,7 @@ def test_added_box_and_untouched_sibling_are_both_sent_in_one_confirm_write(
 
     stub.on("PUT", r"/crops/([^/]+)/regions$", region_put)
 
-    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     canvas = page.get_by_test_id("multibox-canvas").first
     canvas.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
@@ -288,7 +289,7 @@ def test_z_undo_after_a_multibox_confirm_calls_the_single_region_undo_route(
 
     stub.on("POST", r"/crops/([^/]+)/region/undo$", region_undo)
 
-    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 
@@ -329,7 +330,7 @@ def test_on_screen_confirm_button_uses_the_multibox_write_too(stub, page, app_ur
 
     stub.on("PUT", r"/crops/([^/]+)/regions$", region_put)
 
-    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 

@@ -42,9 +42,7 @@
 
   const paths = $derived(splitLines(pathsText));
   const labelPaths = $derived(splitLines(labelTxtPathsText));
-  const overLimit = $derived(
-    config.batchMaxItems !== null && paths.length > config.batchMaxItems,
-  );
+  const overLimit = $derived(paths.length > config.batchMaxItems);
 
   const failedResults = $derived(
     result ? result.results.filter((r) => r.status === 'failed') : [],
@@ -53,6 +51,7 @@
     result ? result.results.filter((r) => r.secondary_detector_error) : [],
   );
   const errorKindCounts = $derived.by(() => {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local tally map consumed synchronously within this computation, never stored in reactive state
     const counts = new Map<string, number>();
     for (const r of failedResults) {
       const kind = r.error_kind ?? 'unknown';

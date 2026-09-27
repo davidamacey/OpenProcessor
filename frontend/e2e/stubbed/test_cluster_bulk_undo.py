@@ -13,7 +13,7 @@ from conftest import ACTION_TIMEOUT_MS
 from fixtures.wire import make_item
 
 CLASSES = [
-    {"id": 1, "name": "ducati", "group": "moto", "hotkey_letter": "k", "count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
+    {"class_id": 1, "class_name": "ducati", "kind": "item", "group": "moto", "hotkey_letter": "k", "sample_count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
 ]
 
 CLUSTERS = {
@@ -88,7 +88,7 @@ def test_cluster_bulk_label_then_single_undo_sends_one_batch_call(stub, page, ap
 
     stub.on("POST", r"/crops/([^/]+)/label/undo$", undo_single_handler)
 
-    page.goto(f"{app_url}/clusters/1")
+    page.goto(f"{app_url}/p/default/clusters/1")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(400)
 

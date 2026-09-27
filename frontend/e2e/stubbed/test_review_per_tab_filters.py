@@ -11,15 +11,16 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
 
-from fixtures.wire import make_item
+from fixtures.wire import make_item, review_tab, review_tabs
 
 CLASSES = [
     {
-        "id": 1,
-        "name": "ducati",
+        "class_id": 1,
+        "class_name": "ducati",
+        "kind": "item",
         "group": "moto",
         "hotkey_letter": "k",
-        "count": 10,
+        "sample_count": 10,
         "validated_count": 5,
         "cluster_size": 12,
         "deprecated": False,
@@ -30,22 +31,15 @@ CLASSES = [
 # conf_min/conf_max. `primary_low_conf`: the full list, with a served
 # max_rank default of 2 (so its subject-toggle "unset" label should read
 # "Top 2").
-REVIEW_TABS = {
-    "tabs": [
-        {
-            "id": "all",
-            "label": "All",
-            "filters": ["class_id", "source"],
-            "filter_defaults": {},
-        },
-        {
-            "id": "primary_low_conf",
-            "label": "Primary low-conf",
-            "filters": ["class_id", "source", "max_rank", "min_blur_ratio", "conf_min", "conf_max"],
-            "filter_defaults": {"max_rank": 2},
-        },
-    ]
-}
+REVIEW_TABS = review_tabs(
+    review_tab("all", "All", filters=["class_id", "source"]),
+    review_tab(
+        "primary_low_conf",
+        "Primary low-conf",
+        filters=["class_id", "source", "max_rank", "min_blur_ratio", "conf_min", "conf_max"],
+        filter_defaults={"max_rank": 2},
+    ),
+)
 
 
 def review_item(i: int) -> dict:
@@ -72,14 +66,10 @@ def test_review_filter_bar_hides_controls_the_active_tab_does_not_serve(stub, pa
         items = [review_item(i) for i in range(2)]
         return (200, {"items": items, "total": 2, "page": 1, "page_size": 30})
 
-    # Registered BEFORE _stub_common so /review/tabs (a more specific,
-    # later-registered pattern) wins over this broader /review/ regex —
-    # dispatch checks the most-recently-registered handler first, and
-    # r"/review/" also matches the /review/tabs path.
-    stub.on("GET", r"/review/", review_handler)
+    stub.on("GET", r"/review/(?!tabs)", review_handler)
     _stub_common(stub)
 
-    page.goto(f"{app_url}/review?tab=all")
+    page.goto(f"{app_url}/p/default/review?tab=all")
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(800)
 
@@ -98,10 +88,10 @@ def test_review_subject_toggle_label_reflects_served_max_rank_default(stub, page
         items = [review_item(i) for i in range(2)]
         return (200, {"items": items, "total": 2, "page": 1, "page_size": 30})
 
-    stub.on("GET", r"/review/", review_handler)
+    stub.on("GET", r"/review/(?!tabs)", review_handler)
     _stub_common(stub)
 
-    page.goto(f"{app_url}/review?tab=all&preset=primary_low_conf")
+    page.goto(f"{app_url}/p/default/review?tab=all&preset=primary_low_conf")
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(800)
 

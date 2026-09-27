@@ -14,11 +14,12 @@ from fixtures.wire import REGION_CLASS
 
 CLASSES = [
     {
-        "id": 1,
-        "name": REGION_CLASS,
+        "class_id": 1,
+        "class_name": REGION_CLASS,
+        "kind": "region",
         "group": "widgets",
         "hotkey_letter": "l",
-        "count": 40,
+        "sample_count": 40,
         "validated_count": 12,
         "cluster_size": 44,
         "deprecated": False,
@@ -48,7 +49,7 @@ def test_region_gallery_detector_filter_lists_served_filterable_detectors(stub, 
     # fail-closed-clean rather than accumulating unrelated `unhandled` hits.
     stub.on("GET", r"/clusters(\?|$)", {"clusters": [], "count": 0})
 
-    page.goto(f"{app_url}/clusters?class={REGION_CLASS}")
+    page.goto(f"{app_url}/p/default/clusters?class={REGION_CLASS}")
 
     # The Detector select specifically — /clusters also renders an
     # unrelated cluster-sort <select>, so `.first` would be ambiguous.

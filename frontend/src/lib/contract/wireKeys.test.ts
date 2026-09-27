@@ -103,8 +103,8 @@ function declaredWireFields(v: unknown, out: string[] = []): string[] {
  * `SubBoxCapability.listField` this branch declares) or any
  * `RegionBoxWire` element key. This list — deliberately separate from
  * `KNOWN_STALE` above, which is for fields the backend will never emit —
- * is emptied by the lockstep contract sync once the backend's W8 lands
- * and `npm run contract:sync` picks up `region_box_keys`/
+ * is deleted when backend W8 rebases onto projects (the vendored
+ * snapshot is cutover/projects-lifecycle 29807534, which has no W8) and `npm run contract:sync` picks up `region_box_keys`/
  * `region_summary_keys`/`box_states`. Do not add anything here that
  * isn't a genuine "the backend hasn't shipped this yet" case.
  */

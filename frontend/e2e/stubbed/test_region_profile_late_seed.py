@@ -11,16 +11,16 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
 
-from fixtures.wire import REGION_PROFILE, REGION_TAB_LABEL
+from fixtures.wire import REGION_PROFILE, REGION_TAB_LABEL, review_tabs
 from test_labeling_flow import register_base
 
 
 def test_failed_boot_health_then_success_shows_region_tab_without_toast(stub, page, app_url):
     register_base(stub)
-    stub.on("GET", r"/review/tabs(\?|$)", {"tabs": []})
+    stub.on("GET", r"/review/tabs(\?|$)", review_tabs())
     stub.on(
         "GET",
-        r"/review/",
+        r"/review/(?!tabs)",
         lambda _r, _m: (200, {"items": [], "total": 0, "page": 1, "page_size": 30}),
     )
     calls = {"n": 0}
@@ -34,7 +34,7 @@ def test_failed_boot_health_then_success_shows_region_tab_without_toast(stub, pa
 
     stub.on("GET", r"/health$", health)
 
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     page.get_by_test_id("review-tabs").get_by_role("button", name=REGION_TAB_LABEL).wait_for(
         timeout=ACTION_TIMEOUT_MS
     )

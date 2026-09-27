@@ -46,23 +46,20 @@ export interface RegistryClass {
   /** Server-computed adequacy tier from `GET {API_PREFIX}/classes`
    *  (`block` | `warn` | `ok`, against the served `thresholds`). Never
    *  recomputed client-side from `validated_count`. */
-  adequacy?: string;
+  adequacy: string;
   /** `'item'` (an ordinary item class) or `'region'` (a slot-bound
    *  region class, i.e. the served profile's region_class_name) — served on
-   *  `GET {API_PREFIX}/classes`/`/stats/classes` (OpenProcessor #36 item 1,
-   *  X2/R1). The single source of truth for excluding a region class from
-   *  an item-class picker; `isSlotBoundClass`/`isItemClassTarget`
-   *  (`$lib/classVisibility`) read this first, falling back to the slot
-   *  registry only for a class an older backend doesn't tag. */
-  kind?: 'item' | 'region';
-  /** Validated crops usable for training — `sample_count`/`validated_count`
-   *  no longer include region counts as of #36 (X2), so this is the
-   *  server's own trainable count for the class, not client math. */
-  trainable?: number;
-  /** On `GET {API_PREFIX}/classes`: the shortfall of `trainable` against
-   *  the served per-class hard minimum (`thresholds.block_below`), floored
-   *  at 0 — served directly. > 0 means the class blocks preflight. */
-  trainable_gap?: number;
+   *  `GET {API_PREFIX}/classes`. The single source of truth for excluding
+   *  a region class from an item-class picker (`isSlotBoundClass`/
+   *  `isItemClassTarget`, `$lib/classVisibility`). */
+  kind: 'item' | 'region';
+  /** Validated crops usable for training (region counts, test holdout and
+   *  excluded crops left out) — the server's own count, not client math. */
+  trainable: number;
+  /** The shortfall of `trainable` against the served per-class hard
+   *  minimum (`thresholds.block_below`), floored at 0. > 0 means the
+   *  class blocks preflight. */
+  trainable_gap: number;
 }
 
 /** `thresholds` served on `GET {API_PREFIX}/classes`, `GET {API_PREFIX}/stats/classes`
@@ -153,8 +150,8 @@ export interface ExportClassSplitCounts {
  * synchronous `ExportResult` response (a different endpoint, still
  * `running`/`failed`/`success`-capable) and assigns it to the same
  * `exportState` variable. Every field below `status` is optional/nullable
- * so a pre-df01309 backend's GET response (missing all of them) renders
- * exactly as it did before — no page break on a missing field.
+ * because the served `ExportStatusResponse` requires only `status` (an
+ * idle status, with no export yet, carries none of them).
  */
 export interface ExportStatus {
   status: string;
@@ -184,8 +181,7 @@ export interface ExportStatus {
   object_count?: number | null;
   class_count?: number | null;
   /** Of `class_count` registry classes, how many have >=1 object (#36
-   *  item 6). `null` for an export written before it was recorded, or a
-   *  backend that predates the field entirely. */
+   *  item 6). `null` for an export written before it was recorded. */
   classes_with_objects?: number | null;
   /** Images per split. */
   split_counts?: ExportSplitCounts | null;
@@ -336,32 +332,29 @@ export interface ExportDatasetList {
  * Server response from `POST {API_PREFIX}/test_holdout/freeze`. As of
  * OpenProcessor df01309 the request body is `{percent}` only — no
  * `seed` (selection is deterministic, SHA1-of-`crop_id` per class; an
- * unknown field like `seed` is now a 422, not silently ignored) — and
- * the response gained `selection`/`min_per_class` (both required on
- * df01309; optional here so a pre-df01309 backend's response, which
- * doesn't serve them, still type-checks and renders without them).
+ * unknown field like `seed` is now a 422, not silently ignored).
  */
 export interface TestHoldoutFreezeResult {
   n_frozen: number;
   n_classes_covered: number;
   test_holdout_sha: string;
   per_class_counts: Record<string, number>;
-  /** Selection method name — `'sha1_per_class'` on df01309. */
-  selection?: string;
+  /** Selection method name — `'sha1_per_class'`. */
+  selection: string;
   /** Target holdout percent per class, echoed from the request. */
-  percent?: number;
+  percent: number;
   /** Floor per class — all of a class smaller than this is frozen. */
-  min_per_class?: number;
+  min_per_class: number;
 }
 
 /** Server response from `GET {API_PREFIX}/test_holdout/stats`. */
 export interface TestHoldoutStats {
   total: number;
-  by_class: Array<{ key: number; doc_count: number; deficient?: boolean }>;
+  by_class: Array<{ key: number; doc_count: number; deficient: boolean }>;
   /** The same class-adequacy threshold served on `/classes`/`/stats/classes`
    *  — the frontend's "below 5 test crops" copy reads this, never a
    *  hardcoded 5. */
-  min_test_per_class?: number;
+  min_test_per_class: number;
 }
 
 export interface BBoxNorm {
@@ -568,7 +561,7 @@ export interface Cluster {
    *  LABELLED members. Not the geometry `purity`. */
   dominant_pct: number | null;
   /** Served member counts behind `dominant_pct` (cluster-scoped, include
-   *  any test-holdout members). Optional: absent on older responses. */
+   *  any test-holdout members). */
   dominant_count?: number | null;
   labelled_count?: number | null;
   /** DQ-M2 fix (dq-queues cutover, 2026-09-24): nearest-centroid geometry
@@ -613,8 +606,6 @@ export interface Cluster {
   has_subclusters: boolean;
   /** Distinct cluster_subid count from the backend. */
   n_subclusters: number;
-  /** Legacy alias for n_subclusters — kept until callers migrate. */
-  sub_clusters?: number;
   centroid_sha?: string;
   updated_at: string | null;
   /** Set only on the client-built region inventory entry pinned
@@ -648,24 +639,41 @@ export interface StatsSummary {
     validated_count: number;
     /** Server-computed adequacy tier (`block`/`warn`/`ok`) — see
      *  `RegistryClass.adequacy`. */
-    adequacy?: string;
+    adequacy: string;
     /** Server-computed YOLO augmentation target for this class. */
-    aug_target?: number;
+    aug_target: number;
     /** `aug_target - validated_count`, served directly. */
-    aug_gap?: number;
-    /** Validated crops usable for training (region counts excluded, #36
-     *  X2) — the server's own trainable count, not client math. */
-    trainable?: number;
-    /** `aug_target - trainable`, served directly (#36 item 1). */
-    trainable_gap?: number;
+    aug_gap: number;
+    /** See `RegistryClass.trainable`. */
+    trainable: number;
+    /** See `RegistryClass.trainable_gap` (shortfall against the per-class
+     *  hard minimum, not against `aug_target`). */
+    trainable_gap: number;
   }>;
   /** Served alongside `per_class` on `/stats/classes` — same shape as
-   *  `ClassesResponse.thresholds`. */
+   *  `ClassesResponse.thresholds`. Absent only when `/stats/classes`
+   *  itself failed to load. */
   thresholds?: ClassThresholds;
 }
 
-/** `GET {API_PREFIX}/health`. `degraded` means a non-critical
- *  dependency (e.g. the VLM) is down; labeling still works. */
+/** `GET {globalApi()}/health` (P1 projects cutover) — unscoped, has no
+ *  project bound. Feeds only the top-bar API status chip; every
+ *  project-scoped fact (region profile, queue counts, …) comes from the
+ *  scoped `ApiHealth` below. */
+export interface GlobalHealth {
+  status: 'ok' | 'degraded' | 'down';
+  triton?: { reachable: boolean; detail?: string };
+  opensearch?: { reachable: boolean; indexes?: Record<string, boolean> };
+  vlm?: { reachable: boolean; model?: string | null };
+  mlflow_public_url?: string | null;
+  version?: string;
+  api_version?: string;
+}
+
+/** `GET {scoped()}/health` — today's project-scoped shape (P1 projects
+ *  cutover) plus the bound `project` slug. `degraded` means a
+ *  non-critical dependency (e.g. the VLM) is down; labeling still
+ *  works. */
 export interface ApiHealth {
   status: 'ok' | 'degraded' | 'down';
   triton?: { reachable: boolean; detail?: string };
@@ -673,10 +681,11 @@ export interface ApiHealth {
   vlm?: { reachable: boolean; model?: string | null };
   registry?: { path?: string; exists?: boolean; mtime?: string | null };
   /** The backend's active region profile, or `null` when none is
-   *  configured (then every region route answers 409). Absent on a
-   *  backend older than OpenProcessor naming-w2, which the UI treats the
-   *  same as `null`. The only signal region features key on. */
-  region_profile?: ServedRegionProfile | null;
+   *  configured (then every region route answers 409). The only signal
+   *  region features key on. */
+  region_profile: ServedRegionProfile | null;
+  /** The project this scoped health was read from. */
+  project: string;
 }
 
 /** `RegionProfileSummary` on `GET {API_PREFIX}/health` and
@@ -701,19 +710,18 @@ export interface ServedRegionProfile {
   text_reader: string;
   /** False for a text-free profile: no region text is read, stored or
    *  editable — `region_text*` stays null and a `region_meta` PATCH
-   *  carrying `region_text` 422s (OpenProcessor W1). Optional/undefined
-   *  on a pre-W1 backend; callers fall back to `text_reader` being
-   *  non-empty and not `'none'` (`profileReadsText()`,
-   *  `servedRegionSlot.ts`). */
-  reads_text?: boolean;
+   *  carrying `region_text` 422s (OpenProcessor W1). The one gate for the
+   *  region slot's text capability (`servedRegionSlot.ts`). */
+  reads_text: boolean;
   /** Whether the OCR text-hint re-pass (after a segmenter miss) is
-   *  enabled for this profile. Optional/undefined on a pre-W1 backend;
-   *  informational only today — no UI reads it yet (see CLAUDE.md). */
-  text_hint_enabled?: boolean;
+   *  enabled for this profile. Informational only today — no UI reads it
+   *  yet (see CLAUDE.md). */
+  text_hint_enabled: boolean;
   /** W8.8/W8.9: request-size guards on region box writes — never a
-   *  labeling rule. `max_boxes_per_write` gates the Add-box action;
-   *  optional/undefined on a pre-W8 backend (no client-guessed cap in
-   *  that case — Add stays unbounded). */
+   *  labeling rule. `max_boxes_per_write` gates the Add-box action.
+   *  Optional because backend W8 has not landed in the vendored contract
+   *  (pending-backend, see regionProfile.test.ts's PENDING_BACKEND_W8_KEYS);
+   *  absent means no client-guessed cap (Add stays unbounded). */
   limits?: {
     max_boxes_per_write?: number;
   };
@@ -808,7 +816,7 @@ export interface PaginatedResponse<T> {
    *  own explanation for why this queue is empty right now (e.g. "no
    *  probe predictions — run a probe"), distinct from and more direct
    *  than `sort_fallback_reason` (OpenProcessor #36 item 9). Absent when
-   *  the queue isn't empty, or on a backend that predates the field. */
+   *  the queue isn't empty. */
   empty_reason?: string | null;
   /** Provenance for a pool-scale overlay ordering (curation-strategy plan
    *  Phase 4 — currently only `{API_PREFIX}/crops?order=diverse`): which
@@ -1113,13 +1121,13 @@ export interface ModelInfo {
    *  the active config hard-blocks (`is_region_protected`, now also
    *  covering the ingest primary proposer/secondary classifier and the
    *  OCR det/rec pair, not just the region detector). `unloadButtonState`
-   *  reads this FIRST, ahead of `kind`/`is_region_protected` — the
-   *  server's own verdict, never re-derived from the other flags. */
-  unloadable?: boolean;
+   *  reads this FIRST, ahead of `is_region_protected` — the server's own
+   *  verdict, never re-derived from the other flags. */
+  unloadable: boolean;
   /** Served (OpenProcessor ba88751): true only for a model the pipeline
    *  can run without — the region profile's detector when a segmenter is
-   *  configured. Pairs with status `not_installed`. Absent on older backends. */
-  optional?: boolean;
+   *  configured. Pairs with status `not_installed`. */
+  optional: boolean;
   /** Present (with job_id/version) only for models promoted through this pipeline. */
   job_id?: string | null;
   promoted_at?: string | null;
@@ -1206,7 +1214,7 @@ export interface IngestImageResult {
   /**
    * OpenProcessor d72cc63: set when the image itself ingested but the
    * optional secondary detector failed on it (so it carries only the
-   * primary detector's crops). Null otherwise; absent on an older backend.
+   * primary detector's crops). Null otherwise.
    */
   secondary_detector_error?: string | null;
 }

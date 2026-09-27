@@ -45,11 +45,11 @@ JSON file (`annotation-profiles.json`) placed next to the built app. See
 
 ## Everything degrades gracefully
 
-Nearly every optional feature (score chips, the embedding-plot lasso tool,
-semantic search, `/bakeoff`, `/train`) is gated on a runtime probe of the
-backend's own `/methods`, `/health`, or a feature-specific availability
-check — never a Cropwright build flag. A backend that hasn't enabled a
-feature simply doesn't get a nav link or page section for it.
+Every optional feature (score chips, the embedding-plot lasso tool,
+semantic search, the region surfaces, the single-class export) is gated on
+what the backend serves at runtime — its own `/methods` capability list or
+the `/health` region profile — never a Cropwright build flag. A backend
+that hasn't enabled a feature simply doesn't get a page section for it.
 
 ## No database, no auth, of its own
 

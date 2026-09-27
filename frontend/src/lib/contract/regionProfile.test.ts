@@ -27,8 +27,9 @@ const FRONTEND_KEYS = {
 // W8.9 (feat/w8-multibox-lockstep, docs/design/
 // w8-multibox-frontend-plan-2026-09-26.md): `limits` is new in the
 // backend's W8 wave and isn't in the vendored pre-W8 OpenAPI snapshot yet.
-// Remove this allow-list entry (not widen it) the moment `npm run
-// contract:sync` picks up the backend's W8 addition to
+// The vendored snapshot (cutover/projects-lifecycle 29807534) has no W8.
+// Delete this allow-list entry (not widen it) when backend W8 rebases onto
+// projects and `npm run contract:sync` picks up the backend's W8 addition to
 // `RegionProfileSummary` — same pattern as endpointCatalog.test.ts's
 // PENDING_BACKEND.
 const PENDING_BACKEND_W8_KEYS = new Set(['limits']);

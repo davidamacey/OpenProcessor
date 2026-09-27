@@ -14,7 +14,7 @@ from conftest import ACTION_TIMEOUT_MS
 import json
 
 CLASSES = [
-    {"id": 1, "name": "ducati", "group": "moto", "hotkey_letter": "k", "count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
+    {"class_id": 1, "class_name": "ducati", "kind": "item", "group": "moto", "hotkey_letter": "k", "sample_count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
 ]
 
 IDLE_JOB = {
@@ -51,7 +51,7 @@ def test_dashboard_stats_unavailable(stub, page, app_url):
     sse_body = f"event: snapshot\ndata: {json.dumps(snapshot)}\n\n"
     stub.on("GET", r"/pipeline/events", (200, sse_body, "text/event-stream"))
 
-    page.goto(f"{app_url}/dashboard")
+    page.goto(f"{app_url}/p/default/dashboard")
     page.get_by_text("Stats unavailable:", exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 

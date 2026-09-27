@@ -35,27 +35,38 @@ keyboard-first UX matching the legacy_sorter manual-mode speed budget.
 
 ## Routes
 
-All routes below are shipped and linked from the top nav (`+layout.svelte`)
-except `/clusters/[id]`, reached via a cluster card. `/` is not a route in
-its own right — it's a bare 307 redirect to `/dashboard` (`src/routes/
-+page.ts`), and the top-bar logo/"Dashboard" link both point at
-`/dashboard` directly, not `/`. The MVP/post-MVP split from the original
-design doc is gone — every route in this table exists and works; nothing
-here is a stub.
+**Every page lives under a project: `/p/[project]/<section>`** (owner
+decision: the active project lives in the URL path only, nothing in
+localStorage — see "Projects" below). The table lists the sections; the
+real URL of `/review` is `/p/<slug>/review`. All of them are shipped and
+linked from the top nav (`src/routes/p/[project]/+layout.svelte`, the app
+shell) except `/clusters/[id]`, reached via a cluster card. `/` is not a
+route in its own right — it redirects to `/p/<served default_slug>/dashboard`
+(`src/routes/+page.ts`), and the bare pre-projects paths (`/review?tab=x`,
+`/clusters/12`, ...) redirect to the same path under the served default
+project with the query string kept (`src/routes/[...legacy]/+page.ts`).
+`/p/<slug>` alone lands on `dashboard`. The top bar carries the **project
+switcher** (`ProjectSwitcher.svelte`). `/projects` is the one global page
+(not under `/p/`). Every in-app link and `goto()` is built by
+`projectHref()` (`$lib/projectPaths`) wrapped in `resolve()`, never
+hand-assembled. The MVP/post-MVP split from the original design doc is
+gone — every route in this table exists and works; nothing here is a
+stub.
 
 | Route            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/dashboard`     | Current pipeline dashboard — live `DatasetStats` (polls every 10s) + `AutoLabelPanel` ("Run Clustering Now" with stage progress), shared with the daemon-fired auto-label run. `AutoLabelPanel` also hosts an optional per-class assist scope (`AssistScopeBar`, absent unless `/methods` advertises a usable `prompt_pack` — see "Curation-strategy selector bar" below) that lets an operator point the VLM-assisted sweep at a single class instead of the whole pool.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `/ingest`        | Bring images into the pool. Offers browser upload (files, folders and drag-drop) to `POST {API_PREFIX}/ingest/upload`, chunked to the served per-request cap with bounded concurrency. It shows a per-file result (ingested / duplicate / failed + served reason), supports pause/resume/cancel, and pre-filters already-indexed identifiers via `POST {API_PREFIX}/ingest/path_lookup`. An optional server-path mode uses `POST {API_PREFIX}/ingest/batch` and is shown only when the backend advertises at least one `batch.source_roots` entry via `GET {API_PREFIX}/ingest/config` (see "Ingest" below). The page also has an ingest status table by source (`GET {API_PREFIX}/ingest/status`), a region-drain panel (`GET {API_PREFIX}/ingest/region_drain`, only with a served region profile), and a clustering handoff that reuses `AutoLabelPanel`. The route is gated by `ingestAvailability`: when the backend lacks the ingest router, the page is absent, not disabled.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `/clusters`      | Cluster grid view, sidebar filter, **strategy bar** (review-sort dropdown + score chips, see below — no cluster-method picker here; that lives on `/settings`). When the class filter is a slot-bound class (the served region profile's `region_class_name`), replaces the cluster grid with that slot's **region gallery** (`SlotGallery`, driven by `createSlotGalleryController(slot)` in `src/routes/clusters/slotGalleryController.svelte.ts`, one controller per slot bound through `slotForClassName`, browsing the slot's `queue.browsePath`, i.e. `{API_PREFIX}/regions`; detector / verified / status / score / text filters, all copy templated over `slot.label`). The unfiltered grid pins one synthetic inventory card per registered slot with a browse endpoint. Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below). An **Ignored** toggle (2026-09-24, logic-moves W7) swaps the grid for the excluded/`cluster_id=-2` bucket with a "Restore selected" action, and an **item-text search** box (`{API_PREFIX}/crops?item_text=`) swaps it for a literal OCR-text search over `item_text_lines` — both mode-swaps mirror the existing dataset-wide semantic search's pattern, and neither is the same endpoint as the semantic (embedding) search box.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `/ingest`        | Bring images into the pool. Offers browser upload (files, folders and drag-drop) to `POST {API_PREFIX}/ingest/upload`, chunked to the served per-request cap with bounded concurrency. It shows a per-file result (ingested / duplicate / failed + served reason), supports pause/resume/cancel, and pre-filters already-indexed identifiers via `POST {API_PREFIX}/ingest/path_lookup`. An optional server-path mode uses `POST {API_PREFIX}/ingest/batch` and is shown only when `GET {API_PREFIX}/ingest/config` serves `batch.enabled: true` and at least one `batch.source_roots` entry; `upload.enabled: false` replaces the browser-upload panel with one line (see "Ingest" below). The page also has an ingest status table by source (`GET {API_PREFIX}/ingest/status`), a region-drain panel (`GET {API_PREFIX}/ingest/region_drain`, only with a served region profile), and a clustering handoff that reuses `AutoLabelPanel`. The page renders from the served `GET {API_PREFIX}/ingest/config`: a loading line until it loads, its error if the read fails.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `/clusters`      | Cluster grid view, sidebar filter, **strategy bar** (review-sort dropdown + score chips, see below — no cluster-method picker here; that lives on `/settings`). When the class filter is a slot-bound class (the served region profile's `region_class_name`), replaces the cluster grid with that slot's **region gallery** (`SlotGallery`, driven by `createSlotGalleryController(slot)` in `src/routes/p/[project]/clusters/slotGalleryController.svelte.ts`, one controller per slot bound through `slotForClassName`, browsing the slot's `queue.browsePath`, i.e. `{API_PREFIX}/regions`; detector / verified / status / score / text filters, all copy templated over `slot.label`). The unfiltered grid pins one synthetic inventory card per registered slot with a browse endpoint. Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below). An **Ignored** toggle (2026-09-24, logic-moves W7) swaps the grid for the excluded/`cluster_id=-2` bucket with a "Restore selected" action, and an **item-text search** box (`{API_PREFIX}/crops?item_text=`) swaps it for a literal OCR-text search over `item_text_lines` — both mode-swaps mirror the existing dataset-wide semantic search's pattern, and neither is the same endpoint as the semantic (embedding) search box.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `/clusters/[id]` | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `/review`        | 6 top-level review tabs (2026-09 consolidation, down from 9, plus `new_class_proposals` added 2026-09-24 — see below): **All** / **Uncertainty** / **Model Disagreements** / **Classifier Blind Spots** / **New Class Proposals** / one tab per registered queue-capable slot (in practice the one region tab, present only when the backend serves a region profile and labelled by its `display_name`, `?tab=regions`), each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays — the bar's summary chip also shows the server's `sort_applied` next to whatever was requested. The All tab additionally offers a row of **quick-filter preset chips** (VLM mismatches / VLM low-conf / Primary · low-conf) that layer the former Mismatches / VLM Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. Class/Source/Conf filter controls (`class_id`/`source`/`conf_min`/`conf_max`) are live against `GET {API_PREFIX}/review/{tab}`. `/review?crop_id=` deep links resolve via `GET {API_PREFIX}/review/{tab}/locate` — jumps straight to the crop's served page/rank, or shows the backend's `reason` when it isn't in the queue. A slot tab carries provenance chips + the region text reading, driven by the active slot's capabilities rather than a hardcoded tab check (see "Slot-generic review tabs" below).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `/classes`       | Add / rename / merge / **deprecate** / **restore** classes, per-class hotkey binding, and a **Proposals** section (`GET {API_PREFIX}/review/new_class_proposals/summary`) for creating a class from — or mapping onto an existing class — a VLM-proposed term the registry doesn't have yet, bulk-resolving _every_ pending crop proposing that term (`POST {API_PREFIX}/review/new_class_proposals/resolve`), not just the summary's sample thumbnails. Every active row has a **Deprecate** button (`POST {API_PREFIX}/classes/{id}/deprecate`, confirm-gated) — 409 with a structured `class_still_referenced` detail (`{message, item_count, confirmed_label_count}`) offers the existing merge dialog instead, preselecting the class as the merge source. The deprecated-classes table's **Restore** button (OpenProcessor 01324cb, 243f7f2) is real, not the permanently-disabled placeholder it used to be — `POST {API_PREFIX}/classes/{id}/restore`, whose 409 is either a PLAIN STRING detail (a live class already claims the name) shown verbatim, or, for a class merged into another (OpenProcessor 4c125ec, F-56), a structured `class_merged` detail rendered as "Merged into `<served class_name>`; un-merge isn't supported." plus the served message and hint (`classMergedDetail`/`classMergedRestoreText`, `api.ts`). Since OpenProcessor 51b05d7, `GET {API_PREFIX}/classes` serves `merged_into`, so a merged deprecated class shows "merged into `<name>`" instead of a Restore button (the 409 path stays for a stale page). The merge dry-run's `validations_carried_over` reads "N human validations will carry over" (a merge keeps validations; the old `would_unvalidate` key is gone, no shim). The class table renders first; the Proposals list sits below it (and below the deprecated table) in a collapsed `<details>` (F-53), its per-term Hide button is session-only (not persisted, F-58), and the page scrolls as a whole rather than in an inner pane (F-50). |
-| `/export`        | Trigger YOLO export, view balance gap, freeze test holdout, download the frozen export's `class_registry.json`/`data.yaml`/`manifest.json` (via `{API_PREFIX}/export/registry/{artifact}`). Since OpenProcessor df01309, `GET {API_PREFIX}/export/status` also serves `image_count`/`class_count`/`group_key`/`split_counts`/`class_split_counts` — the page shows the served train/val/test totals and a collapsible per-class table (any class at 0 train or 0 val highlighted, served numbers only). The freeze modal has no Seed field: `POST {API_PREFIX}/test_holdout/freeze`'s body is `{percent}` only (selection is deterministic, SHA1 of each crop id per class — an extra `seed` key is a 422); the success toast shows the served `selection`/`min_per_class` when present. Since OpenProcessor 4c9499a (one image + one label file per source image), `ExportStatus` also carries `object_count`/`split_object_counts` (label lines, distinct from `image_count`/`split_counts`) — the page reads "N objects in M images" and separate images:/objects: split badges, never one ambiguous number. An opt-in "Only images whose every object is labeled" checkbox sends `require_fully_labeled_images` on `POST {API_PREFIX}/export/yolo`; the served partial-frame counts (`unlabeled_items_on_exported_images`/`images_with_unlabeled_items`/`images_dropped_not_fully_labeled`) render when present. Every one of these fields is `null` (not `0`) on an export written before it was recorded — rendered via `formatCount()` (`src/lib/formatCount.ts`) as "—". All of the above is optional/nullable on `ExportStatus`/`TestHoldoutFreezeResult` so a pre-df01309/pre-4c9499a backend (missing every new field) renders exactly as before.                                                                                                                                                                                                                                             |
+| `/export`        | Trigger YOLO export, view balance gap, freeze test holdout, download the frozen export's `class_registry.json`/`data.yaml`/`manifest.json` (via `{API_PREFIX}/export/registry/{artifact}`). Since OpenProcessor df01309, `GET {API_PREFIX}/export/status` also serves `image_count`/`class_count`/`group_key`/`split_counts`/`class_split_counts` — the page shows the served train/val/test totals and a collapsible per-class table (any class at 0 train or 0 val highlighted, served numbers only). The freeze modal has no Seed field: `POST {API_PREFIX}/test_holdout/freeze`'s body is `{percent}` only (selection is deterministic, SHA1 of each crop id per class — an extra `seed` key is a 422); the success toast shows the served `selection`/`min_per_class`. Since OpenProcessor 4c9499a (one image + one label file per source image), `ExportStatus` also carries `object_count`/`split_object_counts` (label lines, distinct from `image_count`/`split_counts`) — the page reads "N objects in M images" and separate images:/objects: split badges, never one ambiguous number. An opt-in "Only images whose every object is labeled" checkbox sends `require_fully_labeled_images` on `POST {API_PREFIX}/export/yolo`; the served partial-frame counts (`unlabeled_items_on_exported_images`/`images_with_unlabeled_items`/`images_dropped_not_fully_labeled`) render when present. Every one of these fields is `null` (not `0`) on an export written before it was recorded — rendered via `formatCount()` (`src/lib/formatCount.ts`) as "—". The `ExportStatus` fields are nullable because the served schema types them so; `TestHoldoutFreezeResult`'s `selection`/`percent`/`min_per_class` are required.                                                                                                                                                                                                                                                                      |
 | `/models`        | Triton model registry browser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `/train`         | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Training cohorts picker** (class-agnostic `CORE_COHORTS` for every class + the region profile's 5 server-side modes when one is configured — see "Training cohorts" below). The dataset card shows the _current export's own_ `image_count`/`class_count`/`split_counts`/per-class `class_split_counts` (from `GET {API_PREFIX}/export/status`, OpenProcessor df01309) rather than the dataset-wide validated total — the old global number (which double-counted `test_holdout` crops) survives only as a clearly-labelled "(global pool)" fallback for a pre-df01309 backend or an explicitly-picked past export version. `AugmentationPanel`'s preset picker is served from `GET {API_PREFIX}/train/augmentation_presets` (id/label/description/orientation-sensitive), defaulting to the served `default`; a pre-df01309 backend 404s that endpoint and the panel falls back to a read-only display of the current value. `/train/start`/`/start_campaign`'s 422 on an unknown `augmentation.preset` (`{detail: {message, field, valid_presets}}`) surfaces `valid_presets` in the toast alongside the message. Since OpenProcessor 4c9499a, the card also shows the export's `object_count`/`split_object_counts` (label lines) alongside `image_count`/`split_counts` — "N objects in M images" plus separate images:/objects: split badges — and its per-class table is objects, not an ambiguous count; a `null` field (an export written before 4c9499a recorded it) renders via `formatCount()` as "—", never 0.                                                                                                                                                                                                                                                                                                                                                                       |
-| `/bakeoff`       | Model comparison on OpenProcessor #34's v2 wire (F6, `docs/design/bakeoff-v2-ui-plan-2026-09-25.md`). Pick eval datasets (`GET {API_PREFIX}/bakeoff/eval_datasets`: export test splits first with the current one flagged and preselected, external frozen sets grouped by served `group`), models (finished training runs from `/bakeoff/trained_models`, each with the served per-selected-dataset `for_dataset` facts and a train/test overlap warning when the served overlap is non-null and > 0; the profile's `/bakeoff/baseline_models`; an optional custom ref) and a profile (whatever `/bakeoff/profiles` serves, `default_profile` preselected, `default_error` shown). A confirm dialog precedes `POST /bakeoff/run` (typed `run`/`baseline`/`custom` refs; 400/409/422 detail shown verbatim); the job polls `/bakeoff/status/{id}` with progress, per-stage failures and the enqueue-time class mapping. Results: the `/bakeoff/matrix/{id}` model × dataset matrix bolds every served tied winner (`best` is a list), and `/bakeoff/results/{id}?dataset_id=` renders ranked rows plus a per-class table where an uncovered class reads "not covered" and each model's unmapped classes are listed; a 409 (pre-v2 result) shows a note. Previous runs (`/bakeoff/runs`) stay selectable. State in `src/lib/bakeoff/bakeoffController.svelte.ts`, types in `src/lib/types_bakeoff.ts` (pinned to the vendored OpenAPI by `contract/bakeoffContract.test.ts`); nothing computes a metric, mapping, rank or winner client-side. Gated on backend availability via a one-shot probe of `GET {API_PREFIX}/bakeoff/runs` (`src/lib/bakeoffAvailability.svelte.ts`) — absent, not disabled: the nav link and page body don't render at all when the backend's `{API_PREFIX}/bakeoff/*` router isn't mounted, and no discovery request fires unconditionally on mount. The probe itself would move to an `evaluation` axis on `/methods` once the backend ships one.                             |
-| `/settings`      | Deployment-defaults admin page for the shared curation-strategy defaults (`GET,PUT {API_PREFIX}/settings`) — one place to pin the deployment's clustering method, review-queue sort and VLM prompt pack (the latter honored by the always-on VLM labeler and by auto-label runs that don't pick their own), plus a read-only "Set by the backend's startup config" section for `detection_profile` (the backend picks it from startup config; nothing that runs reads a shared or per-run selection). Which axes get a control is decided solely by the server's per-entry `settable` flag on `/methods` (`settableAxes` in `src/lib/curationSettings.ts`). Deployment-wide — see `docs/design/curation-settings-ui-plan-2026-09-21.md` — so it is its own route rather than a `StrategyBar` chip, with an explicit confirm dialog before every save. Also hosts the **Curation scores card** (`ScoresCard.svelte`, G10, 2026-09-24) — per-scorer coverage from `GET {API_PREFIX}/scores/coverage`, confirm-gated "Compute all"/"Compute selected" (`POST {API_PREFIX}/scores/compute {scorers}`, ids always sourced from the served coverage keys), a progress poll of `GET {API_PREFIX}/scores/status` following `EmbeddingPlot`'s rebuild-job pattern, and "Cancel" (`POST {API_PREFIX}/scores/cancel`). Absent, not broken, when `/scores/coverage` 404s; a failed compute (e.g. mistakenness lacking probe predictions) shows the backend's error verbatim. A completed compute reloads coverage and resets `strategiesStore` so `StrategyBar`'s sort/score options pick up the new coverage without a full page reload — see "Curation-strategy selector bar" below. Also hosts the **Keyboard shortcuts** card (`KeymapCard.svelte`, K2, 2026-09-26) — absent, not disabled, until OpenProcessor W2b's `GET/PUT {API_PREFIX}/keymap` route exists; see "Keyboard shortcuts" below.                                                                                                                |
+| `/train`         | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Training cohorts picker** (class-agnostic `CORE_COHORTS` for every class + the region profile's 5 server-side modes when one is configured — see "Training cohorts" below). The dataset card shows the _current export's own_ `image_count`/`class_count`/`split_counts`/per-class `class_split_counts` (from `GET {API_PREFIX}/export/status`, OpenProcessor df01309) rather than the dataset-wide validated total — the old global number (which double-counted `test_holdout` crops) survives only as a clearly-labelled "(global pool)" line for an explicitly-picked past export version, which `/export/status` does not describe. `AugmentationPanel`'s preset picker is served from `GET {API_PREFIX}/train/augmentation_presets` (id/label/description/orientation-sensitive), defaulting to the served `default`; a failed load shows its error (there is no hardcoded preset list or default id). `/train/start`/`/start_campaign`'s 422 on an unknown `augmentation.preset` (`{detail: {message, field, valid_presets}}`) surfaces `valid_presets` in the toast alongside the message. Since OpenProcessor 4c9499a, the card also shows the export's `object_count`/`split_object_counts` (label lines) alongside `image_count`/`split_counts` — "N objects in M images" plus separate images:/objects: split badges — and its per-class table is objects, not an ambiguous count; a `null` field (an export written before 4c9499a recorded it) renders via `formatCount()` as "—", never 0.                                                                                                                                                                                                                                                                                                                                                                                        |
+| `/bakeoff`       | Model comparison on OpenProcessor #34's v2 wire (F6, `docs/design/bakeoff-v2-ui-plan-2026-09-25.md`). Pick eval datasets (`GET {API_PREFIX}/bakeoff/eval_datasets`: export test splits first with the current one flagged and preselected, external frozen sets grouped by served `group`), models (finished training runs from `/bakeoff/trained_models`, each with the served per-selected-dataset `for_dataset` facts and a train/test overlap warning when the served overlap is non-null and > 0; the profile's `/bakeoff/baseline_models`; an optional custom ref) and a profile (whatever `/bakeoff/profiles` serves, `default_profile` preselected, `default_error` shown). A confirm dialog precedes `POST /bakeoff/run` (typed `run`/`baseline`/`custom` refs; 400/409/422 detail shown verbatim); the job polls `/bakeoff/status/{id}` with progress, per-stage failures and the enqueue-time class mapping. Results: the `/bakeoff/matrix/{id}` model × dataset matrix bolds every served tied winner (`best` is a list), and `/bakeoff/results/{id}?dataset_id=` renders ranked rows plus a per-class table where an uncovered class reads "not covered" and each model's unmapped classes are listed; a 409 (pre-v2 result) shows a note. Previous runs (`/bakeoff/runs`) stay selectable. State in `src/lib/bakeoff/bakeoffController.svelte.ts`, types in `src/lib/types_bakeoff.ts` (pinned to the vendored OpenAPI by `contract/bakeoffContract.test.ts`); nothing computes a metric, mapping, rank or winner client-side. The nav link and page always render (the backend mounts the `{API_PREFIX}/bakeoff/*` router unconditionally); the page runs its discovery reads on mount.                                                                                                                                                                                                                                                                                                   |
+| `/settings`      | Deployment-defaults admin page for the shared curation-strategy defaults (`GET,PUT {API_PREFIX}/settings`) — one place to pin the deployment's clustering method, review-queue sort and VLM prompt pack (the latter honored by the always-on VLM labeler and by auto-label runs that don't pick their own), plus a read-only "Set by the backend's startup config" section for `detection_profile` (the backend picks it from startup config; nothing that runs reads a shared or per-run selection). Which axes get a control is decided solely by the server's per-entry `settable` flag on `/methods` (`settableAxes` in `src/lib/curationSettings.ts`). Deployment-wide — see `docs/design/curation-settings-ui-plan-2026-09-21.md` — so it is its own route rather than a `StrategyBar` chip, with an explicit confirm dialog before every save. Also hosts the **Curation scores card** (`ScoresCard.svelte`, G10, 2026-09-24) — per-scorer coverage from `GET {API_PREFIX}/scores/coverage`, confirm-gated "Compute all"/"Compute selected" (`POST {API_PREFIX}/scores/compute {scorers}`, ids always sourced from the served coverage keys), a progress poll of `GET {API_PREFIX}/scores/status` following `EmbeddingPlot`'s rebuild-job pattern, and "Cancel" (`POST {API_PREFIX}/scores/cancel`). A failed coverage read shows its error with a retry; a failed compute (e.g. mistakenness lacking probe predictions) shows the backend's error verbatim. A completed compute reloads coverage and resets `strategiesStore` so `StrategyBar`'s sort/score options pick up the new coverage without a full page reload — see "Curation-strategy selector bar" below. Also hosts the **Keyboard shortcuts** card (`KeymapCard.svelte`, K2, 2026-09-26) — absent, not disabled, until OpenProcessor W2b's `GET/PUT {API_PREFIX}/keymap` route exists; see "Keyboard shortcuts" below.                                                                                                             |
+| `/projects`      | Global project management (not under `/p/`; `src/routes/projects/+page.svelte`, state in `$lib/projects/projectsAdminController.svelte.ts`). The served list (`GET {API_PREFIX}/projects`, with a Show-archived toggle sending `include_archived=true`), the served shard `capacity` block, and the P3 lifecycle actions: create (`POST /projects`), edit (`PATCH /projects/{slug}` with `expected_revision`; a 409 `revision_conflict` offers a reload that keeps the typed edit), archive / unarchive, copy settings (`POST /projects/{slug}/clone_settings`, axes from the served `limits.cloneable_axes`), and a guarded delete (the served dry run's report and `blocking` reasons first; no confirm field while anything blocks; `confirm` = the typed slug). Every action is gated on served flags only (Open/Edit: `selectable`; Archive/Copy settings: `writable`; Unarchive: `selectable && !writable`; Delete: `deletable`; Create disabled only by a served `blocked` capacity). Refusals render the served `detail.message` verbatim; the lifecycle envelope's `warnings` become toasts.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ## Ingest (`/ingest`, 2026-09-24; BA-1..BA-7 adopted 2026-09-25)
 
@@ -65,40 +76,28 @@ of that plan are implemented as of OpenProcessor #36 (backend commit
 c5c606f) — see the plan's status section for the full piece-by-piece
 record.
 
-- **Gating.** `src/lib/ingest/ingestAvailability.svelte.ts` probes
-  `GET {API_PREFIX}/ingest/status` once (modelled on
-  `bakeoffAvailability.svelte.ts`): a 404/501 hides the nav link and the
-  route body entirely; any other failure leaves the optimistic value
-  alone. The **page itself** (not just the nav link) additionally
-  renders neither the absence copy nor the upload UI while `available`
-  is still `null` — deliberately not the nav link's optimistic
-  behavior, because the upload/status/drain child components each fire
-  their own GET on mount, and a genuinely-absent backend must fire zero
-  ingest requests (caught live by `e2e/stubbed/test_ingest.py`'s
-  `test_ingest_absent`, which found this as a real bug during
-  implementation). The availability probe deliberately still targets
-  `/ingest/status`, not `/ingest/config` — `/routes/ingest/+page.svelte`
-  fetches `getIngestConfig()` itself, once, only after `available`
-  resolves `true`, so a config fetch never fires against a backend that
-  lacks the router.
-- **Served config (BA-2, landed).** `GET {API_PREFIX}/ingest/config` is
-  real and wired up (`getIngestConfig()`, `api.ts`) — `ingestConfig.ts`'s
-  `resolveIngestConfig(served)` resolves every upload/batch/region-drain
-  limit from it, falling back to the documented interim constants only
-  while the fetch is in flight or against a pre-BA-2 backend (404 →
-  `null`). `uploadMaxBytes` is the tighter of the nginx proxy's
+- **Served config.** The ingest router is always mounted, so the nav
+  link always renders. `/routes/p/[project]/ingest/+page.svelte` fetches
+  `GET {API_PREFIX}/ingest/config` (`getIngestConfig()`, `api.ts`) once
+  on mount and renders only a loading line until it loads (or its error
+  if the read fails) — the upload/status/drain sections, whose child
+  components each fire their own GET, mount only after.
+  `ingestConfig.ts`'s `resolveIngestConfig(served)` resolves every
+  upload/batch/region-drain limit from it; there are no interim client
+  constants. `uploadMaxBytes` is the tighter of the nginx proxy's
   `client_max_body_size` and the served `upload.max_bytes_per_request` —
   a chunk sized against only one of the two could still 413 against the
   other.
-- **Upload caveat.** The amber "uploaded images can't be browsed" banner
-  now renders only when `upload.persists_bytes` is `false`, or when it's
-  unknown (`null` — a pre-BA-2 backend, or the served config hasn't
-  loaded yet) and the operator hasn't set
-  `PUBLIC_CROPWRIGHT_INGEST_UPLOAD=1`. BA-1 landed
-  (`POST {API_PREFIX}/ingest/upload` persists the uploaded bytes
-  server-side, content-addressed) so a deployment on c5c606f+ serves
-  `persists_bytes: true` and shows no banner at all — the served truth,
-  not a hardcoded caveat.
+- **Served on/off switches.** `upload.enabled: false` replaces the
+  browser-upload panel (and its caveat) with one line, "Browser uploads
+  are disabled on this deployment." `batch.enabled: false` hides the
+  server-path panel, the same as an empty `batch.source_roots`
+  (`serverPathIngestAvailable`, `ingestConfig.ts`).
+- **Upload caveat.** The amber "uploads aren't kept" banner renders only
+  when the served `upload.persists_bytes` is `false`.
+  `POST {API_PREFIX}/ingest/upload` persists the uploaded bytes
+  server-side, content-addressed, so a stock deployment serves
+  `persists_bytes: true` and shows no banner at all.
 - **Run controller.** `src/lib/ingest/ingestRunController.svelte.ts`
   (`createIngestRun`, same factory convention as
   `clusterController`/`reviewController`) owns the whole
@@ -109,8 +108,7 @@ record.
   byte cap), dispatches with bounded concurrency (default 2), and maps
   each chunk's response — 200 (BA-1: keyed by the returned
   `source_identifier`, not `image_path`, since `image_path` is now the
-  server-persisted content-addressed path; falls back to `image_path`
-  for a pre-BA-1 backend that doesn't echo `source_identifier`), a
+  server-persisted content-addressed path), a
   backend-style 413 (JSON body: halve the chunk and retry once, tagged
   `error_kind: 'too_large'`), an nginx-style 413 (HTML body: stop the
   run, never retry), 422 (fail with the served detail), 503 (auto-pause
@@ -141,8 +139,8 @@ record.
   that both contain e.g. `img001.jpg` at their root would otherwise
   collide.
 - **Server-path ingest (piece 11, landed).** `IngestBatchPanel.svelte`
-  renders on `/ingest` only when the served `batch.source_roots` is
-  non-empty (`config.batchSourceRoots`) — lists the roots read-only and
+  renders on `/ingest` only when the served `batch.enabled` is true and
+  `batch.source_roots` is non-empty (`serverPathIngestAvailable`) — lists the roots read-only and
   submits real batches via the pre-existing `POST
 {API_PREFIX}/ingest/batch` (that endpoint predates #36; BA-2 is what
   serves `source_roots`/`max_items` for the gate and client-side cap
@@ -194,11 +192,9 @@ ingest-ui-and-acceptance-plan-2026-09-24.md` §A.6). Anyone who can reach
     controller instead keys off `e.body`'s _type_ (`object` for a
     backend 413, `string` for nginx's HTML page), which is what
     `apiFetch` actually produces.
-  - the plan's upload-override env var (`CROPWRIGHT_INGEST_UPLOAD`)
-    isn't exposed to the client bundle — `vite.config.ts`'s `envPrefix`
-    only forwards `VITE_`/`PUBLIC_`-prefixed vars. Uses
-    `PUBLIC_CROPWRIGHT_INGEST_UPLOAD` instead, matching every other
-    client-visible env var in this codebase.
+  - the plan's upload-override env var (`CROPWRIGHT_INGEST_UPLOAD`,
+    later `PUBLIC_CROPWRIGHT_INGEST_UPLOAD`) is gone: the banner follows
+    the served `persists_bytes` alone (#85).
   - the plan sketches the ingest-only 600s `proxy_read_timeout` as a
     _nested_ `location` inside the general API location; nginx doesn't
     reliably support nesting one regex location inside another, so
@@ -309,10 +305,10 @@ preset)` is the single place that decides which queue actually gets
   — instead of unconditionally, and the subject/max_rank toggle's
   "unset" option label reads the served default (`servedMaxRankDefault`
   → `` `Top ${n}` `` when set, else "All ranks") instead of a hardcoded
-  "Top 2". `filterSupported` defaults to **visible** when a tab's
-  `filters` is absent/unknown (older backend, or an id `GET
-{API_PREFIX}/review/tabs` doesn't know) — a control never disappears
-  because the vocabulary endpoint is stale or hasn't loaded yet.
+  "Top 2". `filterSupported` defaults to **visible** when the served
+  list has no entry for the tab id (not loaded yet, or an id `GET
+{API_PREFIX}/review/tabs` doesn't know, e.g. a tier-2 slot tab) — a
+  control never disappears because the vocabulary hasn't loaded.
 - **Generic served-enum filter bar (OpenProcessor 3f1a11e adoption).**
   Beyond the fixed `filters`/`filter_defaults` name list above, each
   `GET {API_PREFIX}/review/tabs` entry now also carries `filter_specs` —
@@ -393,7 +389,7 @@ controls, never a replacement for the production defaults:
 - **No cluster-method picker.** An earlier version of this section
   claimed `StrategyBar` included one; it never has. `rg` over non-test
   source finds `cluster_methods` referenced only in `strategies.ts`
-  (types/parse/fallback) and `strategiesStore.defaultClusterMethodId` —
+  (types/parse) and `strategiesStore.defaultClusterMethodId` —
   a derived value with zero non-test readers. `StrategyBar.svelte`
   renders only the sort dropdown, score chips, and the diverse stepper.
   The first (and, today, only) surface in the app exposing the
@@ -472,10 +468,10 @@ contract. Landed on OpenProcessor main (f4551bf): unknown ids 422 with
 and `class_id` scopes only the VLM sweep, not clustering or auto-promote.
 
 Every one of these degrades gracefully to invisible/default when its
-backend flag is off or `{API_PREFIX}/methods` fails: `strategiesStore` falls back
-to `FALLBACK_METHODS` (`strategies.ts`) — the hardcoded stable-only list
-matching what's always been implemented — so a missing endpoint never
-breaks page load. Flags are OpenProcessor env vars
+backend flag is off or `{API_PREFIX}/methods` fails: `strategiesStore` starts
+from, and on a failed load keeps, `EMPTY_METHODS` (`strategies.ts`, nothing
+advertised) and records the error, so every optional control stays hidden
+and page load never breaks. There is no hardcoded capability list. Flags are OpenProcessor env vars
 (`OP_SCORES_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`,
 `OP_VIZ_PROJECTION_ENABLED`, `OP_SEMANTIC_SEARCH_ENABLED`), all default
 off.
@@ -490,15 +486,13 @@ plumbs it into `/review`'s empty-queue panel (`emptyQueueMessage`,
 `$lib/review/reviewCopy.ts`), which shows it ahead of
 `sort_fallback_reason` when both are set. `GET {API_PREFIX}/review/tabs`
 also gained a top-level `empty_state` (`has_probe_predictions`/
-`has_item_scores`) — a sibling read, `getReviewEmptyState()`
-(`reviewTabsVocabularyStore.emptyState`, kept separate from
-`getReviewTabsVocabulary()` so the tabs array's own shape/tests are
-untouched). When the served reason mentions a probe or a score and the
+`has_item_scores`), read by the same `getReviewTabs()` call
+(`reviewTabsVocabularyStore.emptyState`). When the served reason mentions a probe or a score and the
 matching `empty_state` flag is false, the panel adds a direct link ("Run
 a probe on /train" / "Compute scores on /settings") instead of leaving
 the operator to guess where to go — verified live: the Uncertainty
 queue's empty panel links to `/train` on this deployment (no probe has
-ever run). Absent/malformed on either field renders exactly as before.
+ever run).
 
 ## Cluster purity (DQ-M2, dq-queues cutover 2026-09-24)
 
@@ -531,11 +525,9 @@ single signal driving `/clusters`' card border and badge.
   centre is this one") plus label agreement (`label_purity`) and labelled
   share. The sort options read "cohesion asc/desc". Values and tier bands
   are still the served ones; only the word changed.
-- All four new fields (`purity_n`, `purity_basis`, `label_purity`,
-  `labelled_share`) are optional on `RawCluster`/`Cluster` and render
-  gated on non-null — an older backend that doesn't serve them shows the
-  same purity number as before, just without the n/basis/label-purity
-  detail.
+- All four fields (`purity_n`, `purity_basis`, `label_purity`,
+  `labelled_share`) are served on every `RawCluster` (nullable when
+  nothing was measured) and render gated on non-null.
 
 ## Training UI — `/train` (Phase 2 of the training pipeline)
 
@@ -601,17 +593,12 @@ lineage comes straight off the already-loaded `TrainJobStatus`
 manifest (`GET {API_PREFIX}/train/manifest/{job_id}`, for lineage) is
 fetched lazily, only the first time the section is opened.
 
-- **Val vs. test labelling — resolved.** `eval`'s overall figures
-  (`map50`/`map50_95`/`precision`/`recall`) and its `per_class` table
-  are labelled independently by `evalOverallLabel`/`evalPerClassLabel`
-  (`src/lib/trainResults.ts`), never assumed to both mean "test". The
-  eval-split cutover (OpenProcessor 5595474) has landed: the backend
-  serves `eval.split` (`'test'` when the frozen-holdout pass ran, `'val'`
-  when it fell back), and this is the run's **headline number** —
-  labelled directly by `split`, not the pre-cutover guess. A run whose
-  `eval` predates the cutover (no `split` served) still falls back to
-  the old guess (overall = last val epoch, per-class = test) — see
-  `types_train.ts`'s `TrainEval` doc comment.
+- **Val vs. test labelling.** The trainer writes `eval.split` on every
+  eval block (`'test'` when the frozen-holdout pass ran, `'val'` when it
+  fell back); `TrainEval.split` is required. `eval`'s overall figures
+  (`map50`/`map50_95`/`precision`/`recall`), the run's **headline
+  number**, and its `per_class` table are both labelled by that served
+  `split` (`evalSplitLabel`, `src/lib/trainResults.ts`).
 - **`eval.head`** (OpenProcessor #34 W1) names the detection head that
   test-split pass scored (e.g. `'end2end'` when YOLO26's NMS-free
   one-to-one head was explicitly forced to match what's actually
@@ -653,9 +640,7 @@ map50_95}` row, never a per-key max spanning different epochs. Neither
   `dataset_version_tag`, `frozen_test_sha`, `test_label_sha` (the three
   export-identity fields added by #34 W1), `include_classes`,
   `training_seed`, `code_versions.{api_sha, trainer_sha,
-trainer_image_id}` (`trainer_sha` replaces the old `trainer_image`
-  field name — a rolling-deploy backend may still echo that legacy key
-  too, but it's never read), and a class-remap table (new id → original
+trainer_image_id}`, and a class-remap table (new id → original
   id → name) built from the served `class_remap.new_to_original`/
   `names` — no client-side remap math.
 - **`/bakeoff`'s model picker** (`TrainedModel`, `types_bakeoff.ts`)
@@ -779,7 +764,7 @@ server's, not a client constant.
 
 Class assignment is per-class `hotkey_letter`, configured on `/classes` (or in
 the `~` overlay) and routed through `dropOnClassStore` by the layout-level
-keydown listener in `src/routes/+layout.svelte`. There is no `1-9, 0` top-N
+keydown listener in `src/routes/p/[project]/+layout.svelte`. There is no `1-9, 0` top-N
 scheme — it was removed; one binding scheme means no "what does this key do
 here?" friction. On `/clusters/[id]` a class letter labels the current
 selection (or the just-dragged set); on `/review` it labels the current item.
@@ -827,8 +812,8 @@ serve) and read through `keymapStore` (`src/lib/stores/keymap.svelte.ts`):
   Fixed form, modal and a11y keys (Enter submits, Esc cancels, ↑↓ in a
   listbox, Tab) are not actions and are not routed through the keymap.
 - **W8 per-box actions** (`review.region.accept_box` / `reject_box`,
-  `box_edit.next_box`) are declared `available: false`, so
-  `registerAction` and `actionFor` ignore them until W8 lands.
+  `box_edit.next_box`) are `available: true`, registered by the
+  multi-box region surface (see "W8 multi-box regions" below).
 - **K2 (2026-09-26): the served keymap is live.** `loadKeymap()`
   (`src/lib/stores/keymap.svelte.ts`) reads the scoped `GET {prefix}
 /keymap` once from the root layout's `load()` and hands the result to
@@ -859,6 +844,28 @@ serve) and read through `keymapStore` (`src/lib/stores/keymap.svelte.ts`):
   a generic string. The four `/keymap*` routes are a documented
   pending-backend entry in `endpointCatalog.test.ts`'s contract check
   until OpenProcessor W2b lands and vendors them.
+- **K2b (2026-09-26): per-context overrides.** Plan §0 decision 4 — a
+  verb rebind applies on every page by default, with a per-context
+  override available. `KeymapCard.svelte` now has two sections: a
+  **Verb groups** list (one row per served `group` id shared by 2+
+  modifiable actions across contexts — `undo`, `confirm`, `discard`,
+  `skip`, `prev`, `next`, `select_all`, `ignore`, `nudge`), where
+  editing the row's keys writes every member action id at once, and a
+  **"Customize per page" disclosure** under each group listing every
+  member by its own context label with its own key chips — editing one
+  there writes only that action id and detaches it. Detachment is
+  computed each render (does this member's draft differ from the other
+  members' shared value), never a stored flag, so a "differs from the
+  group" marker + "reset to group" also surface a pre-existing
+  server-side per-context override for free. Locked keys stay locked in
+  both views; a group-level capture rejects any `grammar.locked_keys`
+  combo outright rather than checking per-member locked-key sets. The
+  per-context tables below the Verb groups section now hold only
+  ungrouped actions and locked/non-modifiable actions (the whole
+  `cancel` group has no modifiable members, so it never appears in Verb
+  groups at all). Writing is unchanged: the same `overrides` action-id
+  map, the same `PUT`/`validate`/`reset` calls — a group edit just
+  happens to populate more than one key.
 
 Reserved single-char action keys (`g n d z x u a m /`, plus `b f e` from the
 region slot's keymap — server-served today as `/abdefgmnuxz`)
@@ -1006,14 +1013,17 @@ and restores the grid layout; the drag itself ends on pointer release.
 `'region'`) and `trainable`/`trainable_gap` directly on each class
 (`RegistryClass`/`StatsSummary.per_class`) — `sample_count`/
 `validated_count` no longer include region counts (X2). `$lib/
-classVisibility.ts`'s `isSlotBoundClass` reads the served `kind` first;
-falls back to the slot registry only when a class isn't tagged (an older
-backend) — the R1 fix (the region class topping the item-class picker
-and quick-assign row) is now backed by the server's own classification,
-not a client heuristic keyed off the slot registry alone. `/export`'s
-per-class table (`exportDatasetRows.ts`) prefers the served `trainable`/
-`trainable_gap` over the client-side validated-minus-holdout math, kept
-only as the fallback for an older export/backend.
+classVisibility.ts`'s `isSlotBoundClass` reads the served `kind` alone
+(`RegistryClass.kind` is required) — the R1 fix (the region class
+topping the item-class picker and quick-assign row) is backed by the
+server's own classification, not a client heuristic keyed off the slot
+registry. `/export`'s per-class table (`exportDatasetRows.ts`) shows the
+served `trainable`/`trainable_gap` and the served per-bucket holdout
+`deficient` flag; there is no client-side validated-minus-holdout math.
+Its Gap column is the served `trainable_gap` — the shortfall against the
+served per-class hard minimum (`thresholds.block_below`), not against the
+aug target — and its tooltips say so (`gapCellTitle`). `/dashboard`'s
+class-balance bars are sized by the same served `trainable`.
 
 ## Data integrity
 
@@ -1034,9 +1044,8 @@ cover the ingest primary proposer/secondary classifier and the OCR
 det/rec pair, not just the region detector — every one of these
 hard-blocks `DELETE {API_PREFIX}/models/{name}` server-side (403, no
 `force` override). `$lib/modelUnload.ts`'s `unloadButtonState` reads
-`unloadable` FIRST (`=== false` hides the button outright, ahead of
-`kind`/`is_region_protected`); a backend that predates the field
-(`undefined`) falls back to the prior `kind !== 'triton'` rule. A
+`unloadable` FIRST (`false` hides the button outright, ahead of
+`is_region_protected`; `unloadable`/`optional` are required). A
 region-protected-but-otherwise-unloadable model still shows no button,
 but `/models` now renders a "protected: in use by the pipeline" chip in
 that case (`showsProtectedChip`) instead of nothing. The segmenter can
@@ -1052,7 +1061,7 @@ repository entirely). `$lib/modelStatus.ts`'s `modelStatusPill` renders
 it as a neutral "optional · not installed" pill rather than a warning,
 and the protected chip is dropped for a model that isn't installed
 (`isInstalled`). An installed-but-unloaded optional model still reads
-"not ready". Covered by `src/routes/models/modelStatus.test.ts`.
+"not ready". Covered by `src/routes/p/[project]/models/modelStatus.test.ts`.
 
 ## W8 multi-box regions (lockstep branch `feat/w8-multibox-lockstep`)
 
@@ -1139,6 +1148,15 @@ regions/{box_id}` — the per-box accept/reject keys, `y`/`r`), and
   ring/chip surface (`/review`, `SlotBboxEditor.svelte`,
   `SourceImageOverlay.svelte`, `CropMetaPanel.svelte`) — never a client
   role→color guess when a tone is served.
+- **Contract: pending backend.** The vendored snapshot
+  (`cutover/projects-lifecycle` 29807534) has no W8. The W8 routes,
+  `region_boxes` and `region_profile.limits` pass the contract tests only
+  through named pending-backend allow-lists (`PENDING_BACKEND` in
+  `endpointCatalog.test.ts`, `PENDING_BACKEND_W8` in `wireKeys.test.ts`/
+  `servedRegionSlot.test.ts`, `PENDING_BACKEND_W8_KEYS` in
+  `regionProfile.test.ts`). Delete them when backend W8 rebases onto
+  projects and `npm run contract:sync` picks it up. W8's own URLs are
+  project-scoped (`scoped()`), and its e2e tests open `/p/default/...`.
 
 ## Plate provenance + OCR (Wave 1 + Wave 2b, 2026-05-11)
 
@@ -1420,10 +1438,9 @@ region surface at all and calls none of them.
   `text_reader: 'none'`, `reads_text: false`. Whether the synthesized
   region slot gets a text capability (`SlotCard`'s text value,
   `/review`'s inline text row/edit, `CropMetaPanel`'s text section, the
-  region browse text filter) is gated on `profileReadsText()`
-  (`servedRegionSlot.ts`): prefers the served `reads_text`; a backend
-  that predates the field (`undefined`) falls back to `text_reader`
-  being non-empty and not the literal `'none'`. On a text-free profile,
+  region browse text filter) is gated on the served `reads_text` alone
+  (`servedRegionSlot.ts`; `ServedRegionProfile.reads_text` is required).
+  On a text-free profile,
   `/regions/vocabulary` also serves `text_rules: null`/
   `text_choices: []` and drops the `ocr` actor and (when the profile is
   segmenter-only) the `detector` entry — `regionVocabularyStore` already
@@ -1437,8 +1454,8 @@ region surface at all and calls none of them.
   (`src/lib/stores/regionProfile.svelte.ts`) reads the prefixed
   `{API_PREFIX}/health` once in the root layout's `load()` (bounded at
   2 s per try, 3 tries with a short backoff, alongside the tier-2 load).
-  Only a successful read seeds: a served `region_profile: null` (or a
-  backend that predates the field) is "not configured", but a timeout or
+  Only a successful read seeds: a served `region_profile: null` is "not
+  configured", but a timeout or
   network error leaves the store `unknown` (F-78) — still no region route
   is called, `/review` shows "loading region profile…", and the first
   successful `healthStore` poll seeds it and installs the slot. The root
@@ -1459,7 +1476,7 @@ region surface at all and calls none of them.
   built generically ("Confirm `<Region>`", "`<Region>` score", "Edit
   `<region>`") so a deployment reads "Confirm Plate" rather than the
   generic "Confirm Region", `?tab=` id and review endpoint = `regions`, browse path `/regions`,
-  text capability only when `text_reader` is non-empty, no client
+  text capability only when the profile serves `reads_text: true`, no client
   cohorts (served by `/training_cohorts`), and a `single_class` dataset
   export whose `profileName`/`datasetKind` is the profile `name` (so the
   export's output root, e.g. `/exports/license_plate/`, is unchanged).
@@ -1811,7 +1828,7 @@ While at the narrow (800px) viewport, the sweep also asserts
 `document.documentElement.scrollWidth <= window.innerWidth + 1` — no
 horizontal page overflow. (This caught and drove the fix for the top
 nav wrapping "Bake-off" onto two lines and clipping the "API OK" chip
-past the viewport edge at ≤800px — `src/routes/+layout.svelte`'s primary
+past the viewport edge at ≤800px — `src/routes/p/[project]/+layout.svelte`'s primary
 nav is now its own horizontally-scrolling strip, `overflow-x-auto
 whitespace-nowrap`, with every link `shrink-0` and the status chip
 pinned `shrink-0` so it's never squeezed.)
@@ -1940,35 +1957,88 @@ instead, clamped to `MAX_RETRY_AFTER_MS` (5s) so it can't stall the UI
 past the existing retry budget or add an extra attempt. Every caller
 still just sees the eventual `ApiError` with the served `detail` string.
 
-### Groundwork for multi-project support (2026-09-26)
+### Projects — `/p/[project]` routes, switcher, `/projects` (2026-09-26)
 
-The backend is moving every scoped route under
-`{API_PREFIX}/projects/{project}/...`, with a project's served `prefix`
-coming from a future `GET {API_PREFIX}/projects`; the unscoped routes
-stay as an alias bound to the `default` project
-(`docs/design/any-domain-rev3-and-projects-contract-review-2026-09-26.md`
-§7). Every scoped call in `api.ts`, `sse.ts`, `SlotCard.svelte` and
-`export/+page.svelte` now builds its URL through one function, `scoped()`
-— backed by a small module-level holder (`setScopedPrefix()`, never
-persisted) that defaults to `API_PREFIX`, so today every built URL is
-byte-identical to before this groundwork landed. A separate `globalApi()`
-builder is reserved for the (currently nonexistent) endpoints that will
-stay global once projects land — no call site uses it yet, since the
-backend hasn't said which endpoints those are.
+**OWNER DECISION: a fresh build, no backward compatibility.** The
+backend's projects cutover removes the old unscoped `{API_PREFIX}/...`
+alias entirely — there is no `default`-prefix fallback anywhere in this
+build.
 
-Client-side caches that must never bleed data across projects — crop ids
-are content-derived, so the same image gets the same `crop_id` in every
-project — are keyed by `activeProjectKey()` (mirrors `scoped()`'s
-current value) and expose a `resetForProjectChange()` hook for the
-future project switcher to call on every switch:
-`SourceImageOverlay.svelte`'s module-level crop-context cache, and
-`stores/undo.svelte.ts`'s undo ring buffer (which clears outright rather
-than filtering, so Z can never revert a different project's write).
+- **GLOBAL routes** (never project-scoped): `{API_PREFIX}/projects` (the
+  list and every lifecycle write), the global `{API_PREFIX}/health` and
+  the global `{API_PREFIX}/events`.
+- **Everything else** lives ONLY under a project's own served `prefix`:
+  `{API_PREFIX}/projects/{project}/...`
+  (`docs/design/any-domain-rev3-and-projects-contract-review-2026-09-26.md`
+  §7).
 
-`apiCallScanner.ts`/`endpointCatalog.test.ts` (the contract catalog
-below) and the `apiPrefixScan` ratchet scan for `${scoped()}` rather than
-a literal `${API_PREFIX}`, so this stayed a zero-behavior-change refactor
-with no weakened test coverage.
+**The active project lives in the URL path only** (`/p/<slug>/...`,
+owner decision) — reconstructable from the URL, so nothing is persisted.
+
+- `projectsStore` (`src/lib/stores/projects.svelte.ts`): the root
+  layout's `load()` reads `GET {globalApi()}/projects` once (bounded
+  retries). `src/routes/p/[project]/+layout.ts` then `resolve()`s the
+  slug — a listed project, or `GET {globalApi()}/projects/{slug}` for one
+  the default list doesn't carry (an archived project opened by link) —
+  and `select()`s it: `setScopedPrefix(<served prefix>)` (never
+  assembled client-side) and, on a change of project, every registered
+  reset hook. Only then does it load the scoped region profile and
+  keymap. An unknown slug, or one the server marks not `selectable`
+  (`building`/`failed`/`deleting`), renders `ProjectUnavailable.svelte`
+  ("not found" / "not available", with links to `/projects` and the
+  served default project) and fires no scoped call. A failed project-list
+  load renders the root layout's full blocking error state
+  (`data-testid="projects-blocking-error"`).
+- Every scoped call builds its URL through `scoped()` (`api.ts`), which
+  throws `ProjectNotSelectedError` until a project is selected (fails
+  closed). `globalApi()` is the only way to reach the global routes.
+- **Stale responses are dropped.** `apiFetch` remembers the scoped prefix
+  a request was built for; a scoped response that lands after the active
+  project changed rejects as an `AbortError` (which every caller already
+  ignores), so the previous project's data never renders in the next.
+  Global calls pass `{ global: true }` and are never dropped.
+- **Per-project caches reset themselves.** Each store registers its own
+  hook with `onProjectChange()` (`$lib/projectChange`, dependency-free):
+  the undo ring buffer, the source-overlay context cache, `classesStore`,
+  `healthStore`'s scoped half, `classSourcesStore`,
+  `regionProfileStore` (a different project's profile is not a "change":
+  no reload notice — the notice still fires for the SAME project),
+  `regionStatusesStore`, `regionVocabularyStore`,
+  `reviewTabsVocabularyStore`, `strategiesStore`,
+  `curationSettingsStore` and the keymap.
+  Load-once stores carry a generation counter so a load started for the
+  previous project never lands. The shell's content is keyed on the slug
+  too: SvelteKit reuses a page instance across `/p/a/review` →
+  `/p/b/review`, so page-local state would otherwise survive a switch.
+- **Links.** `projectHref(path)` (`$lib/projectPaths`) builds
+  `/p/<active slug><path>`; call sites wrap it in SvelteKit's `resolve()`
+  (`svelte/no-navigation-without-resolve`). `switchProjectHref()` keeps
+  the section and ordinary query params and drops ids that don't carry
+  across projects (`/clusters/<id>`, `crop_id`, `class`);
+  `legacyRedirectTarget()` maps `/` and the bare old paths.
+- **Switcher** (`ProjectSwitcher.svelte`, top bar): the served
+  `selectable` projects (plus the active one), each with its
+  `display_name`, slug and a served status label (`labels.status`) for
+  anything not `active`; a "custom keys" badge when the active project's
+  served keymap has `is_default: false`; "Manage projects…" links to
+  `/projects`. A project whose served `writable` is false (archived) shows
+  a read-only banner under the top bar. The global `project.*` event
+  stream re-reads the list.
+- **`/projects`** — see the Routes table. Wire types in
+  `src/lib/types_projects.ts`, pinned key-for-key to the vendored OpenAPI
+  by `src/lib/contract/projectsContract.test.ts` (the `DELETE
+/projects/{project}` response and `capacity` are untyped in the served
+  OpenAPI, so they are documented, not pinned).
+- **Tests:** `projectPaths.test.ts`, `stores/projects.svelte.test.ts`,
+  `stores/projectSwitchResets.test.ts`, `api.projectLifecycle.test.ts`
+  (wrappers + stale guard), `projects/projectsAdminController.test.ts`,
+  `components/ProjectSwitcher.test.ts`, `routes/projectRouting.test.ts`
+  (redirect and slug-resolution loads), `routes/projects/projectsPage.test.ts`
+  (mount); e2e `test_project_scoping.py` (prefix boundaries, redirects,
+  not-found pages), `test_project_switch.py` (two projects: requests move
+  to the other prefix, undo resets) and `test_projects_crud.py`.
+  `src/lib/test/setup.ts` selects a test project whose prefix is
+  `API_PREFIX` (slug `default`) before every unit test.
 
 ## API contract
 

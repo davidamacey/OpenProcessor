@@ -18,11 +18,12 @@ from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item
 
 CLASSES = [
     {
-        "id": 1,
-        "name": REGION_CLASS,
+        "class_id": 1,
+        "class_name": REGION_CLASS,
+        "kind": "region",
         "group": "widgets",
         "hotkey_letter": "l",
-        "count": 40,
+        "sample_count": 40,
         "validated_count": 12,
         "cluster_size": 44,
         "deprecated": False,
@@ -86,7 +87,7 @@ def test_nudges_stay_in_edit_mode_and_save_to_the_edited_crop(stub, page, app_ur
     stub.on("GET", r"/crops/[^/]+/image$", (200, b"", "image/jpeg"))
     stub.on(
         "GET",
-        r"/review/",
+        r"/review/(?!tabs)",
         lambda _r, _m: (
             200,
             {"items": [tag_item(i) for i in range(1, 4)], "total": 3, "page": 1, "page_size": 30},
@@ -105,7 +106,7 @@ def test_nudges_stay_in_edit_mode_and_save_to_the_edited_crop(stub, page, app_ur
 
     stub.on("PATCH", r"/crops/([^/]+)/region_meta$", region_meta)
 
-    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(500)
     counter_before = page.get_by_test_id("queue-counter").first.inner_text()

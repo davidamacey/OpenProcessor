@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Lint debt (#83): `svelte/prefer-svelte-reactivity` and
+  `svelte/no-navigation-without-resolve` restored to `error`.** Both
+  rules were downgraded to `warn` during the eslint-plugin-svelte 3
+  upgrade; all 67 warnings (63 reactivity, 4 navigation) are now fixed
+  and the downgrade override in `eslint.config.js` is gone.
+  - Reactivity: genuinely reactive Map/Set state (`sel.ids` in
+    `$lib/selection.svelte.ts`, the `/clusters` badge-lookup cache, the
+    stale-fetch exclusion guard) converted to `SvelteSet`/`SvelteMap`
+    from `svelte/reactivity`, mutated in place rather than
+    rebuilt-and-reassigned. `selection.svelte.ts`'s selection set is now
+    a single long-lived `SvelteSet`. Every other flagged site was a
+    local, synchronous temporary (a dedup/lookup set or tally map built
+    and consumed within one function/computation, never held in
+    reactive state) or a plain non-reactive cache (module-level promise
+    cache, memoized controller instances, an internal undo-bookkeeping
+    map) — each left as a native `Set`/`Map` with a
+    `eslint-disable-next-line` and a one-line reason, per file.
+  - Navigation: the four flagged `<a href>`s are all external dashboard
+    links (MLflow, Grafana, Prometheus, OpenSearch) that `resolve()`
+    cannot handle (it only resolves in-app SvelteKit routes) — wrapped
+    in `eslint-disable`/`eslint-enable` pairs with a reason instead.
+
 ### Changed
 
 - **Bind address is configurable.** The compose port is now
@@ -116,6 +140,109 @@ null, bbox_norm}`) plus the owner-decided Enter semantics
     populates `subBoxes`, not the legacy singular `subBox`. Mutation-
     checked twice (the tone-color mapping and the loop guard fix each
     independently fail the new test when reverted).
+
+- **Projects UI: every page under `/p/[project]`, a project switcher and
+  `/projects` management (P1–P3 surface).** The active project lives in
+  the URL path only (owner decision; nothing in localStorage).
+  - Every page moved to `/p/<slug>/<section>`. `/` and the bare old
+    paths (`/review?tab=x`, `/clusters/12`) redirect under the served
+    default project with the query string kept, and `/p/<slug>` lands on
+    the dashboard. An unknown or non-selectable slug shows a "project not
+    found / not available" page with links to the project list and the
+    default project, and fires no scoped call.
+  - A top-bar project switcher lists the served selectable projects with
+    served status labels and a "custom keys" badge. Switching keeps the
+    current section and drops ids that don't carry across projects. An
+    archived (not writable) project shows a read-only banner.
+  - On a switch, every per-project cache resets (undo stack, class
+    registry, vocabularies, region profile with no reload notice,
+    settings, keymap, source-overlay cache), and a
+    scoped response that lands after the switch is dropped.
+  - `/projects`: the served list with a Show-archived toggle, the served
+    shard capacity, and create / edit / archive / unarchive / copy
+    settings / delete. Every action is gated on served flags only.
+    Refusals render the served message verbatim, a `revision_conflict`
+    offers a reload, delete shows the served dry run and blocking reasons
+    first, and lifecycle warnings become toasts.
+  - Vendored OpenAPI re-synced from the backend's projects-lifecycle
+    branch (purely additive: the P3 routes and schemas);
+    `types_projects.ts` is pinned to it by `projectsContract.test.ts`.
+  - Tests: unit and mount tests for the path helpers, the store, the
+    stale-response guard, the switcher, the routing loads and every
+    management action's served-error handling (each mutation-checked);
+    stubbed e2e for two-project switching, redirects and `/projects`
+    CRUD, and every existing e2e test moved to `/p/default/...`.
+
+- **Projects P1 follow-up: a real prefix-boundary e2e test.** Every
+  other stubbed e2e route pattern matches by path suffix (`r"/health$"`
+  matches both the global and the scoped health), so none of them could
+  catch a call built from the wrong URL builder. New
+  `e2e/stubbed/test_project_scoping.py` records every request during a
+  `/review` mount and asserts the project list and status-chip health
+  hit the GLOBAL `/curation/projects`/`/curation/health`, region-profile
+  health/`/review/*`/`/classes` hit the scoped
+  `/curation/projects/default/...`, and nothing hits an unscoped
+  `/curation/<scoped-route>`. Mutation-checked: confirmed red when
+  `scoped()` is temporarily forced to return `API_PREFIX`.
+- Restored three bake-off fields (`EvalDatasetClass.registry_class_name`,
+  `BakeoffProfileRow.context_class_names`, `ClassMapping.model_to_eval_names`,
+  OpenProcessor 3cd4ca87, already adopted on this frontend) that the P1
+  contract sync had dropped only because the synced backend branch
+  (`cutover/projects-foundation` @ `dc2b4e0e`) predates that upstream
+  commit. `bakeoffContract.test.ts` now carries an explicit, commented
+  `PENDING_REBASE_FIELDS` allow-list for exactly these three, to be
+  deleted (not widened) once that branch is rebased onto `main` and
+  re-synced.
+
+- **Projects P1 — scoped-only wire, no backward compatibility (owner
+  decision).** OpenProcessor's `cutover/projects-foundation` removes the
+  unscoped `{API_PREFIX}/...` alias entirely: every scoped route now
+  lives under `{API_PREFIX}/projects/{project}/...`, and only
+  `/projects` (list/CRUD), `/health` and `/events` stay global.
+  - `src/lib/api.ts`'s `scoped()` now throws `ProjectNotSelectedError`
+    until `setScopedPrefix()` has run (fails closed, matching the
+    backend's `ProjectNotBound`) — no `default`-prefix fallback baked
+    in.
+  - New `projectsStore` (`src/lib/stores/projects.svelte.ts`) loads
+    `GET {globalApi()}/projects` once at boot, picks the served
+    `is_default: true`/`selectable` project, and seeds
+    `setScopedPrefix()` from its own `prefix` — every scoped call is
+    built from that served value, never assembled client-side. A
+    persistent load failure sets `projectsStore.error`; the root layout
+    (`src/routes/+layout.svelte`) renders a full blocking error state
+    (`data-testid="projects-blocking-error"`) instead of a
+    half-rendered app. No URL param or switcher yet — exactly one active
+    project per session (a later task).
+  - New `src/lib/types_projects.ts` (`ProjectSummary`, `ProjectsResponse`,
+    `ProjectCapacity`, `ProjectLimits`), `getProjects()`/`getGlobalHealth()`
+    (`api.ts`).
+  - **Health split**: the top-bar API status chip now reads the GLOBAL
+    `GET {globalApi()}/health` (`GlobalHealth`, `types.ts`);
+    `regionProfileStore`/project facts still read the project-scoped
+    `GET {scoped()}/health` (`ApiHealth`, now also carrying `project`).
+    `healthStore.poll()` fires both.
+  - **Events split**: new `subscribeGlobalEvents()` (`src/lib/sse.ts`)
+    opens the GLOBAL `GET {globalApi()}/events` stream (`project.*`
+    events, always `project: null`) — held by the root layout to
+    refresh the project list. Item/pipeline SSE
+    (`subscribeCurationEvents`/`subscribePipelineEvents`) stay scoped,
+    unchanged. K2's `config.changed axis=keymap` subscription stays on
+    the scoped stream (the keymap is per-project).
+  - `resetForProjectChange()` hooks (the undo ring buffer,
+    `SourceImageOverlay`'s crop-context cache) are now wired into a
+    central `onProjectChange()` registry in `projectsStore` — unused
+    today (no switcher yet) but ready for it.
+  - Contracts re-synced from OpenProcessor `cutover/projects-foundation`
+    @ `dc2b4e0e`. `endpointCatalog.test.ts`/`apiCallScanner.ts` resolve
+    every `${scoped()}` call against the scoped OpenAPI paths
+    (`/curation/projects/{project}/...`) and every `${globalApi()}` call
+    against the global ones, with the same completeness guard for both.
+  - `e2e/conftest.py`'s `Stub` serves the global `GET {api_prefix}/projects`
+    by default (`e2e/fixtures/wire.py`'s `projects_response()`, one
+    `default` project); every other stubbed route is unchanged since its
+    patterns already match by path suffix, not full path — the fail-closed
+    501 guard is untouched.
+
 - **Configurable keyboard shortcuts — editor + served keymap (K2 of
   `docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md`).**
   Built ahead of OpenProcessor W2b's `GET/PUT {prefix}/keymap`,
@@ -156,6 +283,44 @@ axis=keymap` SSE frame refetches and applies live, no reload
     `/review`; absent + default keys still work on a 404). Every
     existing stubbed e2e test now sees a default 404 stub for
     `GET {prefix}/keymap` (`e2e/conftest.py`).
+- **Per-context keymap overrides (K2b of `docs/design/
+configurable-keyboard-shortcuts-plan-2026-09-26.md` §0 decision 4 +
+  §5.4).** A rebind still applies on every page by default, but an
+  operator can now break a single context out of the group:
+  - `KeymapCard.svelte` gained a **Verb groups** section, one row per
+    served `group` id shared by 2+ modifiable actions across contexts
+    (`undo`, `confirm`, `discard`, `skip`, `prev`, `next`,
+    `select_all`, `ignore`, `nudge`). Editing the group row's keys
+    writes every member action id at once — "rebind Undo" changes
+    `review.undo`, `cluster.undo`, `clusters_search.undo` and
+    `region_gallery.undo` together, same as before.
+  - Each group row has a **"Customize per page" disclosure** listing
+    every member under its own context label with its own key chips.
+    Editing one there writes only that action id (detaches it from the
+    group); a "differs from the group" marker plus "reset to group"
+    render automatically — computed from the draft, not a stored flag,
+    so a pre-existing server-side per-context override shows the same
+    marker with no extra bookkeeping. Locked keys (Esc, Enter, arrows)
+    stay locked in both the group row and the per-context rows; a
+    group-level capture rejects any `grammar.locked_keys` combo
+    outright, since a group can span members whose own locked-key sets
+    differ.
+  - The existing per-context tables now hold only ungrouped actions
+    and locked/non-modifiable actions (e.g. the whole `cancel` group,
+    which has no modifiable members) — unchanged in behaviour.
+  - Writing still goes through the same `overrides` action-id map and
+    `PUT`/`validate`/`reset` plumbing; a group edit writes every member
+    id, a per-context edit writes only that id, and the server's own
+    validation errors/warnings render on the specific action row,
+    exactly as K2 already did.
+  - New mount tests in `KeymapCard.test.ts` (group edit vs. per-context
+    edit, the written override bodies, the detached marker, reset-to-
+    group) and a new e2e flow in `test_keymap.py`
+    (`test_keymap_per_context_override`): detach `cluster.discard`
+    on `/settings`, save, assert the `PUT` body carries only
+    `cluster.discard`, then confirm `/review` still discards on the
+    group's default `d` while `/clusters/[id]` discards on the new key
+    and ignores `d`.
 - **OpenProcessor 3cd4ca87 adoption** (contract sync + 503/Retry-After):
   - `apiFetch` (`src/lib/api.ts`) now honours a 503's `Retry-After`
     (seconds) header in place of that attempt's fixed backoff delay,
@@ -478,6 +643,65 @@ compose pull && docker compose up -d` — no `git clone` needed.
 - **Private export tool** `scripts/oss-export/` (`export.sh`,
   `leak-scan.sh`, `exclude.txt`, `leak-patterns.txt`, `overlay/`)
   replaces `scripts/debrand-export.sh`, which is deleted.
+
+### Removed
+
+- **Every client-side fallback for an older backend (#85).** Owner
+  decision: a fresh build with no users targets only the current
+  OpenProcessor wire (the vendored OpenAPI). Plan and evidence:
+  `docs/design/no-backcompat-removal-plan-2026-09-26.md`.
+  - `FALLBACK_METHODS`: `getMethods()` now rejects like every other read
+    and `strategiesStore` starts from (and on a failed load keeps)
+    `EMPTY_METHODS`, so nothing is advertised that the server didn't serve.
+  - The `/settings` "backend predates shared defaults" 404 state and the
+    Curation scores card's absent-on-404 path; a failed read shows its
+    error with a retry.
+  - The bake-off and ingest availability probes: both routers are
+    always mounted, so the nav links and pages always render.
+  - `/ingest`: the interim upload limits used when `/ingest/config`
+    404ed, the null-unknown `persists_bytes` banner and its
+    `PUBLIC_CROPWRIGHT_INGEST_UPLOAD` override, and the `image_path`
+    fallback for upload results without `source_identifier`. The page
+    shows a loading line until the served config loads.
+  - `/train`: the read-only augmentation-preset fallback (and hardcoded
+    `balanced_default`) when `/train/augmentation_presets` 404s, and the
+    pre-cutover val/test label guess for an `eval` without `split`
+    (`evalSplitLabel` labels both from the served split).
+  - Classes: the slot-registry fallback in `isSlotBoundClass` for a class
+    without `kind`, `getClasses`' legacy `id`/`name`/`count` aliases and
+    zeroed-thresholds default, and `/export`'s validated-minus-holdout and
+    local `deficient` fallbacks.
+  - `/models`: the `kind !== 'triton'` rule for an entry without
+    `unloadable`.
+  - Region profile: the `text_reader` heuristic when `reads_text` is
+    absent, and the store's per-field defaults for a profile missing
+    fields.
+  - `/review`: the second `/review/tabs` fetch for `empty_state` and the
+    per-field guards on each tab entry; one `getReviewTabs()` reads the
+    whole served response.
+  - Smaller wire fallbacks: `DatasetStats`' `by_human` region alias, the
+    `/clusters/[id]` header's registry lookup for a cluster without
+    `dominant_class_name` (kept only for a failed card load), and the
+    semantic-search `similarity_score`/`score` keys.
+  - Types now mark as required every field the current contract always
+    serves (class `kind`/`trainable`/`trainable_gap`/`adequacy`,
+    `/stats/classes` rows, holdout `deficient`/`min_test_per_class`,
+    region profile `reads_text`/`text_hint_enabled`, health
+    `region_profile`/`project`, review-tab `filters`/`filter_defaults`/
+    `description`, `eval.split`, promote cold-start flag, freeze
+    `selection`/`percent`/`min_per_class`, model `unloadable`/`optional`,
+    dataset-stats region/unlabeled counters, cluster purity fields).
+    Tests that exercised only a removed fallback are deleted; unit and e2e
+    fixtures now serve the current wire shape.
+  - `getClass()` (unused) and the dashboard's client-side
+    validated-minus-holdout `trainableCount()`: the class-balance bars
+    are sized by the served `trainable`.
+  - Follow-up fixes on the same branch: `/export`'s Gap column tooltips
+    describe the served `trainable_gap` as the shortfall against the
+    served per-class minimum (they said "Aug target minus trainable"),
+    and `/ingest` honours the served `upload.enabled` (one line instead of
+    the upload panel when false) and `batch.enabled` (hides the
+    server-path panel when false).
 
 ### Fixed
 

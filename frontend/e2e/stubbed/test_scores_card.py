@@ -2,8 +2,7 @@
 frontend-coverage-audit-2026-09-24.md §G10): the compute flow end to end
 against the stub — coverage render, the confirm-before-compute dialog,
 the request body sourced from served scorer ids, polling `/scores/status`
-to completion with a coverage reload, cancel, and the card's absence on a
-pre-`/scores/*` (404) backend.
+to completion with a coverage reload, and cancel.
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ COVERAGE_AFTER = {
 }
 
 
-def register(stub, *, coverage_status=200, coverage_body=None):
+def register(stub, *, coverage_body=None):
     compute_calls: list[tuple[str, str]] = []
     status_calls = {"n": 0}
     coverage_state = {"body": coverage_body if coverage_body is not None else COVERAGE_BEFORE}
@@ -41,8 +40,6 @@ def register(stub, *, coverage_status=200, coverage_body=None):
     stub.on("GET", r"/settings(\?|$)", {"defaults": {}, "updated_at": None, "updated_by": None})
 
     def coverage_get(_request, _match):
-        if coverage_status != 200:
-            return (coverage_status, {"detail": "not found"})
         return (200, coverage_state["body"])
 
     def compute_post(request, _match):
@@ -123,24 +120,10 @@ def register(stub, *, coverage_status=200, coverage_body=None):
     return compute_calls
 
 
-def test_scores_card_absent_on_404(stub, page, app_url):
-    register(stub, coverage_status=404)
-
-    page.goto(f"{app_url}/settings")
-    page.get_by_text("Deployment defaults").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(400)
-
-    assert not [c for c in stub.console_errors if c.startswith("pageerror")]
-    assert page.get_by_text("Curation scores").count() == 0, (
-        "the scores card must be entirely absent on a pre-/scores/* backend, not "
-        "rendered broken/empty"
-    )
-
-
 def test_scores_card_compute_all_flow(stub, page, app_url):
     compute_calls = register(stub)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Curation scores").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 
@@ -177,7 +160,7 @@ def test_scores_card_compute_all_flow(stub, page, app_url):
 def test_scores_card_compute_selected_and_cancel(stub, page, app_url):
     compute_calls = register(stub)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Curation scores").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
 

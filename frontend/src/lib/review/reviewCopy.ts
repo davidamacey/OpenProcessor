@@ -50,8 +50,8 @@ export interface EmptyQueueInput {
   /** Served `/review/tabs` `empty_state` (#36 item 9) — when the deployment
    *  has never run a probe or computed item scores at all, the empty
    *  message can point straight at the control that would populate this
-   *  queue, rather than leaving the operator to guess. `null`/absent on a
-   *  backend that predates the field. */
+   *  queue, rather than leaving the operator to guess. `null` until the
+   *  tabs vocabulary has loaded. */
   emptyState?: { has_probe_predictions: boolean; has_item_scores: boolean } | null;
 }
 
@@ -61,7 +61,9 @@ export interface EmptyQueueMessage {
   /** Set when the served `emptyState` says the prerequisite this queue
    *  needs (probe predictions or item scores) has never been computed —
    *  a link target the page renders as an anchor. */
-  link?: { href: string; text: string };
+  /** A project section path; the page builds the full link with
+   *  `projectHref()`. */
+  link?: { href: '/train' | '/settings'; text: string };
 }
 
 /**

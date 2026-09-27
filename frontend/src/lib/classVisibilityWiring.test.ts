@@ -31,11 +31,11 @@ const ASSIGNMENT_SURFACES = [
   'src/lib/classPicker.ts',
   'src/lib/stores/classes.svelte.ts',
   'src/lib/components/ClassSidebar.svelte',
-  'src/routes/clusters/[id]/+page.svelte',
+  'src/routes/p/[project]/clusters/[id]/+page.svelte',
   'src/lib/components/EmbeddingPlot.svelte',
   'src/lib/components/ShortcutOverlay.svelte',
   'src/lib/classHotkey.ts',
-  'src/routes/+layout.svelte',
+  'src/routes/p/[project]/+layout.svelte',
 ];
 
 describe('widget_tag assignment-hiding wiring', () => {
@@ -45,7 +45,7 @@ describe('widget_tag assignment-hiding wiring', () => {
   });
 
   it('cluster-detail confirm-to <select> filters through isAssignableClass, not raw classesStore.classes', () => {
-    const src = read('src/routes/clusters/[id]/+page.svelte');
+    const src = read('src/routes/p/[project]/clusters/[id]/+page.svelte');
     expect(src).not.toMatch(/\{#each classesStore\.classes as cls/);
     expect(src).toMatch(
       /\{#each classesStore\.classes\.filter\(isAssignableClass\) as cls/,
@@ -66,14 +66,14 @@ describe('widget_tag assignment-hiding wiring', () => {
   });
 
   it("the review page's class FILTER dropdown pool is unchanged (still !c.deprecated only)", () => {
-    const src = read('src/routes/review/+page.svelte');
+    const src = read('src/routes/p/[project]/review/+page.svelte');
     expect(src).toMatch(
       /const filterableClasses = \$derived\(classesStore\.classes\.filter\(\(c\) => !c\.deprecated\)\);/,
     );
   });
 
   it('the review page does not import classVisibility itself — it delegates to classPicker.ts/classesStore', () => {
-    const src = read('src/routes/review/+page.svelte');
+    const src = read('src/routes/p/[project]/review/+page.svelte');
     expect(src).not.toMatch(/classVisibility/);
   });
 });

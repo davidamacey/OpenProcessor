@@ -19,6 +19,7 @@
  */
 
 import { ApiError, getKeymap } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
 import { formatCompactKey, formatShortcutKey } from '$lib/keyboardDisplay';
 import {
   FALLBACK_KEYMAP,
@@ -40,6 +41,7 @@ const FALLBACK_BY_ID = new Map(FALLBACK_KEYMAP.actions.map((a) => [a.id, a]));
 
 /** An action's effective keys under the document's locked-key rules. */
 export function effectiveKeys(action: KeymapAction, doc: KeymapDocument): string[] {
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local lookup set consumed synchronously within this function, never stored in reactive state
   const lockedGrammar = new Set(doc.grammar.locked_keys);
   const own = action.locked_keys ?? [];
   const requested = (action.modifiable ? action.keys : action.default).map((k) =>
@@ -63,6 +65,7 @@ class KeymapStore {
 
   #byId = $derived.by(() => {
     const doc = this.#doc;
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- rebuilt from scratch on every $derived recompute and returned as an immutable value; reactivity comes from the surrounding $derived.by, not per-key mutation
     const map = new Map<string, KeymapAction & { keys: string[] }>();
     for (const a of doc.actions) {
       // A served id this build doesn't know is ignored: nothing here
@@ -203,7 +206,7 @@ export const keymapStore = new KeymapStore();
 
 /**
  * `keymapAvailability` — provisional capability gate for the `/settings`
- * Keyboard section, same shape as `bakeoffAvailability` (K2, plan §5.1).
+ * Keyboard section (K2, plan §5.1).
  *
  * A pre-W2b backend 404s/501s `GET {prefix}/keymap`: `available` becomes
  * `false`, `keymapStore` stays on `FALLBACK_KEYMAP`, and the editor is
@@ -300,3 +303,11 @@ export async function loadKeymap(): Promise<void> {
     }
   }
 }
+
+// The keymap is a per-project axis: a switch drops back to the fallback
+// document and re-probes availability; the /p/[project] layout then
+// loads the new project's served keymap.
+onProjectChange(() => {
+  keymapStore.resetToFallback();
+  keymapAvailability.reset();
+});

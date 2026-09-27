@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import StrategyBar from './StrategyBar.svelte';
 import { createStrategyBar } from '$lib/strategyBar.svelte';
-import { FALLBACK_METHODS } from '$lib/strategies';
+import { EMPTY_METHODS } from '$lib/strategies';
 import { strategiesStore } from '$stores/strategies.svelte';
 
 let target: HTMLDivElement;
@@ -31,8 +31,8 @@ afterEach(() => {
 });
 
 function render(props: Record<string, unknown>) {
-  // strategiesStore.init() fires on mount; a rejected fetch degrades to
-  // FALLBACK_METHODS (documented "never throws" contract) rather than
+  // strategiesStore.init() fires on mount; a rejected fetch leaves
+  // EMPTY_METHODS (init() never throws) rather than
   // hanging the test on a real network call.
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('no network in test')));
   target = document.createElement('div');
@@ -46,7 +46,7 @@ describe('StrategyBar — sort options follow the served status (F8 D2)', () => 
   it('offers uniqueness once /methods serves it experimental, never while shadow', () => {
     const sortsWith = (status: string) =>
       ({
-        ...FALLBACK_METHODS,
+        ...EMPTY_METHODS,
         review_sorts: [
           { id: 'recent', axis: 'sort', label: 'Recent', status: 'stable' },
           {
@@ -98,7 +98,7 @@ describe('StrategyBar — applied-sort summary', () => {
   // ("→ classifier_blind_spots_default") though /methods serves a label for each.
   it('shows the served /methods label for the applied sort, not its raw id', () => {
     strategiesStore.methods = {
-      ...FALLBACK_METHODS,
+      ...EMPTY_METHODS,
       review_sorts: [
         {
           id: 'primary_low_conf_default',
@@ -113,7 +113,7 @@ describe('StrategyBar — applied-sort summary', () => {
 
     expect(el.textContent).toContain('→ Largest subject, least confident');
     expect(el.textContent).not.toContain('primary_low_conf_default');
-    strategiesStore.methods = FALLBACK_METHODS;
+    strategiesStore.methods = EMPTY_METHODS;
   });
 
   it('shows nothing when no applied sort was reported', () => {

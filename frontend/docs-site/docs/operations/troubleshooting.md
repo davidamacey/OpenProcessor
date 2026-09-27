@@ -21,10 +21,11 @@ runtime (see [Backend feature flags](../configuration/backend-feature-flags.md))
 Absent is the expected behavior for a backend that hasn't enabled that
 feature — it is not a bug.
 
-## `/ingest` doesn't appear at all
+## `/ingest` shows only an error
 
-The backend predates the ingest router. Nothing to fix on the frontend
-side; upgrade the backend.
+The page renders from the served `GET {API_PREFIX}/ingest/config`; the
+error line is that read's own failure. Check the backend is reachable
+and on a current OpenProcessor release.
 
 ## Upload fails with a 413
 

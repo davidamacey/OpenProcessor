@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from conftest import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
 from fixtures.multipart import parse_multipart
@@ -39,11 +40,11 @@ def _base_ingest_stubs(
     batch_source_roots=None,
     stall_reason=None,
     region_dependencies=None,
+    upload_enabled=True,
 ) -> None:
-    """BA-1..BA-7 (OpenProcessor #36, c5c606f) baseline: `/ingest/config` is
-    now real and always stubbed here (the page fetches it once
-    `ingestAvailability` confirms the router is mounted), and the drain
-    response always carries the BA-3 `drained` verdict.
+    """Baseline: `/ingest/config` is always stubbed here (the page fetches
+    it on mount), and the drain response always carries the served
+    `drained` verdict.
 
     `drained` defaults to `drain_unfinished == 0` (the obvious case — a
     caller that wants to exercise "just reached zero, not yet stable"
@@ -63,7 +64,7 @@ def _base_ingest_stubs(
         r"/ingest/config(\?|$)",
         {
             "upload": {
-                "enabled": True,
+                "enabled": upload_enabled,
                 "max_images_per_request": 128,
                 "max_bytes_per_request": 268435456,
                 "accepted_extensions": [".jpg", ".jpeg", ".png"],
@@ -96,7 +97,7 @@ def _base_ingest_stubs(
 
 
 def _select_folder(page, app_url) -> None:
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     folder_input = page.locator("input[type=file]").nth(1)
     folder_input.set_input_files(str(FIXTURES))
@@ -238,7 +239,7 @@ def test_drain_gate(stub, page, app_url):
     start_calls = []
     stub.on("POST", r"/pipeline/auto_label/start", lambda *_: start_calls.append(1) or IDLE_JOB)
 
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     page.wait_for_selector("text=4")
 
@@ -262,7 +263,7 @@ def test_drain_gate(stub, page, app_url):
             "observed_at": "2026-09-25T00:00:01Z",
         },
     )
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     recluster_btn = page.get_by_role("button", name="Recluster now", exact=True)
     recluster_btn.wait_for()
@@ -282,7 +283,7 @@ def test_drain_gate(stub, page, app_url):
             "observed_at": "2026-09-25T00:00:30Z",
         },
     )
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
 
     recluster_btn = page.get_by_role("button", name="Recluster now", exact=True)
@@ -334,7 +335,7 @@ def test_server_path_batch_panel(stub, page, app_url):
 
     stub.on("POST", r"/ingest/batch", batch_handler)
 
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     page.wait_for_selector("text=Server-path ingest")
     assert "/data/archive" in page.locator("body").inner_text()
@@ -349,23 +350,26 @@ def test_server_path_batch_panel(stub, page, app_url):
 
 def test_server_path_batch_panel_absent_without_source_roots(stub, page, app_url):
     _base_ingest_stubs(stub)  # batch_source_roots defaults to []
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     page.wait_for_selector("text=Upload")
     assert "Server-path ingest" not in page.locator("body").inner_text()
 
 
-def test_ingest_absent(stub, page, app_url):
-    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
-    stub.on("GET", r"/ingest/status(\?|$)", (404, {"detail": "not found"}, "application/json"))
-
-    page.goto(f"{app_url}/ingest")
-    page.wait_for_selector("text=This backend does not provide ingest.")
-    expect(page.locator('nav[aria-label="Primary"] a[href="/ingest"]')).to_have_count(0)
-
-    ingest_calls = [c for c in stub.calls if "/ingest/" in c[1]]
-    assert ingest_calls == []
-    assert not any("/ingest/" in path for _, path in stub.handled if path != "/curation/ingest/status")
+def test_upload_disabled_shows_one_line_and_no_upload_panel(stub, page, app_url):
+    """The served `upload.enabled: false`: no browser-upload panel, one line
+    saying so, and no upload request can be made."""
+    _base_ingest_stubs(stub, upload_enabled=False)
+    page.goto(f"{app_url}/p/default/ingest")
+    page.get_by_test_id("ingest-upload-disabled").wait_for(timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id("ingest-upload-disabled")).to_have_text(
+        "Browser uploads are disabled on this deployment."
+    )
+    expect(page.locator("input[type=file]")).to_have_count(0)
+    expect(page.get_by_role("heading", name="Upload", exact=True)).to_have_count(0)
+    # The rest of the page (status table, clustering handoff) still renders.
+    page.get_by_role("heading", name="Clustering").wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert not [c for c in stub.calls if "/ingest/upload" in c[1]]
 
 
 def test_region_drain_shows_served_stall_reason(stub, page, app_url):
@@ -385,7 +389,7 @@ def test_region_drain_shows_served_stall_reason(stub, page, app_url):
             }
         ],
     )
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     expect(page.get_by_test_id("region-drain-stall-reason")).to_contain_text(reason)
     expect(page.get_by_test_id("region-drain-dependencies")).to_contain_text("seg_b")

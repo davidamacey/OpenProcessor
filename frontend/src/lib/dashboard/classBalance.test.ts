@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { sortClassBalance, type ClassBalanceRow } from './classBalance';
 
 function row(over: Partial<ClassBalanceRow>): ClassBalanceRow {
-  return { class_id: 1, class_name: 'z', count: 0, validated_count: 0, ...over };
+  return {
+    class_id: 1,
+    class_name: 'z',
+    count: 0,
+    validated_count: 0,
+    trainable: 0,
+    ...over,
+  };
 }
 
 describe('sortClassBalance (DQ-m11)', () => {

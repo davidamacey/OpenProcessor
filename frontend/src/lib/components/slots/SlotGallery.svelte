@@ -13,7 +13,7 @@
   import {
     FALSE_POSITIVE_REGION_CLUSTER_ID,
     type SlotGalleryController,
-  } from '../../../routes/clusters/slotGalleryController.svelte';
+  } from '../../../routes/p/[project]/clusters/slotGalleryController.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 

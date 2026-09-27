@@ -52,6 +52,8 @@ describe('the shipped annotation-profiles.example.json — integration gate', ()
     display_name_singular: 'Pallet label',
     region_class_name: 'pallet_label',
     text_reader: 'ocr',
+    reads_text: true,
+    text_hint_enabled: false,
   };
   const servedSlot = regionSlotFromServedProfile(servedProfile);
 

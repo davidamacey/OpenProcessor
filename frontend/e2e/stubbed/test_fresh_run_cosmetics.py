@@ -40,7 +40,7 @@ def test_breadcrumb_is_not_truncated_at_800(stub, page, app_url):
     "classe" at 800px."""
     page.set_viewport_size(NARROW)
     _classes_page_stubs(stub)
-    page.goto(f"{app_url}/classes")
+    page.goto(f"{app_url}/p/default/classes")
     crumb = page.locator('nav[aria-label="Breadcrumb"]')
     crumb.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(300)
@@ -70,7 +70,7 @@ def test_bakeoff_ranked_table_shows_scroll_cue_at_800(stub, page, app_url):
     stub.on("GET", r"/bakeoff/matrix/job-1$", MATRIX)
     stub.on("GET", r"/bakeoff/results/job-1$", COMPARISON)
 
-    page.goto(f"{app_url}/bakeoff")
+    page.goto(f"{app_url}/p/default/bakeoff")
     page.locator('[data-job-id="job-1"]').click(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("comparison-rows").wait_for(timeout=10000)
     page.wait_for_timeout(300)
@@ -98,7 +98,7 @@ def test_settings_unset_sort_is_not_blank(stub, page, app_url):
         "flags": {},
     }
     register(stub, methods, 200, SETTINGS_EMPTY)
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     sort_select = page.locator("select").nth(1)
     sort_select.wait_for(timeout=ACTION_TIMEOUT_MS)
     shown = sort_select.evaluate("el => el.options[el.selectedIndex]?.text ?? ''")
@@ -119,7 +119,7 @@ def test_region_inventory_card_uses_served_display_name(stub, page, app_url):
     stub.on("GET", r"/clusters(\?|$)", CLUSTERS)
     stub.on("GET", r"/regions(\?|$)", {"items": items, "total": 4})
 
-    page.goto(f"{app_url}/clusters")
+    page.goto(f"{app_url}/p/default/clusters")
     title = page.get_by_test_id("slot-card-title")
     title.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert title.inner_text().strip() == REGION_TAB_LABEL

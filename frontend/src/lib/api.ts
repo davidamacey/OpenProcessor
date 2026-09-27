@@ -15,11 +15,7 @@
  * All endpoint URL patterns come from Section "Phase 2D" of the v7 plan.
  */
 
-import {
-  FALLBACK_METHODS,
-  parseMethodsResponse,
-  type MethodsResponse,
-} from './strategies';
+import { parseMethodsResponse, type MethodsResponse } from './strategies';
 import { parseCurationSettings, type CurationSettings } from '$lib/curationSettings';
 import { mapCropSlots } from './annotations/cropSlots';
 import type { KeymapDocument, KeymapValidationIssue } from './keymapFallback';
@@ -44,7 +40,6 @@ import type {
   CropRegionUndoBatchResult,
   CropUndoBatchResult,
   ItemTextLine,
-  RegistryClass,
   RegistryClassCreate,
   RegistryClassMerge,
   RegistryClassUpdate,
@@ -56,6 +51,7 @@ import type {
   ExportResult,
   ExportStatus,
   ApiHealth,
+  GlobalHealth,
   ServedRegionProfile,
   SingleClassExportResult,
   SingleClassExportStatus,
@@ -108,6 +104,17 @@ import type {
   EvalDatasetList,
   TrainedModelList,
 } from './types_bakeoff';
+import type {
+  ArchiveRequest,
+  CloneSettingsRequest,
+  CreateProjectRequest,
+  DeleteDryRunResponse,
+  PatchProjectRequest,
+  ProjectErrorDetail,
+  ProjectLifecycleResponse,
+  ProjectRecordResponse,
+  ProjectsResponse,
+} from './types_projects';
 
 // Vite exposes only PUBLIC_-prefixed env vars to the client. SvelteKit uses
 // `$env/dynamic/public` but importing that here would force every consumer
@@ -152,37 +159,69 @@ export function normalizeApiPrefix(raw: string): string {
 export const API_PREFIX: string = normalizeApiPrefix(RAW_API_PREFIX);
 
 /**
- * Groundwork for multi-project support (`docs/design/
- * any-domain-rev3-and-projects-contract-review-2026-09-26.md` §7). The
- * backend is moving every scoped route under `{API_PREFIX}/projects/
- * {project}/...`, with a project's served `prefix` coming from a future
- * `GET {API_PREFIX}/projects`; the unscoped routes stay as an alias bound
- * to the `default` project. Every existing call site already builds its
- * URL from this one module-level holder via `scoped()` — flipping the
- * holder later (when a project switcher lands) changes every request
- * with no call-site edits. Today it's pinned to `API_PREFIX` itself, so
- * every built URL is byte-identical to before this groundwork landed.
+ * Multi-project scoping (P1, `docs/design/
+ * any-domain-rev3-and-projects-contract-review-2026-09-26.md` §7;
+ * OWNER DECISION: no backward compatibility with the retired unscoped
+ * `{API_PREFIX}/...` alias). Every route except the GLOBAL ones below
+ * lives under a project's own served `prefix`
+ * (`/curation/projects/{project}/...`, from `GET {globalApi()}/projects`).
+ * There is no `default` fallback prefix baked in here — the active
+ * project is set by `setScopedPrefix()` once `projectsStore.load()`
+ * resolves the default project, and every scoped call made before that
+ * throws (fails closed, matching the backend's `ProjectNotBound`).
  */
-const scopeHolder: { prefix: string } = { prefix: API_PREFIX };
+const scopeHolder: { prefix: string | null; generation: number } = {
+  prefix: null,
+  generation: 0,
+};
+
+export class ProjectNotSelectedError extends Error {
+  constructor() {
+    super('no active project selected yet');
+    this.name = 'ProjectNotSelectedError';
+  }
+}
 
 /**
  * Sets the active project's scoped prefix (e.g. `/curation/projects/
- * acme`). Not called anywhere yet — reserved for the future project
- * switcher. Never persisted (no localStorage): the active project is
- * always live UI state, seeded fresh from the served project list.
+ * default`), as served by `GET {globalApi()}/projects`. Called once by
+ * `projectsStore.load()` at boot; never persisted (no localStorage) —
+ * the active project is always live UI state, seeded fresh from the
+ * served project list every load.
  */
 export function setScopedPrefix(prefix: string): void {
+  if (scopeHolder.prefix === prefix) return;
   scopeHolder.prefix = prefix;
+  scopeHolder.generation += 1;
+}
+
+/** Bumped every time the active project's scoped prefix changes — the
+ *  stale-response guard in `apiFetch` compares a request's start
+ *  generation against the current one. */
+export function scopeGeneration(): number {
+  return scopeHolder.generation;
+}
+
+/**
+ * A scoped response that arrives after the active project changed. It
+ * is an `AbortError` (every call site already treats an abort as "drop
+ * it silently"), so a late answer from the previous project never
+ * renders in the new one.
+ */
+export function staleProjectError(): DOMException {
+  return new DOMException('response from a previous project', 'AbortError');
 }
 
 /**
  * The one function every scoped backend call builds its URL through,
- * e.g. `` `${scoped()}/health` ``. Returns the active project's prefix —
- * today always `API_PREFIX`, so every URL is unchanged. Distinct from
- * `globalApi()` below for the (today nonexistent) handful of endpoints
- * that will stay global once projects land.
+ * e.g. `` `${scoped()}/health` ``. Throws `ProjectNotSelectedError` if
+ * no project has been selected yet — every scoped call site should only
+ * ever run after the root layout's project bootstrap has resolved.
+ * Distinct from `globalApi()` below for the small set of routes that
+ * are never project-scoped (`/projects`, the global `/health`/`/events`).
  */
 export function scoped(): string {
+  if (scopeHolder.prefix === null) throw new ProjectNotSelectedError();
   return scopeHolder.prefix;
 }
 
@@ -195,16 +234,14 @@ export function scoped(): string {
  * for a second, independently-settable holder.
  */
 export function activeProjectKey(): string {
-  return scopeHolder.prefix;
+  return scoped();
 }
 
 /**
- * Builder for endpoints that will stay global (not project-scoped) once
- * projects land — e.g. the future `/projects` list itself. No call site
- * uses this yet: the backend hasn't shipped the split, and guessing
- * which endpoints are global ahead of that would be wrong more often
- * than not. Kept separate from `scoped()` purely so a future call
- * site's intent reads directly off which builder it uses.
+ * Builder for the handful of routes that stay global (never
+ * project-scoped): `/projects` (list/CRUD), the global `/health` and
+ * the global `/events` stream. No call site here builds a scoped URL
+ * from this — it is always `API_PREFIX` itself.
  */
 export function globalApi(): string {
   return API_PREFIX;
@@ -393,12 +430,31 @@ export function resolveApiUrl(url: string): string {
   return `${apiBase}${url}`;
 }
 
+export interface ApiFetchOptions {
+  /** A GLOBAL route (`/projects*`, global `/health`): never dropped as
+   *  stale when the active project changes mid-request. */
+  global?: boolean;
+}
+
 export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
   signal?: AbortSignal,
+  opts: ApiFetchOptions = {},
 ): Promise<T> {
   const url = resolveApiUrl(path);
+  // Stale-project guard (review §7.1): a scoped request remembers the
+  // project it was built for; if the active project changed before its
+  // response lands, the response is dropped as an AbortError.
+  const startPrefix = scopeHolder.prefix;
+  const startGeneration = scopeHolder.generation;
+  const isScopedCall =
+    !opts.global && startPrefix !== null && path.startsWith(`${startPrefix}/`);
+  const assertFresh = (): void => {
+    if (isScopedCall && scopeHolder.generation !== startGeneration) {
+      throw staleProjectError();
+    }
+  };
   let attempt = 0;
   let lastError: unknown;
   // 1 initial + 3 retries on 5xx => 4 attempts max.
@@ -420,11 +476,15 @@ export async function apiFetch<T>(
           ...(init.headers ?? {}),
         },
       });
+      assertFresh();
       if (res.ok) {
         if (res.status === 204) return undefined as T;
         const ct = res.headers.get('content-type') ?? '';
-        if (ct.includes('application/json')) return (await res.json()) as T;
-        return (await res.text()) as unknown as T;
+        const out = ct.includes('application/json')
+          ? ((await res.json()) as T)
+          : ((await res.text()) as unknown as T);
+        assertFresh();
+        return out;
       }
       let body: unknown = null;
       try {
@@ -450,6 +510,9 @@ export async function apiFetch<T>(
       if (e instanceof DOMException && e.name === 'AbortError') throw e;
       lastError = e;
     }
+    // A retry after the project changed would fetch the OLD project's
+    // URL again — stop instead.
+    assertFresh();
     if (attempt < RETRY_DELAYS_MS.length) {
       // A served `Retry-After` (503 only) replaces this attempt's fixed
       // backoff delay, clamped to MAX_RETRY_AFTER_MS — it never adds an
@@ -483,30 +546,166 @@ export function getHealth(signal?: AbortSignal): Promise<ApiHealth> {
   return apiFetch<ApiHealth>(`${scoped()}/health`, {}, signal);
 }
 
+/** `GET {globalApi()}/health` — unscoped, no project bound. Feeds only
+ *  the top-bar API status chip. */
+export function getGlobalHealth(signal?: AbortSignal): Promise<GlobalHealth> {
+  return apiFetch<GlobalHealth>(`${globalApi()}/health`, {}, signal, { global: true });
+}
+
+/** `GET {globalApi()}/projects` — the switcher vocabulary, global
+ *  (unscoped). The one read every project-scoped call depends on: a
+ *  project's `prefix` here is what `setScopedPrefix()` is seeded with.
+ *  `includeArchived` adds the served `archived` projects (the list
+ *  membership per status is the server's, never filtered here). */
+export function getProjects(
+  signal?: AbortSignal,
+  includeArchived = false,
+): Promise<ProjectsResponse> {
+  return apiFetch<ProjectsResponse>(
+    `${globalApi()}/projects${qs({ include_archived: includeArchived ? true : undefined })}`,
+    {},
+    signal,
+    { global: true },
+  );
+}
+
+// -- project lifecycle (P3; all GLOBAL, never scoped) ---------------------
+
+/** `GET {globalApi()}/projects/{slug}` — the record for a slug the
+ *  default list doesn't carry (an archived project's deep link). */
+export function getProject(
+  slug: string,
+  signal?: AbortSignal,
+): Promise<ProjectRecordResponse> {
+  return apiFetch<ProjectRecordResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}`,
+    {},
+    signal,
+    { global: true },
+  );
+}
+
+export function createProject(
+  body: CreateProjectRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects`,
+    { method: 'POST', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+export function patchProject(
+  slug: string,
+  body: PatchProjectRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}`,
+    { method: 'PATCH', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+export function archiveProject(
+  slug: string,
+  body: ArchiveRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}/archive`,
+    { method: 'POST', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+export function unarchiveProject(
+  slug: string,
+  body: ArchiveRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}/unarchive`,
+    { method: 'POST', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+export function cloneProjectSettings(
+  slug: string,
+  body: CloneSettingsRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}/clone_settings`,
+    { method: 'POST', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+/** `DELETE …?dry_run=true` — the served report, writes nothing. */
+export function deleteProjectDryRun(slug: string): Promise<DeleteDryRunResponse> {
+  return apiFetch<DeleteDryRunResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}${qs({ dry_run: true })}`,
+    { method: 'DELETE' },
+    undefined,
+    { global: true },
+  );
+}
+
+/** `DELETE …?confirm=<slug>` — a real, guarded delete. Answers 202 with
+ *  the `deleting` record; the removal finishes in the background. */
+export function deleteProject(
+  slug: string,
+  confirm: string,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}${qs({ confirm })}`,
+    { method: 'DELETE' },
+    undefined,
+    { global: true },
+  );
+}
+
 /**
- * Capability discovery for the curation-strategy registries (plan §3/§5.3):
- * which cluster methods / review sorts / overlays / scores the backend
- * currently offers, each with a `stable | experimental | shadow |
- * disabled` status. Phase 0 plumbing only — nothing consumes this yet.
- *
- * **Never rejects.** `{API_PREFIX}/methods` may not exist yet (backend Phase 0
- * lands independently — see `strategies.ts`'s header), and this endpoint
- * is pure capability discovery, not something a caller should have to
- * try/catch around. `apiFetch` already applies the house retry rule (no
- * retry on 4xx, 3 retries with backoff on 5xx/network errors); once that
- * settles, a 404 or any other failure here resolves to `FALLBACK_METHODS`
- * — the hardcoded stable-only list matching what's actually implemented
- * today — instead of throwing. A caller-initiated abort still propagates,
- * since that's a cancellation, not a backend failure.
+ * The structured `{detail: {error, message, ...}}` body every project
+ * route answers an error with (`ConfigErrorDetail`), or `null` when the
+ * error isn't one (a network failure, a plain-string detail, a pydantic
+ * validation list). The UI renders `message` verbatim and branches only
+ * on the served `error` code.
+ */
+export function projectErrorDetail(e: unknown): ProjectErrorDetail | null {
+  if (!(e instanceof ApiError)) return null;
+  const body = e.body;
+  if (!body || typeof body !== 'object') return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  const d = detail as Record<string, unknown>;
+  if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
+  return d as unknown as ProjectErrorDetail;
+}
+
+/** The text to show for a failed project action: the served `message`
+ *  when the error is structured, else the generic `ApiError.detail`
+ *  (e.g. a joined pydantic validation list), else the error's message. */
+export function projectErrorText(e: unknown): string {
+  const d = projectErrorDetail(e);
+  if (d) return d.message;
+  if (e instanceof ApiError && e.detail) return e.detail;
+  return (e as Error)?.message ?? String(e);
+}
+
+/**
+ * Capability discovery for the curation-strategy registries: which
+ * cluster methods / review sorts / overlays / scores / exports / assist
+ * axes the backend currently offers, each with a `stable | experimental
+ * | shadow | disabled` status. Rejects on failure like every other read;
+ * `strategiesStore` is the one caller that catches.
  */
 export async function getMethods(signal?: AbortSignal): Promise<MethodsResponse> {
-  try {
-    const raw = await apiFetch<unknown>(`${scoped()}/methods`, {}, signal);
-    return parseMethodsResponse(raw);
-  } catch (e) {
-    if (e instanceof DOMException && e.name === 'AbortError') throw e;
-    return FALLBACK_METHODS;
-  }
+  const raw = await apiFetch<unknown>(`${scoped()}/methods`, {}, signal);
+  return parseMethodsResponse(raw);
 }
 
 // -- shared curation defaults (GET,PUT {API_PREFIX}/settings) -----------
@@ -516,25 +715,10 @@ export async function getMethods(signal?: AbortSignal): Promise<MethodsResponse>
 // docs/design/curation-settings-ui-plan-2026-09-21.md §1.3.
 
 /**
- * Read the deployment's shared curation defaults.
- *
- * **Unlike `getMethods()`, this DOES reject.** That asymmetry is
- * deliberate: `getMethods` is fired from many component mounts and its
- * absence has a meaningful fallback (`FALLBACK_METHODS`), so swallowing
- * failures there is right. This endpoint is fired from exactly one page,
- * and that page must distinguish three outcomes an opaque fallback would
- * fuse into one:
- *
- *   404  -> this backend predates the feature; show "not supported",
- *           render no controls at all
- *   5xx/net -> transient; show the error and offer a retry
- *   200  -> real record (possibly `defaults: {}` when nothing has ever
- *           been written — that is the normal first-run response, NOT an
- *           error)
- *
- * Throwing preserves `ApiError.status`, which is the only thing that can
- * tell those apart. `curationSettingsStore` is the single place that
- * catches.
+ * Read the deployment's shared curation defaults. A `defaults: {}`
+ * record (nothing written yet) is the normal first-run response, not an
+ * error. Rejects on failure; `curationSettingsStore` is the one caller
+ * that catches.
  */
 export async function getCurationSettings(
   signal?: AbortSignal,
@@ -1359,28 +1543,26 @@ export interface DatasetStats {
   regions: {
     /** Crops with a region_bbox_norm right now — the honest "crops with a
      *  region" count (matches the region cluster view). */
-    boxed?: number;
+    boxed: number;
     /** Crops the verifier confirmed carry a real region (region_status='detected'). */
-    confirmed?: number;
+    confirmed: number;
     /** Sum of region_detector credit — includes rejected/failed attempts,
-     *  so it OVERSTATES real regions. Kept for back-compat; not the headline. */
+     *  so it OVERSTATES real regions. Not the headline. */
     total_detected: number;
     by_detector: number;
     by_segmenter: number;
-    /** Legacy alias for ``by_human_drew``. */
-    by_human: number;
     /** Crops where the operator drew a fresh region bbox from scratch. */
-    by_human_drew?: number;
+    by_human_drew: number;
     /** Crops whose region was verified by a human (the Confirm button). */
-    verified_by_human?: number;
+    verified_by_human: number;
     /** Crops whose region was verified by the VLM verifier (auto-verify). */
-    verified_by_vlm?: number;
+    verified_by_vlm: number;
     /**
      * Union: any region the operator touched — drew the bbox OR
      * confirmed an AI-proposed one. The dashboard surfaces this as
      * the honest "you reviewed N regions" number.
      */
-    validated_by_human?: number;
+    validated_by_human: number;
   };
   unlabeled: {
     pending_detection: number;
@@ -1391,22 +1573,20 @@ export interface DatasetStats {
      *  `class_id`). */
     no_label_source: number;
     /** Subset of `no_label_source` the VLM looked at but couldn't (or
-     *  didn't) resolve to a class (#36 item 2). Served alongside
-     *  `no_label_source`; absent on a backend that predates it. */
-    vlm_no_class?: number;
+     *  didn't) resolve to a class (#36 item 2). */
+    vlm_no_class: number;
     /** F-23 (OpenProcessor d72cc63): crops a detector proposed but
      *  nothing has classified yet — a subset of `no_label_source`, like
-     *  `vlm_no_class`. Moved here from the always-0 `labeled.by_proposal`
-     *  (removed). Absent on a backend that predates it. */
-    by_proposal?: number;
+     *  `vlm_no_class`. */
+    by_proposal: number;
   };
   in_progress: {
     region_drain_total_unfinished: number;
     /** V-1 (OpenProcessor d72cc63): a served, human-readable line naming
      *  why the region drain can't progress (a region-profile dependency
      *  is down, and since when). Null when nothing is pending or every
-     *  dependency is ready; absent on an older backend. Rendered verbatim. */
-    region_stall_reason?: string | null;
+     *  dependency is ready. Rendered verbatim. */
+    region_stall_reason: string | null;
   };
   clusters: {
     last_run_at: string | null;
@@ -1438,18 +1618,7 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
     by_source?: Array<{ key: string; doc_count: number }>;
   };
   type RawClasses = {
-    classes?: Array<{
-      class_id: number;
-      class_name: string;
-      count?: number;
-      sample_count?: number;
-      validated_count?: number;
-      adequacy?: string;
-      aug_target?: number;
-      aug_gap?: number;
-      trainable?: number;
-      trainable_gap?: number;
-    }>;
+    classes: StatsSummary['per_class'];
     thresholds?: ClassThresholds;
   };
   // allSettled, not Promise.all: /stats/dataset can 503 (G1 — the live
@@ -1479,11 +1648,11 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
       images_pending: 0,
       last_run_at: null,
     },
-    per_class: (cls.classes ?? []).map((c) => ({
+    per_class: cls.classes.map((c) => ({
       class_id: c.class_id,
       class_name: c.class_name,
-      count: c.count ?? c.sample_count ?? 0,
-      validated_count: c.validated_count ?? 0,
+      count: c.count,
+      validated_count: c.validated_count,
       adequacy: c.adequacy,
       aug_target: c.aug_target,
       aug_gap: c.aug_gap,
@@ -1495,68 +1664,49 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
 }
 
 export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse> {
-  // The API returns `{classes: [{class_id, class_name, group, sample_count,
-  // validated_count, deprecated, adequacy, added_at}, ...], thresholds,
-  // reserved_hotkeys}`. Map `classes` to the labeler's RegistryClass shape,
-  // which uses `id`/`name`/`count`; `thresholds` and `reserved_hotkeys` pass
-  // through verbatim — they're the server's own adequacy/hotkey rules, never
-  // recomputed client-side.
+  // Map the served `ClassEntry` rows to the labeler's RegistryClass shape
+  // (`id`/`name`/`count`); `thresholds` and `reserved_hotkeys` pass through
+  // verbatim — the server's own adequacy/hotkey rules, never recomputed
+  // client-side.
   type RawClass = {
-    class_id?: number;
-    id?: number;
-    class_name?: string;
-    name?: string;
-    group?: string | null;
-    sample_count?: number;
-    count?: number;
-    validated_count?: number;
-    cluster_size?: number;
-    color?: string | null;
-    deprecated?: boolean;
-    added_at?: string;
-    hotkey_letter?: string | null;
-    adequacy?: string;
-    kind?: 'item' | 'region';
-    trainable?: number;
-    trainable_gap?: number;
-    merged_into?: number | null;
+    class_id: number;
+    class_name: string;
+    group: string;
+    sample_count: number;
+    validated_count: number;
+    cluster_size: number;
+    deprecated: boolean;
+    added_at: string | null;
+    hotkey_letter: string | null;
+    adequacy: string;
+    kind: 'item' | 'region';
+    trainable: number;
+    trainable_gap: number;
+    merged_into: number | null;
   };
   const res = await apiFetch<{
     classes: RawClass[];
-    thresholds?: ClassThresholds;
-    reserved_hotkeys?: string[];
+    thresholds: ClassThresholds;
+    reserved_hotkeys: string[];
   }>(`${scoped()}/classes`, {}, signal);
-  const raw = res.classes ?? [];
-  const classes = raw.map((c) => ({
-    id: c.class_id ?? c.id ?? -1,
-    name: c.class_name ?? c.name ?? '',
-    group: c.group ?? null,
-    count: c.sample_count ?? c.count ?? 0,
-    validated_count: c.validated_count ?? 0,
-    cluster_size: c.cluster_size ?? 0,
+  const classes = res.classes.map((c) => ({
+    id: c.class_id,
+    name: c.class_name,
+    group: c.group || null,
+    count: c.sample_count,
+    validated_count: c.validated_count,
+    cluster_size: c.cluster_size,
     added_at: c.added_at ?? '',
-    color: c.color ?? null,
-    deprecated: !!c.deprecated,
-    hotkey_letter: c.hotkey_letter ?? null,
+    color: null,
+    deprecated: c.deprecated,
+    hotkey_letter: c.hotkey_letter,
     adequacy: c.adequacy,
     kind: c.kind,
     trainable: c.trainable,
     trainable_gap: c.trainable_gap,
-    merged_into: c.merged_into ?? null,
+    merged_into: c.merged_into,
   }));
-  // Old-shape (bare array) or pre-cutover backend responses omit these —
-  // an empty threshold/reserved set just means the adequacy chip and the
-  // hotkey guard render as "unknown" until a real response arrives, never
-  // a crash or a client-invented number.
-  const thresholds: ClassThresholds = res.thresholds ?? {
-    block_below: 0,
-    warn_below: 0,
-    min_test_per_class: 0,
-    aug_target_min: 0,
-    aug_target_max: 0,
-  };
-  const reserved_hotkeys = res.reserved_hotkeys ?? [];
-  return { classes, thresholds, reserved_hotkeys };
+  return { classes, thresholds: res.thresholds, reserved_hotkeys: res.reserved_hotkeys };
 }
 
 /** Raw cluster card from `{API_PREFIX}/clusters`. The backend is the single
@@ -1580,19 +1730,19 @@ type RawCluster = {
   purity: number | null;
   /** How many members `purity` was computed over (the geometry pass's
    *  coverage for this cluster) — purity is noisy at low n. */
-  purity_n?: number | null;
+  purity_n: number | null;
   /** Always `'nearest_centroid'` today; served so the frontend never
    *  hardcodes what `purity` means. */
-  purity_basis?: string | null;
+  purity_basis: string | null;
   /** Server-banded purity (see `purity_thresholds` below) — 'pure' | 'mixed' | 'noisy'. */
   purity_tier: 'pure' | 'mixed' | 'noisy' | null;
   /** Largest-class share among LABELLED members (the old label-based
    *  "purity" — always 1.0 for a class cluster by construction, which is
    *  exactly why it stopped being called `purity`). `promotable` uses
    *  this, not the geometry-based `purity` above. */
-  label_purity?: number | null;
+  label_purity: number | null;
   /** Share of this cluster's members that have any label at all. */
-  labelled_share?: number | null;
+  labelled_share: number | null;
   /** Server's auto-promote eligibility gate for this cluster. */
   promotable: boolean;
   is_unlabeled: boolean;
@@ -1646,22 +1796,21 @@ function _rawClusterToCluster(
     // members), never the nearest-centroid geometry `purity` below —
     // mapping `purity` here rendered "class_b · 3%" for a cluster that
     // is 616/616 class_b.
-    dominant_pct: c.label_purity ?? null,
+    dominant_pct: c.label_purity,
     dominant_count: c.dominant_count ?? null,
     labelled_count: c.labelled_count ?? null,
     purity: c.purity,
-    purity_n: c.purity_n ?? null,
-    purity_basis: c.purity_basis ?? null,
+    purity_n: c.purity_n,
+    purity_basis: c.purity_basis,
     purity_tier: c.purity_tier ?? null,
-    label_purity: c.label_purity ?? null,
-    labelled_share: c.labelled_share ?? null,
+    label_purity: c.label_purity,
+    labelled_share: c.labelled_share,
     promotable: !!c.promotable,
     core_similarity_min: coreSimilarityMin,
     is_unlabeled: c.is_unlabeled,
     representative_crop_ids: (c.representatives ?? []).map((r) => r.crop_id),
     has_subclusters: c.n_subclusters > 0,
     n_subclusters: c.n_subclusters,
-    sub_clusters: c.n_subclusters,
     updated_at: c.updated_at,
   };
 }
@@ -2739,76 +2888,20 @@ export interface ReviewFilterSpec {
 export interface ReviewTabVocabularyEntry {
   id: string;
   label: string;
-  description?: string;
-  /** Query parameters this tab honours (dq-queues cutover, 2026-09-24) —
-   *  a parameter not listed is accepted and ignored server-side. Drives
-   *  which filter-bar controls render for the active tab. Absent/empty
-   *  means "unknown" — the frontend then shows every control, same as
-   *  before this endpoint carried the field. */
-  filters?: string[];
+  description: string;
+  /** Query parameters this tab honours — a parameter not listed is
+   *  accepted and ignored server-side. Drives which filter-bar controls
+   *  render for the active tab. */
+  filters: string[];
   /** Values the tab applies when a filter is omitted, e.g.
    *  `{max_rank: 2}` for the two primary-subject tabs. */
-  filter_defaults?: Record<string, unknown>;
-  /** Self-describing enum filters this tab honours (3f1a11e adoption) —
-   *  empty for a tab with none, or on an older backend that doesn't
-   *  serve the field yet. */
+  filter_defaults: Record<string, unknown>;
+  /** Self-describing enum filters this tab honours (empty for none). */
   filter_specs: ReviewFilterSpec[];
 }
 
-/** Every review tab's served `id`/`label`/`description`, in `KNOWN_TABS`
- *  order. The frontend keeps its own tab structure/ids (`reviewTabs.ts`)
- *  and only overlays the served label/description on top, falling back to
- *  the static label when the endpoint is absent. */
-export async function getReviewTabsVocabulary(
-  signal?: AbortSignal,
-): Promise<ReviewTabVocabularyEntry[]> {
-  const res = await apiFetch<{ tabs?: ReviewTabVocabularyEntry[] }>(
-    `${scoped()}/review/tabs`,
-    {},
-    signal,
-  );
-  return (res.tabs ?? [])
-    .filter(
-      (t) => typeof t?.id === 'string' && t.id.length > 0 && typeof t.label === 'string',
-    )
-    .map((t) => ({
-      id: t.id,
-      label: t.label,
-      description: t.description,
-      filters: Array.isArray(t.filters)
-        ? t.filters.filter((f): f is string => typeof f === 'string')
-        : undefined,
-      filter_defaults:
-        t.filter_defaults && typeof t.filter_defaults === 'object'
-          ? t.filter_defaults
-          : undefined,
-      filter_specs: Array.isArray(t.filter_specs)
-        ? t.filter_specs
-            .filter(
-              (s): s is ReviewFilterSpec =>
-                !!s &&
-                typeof s.param === 'string' &&
-                s.kind === 'enum' &&
-                typeof s.label === 'string' &&
-                Array.isArray(s.options),
-            )
-            .map((s) => ({
-              param: s.param,
-              kind: 'enum' as const,
-              label: s.label,
-              options: s.options
-                .filter(
-                  (o): o is ReviewFilterOption =>
-                    !!o && typeof o.value === 'string' && typeof o.label === 'string',
-                )
-                .map((o) => ({ value: o.value, label: o.label })),
-            }))
-        : [],
-    }));
-}
-
-/** `empty_state` on `GET {API_PREFIX}/review/tabs` (#36 item 9) — whether
- *  the deployment has ANY probe predictions or item scores at all, so an
+/** `empty_state` on `GET {API_PREFIX}/review/tabs` — whether the
+ *  deployment has ANY probe predictions or item scores at all, so an
  *  empty Uncertainty/Model-disagreements/score-sorted queue can point at
  *  the missing prerequisite (run a probe, compute scores) instead of just
  *  saying "empty". */
@@ -2817,31 +2910,18 @@ export interface ReviewEmptyState {
   has_item_scores: boolean;
 }
 
-/** Sibling read of `GET {API_PREFIX}/review/tabs`'s top-level `empty_state` —
- *  kept as its own call (rather than changing `getReviewTabsVocabulary`'s
- *  return shape) so every existing caller/test of the tabs array is
- *  unaffected; `reviewTabsVocabularyStore.init()` fires both once. `null`
- *  when absent (an older backend) — never invented client-side. */
-export async function getReviewEmptyState(
-  signal?: AbortSignal,
-): Promise<ReviewEmptyState | null> {
-  const res = await apiFetch<{ empty_state?: Partial<ReviewEmptyState> | null }>(
-    `${scoped()}/review/tabs`,
-    {},
-    signal,
-  );
-  const es = res.empty_state;
-  if (!es || typeof es !== 'object') return null;
-  if (
-    typeof es.has_probe_predictions !== 'boolean' ||
-    typeof es.has_item_scores !== 'boolean'
-  ) {
-    return null;
-  }
-  return {
-    has_probe_predictions: es.has_probe_predictions,
-    has_item_scores: es.has_item_scores,
-  };
+/** `GET {API_PREFIX}/review/tabs`. */
+export interface ReviewTabsResponse {
+  tabs: ReviewTabVocabularyEntry[];
+  empty_state: ReviewEmptyState;
+}
+
+/** Every review tab's served vocabulary, in served order, plus the
+ *  deployment-wide `empty_state`. The frontend keeps its own tab
+ *  structure/ids (`reviewTabs.ts`) and only overlays the served
+ *  label/description/filters on top. */
+export function getReviewTabs(signal?: AbortSignal): Promise<ReviewTabsResponse> {
+  return apiFetch<ReviewTabsResponse>(`${scoped()}/review/tabs`, {}, signal);
 }
 
 /**
@@ -3513,12 +3593,8 @@ function parseScoresCoverage(raw: unknown): ScoresCoverage {
 }
 
 /**
- * Per-scorer coverage. **Rejects** on failure (mirrors
- * `getCurationSettings`, not `getMethods`'s swallow-everything
- * contract) — the one caller, the `/settings` scores card, must tell a
- * 404 ("this backend predates `/scores/*`, render no card at all") apart
- * from a transient failure, exactly the three-way split
- * `curationSettingsStore` already draws for the same reason.
+ * Per-scorer coverage. Rejects on failure; the one caller, the
+ * `/settings` scores card, shows the error with a retry.
  */
 export async function getScoresCoverage(signal?: AbortSignal): Promise<ScoresCoverage> {
   const raw = await apiFetch<unknown>(`${scoped()}/scores/coverage`, {}, signal);
@@ -3651,11 +3727,7 @@ export async function searchCrops(
   filter: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<SearchCrop>> {
-  type RawSearchItem = RawCrop & {
-    similarity_score?: number | null;
-    semantic_score?: number | null;
-    score?: number | null;
-  };
+  type RawSearchItem = RawCrop & { semantic_score: number | null };
   type RawPage = {
     total: number;
     page: number;
@@ -3672,11 +3744,8 @@ export async function searchCrops(
     return {
       ...base,
       // The backend's `_hydrate_item` (OpenProcessor semantic_search.py) sends
-      // the match score as `semantic_score` — `similarity_score`/`score`
-      // are legacy/defensive fallbacks that the live endpoint has never
-      // actually populated. Without the semantic_score read here every
-      // search-result badge silently rendered 0%.
-      similarity_score: it.similarity_score ?? it.semantic_score ?? it.score ?? 0,
+      // the match score as `semantic_score`.
+      similarity_score: it.semantic_score ?? 0,
     };
   });
   return {
@@ -3781,10 +3850,6 @@ export function listDatasets(
 }
 
 // -- classes mutators ----------------------------------------------------
-
-export function getClass(classId: number, signal?: AbortSignal): Promise<RegistryClass> {
-  return apiFetch<RegistryClass>(`${scoped()}/classes/${classId}`, {}, signal);
-}
 
 export function addClass(
   payload: RegistryClassCreate,
@@ -4346,8 +4411,6 @@ export function getTrainPresets(signal?: AbortSignal): Promise<PresetsResponse> 
 /**
  * `GET {API_PREFIX}/train/augmentation_presets` (OpenProcessor df01309) —
  * the trainer's real preset catalog, for `AugmentationPanel`'s picker.
- * 404s on a pre-df01309 backend; callers must catch and degrade to a
- * read-only display rather than a hardcoded id list.
  */
 export function getAugmentationPresets(
   signal?: AbortSignal,
@@ -4652,21 +4715,11 @@ export async function ingestBatch(
 }
 
 /**
- * BA-2 (landed, OpenProcessor c5c606f): typed ingest capability + limits,
- * actually enforced by `/ingest/upload`/`/ingest/batch`/`/ingest/region_drain`
- * — replaces every interim client constant in `ingestConfig.ts`. A 404
- * (pre-BA-2 backend) resolves to `null`; `resolveIngestConfig(null)` falls
- * back to the documented interim values, same as before this landed.
+ * Typed ingest capability + limits, actually enforced by
+ * `/ingest/upload`/`/ingest/batch`/`/ingest/region_drain`.
  */
-export async function getIngestConfig(
-  signal?: AbortSignal,
-): Promise<IngestConfig | null> {
-  try {
-    return await apiFetch<IngestConfig>(`${scoped()}/ingest/config`, {}, signal);
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) return null;
-    throw e;
-  }
+export function getIngestConfig(signal?: AbortSignal): Promise<IngestConfig> {
+  return apiFetch<IngestConfig>(`${scoped()}/ingest/config`, {}, signal);
 }
 
 // ===========================================================================

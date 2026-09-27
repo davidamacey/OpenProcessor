@@ -7,21 +7,19 @@
  * serves `trainable_gap` per class — the shortfall of its trainable count
  * (validated minus test holdout minus excluded) against the served
  * per-class hard minimum, floored at 0. A class is lacking when that
- * served gap is > 0. No threshold is computed or invented here; a class
- * an older backend doesn't serve the field for is never treated as
- * lacking.
+ * served gap is > 0. No threshold is computed or invented here.
  */
 import type { RegistryClass } from '$lib/types';
 
 function candidates(classes: RegistryClass[]): RegistryClass[] {
   // Region-kind classes are sub-box slots, not item classes a detector
-  // run trains on (served `kind`, OpenProcessor #36 item 1).
+  // run trains on (served `kind`).
   return classes.filter((c) => !c.deprecated && c.kind !== 'region');
 }
 
 /** Non-deprecated item classes the server says are short of data. */
 export function classesLackingData(classes: RegistryClass[]): RegistryClass[] {
-  return candidates(classes).filter((c) => (c.trainable_gap ?? 0) > 0);
+  return candidates(classes).filter((c) => c.trainable_gap > 0);
 }
 
 /**

@@ -196,8 +196,8 @@ export function parseCurationSettings(raw: unknown): CurationSettings {
  *
  * DELIBERATELY UNLIKE `StrategyBar.svelte`: no synthetic
  * `'Default order'` / sentinel option is appended. `'default'` is NOT a
- * real backend sort-registry id (it exists only in this app's
- * FALLBACK_METHODS and as StrategyBar's local "no override" sentinel),
+ * real backend sort-registry id (it exists only as StrategyBar's local
+ * "no override" sentinel),
  * so PUTting it would 422 on `_validate_defaults`'s
  * "is not a currently-advertised id" branch. Do not add one back.
  */

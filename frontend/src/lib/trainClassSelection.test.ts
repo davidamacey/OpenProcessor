@@ -21,6 +21,10 @@ function cls(id: number, over: Partial<RegistryClass> = {}): RegistryClass {
     validated_count: 0,
     cluster_size: 0,
     added_at: '2026-01-01T00:00:00Z',
+    adequacy: 'block',
+    kind: 'item',
+    trainable: 0,
+    trainable_gap: 0,
     ...over,
   };
 }

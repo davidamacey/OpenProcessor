@@ -33,7 +33,13 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
-from fixtures.wire import REGION_PROFILE, REGION_TAB_LABEL
+from fixtures.wire import (
+    REGION_PROFILE,
+    REGION_TAB_LABEL,
+    projects_response,
+    review_tab,
+    review_tabs,
+)
 
 import pytest
 
@@ -195,6 +201,17 @@ class Stub:
         # The served region profile gates every region feature; the
         # default deployment has one (the neutral widget/tag domain).
         # e2e/stubbed/test_no_region_profile.py overrides it with None.
+        # P1 projects cutover: the GLOBAL project list, read once by the
+        # root layout's bootstrap before anything scoped fires. Every
+        # scoped request in the app is then built from this project's own
+        # served `prefix` (`{api_prefix}/projects/default`) — matched by
+        # every OTHER `.on(...)` pattern below purely by suffix, so this
+        # is the only project-aware default the stub needs.
+        self.on(
+            "GET",
+            rf"^{re.escape(api_prefix)}/projects$",
+            projects_response(api_prefix),
+        )
         self.on("GET", r"/health$", {"status": "ok", "region_profile": REGION_PROFILE})
         self.on("GET", r"(thumbnail|region_thumbnail|/source)(/|$|\?)", self._image)
         # K6 (docs/design/k6-frontend-overlay-plan-2026-09-24.md):
@@ -286,17 +303,12 @@ class Stub:
         self.on(
             "GET",
             r"/review/tabs(\?|$)",
-            {"tabs": [{"id": "regions", "label": REGION_TAB_LABEL}]},
+            review_tabs(review_tab("regions", REGION_TAB_LABEL)),
         )
         self.on("GET", r"/bakeoff/runs(\?|$)", {"runs": []})
-        # The root layout's ingestAvailability probe fires on every route
-        # (same pattern as bakeoff/runs above) — every existing test needs
-        # this default so the /ingest nav link's probe doesn't 501.
+        # /ingest's own page reads its status table and its config on
+        # mount; defaults so a route sweep through /ingest never 501s.
         self.on("GET", r"/ingest/status(\?|$)", {"total": 0, "by_source": [], "by_day": []})
-        # BA-2 (OpenProcessor #36, c5c606f): once the probe above confirms
-        # the ingest router is mounted, /ingest's own page fetches
-        # `GET /ingest/config` on mount — every existing test needs this
-        # default too, same reasoning as /ingest/status above.
         self.on(
             "GET",
             r"/ingest/config(\?|$)",

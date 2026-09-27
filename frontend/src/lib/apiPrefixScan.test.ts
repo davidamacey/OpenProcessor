@@ -115,7 +115,9 @@ describe('no bare /curation literal composes a URL outside api.ts', () => {
     expect(scanned.length).toBeGreaterThan(80);
     expect(scanned).toContain(path.join('lib', 'api.ts'));
     expect(scanned).toContain(path.join('lib', 'sse.ts'));
-    expect(scanned).toContain(path.join('routes', 'export', '+page.svelte'));
+    expect(scanned).toContain(
+      path.join('routes', 'p', '[project]', 'export', '+page.svelte'),
+    );
     expect(scanned).toContain(path.join('lib', 'annotations', 'registeredSlots.ts'));
   });
 
@@ -159,8 +161,13 @@ describe('api.ts composition ratchet — every apiFetch path starts with ${scope
     expect(calls.length).toBeGreaterThanOrEqual(70);
   });
 
-  it('every call composes its path from ${scoped()}', () => {
-    const bad = calls.filter((h) => !h.startsWith('`${scoped()}'));
+  it('every call composes its path from ${scoped()} or ${globalApi()}', () => {
+    // ${globalApi()}: the P1-cutover global routes (getGlobalHealth,
+    // getProjects) — the small, explicit exception to "every call is
+    // scoped", never a hand-assembled prefix.
+    const bad = calls.filter(
+      (h) => !h.startsWith('`${scoped()}') && !h.startsWith('`${globalApi()}'),
+    );
     expect(bad).toEqual([]);
   });
 });
@@ -189,8 +196,11 @@ describe('${apiBase} is always followed by ${scoped()}', () => {
     ['lib/api.ts', apiSrc],
     ['lib/sse.ts', sseSrc],
     [
-      'routes/export/+page.svelte',
-      readFileSync(path.resolve(srcRoot, 'routes/export/+page.svelte'), 'utf-8'),
+      'routes/p/[project]/export/+page.svelte',
+      readFileSync(
+        path.resolve(srcRoot, 'routes/p/[project]/export/+page.svelte'),
+        'utf-8',
+      ),
     ],
   ];
 
@@ -199,16 +209,24 @@ describe('${apiBase} is always followed by ${scoped()}', () => {
     for (const [rel, src] of files) {
       const stripped = stripComments(src);
       for (const m of stripped.matchAll(/\$\{apiBase\}(.{0,16})/g)) {
-        if (!m[1].startsWith('${scoped()}')) bad.push(`${rel}  \${apiBase}${m[1]}`);
+        if (!m[1].startsWith('${scoped()}') && !m[1].startsWith('${globalApi()}')) {
+          bad.push(`${rel}  \${apiBase}${m[1]}`);
+        }
       }
     }
     expect(bad).toEqual(['lib/api.ts  ${apiBase}${url}`;']);
   });
 
-  it('sse.ts builds both EventSource URLs from ${scoped()}', () => {
+  it('sse.ts builds both scoped EventSource URLs from ${scoped()}', () => {
     expect([
       ...sseSrc.matchAll(/\$\{apiBase\}\$\{scoped\(\)\}\/(pipeline\/events|events)/g),
     ]).toHaveLength(4);
+  });
+
+  it('sse.ts builds the global EventSource URL from ${globalApi()}', () => {
+    expect([
+      ...sseSrc.matchAll(/\$\{apiBase\}\$\{globalApi\(\)\}\/events/g),
+    ]).toHaveLength(2);
   });
 });
 

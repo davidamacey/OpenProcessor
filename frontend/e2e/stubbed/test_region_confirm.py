@@ -17,16 +17,7 @@ from conftest import ACTION_TIMEOUT_MS
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
 CLASSES = [
-    {
-        "id": 1,
-        "name": REGION_CLASS,
-        "group": "widgets",
-        "hotkey_letter": "l",
-        "count": 40,
-        "validated_count": 12,
-        "cluster_size": 44,
-        "deprecated": False,
-    },
+    {"class_id": 1, "class_name": REGION_CLASS, "kind": "region", "group": "widgets", "hotkey_letter": "l", "sample_count": 40, "validated_count": 12, "cluster_size": 44, "deprecated": False},
 ]
 
 METHODS = {"strategies": [], "flags": {}}
@@ -88,7 +79,7 @@ def test_region_confirm_unchanged_box_sends_state_only_no_bbox_norm(stub, page, 
     def review_handler(_request, _match):
         return (200, {"items": [tag_item()], "total": 1, "page": 1, "page_size": 30})
 
-    stub.on("GET", r"/review/", review_handler)
+    stub.on("GET", r"/review/(?!tabs)", review_handler)
 
     def region_put(request, match):
         region_puts.append((match.string, request.post_data_json or {}))
@@ -117,7 +108,7 @@ def test_region_confirm_unchanged_box_sends_state_only_no_bbox_norm(stub, page, 
 
     stub.on("PATCH", r"/crops/([^/]+)/region_meta$", region_meta)
 
-    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)

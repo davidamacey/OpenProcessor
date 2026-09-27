@@ -14,7 +14,7 @@
  * `onEvent` callback so the page can switch on `event.type`.
  */
 
-import { apiBase, scoped } from './api';
+import { apiBase, globalApi, scoped } from './api';
 import { slotRegistry } from './annotations/registeredSlots';
 
 // All event payloads share these fields; specific types add more.
@@ -233,6 +233,104 @@ export function subscribePipelineEvents(
         console.warn('[sse] failed to parse stats', err);
       }
     });
+    es.onerror = (err) => {
+      opts.onError?.(err);
+      if (closed) return;
+      es?.close();
+      es = null;
+      reconnectTimer = setTimeout(() => {
+        backoff = Math.min(backoff * 2, RECONNECT_MAX_MS);
+        open();
+      }, backoff);
+    };
+  }
+
+  open();
+
+  return {
+    close(): void {
+      closed = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      es?.close();
+      es = null;
+    },
+  };
+}
+
+/**
+ * Global project-lifecycle event, `GET {globalApi()}/events` (P1
+ * projects cutover) — always `project: null`/`topic: 'project'`; a
+ * scoped item/pipeline event never appears on this stream (those come
+ * from `{scoped()}/events`). Fields beyond the envelope are carried
+ * untyped since this build only reacts to "something about the project
+ * list changed" (`projectsStore.load()` re-read), not per-event detail.
+ */
+export interface ProjectEvent {
+  type: string;
+  topic: 'project';
+  project: null;
+  target?: string;
+  ts?: number;
+  [field: string]: unknown;
+}
+
+export interface GlobalEventSubscribeOptions {
+  onEvent: (event: ProjectEvent) => void;
+  onError?: (err: Event | Error) => void;
+  onOpen?: () => void;
+}
+
+const GLOBAL_EVENT_TYPES = [
+  'project.created',
+  'project.updated',
+  'project.archived',
+  'project.unarchived',
+  'project.deleted',
+  'combine.progress',
+];
+
+/**
+ * Open an SSE subscription to the GLOBAL `{globalApi()}/events` —
+ * `project.*` events with no bound project. Held by `projectsStore` to
+ * refresh the project list; distinct from `subscribeCurationEvents`/
+ * `subscribePipelineEvents`, which are project-scoped.
+ */
+export function subscribeGlobalEvents(
+  opts: GlobalEventSubscribeOptions,
+): CurationEventSubscription {
+  let es: EventSource | null = null;
+  let backoff = RECONNECT_INITIAL_MS;
+  let closed = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const url = (() => {
+    const base =
+      apiBase && /^https?:\/\//i.test(apiBase)
+        ? `${apiBase}${globalApi()}/events`
+        : `${typeof window !== 'undefined' ? window.location.origin : ''}${apiBase}${globalApi()}/events`;
+    return new URL(base).toString();
+  })();
+
+  function open(): void {
+    if (closed) return;
+    es = new EventSource(url);
+    es.onopen = () => {
+      backoff = RECONNECT_INITIAL_MS;
+      opts.onOpen?.();
+    };
+    for (const t of GLOBAL_EVENT_TYPES) {
+      es.addEventListener(t, (ev: MessageEvent) => {
+        try {
+          const payload = JSON.parse(ev.data) as ProjectEvent;
+          opts.onEvent(payload);
+        } catch (err) {
+          console.warn('[sse] failed to parse global event', t, err);
+        }
+      });
+    }
     es.onerror = (err) => {
       opts.onError?.(err);
       if (closed) return;

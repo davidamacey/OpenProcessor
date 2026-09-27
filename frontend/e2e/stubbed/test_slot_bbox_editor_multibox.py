@@ -20,11 +20,12 @@ from fixtures.wire import REGION_CLASS, make_item
 
 CLASSES = [
     {
-        "id": 1,
-        "name": REGION_CLASS,
+        "class_id": 1,
+        "class_name": REGION_CLASS,
+        "kind": "region",
         "group": "widgets",
         "hotkey_letter": "l",
-        "count": 10,
+        "sample_count": 10,
         "validated_count": 5,
         "cluster_size": 10,
         "deprecated": False,
@@ -118,7 +119,7 @@ def test_cropcard_pencil_opens_multibox_editor_and_saves_with_no_region_status(
 
     stub.on("PUT", r"/crops/([^/]+)/regions$", region_put)
 
-    page.goto(f"{app_url}/clusters/1")
+    page.goto(f"{app_url}/p/default/clusters/1")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
 
     thumbnail = page.locator("img").first

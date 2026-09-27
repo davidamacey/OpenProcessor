@@ -76,12 +76,12 @@ def test_deprecate_empty_class_succeeds_and_refreshes(stub, page, app_url):
     )
     _confirm_dialogs_yes(page)
 
-    page.goto(f"{app_url}/classes")
+    page.goto(f"{app_url}/p/default/classes")
     row = page.get_by_test_id("class-row-10")
     row.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("deprecate-10").click()
 
-    assert any(c[1] == "/curation/classes/10/deprecate" for c in stub.calls)
+    assert any(c[1].endswith("/classes/10/deprecate") for c in stub.calls)
     toast = page.get_by_text("Deprecated coupe.")
     toast.wait_for(timeout=ACTION_TIMEOUT_MS)
 
@@ -108,7 +108,7 @@ def test_deprecate_still_referenced_offers_merge_preselecting_source(stub, page,
     )
     _confirm_dialogs_yes(page)
 
-    page.goto(f"{app_url}/classes")
+    page.goto(f"{app_url}/p/default/classes")
     row = page.get_by_test_id("class-row-11")
     row.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("deprecate-11").click()
@@ -133,7 +133,7 @@ def test_restore_succeeds_and_row_disappears(stub, page, app_url):
     )
     _confirm_dialogs_yes(page)
 
-    page.goto(f"{app_url}/classes")
+    page.goto(f"{app_url}/p/default/classes")
     toggle = page.get_by_text("Deprecated classes (1)")
     toggle.wait_for(timeout=ACTION_TIMEOUT_MS)
     toggle.click()
@@ -142,7 +142,7 @@ def test_restore_succeeds_and_row_disappears(stub, page, app_url):
     assert restore_btn.is_enabled()
     restore_btn.click()
 
-    assert any(c[1] == "/curation/classes/99/restore" for c in stub.calls)
+    assert any(c[1].endswith("/classes/99/restore") for c in stub.calls)
 
 
 def test_restore_conflict_shows_plain_string_detail_verbatim(stub, page, app_url):
@@ -156,7 +156,7 @@ def test_restore_conflict_shows_plain_string_detail_verbatim(stub, page, app_url
     )
     _confirm_dialogs_yes(page)
 
-    page.goto(f"{app_url}/classes")
+    page.goto(f"{app_url}/p/default/classes")
     toggle = page.get_by_text("Deprecated classes (1)")
     toggle.wait_for(timeout=ACTION_TIMEOUT_MS)
     toggle.click()
@@ -191,7 +191,7 @@ def test_restore_merged_class_names_the_merge_target(stub, page, app_url):
     )
     _confirm_dialogs_yes(page)
 
-    page.goto(f"{app_url}/classes")
+    page.goto(f"{app_url}/p/default/classes")
     toggle = page.get_by_text("Deprecated classes (1)")
     toggle.wait_for(timeout=ACTION_TIMEOUT_MS)
     toggle.click()
@@ -212,7 +212,7 @@ def test_merged_class_row_has_no_restore(stub, page, app_url):
     stub.on("GET", r"/review/new_class_proposals/summary(\?|$)", EMPTY_PROPOSALS)
     stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
 
-    page.goto(f"{app_url}/classes")
+    page.goto(f"{app_url}/p/default/classes")
     toggle = page.get_by_text("Deprecated classes (1)")
     toggle.wait_for(timeout=ACTION_TIMEOUT_MS)
     toggle.click()
@@ -239,7 +239,7 @@ def test_merge_preview_says_validations_carry_over(stub, page, app_url):
             "blocked": False,
         },
     )
-    page.goto(f"{app_url}/classes")
+    page.goto(f"{app_url}/p/default/classes")
     page.get_by_role("button", name="Merge classes").click(timeout=ACTION_TIMEOUT_MS)
     dialog = page.get_by_role("dialog", name="Merge classes")
     dialog.wait_for(timeout=5000)

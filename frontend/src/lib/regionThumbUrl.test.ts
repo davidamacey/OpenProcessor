@@ -26,7 +26,11 @@ afterEach(() => {
 async function loadApiWithRemoteBase() {
   vi.stubEnv('PUBLIC_TRITON_API_URL', REMOTE_BASE);
   vi.resetModules();
-  return import('./api');
+  const mod = await import('./api');
+  // A fresh module instance has its own scopeHolder — seed it the same
+  // way src/lib/test/setup.ts does for the normal (non-reset) module.
+  mod.setScopedPrefix(mod.API_PREFIX);
+  return mod;
 }
 
 describe('getRegionThumbUrl', () => {

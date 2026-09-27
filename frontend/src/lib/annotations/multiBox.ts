@@ -1,7 +1,7 @@
 /**
  * Pure logic for W8 multi-box region edits — box selection/geometry
  * helpers and the `PUT /crops/{crop_id}/regions` request body builder
- * (spec: openprocessor any_domain_plan.md §7.7, W8.7/W8.8). Kept dependency-
+ * (backend spec W8.7/W8.8). Kept dependency-
  * free (no api.ts, no Svelte) so it can be unit-tested in isolation and
  * mutation-checked without a component mount.
  *

@@ -28,7 +28,7 @@ from conftest import ACTION_TIMEOUT_MS
 
 import re
 
-from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL
+from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL, review_tab, review_tabs
 
 import json
 from pathlib import Path
@@ -45,8 +45,8 @@ EXAMPLE_PROFILE = json.loads((REPO_ROOT / "static" / "annotation-profiles.exampl
 MALFORMED_PROFILE = {"version": 1, "slots": [{"key": "bad"}]}
 
 CLASSES = [
-    {"id": 1, "name": REGION_CLASS, "group": "widgets", "hotkey_letter": "l", "count": 40, "validated_count": 12, "cluster_size": 44, "deprecated": False},
-    {"id": 2, "name": "pallet_label", "group": "warehouse", "hotkey_letter": "w", "count": 20, "validated_count": 5, "cluster_size": 22, "deprecated": False},
+    {"class_id": 1, "class_name": REGION_CLASS, "kind": "region", "group": "widgets", "hotkey_letter": "l", "sample_count": 40, "validated_count": 12, "cluster_size": 44, "deprecated": False},
+    {"class_id": 2, "class_name": "pallet_label", "kind": "item", "group": "warehouse", "hotkey_letter": "w", "sample_count": 20, "validated_count": 5, "cluster_size": 22, "deprecated": False},
 ]
 
 METHODS = {"strategies": [], "flags": {}}
@@ -62,10 +62,9 @@ def register_curation(stub):
         review_calls.append(match.string)
         return (200, EMPTY_QUEUE)
 
-    stub.on("GET", r"/review/", review_handler)
-    # The catch-all above would also answer /review/tabs; keep the served
-    # region-tab label conftest.py defaults to.
-    stub.on("GET", r"/review/tabs(\?|$)", {"tabs": [{"id": "regions", "label": REGION_TAB_LABEL}]})
+    stub.on("GET", r"/review/(?!tabs)", review_handler)
+    # Keep the served region-tab label conftest.py defaults to.
+    stub.on("GET", r"/review/tabs(\?|$)", review_tabs(review_tab("regions", REGION_TAB_LABEL)))
     return review_calls
 
 
@@ -96,7 +95,7 @@ def test_tier2_profile_absent(stub, page, app_url):
     register_curation(stub)
     register_profile_route(page, status=200, body=None, content_type="text/html")
 
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     labels = tab_labels(page)
     assert "Pallet labels" not in labels, f"no 'Pallet labels' tab expected: {labels}"
     assert REGION_TAB_LABEL in labels, f"the region tab should still be present: {labels}"
@@ -111,10 +110,10 @@ def test_tier2_profile_served(stub, page, app_url):
     review_calls = register_curation(stub)
     stub.on("GET", r"/health$", {"status": "ok", "region_profile": PALLET_REGION_PROFILE})
     # No served label: the tab label comes from the tier-2 entry.
-    stub.on("GET", r"/review/tabs(\?|$)", {"tabs": []})
+    stub.on("GET", r"/review/tabs(\?|$)", review_tabs())
     register_profile_route(page, status=200, body=json.dumps(EXAMPLE_PROFILE), content_type="application/json")
 
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     labels = tab_labels(page)
     assert "Pallet labels" in labels, f"'Pallet labels' tab should be present: {labels}"
     assert REGION_TAB_LABEL not in labels, f"the example replaces the served slot: {labels}"
@@ -125,7 +124,7 @@ def test_tier2_profile_served(stub, page, app_url):
     review_calls.clear()
     pallet_tab.first.click()
     page.wait_for_timeout(800)
-    assert any("/curation/review/regions" in c for c in review_calls), (
+    assert any(c.endswith("/review/regions") or "/review/regions?" in c for c in review_calls), (
         f"clicking it should drive GET /curation/review/regions: {review_calls}"
     )
 
@@ -140,7 +139,7 @@ def test_tier2_profile_malformed(stub, page, app_url):
     register_curation(stub)
     register_profile_route(page, status=200, body=json.dumps(MALFORMED_PROFILE), content_type="application/json")
 
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     labels = tab_labels(page)
     assert REGION_TAB_LABEL in labels, f"the page should still render the core tabs + the region tab: {labels}"
     assert "Pallet labels" not in labels, f"no 'Pallet labels' tab from a malformed document: {labels}"
@@ -164,7 +163,7 @@ def test_tier2_profile_malformed(stub, page, app_url):
 
 def _assert_dropped(stub, page, app_url, *, expect_region_tab: bool, reason: str) -> None:
     register_profile_route(page, status=200, body=json.dumps(EXAMPLE_PROFILE), content_type="application/json")
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     labels = tab_labels(page)
     assert "Pallet labels" not in labels, f"the example must be dropped: {labels}"
     assert (REGION_TAB_LABEL in labels) is expect_region_tab, labels
@@ -184,7 +183,7 @@ def test_tier2_region_slot_dropped_under_another_served_profile(stub, page, app_
 def test_tier2_region_slot_dropped_without_a_region_profile(stub, page, app_url):
     register_curation(stub)
     stub.on("GET", r"/health$", {"status": "ok", "region_profile": None})
-    stub.on("GET", r"/review/tabs(\?|$)", {"tabs": []})
+    stub.on("GET", r"/review/tabs(\?|$)", review_tabs())
     _assert_dropped(stub, page, app_url, expect_region_tab=False, reason="no region profile")
     paths = [p for (_m, p) in stub.handled]
     assert not [p for p in paths if "/regions" in p], paths

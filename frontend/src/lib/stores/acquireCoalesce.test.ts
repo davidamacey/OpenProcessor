@@ -32,7 +32,10 @@ afterEach(() => {
 
 describe('healthStore.acquire/release coalescing', () => {
   it('does not abort the in-flight poll when release is immediately followed by re-acquire', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(ok({ status: 'ok' }));
+    // poll() now fires two requests per invocation (global health for
+    // the chip, scoped health for the region profile) — a fresh
+    // Response per call, since a Response's body can only be read once.
+    const fetchMock = vi.fn().mockImplementation(() => ok({ status: 'ok' }));
     vi.stubGlobal('fetch', fetchMock);
 
     const release1 = healthStore.acquire();
@@ -45,12 +48,12 @@ describe('healthStore.acquire/release coalescing', () => {
     // Only the original poll() from the first acquire() should have
     // fired — the release+reacquire burst must not abort it and start
     // a second one.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     release2();
   });
 
   it('still tears down for a real, lasting release (no re-acquire follows)', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(ok({ status: 'ok' }));
+    const fetchMock = vi.fn().mockImplementation(() => ok({ status: 'ok' }));
     vi.stubGlobal('fetch', fetchMock);
 
     const release = healthStore.acquire();

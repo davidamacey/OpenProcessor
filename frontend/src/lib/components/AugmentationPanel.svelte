@@ -23,11 +23,9 @@
   // (OpenProcessor df01309) — the trainer's own catalog
   // (`docker/trainer/augment.py` builds its `PRESETS` from the same
   // ids), so the picker can never offer an id the trainer will reject.
-  // `null` while loading; `presetsUnavailable` when the endpoint 404s
-  // (a pre-df01309 backend) — degrade to a read-only display of the
-  // current value rather than a hardcoded id list.
+  // `null` while loading; `presetsError` when the read failed.
   let presetsResponse = $state<AugmentationPresetsResponse | null>(null);
-  let presetsUnavailable = $state<boolean>(false);
+  let presetsError = $state<string | null>(null);
 
   $effect(() => {
     const ctrl = new AbortController();
@@ -37,15 +35,14 @@
       })
       .catch((e: unknown) => {
         if ((e as Error).name === 'AbortError') return;
-        presetsUnavailable = true;
+        presetsError = (e as Error)?.message ?? 'failed to load presets';
       });
     return () => ctrl.abort();
   });
 
-  // Fallback id used before the served list has loaded (or when it never
-  // does) — matches the trainer's own `DEFAULT_AUGMENTATION_PRESET`.
-  const FALLBACK_DEFAULT_PRESET = 'balanced_default';
-  const servedDefault = $derived(presetsResponse?.default ?? FALLBACK_DEFAULT_PRESET);
+  // Unset until the served list loads; a spec without `preset` gets the
+  // backend's own default.
+  const servedDefault = $derived(presetsResponse?.default);
   const selectedPresetOption = $derived(
     presetsResponse?.presets.find((p) => p.id === (value?.preset ?? servedDefault)) ??
       null,
@@ -177,7 +174,7 @@
       {#if !enabled}
         disabled
       {:else}
-        {spec.preset ?? 'balanced_default'} · ×{spec.multiplier ?? 1}
+        {spec.preset ?? servedDefault ?? 'default preset'} · ×{spec.multiplier ?? 1}
         {#if oversampleMode !== 'off'}· {oversampleMode} oversample{/if}
       {/if}
     </span>
@@ -222,15 +219,9 @@
                   {/if}
                 </p>
               {/if}
-            {:else if presetsUnavailable}
-              <div
-                class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-300"
-              >
-                {spec.preset ?? servedDefault}
-              </div>
-              <p class="mt-1 text-[11px] text-zinc-500">
-                Preset list unavailable (backend doesn't serve
-                `train/augmentation_presets` yet) — showing the current value read-only.
+            {:else if presetsError}
+              <p class="text-[11px] text-red-300">
+                Could not load presets: {presetsError}
               </p>
             {:else}
               <p class="text-[11px] text-zinc-500">Loading presets…</p>

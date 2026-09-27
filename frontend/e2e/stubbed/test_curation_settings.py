@@ -3,8 +3,8 @@ docs/design/test-audit-2026-09-24.md recommendation 5 / P1-1).
 
 Four passes against `/settings`:
 
-  Pass 1 — the settings endpoint 404s (backend predates the feature). No
-           controls at all.
+  Pass 1 — the settings endpoint fails. The error and a Retry button
+           render; no controls at all.
   Pass 2 — today's real /methods shape (no assist axes). The two real
            controls render, and a save round-trip is observed verbatim.
   Pass 3 — /methods advertises the two advisory axes too. They render
@@ -59,10 +59,10 @@ def register(stub, methods_body, settings_get_status, settings_get_body, put_res
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
     stub.on("GET", r"/methods(\?|$)", methods_body)
     # G10 "Curation scores" card: this suite doesn't exercise it (see
-    # test_scores_card.py), so a plain 404 keeps it absent and out of the
-    # way of every assertion here — same "backend predates the feature"
-    # path the card itself degrades to.
-    stub.on("GET", r"/scores/coverage(\?|$)", (404, {"detail": "not found"}))
+    # test_scores_card.py); an empty coverage map and an idle job keep it
+    # out of the way of every assertion here.
+    stub.on("GET", r"/scores/coverage(\?|$)", {"coverage": {}})
+    stub.on("GET", r"/scores/status(\?|$)", {"status": "idle"})
 
     def settings_get(_request, _match):
         if settings_get_status != 200:
@@ -81,12 +81,12 @@ def register(stub, methods_body, settings_get_status, settings_get_body, put_res
 
 def test_curation_settings(stub, page, app_url):
     # ================================================================
-    # Pass 1 — feature absent (404).
+    # Pass 1 — the settings read fails.
     # ================================================================
-    register(stub, METHODS_TODAY, 404, None)
+    register(stub, METHODS_TODAY, 500, None)
 
-    page.goto(f"{app_url}/settings")
-    page.get_by_text(re.compile(r"does not support shared curation defaults")).first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.goto(f"{app_url}/p/default/settings")
+    page.get_by_role("button", name="Retry").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 
     assert not [c for c in stub.console_errors if c.startswith("pageerror")], "page should render with no pageerror"
@@ -99,7 +99,7 @@ def test_curation_settings(stub, page, app_url):
     stub.console_errors.clear()
     put_calls = register(stub, METHODS_TODAY, 200, SETTINGS_EMPTY, put_response=SETTINGS_MERGED)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Clustering method").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 
@@ -144,7 +144,7 @@ def test_curation_settings(stub, page, app_url):
     stub.console_errors.clear()
     register(stub, METHODS_WITH_ASSIST_AXES, 200, SETTINGS_EMPTY)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Set by the backend's startup config").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 
@@ -164,7 +164,7 @@ def test_curation_settings(stub, page, app_url):
     stub.console_errors.clear()
     register(stub, METHODS_TODAY, 200, SETTINGS_EMPTY, put_response=SETTINGS_422, put_status=422)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Clustering method").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_timeout(200)
 

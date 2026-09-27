@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  FALLBACK_METHODS,
+  EMPTY_METHODS,
   hasFieldCoverage,
   isDatasetExportAvailable,
   isDiverseOverlayAvailable,
@@ -477,8 +477,8 @@ describe('isDiverseOverlayAvailable', () => {
     ).toBe(true);
   });
 
-  it('never throws on FALLBACK_METHODS.overlays (empty today)', () => {
-    expect(isDiverseOverlayAvailable(FALLBACK_METHODS.overlays)).toBe(false);
+  it('never throws on EMPTY_METHODS.overlays (empty today)', () => {
+    expect(isDiverseOverlayAvailable(EMPTY_METHODS.overlays)).toBe(false);
   });
 });
 
@@ -538,8 +538,8 @@ describe('isEmbeddingVizAvailable', () => {
     ).toBe(true);
   });
 
-  it('never throws on FALLBACK_METHODS.overlays (empty today)', () => {
-    expect(isEmbeddingVizAvailable(FALLBACK_METHODS.overlays)).toBe(false);
+  it('never throws on EMPTY_METHODS.overlays (empty today)', () => {
+    expect(isEmbeddingVizAvailable(EMPTY_METHODS.overlays)).toBe(false);
   });
 });
 
@@ -594,8 +594,8 @@ describe('isSemanticSearchAvailable', () => {
     ).toBe(true);
   });
 
-  it('never throws on FALLBACK_METHODS.overlays (empty today — no semantic_search entry)', () => {
-    expect(isSemanticSearchAvailable(FALLBACK_METHODS.overlays)).toBe(false);
+  it('never throws on EMPTY_METHODS.overlays (empty today — no semantic_search entry)', () => {
+    expect(isSemanticSearchAvailable(EMPTY_METHODS.overlays)).toBe(false);
   });
 });
 
@@ -656,10 +656,10 @@ describe('isDatasetExportAvailable', () => {
     expect(isDatasetExportAvailable(exports, 'coco')).toBe(false);
   });
 
-  it('never throws on FALLBACK_METHODS.dataset_exports (empty today)', () => {
-    expect(
-      isDatasetExportAvailable(FALLBACK_METHODS.dataset_exports, 'single_class'),
-    ).toBe(false);
+  it('never throws on EMPTY_METHODS.dataset_exports (empty today)', () => {
+    expect(isDatasetExportAvailable(EMPTY_METHODS.dataset_exports, 'single_class')).toBe(
+      false,
+    );
   });
 });
 
@@ -722,8 +722,8 @@ describe('isEmbeddingVizBannerRequired', () => {
     ).toBe(true);
   });
 
-  it('never throws on FALLBACK_METHODS.overlays (empty today)', () => {
-    expect(isEmbeddingVizBannerRequired(FALLBACK_METHODS.overlays)).toBe(false);
+  it('never throws on EMPTY_METHODS.overlays (empty today)', () => {
+    expect(isEmbeddingVizBannerRequired(EMPTY_METHODS.overlays)).toBe(false);
   });
 });
 
@@ -751,7 +751,7 @@ describe('hasFieldCoverage', () => {
     expect(hasFieldCoverage({ field_coverage: null })).toBe(true);
   });
 
-  it('is true when coverage is undefined/absent (pre-Phase-6 backend, or the FALLBACK_METHODS/synthetic sentinel path)', () => {
+  it('is true when coverage is undefined/absent (the synthetic sentinel path)', () => {
     expect(hasFieldCoverage({})).toBe(true);
     expect(hasFieldCoverage({ field_coverage: undefined })).toBe(true);
   });
@@ -832,52 +832,10 @@ describe('sort dropdown filtering (mirrors StrategyBar.svelte sortOptions)', () 
   });
 });
 
-describe('FALLBACK_METHODS', () => {
-  it('is a stable-only list matching what is actually implemented today', () => {
-    expect(FALLBACK_METHODS.cluster_methods).toEqual([
-      {
-        id: 'ivf',
-        label: 'FAISS IVF-512 (production)',
-        status: 'stable',
-        default: true,
-      },
-    ]);
-    expect(FALLBACK_METHODS.review_sorts).toEqual([
-      {
-        id: 'default',
-        label: 'Recent first',
-        status: 'stable',
-        default: true,
-        field_coverage: null,
-      },
-    ]);
-    expect(FALLBACK_METHODS.overlays).toEqual([]);
-    expect(FALLBACK_METHODS.scores).toEqual([]);
-    expect(FALLBACK_METHODS.dataset_exports).toEqual([]);
-    expect(FALLBACK_METHODS.detection_profiles).toEqual([]);
-    expect(FALLBACK_METHODS.prompt_packs).toEqual([]);
+describe('EMPTY_METHODS', () => {
+  it('advertises nothing on any axis', () => {
+    for (const list of Object.values(EMPTY_METHODS)) expect(list).toEqual([]);
   });
-
-  it('never contains an experimental/shadow/disabled entry', () => {
-    const all = [
-      ...FALLBACK_METHODS.cluster_methods,
-      ...FALLBACK_METHODS.review_sorts,
-      ...FALLBACK_METHODS.overlays,
-      ...FALLBACK_METHODS.scores,
-      ...FALLBACK_METHODS.dataset_exports,
-      ...FALLBACK_METHODS.detection_profiles,
-      ...FALLBACK_METHODS.prompt_packs,
-    ];
-    expect(all.every((m) => m.status === 'stable')).toBe(true);
-  });
-
-  // FALLBACK_METHODS is the already-parsed *output* shape (four buckets),
-  // not a valid raw {API_PREFIX}/methods *input* (the real wire format is a flat
-  // `strategies` array with an `axis` field per entry — see the header
-  // comment on parseMethodsResponse's describe block above). It is
-  // never fed back through the parser in real usage (api.ts's getMethods
-  // returns it directly on a fetch failure), so there is no round-trip
-  // invariant to assert here anymore.
 });
 
 describe('selectableAxisEntries', () => {
@@ -958,8 +916,8 @@ describe('isPromptPackAvailable', () => {
     ).toBe(true);
   });
 
-  it('is false for FALLBACK_METHODS.prompt_packs', () => {
-    expect(isPromptPackAvailable(FALLBACK_METHODS.prompt_packs)).toBe(false);
+  it('is false for EMPTY_METHODS.prompt_packs', () => {
+    expect(isPromptPackAvailable(EMPTY_METHODS.prompt_packs)).toBe(false);
   });
 });
 
@@ -971,8 +929,8 @@ describe('isPromptPackAvailable', () => {
  * is the regression guard for the whole feature.
  */
 describe('isScopedAssistAvailable', () => {
-  it('is false for FALLBACK_METHODS (the /methods-404 path)', () => {
-    expect(isScopedAssistAvailable(FALLBACK_METHODS)).toBe(false);
+  it('is false for EMPTY_METHODS (the /methods-404 path)', () => {
+    expect(isScopedAssistAvailable(EMPTY_METHODS)).toBe(false);
   });
 
   it("is false for today's real backend shape (METHODS_TODAY) — must degrade to fully invisible", () => {

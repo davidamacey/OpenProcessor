@@ -34,9 +34,15 @@ const srcRoot = path.resolve(here, '..', '..');
 const SCANNED_FILES = [
   'lib/api.ts',
   'lib/sse.ts',
-  'routes/export/+page.svelte',
+  'routes/p/[project]/export/+page.svelte',
   'lib/components/SlotCard.svelte',
 ] as const;
+
+/** Every file that composes a backend URL through `${globalApi()}` — the
+ *  small set of routes P1 keeps global (never project-scoped): the
+ *  project list itself, and the global health/events used before a
+ *  project is even selected. */
+const GLOBAL_SCANNED_FILES = ['lib/api.ts', 'lib/sse.ts'] as const;
 
 function read(rel: string): string {
   return readFileSync(path.join(srcRoot, rel), 'utf-8');
@@ -148,8 +154,9 @@ const PENDING_BACKEND: Array<{ path: string; method: string }> = [
   { path: '/keymap/reset', method: 'POST' },
   // W8 multi-box regions (feat/w8-multibox-lockstep, docs/design/
   // w8-multibox-frontend-plan-2026-09-26.md): new in the backend's W8
-  // wave, not yet in the vendored OpenAPI snapshot. Remove at the
-  // lockstep merge once `npm run contract:sync` picks them up.
+  // wave, not yet in the vendored OpenAPI snapshot (cutover/projects-
+  // lifecycle 29807534 has no W8). Delete these four entries when backend
+  // W8 rebases onto projects and `npm run contract:sync` picks them up.
   { path: '/crops/*/regions', method: 'PUT' },
   { path: '/crops/batch_regions', method: 'PUT' },
   { path: '/crops/*/regions/*', method: 'PATCH' },
@@ -168,10 +175,16 @@ interface ResolvedCall {
   raw: string;
 }
 
-function resolveCalls(file: (typeof SCANNED_FILES)[number]): ResolvedCall[] {
+function resolveCalls(
+  file: (typeof SCANNED_FILES)[number],
+  marker: string = '${scoped()}',
+): ResolvedCall[] {
   const src = read(file);
-  const sites: ApiCallSite[] = scanApiCallSites(src);
-  const overridesForFile = MANUAL_OVERRIDES.filter((o) => o.file === file);
+  const sites: ApiCallSite[] = scanApiCallSites(src, marker);
+  // Every MANUAL_OVERRIDES marker anchors a ${scoped()} call site — none
+  // apply to the ${globalApi()} scan.
+  const overridesForFile =
+    marker === '${scoped()}' ? MANUAL_OVERRIDES.filter((o) => o.file === file) : [];
 
   // marker -> the index of the nearest scanned site after it.
   const overrideSiteIndex = new Map<number, (typeof overridesForFile)[number]>();
@@ -232,6 +245,32 @@ describe('endpoint catalog: completeness', () => {
     );
     expect(unscanned).toEqual([]);
   });
+
+  it('no other src/ file references ${globalApi()} outside GLOBAL_SCANNED_FILES', () => {
+    let out = '';
+    try {
+      out = execFileSync(
+        'grep',
+        ['-rl', '--include=*.ts', '--include=*.svelte', '${globalApi()}', srcRoot],
+        { encoding: 'utf-8' },
+      );
+    } catch (e) {
+      // grep exits 1 when there are no matches at all — not an error here.
+      if ((e as { status?: number }).status !== 1) throw e;
+    }
+    const hits = out
+      .split('\n')
+      .filter(Boolean)
+      .map((p) => path.relative(srcRoot, p))
+      .filter(
+        (p) => !p.endsWith('.test.ts') && !p.startsWith(path.join('lib', 'contract')),
+      );
+    const scannedSet = new Set<string>(GLOBAL_SCANNED_FILES);
+    const unscanned = hits.filter(
+      (p) => !scannedSet.has(p as (typeof GLOBAL_SCANNED_FILES)[number]),
+    );
+    expect(unscanned).toEqual([]);
+  });
 });
 
 // -- OpenAPI lookup -----------------------------------------------------
@@ -242,11 +281,14 @@ interface OpenApiDoc {
 const doc = openapi as unknown as OpenApiDoc;
 
 /** OpenAPI paths are absolute under the backend's own prefix
- *  (`/curation/...`, the default `OP_API_PREFIX`). The frontend composes
- *  `${scoped()}/...` where `scoped()` returns `API_PREFIX` by default —
- *  mapping `${scoped()}` -> `/curation` is exactly that default-prefix
- *  identification, matching this project's plan instructions. */
+ *  (`/curation/...`, the default `OP_API_PREFIX`). P1 projects cutover:
+ *  every SCOPED route additionally lives under `/projects/{project}`
+ *  (`GLOBAL_ROUTES` below is the fixed, explicit list of what stays
+ *  global) — `${scoped()}/foo` resolves against
+ *  `/curation/projects/{project}/foo`, `${globalApi()}/foo` against
+ *  `/curation/foo` directly. */
 const OPENAPI_PREFIX = '/curation';
+const SCOPED_OPENAPI_PREFIX = '/curation/projects/*';
 
 function normalizeSegments(p: string): string[] {
   return p
@@ -263,11 +305,16 @@ interface OpenApiOperation {
   params: Set<string>;
 }
 
-function findOperation(frontendPath: string, method: string): OpenApiOperation | null {
-  const wanted = normalizeSegments(frontendPath);
+function findOperation(
+  frontendPath: string,
+  method: string,
+  scope: 'scoped' | 'global' = 'scoped',
+): OpenApiOperation | null {
+  const prefix = scope === 'scoped' ? SCOPED_OPENAPI_PREFIX : OPENAPI_PREFIX;
+  const wanted = normalizeSegments(`${prefix}${frontendPath}`);
   for (const [openApiPath, methods] of Object.entries(doc.paths)) {
     if (!openApiPath.startsWith(OPENAPI_PREFIX)) continue;
-    const opSegs = normalizeSegments(openApiPath.slice(OPENAPI_PREFIX.length));
+    const opSegs = normalizeSegments(openApiPath);
     if (opSegs.length !== wanted.length) continue;
     const matches = opSegs.every(
       (seg, i) => seg === '*' || wanted[i] === '*' || seg === wanted[i],
@@ -286,45 +333,57 @@ function findOperation(frontendPath: string, method: string): OpenApiOperation |
   return null;
 }
 
-describe('endpoint catalog: every call resolves to a real OpenAPI operation', () => {
-  for (const file of SCANNED_FILES) {
-    const calls = resolveCalls(file);
-    describe(file, () => {
-      it('found at least one call site', () => {
-        expect(calls.length).toBeGreaterThan(0);
+function describeCalls(
+  file: string,
+  calls: ResolvedCall[],
+  scope: 'scoped' | 'global',
+): void {
+  describe(file, () => {
+    it('found at least one call site', () => {
+      expect(calls.length).toBeGreaterThan(0);
+    });
+
+    for (const call of calls) {
+      const label = `${call.method} ${call.path}`;
+      const pending = isPendingBackend(call.path, call.method);
+      it(`${label} exists in the OpenAPI contract${pending ? ' (skipped: pending backend)' : ''}`, (ctx) => {
+        if (pending) {
+          ctx.skip();
+          return;
+        }
+        const op = findOperation(call.path, call.method, scope);
+        expect(
+          op,
+          `no OpenAPI operation matches ${label} (raw: ${call.raw})`,
+        ).not.toBeNull();
       });
 
-      for (const call of calls) {
-        const label = `${call.method} ${call.path}`;
-        const pending = isPendingBackend(call.path, call.method);
-        it(`${label} exists in the OpenAPI contract${pending ? ' (skipped: pending backend)' : ''}`, (ctx) => {
-          if (pending) {
-            ctx.skip();
-            return;
-          }
-          const op = findOperation(call.path, call.method);
-          expect(
-            op,
-            `no OpenAPI operation matches ${label} (raw: ${call.raw})`,
-          ).not.toBeNull();
-        });
+      it(`${label} — every sent query key is a declared OpenAPI parameter`, () => {
+        if (call.queryParams == null) {
+          // Untyped passthrough (e.g. a bare `Record<string, unknown>`
+          // filter object) the scanner correctly declines to guess at.
+          // Path+method is still checked above.
+          return;
+        }
+        const op = findOperation(call.path, call.method, scope);
+        if (!op) return; // already failed the existence assertion above
+        const undeclared = call.queryParams.filter((k) => !op.params.has(k));
+        expect(undeclared, `${label} sends undeclared params (raw: ${call.raw})`).toEqual(
+          [],
+        );
+      });
+    }
+  });
+}
 
-        it(`${label} — every sent query key is a declared OpenAPI parameter`, () => {
-          if (call.queryParams == null) {
-            // Untyped passthrough (e.g. a bare `Record<string, unknown>`
-            // filter object) the scanner correctly declines to guess at.
-            // Path+method is still checked above.
-            return;
-          }
-          const op = findOperation(call.path, call.method);
-          if (!op) return; // already failed the existence assertion above
-          const undeclared = call.queryParams.filter((k) => !op.params.has(k));
-          expect(
-            undeclared,
-            `${label} sends undeclared params (raw: ${call.raw})`,
-          ).toEqual([]);
-        });
-      }
-    });
+describe('endpoint catalog: every call resolves to a real OpenAPI operation', () => {
+  for (const file of SCANNED_FILES) {
+    describeCalls(file, resolveCalls(file), 'scoped');
+  }
+});
+
+describe('endpoint catalog: every GLOBAL call resolves to a real OpenAPI operation', () => {
+  for (const file of GLOBAL_SCANNED_FILES) {
+    describeCalls(file, resolveCalls(file, '${globalApi()}'), 'global');
   }
 });

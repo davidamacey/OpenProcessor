@@ -34,18 +34,15 @@ export type UnloadButtonState = 'hidden' | 'normal' | 'force-required';
  * - `normal`: rendered, single confirmation, `force=false`.
  *
  * `unloadable` is checked FIRST and is the server's own verdict — never
- * re-derived from `kind`. A backend that predates the field (`unloadable`
- * absent/`undefined`) falls back to the prior `kind !== 'triton'` rule,
- * so an older deployment renders exactly as before.
+ * re-derived from `kind`.
  */
 export function unloadButtonState(
   model: Pick<
     ModelInfo,
-    'kind' | 'is_region_protected' | 'requires_force_to_unload' | 'unloadable'
+    'is_region_protected' | 'requires_force_to_unload' | 'unloadable'
   >,
 ): UnloadButtonState {
-  if (model.unloadable === false) return 'hidden';
-  if (model.unloadable === undefined && model.kind !== 'triton') return 'hidden';
+  if (!model.unloadable) return 'hidden';
   if (model.is_region_protected) return 'hidden';
   if (model.requires_force_to_unload) return 'force-required';
   return 'normal';
@@ -58,7 +55,7 @@ export function unloadButtonState(
 export function showsProtectedChip(
   model: Pick<ModelInfo, 'is_region_protected' | 'unloadable'>,
 ): boolean {
-  return !!model.is_region_protected && model.unloadable !== false;
+  return !!model.is_region_protected && model.unloadable;
 }
 
 export function unloadConfirmMessage(

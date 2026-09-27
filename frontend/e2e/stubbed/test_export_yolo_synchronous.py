@@ -24,11 +24,12 @@ from conftest import ACTION_TIMEOUT_MS
 
 CLASSES = [
     {
-        "id": 44,
-        "name": "mustang",
+        "class_id": 44,
+        "class_name": "mustang",
+        "kind": "item",
         "group": "car",
         "hotkey_letter": "m",
-        "count": 161,
+        "sample_count": 161,
         "validated_count": 34,
         "cluster_size": 161,
         "deprecated": False,
@@ -45,6 +46,8 @@ STATS_CLASSES = {
             "adequacy": "warn",
             "aug_target": 500,
             "aug_gap": 466,
+            "trainable": 29,
+            "trainable_gap": 0,
         },
     ],
     "thresholds": {"block_below": 0, "warn_below": 5, "min_test": 5},
@@ -114,7 +117,7 @@ def test_export_completes_without_polling_and_refreshes_registry_buttons(stub, p
 
     stub.on("POST", r"/export/yolo$", export_yolo_handler)
 
-    page.goto(f"{app_url}/export")
+    page.goto(f"{app_url}/p/default/export")
     page.get_by_text("No frozen multi-class export yet").wait_for(timeout=ACTION_TIMEOUT_MS)
 
     export_button = page.get_by_role("button", name="Export", exact=True)

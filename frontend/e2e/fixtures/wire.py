@@ -48,6 +48,8 @@ REGION_PROFILE: dict[str, Any] = {
     "display_name_singular": "Widget tag",
     "region_class_name": "widget_tag",
     "text_reader": "ocr",
+    "reads_text": True,
+    "text_hint_enabled": False,
 }
 # What the app derives from it: the bound class, the region tab's `?tab=`
 # id (the backend's own `regions` tab id) and its label (the served
@@ -56,6 +58,91 @@ REGION_CLASS = REGION_PROFILE["region_class_name"]
 REGION_TAB_URL_ID = "regions"
 REGION_TAB_LABEL = REGION_PROFILE["display_name"]
 REGION_SINGULAR_LABEL = REGION_PROFILE["display_name_singular"]
+
+# P1 projects cutover (docs/design/
+# any-domain-rev3-and-projects-contract-review-2026-09-26.md): the
+# GLOBAL `GET {api_prefix}/projects` response every test's root-layout
+# bootstrap reads before anything scoped fires. Every scoped call in the
+# app is then built from this project's own served `prefix` — never
+# assembled client-side — so a stubbed test never has to know the
+# `/projects/{slug}` shape itself beyond this fixture.
+DEFAULT_PROJECT_SLUG = "default"
+
+
+def project(api_prefix: str, slug: str, **over: Any) -> dict[str, Any]:
+    """One served `ProjectSummary`, `prefix` built the way the server builds
+    it. Every non-slug value is overridable (status, writable, selectable,
+    deletable, revision, ...)."""
+    out: dict[str, Any] = {
+        "slug": slug,
+        "display_name": slug.capitalize(),
+        "description": "",
+        "prefix": f"{api_prefix}/projects/{slug}",
+        "status": "active",
+        "writable": True,
+        "selectable": True,
+        "is_default": False,
+        "deletable": True,
+        "revision": 1,
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "counts": {"images": 0, "items": 0, "validated": 0},
+        "origin": None,
+    }
+    out.update(over)
+    return out
+
+
+def default_project(api_prefix: str) -> dict[str, Any]:
+    return project(api_prefix, DEFAULT_PROJECT_SLUG, is_default=True, deletable=False)
+
+
+PROJECT_STATUS_LABELS = {
+    "active": "Active",
+    "archived": "Archived",
+    "building": "Building",
+    "failed": "Failed",
+    "deleting": "Deleting",
+    "deleted": "Deleted",
+}
+
+
+def projects_response(
+    api_prefix: str,
+    projects: list[dict[str, Any]] | None = None,
+    capacity_status: str = "ok",
+) -> dict[str, Any]:
+    return {
+        "default_slug": DEFAULT_PROJECT_SLUG,
+        "projects": projects if projects is not None else [default_project(api_prefix)],
+        "capacity": {
+            "status": capacity_status,
+            "active_shards": 6,
+            "per_project_shards": 6,
+            "soft_limit": 40,
+            "hard_limit": 1000,
+            "heap_max_bytes": 2147483648,
+            "max_shards_per_node": 1000,
+            "data_nodes": 1,
+            "projects_until_soft_limit": 5,
+            "message": f"Served capacity message ({capacity_status}).",
+            "labels": {
+                "ok": "Room for more projects",
+                "warn": "Near the recommended shard budget",
+                "blocked": "No room for another project",
+            },
+        },
+        "limits": {
+            "slug_pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+            "slug_min": 2,
+            "slug_max": 32,
+            "reserved_slugs": ["all", "combine", "global", "health", "new", "none", "projects", "settings", "vlm"],
+            "retired_slugs": [],
+            "cloneable_axes": ["settings_defaults", "classes"],
+        },
+        "labels": {"status": PROJECT_STATUS_LABELS},
+        "include_archived": False,
+    }
 
 # Every non-default value below is distinct on purpose (same rationale as
 # makeItem.ts): a mapping bug that drops a field to a hardcoded default is
@@ -219,3 +306,36 @@ def make_item(**overrides: Any) -> dict[str, Any]:
     item = dict(DEFAULT_ITEM)
     item.update(overrides)
     return item
+
+
+# `GET {API_PREFIX}/review/tabs` (ReviewTabsResponse). Every filter-bar
+# param /review knows; a stubbed tab honours all of them unless a test
+# narrows `filters`.
+REVIEW_FILTER_PARAMS = [
+    "class_id",
+    "source",
+    "conf_min",
+    "conf_max",
+    "text",
+    "max_rank",
+    "min_blur_ratio",
+]
+REVIEW_EMPTY_STATE = {"has_probe_predictions": True, "has_item_scores": True}
+
+
+def review_tab(tab_id: str, label: str, **over: Any) -> dict[str, Any]:
+    """One served `ReviewTab`, every required field present."""
+    return {
+        "id": tab_id,
+        "label": label,
+        "description": "",
+        "filters": list(REVIEW_FILTER_PARAMS),
+        "filter_defaults": {},
+        "filter_specs": [],
+        **over,
+    }
+
+
+def review_tabs(*tabs: dict[str, Any], empty_state: dict[str, bool] | None = None) -> dict[str, Any]:
+    """A full `ReviewTabsResponse` body."""
+    return {"tabs": list(tabs), "empty_state": empty_state or dict(REVIEW_EMPTY_STATE)}

@@ -46,8 +46,8 @@
 
   let { scope, classes, disabled = false }: Props = $props();
 
-  // getMethods()/init() never throws (any failure degrades to
-  // FALLBACK_METHODS) and init() is idempotent — safe to call on every
+  // init() never throws (a failed load leaves EMPTY_METHODS) and is
+  // idempotent — safe to call on every
   // mount without a guard, exactly as StrategyBar does. Installs no
   // listener.
   $effect(() => {

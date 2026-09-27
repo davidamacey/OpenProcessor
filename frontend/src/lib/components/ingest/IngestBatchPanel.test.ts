@@ -10,6 +10,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import IngestBatchPanel from './IngestBatchPanel.svelte';
 import { ingestBatch } from '$lib/api';
 import { resolveIngestConfig } from '$lib/ingest/ingestConfig';
+import { servedIngestConfig } from '$lib/test/fixtures/ingestConfig';
 import type { BatchIngestResponse } from '$lib/types';
 
 vi.mock('$lib/api', async () => {
@@ -86,7 +87,7 @@ describe('IngestBatchPanel', () => {
       target,
       props: {
         config: {
-          ...resolveIngestConfig(null),
+          ...resolveIngestConfig(servedIngestConfig()),
           batchSourceRoots: ['/data/archive', '/data/incoming'],
         },
       },
@@ -101,7 +102,10 @@ describe('IngestBatchPanel', () => {
     instance = mount(IngestBatchPanel, {
       target,
       props: {
-        config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data/archive'] },
+        config: {
+          ...resolveIngestConfig(servedIngestConfig()),
+          batchSourceRoots: ['/data/archive'],
+        },
       },
     });
     flushSync();
@@ -135,7 +139,10 @@ describe('IngestBatchPanel', () => {
     instance = mount(IngestBatchPanel, {
       target,
       props: {
-        config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data/archive'] },
+        config: {
+          ...resolveIngestConfig(servedIngestConfig()),
+          batchSourceRoots: ['/data/archive'],
+        },
       },
     });
     flushSync();
@@ -158,7 +165,7 @@ describe('IngestBatchPanel', () => {
       target,
       props: {
         config: {
-          ...resolveIngestConfig(null),
+          ...resolveIngestConfig(servedIngestConfig()),
           batchSourceRoots: ['/data/archive'],
           batchMaxItems: 1,
         },
@@ -188,7 +195,10 @@ describe('IngestBatchPanel', () => {
     instance = mount(IngestBatchPanel, {
       target,
       props: {
-        config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data/archive'] },
+        config: {
+          ...resolveIngestConfig(servedIngestConfig()),
+          batchSourceRoots: ['/data/archive'],
+        },
       },
     });
     flushSync();
@@ -213,7 +223,10 @@ describe('IngestBatchPanel', () => {
     instance = mount(IngestBatchPanel, {
       target,
       props: {
-        config: { ...resolveIngestConfig(null), batchSourceRoots: ['/data/archive'] },
+        config: {
+          ...resolveIngestConfig(servedIngestConfig()),
+          batchSourceRoots: ['/data/archive'],
+        },
       },
     });
     flushSync();

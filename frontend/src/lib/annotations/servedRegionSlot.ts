@@ -175,24 +175,12 @@ const GENERIC_NOUN = 'Regions';
 /** Fallback singular title when the profile sets no `display_name_singular`. */
 const GENERIC_NOUN_SINGULAR = 'Region';
 
-/** Whether the served profile reads/stores region text at all
- *  (OpenProcessor W1, 2026-09-26). Prefers the served `reads_text` flag;
- *  a pre-W1 backend doesn't serve it, so falls back to the old signal —
- *  a non-empty `text_reader` that isn't the new text-free sentinel
- *  `'none'` (a pre-W1 backend never serves that value, so the `!==
- *  'none'` check is a no-op for it, kept only so this one function is
- *  correct against both eras without a caller needing to know which). */
-export function profileReadsText(p: ServedRegionProfile): boolean {
-  if (typeof p.reads_text === 'boolean') return p.reads_text;
-  return p.text_reader.trim().length > 0 && p.text_reader.trim() !== 'none';
-}
-
 export function regionSlotFromServedProfile(p: ServedRegionProfile): SlotSpec {
   const noun = p.display_name.trim() || GENERIC_NOUN;
   // A profile without a region class still gets its review tab; binding
   // falls back to the profile name so the slot is never keyless.
   const className = p.region_class_name.trim() || p.name;
-  const hasText = profileReadsText(p);
+  const hasText = p.reads_text;
   // `title` reads as a singular in the UI ("Confirm Region", "Region
   // score"); the served plural noun ("Widget tags") is wrong there, so it's
   // its own served field, falling back to the generic "Region" (#36 item 10).

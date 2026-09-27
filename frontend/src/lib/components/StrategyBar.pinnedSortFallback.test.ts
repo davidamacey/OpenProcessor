@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import StrategyBar from './StrategyBar.svelte';
 import { createStrategyBar } from '$lib/strategyBar.svelte';
-import { FALLBACK_METHODS } from '$lib/strategies';
+import { EMPTY_METHODS } from '$lib/strategies';
 import { strategiesStore } from '$stores/strategies.svelte';
 
 let target: HTMLDivElement;
@@ -28,12 +28,12 @@ afterEach(() => {
   }
   target?.remove();
   vi.unstubAllGlobals();
-  strategiesStore.methods = FALLBACK_METHODS;
+  strategiesStore.methods = EMPTY_METHODS;
 });
 
 function render(props: Record<string, unknown>) {
-  // strategiesStore.init() fires on mount; a rejected fetch degrades to
-  // FALLBACK_METHODS (documented "never throws" contract) rather than
+  // strategiesStore.init() fires on mount; a rejected fetch leaves
+  // EMPTY_METHODS (init() never throws) rather than
   // hanging the test on a real network call.
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('no network in test')));
   target = document.createElement('div');
@@ -45,7 +45,7 @@ function render(props: Record<string, unknown>) {
 
 function withZeroCoverageUncertainty(): void {
   strategiesStore.methods = {
-    ...FALLBACK_METHODS,
+    ...EMPTY_METHODS,
     review_sorts: [
       {
         id: 'uncertainty_entropy',
@@ -89,7 +89,7 @@ describe('StrategyBar — pinned-default-coverage chip', () => {
 
   it('shows no chip when the pinned default has real coverage', () => {
     strategiesStore.methods = {
-      ...FALLBACK_METHODS,
+      ...EMPTY_METHODS,
       review_sorts: [
         {
           id: 'representativeness',

@@ -18,11 +18,12 @@ from fixtures.wire import REGION_CLASS
 
 CLASSES = [
     {
-        "id": 1,
-        "name": REGION_CLASS,
+        "class_id": 1,
+        "class_name": REGION_CLASS,
+        "kind": "region",
         "group": "widgets",
         "hotkey_letter": "l",
-        "count": 40,
+        "sample_count": 40,
         "validated_count": 12,
         "cluster_size": 44,
         "deprecated": False,
@@ -132,7 +133,7 @@ def test_cluster_triage_uses_batch_box_state_with_per_box_targets(stub, page, ap
 
     stub.on("POST", r"/regions/batch_status(\?|$)", batch_status_handler)
 
-    page.goto(f"{app_url}/clusters?class={REGION_CLASS}")
+    page.goto(f"{app_url}/p/default/clusters?class={REGION_CLASS}")
 
     cluster_card = page.locator('button:has-text("#7")')
     cluster_card.wait_for(timeout=ACTION_TIMEOUT_MS)

@@ -7,6 +7,7 @@ import type {
 } from '$lib/types';
 import type { IngestFile } from './fileSource';
 import { resolveIngestConfig } from './ingestConfig';
+import { servedIngestConfig } from '$lib/test/fixtures/ingestConfig';
 import { createIngestRun, type IngestRunDeps } from './ingestRunController.svelte';
 
 function mkFile(id: string, size = 10): IngestFile {
@@ -56,7 +57,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-const config = resolveIngestConfig(null);
+const config = resolveIngestConfig(servedIngestConfig());
 
 function baseDeps(overrides: Partial<IngestRunDeps> = {}): IngestRunDeps {
   return {

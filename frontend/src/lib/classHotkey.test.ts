@@ -26,6 +26,10 @@ function cls(over: Partial<RegistryClass> & { id: number; name: string }): Regis
     added_at: '2026-01-01',
     hotkey_letter: null,
     deprecated: false,
+    adequacy: 'block',
+    kind: 'item',
+    trainable: 0,
+    trainable_gap: 0,
     ...over,
   };
 }

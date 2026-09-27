@@ -43,6 +43,7 @@ import { classesStore } from '$stores/classes.svelte';
 import { keymapStore } from '$stores/keymap.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import { undoStore } from '$stores/undo.svelte';
+import { SvelteSet } from 'svelte/reactivity';
 
 export interface ExclusionGuard {
   /** Wire straight into `cropPager`'s `accept` pager option. */
@@ -61,7 +62,7 @@ export interface ExclusionGuard {
  * `svelte-check` flags as a non-reactive `$state` update.
  */
 export function createExclusionGuard(): ExclusionGuard {
-  const ids = new Set<string>();
+  const ids = new SvelteSet<string>();
   return {
     accept: (crop) => !ids.has(crop.id),
     claim: (idsToClaim) => {
@@ -158,7 +159,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
         undoStore.recordWrites(res.updated_ids);
       }
       toastStore.success(`Labeled ${ids.length} crop${ids.length === 1 ? '' : 's'}.`);
-      sel.ids = new Set();
+      sel.ids = new SvelteSet();
       // Bug 4 (live smoke: header stayed "0 validated" after 34 crops
       // were labeled through this page, only updating on reload): the
       // header's validated/labeled/cluster-total chip reads
@@ -206,6 +207,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     // BEFORE the await, so the labeling feels real-time.
     const snap = cropPager.items;
     const snapTotal = cropPager.total;
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local lookup, built and consumed synchronously within this function, never stored in reactive state
     const droppedSet = new Set(ids);
     cropPager.items = cropPager.items.filter((c) => !droppedSet.has(c.id));
     cropPager.total = Math.max(0, cropPager.total - ids.length);
@@ -213,7 +215,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     // from the (already-corrected) pager instead of from whatever
     // snapshot the in-flight drag left behind.
     resetGrid();
-    sel.ids = new Set();
+    sel.ids = new SvelteSet();
     // Claim these ids before the await resolves — see excludedCropIds
     // above. A stale/concurrent fetch that lands between now and the
     // await settling must not be allowed to resurrect them.
@@ -322,10 +324,12 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     }
     // Shift+Enter is already a deliberate two-finger gesture and Z undoes
     // it, so no nag-confirm. Group by class id for bulk_label.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local lookup, built and consumed synchronously within this function, never stored in reactive state
     const groups = new Map<number, string[]>();
     // Prior crop per id so a failing group can be rolled back precisely —
     // a single try/catch around the whole loop left the failed group and
     // every later group locally green but never sent.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local lookup, built and consumed synchronously within this function, never stored in reactive state
     const priors = new Map<string, Crop>();
     // dq-queues cutover (2026-09-24): a suggestion accepted for a
     // DIFFERENT class than this cluster's own moves the crop into that
@@ -333,6 +337,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     // (exclusionGuard, same as dropOnClass/acceptVlmForCrop) instead of
     // an in-place field update that leaves a now-wrong-cluster crop
     // sitting in this grid.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local lookup, built and consumed synchronously within this function, never stored in reactive state
     const movingIds = new Set<string>();
     for (const t of targets) {
       const k = t.vlm_suggested_class_id!;
@@ -412,13 +417,14 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
       lastError = (e as Error).message;
       failedCount = ids.length;
     }
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local lookup, built and consumed synchronously within this function, never stored in reactive state
     const succeededSet = new Set(succeededIds);
     cropPager.items = cropPager.items.filter((c) => !succeededSet.has(c.id));
     exclusionGuard.claim(succeededIds);
     undoStore.recordWrites(succeededIds);
     // Keep whatever didn't succeed visible and selected so the operator
     // can retry.
-    sel.ids = new Set(ids.filter((id) => !succeededSet.has(id)));
+    sel.ids = new SvelteSet(ids.filter((id) => !succeededSet.has(id)));
     if (succeededIds.length > 0) {
       toastStore.success(
         `Discarded ${succeededIds.length}. Press ${keymapStore.glyph('cluster.undo')} to undo.`,
@@ -462,7 +468,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
       const res = await excludeCrops(ids, reason);
       cropPager.items = cropPager.items.filter((c) => !ids.includes(c.id));
       exclusionGuard.claim(ids);
-      sel.ids = new Set();
+      sel.ids = new SvelteSet();
       lastExcludedIds = ids;
       const tag = reason === 'ignore' ? '' : ` (${reason})`;
       toastStore.success(
@@ -504,7 +510,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     // Snapshot for revert: full crops list before mutation.
     const snap = cropPager.items;
     cropPager.items = cropPager.items.filter((c) => !ids.includes(c.id));
-    sel.ids = new Set();
+    sel.ids = new SvelteSet();
     rememberTarget(targetClusterId);
     // Claim these ids immediately — see excludedCropIds above. Without
     // this, a GET for this cluster that was already in flight (or gets

@@ -100,10 +100,10 @@ describe('AugmentationPanel — served preset list', () => {
     expect(target.textContent).toContain('horizontal flip disabled for this preset');
   });
 
-  it('degrades to a read-only current-value display when the endpoint 404s (old backend)', async () => {
+  it('shows the load error and no picker when the preset list fails to load', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ detail: 'not found' }, 404));
+      .mockResolvedValue(jsonResponse({ detail: 'presets unavailable' }, 422));
     vi.stubGlobal('fetch', fetchMock);
 
     mountPanel({
@@ -119,7 +119,7 @@ describe('AugmentationPanel — served preset list', () => {
     expandPanel();
 
     expect(target.querySelector('select')).toBeNull();
-    expect(target.textContent).toContain('outdoor_scene');
-    expect(target.textContent).toContain('Preset list unavailable');
+    expect(target.textContent).toContain('Could not load presets');
+    expect(target.textContent).toContain('presets unavailable');
   });
 });

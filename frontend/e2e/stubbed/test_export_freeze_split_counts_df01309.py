@@ -23,21 +23,23 @@ from conftest import ACTION_TIMEOUT_MS
 
 CLASSES = [
     {
-        "id": 1,
-        "name": "bmw",
+        "class_id": 1,
+        "class_name": "bmw",
+        "kind": "item",
         "group": "car",
         "hotkey_letter": "b",
-        "count": 300,
+        "sample_count": 300,
         "validated_count": 200,
         "cluster_size": 300,
         "deprecated": False,
     },
     {
-        "id": 2,
-        "name": "audi",
+        "class_id": 2,
+        "class_name": "audi",
+        "kind": "item",
         "group": "car",
         "hotkey_letter": "a",
-        "count": 100,
+        "sample_count": 100,
         "validated_count": 50,
         "cluster_size": 100,
         "deprecated": False,
@@ -46,8 +48,10 @@ CLASSES = [
 
 STATS_CLASSES = {
     "classes": [
-        {"class_id": 1, "class_name": "bmw", "count": 300, "validated_count": 200, "adequacy": "ok"},
-        {"class_id": 2, "class_name": "audi", "count": 100, "validated_count": 50, "adequacy": "warn"},
+        {"class_id": 1, "class_name": "bmw", "count": 300, "validated_count": 200, "adequacy": "ok",
+         "aug_target": 500, "aug_gap": 300, "trainable": 200, "trainable_gap": 0},
+        {"class_id": 2, "class_name": "audi", "count": 100, "validated_count": 50, "adequacy": "warn",
+         "aug_target": 500, "aug_gap": 450, "trainable": 50, "trainable_gap": 0},
     ],
     "thresholds": {"block_below": 0, "warn_below": 5, "min_test": 5},
 }
@@ -120,7 +124,7 @@ def test_export_status_renders_served_split_counts_and_highlights_zero_classes(
 ):
     register_export_mount(stub)
 
-    page.goto(f"{app_url}/export")
+    page.goto(f"{app_url}/p/default/export")
     page.get_by_text("620", exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     assert page.get_by_text("objects in", exact=False).count() > 0
@@ -156,7 +160,7 @@ def test_freeze_modal_has_no_seed_field_and_posts_percent_only(stub, page, app_u
 
     stub.on("POST", r"/test_holdout/freeze(\?|$)", freeze_handler)
 
-    page.goto(f"{app_url}/export")
+    page.goto(f"{app_url}/p/default/export")
     freeze_button = page.get_by_role("button", name="Freeze test set", exact=True)
     freeze_button.wait_for(timeout=ACTION_TIMEOUT_MS)
     freeze_button.click()
@@ -193,7 +197,7 @@ def test_require_fully_labeled_images_checkbox_sends_the_flag(stub, page, app_ur
 
     stub.on("POST", r"/export/yolo(\?|$)", export_handler)
 
-    page.goto(f"{app_url}/export")
+    page.goto(f"{app_url}/p/default/export")
     checkbox = page.get_by_text("Only images whose every object is labeled", exact=False)
     checkbox.wait_for(timeout=ACTION_TIMEOUT_MS)
     checkbox.click()
@@ -225,9 +229,11 @@ def test_export_shows_trainable_vs_held_out_and_classes_with_objects(stub, page,
         {
             "classes": [
                 {"class_id": 1, "class_name": "bmw", "count": 108, "validated_count": 35,
-                 "adequacy": "warn", "aug_target": 500, "aug_gap": 465},
+                 "adequacy": "warn", "aug_target": 500, "aug_gap": 465,
+                 "trainable": 30, "trainable_gap": 0},
                 {"class_id": 2, "class_name": "audi", "count": 10, "validated_count": 0,
-                 "adequacy": "block", "aug_target": 500, "aug_gap": 500},
+                 "adequacy": "block", "aug_target": 500, "aug_gap": 500,
+                 "trainable": 0, "trainable_gap": 20},
             ],
             "thresholds": {"block_below": 20, "warn_below": 500, "min_test": 5},
         },
@@ -247,12 +253,12 @@ def test_export_shows_trainable_vs_held_out_and_classes_with_objects(stub, page,
     stub.on("GET", r"/export/status(\?|$)", status)
     stub.on("GET", r"/export/datasets(\?|$)", {"datasets": []})
 
-    page.goto(f"{app_url}/export")
+    page.goto(f"{app_url}/p/default/export")
     bmw = page.locator("table tr", has_text="bmw").first
     bmw.wait_for(timeout=ACTION_TIMEOUT_MS)
     cells = [c.strip() for c in bmw.locator("td").all_inner_texts()]
     # Class, ID, Total, Validated, Trainable, Aug target, Gap, Test, Adequacy
-    assert cells[3:8] == ["35", "30", "500", "+470", "5"], cells
+    assert cells[3:8] == ["35", "30", "500", "0", "5"], cells
 
     chip = " ".join(page.locator('[data-testid="export-class-count"]').inner_text().split())
     assert chip == "1 classes with objects (2 in registry)", chip
@@ -281,9 +287,11 @@ def test_export_class_count_chip_prefers_served_classes_with_objects(
         {
             "classes": [
                 {"class_id": 1, "class_name": "bmw", "count": 108, "validated_count": 35,
-                 "adequacy": "warn", "aug_target": 500, "aug_gap": 465},
+                 "adequacy": "warn", "aug_target": 500, "aug_gap": 465,
+                 "trainable": 30, "trainable_gap": 0},
                 {"class_id": 2, "class_name": "audi", "count": 10, "validated_count": 0,
-                 "adequacy": "block", "aug_target": 500, "aug_gap": 500},
+                 "adequacy": "block", "aug_target": 500, "aug_gap": 500,
+                 "trainable": 0, "trainable_gap": 20},
             ],
             "thresholds": {"block_below": 20, "warn_below": 500, "min_test": 5},
         },
@@ -304,7 +312,7 @@ def test_export_class_count_chip_prefers_served_classes_with_objects(
     stub.on("GET", r"/export/status(\?|$)", status)
     stub.on("GET", r"/export/datasets(\?|$)", {"datasets": []})
 
-    page.goto(f"{app_url}/export")
+    page.goto(f"{app_url}/p/default/export")
     bmw = page.locator("table tr", has_text="bmw").first
     bmw.wait_for(timeout=ACTION_TIMEOUT_MS)
 
