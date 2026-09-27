@@ -132,3 +132,69 @@ def test_delete_finish_is_idempotent_after_crash_between_steps() -> None:
     # already-deleted record; it must be a no-op, not an error.
     second = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
     assert second.status == 'deleted'
+
+
+def test_delete_refuses_from_building_or_deleting(monkeypatch) -> None:
+    """m3: the plan's machine is active|archived|failed -> deleting. A
+    delete racing a create (still 'building') or a second delete
+    (already 'deleting') must be refused, not resurrect/re-flip it."""
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+    asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
+    asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
+    asyncio.run(registry.ensure_fresh())
+
+    from dataclasses import replace
+
+    from src.services.projects.registry import record_to_doc
+
+    alpha_record = registry.get('alpha')
+    assert alpha_record is not None
+    building = replace(alpha_record, status='building')
+    client.docs['project:alpha'] = record_to_doc(building)
+    client._seq['project:alpha'] = client._seq.get('project:alpha', 0) + 1
+    registry._by_slug['alpha'] = building  # _resolve_existing reads the in-memory snapshot
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    assert exc_info.value.detail['error'] == 'invalid_transition'
+
+
+def test_delete_finish_rolls_back_to_pre_delete_status_on_drain_timeout(monkeypatch) -> None:
+    """M3: a real drain wait that never clears rolls the record back to
+    whatever status delete found it in (here 'active'), not always
+    'failed' -- an active project whose delete timed out on drain is
+    still a perfectly usable active project."""
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+    asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
+    asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
+    asyncio.run(registry.ensure_fresh())
+
+    from src.services.projects import busy
+
+    # delete_project's own upfront busy check must pass clean; the
+    # simulated inflight write appears only once we're already
+    # 'deleting' and into delete_project_finish's drain wait -- the
+    # exact race M3 exists to catch (a writer picked up between the
+    # check and the flip).
+    deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    assert deleting.status == 'deleting'
+    assert deleting.pre_delete_status == 'active'
+
+    monkeypatch.setattr(lifecycle, '_DELETE_DRAIN_TIMEOUT_SECONDS', 0.01)
+    monkeypatch.setattr(lifecycle, '_DELETE_DRAIN_POLL_SECONDS', 0.01)
+    monkeypatch.setattr(
+        busy,
+        '_detection_worker_inflight',
+        lambda record: [busy.JobRef(kind='detection_worker', job_id='still-busy')],  # noqa: ARG005
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+    assert exc_info.value.detail['error'] == 'project_busy'
+
+    asyncio.run(registry.ensure_fresh())
+    rolled_back = registry.get('alpha')
+    assert rolled_back is not None
+    assert rolled_back.status == 'active'

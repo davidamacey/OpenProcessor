@@ -17,10 +17,16 @@ import asyncio
 import shutil
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from src.config.project_context import bind_project
-from src.config.projects import DEFAULT_SLUG, ProjectRecord, is_valid_slug, resources_for_new
+from src.config.projects import (
+    DEFAULT_SLUG,
+    ProjectRecord,
+    ProjectStatus,
+    is_valid_slug,
+    resources_for_new,
+)
 from src.core.logging import get_logger
 from src.routers.curation._config_common_models import api_error
 from src.routers.curation._project_models import ARCHIVABLE_STATUSES, UNARCHIVABLE_STATUSES
@@ -504,13 +510,27 @@ async def _delete_dirs(record: ProjectRecord) -> None:
     _rm_dir_guarded(record.resources.autolabel_dir, record.resources.autolabel_dir.parent.parent)
 
 
-async def _wait_for_drain(record: ProjectRecord) -> bool:  # noqa: ARG001
-    """Best-effort drain wait (plan §4 step 3). P2 owns the authoritative
-    per-project ``runtime`` doc this reads; until it lands there is
-    nothing to poll, so this is a no-op success (nothing known to be
-    inflight)."""
-    await asyncio.sleep(0)
-    return True
+_DELETABLE_STATUSES = frozenset({'active', 'archived', 'failed'})
+
+
+async def _wait_for_drain(record: ProjectRecord) -> bool:
+    """Drain wait (plan §4 step 3, M3): poll the detection worker's
+    per-project inflight liveness (``busy._detection_worker_inflight``,
+    P2's real file-based liveness docs -- landed since the stale
+    docstring this replaces was written) until no host reports inflight
+    writes, or ``_DELETE_DRAIN_TIMEOUT_SECONDS`` elapses. The project was
+    already flipped to ``deleting`` before this runs, so the binder
+    refuses any *new* write for the duration; this only waits out
+    writers that were already inflight."""
+    from src.services.projects import busy
+
+    deadline = asyncio.get_event_loop().time() + _DELETE_DRAIN_TIMEOUT_SECONDS
+    while True:
+        if not busy._detection_worker_inflight(record):
+            return True
+        if asyncio.get_event_loop().time() >= deadline:
+            return False
+        await asyncio.sleep(_DELETE_DRAIN_POLL_SECONDS)
 
 
 async def delete_project(
@@ -535,6 +555,9 @@ async def delete_project(
             'The default project can be archived but not deleted.',
             project=slug,
         )
+    # m3: active|archived|failed -> deleting only; never re-flip a
+    # 'building' or already-'deleting' record.
+    _require_transition(record, 'delete', _DELETABLE_STATUSES)
     if confirm is None:
         raise api_error(422, 'confirm_mismatch', 'confirm is required for a real delete')
     if confirm != slug:
@@ -572,7 +595,9 @@ async def delete_project(
             )
 
     _, seq, term = await get_record_with_seq(client, slug)
-    deleting = replace(record, status='deleting', updated_at=_now())
+    deleting = replace(
+        record, status='deleting', pre_delete_status=record.status, updated_at=_now()
+    )
     await write_record(client, deleting, if_seq_no=seq, if_primary_term=term)
     await get_project_registry().ensure_fresh()
     return deleting
@@ -632,8 +657,15 @@ async def delete_project_finish(client: Any, *, slug: str) -> ProjectRecord:
 
     drained = await _wait_for_drain(record)
     if not drained:
+        # M3: roll back to the status delete found it in, not always 'failed'.
         _, seq, term = await get_record_with_seq(client, slug)
-        rolled_back = replace(record, status='failed', updated_at=_now())
+        fallback_status: ProjectStatus = 'failed'
+        rolled_back = replace(
+            record,
+            status=cast('ProjectStatus', record.pre_delete_status) or fallback_status,
+            pre_delete_status=None,
+            updated_at=_now(),
+        )
         await write_record(client, rolled_back, if_seq_no=seq, if_primary_term=term)
         await get_project_registry().ensure_fresh()
         raise api_error(

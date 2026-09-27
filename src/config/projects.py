@@ -96,6 +96,10 @@ class ProjectRecord:
     updated_at: str
     origin: dict | None
     resources: ProjectResources
+    # M3: the status a 'deleting' record should roll back to if the drain
+    # wait times out (the plan's machine, not the 'failed' the old no-op
+    # drain always wrote). None once terminal / not mid-delete.
+    pre_delete_status: str | None = None
 
 
 def _project_index_prefix() -> str:

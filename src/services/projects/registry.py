@@ -78,6 +78,7 @@ def record_to_doc(record: ProjectRecord) -> dict[str, Any]:
         'updated_at': record.updated_at,
         'origin': record.origin,
         'resources': _resources_to_dict(record.resources),
+        'pre_delete_status': record.pre_delete_status,
     }
 
 
@@ -92,6 +93,7 @@ def doc_to_record(doc: Mapping[str, Any]) -> ProjectRecord:
         updated_at=doc['updated_at'],
         origin=doc.get('origin'),
         resources=_resources_from_dict(doc['resources']),
+        pre_delete_status=doc.get('pre_delete_status'),
     )
 
 
