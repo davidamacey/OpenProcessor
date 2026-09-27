@@ -677,12 +677,11 @@ export interface ApiHealth {
   vlm?: { reachable: boolean; model?: string | null };
   registry?: { path?: string; exists?: boolean; mtime?: string | null };
   /** The backend's active region profile, or `null` when none is
-   *  configured (then every region route answers 409). Absent on a
-   *  backend older than OpenProcessor naming-w2, which the UI treats the
-   *  same as `null`. The only signal region features key on. */
-  region_profile?: ServedRegionProfile | null;
+   *  configured (then every region route answers 409). The only signal
+   *  region features key on. */
+  region_profile: ServedRegionProfile | null;
   /** The project this scoped health was read from. */
-  project?: string;
+  project: string;
 }
 
 /** `RegionProfileSummary` on `GET {API_PREFIX}/health` and
@@ -707,15 +706,13 @@ export interface ServedRegionProfile {
   text_reader: string;
   /** False for a text-free profile: no region text is read, stored or
    *  editable — `region_text*` stays null and a `region_meta` PATCH
-   *  carrying `region_text` 422s (OpenProcessor W1). Optional/undefined
-   *  on a pre-W1 backend; callers fall back to `text_reader` being
-   *  non-empty and not `'none'` (`profileReadsText()`,
-   *  `servedRegionSlot.ts`). */
-  reads_text?: boolean;
+   *  carrying `region_text` 422s (OpenProcessor W1). The one gate for the
+   *  region slot's text capability (`servedRegionSlot.ts`). */
+  reads_text: boolean;
   /** Whether the OCR text-hint re-pass (after a segmenter miss) is
-   *  enabled for this profile. Optional/undefined on a pre-W1 backend;
-   *  informational only today — no UI reads it yet (see CLAUDE.md). */
-  text_hint_enabled?: boolean;
+   *  enabled for this profile. Informational only today — no UI reads it
+   *  yet (see CLAUDE.md). */
+  text_hint_enabled: boolean;
 }
 
 // 'outliers' was retired from the UI in the 2026-09 tab consolidation

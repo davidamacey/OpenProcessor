@@ -114,7 +114,7 @@ class HealthStore {
     try {
       const sh = await getHealth(ctrl.signal);
       this.scopedHealth = sh;
-      regionProfileStore.observe(sh?.region_profile);
+      regionProfileStore.observe(sh.region_profile);
     } catch {
       // ignore — the global poll above already recorded chip state
     }

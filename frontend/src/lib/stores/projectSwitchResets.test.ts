@@ -28,6 +28,8 @@ const profile = (name: string) => ({
   display_name_singular: name,
   region_class_name: name,
   text_reader: '',
+  reads_text: false,
+  text_hint_enabled: false,
 });
 
 afterEach(() => {

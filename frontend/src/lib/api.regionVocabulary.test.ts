@@ -84,6 +84,8 @@ describe('getRegionVocabulary', () => {
         display_name_singular: 'Widget tag',
         region_class_name: 'widget_tag',
         text_reader: 'ocr',
+        reads_text: true,
+        text_hint_enabled: false,
       },
     };
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(payload));

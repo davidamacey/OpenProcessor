@@ -48,6 +48,8 @@ REGION_PROFILE: dict[str, Any] = {
     "display_name_singular": "Widget tag",
     "region_class_name": "widget_tag",
     "text_reader": "ocr",
+    "reads_text": True,
+    "text_hint_enabled": False,
 }
 # What the app derives from it: the bound class, the region tab's `?tab=`
 # id (the backend's own `regions` tab id) and its label (the served

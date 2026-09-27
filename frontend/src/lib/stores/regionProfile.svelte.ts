@@ -10,8 +10,7 @@
  *
  * Seeded once, before first render, by `loadRegionProfile()` from the
  * root layout's `load()`. Only a SUCCESSFUL read seeds: a served
- * `region_profile: null` (or a backend too old to serve the field) means
- * "not configured". A timeout or network error does not (F-78: a slow
+ * `region_profile: null` means "not configured". A timeout or network error does not (F-78: a slow
  * first `/health` used to seed "no profile", the next poll disagreed,
  * and a spurious "reload" toast fired while the region tab was missing).
  * Boot retries with a bounded backoff; if every try fails the store stays
@@ -40,20 +39,18 @@ export const REGION_PROFILE_RETRY_DELAYS_MS = [250, 750];
 export const REGION_PROFILE_CHANGED_NOTICE =
   "The backend's region profile changed — reload the page to apply it.";
 
-function normalize(
-  p: ServedRegionProfile | null | undefined,
-): ServedRegionProfile | null {
-  if (!p || typeof p !== 'object' || typeof p.name !== 'string' || !p.name) return null;
+/** The served profile's own fields (dropping anything else on the wire),
+ *  or `null` when none is configured. */
+function normalize(p: ServedRegionProfile | null): ServedRegionProfile | null {
+  if (!p) return null;
   return {
     name: p.name,
-    display_name: typeof p.display_name === 'string' ? p.display_name : '',
-    display_name_singular:
-      typeof p.display_name_singular === 'string' ? p.display_name_singular : '',
-    region_class_name: typeof p.region_class_name === 'string' ? p.region_class_name : '',
-    text_reader: typeof p.text_reader === 'string' ? p.text_reader : '',
-    reads_text: typeof p.reads_text === 'boolean' ? p.reads_text : undefined,
-    text_hint_enabled:
-      typeof p.text_hint_enabled === 'boolean' ? p.text_hint_enabled : undefined,
+    display_name: p.display_name,
+    display_name_singular: p.display_name_singular,
+    region_class_name: p.region_class_name,
+    text_reader: p.text_reader,
+    reads_text: p.reads_text,
+    text_hint_enabled: p.text_hint_enabled,
   };
 }
 
@@ -88,7 +85,7 @@ class RegionProfileStore {
   }
 
   /** Records the profile the UI is built from (a successful read). */
-  seed(p: ServedRegionProfile | null | undefined): void {
+  seed(p: ServedRegionProfile | null): void {
     this.profile = normalize(p);
     this.loaded = true;
     this.unknown = false;
@@ -105,7 +102,7 @@ class RegionProfileStore {
   /** A later successful reading (a `/health` poll, or a region route's
    *  409). Seeds the store when boot never got one; otherwise a reading
    *  that differs from the seeded one raises the reload notice once. */
-  observe(p: ServedRegionProfile | null | undefined): void {
+  observe(p: ServedRegionProfile | null): void {
     if (!this.loaded) {
       if (!this.unknown) return;
       this.seed(p);
@@ -187,7 +184,7 @@ export function loadRegionProfile(
       try {
         const h = await fetchHealth(AbortSignal.timeout(REGION_PROFILE_TIMEOUT_MS));
         if (gen !== loadGeneration) return null;
-        regionProfileStore.seed(normalize(h?.region_profile));
+        regionProfileStore.seed(normalize(h.region_profile));
         installServedRegionProfile(regionProfileStore.profile);
         break;
       } catch {

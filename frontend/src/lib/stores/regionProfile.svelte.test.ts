@@ -27,7 +27,7 @@ import {
 } from './regionProfile.svelte';
 
 function health(over: Partial<ApiHealth> = {}): ApiHealth {
-  return { status: 'ok', ...over };
+  return { status: 'ok', region_profile: null, project: 'default', ...over };
 }
 
 beforeEach(() => {
@@ -57,12 +57,6 @@ describe('loadRegionProfile', () => {
   it('region_profile: null means not configured and no slot', async () => {
     await loadRegionProfile(vi.fn().mockResolvedValue(health({ region_profile: null })));
     expect(regionProfileStore.loaded).toBe(true);
-    expect(regionProfileStore.configured).toBe(false);
-    expect(registeredSlots).toEqual([]);
-  });
-
-  it('a backend that predates the field counts as not configured', async () => {
-    await loadRegionProfile(vi.fn().mockResolvedValue(health()));
     expect(regionProfileStore.configured).toBe(false);
     expect(registeredSlots).toEqual([]);
   });
