@@ -102,6 +102,19 @@
         "title": "AcceptedModel",
         "type": "object"
       },
+      "ArchiveRequest": {
+        "properties": {
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision"
+        ],
+        "title": "ArchiveRequest",
+        "type": "object"
+      },
       "AugmentationPresetOption": {
         "description": "One selectable ``augmentation.preset``.",
         "properties": {
@@ -1462,6 +1475,39 @@
         "title": "ClassUpdateRequest",
         "type": "object"
       },
+      "CloneSettingsRequest": {
+        "description": "``POST {prefix}/clone_settings`` (P3).",
+        "properties": {
+          "axes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Axes"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "from": {
+            "title": "From",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "expected_revision"
+        ],
+        "title": "CloneSettingsRequest",
+        "type": "object"
+      },
       "CommonMetricBlock": {
         "description": "The same metrics restricted to the comparison's common_classes.",
         "properties": {
@@ -1820,6 +1866,55 @@
           "predictions_outside_scored_classes"
         ],
         "title": "Coverage",
+        "type": "object"
+      },
+      "CreateProjectRequest": {
+        "description": "``POST /projects`` (P3).",
+        "properties": {
+          "clone_axes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clone Axes"
+          },
+          "clone_settings_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clone Settings From"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "display_name"
+        ],
+        "title": "CreateProjectRequest",
         "type": "object"
       },
       "CropBatchLabelRequest": {
@@ -5466,6 +5561,42 @@
         "title": "NotCoveredClass",
         "type": "object"
       },
+      "PatchProjectRequest": {
+        "description": "``PATCH {prefix}`` (P3). The slug is immutable.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision"
+        ],
+        "title": "PatchProjectRequest",
+        "type": "object"
+      },
       "PerClassRow": {
         "properties": {
           "ap50": {
@@ -5941,6 +6072,26 @@
         "title": "ProjectLabels",
         "type": "object"
       },
+      "ProjectLifecycleResponse": {
+        "description": "Every project lifecycle mutation (create 201, PATCH, archive,\nunarchive, clone_settings; P3) answers this envelope, so the switcher\nadopts the returned summary without a re-read.",
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/ProjectSummary"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "ProjectLifecycleResponse",
+        "type": "object"
+      },
       "ProjectLimits": {
         "properties": {
           "cloneable_axes": {
@@ -6107,6 +6258,93 @@
         "title": "ProjectRecordResponse",
         "type": "object"
       },
+      "ProjectStatsCounts": {
+        "properties": {
+          "classes": {
+            "title": "Classes",
+            "type": "integer"
+          },
+          "holdout_items": {
+            "title": "Holdout Items",
+            "type": "integer"
+          },
+          "images": {
+            "title": "Images",
+            "type": "integer"
+          },
+          "items": {
+            "title": "Items",
+            "type": "integer"
+          },
+          "pending_detection": {
+            "title": "Pending Detection",
+            "type": "integer"
+          },
+          "promoted_models": {
+            "title": "Promoted Models",
+            "type": "integer"
+          },
+          "validated": {
+            "title": "Validated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "images",
+          "items",
+          "validated",
+          "pending_detection",
+          "holdout_items",
+          "classes",
+          "promoted_models"
+        ],
+        "title": "ProjectStatsCounts",
+        "type": "object"
+      },
+      "ProjectStatsResponse": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/ProjectStatsCounts"
+          },
+          "disk": {
+            "additionalProperties": true,
+            "title": "Disk",
+            "type": "object"
+          },
+          "indexes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Indexes",
+            "type": "array"
+          },
+          "jobs": {
+            "additionalProperties": true,
+            "title": "Jobs",
+            "type": "object"
+          },
+          "last_ingest_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Ingest At"
+          }
+        },
+        "required": [
+          "counts",
+          "indexes",
+          "disk",
+          "jobs"
+        ],
+        "title": "ProjectStatsResponse",
+        "type": "object"
+      },
       "ProjectSummary": {
         "properties": {
           "counts": {
@@ -6197,6 +6435,25 @@
           "counts"
         ],
         "title": "ProjectSummary",
+        "type": "object"
+      },
+      "ProjectWarning": {
+        "description": "A non-blocking note on a lifecycle response (e.g.\n``shard_budget_high``).",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ProjectWarning",
         "type": "object"
       },
       "ProjectsResponse": {
@@ -9146,9 +9403,126 @@
         "tags": [
           "Projects"
         ]
+      },
+      "post": {
+        "operationId": "create_project_curation_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectLifecycleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Project",
+        "tags": [
+          "Projects"
+        ]
       }
     },
     "/curation/projects/{project}": {
+      "delete": {
+        "description": "Dry run (200, writes nothing) or a guarded delete. A real delete\nanswers **202** with the ``deleting`` record (delta 10): the drain\nwait, index/dir removal and tombstone run in the background so this\nalways returns well under a proxy read timeout, regardless of how\nlong the drain takes. Follow ``project.deleted`` on the global\nstream, or poll ``GET /projects/{project}`` -> 404, to know when it\nfinished.",
+        "operationId": "delete_project_curation_projects__project__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dry_run",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Dry Run",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "confirm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Confirm"
+            }
+          },
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Force",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Delete Project Curation Projects  Project  Delete"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Project",
+        "tags": [
+          "Projects"
+        ]
+      },
       "get": {
         "operationId": "get_project_curation_projects__project__get",
         "parameters": [
@@ -9186,6 +9560,110 @@
           }
         },
         "summary": "Get Project",
+        "tags": [
+          "Projects"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_project_curation_projects__project__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectLifecycleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Project",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/curation/projects/{project}/archive": {
+      "post": {
+        "operationId": "archive_project_curation_projects__project__archive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectLifecycleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Archive Project",
         "tags": [
           "Projects"
         ]
@@ -10273,6 +10751,59 @@
         "summary": "Restore Class",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/clone_settings": {
+      "post": {
+        "operationId": "clone_settings_route_curation_projects__project__clone_settings_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloneSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectLifecycleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clone Settings Route",
+        "tags": [
+          "Projects"
         ]
       }
     },
@@ -17580,6 +18111,49 @@
         ]
       }
     },
+    "/curation/projects/{project}/stats": {
+      "get": {
+        "operationId": "get_project_stats_curation_projects__project__stats_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectStatsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Project Stats",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
     "/curation/projects/{project}/stats/classes": {
       "get": {
         "description": "Per-class total/validated breakdown.\n\nReturns both the raw ``by_class`` aggregation and a flattened ``classes``\narray (``{class_id, class_name, count, validated_count, trainable,\ntrainable_gap, adequacy, aug_target, aug_gap}``, plus the ``thresholds``\nbehind them) joined against the registry for the names. The labeler's\n``getStats()`` (Export + Home pages) consumes ``classes`` — the\naggregation alone has no class names, so without this join the Export\ndataset table renders empty.\n\n``trainable`` = validated minus frozen test-holdout minus human-excluded\ncrops — the frontend used to compute ``validated - holdout`` itself\nclient-side; this serves the real number (also excluding\n``class_excluded`` crops, which the client-side version didn't\naccount for) so every page agrees. ``trainable_gap`` is the shortfall\nagainst :func:`dataset_thresholds`'s per-class minimum, floored at 0.",
@@ -18779,6 +19353,59 @@
         "summary": "Training Cohorts",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/unarchive": {
+      "post": {
+        "operationId": "unarchive_project_curation_projects__project__unarchive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectLifecycleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unarchive Project",
+        "tags": [
+          "Projects"
         ]
       }
     },
