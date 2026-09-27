@@ -1756,7 +1756,7 @@ choose_cropwright_bind() {
         CROPWRIGHT_BIND=127.0.0.1
     elif [[ "$OP_BIND_ADDRESS" != 0.0.0.0 ]] && ! is_loopback_ipv4 "$OP_BIND_ADDRESS"; then
         CROPWRIGHT_BIND="$OP_BIND_ADDRESS"
-    elif [[ "$prev" == 0.0.0.0 || "$prev" == 127.0.0.1 ]] || { is_ipv4 "$prev" && [[ "$prev" == "$OP_BIND_ADDRESS" ]]; }; then
+    elif [[ -n "$prev" ]] && is_ipv4 "$prev"; then
         CROPWRIGHT_BIND="$prev"
     elif [[ "$OP_UNATTENDED" != 1 ]] && tty_usable; then
         prompt_line reply "Let other computers on your LAN open the Cropwright web UI? [Y/n]: " "--local-only"

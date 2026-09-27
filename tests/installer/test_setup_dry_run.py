@@ -605,6 +605,16 @@ def test_specific_bind_address_also_applies_to_cropwright(shimmed: Shimmed) -> N
     assert 'reachable from your LAN and has NO login' in result.stderr
 
 
+def test_rerun_without_bind_keeps_a_specific_cropwright_bind(shimmed: Shimmed) -> None:
+    first = configure(
+        shimmed, '--bind', '10.10.10.20', tiers='cropwright', OP_ALLOW_PUBLIC_BIND='1'
+    )
+    assert first.returncode == 0, first.stderr
+    again = configure(shimmed, tiers='cropwright')
+    assert again.returncode == 0, again.stderr
+    assert 'CROPWRIGHT_BIND_ADDRESS=10.10.10.20' in _cw_env(shimmed)
+
+
 def test_local_only_wins_over_a_specific_bind_for_cropwright(shimmed: Shimmed) -> None:
     result = configure(
         shimmed,
