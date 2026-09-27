@@ -1247,7 +1247,7 @@ def _sweep(
         leaks.extend(
             f'{tag}: event {event.get("type")} went to project {event.get("project")!r}'
             for event in route_events
-            if event.get('project') != slug
+            if event.get('project') != slug and key not in UNBOUND_BY_DESIGN
         )
 
         body = response.text
@@ -1334,7 +1334,8 @@ def test_every_scoped_route_stays_inside_the_bound_project(
 def test_lifecycle_mutations_really_write_the_seeded_registry(leak_env: LeakEnv) -> None:
     """M6: with op_projects seeded, PATCH/archive/unarchive/clone_settings
     reach a real write behind the real guard (previously 404
-    project_not_found -- the gap B1 slipped through)."""
+    project_not_found -- the gap B1 slipped through). M5: each also
+    publishes its project.* event on the global stream."""
     client = TestClient(leak_env.app, raise_server_exceptions=False)
 
     record = client.get(f'{SCOPED.format(project="beta")}').json()
@@ -1358,6 +1359,11 @@ def test_lifecycle_mutations_really_write_the_seeded_registry(leak_env: LeakEnv)
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()['project']['status'] == 'active'
+
+    published = [(e.get('type'), e.get('target'), e.get('project')) for e in leak_env.events]
+    assert ('project.updated', 'beta', None) in published
+    assert ('project.archived', 'beta', None) in published
+    assert ('project.unarchived', 'beta', None) in published
 
 
 def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakEnv) -> None:
@@ -1413,6 +1419,14 @@ def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakE
         )
         == before_alpha_docs
     )
+    # M5: create publishes its event synchronously in the request; the
+    # delete route's completion event (project.deleted) is published by
+    # its own fire-and-forget _finish() task, not by
+    # lifecycle.delete_project_finish directly (called above to avoid
+    # TestClient's portal cancelling the real background task) -- so it
+    # is not expected here. See test_delete_finish_publishes_project_deleted.
+    published = [(e.get('type'), e.get('target')) for e in leak_env.events]
+    assert ('project.created', 'gamma') in published
 
 
 def test_a_misrouted_mget_is_refused_before_it_reaches_opensearch(

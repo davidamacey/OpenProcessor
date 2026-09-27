@@ -56,6 +56,26 @@ global_router = APIRouter(
     },
 )
 
+# m11: a strong reference for delete's fire-and-forget finish task, so it
+# is never garbage-collected mid-run (a documented asyncio caveat) --
+# discarded automatically once the task completes.
+_BACKGROUND_DELETE_TASKS: set[asyncio.Task[None]] = set()
+
+
+def _publish_lifecycle_event(event_type: str, record: Any) -> None:
+    """M5 step 9: every project.* lifecycle event on the global stream
+    (never scoped -- these routes act *on* a project, not *within* one),
+    so any open Cropwright tab (not just the one that made the request)
+    learns about create/patch/archive/unarchive/delete."""
+    from src.services.curation.event_hub import publish_global_event
+
+    publish_global_event(
+        event_type,
+        target=record.slug,
+        status=record.status,
+        revision=record.revision,
+    )
+
 
 async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, ProjectCounts]:
     """One ``_cat/indices`` call covering every project's images/items
@@ -187,6 +207,7 @@ async def create_project(body: CreateProjectRequest) -> ProjectLifecycleResponse
         clone_settings_from=body.clone_settings_from,
         clone_axes=body.clone_axes,
     )
+    _publish_lifecycle_event('project.created', record)
     return await _summary_response(record, warnings)
 
 
@@ -203,6 +224,7 @@ async def patch_project(
         description=body.description,
         expected_revision=body.expected_revision,
     )
+    _publish_lifecycle_event('project.updated', record)
     return await _summary_response(record)
 
 
@@ -215,6 +237,7 @@ async def archive_project(
     record = await lifecycle.archive_project(
         client, slug=project, expected_revision=body.expected_revision
     )
+    _publish_lifecycle_event('project.archived', record)
     return await _summary_response(record)
 
 
@@ -227,6 +250,7 @@ async def unarchive_project(
     record = await lifecycle.unarchive_project(
         client, slug=project, expected_revision=body.expected_revision
     )
+    _publish_lifecycle_event('project.unarchived', record)
     return await _summary_response(record)
 
 
@@ -243,6 +267,7 @@ async def clone_settings_route(
         axes=body.axes,
         expected_revision=body.expected_revision,
     )
+    _publish_lifecycle_event('project.updated', record)
     return await _summary_response(record)
 
 
@@ -276,11 +301,22 @@ async def delete_project(
 
     async def _finish() -> None:
         try:
-            await lifecycle.delete_project_finish(client, slug=project)
+            finished = await lifecycle.delete_project_finish(client, slug=project)
         except Exception as exc:
             logger.error('project_delete_finish_failed', project=project, error=str(exc))
+        else:
+            # M5 step 9: the completion signal Cropwright polls for
+            # (docstring above; delta 10) -- published only once the
+            # tombstone write itself succeeded, never on a busy/failed
+            # retry (M3/M4 leave the record retryable with no event).
+            _publish_lifecycle_event('project.deleted', finished)
 
-    asyncio.create_task(_finish())  # noqa: RUF006 - fire-and-forget delete completion (delta 10)
+    # M11 (unstarted background task with no strong reference can be
+    # GC'd mid-run): held on the router module so it survives until it
+    # completes, and discarded from the set once done.
+    task = asyncio.create_task(_finish())
+    _BACKGROUND_DELETE_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_DELETE_TASKS.discard)
     response.status_code = 202
     return await _summary_response(record)
 
