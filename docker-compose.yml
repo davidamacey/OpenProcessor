@@ -578,7 +578,7 @@ services:
   # docker/trainer/mlflow_callbacks.py degrades to a warning when this is
   # unreachable, so a deployment that doesn't want it can leave it stopped.
   curation-mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.19.0
+    image: ${MLFLOW_IMAGE:-ghcr.io/mlflow/mlflow:v2.19.0}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-mlflow
     profiles:
       - training
@@ -691,7 +691,7 @@ services:
       - triton_net
 
   node-exporter:
-    image: prom/node-exporter:v1.10.2
+    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.10.2}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-node-exporter
     restart: always
     profiles:
@@ -707,7 +707,7 @@ services:
   # Per-GPU utilization / VRAM / power / temperature for Grafana across ALL
   # host GPUs (not just Triton's). Read-only; does not reserve compute.
   dcgm-exporter:
-    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04
+    image: ${DCGM_EXPORTER_IMAGE:-nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-dcgm
     restart: always
     profiles:
@@ -729,7 +729,7 @@ services:
       - triton_net
 
   prometheus:
-    image: prom/prometheus:v3.12.0
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.12.0}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-prometheus
     restart: always
     profiles:
@@ -752,7 +752,7 @@ services:
       - node-exporter
 
   grafana:
-    image: grafana/grafana:13.1.0
+    image: ${GRAFANA_IMAGE:-grafana/grafana:13.1.0}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-grafana
     restart: always
     profiles:
@@ -782,7 +782,7 @@ services:
     # Runs as the image's builtin non-root user (uid 10001). Existing
     # root-owned loki_data volumes need a one-time chown — see
     # docs/MIGRATION_TRITON_26.md.
-    image: grafana/loki:3.6.12
+    image: ${LOKI_IMAGE:-grafana/loki:3.6.12}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-loki
     restart: always
     profiles:
@@ -798,7 +798,7 @@ services:
 
 # Log shipper: Grafana Alloy (Promtail reached EOL 2026-03-02).
   alloy:
-    image: grafana/alloy:v1.17.1
+    image: ${ALLOY_IMAGE:-grafana/alloy:v1.17.1}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-alloy
     restart: always
     profiles:
@@ -807,6 +807,9 @@ services:
       - ./monitoring/alloy-config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    environment:
+      # alloy-config.alloy keeps only containers of THIS compose project.
+      - OP_LOG_PROJECT=${COMPOSE_PROJECT_NAME:-openprocessor}
     command:
       - run
       - /etc/alloy/config.alloy
@@ -821,13 +824,14 @@ services:
   # OpenSearch 3.x with k-NN plugin for vector similarity search
   # ===================================================================
   opensearch:
-    image: opensearchproject/opensearch:3.6.0
+    image: ${OPENSEARCH_IMAGE:-opensearchproject/opensearch:3.6.0}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-opensearch
     restart: always
     environment:
       - discovery.type=single-node
       - bootstrap.memory_lock=true
-      - "OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g"  # Heap size (adjust based on RAM)
+      # Heap: OPENSEARCH_HEAP in .env; the installer sizes it to RAM/8, clamped to 1-8g.
+      - "OPENSEARCH_JAVA_OPTS=-Xms${OPENSEARCH_HEAP:-2g} -Xmx${OPENSEARCH_HEAP:-2g}"
       - DISABLE_SECURITY_PLUGIN=true  # Disable security for dev (enable in production)
     ulimits:
       memlock:
@@ -849,7 +853,7 @@ services:
       - triton_net
 
   opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:3.6.0
+    image: ${OPENSEARCH_DASHBOARDS_IMAGE:-opensearchproject/opensearch-dashboards:3.6.0}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-osd
     restart: always
     profiles:

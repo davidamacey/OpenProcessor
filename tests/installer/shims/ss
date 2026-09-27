@@ -1,0 +1,8 @@
+#!/bin/bash
+# Test double for ss: a port listed in $SHIM_STATE/ports_in_use is LISTENing.
+printf 'ss %s\n' "$*" >> "${SHIM_LOG:?}"
+last="${!#}"
+port="${last##*:}"
+if grep -qx "$port" "${SHIM_STATE:?}/ports_in_use" 2>/dev/null; then
+    echo "LISTEN 0 4096 127.0.0.1:${port} 0.0.0.0:*"
+fi

@@ -20,12 +20,11 @@ Resolution order, cached per model name:
    (Triton's own native mechanism for this; unused by any config this
    repo currently generates, but honored here for a hand-authored or
    third-party model that sets it).
-3. :data:`src.utils.affine.COCO_CLASSES`, but **only** for the small,
-   fixed set of stock COCO detector names -- never as a silent default
-   for an unrecognized model. An unresolvable id for any other model
-   renders as ``class_{id}``, exactly like the existing "not in
-   COCO_CLASSES" fallback, rather than a wrong label from a different
-   model's vocabulary.
+
+Every model -- stock or promoted -- resolves through its own
+``labels.txt``/``label_filename``; there is no fallback to another
+model's vocabulary (class identity invariant). An unresolvable id
+renders as ``class_{id}``.
 
 The cache is invalidated on promote/unload so a freshly promoted or
 removed model's labels are picked up on its very first request
@@ -39,24 +38,11 @@ import re
 import threading
 from pathlib import Path
 
-from src.utils.affine import COCO_CLASSES
-
 
 # Mirrors src.services.training.triton_promote.resolve_triton_models_dir --
 # duplicated (not imported) so this module has no dependency on the
 # training subsystem, which pulls in a much heavier import chain.
 _DEFAULT_TRITON_MODELS_DIR = Path('/app/models')
-
-# Stock detectors this repo ships that serve the standard 80-class COCO
-# vocabulary. Both already carry their own labels.txt (resolution step 1
-# handles them without ever reaching this set); it exists purely as a
-# safety net if that file is ever missing or unreadable.
-_STOCK_COCO_MODEL_NAMES = frozenset(
-    {
-        'yolov11_small_trt_end2end',
-        'yolov11_small_end2end',
-    }
-)
 
 _LABEL_FILENAME_RE = re.compile(r'label_filename\s*:\s*"([^"]*)"')
 
@@ -106,9 +92,6 @@ def _load_class_names(model_name: str) -> dict[int, str]:
         names = _read_labels_file(model_dir / label_filename)
         if names is not None:
             return names
-
-    if model_name in _STOCK_COCO_MODEL_NAMES:
-        return dict(COCO_CLASSES)
 
     return {}
 

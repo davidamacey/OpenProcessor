@@ -5,8 +5,15 @@
 # §11.1 item 2): no CI image builds. This script, run by hand on this host
 # (or via `make release`), builds every published image with the Docker
 # build cache, gates on a Trivy CRITICAL scan, and -- only with --push --
-# pushes digest-pinned tags and writes images.lock + release-manifest.txt
-# for the installer to verify against.
+# pushes digest-pinned tags and writes images.lock (plus images.lock.sha256)
+# for the installer to verify against. images.lock pins every image an
+# install can pull: the five built here and the third-party ones (vLLM,
+# OpenSearch, MLflow, monitoring), whose upstream tags are resolved to
+# digests at release time. Key names come from scripts/lib/image_keys.sh,
+# the same table the installer reads.
+#
+# It never touches release-manifest.txt: that is the installer's file list,
+# read by scripts/release/build_deploy_bundle.sh.
 #
 # Modeled on Cropwright's local multi-arch release script
 # (scripts/release.sh and scripts/release/*.sh in that repo), trimmed to
@@ -43,19 +50,24 @@ DOCKER_BIN="${DOCKER_BIN:-docker}"
 TRIVY_BIN="${TRIVY_BIN:-trivy}"
 ALLOWLIST_FILE="${TRIVY_ALLOWLIST_FILE:-$SCRIPT_DIR/trivy-allowlist.txt}"
 LOCK_FILE="${IMAGES_LOCK_FILE:-$REPO_ROOT/images.lock}"
-MANIFEST_FILE="${RELEASE_MANIFEST_FILE:-$REPO_ROOT/release-manifest.txt}"
+LOCK_SUMS_FILE="${IMAGES_LOCK_SUMS_FILE:-${LOCK_FILE}.sha256}"
+if [[ "$(basename "$LOCK_SUMS_FILE")" == release-manifest.txt || "$(basename "$LOCK_FILE")" == release-manifest.txt ]]; then
+    err "release-manifest.txt is the installer's file list; the release script never writes it"
+    exit "$EXIT_MISUSE"
+fi
 
-# service_key -> "dockerfile|build_context|image_name"
+# shellcheck source=../lib/image_keys.sh
+source "$REPO_ROOT/scripts/lib/image_keys.sh"
+
+# service_key -> "dockerfile|build_context|image_name", from the shared table.
 # image_name is the repo-local part; the pushed tag is
 # "${OP_IMAGE_NAMESPACE}/${image_name}:${VERSION}".
-declare -A IMAGE_SPECS=(
-    [api]="Dockerfile|.|openprocessor"
-    [triton]="Dockerfile.triton|.|openprocessor-triton"
-    [evaluator]="docker/evaluator/Dockerfile|.|openprocessor-evaluator"
-    [segmenter]="docker/segmenter/Dockerfile|.|openprocessor-segmenter"
-    [trainer]="docker/trainer/Dockerfile|.|openprocessor-trainer"
-)
-ALL_SERVICES="api triton evaluator segmenter trainer"
+declare -A IMAGE_SPECS=()
+for _key in $(image_keys build); do
+    IMAGE_SPECS[$_key]="$(image_key_field "$_key" dockerfile)|.|$(image_key_field "$_key" image)"
+done
+ALL_SERVICES="$(image_keys build | tr '\n' ' ')"
+THIRD_PARTY_KEYS="$(image_keys third | tr '\n' ' ')"
 
 # ── args ──────────────────────────────────────────────────────────────────
 
@@ -71,7 +83,7 @@ Usage: build_and_publish.sh (--dry-run|--push) [--only svc1,svc2] [--version vX.
                              [--namespace NAME] [--allow-dirty] [--local-tag-suffix SUF]
 
   --dry-run           build + scan every selected image, never push
-  --push              build + scan + push, and write images.lock / release-manifest.txt
+  --push              build + scan + push, resolve third-party digests, write images.lock
   --only LIST         comma-separated subset of: api,triton,evaluator,segmenter,trainer
   --version vX.Y.Z    override the VERSION file (must equal it unless --allow-dirty)
   --namespace NAME    override OP_IMAGE_NAMESPACE (default: davidamacey)
@@ -245,27 +257,41 @@ push_image() {
     echo "${digest##*@}"
 }
 
-# ── manifest / lock writers ─────────────────────────────────────────────────
+# ── third-party digests ─────────────────────────────────────────────────────
+
+# resolve_third_party KEY -> sha256 digest of the key's upstream image
+resolve_third_party() {
+    local key="$1" src digest
+    src="$(image_key_field "$key" source)"
+    log "resolving $key ($src)"
+    "$DOCKER_BIN" pull "$src" >&2 || { err "could not pull $src"; return 1; }
+    digest="$("$DOCKER_BIN" image inspect "$src" --format '{{index .RepoDigests 0}}' 2>/dev/null)"
+    [[ "$digest" == *@sha256:* ]] || { err "no repo digest for $src"; return 1; }
+    echo "${digest##*@}"
+}
+
+# ── lock writers ─────────────────────────────────────────────────────────────
 
 write_images_lock() {
     local -n digests_ref="$1"
+    local key
     : > "$LOCK_FILE"
     for svc in "${SERVICES[@]}"; do
         IFS='|' read -r _ _ image_name <<< "${IMAGE_SPECS[$svc]}"
         echo "${svc}=${OP_IMAGE_NAMESPACE}/${image_name}:${VERSION}@${digests_ref[$svc]}" >> "$LOCK_FILE"
     done
+    for key in $THIRD_PARTY_KEYS; do
+        echo "${key}=$(image_key_field "$key" source)@${digests_ref[$key]}" >> "$LOCK_FILE"
+    done
     sort -o "$LOCK_FILE" "$LOCK_FILE"
     ok "wrote $LOCK_FILE"
 }
 
-write_release_manifest() {
-    : > "$MANIFEST_FILE"
-    if [[ -f "$LOCK_FILE" ]]; then
-        local sha
-        sha="$(sha256sum "$LOCK_FILE" | awk '{print $1}')"
-        printf '%s\t%s\n' "$(basename "$LOCK_FILE")" "$sha" >> "$MANIFEST_FILE"
-    fi
-    ok "wrote $MANIFEST_FILE"
+write_lock_sums() {
+    local sha
+    sha="$(sha256sum "$LOCK_FILE" | awk '{print $1}')"
+    printf '%s  %s\n' "$sha" "$(basename "$LOCK_FILE")" > "$LOCK_SUMS_FILE"
+    ok "wrote $LOCK_SUMS_FILE"
 }
 
 # ── main ─────────────────────────────────────────────────────────────────────
@@ -300,7 +326,15 @@ done
 
 $FAILED && { err "one or more pushes failed"; exit "$EXIT_GATE"; }
 
-write_images_lock DIGESTS
-write_release_manifest
+for key in $THIRD_PARTY_KEYS; do
+    digest="$(resolve_third_party "$key")" || { FAILED=true; continue; }
+    # shellcheck disable=SC2034  # read via the write_images_lock nameref
+    DIGESTS["$key"]="$digest"
+done
 
-ok "release complete: ${#SERVICES[@]} image(s) pushed as v${VERSION} (+ latest), images.lock and release-manifest.txt written"
+$FAILED && { err "one or more third-party digests could not be resolved"; exit "$EXIT_GATE"; }
+
+write_images_lock DIGESTS
+write_lock_sums
+
+ok "release complete: ${#SERVICES[@]} image(s) pushed as v${VERSION} (+ latest); images.lock pins them and $(wc -w <<< "$THIRD_PARTY_KEYS") third-party images"
