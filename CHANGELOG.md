@@ -45,9 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   test.
 
 ### Fixed
-- **W2-finish review fix-on-fix pass (2026-09-27).** Addresses the
-  independent review of the W2-finish pass (`w2_finish_review_2026-09-27.md`),
-  which came back MERGE AFTER FIXES on commits `8f472157`/`707e7ee7`:
+- **W2-finish review fix-on-fix pass (2026-09-27), including a
+  fix-on-fix confirmation re-review.** Addresses the independent review
+  of the W2-finish pass (`w2_finish_review_2026-09-27.md`), which came
+  back MERGE AFTER FIXES on commits `8f472157`/`707e7ee7` (MJ1, MJ2, m1,
+  m2, m3 below), and the follow-up re-review at `bbc82fe8` (range
+  `707e7ee7..bbc82fe8`), which confirmed all five of those closed and
+  found one new major left over from MJ1 (MJ3, below) before returning
+  MERGE:
   - **MJ1** (major): the config-store poll task never actually started
     in production. `startup_bootstrap_config_store_safe()`
     (`src/services/config_store/store.py`) used to also call
@@ -64,6 +69,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     (new, `tests/curation/test_config_store.py`) reproduced the
     reviewer's exact probe (`assert task is not None` failed with
     `config_store_bootstrap_skipped` logged) against the unfixed code.
+  - **MJ3** (major, found in the re-review of this same pass; fix-on-fix):
+    MJ1's fix still ran `ensure_global_configs_index` inline before
+    `create_task`, inside a broad `except` that returned `None` on any
+    failure there -- an unreachable OpenSearch at startup, or a lost
+    index-create race surfacing as `resource_already_exists_exception`
+    before `indices.exists` sees the winner's index. Both are realistic
+    on a cold stack start (production `yolo-api` has no
+    `opensearch: service_healthy` gate ahead of its 32 workers), and
+    nothing ever retried, so that worker had no poll task for its entire
+    lifetime -- M4 stayed inert there, contrary to what MJ1's own
+    docstring claimed ("`_poll_all_active_projects`'s own first tick
+    still runs once OpenSearch recovers"). Fixed by mirroring
+    `src.services.projects.bootstrap.startup_bootstrap_project_registry_safe`'s
+    retry-then-poll shape: `startup_bootstrap_config_store_safe()` now
+    always returns a real task -- it tries the index-ensure once inline,
+    and on any failure hands off to a task that retries with backoff
+    (1s, doubling to a 30s cap) until it succeeds, then runs
+    `_poll_all_active_projects` forever. Corrected the function's
+    docstring to state this plainly instead of asserting a recovery path
+    that didn't exist. Red-then-green:
+    `test_startup_bootstrap_config_store_safe_retries_until_opensearch_reachable`
+    (new, `tests/curation/test_config_store.py`) makes `indices.exists`
+    raise a connection error on the first 3 calls, then succeed --
+    failed with `assert task is not None` against the unfixed code
+    (`None`, no task), passed once the retry-then-poll wrapper landed.
   - **MJ2** (major): the new unprefixed `op_global_configs` index broke
     the live verify harness's `verify_`-prefix safety guard
     (`tests/live/conftest.py`'s `harness_safety_guard`). The code
@@ -73,7 +103,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     sets `OP_GLOBAL_CONFIGS_INDEX=verify_global_configs` alongside the
     existing `OP_PROJECTS_INDEX=verify_projects`, and
     `tests/live/conftest.py`'s `INDEXES` map gained a `global_configs`
-    entry so the static `verify_`-prefix assertion covers it too.
+    entry (a hardcoded `verify_global_configs` literal, so its own
+    static `verify_`-prefix check always passes and does not itself
+    verify the compose file and the map agree -- the real protection is
+    the harness's live stray-index scan against `_cat/indices`, which
+    does check the two agree).
   - **m1** (minor): the guard test for `op_global_configs` isolation
     (`tests/projects/test_opensearch_guard.py::test_global_configs_index_is_a_legitimate_unowned_index`)
     now builds its URLs from the real `global_configs_index()` resolver
@@ -82,7 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     mutating `global_configs_index()`'s default to
     `op_prj_default__configs` now turns this test red (it previously
     stayed green against the hardcoded literal).
-  - **m3** (minor): minor 5's six `vlm_called = True` call sites had no
+  - **m3** (minor): minor 5's four `vlm_called = True` call sites had no
     test coverage beyond the bulk-writer gate test -- removing all of
     them left the full suite's pass/fail outcome unchanged except for
     that one test. Added `tests/curation/test_vlm_called_call_sites.py`
@@ -261,18 +295,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     (`AppliedRuntime` is new). No route serves this yet (W3/W4 land the
     CRUD routes); this is the shared model Cropwright's contract already
     expects. Contracts regenerated.
-  - **Not done, recorded as remaining work (M3):** the `op_global_configs`
-    global store (for W9 endpoints / `local_vlm:desired`) does not
-    exist. `ConfigStore`/`get_config_store` remain project-scoped only.
-  - **Minors not addressed:** `name@rev` pinning is still a no-op
-    (recorded as W3 work in the original W2 commit message already);
-    `GET /settings` still hides `detection_profile: off`; the worker
-    still stamps `vlm_prompt_pack` even when no VLM ran this pass;
-    `registry_reclassify.py`'s docstring/behavior mismatch;
-    `_clone_activations`'s `except (NotFoundError, KeyError)` test-double
-    accommodation is unchanged (kept -- `FakeLifecycleOpenSearch` still
-    answers `found: false` without raising; fixing the fake itself is a
-    larger, riskier change than this pass's budget allowed).
+  - **Not done, recorded as remaining work (M3): since closed.** At the
+    time of this pass, the `op_global_configs` global store (for W9
+    endpoints / `local_vlm:desired`) did not exist yet and
+    `ConfigStore`/`get_config_store` were project-scoped only. Built by
+    W2 review M3 (2026-09-27) -- see the `op_global_configs` entry under
+    Added, above.
+  - **Minors not addressed: four of five since closed.** At the time of
+    this pass: `name@rev` pinning was still a no-op; `GET /settings`
+    hid `detection_profile: off`; the worker stamped `vlm_prompt_pack`
+    even when no VLM ran; `registry_reclassify.py` had a docstring/
+    behavior mismatch; and `_clone_activations`'s
+    `except (NotFoundError, KeyError)` test-double accommodation was
+    unchanged. The W2-finish minors pass (above) closed all of these
+    except the first: Minor 4 (`detection_profile: off`), Minor 5
+    (`vlm_prompt_pack` gating), Minor 6 (`registry_reclassify.py`
+    docstring) and Minor 3 (the `except` accommodation, reversing this
+    pass's "too risky" call). **Still open, deferred to W3 by design:**
+    `name@rev` pinning remains a no-op.
 - **P3 review fix pass (2026-09-27).** Addresses the independent P3 review's
   blocker and majors:
   - M1: `POST /projects` create is now storage-OCC-safe (`op_type='create'`);
