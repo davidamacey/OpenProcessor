@@ -15,6 +15,8 @@ _CONFIG_SH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [[ -z "${NC:-}" ]] && source "${_CONFIG_SH_DIR}/colors.sh"
 # shellcheck source=gpu.sh
 source "${_CONFIG_SH_DIR}/gpu.sh"
+# shellcheck source=opensearch_heap.sh
+source "${_CONFIG_SH_DIR}/opensearch_heap.sh"
 
 # =============================================================================
 # Configuration
@@ -685,6 +687,15 @@ generate_env_file() {
     # Load profile
     load_profile "$profile" || return 1
 
+    # A heap the user already set survives a forced regeneration.
+    local heap=""
+    [[ -f "$env_file" ]] && heap="$(sed -n 's/^OPENSEARCH_HEAP=//p' "$env_file" | tail -n1)"
+    if [[ -n "$heap" ]]; then
+        log_info "keeping your OPENSEARCH_HEAP=${heap}"
+    else
+        heap="$(opensearch_heap_for_host)" || { log_error "could not read host memory to size the OpenSearch heap"; return 1; }
+    fi
+
     log_step "Generating .env file..."
 
     cat > "$env_file" << EOF
@@ -703,8 +714,8 @@ TRITON_WORKERS=$PROFILE_WORKERS
 MAX_BATCH_SIZE=$PROFILE_MAX_BATCH
 SHM_SIZE=$PROFILE_SHM_SIZE
 
-# OpenSearch vector database
-OPENSEARCH_HEAP=$PROFILE_HEAP
+# OpenSearch JVM heap: host RAM/8, clamped to 1g..8g (scripts/lib/opensearch_heap.sh)
+OPENSEARCH_HEAP=$heap
 
 # Ports (change if these conflict with something else on your host, or
 # to run a second isolated stack -- see env.template's "Isolation" section)
@@ -787,7 +798,7 @@ services:
     environment:
       - discovery.type=single-node
       - bootstrap.memory_lock=true
-      - "OPENSEARCH_JAVA_OPTS=-Xms${PROFILE_HEAP} -Xmx${PROFILE_HEAP}"
+      - "OPENSEARCH_JAVA_OPTS=-Xms\${OPENSEARCH_HEAP:-2g} -Xmx\${OPENSEARCH_HEAP:-2g}"
       - DISABLE_SECURITY_PLUGIN=true
 EOF
 

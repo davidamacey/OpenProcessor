@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **OpenSearch heap is sized from host RAM in one place.** New
+  `scripts/lib/opensearch_heap.sh` (`opensearch_heap_for_host`: RAM/8,
+  clamped to 1-8 GB; `opensearch_shard_budget`) is used by both
+  `setup-openprocessor.sh` and `scripts/lib/config.sh`. `config.sh` no
+  longer takes the heap from the GPU profile, keeps an `OPENSEARCH_HEAP`
+  the user already set on a forced regeneration, and its compose override
+  interpolates `${OPENSEARCH_HEAP}` instead of a baked value. The
+  installer summary prints the heap and the soft shard budget (heap GB x
+  `OP_SHARDS_PER_HEAP_GB`, new advanced knob, default 20).
 - **Triton model names are env-overridable settings, not literals**
   (`TritonModelConfig` in `src/config/settings.py`): `FACE_DETECT_MODEL`,
   `ARCFACE_MODEL`, `CLIP_IMAGE_MODEL`, `CLIP_TEXT_MODEL`, `OCR_DET_MODEL`,
@@ -29,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inside the background task.
 
 ### Removed
+- `opensearch_heap` from the GPU profiles (`config_templates/profiles/*.json`)
+  and `PROFILE_HEAP` from `scripts/lib/gpu.sh`: the heap is a host-RAM
+  fact, not a GPU fact.
 - **COCO special-case in class-name resolution.** `class_names.py`'s
   `_STOCK_COCO_MODEL_NAMES` fallback (borrowing COCO's vocabulary for the
   stock YOLO11 detector names if `labels.txt` was ever missing) is gone —

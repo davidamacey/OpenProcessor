@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import shutil
 import stat
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from installer_harness import GPU_HOST, PROJECT, RELEASE, build_fake_release, fake_digest
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from installer_harness import Shimmed
 
 
@@ -253,13 +254,34 @@ def test_port_base_moves_the_whole_block(shimmed: Shimmed) -> None:
 # --- .env content ------------------------------------------------------------------
 
 
+def _meminfo(shimmed: Shimmed, ram_gib: int) -> str:
+    f = shimmed.root / f'meminfo_{ram_gib}'
+    f.write_text(f'MemTotal:       {ram_gib * 1024 * 1024} kB\nMemFree:  1 kB\n')
+    return str(f)
+
+
 def test_opensearch_heap_is_ram_over_8_clamped(shimmed: Shimmed) -> None:
-    result = configure(shimmed)
+    result = configure(shimmed, OP_MEMINFO_PATH=_meminfo(shimmed, 32))
     assert result.returncode == 0, result.stderr
-    meminfo = Path('/proc/meminfo').read_text().splitlines()
-    mem_kib = next(int(ln.split()[1]) for ln in meminfo if ln.startswith('MemTotal:'))
-    expected = min(8, max(1, mem_kib // 1024 // 1024 // 8))
-    assert env_file(shimmed)['OPENSEARCH_HEAP'] == f'{expected}g'
+    assert env_file(shimmed)['OPENSEARCH_HEAP'] == '4g'
+
+
+def test_summary_prints_heap_and_soft_shard_budget(shimmed: Shimmed) -> None:
+    result = configure(shimmed, OP_MEMINFO_PATH=_meminfo(shimmed, 16))
+    assert result.returncode == 0, result.stderr
+    assert 'OpenSearch  : heap 2g, soft shard budget 40 (20 shards per heap GB)' in result.stdout
+
+
+def test_summary_budget_uses_the_user_heap_and_shard_knob(shimmed: Shimmed) -> None:
+    mem = _meminfo(shimmed, 16)
+    assert configure(shimmed, OP_MEMINFO_PATH=mem).returncode == 0
+    env_path = shimmed.root / 'inst' / '.env'
+    text = env_path.read_text().replace('OPENSEARCH_HEAP=2g', 'OPENSEARCH_HEAP=3g', 1)
+    env_path.write_text(text + 'OP_SHARDS_PER_HEAP_GB=25\n')
+    result = configure(shimmed, OP_MEMINFO_PATH=mem)
+    assert result.returncode == 0, result.stderr
+    assert env_file(shimmed)['OPENSEARCH_HEAP'] == '3g'
+    assert 'OpenSearch  : heap 3g, soft shard budget 75 (25 shards per heap GB)' in result.stdout
 
 
 def test_rerun_is_idempotent_and_keeps_user_values(shimmed: Shimmed) -> None:

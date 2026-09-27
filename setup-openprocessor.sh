@@ -1485,17 +1485,6 @@ require_external_vlm_consent() {
 }
 
 # -----------------------------------------------------------------------------
-# 11.1 #8 OpenSearch heap: RAM/8, clamped to 1..8 GB
-# -----------------------------------------------------------------------------
-opensearch_heap_gb() {
-    local ram_gb=$(( $1 / 1024 / 1024 )) heap
-    heap=$(( ram_gb / 8 ))
-    (( heap < 1 )) && heap=1
-    (( heap > 8 )) && heap=8
-    echo "$heap"
-}
-
-# -----------------------------------------------------------------------------
 # 3.2 Images: images.lock digests, or an explicit tag for local-only builds
 # -----------------------------------------------------------------------------
 _lock_line_valid() {
@@ -2260,6 +2249,12 @@ print_summary() {
     echo "  tiers       : ${SELECTED_TIERS}"
     echo "  GPU plan    : ${GPU_PLAN_SUMMARY:-none}"
     echo "  health      : ${HEALTH_RESULT}"
+    local heap per_gb budget
+    heap="$(read_env_var "$ENV_FILE" OPENSEARCH_HEAP || true)"
+    per_gb="$(read_env_var "$ENV_FILE" OP_SHARDS_PER_HEAP_GB || true)"
+    [[ "$per_gb" =~ ^[0-9]+$ ]] || per_gb=20
+    budget="$(opensearch_shard_budget "$heap" "$per_gb" || echo unknown)"
+    echo "  OpenSearch  : heap ${heap:-unset}, soft shard budget ${budget} (${per_gb} shards per heap GB)"
     echo ""
     echo "  URLs:"
     echo "    API docs    http://${h}:${api}/docs"
@@ -2686,6 +2681,8 @@ do_install() {
     source "${OP_DIR}/scripts/lib/model_setup.sh"
     # shellcheck source=scripts/lib/image_keys.sh
     source "${OP_DIR}/scripts/lib/image_keys.sh"
+    # shellcheck source=scripts/lib/opensearch_heap.sh
+    source "${OP_DIR}/scripts/lib/opensearch_heap.sh"
 
     env_create_or_merge
     env_set COMPOSE_PROJECT_NAME "$OP_PROJECT"
@@ -2828,10 +2825,9 @@ do_install() {
     done
     [[ "$OP_WITH_MONITORING" == 1 ]] && profiles+=(monitoring)
     env_set COMPOSE_PROFILES "$(IFS=,; echo "${profiles[*]:-}")"
-    local mem_kib heap
-    mem_kib="$(awk '/^MemTotal:/ { print $2 }' /proc/meminfo)"
-    heap="$(opensearch_heap_gb "$mem_kib")"
-    env_set_default OPENSEARCH_HEAP "${heap}g"
+    local heap
+    heap="$(opensearch_heap_for_host)" || die "could not read host memory from ${OP_MEMINFO_PATH:-/proc/meminfo} to size the OpenSearch heap"
+    env_set_default OPENSEARCH_HEAP "$heap"
     env_set_default OP_SOURCE_ROOT_HOST ./data
 
     ensure_hf_token

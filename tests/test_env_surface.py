@@ -91,6 +91,9 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     'OP_SEGMENTER_IMAGE',
     'OP_TRAINER_IMAGE',
     'OP_BIND_ADDRESS',
+    # Projects plan 2.3: the soft shard budget knob. Today its only reader is
+    # the installer (scripts/lib/opensearch_heap.sh, bash) for the summary.
+    'OP_SHARDS_PER_HEAP_GB',
 }
 
 
