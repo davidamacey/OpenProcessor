@@ -149,6 +149,7 @@ def route_bodies(slug: str) -> dict[tuple[str, str], dict[str, Any]]:
             'files': [('images', (f'{slug}-up.jpg', jpeg_bytes(len(slug)), 'image/jpeg'))],
         },
         ('POST', '/probe/run'): {'json': {'job_id': f'{slug}-job-0001'}},
+        ('PUT', '/models/{model_name}/sharing'): {'json': {'shared': True, 'expected_revision': 1}},
         ('PUT', '/crops/{crop_id}/region'): {'json': {'region_bbox_norm': [0.1, 0.1, 0.4, 0.4]}},
         ('PATCH', '/crops/{crop_id}/region_meta'): {'json': {'region_text': f'{slug}TXT'}},
         ('PUT', '/crops/batch_region'): {
@@ -226,6 +227,9 @@ P2_DEFERRED: dict[tuple[str, str], str] = {
     ('POST', '/bakeoff/run'): 'global bake-off jobs dir and GPU claim (P2, plan §5.3)',
     ('POST', '/train/promote/{job_id}'): 'promoted-model ownership in the shared Triton repo (P2)',
     ('DELETE', '/models/{model_name}'): 'promoted-model ownership in the shared Triton repo (P2)',
+    ('PUT', '/models/{model_name}/sharing'): (
+        'promoted-model ownership in the shared Triton repo (P2); no promote.json seeded here'
+    ),
 }
 
 

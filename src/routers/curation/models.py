@@ -536,6 +536,13 @@ def _project_owns_model(model_name: str) -> bool:
     return not any(model_name.startswith(prefix) for prefix in other_prefixes)
 
 
+# PUT /models/{model_name}/sharing lives in _models_sharing.py (kept
+# under the 700-LOC ratchet); imported for its route-registration
+# side effect and so `_project_owns_model` above stays this module's
+# single definition (that submodule imports it back from here).
+from src.routers.curation import _models_sharing  # noqa: E402,F401
+
+
 class UnloadModelResponse(BaseModel):
     triton_name: str
     triton_unloaded: bool
