@@ -1,0 +1,132 @@
+"""The ONE `for_activation` gate every activation-writing entry point must
+call (W3/W4 round-4 review, R4-1).
+
+Round 3 fixed the gate bypass for `PUT /settings` (N1) by copying the
+`/activate` route's checks into ``settings.py``. Round 4 found the SAME
+class of bug a fourth time: ``POST /prompt_packs/active/rollback`` (and
+its region-profile twin) re-activate a revision with **no** gate at all,
+so a pack/profile that ``/activate`` correctly 422s (even with
+``force: true``) can still go live through rollback.
+
+The round-3 reviewer's own diagnosis: "the lasting fix is one gate
+function that every activation path calls, plus a single test that walks
+all of them with a revision that should fail." This module is that
+function. Every writer of an ``activation:*`` doc must call
+:func:`run_activation_gate` before writing:
+
+- ``POST /prompt_packs/{name}/activate``, ``POST /region_profiles/{name}/activate``
+- ``PUT /settings`` (the config-store-backed axes)
+- ``POST /prompt_packs/active/rollback``, ``POST /region_profiles/active/rollback``
+
+Deactivating (``name is None``) never needs the gate -- there is nothing
+to validate.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+
+if TYPE_CHECKING:
+    from src.routers.curation._config_common_models import ValidationReport
+    from src.services.config_store.index import ConfigAxis
+
+
+async def run_activation_gate(
+    axis: ConfigAxis,
+    name: str,
+    revision: int | None,
+    *,
+    force: bool = False,
+    client: Any = None,
+) -> ValidationReport:
+    """Run the exact `for_activation` validation the dedicated `/activate`
+    routes run, against whichever axis is being activated.
+
+    ``client`` (an OpenSearch client) is optional but should be passed
+    whenever the caller has one: rollback's ``previous`` ref can name a
+    revision that is no longer the STORED CURRENT one (e.g. pack was
+    active at rev 1, a later, never-activated PUT moved current to rev
+    2) -- ``build_record`` only resolves the current revision, so without
+    a client-backed fallback to the immutable ``<kind>:<name>@<rev>``
+    revision-copy doc, a legitimate rollback to an old-but-real revision
+    would incorrectly 404 here. Callers with no client (none exist today)
+    keep the current-revision-only behavior the dedicated activate routes
+    already had (round-1..3 Minor 2: activating a genuinely past revision
+    through those routes is a separate, pre-existing, non-blocking gap).
+
+    Raises the router-shaped ``HTTPException`` (via ``api_error``) for:
+    - 404 ``not_found`` -- unknown name/revision;
+    - 403 ``read_only`` -- a template can't be activated directly;
+    - 422 ``validation_failed`` -- blocking `for_activation` errors, i.e.
+      every error not in ``BYPASSABLE_CODES`` when ``force`` is set.
+
+    Returns the ``ValidationReport`` on success (the caller may want it,
+    e.g. to echo back in the response).
+    """
+    from src.routers.curation._config_common_models import api_error
+
+    if axis == 'prompt_pack':
+        from src.routers.curation.prompt_packs import _registry_class_names, _resolve_profile
+        from src.services.config_store.pack_validation import BYPASSABLE_CODES, validate_pack
+        from src.services.config_store.packs import (
+            build_record as build_pack_record,
+            get_revision_record as get_pack_revision,
+        )
+
+        record = build_pack_record(name, revision=revision)
+        if record is None and revision is not None and client is not None:
+            record = await get_pack_revision(client, name, revision)
+        if record is None:
+            raise api_error(404, 'not_found', f'{name!r} is not a known pack')
+        if record.read_only and record.source == 'template':
+            raise api_error(403, 'read_only', f'{name!r} is a template; clone it first')
+        report = validate_pack(
+            None,
+            record.body,
+            profile=_resolve_profile(None),
+            for_activation=True,
+            class_names=_registry_class_names(),
+        )
+    else:
+        from src.routers.curation.region_profiles import (
+            _project_slug,
+            _registry_class_names,
+            _segmenter_health_fn,
+        )
+        from src.services.config_store.profile_validation import BYPASSABLE_CODES, validate_profile
+        from src.services.config_store.profiles import (
+            build_record as build_profile_record,
+            get_revision_record as get_profile_revision,
+        )
+        from src.services.labeling.vlm_prompts import active_prompt_pack
+
+        profile_record = build_profile_record(name, revision=revision)
+        if profile_record is None and revision is not None and client is not None:
+            profile_record = await get_profile_revision(client, name, revision)
+        if profile_record is None:
+            raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
+        if profile_record.read_only and profile_record.source == 'template':
+            raise api_error(403, 'read_only', f'{name!r} is a template; clone it first')
+        report = await validate_profile(
+            None,
+            profile_record.body,
+            for_activation=True,
+            segmenter_health=_segmenter_health_fn,
+            active_pack=active_prompt_pack(),
+            class_names=_registry_class_names(),
+            project_slug=_project_slug(),
+        )
+
+    blocking = [e for e in report.errors if not (force and e.code in BYPASSABLE_CODES)]
+    if blocking:
+        raise api_error(
+            422,
+            'validation_failed',
+            f'{name!r} has {len(blocking)} blocking error(s)',
+            report=report,
+        )
+    return report
+
+
+__all__ = ['run_activation_gate']

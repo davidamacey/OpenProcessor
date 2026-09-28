@@ -555,34 +555,19 @@ async def delete_region_profile_route(
 async def activate_region_profile_route(
     name: str, body: RegionProfileActivateRequest, opensearch: OpenSearchDep
 ) -> Any:
-    from src.services.config_store.profile_validation import BYPASSABLE_CODES
-    from src.services.labeling.vlm_prompts import active_prompt_pack
+    from src.services.config_store.activation_gate import run_activation_gate
 
     store = get_config_store()
     await store.ensure_fresh(opensearch)
     record = build_record(name, revision=body.revision)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
-    if record.read_only and record.source == 'template':
-        raise api_error(403, 'read_only', f'{name!r} is a template; clone it first')
 
-    report = await validate_profile(
-        None,
-        record.body,
-        for_activation=True,
-        segmenter_health=_segmenter_health_fn,
-        active_pack=active_prompt_pack(),
-        class_names=_registry_class_names(),
-        project_slug=_project_slug(),
+    # R4-1 fix (W3/W4 round-4 review): the ONE shared `for_activation` gate
+    # every activation writer calls -- activate, settings-bridge, rollback.
+    report = await run_activation_gate(
+        'detection_profile', name, record.revision, force=body.force, client=opensearch
     )
-    blocking = [e for e in report.errors if not (body.force and e.code in BYPASSABLE_CODES)]
-    if blocking:
-        raise api_error(
-            422,
-            'validation_failed',
-            f'{name!r} has {len(blocking)} blocking error(s)',
-            report=report,
-        )
 
     expected_active = (
         body.expected_active.model_dump() if body.expected_active is not None else None

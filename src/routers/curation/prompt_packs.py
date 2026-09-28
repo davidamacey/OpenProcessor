@@ -626,36 +626,19 @@ async def delete_prompt_pack_route(
 async def activate_prompt_pack_route(
     name: str, body: PromptPackActivateRequest, opensearch: OpenSearchDep
 ) -> Any:
+    from src.services.config_store.activation_gate import run_activation_gate
+
     store = get_config_store()
     await store.ensure_fresh(opensearch)
     record = build_record(name, revision=body.revision)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')
-    # M-3 fix (W3/W4 review 2026-09-28): a template is not a real, storable,
-    # activatable config -- `available_prompt_packs()` never sees it, so
-    # `active_prompt_pack()` would silently fall back to the env/file
-    # default while `GET /active` kept reporting the template as active.
-    # Mirror the region-profile route's guard: refuse, don't fail open.
-    if record.read_only and record.source == 'template':
-        raise api_error(403, 'read_only', f'{name!r} is a template; clone it first')
 
-    report = validate_pack(
-        None,
-        record.body,
-        profile=_resolve_profile(None),
-        for_activation=True,
-        class_names=_registry_class_names(),
+    # R4-1 fix (W3/W4 round-4 review): the ONE shared `for_activation` gate
+    # every activation writer calls -- activate, settings-bridge, rollback.
+    report = await run_activation_gate(
+        'prompt_pack', name, record.revision, force=body.force, client=opensearch
     )
-    from src.services.config_store.pack_validation import BYPASSABLE_CODES
-
-    blocking = [e for e in report.errors if not (body.force and e.code in BYPASSABLE_CODES)]
-    if blocking:
-        raise api_error(
-            422,
-            'validation_failed',
-            f'{name!r} has {len(blocking)} blocking error(s)',
-            report=report,
-        )
 
     expected_active = (
         body.expected_active.model_dump() if body.expected_active is not None else None

@@ -163,8 +163,10 @@ async def _validate_clone(
         #     the ensuing `ActiveConflictError`/`RevisionConflictError`.
         #     Fix: check the source's active NAME (per axis) against the
         #     target's config-store snapshot for either kind, up front.
+        from opensearchpy.exceptions import NotFoundError
+
         from src.services.config_store import get_config_store
-        from src.services.config_store.index import ConfigAxis, get_activation
+        from src.services.config_store.index import ConfigAxis, ConfigKind, get_activation
 
         activation_axes: tuple[ConfigAxis, ...] = ('prompt_pack', 'detection_profile')
 
@@ -211,12 +213,27 @@ async def _validate_clone(
 
                 source_name = source_active_names.get(axis)
                 if source_name:
-                    stored_map = (
-                        target_store.current.packs
-                        if axis == 'prompt_pack'
-                        else target_store.current.profiles
-                    )
-                    if source_name in stored_map:
+                    # m2 fix (W3/W4 round-4 review): `target_store.current`
+                    # is a snapshot refreshed at most once per
+                    # `ensure_fresh`'s 1s TTL -- a genuinely concurrent
+                    # write from another worker landing in that window
+                    # (e.g. another process just stored this exact name)
+                    # is invisible here, so this check would pass and
+                    # `_clone_activations`'s `save_config(...,
+                    # expected_revision=None)` would then partially write
+                    # before hitting `RevisionConflictError`. Read the
+                    # specific doc straight from the client instead of
+                    # trusting the cached snapshot.
+                    from src.services.config_store.index import config_doc_id
+
+                    kind: ConfigKind = 'prompt_pack' if axis == 'prompt_pack' else 'region_profile'
+                    doc_id = config_doc_id(kind, source_name)
+                    try:
+                        await client.get(index=target_index, id=doc_id)
+                        name_taken = True
+                    except NotFoundError:
+                        name_taken = False
+                    if name_taken:
                         raise api_error(
                             409,
                             'target_not_empty',
@@ -233,12 +250,20 @@ async def _apply_clone(
     target_record: ProjectRecord,
     source: ProjectRecord,
     axes: list[str],
-    target_activations: dict[str, dict[str, Any] | None] | None = None,
+    target_activations: dict[str, dict[str, Any] | None] | None,
 ) -> list[dict[str, Any]]:
     """Copy the validated axes. Reads the source under a read-only bind so
     the guard rejects any accidental write to it. Returns the ``keymap``
     axis's dropped-action conflicts (``[]`` for every other axis/outcome)
-    -- a structured report, never a silent unbind."""
+    -- a structured report, never a silent unbind.
+
+    m5 fix (W3/W4 round-4 review): ``target_activations`` has no default
+    -- every caller must say explicitly whether the target's per-axis
+    activation state is empty (``None``) or the real
+    ``_validate_clone``-captured doc (N3a). A silent ``None`` default
+    would let a future caller reintroduce the exact "assume the target is
+    empty" bug N3a fixed.
+    """
     conflicts: list[dict[str, Any]] = []
     from src.clients.curation_opensearch import get_curation_settings, update_curation_settings
 

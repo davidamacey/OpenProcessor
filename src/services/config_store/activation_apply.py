@@ -81,6 +81,23 @@ async def rollback_axis(
     if not previous:
         msg = 'no_previous'
         raise LookupError(msg)
+
+    # R4-1 fix (W3/W4 round-4 review): rollback re-activates `previous`,
+    # which must run the exact same never-bypassable `for_activation` gate
+    # `activate` and the settings bridge run. A revision that was validly
+    # active once is not necessarily valid NOW -- the gate is cross-axis
+    # (e.g. the multi-box-key check depends on the *other* axis's current
+    # state), so "it passed before" doesn't make rolling back to it safe.
+    # No `force` here: rollback has no bypass flag, mirroring the
+    # settings bridge.
+    previous_name = previous.get('name')
+    if previous_name is not None:
+        from src.services.config_store.activation_gate import run_activation_gate
+
+        await run_activation_gate(
+            axis, previous_name, previous.get('revision'), force=False, client=client
+        )
+
     return await activate_and_apply(
         store,
         client,

@@ -23,7 +23,7 @@ call sites that were rewired.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 
 if TYPE_CHECKING:
@@ -184,8 +184,18 @@ async def update_curation_settings_route(
     settings_doc_defaults = {k: v for k, v in body.defaults.items() if k not in _CONFIG_STORE_AXES}
 
     await _validate_defaults(settings_doc_defaults, opensearch)
-    for axis, value in config_store_defaults.items():
-        await _activate_config_store_axis(axis, value, opensearch)
+    # m1 fix (W3/W4 round-4 review): resolve + gate EVERY config-store axis
+    # before writing ANY of them. The old loop activated axis 1, then
+    # 422'd resolving axis 2, leaving axis 1's activation committed and
+    # the settings-doc write skipped -- a half-applied PUT. Prepare is
+    # read-only (raises on any validation/gate failure); apply only runs
+    # once every axis has cleared prepare.
+    prepared = [
+        await _prepare_config_store_axis(axis, value, opensearch)
+        for axis, value in config_store_defaults.items()
+    ]
+    for plan in prepared:
+        await _apply_config_store_axis(plan, opensearch)
 
     doc = await update_curation_settings(opensearch, settings_doc_defaults)
     doc['defaults'] = {**doc.get('defaults', {}), **await _config_store_axis_defaults(opensearch)}
@@ -193,13 +203,23 @@ async def update_curation_settings_route(
     return CurationSettingsResponse(**doc)
 
 
-async def _activate_config_store_axis(axis: str, value: str | None, opensearch: Any) -> None:
+class _AxisActivationPlan(NamedTuple):
+    axis: str
+    target_name: str | None
+    target_revision: int | None
+    expected_active: dict[str, Any] | None
+
+
+async def _prepare_config_store_axis(
+    axis: str, value: str | None, opensearch: Any
+) -> _AxisActivationPlan:
     """``PUT /settings {"defaults": {axis: value}}`` for a config-store
     axis: resolve ``value`` (or ``None``/``'off'``) against the live
-    registry, then activate the latest revision through the store."""
+    registry and run the activation gate. Read-only -- writes nothing --
+    so every axis in a multi-axis PUT can be prepared (and any of them
+    can raise) before any axis is actually activated (m1 fix)."""
     from src.routers.curation._config_common_models import api_error
-    from src.services.config_store import ActiveConflictError, get_config_store
-    from src.services.config_store.store import activate_axis
+    from src.services.config_store import get_config_store
     from src.services.curation.strategy_defaults import _advertised_ids_for_axis
 
     store = get_config_store()
@@ -207,9 +227,18 @@ async def _activate_config_store_axis(axis: str, value: str | None, opensearch: 
     current_ref = (
         store.current.active_pack if axis == 'prompt_pack' else store.current.active_profile
     )
+    # R4-2 fix (W3/W4 round-4 review): the same `expected_active` shape
+    # bug N3a fixed in clone.py. `index.activate`'s OCC compares against
+    # the REAL stored activation doc -- `None` only when no doc has ever
+    # been written for this axis. Once any doc exists, an explicit
+    # deactivation ('off') stores `{'name': None, 'revision': None}`,
+    # which is NOT equal to Python `None`. Folding 'off' into `None` here
+    # made every PUT after a deactivation 409 `active_conflict`.
     expected_active: dict[str, Any] | None = None
     if isinstance(current_ref, tuple):
         expected_active = {'name': current_ref[0], 'revision': current_ref[1]}
+    elif current_ref == 'off':
+        expected_active = {'name': None, 'revision': None}
 
     target_name: str | None
     if value is None or value == 'off':
@@ -243,86 +272,57 @@ async def _activate_config_store_axis(axis: str, value: str | None, opensearch: 
             target_revision = stored.revision
 
     if target_name is not None:
-        await _run_activation_gate(axis, target_name, target_revision)
+        await _run_activation_gate(axis, target_name, target_revision, opensearch)
 
+    return _AxisActivationPlan(
+        axis=axis,
+        target_name=target_name,
+        target_revision=target_revision,
+        expected_active=expected_active,
+    )
+
+
+async def _apply_config_store_axis(plan: _AxisActivationPlan, opensearch: Any) -> None:
+    """Write side of a prepared axis activation (see
+    :func:`_prepare_config_store_axis`). Only called once every axis in
+    the request has cleared prepare."""
+    from src.routers.curation._config_common_models import api_error
+    from src.services.config_store import ActiveConflictError, get_config_store
+    from src.services.config_store.store import activate_axis
+
+    store = get_config_store()
     try:
         await activate_axis(
             store,
             opensearch,
-            axis=cast('ConfigAxis', axis),
-            name=target_name,
-            revision=target_revision,
-            expected_active=expected_active,
+            axis=cast('ConfigAxis', plan.axis),
+            name=plan.target_name,
+            revision=plan.target_revision,
+            expected_active=plan.expected_active,
         )
     except ActiveConflictError as exc:
         raise api_error(
             409,
             'active_conflict',
-            f'axis {axis!r} was activated by another writer since this request started',
+            f'axis {plan.axis!r} was activated by another writer since this request started',
             current=exc.current,
         ) from exc
 
 
-async def _run_activation_gate(axis: str, target_name: str, target_revision: int | None) -> None:
-    """N1 fix (W3/W4 round-3 review): the Cropwright default-pack dropdown
+async def _run_activation_gate(
+    axis: str, target_name: str, target_revision: int | None, opensearch: Any
+) -> None:
+    """N1 fix (W3/W4 round-3 review), now routed through the single
+    shared gate (round-4 R4-1): the Cropwright default-pack dropdown
     calls ``PUT /settings``, not ``POST .../activate`` -- this bridge must
     run the exact same never-bypassable ``for_activation`` validation the
-    dedicated activate routes run (``prompt_packs.py``'s
-    ``activate_prompt_pack_route`` / ``region_profiles.py``'s
-    ``activate_region_profile_route``), or a multi-box-stripped revision
-    that ``/activate`` correctly 422s (even with ``force: true``) goes
-    live silently through this route instead. This bridge has no
-    ``force`` flag, so it never bypasses -- any blocking error 422s.
+    dedicated activate routes (and rollback) run, or a multi-box-stripped
+    revision that ``/activate`` correctly 422s (even with ``force: true``)
+    goes live silently through this route instead. This bridge passes no
+    ``force``, so it never bypasses -- any blocking error 422s.
     """
-    from src.routers.curation._config_common_models import api_error
+    from src.services.config_store.activation_gate import run_activation_gate
 
-    if axis == 'prompt_pack':
-        from src.routers.curation.prompt_packs import _registry_class_names, _resolve_profile
-        from src.services.config_store.pack_validation import validate_pack
-        from src.services.config_store.packs import build_record as build_pack_record
-
-        record = build_pack_record(target_name, revision=target_revision)
-        if record is None:
-            raise api_error(404, 'not_found', f'{target_name!r} is not a known pack')
-        if record.read_only and record.source == 'template':
-            raise api_error(403, 'read_only', f'{target_name!r} is a template; clone it first')
-        report = validate_pack(
-            None,
-            record.body,
-            profile=_resolve_profile(None),
-            for_activation=True,
-            class_names=_registry_class_names(),
-        )
-    else:
-        from src.routers.curation.region_profiles import (
-            _project_slug,
-            _registry_class_names,
-            _segmenter_health_fn,
-        )
-        from src.services.config_store.profile_validation import validate_profile
-        from src.services.config_store.profiles import build_record as build_profile_record
-        from src.services.labeling.vlm_prompts import active_prompt_pack
-
-        profile_record = build_profile_record(target_name, revision=target_revision)
-        if profile_record is None:
-            raise api_error(404, 'not_found', f'{target_name!r} is not a known region profile')
-        if profile_record.read_only and profile_record.source == 'template':
-            raise api_error(403, 'read_only', f'{target_name!r} is a template; clone it first')
-        report = await validate_profile(
-            None,
-            profile_record.body,
-            for_activation=True,
-            segmenter_health=_segmenter_health_fn,
-            active_pack=active_prompt_pack(),
-            class_names=_registry_class_names(),
-            project_slug=_project_slug(),
-        )
-
-    blocking = list(report.errors)
-    if blocking:
-        raise api_error(
-            422,
-            'validation_failed',
-            f'{target_name!r} has {len(blocking)} blocking error(s)',
-            report=report,
-        )
+    await run_activation_gate(
+        cast('ConfigAxis', axis), target_name, target_revision, client=opensearch
+    )
