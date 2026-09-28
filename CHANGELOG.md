@@ -103,7 +103,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   streaming stages (`stage_a_consumer`, `stage_a_sam_consumer`,
   `stage_b_combined`) now select N candidates per item
   (`select_region_candidates`, new `DetectionProfile` fields
-  `region_nms_iou`/`region_max_candidates`), render one numbered VLM
+  `region_nms_iou`/`max_regions_per_item`, the latter renamed from
+  `region_max_candidates` and defaulted to 1 by the correctness pass
+  below -- multi-box is opt-in per profile, never silently on), render
+  one numbered VLM
   overlay per crop (`render_region_block`) instead of a single-box
   prompt, and map the reply's per-box verdicts onto `RegionBox` entries
   (`verdicts_to_boxes`) written via `boxes_write_fields` — every write
@@ -141,6 +144,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clustering/FP matching, undo-snapshot simplification to box-list-only,
   review-queue/stats/export per-box row shapes, and segmenter service
   `min_score`/candidate-cap config.
+  **Correctness note (2026-09-27):** an independent review of this exact
+  wiring found a blocker (a `pending_verification` item's stored
+  candidate/sibling boxes were read from the wrong source and then
+  discarded on write) and 8 majors (stale-revision/box-id reuse under
+  concurrent writes, item-level verify/auto-confirm fields silently
+  dropped, the region embedding could source a rejected box, multi-box
+  silently on by default, a VLM text-echo filter and a text-free-profile
+  leak fix each ported incompletely, two more packs still on the flat
+  reply shape, and weak N>1 test coverage that let 5 of 6 targeted
+  mutations survive the suite). All fixed in the pass documented under
+  `### Fixed` below — this bullet's "every write path... now produces"
+  claim above was accurate for the happy path only.
 - **W8: explicit OpenSearch mapping for `region_boxes` /
   `region_box_embeddings`.** `_items_body()` now maps the W8 nested list
   and its sibling per-box-embedding field explicitly (fixed element-key
@@ -233,6 +248,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the legacy scalars this pass).
 
 ### Fixed
+- **W8 pipeline-wiring correctness fixes (independent Opus review,
+  2026-09-27): 1 blocker + 8 majors.** Fixes every finding of
+  `docs/design/openprocessor_internal/w8_pipeline_review_2026-09-27.md`
+  against the W8 pipeline-wiring pass above.
+  - **B1 (blocker, data loss):** `pending_verification` re-verification
+    now reads its candidate from the item's stored `region_boxes` list
+    (whichever boxes are `state=='proposed'`, keeping their `box_id`),
+    never the legacy single scalar. The write path merges the resolved
+    verdict boxes back into the CURRENT stored list (`region_boxes.
+    merge_boxes_for_write`) instead of replacing it outright, so an
+    untouched sibling box (already accepted/rejected, or a second
+    proposed box) is never silently discarded (`_ItemTask.pending_merge`,
+    opt-in only for this path — every fresh-detection write keeps its
+    pre-existing replace behaviour, unchanged).
+  - **M1 (stale revision/box-id reuse):** the box-list write
+    (`region_boxes`, `region_count`, `region_revision`, `region_box_seq`,
+    ids) is now computed inside `bulk_writer._merge`, against the live
+    doc `occ_skip_on_conflict_bulk` re-reads immediately before the
+    write, never the task's own fetch-time snapshot. Fresh candidates
+    get a placeholder id (`region_boxes.new_box_placeholder`) at
+    selection time and a real one only at write time
+    (`region_boxes.finalize_box_ids`, minted against the CURRENT
+    `region_box_seq`), so a concurrent write's ids can never collide and
+    the revision only ever increments forward.
+  - **M2 (item-level verify fields dropped):** `region_verified`/
+    `region_verifier`/`region_verifier_version`/`region_verified_at`/
+    `region_validated`/`region_auto_confirmed` are written again on
+    every box-list write (`verify.item_verification_fields`).
+    `region_auto_confirmed`'s box-aware rule: at least one accepted box,
+    and every accepted box independently passes the pre-W8 2-of-2
+    auto-confirm policy (`verify.boxes_auto_confirmed`). The skip-verify
+    and no-VLM-configured paths stay `verified=False`/
+    `auto_confirmed=False`, matching pre-W8 behaviour.
+  - **M3 (embedding from a rejected box):** the region-embedding source
+    (`_ItemTask.candidate_in_crop`) now syncs to the first ACCEPTED box
+    (`runner._sync_accepted_candidate`), never `candidates[0]` (the
+    top-scored candidate, which the VLM may have rejected while
+    accepting a lower-scored sibling).
+  - **M4 (multi-box silently on by default):** `DetectionProfile.
+    region_max_candidates` renamed to `max_regions_per_item`
+    (any_domain_plan.md W8.4/W8.9's name), default changed 3 -> 1.
+    Multi-box is now opt-in per profile.
+  - **M5 (echo-suppression filter dropped):** `region_overlay.
+    box_verdicts`/`_clean_text_reply` gained an `echoes` parameter (the
+    reply's picked class name, `make`, `model`, and their join);
+    `vlm_labeler._combined_reply_from_entry` computes and passes it,
+    restoring the pre-W8 flat parser's `_clean_combined_region_text`
+    suppression on the new per-box path. Also restored the full 7-value
+    sentinel set (`unreadable`/`-` were missing from the W8 rewrite's
+    4-value set).
+  - **M6 (text-free leak, rejected boxes):** the prior pass's
+    `_box_with_resolved_text` leak fix only ran on accepted boxes. New
+    `region_text_stage.resolve_rejected_box_text` runs on every
+    rejected/no-verdict box too (both the ordinary reject path and the
+    no-verdict-cap-reached path): drops the raw VLM text entirely on a
+    text-free profile, and holds it to the same `region_text_rules` an
+    accepted box's reading is held to on a text-reading profile.
+  - **M7 (flat-shape prompt bug, 2 more files):** `data/
+    prompt_pack.example.json` and `docker/test/fake_vlm.py` rewritten to
+    the nested `region_boxes` shape (the built-in packs and
+    `examples/prompt_packs/vehicle_wheel.json` were already fixed by the
+    prior pass).
+  - **M8 (weak N>1 test coverage):** `_drive_worker`'s `primary`/
+    `segmenter` params now accept a list of raw candidates (not just 0 or
+    1), and new tests drive 2-3 candidates through the detector leg, the
+    segmenter leg, and the combined VLM stage, asserting per-box outcomes
+    (state, score, id, text) distinctly — confirmed to catch the review's
+    "cap forced to 1" and "skip-verify guard removed" mutations by
+    reproducing them against the new tests.
+  - **Flaky test fix:** `test_region_no_verdict_cap.py::
+    test_real_verdict_before_the_cap_writes_normally_and_clears_the_count`'s
+    harness (`_drive_worker`'s `_stopper`) used a FIXED 500 x 10ms poll
+    budget (5s) regardless of actual wall-clock elapsed; under load
+    `asyncio.sleep(0.01)` can itself take longer than 10ms, so a
+    multi-retry scenario (6 combined-VLM round trips across 2 write
+    cycles) could run out of budget one retry short of the cap and stop
+    the worker early (~1/12 standalone failure rate, reproduced). Changed
+    to a deadline-based wait (18s, still well under the outer 30s
+    timeout) — 0/12 failures after the fix; this was a harness
+    time-budget issue, not a pipeline logic bug (the B1/M1 fixes above
+    were unrelated, separately reproduced and fixed bugs found while
+    investigating).
+  New tests: `tests/curation/test_region_pending_verification_b1.py`,
+  `tests/curation/test_region_write_occ_m1.py`,
+  `tests/curation/test_region_multi_box_pipeline.py`; extended
+  `test_region_auto_confirm.py`, `test_text_free_worker.py`,
+  `test_region_cascade_integrity.py`, `test_vlm_prompts.py`,
+  `test_verdicts_to_boxes.py`, `test_detection_profile.py`.
 - **W2b-finish: independent re-verification of the Opus review fix pass
   (2026-09-27), plus merging in W2's reviewed config-store hot reload.**
   Merged `main` (W2 config store hot reload, `op_global_configs`, P3F
