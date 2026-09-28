@@ -296,7 +296,16 @@ async def accept_without_vlm(
     if not gate_ok:
         t.detection_trace.append(f'{actor}:sanity_reject:{gate_reason}')
         box = RegionBox(
-            box_id=new_box_placeholder(0),
+            # R-M2 fix (2026-09-27 re-review): reuse the STORED box's own
+            # id when this candidate came from a stored `proposed` box
+            # (Path 1 re-verify, ``cand.box_id`` set by
+            # ``_task_box_from_stored``) -- minting a fresh placeholder
+            # unconditionally left the human's stored box `proposed`
+            # forever (merge never touches an id it doesn't recognize)
+            # while ALSO writing a brand-new sibling box for the same
+            # geometry. Only a genuinely fresh candidate (no stored
+            # counterpart) gets a new placeholder.
+            box_id=cand.box_id or new_box_placeholder(0),
             bbox_norm=cand.bbox_in_source,
             state='rejected',
             score=cand.score,
@@ -308,13 +317,15 @@ async def accept_without_vlm(
         t.pending_boxes = [box]
         t.pending_status = RegionStatus.DETECTION_FAILED
         t.update_doc = {
+            F.status: RegionStatus.DETECTION_FAILED,
             F.detector_chain: list(t.detection_trace),
             **item_verification_fields(verified=False),
         }
         return
     t.detection_trace.append(f'{actor}:{ACCEPTED_UNVERIFIED}')
     box = RegionBox(
-        box_id=new_box_placeholder(0),
+        # R-M2 fix: see the sanity-reject branch above -- same reuse rule.
+        box_id=cand.box_id or new_box_placeholder(0),
         bbox_norm=cand.bbox_in_source,
         state='accepted',
         score=cand.score,
@@ -339,6 +350,13 @@ async def accept_without_vlm(
     t.pending_boxes = [box]
     t.pending_empty_status = RegionStatus.DETECTED
     t.update_doc = {
+        # R-M1 fix: provisional status for region_embed_stage /
+        # _publish_region_events, which read ``t.update_doc`` before the
+        # write-time merge resolves the real one -- see
+        # ``runner._box_list_doc``'s docstring for why this is always
+        # safe here (this box is `accepted`, so the merged status is
+        # guaranteed `detected` regardless of any stored sibling).
+        F.status: RegionStatus.DETECTED,
         F.detector_chain: list(t.detection_trace),
         **item_verification_fields(verified=False),
     }
