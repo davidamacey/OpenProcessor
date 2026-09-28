@@ -416,42 +416,6 @@ def _combined_class_update(
     return update
 
 
-def _combined_write_doc(
-    *,
-    reply: VlmCombinedReply,
-    candidate_in_source: tuple[float, float, float, float],
-    candidate_score: float,
-    detector: str,
-    detector_version: str,
-    chain: list[str],
-    class_names: list[str] | None,
-    auto_confirmed: bool = False,
-    name_to_id: dict[str, int] | None = None,
-) -> dict[str, Any]:
-    """Compose the happy-path ``detected`` write doc for a combined reply.
-
-    Combines :func:`_region_write_doc` (region side) with
-    :func:`_combined_class_update` (class side) so one helper produces
-    every field the runner needs on a successful combined verification.
-    ``name_to_id`` maps the resolved class_name back to the registry's
-    authoritative class_id (see :func:`_combined_class_update`).
-    """
-    ts = _now_iso()
-    region_doc = _region_write_doc(
-        region_in_source=candidate_in_source,
-        score=candidate_score,
-        detector=detector,
-        detector_version=detector_version,
-        chain=chain,
-        auto_confirmed=auto_confirmed,
-        region_text_reply=reply.region_text_reply,
-        region_text_confidence=reply.region_confidence,
-        confidence=reply.region_confidence,
-    )
-    region_doc.update(_combined_class_update(reply, class_names, now=ts, name_to_id=name_to_id))
-    return region_doc
-
-
 async def _auto_confirm_or_pending(
     *,
     sam_score: float,
@@ -490,11 +454,15 @@ async def _auto_confirm_or_pending(
 # W8.5: verdict -> box-list storage (verdicts_to_boxes)
 # =============================================================================
 #
-# NOT YET wired into the streaming runner's stage consumers (stage_a_*,
-# stage_b_combined in runner.py) -- those still build the single legacy
-# scalar write via _region_write_doc / candidate_reject_doc /
-# _combined_write_doc above. This is standalone, tested infrastructure
-# for the eventual multi-candidate rewrite; see the W8 handback report.
+# Wired into the streaming runner's stage_b_combined (runner.py): the
+# live pipeline calls select_region_candidates() to build the candidate
+# list, then this module's verdicts_to_boxes() to resolve the VLM's
+# per-box verdicts into RegionBox entries, written via
+# region_boxes.boxes_write_fields(). candidate_reject_doc() /
+# no_verdict_reject_doc() (no_verdict.py) are the pre-W8 single-candidate
+# write builders -- no longer called from runner.py, left defined
+# (candidate_reject_doc still backs no_verdict.py's own helpers) rather
+# than swept this pass; see the W8 handback report.
 
 
 @dataclass(frozen=True)

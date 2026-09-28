@@ -18,8 +18,14 @@ keeps retrying and never turns into a terminal write.
 The count is in-process only. A worker restart resets it, which at worst
 buys an item ``cap`` more attempts per restart -- still bounded, and it
 needs no extra index field, mapping change or write per attempt. The
-streaming runner owns one counter per stage; the per-crop cascade
-(``cascade._process_crop``) shares the process-wide :func:`cascade_counter`.
+streaming runner owns one counter per stage (``visible_no_verdict`` /
+``combined_no_verdict`` in ``runner.py``).
+
+W8: the per-crop cascade (``cascade._process_crop``) that used to share
+:func:`cascade_counter` / :func:`cascade_no_verdict` was deleted (dead
+code -- the streaming runner is the only production pipeline). Both
+module-level counters below are kept, unused from production, as a
+documented follow-up cleanup rather than deleted in this pass.
 """
 
 from __future__ import annotations

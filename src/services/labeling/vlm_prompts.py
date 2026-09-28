@@ -160,22 +160,28 @@ GENERIC_ITEM_PACK = PromptPack(
     combined_system=(
         'You are labeling an item crop. Return STRICT JSON with these keys: '
         'class_id (int|null), class_confidence (high|medium|low|null), '
-        'region_visible (bool), region_bbox_correct (bool|null), '
-        'region_text (string|null: the characters printed on the region, copied '
-        'verbatim; null when none are legible; never a description of the region or '
-        'the item class), region_confidence (high|medium|low|null). '
+        'region_visible (bool: true if the labeled sub-region is visible anywhere in '
+        'the image, regardless of whether any proposed box below is correct), '
+        'region_boxes (array, one entry per numbered candidate box shown in the '
+        'image -- always an array, even for a single box: '
+        '[{"box": <the number on the overlay>, '
+        '"region_bbox_correct": bool|null, '
+        '"region_text": string|null (the characters printed on that box\'s region, '
+        'copied verbatim; null when none are legible; never a description of the '
+        'region or the item class), '
+        '"region_confidence": "high"|"medium"|"low"|null}, ...]). '
         'No prose, no markdown.'
     ),
     combined_user_template=(
         '{class_block}'
         '{region_block}'
         'If asked to classify and no class matches, return class_id=-1.\n'
-        'If the proposed region bbox correctly outlines the labeled sub-region, set '
-        'region_bbox_correct=true and transcribe region_text.\n'
-        'If the proposed region bbox is wrong but the sub-region IS visible '
-        'elsewhere, set region_bbox_correct=false and region_visible=true.\n'
-        'If no such sub-region is visible, set region_visible=false and '
-        'region_bbox_correct=null.'
+        'For each numbered box: if it correctly outlines the labeled sub-region, set '
+        "that box's region_bbox_correct=true and transcribe its region_text.\n"
+        "If a box is wrong but the sub-region IS visible elsewhere, set that box's "
+        'region_bbox_correct=false and region_visible=true.\n'
+        'If no such sub-region is visible anywhere, set region_visible=false and '
+        "every box's region_bbox_correct=null."
     ),
     combined_batch_system=(
         'You are labeling numbered item crops. Return STRICT JSON: '
@@ -183,10 +189,16 @@ GENERIC_ITEM_PACK = PromptPack(
         'per-image objects (one per numbered image, in input order). '
         'Each per-image object has keys: img (1-based index), '
         'class_id (int|null), class_confidence (high|medium|low|null), '
-        'region_visible (bool), region_bbox_correct (bool|null), '
-        'region_text (string|null: the characters printed on the region, copied '
-        'verbatim; null when none are legible; never a description of the region or '
-        'the item class), region_confidence (high|medium|low|null). '
+        'region_visible (bool: true if the labeled sub-region is visible anywhere in '
+        'that image, regardless of whether any proposed box is correct), '
+        'region_boxes (array, one entry per numbered candidate box shown in that '
+        'image -- always an array, even for a single box: '
+        '[{"box": <the number on that image\'s overlay>, '
+        '"region_bbox_correct": bool|null, '
+        '"region_text": string|null (the characters printed on that box\'s region, '
+        'copied verbatim; null when none are legible; never a description of the '
+        'region or the item class), '
+        '"region_confidence": "high"|"medium"|"low"|null}, ...]). '
         'Output ONLY the JSON object — no prose, no markdown, no reasoning. '
         'Skip the chain-of-thought.'
     ),
@@ -195,12 +207,12 @@ GENERIC_ITEM_PACK = PromptPack(
         '{"results": [{"img": 1, ...}, {"img": 2, ...}, ...]}. '
         'Rules common to all images:\n'
         '- If asked to classify and no class matches, return class_id=-1.\n'
-        '- If the proposed region bbox correctly outlines the labeled sub-region, set '
-        'region_bbox_correct=true and transcribe region_text.\n'
-        '- If the proposed region bbox is wrong but the sub-region IS visible '
-        'elsewhere, set region_bbox_correct=false and region_visible=true.\n'
-        '- If no such sub-region is visible, set region_visible=false and '
-        'region_bbox_correct=null.\n'
+        '- For each numbered box: if it correctly outlines the labeled sub-region, '
+        "set that box's region_bbox_correct=true and transcribe its region_text.\n"
+        '- If a box is wrong but the sub-region IS visible elsewhere, set that '
+        "box's region_bbox_correct=false and region_visible=true.\n"
+        '- If no such sub-region is visible anywhere, set region_visible=false and '
+        "every box's region_bbox_correct=null.\n"
         '- Respond ONLY with the JSON object above. No prose, no markdown, '
         'no reasoning preamble.\n'
         'Per-image directives follow with each image:'
@@ -280,20 +292,25 @@ GENERIC_REGION_PACK = PromptPack(
     combined_system=(
         'You are labeling an item crop. Return STRICT JSON with these keys: '
         'class_id (int|null), class_confidence (high|medium|low|null), '
-        'region_visible (bool), region_bbox_correct (bool|null), '
-        'region_confidence (high|medium|low|null). '
+        'region_visible (bool: true if the sub-region of interest is visible anywhere '
+        'in the image, regardless of whether any proposed box below is correct), '
+        'region_boxes (array, one entry per numbered candidate box shown in the '
+        'image -- always an array, even for a single box: '
+        '[{"box": <the number on the overlay>, '
+        '"region_bbox_correct": bool|null, '
+        '"region_confidence": "high"|"medium"|"low"|null}, ...]). '
         'No prose, no markdown.'
     ),
     combined_user_template=(
         '{class_block}'
         '{region_block}'
         'If asked to classify and no class matches, return class_id=-1.\n'
-        'If the proposed region bbox correctly outlines the sub-region of interest, set '
-        'region_bbox_correct=true.\n'
-        'If the proposed region bbox is wrong but the sub-region IS visible '
-        'elsewhere, set region_bbox_correct=false and region_visible=true.\n'
-        'If no such sub-region is visible, set region_visible=false and '
-        'region_bbox_correct=null.'
+        'For each numbered box: if it correctly outlines the sub-region of interest, '
+        "set that box's region_bbox_correct=true.\n"
+        "If a box is wrong but the sub-region IS visible elsewhere, set that box's "
+        'region_bbox_correct=false and region_visible=true.\n'
+        'If no such sub-region is visible anywhere, set region_visible=false and '
+        "every box's region_bbox_correct=null."
     ),
     combined_batch_system=(
         'You are labeling numbered item crops. Return STRICT JSON: '
@@ -301,8 +318,13 @@ GENERIC_REGION_PACK = PromptPack(
         'per-image objects (one per numbered image, in input order). '
         'Each per-image object has keys: img (1-based index), '
         'class_id (int|null), class_confidence (high|medium|low|null), '
-        'region_visible (bool), region_bbox_correct (bool|null), '
-        'region_confidence (high|medium|low|null). '
+        'region_visible (bool: true if the sub-region of interest is visible anywhere '
+        'in that image, regardless of whether any proposed box is correct), '
+        'region_boxes (array, one entry per numbered candidate box shown in that '
+        'image -- always an array, even for a single box: '
+        '[{"box": <the number on that image\'s overlay>, '
+        '"region_bbox_correct": bool|null, '
+        '"region_confidence": "high"|"medium"|"low"|null}, ...]). '
         'Output ONLY the JSON object — no prose, no markdown, no reasoning. '
         'Skip the chain-of-thought.'
     ),
@@ -311,12 +333,12 @@ GENERIC_REGION_PACK = PromptPack(
         '{"results": [{"img": 1, ...}, {"img": 2, ...}, ...]}. '
         'Rules common to all images:\n'
         '- If asked to classify and no class matches, return class_id=-1.\n'
-        '- If the proposed region bbox correctly outlines the sub-region of interest, set '
-        'region_bbox_correct=true.\n'
-        '- If the proposed region bbox is wrong but the sub-region IS visible '
-        'elsewhere, set region_bbox_correct=false and region_visible=true.\n'
-        '- If no such sub-region is visible, set region_visible=false and '
-        'region_bbox_correct=null.\n'
+        '- For each numbered box: if it correctly outlines the sub-region of '
+        "interest, set that box's region_bbox_correct=true.\n"
+        '- If a box is wrong but the sub-region IS visible elsewhere, set that '
+        "box's region_bbox_correct=false and region_visible=true.\n"
+        '- If no such sub-region is visible anywhere, set region_visible=false and '
+        "every box's region_bbox_correct=null.\n"
         '- Respond ONLY with the JSON object above. No prose, no markdown, '
         'no reasoning preamble.\n'
         'Per-image directives follow with each image:'

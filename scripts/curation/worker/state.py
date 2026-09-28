@@ -22,6 +22,7 @@ from src.services.detection.profile_registry import get_active_region_profile
 
 
 if TYPE_CHECKING:
+    from scripts.curation.worker.verify import TaskBoxInput
     from src.config import DetectionProfile
     from src.services.detection.region_text import OcrLine
 
@@ -157,6 +158,19 @@ class _ItemTask:
     # the downstream VLM verify returns an empty read.
     candidate_text: str | None = None
     candidate_text_confidence: float | None = None
+    # W8: every selected candidate for this item (select_region_candidates
+    # output, wrapped as TaskBoxInput -- box_id set only when read back
+    # from an existing pending_verification box). Drives the multi-box
+    # VLM overlay + verdicts_to_boxes write path. The singular
+    # candidate_* fields above stay populated with candidates[0] (best
+    # candidate) for the no-VLM-configured fallback (accept_without_vlm)
+    # and the region-embedding stage, which are still single-box.
+    candidates: list[TaskBoxInput] = field(default_factory=list)
+    # Current stored region_revision / region_box_seq high-water marks
+    # (read alongside this task's other fields) -- boxes_write_fields'
+    # ``current_src`` needs these to bump them correctly.
+    region_revision: int = 0
+    region_box_seq: int = 0
     # Detection trace — list of "<detector>:<tag>" strings the task
     # accumulates as it moves through the cascade, serialized as
     # ``RegionFields.detector_chain`` on every write that produces a
@@ -182,9 +196,10 @@ class _ItemTask:
     # without one is a bug and :func:`bind_task_project` refuses it.
     project: Any = None
     # Minor 5 (W2 review, 2026-09-27): True once a VLM call actually ran
-    # for this task this pass (visibility gate, combined class+region, or
-    # verify -- see cascade.py/combined.py/verify.py's call sites). The
-    # bulk writer only stamps ``vlm_prompt_pack`` on a write when this is
+    # for this task this pass (visibility gate or combined class+region
+    # -- see runner.py's call sites; W8 deleted the separate per-crop
+    # verify_region cascade in cascade.py/combined.py). The bulk writer
+    # only stamps ``vlm_prompt_pack`` on a write when this is
     # True, so a deployment with no VLM configured (or a write path that
     # skipped the VLM, e.g. the high-confidence segmenter auto-skip) never
     # gets a stamp implying a VLM ran.

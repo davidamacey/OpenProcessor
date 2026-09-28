@@ -35,6 +35,14 @@ class DetectionProfile:
     input_size: int = 640
     confidence_floor: float = 0.4
     batch_limit: int = 16
+    # W8 multi-box candidate selection (src/services/detection/
+    # region_candidates.py select_region_candidates): greedy class-
+    # agnostic NMS IoU threshold across an item's candidates, and the
+    # max candidates kept per item after NMS. ``confidence_floor``
+    # above doubles as the selection floor (``min_score``) -- one
+    # per-detector-leg threshold, not a second one.
+    region_nms_iou: float = 0.5
+    region_max_candidates: int = 3
     letterbox_fill: tuple[int, int, int] = (114, 114, 114)
     # Optional backbone feature-map output of a raw-output (secondary)
     # detector, requested only when Triton reports the model has it.

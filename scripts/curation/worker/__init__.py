@@ -7,12 +7,14 @@ keep working — see ``scripts/curation/region_worker_main.py``.
 
 Sub-modules:
     state        — constants, ``_ItemTask`` dataclass, crop IO helpers
-    cascade      — pending fetch, ``SegmenterClient``, geometry helpers, ``_process_crop``
-    verify       — VLM verify + region doc builders + auto-confirm
+    cascade      — pending fetch, ``SegmenterClient`` re-export, geometry helpers
+    verify       — VLM verify + region doc builders + auto-confirm + verdicts_to_boxes
     bulk_writer  — ``_bulk_update`` + ``_publish_region_events``
-    combined     — combined class+region+OCR cohort routing
     client       — SAM3 HTTP client with circuit breaker
-    runner       — the long-running ``run()`` entry point
+    runner       — the long-running ``run()`` entry point (the live
+                   multi-box pipeline; the pre-W8 single-candidate
+                   ``_process_crop``/``combined.py`` cohort path was
+                   deleted once this became the only production cascade)
     __main__     — ``parse_args`` + ``main`` for ``python -m`` invocation
 
 The shim file uses ``from scripts.curation.worker import *`` to pull
@@ -20,7 +22,7 @@ in the **public** names below (Python's ``*`` skips underscored names
 unless ``__all__`` is defined, which it deliberately is not here). The
 shim then imports underscored helpers it needs *directly from the
 sub-modules* — so this ``__init__`` does NOT need to re-export private
-helpers like ``_ItemTask`` / ``_process_crop`` / ``_bulk_update``.
+helpers like ``_ItemTask`` / ``_bulk_update``.
 """
 
 from __future__ import annotations

@@ -62,6 +62,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.config import RegionFields, get_region_fields
 from src.core.logging import get_logger
+from src.services.labeling.region_overlay import (
+    VlmBoxVerdict,
+    box_verdicts,
+    draw_region_overlay,
+    render_region_block,
+)
 from src.services.labeling.vlm_client import (
     DEFAULT_API_KEY,
     DEFAULT_BASE_URL,
@@ -124,7 +130,8 @@ class RegionCrop(BaseModel):
 class CombinedCrop(BaseModel):
     """Input for the batched ``label_combined_batch`` call.
 
-    Carries the item crop JPEG, the candidate region bbox (when one
+    Carries the item crop JPEG, this item's candidate region boxes (W8:
+    always a list -- N=1 is a list of one, empty when no candidate
     exists from an upstream detector), and a per-crop ``classify`` flag
     so a single batch can mix low-confidence crops (need class label)
     and high-confidence crops (caller already trusts the class).
@@ -134,13 +141,13 @@ class CombinedCrop(BaseModel):
 
     crop_id: str = Field(..., description='Caller-controlled crop identifier.')
     jpeg_bytes: bytes = Field(..., description='Item crop JPEG bytes.')
-    region_bbox_norm: tuple[float, float, float, float] | None = Field(
-        default=None,
+    region_bboxes_norm: list[tuple[float, float, float, float]] = Field(
+        default_factory=list,
         description=(
-            'Optional candidate sub-region bbox in normalized crop coords '
-            '[x1, y1, x2, y2]. When provided, the bbox is drawn as a colored '
-            'overlay on the JPEG before encoding so the VLM can confirm '
-            '"is the box correct?" visually.'
+            'This item candidate region bboxes in normalized crop coords '
+            '[x1, y1, x2, y2] (W8: always a list, possibly empty). When '
+            'non-empty, every box is drawn as a numbered overlay on the JPEG '
+            'before encoding so the VLM can confirm each one visually.'
         ),
     )
     classify: bool = Field(
@@ -222,7 +229,18 @@ class VlmCombinedReply(BaseModel):
     Cuts a 3-call worst-case (class fill + region verify + region read)
     to a single round-trip. Crops with a caller-trusted class skip
     class_id and answer just the region fields.
+
+    **D-B (owner decision, 2026-09-26):** the pre-W8 flat region-verify
+    shape (``region_bbox_correct`` / ``region_text_reply`` /
+    ``region_confidence`` as top-level fields) is dropped -- replaced by
+    ``region_boxes``, one :class:`~src.services.labeling.region_overlay
+    .VlmBoxVerdict` per candidate box offered (aligned by position with
+    the request's ``region_bboxes_norm``, W8.6). ``region_visible``
+    stays a separate top-level answer ("is anything region-like visible
+    in this photo at all", independent of any specific candidate box).
     """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     img_id: str
     class_id: int | None = Field(
@@ -231,14 +249,10 @@ class VlmCombinedReply(BaseModel):
     )
     class_confidence: ConfidenceLevel | None = None
     region_visible: bool = False
-    region_bbox_correct: bool | None = Field(
-        default=None,
-        description='True if the proposed region bbox correctly outlines the sub-region; '
-        'False if the sub-region is visible elsewhere; None when the reply gave no '
-        'verdict on the box (no candidate supplied, or the answer was null / absent).',
+    region_boxes: list[VlmBoxVerdict] = Field(
+        default_factory=list,
+        description='One verdict per candidate box offered, aligned by position (box 1..N).',
     )
-    region_text_reply: str | None = None
-    region_confidence: ConfidenceLevel | None = None
     make: str = Field(default='', description='Free-text attribute 1 when visible, else "".')
     model: str = Field(default='', description='Free-text attribute 2 when visible, else "".')
     class_raw: str = Field(
@@ -402,56 +416,6 @@ def _b64_jpeg(data: bytes) -> str:
     return base64.b64encode(data).decode('ascii')
 
 
-# A 3-pixel-wide red rectangle is unambiguous against most backgrounds.
-_OVERLAY_WIDTH = 3
-# How a prompt names the drawn overlay (kept in step with _draw_bbox_overlay).
-OVERLAY_DESCRIPTION = (
-    'the candidate region is marked by a red rectangle drawn around it (the rectangle '
-    'is not part of the photo)'
-)
-
-
-def _draw_bbox_overlay(
-    jpeg_bytes: bytes,
-    bbox_norm: tuple[float, float, float, float],
-) -> bytes | None:
-    """Render the candidate sub-region bbox as a red rectangle drawn *around*
-    the region on the crop (visual conveyance for the combined VLM call).
-
-    The outline sits just outside the box so it never paints over the
-    region itself: a typical region is ~25 px tall, and an outline drawn
-    inside the box hid a quarter of the text the VLM is asked to read and
-    of the edges it is asked to judge.
-
-    Returns the re-encoded JPEG bytes on success, or None if the source is
-    not a decodable image (caller falls back to coords-in-prompt).
-    """
-    try:
-        from io import BytesIO
-
-        from PIL import Image, ImageDraw
-
-        with Image.open(BytesIO(jpeg_bytes)) as src:
-            im = src.convert('RGB')
-            w, h = im.size
-            x1, y1, x2, y2 = bbox_norm
-            # PIL draws an outline inward from the given rectangle, so grow
-            # the rectangle by the line width to keep the region clear.
-            box = (
-                max(0, int(x1 * w) - _OVERLAY_WIDTH),
-                max(0, int(y1 * h) - _OVERLAY_WIDTH),
-                min(w - 1, int(x2 * w) + _OVERLAY_WIDTH),
-                min(h - 1, int(y2 * h) + _OVERLAY_WIDTH),
-            )
-            draw = ImageDraw.Draw(im)
-            draw.rectangle(box, outline=(255, 0, 0), width=_OVERLAY_WIDTH)
-            out = BytesIO()
-            im.save(out, format='JPEG', quality=90)
-            return out.getvalue()
-    except Exception:
-        return None
-
-
 def _normalize_confidence(value: Any) -> ConfidenceLevel:
     """Coerce a raw model field into one of high|medium|low; default low."""
 
@@ -486,29 +450,6 @@ def _coerce_bool(value: Any) -> bool | None:
         if v in _FALSE_STRINGS:
             return False
     return None
-
-
-def _clean_combined_region_text(raw: Any, *, echoes: tuple[str, ...]) -> str | None:
-    """The region's transcribed text from a combined reply, or ``None``.
-
-    Drops sentinels ("unknown", "n/a", ...) and any value that is really
-    one of the reply's own item answers echoed into the text slot
-    (``echoes``: the class name it picked, its ``make`` / ``model``, both
-    joined). Those describe the item, not text read off the region.
-    """
-    if raw is None or isinstance(raw, bool | dict | list):
-        return None
-    text = str(raw).strip()
-    if not text or text.lower() in _TEXT_SENTINELS:
-        return None
-    if _echo_key(text) in {_echo_key(e) for e in echoes if e}:
-        return None
-    return text[:32]
-
-
-def _echo_key(value: str) -> str:
-    """Case- and separator-insensitive form ("Adventure Bike" == "adventurebike")."""
-    return ''.join(ch for ch in value.casefold() if ch.isalnum())
 
 
 def _unwrap_nested_combined_entry(entry: dict[str, Any], fields: RegionFields) -> dict[str, Any]:
@@ -550,16 +491,20 @@ def _combined_reply_from_entry(
     img_id: str,
     fields: RegionFields,
     class_names: list[str] | None,
+    n_boxes: int,
 ) -> VlmCombinedReply:
     """Build a :class:`VlmCombinedReply` from one parsed reply object.
 
     Fail-closed: raises ``ValueError`` when the region-visible answer is
     missing or not a recognizable boolean (the caller leaves the item
     pending rather than stamping ``no_region_visible`` or an accept off a
-    reply that never answered). ``region_bbox_correct`` reads ``None``
-    unless it is a recognizable boolean, so only an explicit ``true``
-    can accept a box and only an explicit ``false`` can reject one;
-    ``None`` is no verdict.
+    reply that never answered). ``n_boxes`` candidate boxes were offered
+    for this crop (W8.6 numbered overlay); when ``n_boxes > 0`` the reply
+    must carry the list-shaped ``fields.boxes`` key or
+    :class:`~src.services.labeling.region_overlay.MultiRegionKeysMissingError`
+    (a :class:`ValueError` subclass) is raised -- D-B, no flat-shape
+    fallback. ``n_boxes == 0`` (no candidate offered) skips box-verdict
+    parsing entirely: ``region_boxes`` is ``[]``.
 
     Unwraps an unambiguous single-key nesting first (see
     :func:`_unwrap_nested_combined_entry`) before reading any field.
@@ -571,15 +516,9 @@ def _combined_reply_from_entry(
         raise ValueError(msg)
     class_id, class_raw = _coerce_class_answer(entry, class_names)
     class_conf_raw = entry.get('class_confidence')
-    region_conf_raw = entry.get(fields.confidence)
     make = str(entry.get('make') or '').strip()[:48]
     model_name = str(entry.get('model') or '').strip()[:48]
-    picked_class = (
-        class_names[class_id]
-        if class_names and class_id is not None and 0 <= class_id < len(class_names)
-        else ''
-    )
-    echoes = (picked_class, make, model_name, f'{make} {model_name}'.strip())
+    region_boxes = box_verdicts(entry, n_boxes, fields) if n_boxes > 0 else []
     return VlmCombinedReply(
         img_id=img_id,
         class_id=class_id,
@@ -587,11 +526,7 @@ def _combined_reply_from_entry(
             _normalize_confidence(class_conf_raw) if class_conf_raw is not None else None
         ),
         region_visible=visible,
-        region_bbox_correct=_coerce_bool(entry.get(fields.bbox_correct)),
-        region_text_reply=_clean_combined_region_text(entry.get(fields.text), echoes=echoes),
-        region_confidence=(
-            _normalize_confidence(region_conf_raw) if region_conf_raw is not None else None
-        ),
+        region_boxes=region_boxes,
         make=make,
         model=model_name,
         class_raw=class_raw,
@@ -1370,7 +1305,7 @@ class VlmLabeler:
         jpeg_bytes: bytes,
         *,
         class_names: list[str] | None = None,
-        region_bbox_norm: tuple[float, float, float, float] | None = None,
+        region_bboxes_norm: list[tuple[float, float, float, float]] | None = None,
         draw_overlay: bool = True,
     ) -> VlmCombinedReply:
         """One VLM call returns class + region-verify + region-text.
@@ -1381,13 +1316,13 @@ class VlmLabeler:
             class_names: Class-name slice to classify against. Pass
                 None / [] when the caller only wants the region-side
                 answers; ``class_id`` returns None.
-            region_bbox_norm: Candidate sub-region bbox in normalized
-                crop coords ``[x1, y1, x2, y2]`` from an upstream
-                detector. None when no candidate exists — the VLM
-                still answers ``region_visible``.
-            draw_overlay: If True (default), draw the region bbox as a
-                colored rectangle on the crop bytes before encoding so
-                the VLM reasons about it visually. Falls back to
+            region_bboxes_norm: This item candidate region bboxes in
+                normalized crop coords ``[x1, y1, x2, y2]`` (W8: always a
+                list, possibly empty/None). Empty/None when no candidate
+                exists — the VLM still answers ``region_visible``.
+            draw_overlay: If True (default), draw the numbered region
+                overlay on the crop bytes before encoding so the VLM
+                reasons about each box visually. Falls back to
                 coords-in-prompt if drawing fails or is disabled.
 
         Returns:
@@ -1398,10 +1333,11 @@ class VlmLabeler:
             CombinedParseFailure: response unparseable. Caller falls
                 back to the separate-call paths.
         """
+        boxes = region_bboxes_norm or []
         bytes_to_send = jpeg_bytes
         overlay_drawn = False
-        if draw_overlay and region_bbox_norm is not None:
-            drew = _draw_bbox_overlay(jpeg_bytes, region_bbox_norm)
+        if draw_overlay and boxes:
+            drew = draw_region_overlay(jpeg_bytes, boxes)
             if drew is not None:
                 bytes_to_send = drew
                 overlay_drawn = True
@@ -1415,12 +1351,7 @@ class VlmLabeler:
         else:
             class_block = "Don't classify (the caller already has a class). Set class_id=null. "
 
-        if region_bbox_norm is not None and not overlay_drawn:
-            region_block = f'The proposed region bbox (normalized) is {list(region_bbox_norm)}. '
-        elif region_bbox_norm is not None:
-            region_block = f'In this image {OVERLAY_DESCRIPTION}. '
-        else:
-            region_block = 'No region-bbox candidate was provided. '
+        region_block = render_region_block(boxes, overlay_drawn=overlay_drawn)
 
         user_text = self._pack.combined_user_template.format(
             class_block=class_block, region_block=region_block
@@ -1476,7 +1407,11 @@ class VlmLabeler:
 
         try:
             return _combined_reply_from_entry(
-                parsed, img_id=img_id, fields=self._fields, class_names=class_names
+                parsed,
+                img_id=img_id,
+                fields=self._fields,
+                class_names=class_names,
+                n_boxes=len(boxes),
             )
         except (TypeError, ValueError) as exc:
             logger.info(
@@ -1555,7 +1490,7 @@ class VlmLabeler:
                     img_id=crop.crop_id,
                     jpeg_bytes=crop.jpeg_bytes,
                     class_names=class_names if crop.classify else None,
-                    region_bbox_norm=crop.region_bbox_norm,
+                    region_bboxes_norm=crop.region_bboxes_norm,
                     draw_overlay=draw_overlay,
                 )
                 return {crop.crop_id: reply}
@@ -1576,10 +1511,11 @@ class VlmLabeler:
 
         user_content: list[dict[str, Any]] = [{'type': 'text', 'text': header}]
         for i, crop in enumerate(chunk, start=1):
+            boxes = crop.region_bboxes_norm
             bytes_to_send = crop.jpeg_bytes
             overlay_drawn = False
-            if draw_overlay and crop.region_bbox_norm is not None:
-                drew = _draw_bbox_overlay(crop.jpeg_bytes, crop.region_bbox_norm)
+            if draw_overlay and boxes:
+                drew = draw_region_overlay(crop.jpeg_bytes, boxes)
                 if drew is not None:
                     bytes_to_send = drew
                     overlay_drawn = True
@@ -1589,16 +1525,8 @@ class VlmLabeler:
             else:
                 directive_class = 'skip classification (set ``class_id``=null)'
 
-            if crop.region_bbox_norm is not None and overlay_drawn:
-                directive_region = OVERLAY_DESCRIPTION
-            elif crop.region_bbox_norm is not None:
-                directive_region = (
-                    f'the proposed region bbox (normalized) is {list(crop.region_bbox_norm)}'
-                )
-            else:
-                directive_region = 'no region-bbox candidate was provided'
-
-            directive = f'Image {i}: {directive_class}. {directive_region}.'
+            directive_region = render_region_block(boxes, overlay_drawn=overlay_drawn)
+            directive = f'Image {i}: {directive_class}. {directive_region}'
 
             b64 = _b64_jpeg(bytes_to_send)
             user_content.append({'type': 'text', 'text': directive})
@@ -1748,6 +1676,7 @@ class VlmLabeler:
                     img_id=crop.crop_id,
                     fields=fields,
                     class_names=class_names if crop.classify else None,
+                    n_boxes=len(crop.region_bboxes_norm),
                 )
             except (TypeError, ValueError) as exc:
                 logger.warning(

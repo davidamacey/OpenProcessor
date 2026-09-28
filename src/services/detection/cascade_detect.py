@@ -336,6 +336,86 @@ def _decode_yolo_output(
     )
 
 
+# Pre-NMS safety cap on a raw detector output before it reaches W8's
+# ``select_region_candidates`` (region_candidates.py): a 640-input YOLO
+# head emits thousands of anchors, and greedy NMS there is O(n^2) --
+# keeping only the top-scoring ``_MAX_PRE_NMS_ANCHORS`` bounds that cost
+# regardless of how noisy the raw output is. Comfortably above any
+# profile's ``region_max_candidates`` (single digits in practice).
+_MAX_PRE_NMS_ANCHORS = 300
+
+
+def _decode_yolo_output_multi(
+    raw: np.ndarray,
+    scale: float,
+    pad: tuple[float, float],
+    crop_w: int,
+    crop_h: int,
+    confidence_floor: float = 0.4,
+    input_size: int = 640,
+    source: str = '',
+) -> list[RegionCandidate]:
+    """Decode a YOLOv11-shaped ``[1, 5, N]`` raw output to every candidate
+    region above ``confidence_floor`` (W8: multi-candidate detector leg).
+
+    Same geometry pipeline as :func:`_decode_yolo_output` (letterbox
+    undo, crop-frame normalization, degenerate-box drop) but keeps every
+    anchor clearing the floor instead of only the best one. Anchors are
+    capped to the highest-scoring :data:`_MAX_PRE_NMS_ANCHORS` before
+    returning -- caller (:func:`select_region_candidates`) does the real
+    greedy NMS + per-profile cap.
+
+    Returns candidates in no particular order (the caller sorts).
+    """
+    arr = np.asarray(raw)
+    if arr.ndim == 3:
+        arr = arr[0]
+    if arr.ndim != 2:
+        return []
+    if arr.shape[0] == 5 and arr.shape[1] != 5:
+        arr = arr.T
+    if arr.shape[1] < 5:
+        return []
+
+    confs = arr[:, 4]
+    keep_idx = np.nonzero(confs >= confidence_floor)[0]
+    if keep_idx.size == 0:
+        return []
+    if keep_idx.size > _MAX_PRE_NMS_ANCHORS:
+        top = np.argsort(confs[keep_idx])[::-1][:_MAX_PRE_NMS_ANCHORS]
+        keep_idx = keep_idx[top]
+
+    out: list[RegionCandidate] = []
+    for idx in keep_idx:
+        conf = float(confs[idx])
+        cx, cy, w, h = (float(v) for v in arr[idx, 0:4])
+        if max(abs(cx), abs(cy), abs(w), abs(h)) <= 1.5:
+            cx *= input_size
+            cy *= input_size
+            w *= input_size
+            h *= input_size
+        x1 = cx - w / 2.0
+        y1 = cy - h / 2.0
+        x2 = cx + w / 2.0
+        y2 = cy + h / 2.0
+        cx1, cy1, cx2, cy2 = undo_letterbox((x1, y1, x2, y2), scale, pad)
+        nx1 = max(0.0, min(1.0, cx1 / max(crop_w, 1)))
+        ny1 = max(0.0, min(1.0, cy1 / max(crop_h, 1)))
+        nx2 = max(0.0, min(1.0, cx2 / max(crop_w, 1)))
+        ny2 = max(0.0, min(1.0, cy2 / max(crop_h, 1)))
+        if nx2 <= nx1 or ny2 <= ny1:
+            continue
+        out.append(
+            RegionCandidate(
+                bbox_norm=(nx1, ny1, nx2, ny2),
+                score=conf,
+                source=source,
+                rectangularity=None,
+            )
+        )
+    return out
+
+
 # =============================================================================
 # RegionDetector — async Triton client wrapper
 # =============================================================================
@@ -397,20 +477,14 @@ class RegionDetector:
     # Single-crop API
     # ------------------------------------------------------------------
 
-    async def detect(self, crop_jpeg: bytes) -> RegionCandidate | None:
-        """Run region detection on one item crop.
+    async def _infer_raw(
+        self, crop_jpeg: bytes
+    ) -> tuple[np.ndarray, float, tuple[float, float], int, int] | None:
+        """Shared preprocess + Triton call for :meth:`detect` / :meth:`detect_multi`.
 
-        Args:
-            crop_jpeg: JPEG-encoded item crop bytes.
-
-        Returns:
-            The highest-scoring region in the crop's normalized frame,
-            or ``None`` if the model returned nothing above the
-            confidence floor (or if the crop could not be decoded), or
-            when no detector model is configured (no Triton call).
+        Returns ``(raw, scale, pad, crop_w, crop_h)`` or ``None`` on any
+        decode / letterbox / infer failure (already logged).
         """
-        if not self.model_name:
-            return None
         try:
             img = _decode_jpeg(crop_jpeg)
         except ValueError as exc:
@@ -440,8 +514,53 @@ class RegionDetector:
         if raw is None:
             logger.warning('region_infer_missing_output: model=%s', self.model_name)
             return None
+        return raw, scale, pad, crop_w, crop_h
 
+    async def detect(self, crop_jpeg: bytes) -> RegionCandidate | None:
+        """Run region detection on one item crop.
+
+        Args:
+            crop_jpeg: JPEG-encoded item crop bytes.
+
+        Returns:
+            The highest-scoring region in the crop's normalized frame,
+            or ``None`` if the model returned nothing above the
+            confidence floor (or if the crop could not be decoded), or
+            when no detector model is configured (no Triton call).
+        """
+        if not self.model_name:
+            return None
+        decoded = await self._infer_raw(crop_jpeg)
+        if decoded is None:
+            return None
+        raw, scale, pad, crop_w, crop_h = decoded
         return _decode_yolo_output(
+            raw,
+            scale=scale,
+            pad=pad,
+            crop_w=crop_w,
+            crop_h=crop_h,
+            confidence_floor=self.confidence_floor,
+            input_size=self.profile.input_size,
+            source=self.model_name,
+        )
+
+    async def detect_multi(self, crop_jpeg: bytes) -> list[RegionCandidate]:
+        """W8: every region candidate above the confidence floor (not just
+        the top one), for :func:`~src.services.detection.region_candidates
+        .select_region_candidates` to floor/NMS/cap.
+
+        Returns ``[]`` on any decode/infer failure or with no detector
+        model configured (same conditions :meth:`detect` returns
+        ``None`` for).
+        """
+        if not self.model_name:
+            return []
+        decoded = await self._infer_raw(crop_jpeg)
+        if decoded is None:
+            return []
+        raw, scale, pad, crop_w, crop_h = decoded
+        return _decode_yolo_output_multi(
             raw,
             scale=scale,
             pad=pad,
@@ -502,6 +621,41 @@ class RegionDetector:
                 if isinstance(res, BaseException):
                     logger.warning('region_batch_item_failed: idx=%d err=%s', idx, res)
                     results[idx] = None
+                else:
+                    results[idx] = res
+
+        return results
+
+    async def detect_batch_multi(
+        self,
+        crops_jpeg: list[bytes],
+    ) -> list[list[RegionCandidate]]:
+        """W8: :meth:`detect_batch`'s multi-candidate counterpart.
+
+        Returns a list aligned 1:1 with ``crops_jpeg``; each entry is
+        every candidate :meth:`detect_multi` found for that crop (``[]``
+        on failure or a floor miss).
+        """
+        import asyncio
+
+        if not crops_jpeg:
+            return []
+        if not self.model_name:
+            return [[] for _ in crops_jpeg]
+
+        results: list[list[RegionCandidate]] = [[] for _ in crops_jpeg]
+        batch_limit = self.profile.batch_limit
+        for start in range(0, len(crops_jpeg), batch_limit):
+            chunk = crops_jpeg[start : start + batch_limit]
+            chunk_results = await asyncio.gather(
+                *[self.detect_multi(crop) for crop in chunk],
+                return_exceptions=True,
+            )
+            for offset, res in enumerate(chunk_results):
+                idx = start + offset
+                if isinstance(res, BaseException):
+                    logger.warning('region_batch_item_failed: idx=%d err=%s', idx, res)
+                    results[idx] = []
                 else:
                     results[idx] = res
 
