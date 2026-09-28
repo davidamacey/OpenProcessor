@@ -46,18 +46,27 @@ def test_unrecognized_reason_falls_back_to_the_raw_value() -> None:
     assert text == 'rejected: a human free-text reason'
 
 
+class _Fields:
+    status = 'region_status'
+    boxes = 'region_boxes'
+
+
+def _rejected_box(reason: str) -> dict[str, object]:
+    return {
+        'box_id': 'b1',
+        'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+        'state': 'rejected',
+        'rejection_reason': reason,
+    }
+
+
 def test_region_reason_for_no_verdict_item_never_says_rejected() -> None:
     """The exact live scenario: a verify_rejected item with a recorded
     no-verdict rejection reason must not have its per-item reason claim
     "rejected" anywhere."""
-
-    class _Fields:
-        status = 'region_status'
-        rejection_reason = 'region_rejection_reason'
-
     src = {
         'region_status': 'verify_rejected',
-        'region_rejection_reason': REJECT_REASON_NO_VERDICT,
+        'region_boxes': [_rejected_box(REJECT_REASON_NO_VERDICT)],
     }
     text = region_reason(src, _Fields(), default='unused')
     assert text == 'needs human review: verifier gave no verdict'
@@ -65,13 +74,9 @@ def test_region_reason_for_no_verdict_item_never_says_rejected() -> None:
 
 
 def test_region_reason_for_model_verdict_item_says_rejected_only() -> None:
-    class _Fields:
-        status = 'region_status'
-        rejection_reason = 'region_rejection_reason'
-
     src = {
         'region_status': 'verify_rejected',
-        'region_rejection_reason': REJECT_REASON_VERIFIER,
+        'region_boxes': [_rejected_box(REJECT_REASON_VERIFIER)],
     }
     text = region_reason(src, _Fields(), default='unused')
     assert text.startswith('rejected:')
@@ -79,9 +84,5 @@ def test_region_reason_for_model_verdict_item_says_rejected_only() -> None:
 
 
 def test_region_reason_passes_through_default_when_not_rejected() -> None:
-    class _Fields:
-        status = 'region_status'
-        rejection_reason = 'region_rejection_reason'
-
     src = {'region_status': 'detected'}
     assert region_reason(src, _Fields(), default='some other reason') == 'some other reason'

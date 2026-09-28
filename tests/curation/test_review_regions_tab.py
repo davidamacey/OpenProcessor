@@ -22,8 +22,16 @@ F = get_region_fields()
 
 
 def _region_item(**extra: Any) -> dict[str, Any]:
+    text = extra.pop(F.text, None)
+    box: dict[str, Any] = {
+        'box_id': 'b1',
+        'bbox_norm': [0.2, 0.2, 0.4, 0.3],
+        'state': 'accepted',
+    }
+    if text is not None:
+        box['text'] = text
     return {
-        F.bbox_norm: [0.2, 0.2, 0.4, 0.3],
+        F.boxes: [box],
         F.status: RegionStatus.DETECTED.value,
         F.validated: False,
         'class_validated': False,
@@ -33,12 +41,11 @@ def _region_item(**extra: Any) -> dict[str, Any]:
 
 
 def _rejected_candidate_item(**extra: Any) -> dict[str, Any]:
-    """A realistic ``verify_rejected`` item (DQ-B2): no ``bbox_norm``, only
-    the candidate box the verifier rejected."""
+    """A realistic ``verify_rejected`` item (DQ-B2): no accepted box, only
+    the candidate box the verifier rejected (kept, ``state='rejected'``)."""
     doc = _region_item(**extra)
-    doc.pop(F.bbox_norm, None)
     doc[F.status] = RegionStatus.VERIFY_REJECTED.value
-    doc[F.candidate_bbox_norm] = [0.3, 0.6, 0.4, 0.65]
+    doc[F.boxes] = [{'box_id': 'b1', 'bbox_norm': [0.3, 0.6, 0.4, 0.65], 'state': 'rejected'}]
     return doc
 
 
@@ -83,7 +90,7 @@ def test_rejected_status_without_a_candidate_box_is_not_queued() -> None:
     """A legacy verify_rejected row with no candidate (rejected before the
     candidate was kept) has nothing to show -- correctly excluded."""
     doc = _region_item(**{F.status: RegionStatus.VERIFY_REJECTED.value})
-    doc.pop(F.bbox_norm, None)
+    doc[F.boxes] = []
     assert not _in_queue(doc)
     assert not _in_queue(doc, region_status='verify_rejected')
 

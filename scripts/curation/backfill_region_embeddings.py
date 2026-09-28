@@ -86,7 +86,7 @@ def _selection_query() -> dict[str, Any]:
     F = get_region_fields()
     return {
         'bool': {
-            'must': [box_query({'term': {'state': 'accepted'}}, F)],
+            'must': [box_query({'term': {f'{F.boxes}.{F.boxes_state}': 'accepted'}}, F)],
             'must_not': [{'exists': {'field': F.embedding}}],
         },
     }

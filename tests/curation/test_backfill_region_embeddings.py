@@ -184,9 +184,9 @@ async def test_apply_skips_items_with_unreadable_source_image(
 async def test_selection_query_excludes_items_that_already_have_the_field() -> None:
     """Resumability: the query itself must exclude already-embedded items."""
     query = backfill_script._selection_query()
-    assert {'nested': {'path': 'region_boxes', 'query': {'term': {'state': 'accepted'}}}} in query[
-        'bool'
-    ]['must']
+    assert {
+        'nested': {'path': 'region_boxes', 'query': {'term': {'region_boxes.state': 'accepted'}}}
+    } in query['bool']['must']
     assert {'exists': {'field': 'region_embedding'}} in query['bool']['must_not']
 
 

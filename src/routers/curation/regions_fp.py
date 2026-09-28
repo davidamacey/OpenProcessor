@@ -35,6 +35,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation.regions import _REGION_SOURCE_EXCLUDES, _region_item
+from src.services.curation.region_boxes import box_query
 
 
 # ``dominant_class_name`` for a non-FP region-cluster card. Region clusters
@@ -153,9 +154,21 @@ async def list_region_clusters(
 
     F = get_region_fields()
     await _ensure_indexes(opensearch)
+    # W8-cleanup: `region_bbox_norm` is retired (region_boxes is the only
+    # storage for a box now). A crop "still carries a region box" when it
+    # has an accepted box, or a false_positive one (false_positive keeps
+    # its box for FP analysis/training -- see RegionStatus.FALSE_POSITIVE's
+    # docstring).
     must: list[dict[str, Any]] = [
         {'exists': {'field': F.cluster_id}},
-        {'exists': {'field': F.bbox_norm}},
+        box_query(
+            {
+                'terms': {
+                    f'{F.boxes}.{F.boxes_state}': ['accepted', RegionStatus.FALSE_POSITIVE.value]
+                }
+            },
+            F,
+        ),
     ]
     if max_rank is not None:
         must.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
