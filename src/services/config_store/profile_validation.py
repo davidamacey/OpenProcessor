@@ -565,7 +565,7 @@ async def validate_profile(
     )
 
     if for_activation and active_pack is not None:
-        from src.services.config_store.pack_validation import check_multi_region_keys, validate_pack
+        from src.services.config_store.pack_validation import validate_pack
 
         pack_body = active_pack.to_dict()
         pack_report = validate_pack(
@@ -576,7 +576,6 @@ async def validate_profile(
             class_names=class_names,
         )
         all_issues.extend([*pack_report.errors, *pack_report.warnings])
-        del check_multi_region_keys  # imported for readers following the cross-reference only
 
     errors = [i for i in all_issues if i.severity == 'error']
     warnings = [i for i in all_issues if i.severity != 'error']

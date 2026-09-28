@@ -477,42 +477,38 @@ async def clone_prompt_pack(
     name: str, body: PromptPackCloneRequest, opensearch: OpenSearchDep
 ) -> PromptPackDoc:
     from src.config import get_curation_config
-    from src.config.project_context import bind_project
+    from src.services.config_store.clone_shared import (
+        cloned_from_tag,
+        read_source_record,
+        reject_invalid_clone_name,
+    )
 
     target_slug = get_curation_config().project_slug
 
-    if body.from_project and body.from_project != target_slug:
-        from src.routers.curation._config_common_models import api_error as _api_error
-        from src.services.projects.lifecycle import _require_found, _resolve_existing
+    async def _resolve(client: Any) -> PackRecord:
+        return await _resolve_clone_source(
+            client, name=name, revision=body.revision, source=body.source
+        )
 
-        source_record = _require_found(
-            await _resolve_existing(body.from_project), body.from_project
-        )
-        if source_record.status not in ('active', 'archived'):
-            raise _api_error(
-                409,
-                'clone_source_not_ready',
-                f"'{body.from_project}' is {source_record.status}; only an active or "
-                'archived project can be cloned from',
-                project=body.from_project,
-                project_status=source_record.status,
-            )
-        with bind_project(source_record, read_only=True):
-            source_store = get_config_store()
-            await source_store.ensure_fresh(opensearch)
-            source = await _resolve_clone_source(
-                opensearch, name=name, revision=body.revision, source=body.source
-            )
-    else:
-        store = get_config_store()
-        await store.ensure_fresh(opensearch)
-        source = await _resolve_clone_source(
-            opensearch, name=name, revision=body.revision, source=body.source
-        )
+    source = await read_source_record(
+        from_project=body.from_project,
+        target_slug=target_slug,
+        opensearch=opensearch,
+        resolve=_resolve,
+    )
 
     existing = all_known_names()
-    if body.new_name in existing:
-        raise api_error(409, 'name_conflict', f'{body.new_name!r} is already taken')
+    # M-2 fix: new_name must obey the same slug/reserved-word rules as create.
+    name_report = validate_pack(
+        body.new_name, source.body, existing_names=existing, class_names=_registry_class_names()
+    )
+    reject_invalid_clone_name(
+        name_report,
+        new_name=body.new_name,
+        existing=existing,
+        name_codes=('pack_name_invalid', 'pack_name_reserved'),
+        what='pack',
+    )
 
     new_body = dict(source.body)
     report = validate_pack(None, new_body, class_names=_registry_class_names())
@@ -521,18 +517,23 @@ async def clone_prompt_pack(
             422, 'validation_failed', 'the cloned pack has content errors', report=report
         )
 
-    source_project = body.from_project or target_slug
-    cloned_from = (
-        f'{source_project}:{name}@{source.revision if source.revision is not None else "-"}'
+    cloned_from = cloned_from_tag(
+        source_project=body.from_project or target_slug, name=name, revision=source.revision
     )
-    record = await save_pack(
-        opensearch,
-        name=body.new_name,
-        body=new_body,
-        expected_revision=None,
-        description=body.description if body.description is not None else source.description,
-        cloned_from=cloned_from,
-    )
+    try:
+        record = await save_pack(
+            opensearch,
+            name=body.new_name,
+            body=new_body,
+            expected_revision=None,
+            description=body.description if body.description is not None else source.description,
+            cloned_from=cloned_from,
+        )
+    except RevisionConflictError as exc:
+        # M-5 fix: a name that exists in OpenSearch but wasn't yet visible
+        # to this process's `all_known_names()` snapshot (a stale/cold
+        # target store) must still 409, not bubble up as a bare 500.
+        raise api_error(409, 'name_conflict', f'{body.new_name!r} is already taken') from exc
     return _to_doc(record, validation=report)
 
 
@@ -550,8 +551,14 @@ async def save_prompt_pack(
     existing = build_record(name)
     if existing is not None and existing.read_only:
         raise api_error(403, 'read_only', f'{name!r} is read-only')
+    # M-2 fix: PUT must not be a back door to create a reserved/invalid
+    # name -- creation goes through POST, which already runs this check.
+    # An unknown name (whether or not it would otherwise be a legal slug)
+    # 404s here; only an already-stored pack is ever a valid PUT target.
+    if existing is None:
+        raise api_error(404, 'not_found', f'{name!r} is not a known pack')
 
-    report = validate_pack(None, body.body.model_dump(), class_names=_registry_class_names())
+    report = validate_pack(name, body.body.model_dump(), class_names=_registry_class_names())
     if not report.ok:
         raise api_error(
             422, 'validation_failed', f'the pack has {len(report.errors)} error(s)', report=report
@@ -624,6 +631,13 @@ async def activate_prompt_pack_route(
     record = build_record(name, revision=body.revision)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')
+    # M-3 fix (W3/W4 review 2026-09-28): a template is not a real, storable,
+    # activatable config -- `available_prompt_packs()` never sees it, so
+    # `active_prompt_pack()` would silently fall back to the env/file
+    # default while `GET /active` kept reporting the template as active.
+    # Mirror the region-profile route's guard: refuse, don't fail open.
+    if record.read_only and record.source == 'template':
+        raise api_error(403, 'read_only', f'{name!r} is a template; clone it first')
 
     report = validate_pack(
         None,

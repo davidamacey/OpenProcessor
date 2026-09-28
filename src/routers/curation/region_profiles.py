@@ -17,7 +17,6 @@ from src.routers.curation._config_common_models import ActiveRef, api_error
 from src.routers.curation._region_profile_models import (
     RegionProfileActivateRequest,
     RegionProfileBody,
-    RegionProfileCloneRequest,
     RegionProfileCreateRequest,
     RegionProfileDeactivateRequest,
     RegionProfileDoc,
@@ -151,6 +150,10 @@ def _template_names_only() -> list[str]:
 
 @router.get('/region_profiles/schema')
 async def get_region_profile_schema() -> dict[str, Any]:
+    # TODO(W3/W4 review 2026-09-28, Minor 5): placeholder -- every field is
+    # 'string'/'advanced'/enum=None regardless of its real type/group, and
+    # `_region_profile_models.py`'s schema dataclasses stay unused.
+    # Tracked for whichever wave next builds the profile editor UI.
     from dataclasses import fields as dc_fields
 
     from src.config import DetectionProfile
@@ -357,17 +360,16 @@ async def list_region_profiles(
                     reads_text=body.get('text_reader', 'none') != 'none',
                 )
             )
-    store2 = get_config_store()
     active_name, active_revision = None, None
-    ref = store2.current.active_profile
+    ref = store.current.active_profile
     if isinstance(ref, tuple):
         active_name, active_revision = ref
     return RegionProfileList(
         profiles=[_to_summary(r) for r in records if r is not None],
         templates=templates,
         active=ActiveRef(name=active_name, revision=active_revision),
-        config_revision=store2.current.config_revision,
-        stale=store2.current.stale,
+        config_revision=store.current.config_revision,
+        stale=store.current.stale,
     )
 
 
@@ -457,101 +459,10 @@ async def get_region_profile_revision(
     return _to_doc(record)
 
 
-# =============================================================================
-# Clone a profile into a new stored profile
-# =============================================================================
-
-
-async def _resolve_clone_source(
-    client: Any, *, name: str, revision: int | None, source: str | None
-) -> ProfileRecord:
-    if source == 'stored' and revision is not None:
-        record = await get_revision_record(client, name, revision)
-        if record is None:
-            raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
-        return record
-    if source is not None:
-        record = build_record(name, revision=revision)
-        if record is None or record.source != source:
-            raise api_error(404, 'not_found', f'{name!r} has no {source} source')
-        return record
-    if revision is not None:
-        record = await get_revision_record(client, name, revision)
-        if record is not None:
-            return record
-    record = build_record(name, revision=revision)
-    if record is None:
-        raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
-    return record
-
-
-@router.post('/region_profiles/{name}/clone', response_model=RegionProfileDoc, status_code=201)
-async def clone_region_profile(
-    name: str, body: RegionProfileCloneRequest, opensearch: OpenSearchDep
-) -> RegionProfileDoc:
-    from src.config import get_curation_config
-    from src.config.project_context import bind_project
-
-    target_slug = get_curation_config().project_slug
-
-    if body.from_project and body.from_project != target_slug:
-        from src.services.projects.lifecycle import _require_found, _resolve_existing
-
-        source_record = _require_found(
-            await _resolve_existing(body.from_project), body.from_project
-        )
-        if source_record.status not in ('active', 'archived'):
-            raise api_error(
-                409,
-                'clone_source_not_ready',
-                f"'{body.from_project}' is {source_record.status}; only an active or "
-                'archived project can be cloned from',
-                project=body.from_project,
-                project_status=source_record.status,
-            )
-        with bind_project(source_record, read_only=True):
-            source_store = get_config_store()
-            await source_store.ensure_fresh(opensearch)
-            source = await _resolve_clone_source(
-                opensearch, name=name, revision=body.revision, source=body.source
-            )
-    else:
-        store = get_config_store()
-        await store.ensure_fresh(opensearch)
-        source = await _resolve_clone_source(
-            opensearch, name=name, revision=body.revision, source=body.source
-        )
-
-    existing = all_known_names()
-    if body.new_name in existing:
-        raise api_error(409, 'name_conflict', f'{body.new_name!r} is already taken')
-
-    new_body = dict(source.body)
-    report = await validate_profile(
-        None,
-        new_body,
-        segmenter_health=_segmenter_health_fn,
-        class_names=_registry_class_names(),
-        project_slug=target_slug,
-    )
-    if not report.ok:
-        raise api_error(
-            422, 'validation_failed', 'the cloned profile has content errors', report=report
-        )
-
-    source_project = body.from_project or target_slug
-    cloned_from = (
-        f'{source_project}:{name}@{source.revision if source.revision is not None else "-"}'
-    )
-    record = await save_profile(
-        opensearch,
-        name=body.new_name,
-        body=new_body,
-        expected_revision=None,
-        description=body.description if body.description is not None else source.description,
-        cloned_from=cloned_from,
-    )
-    return _to_doc(record, validation=report)
+# POST /region_profiles/{name}/clone lives in _region_profile_clone.py
+# (kept under the 700-LOC ratchet); imported at the bottom of this module
+# for its route-registration side effect, mirroring models.py/
+# _models_sharing.py.
 
 
 # =============================================================================
@@ -568,9 +479,12 @@ async def save_region_profile(
     existing = build_record(name)
     if existing is not None and existing.read_only:
         raise api_error(403, 'read_only', f'{name!r} is read-only')
+    # M-2 fix: PUT is not a back door to create -- POST does that check.
+    if existing is None:
+        raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
 
     report = await validate_profile(
-        None,
+        name,
         body.body.model_dump(),
         segmenter_health=_segmenter_health_fn,
         class_names=_registry_class_names(),
@@ -694,3 +608,9 @@ async def activate_region_profile_route(
         'impact': impact.model_dump(),
         'validation': report.model_dump(),
     }
+
+
+# POST /region_profiles/{name}/clone lives in _region_profile_clone.py
+# (kept under the 700-LOC ratchet); imported for its route-registration
+# side effect.
+from src.routers.curation import _region_profile_clone  # noqa: E402,F401
