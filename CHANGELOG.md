@@ -281,11 +281,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     auto-confirm policy (`verify.boxes_auto_confirmed`). The skip-verify
     and no-VLM-configured paths stay `verified=False`/
     `auto_confirmed=False`, matching pre-W8 behaviour.
+    **Correctness note (2026-09-28 re-review confirmation):** the fields
+    were genuinely restored, but `verified`'s reconstructed rule
+    (`reply is not None`) was wrong -- true even for a VLM rejection or
+    a not-visible answer, contradicting the pre-W8 write and the
+    existing `test_region_status_invariants.py` invariant. Corrected in
+    the fix pass below (R-M4): `verified` now requires at least one
+    ACCEPTED box.
   - **M3 (embedding from a rejected box):** the region-embedding source
     (`_ItemTask.candidate_in_crop`) now syncs to the first ACCEPTED box
     (`runner._sync_accepted_candidate`), never `candidates[0]` (the
     top-scored candidate, which the VLM may have rejected while
     accepting a lower-scored sibling).
+    **Correctness note (2026-09-28 re-review confirmation):** the
+    selection logic itself was correct, but moving the box-list's status
+    write into `bulk_writer._merge` (M1's fix, same commit) removed
+    `F.status` from `t.update_doc` before `region_embed_stage.
+    _eligible_tasks` and `bulk_writer._publish_region_events` ever read
+    it, so this fix had NO OBSERVABLE EFFECT: no region embedding and no
+    `crop.region_verified` event were produced for ANY worker output,
+    including the single-box case that worked before this whole pass.
+    The gate didn't catch it because the embed stage is disabled by
+    default in `_drive_worker` and the M3 test spied on
+    `_sync_accepted_candidate` instead of asserting the real written
+    output. Fixed below (R-M1), with a real end-to-end test replacing
+    the spy.
   - **M4 (multi-box silently on by default):** `DetectionProfile.
     region_max_candidates` renamed to `max_regions_per_item`
     (any_domain_plan.md W8.4/W8.9's name), default changed 3 -> 1.
@@ -336,6 +356,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `test_region_auto_confirm.py`, `test_text_free_worker.py`,
   `test_region_cascade_integrity.py`, `test_vlm_prompts.py`,
   `test_verdicts_to_boxes.py`, `test_detection_profile.py`.
+- **W8 pipeline-wiring fix pass 3 (re-review confirmation, 2026-09-28):
+  1 blocker + 3 majors introduced/left open by the previous fix pass.**
+  Fixes every new finding of the "Re-review 2026-09-27, fix-pass
+  confirmation" section appended to
+  `docs/design/openprocessor_internal/w8_pipeline_review_2026-09-27.md`.
+  - **R-B1 (blocker, livelock):** in merge mode (Path 1 re-verifying a
+    stored `proposed` box), a `region_visible=False` combined-VLM reply
+    now resolves each re-verified candidate to a `rejected` box (keeping
+    its id, reason `region_visible_elsewhere`) via `derive_status` over
+    the full merged list, instead of writing an empty box list.
+    Previously `merge_boxes_for_write(stored, [])` never touched the
+    stored box's id, so it stayed `proposed` forever: every poll made
+    another VLM call and bumped the revision, unbounded --
+    `docker/test/fake_vlm.py` defaults `region_visible` to `false`, so
+    this would have hit immediately in the dev/E2E stack. Fresh-detection
+    writes (no stored box to lose) are unchanged: still an empty list,
+    terminal `no_region_visible`.
+  - **R-M1 (major regression, silent):** restored a PROVISIONAL
+    `F.status` directly onto `t.update_doc` in `runner._box_list_doc`
+    and `region_text_stage.accept_without_vlm` (computed the same way
+    `derive_status` would from this task's own boxes, so it can only
+    ever under-report eligibility, never over-report it) so
+    `region_embed_stage._eligible_tasks` -- which runs BEFORE
+    `bulk_writer._merge` -- can see it again. `bulk_writer._merge` now
+    also corrects `task.update_doc[F.status]` to the REAL merged status
+    once it's known, so `_publish_region_events` (which runs AFTER the
+    merge) reads the accurate value. Region embeddings and
+    `crop.region_verified` events are written/published again for every
+    worker output, not just the ones this pass happened to also touch.
+  - **R-M2 (major regression):** `region_text_stage.accept_without_vlm`
+    now reuses `cand.box_id` (the stored box's own id, set when the
+    candidate came from a stored `proposed` box) instead of always
+    minting `new_box_placeholder(0)`. The no-VLM Path-1 accept used to
+    leave the human's stored box `proposed` forever AND mint a brand-new
+    duplicate `accepted` box for the same geometry.
+  - **R-M3 (M1 residual):** `region_boxes.merge_boxes_for_write` gained
+    an optional `baseline` parameter (the task's fetch-time
+    `stored_boxes` snapshot); `bulk_writer._merge` now passes it. A box a
+    human moved or deleted DURING its own VLM re-verification call is
+    detected per-box (baseline vs. the live re-read doc) and the human's
+    newer state wins -- a move is no longer silently reverted to the
+    stale geometry the VLM verified against, and a delete is no longer
+    resurrected by the pass's now-stale verdict.
+  - **R-M4 (M2 semantics):** `verified` is `reply is not None AND at
+    least one box accepted`, never `reply is not None` alone -- a VLM
+    rejection or a not-visible answer is a real reply but never a
+    confirmed region. Restores the pre-W8 semantics and the
+    `test_region_status_invariants.py` invariant this contradicted.
+  - **Nit:** corrected the `_stopper` deadline-fix comment
+    (`test_region_cascade_integrity.py`) -- it described the flake's
+    cause backwards (a slower `asyncio.sleep(0.01)` makes a fixed
+    500-iteration budget take MORE wall time, not less); the real cause
+    is plain wall-clock variance against a fixed ~5s budget under xdist
+    CPU contention.
+  New tests: `tests/curation/test_region_not_visible_terminal_r_b1.py`,
+  `tests/curation/test_region_no_vlm_reuses_box_id_r_m2.py`,
+  `tests/curation/test_region_merge_concurrent_edit_m1.py`; rewrote
+  `test_region_multi_box_pipeline.py`'s M3 embedding test to drive the
+  real embed stage + event publisher end-to-end (asserting the written
+  `F.embedding` and the published event) instead of spying on
+  `_sync_accepted_candidate`; extended `test_region_rejected_candidate.py`
+  and `test_region_no_verdict_cap.py` with `verified is False` assertions
+  on rejected writes. **Not fixed this pass, confirmed pre-existing and
+  left for W8c** (per the review's r1): a requeue from a terminal status
+  to `pending_detection`/`pending_verification` still runs in "replace"
+  mode against any stored boxes, including human-sourced ones -- the
+  requeue boundary itself, plus the legacy-scalar readers listed in the
+  original W8 pipeline review, remain W8c scope.
 - **W2b-finish: independent re-verification of the Opus review fix pass
   (2026-09-27), plus merging in W2's reviewed config-store hot reload.**
   Merged `main` (W2 config store hot reload, `op_global_configs`, P3F
