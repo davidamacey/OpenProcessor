@@ -18,6 +18,7 @@ from src.routers.curation.pipeline_params import (
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
     RUN_VLM_DESC as _RUN_VLM_DESC,
+    omitted_pack_is_store_active,
     reject_detection_profile,
     resolve_run_prompt_pack,
 )
@@ -69,6 +70,12 @@ async def pipeline_auto_label_start(
     # `prompt_pack` name.
     prompt_pack_was_omitted = not isinstance(prompt_pack, str)
     prompt_pack, prompt_pack_revision = await resolve_run_prompt_pack(opensearch, prompt_pack)
+    if prompt_pack_was_omitted:
+        # R7-2 fix (Major, W3/W4 round-7 review): only the store-active
+        # case has TOCTOU draft risk -- a legacy-settings-doc/env/file
+        # default has nothing to go stale against, so it must keep
+        # running the exact pack it echoes.
+        prompt_pack_was_omitted = omitted_pack_is_store_active(prompt_pack)
     try:
         return auto_label_job.start_job(
             # R6-m1 fix: the worker must invoke the internal implementation

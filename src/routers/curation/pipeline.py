@@ -24,6 +24,7 @@ from src.routers.curation.pipeline_params import (
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
     labeler_resolution_args,
+    omitted_pack_is_store_active,
     reject_detection_profile,
     resolve_run_prompt_pack,
 )
@@ -198,14 +199,12 @@ async def _run_auto_label(
         # `revision=None` to the pinned body, B1 round-2), NOT "not yet
         # resolved." Re-running `resolve_run_prompt_pack` on that
         # already-resolved bare `active_name` here re-entered the N7
-        # "bare name -> latest saved revision" branch and silently
-        # pinned an un-activated draft -- the original round-1 B1 bug,
-        # reachable again via the no-pack default path since the job no
-        # longer crashes. `prompt_pack_resolved` is `/start`'s own
-        # explicit signal ("I already ran the resolver for this
-        # request"), set `True` unconditionally there (pinned, bare-name,
-        # AND omitted alike) -- so this branch only fires for a call that
-        # never went through `/start`'s resolver at all.
+        # "bare name -> latest saved revision" branch and silently pinned
+        # an un-activated draft -- the round-1 B1 bug, reachable again via
+        # the no-pack default path since the job no longer crashes.
+        # `prompt_pack_resolved` is `/start`'s own explicit "I already ran
+        # the resolver" signal, set unconditionally there -- so this
+        # branch only fires for a call that never went through `/start`.
         #
         # R6-1b fix: capture "was `prompt_pack` omitted" from the RAW
         # incoming param before `resolve_run_prompt_pack` overwrites it
@@ -214,6 +213,9 @@ async def _run_auto_label(
         # signal `/start` passes through explicitly.
         prompt_pack_omitted = not isinstance(prompt_pack, str)
         prompt_pack, prompt_pack_revision = await resolve_run_prompt_pack(opensearch, prompt_pack)
+        if prompt_pack_omitted:
+            # R7-2 fix: only the store-active case has TOCTOU draft risk.
+            prompt_pack_omitted = omitted_pack_is_store_active(prompt_pack)
     # `/start` already resolved this `(prompt_pack, prompt_pack_revision)`
     # at request time when the branch above is skipped -- re-running
     # `resolve_run_prompt_pack` on the bare name here would silently

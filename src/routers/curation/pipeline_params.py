@@ -196,6 +196,33 @@ async def resolve_run_prompt_pack(
     return resolved, revision
 
 
+def omitted_pack_is_store_active(resolved_name: str | None) -> bool:
+    """True when ``resolved_name`` (the echo for an omitted per-run
+    ``prompt_pack``) came from the config store's own activation, not a
+    legacy settings-doc/env/file default (R7-2 fix, W3/W4 round-7 review,
+    Major).
+
+    ``labeler_resolution_args``'s ``(None, None)`` re-resolution exists
+    only to dodge the store-active-pack TOCTOU (R6-1b): the echoed name
+    can go STALE between request time and the VLM stage actually running,
+    once a *different* pack is activated. A legacy-settings-doc or
+    env/file default has no such staleness -- nothing "activates" out
+    from under it -- so forcing it through ``(None, None)`` instead just
+    makes the job silently run ``active_prompt_pack()`` (the env/file
+    default) while the summary/echo keeps reporting the settings-doc
+    name: the job runs a DIFFERENT pack than the one it reports and the
+    one ``8bed60f3`` ran. Scoping the omitted signal to "the echo really
+    is the store's current active pack" keeps the TOCTOU fix for the one
+    path that needs it and restores echo == run everywhere else.
+    """
+    from src.services.config_store import get_config_store
+
+    ref = get_config_store().current.active_pack
+    if ref is None or ref == 'off':
+        return False
+    return ref[0] == resolved_name
+
+
 def labeler_resolution_args(
     prompt_pack: str | None, prompt_pack_revision: int | None, *, prompt_pack_omitted: bool
 ) -> tuple[str | None, int | None]:
