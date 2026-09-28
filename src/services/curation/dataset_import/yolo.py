@@ -41,12 +41,21 @@ class DatasetPathNotAllowedError(Exception):
     pass
 
 
-def _names_list(raw: Any) -> list[str] | None:
+def _names_map(raw: Any) -> dict[int, str] | None:
+    """Parse a YOLO ``data.yaml`` ``names`` field into ``{index: name}``.
+
+    A list is dense (``enumerate``); a dict may be sparse (a class pruned
+    from ``data.yaml`` leaves a gap). A missing index must never be filled
+    in from iteration order — that crosses a label at that index onto the
+    next *present* name, mislabeling it (the exact bug class this wave
+    exists to close). Absent indices are simply not present in the map, so
+    a lookup miss is a clean ``label_class_out_of_range``.
+    """
     if raw is None:
         return None
     if isinstance(raw, list):
-        return [str(n) for n in raw]
-    return [str(raw[k]) for k in sorted(raw, key=int)]
+        return {i: str(n) for i, n in enumerate(raw)}
+    return {int(k): str(v) for k, v in raw.items()}
 
 
 def _find_yaml(root: Path) -> Path | None:
@@ -86,25 +95,37 @@ def _resolve_entry(entry: str, yaml_dir: Path, root_field: str | None) -> Path |
     return None
 
 
-def discover_yolo(root: Path, issues: IssueCollector) -> tuple[dict[str, list[Path]], list[str]]:
-    """Return ``({split: [image paths]}, class names)``. Emits
-    ``data_yaml_invalid`` / ``data_yaml_names_missing`` / ``split_dir_missing``."""
+def discover_yolo(
+    root: Path, issues: IssueCollector
+) -> tuple[dict[str, list[Path]], dict[int, str]]:
+    """Return ``({split: [image paths]}, {class index: class name})``. Emits
+    ``data_yaml_invalid`` / ``data_yaml_names_missing`` / ``split_dir_missing``
+    / ``data_yaml_names_sparse``."""
     yaml_path = _find_yaml(root)
     if yaml_path is None:
         # images/<split> or <split>/images tree, no data.yaml.
         raise FormatUndetectedError(str(root))
 
     data = yaml.safe_load(yaml_path.read_text(encoding='utf-8')) or {}
-    names = _names_list(data.get('names'))
+    names = _names_map(data.get('names'))
     if names is None:
         issues.add('data_yaml_names_missing', file=str(yaml_path.name))
-        return {}, []
+        return {}, {}
     nc = data.get('nc')
     if nc is not None and int(nc) != len(names):
         issues.add(
             'data_yaml_invalid', file=str(yaml_path.name), detail={'reason': 'nc != len(names)'}
         )
         return {}, names
+    if names and (max(names) + 1 != len(names)):
+        # A gap in the index range (e.g. a class pruned from data.yaml).
+        # Never fill it in from iteration order -- missing indices stay
+        # missing and reject at the label-row lookup.
+        issues.add(
+            'data_yaml_names_sparse',
+            file=str(yaml_path.name),
+            detail={'present': sorted(names)},
+        )
 
     splits: dict[str, list[Path]] = {}
     for key in _SPLIT_KEYS:
@@ -136,7 +157,7 @@ def label_path_for(image: Path) -> Path:
 
 
 def read_yolo_labels(
-    txt_path: Path, *, names: list[str], rel_file: str, issues: IssueCollector
+    txt_path: Path, *, names: dict[int, str], rel_file: str, issues: IssueCollector
 ) -> tuple[list[LabelBox], bool]:
     """Parse one YOLO ``.txt`` -> ``(boxes, label_file_exists)``.
 
@@ -169,7 +190,7 @@ def read_yolo_labels(
         except ValueError:
             issues.add('label_row_malformed', file=rel_file, line=lineno)
             continue
-        if cls_id < 0 or cls_id >= len(names):
+        if cls_id not in names:
             issues.add(
                 'label_class_out_of_range', file=rel_file, line=lineno, detail={'cls': cls_id}
             )

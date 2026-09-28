@@ -124,6 +124,42 @@ class TestRowIssues:
         assert scan.entries[0].boxes == []
 
 
+class TestSparseNames:
+    def _scan_with_names_dict(self, tmp_path: Path, names: dict[int, str], label_line: str):
+        names_yaml = '\n'.join(f'  {i}: {n}' for i, n in names.items())
+        (tmp_path / 'data.yaml').write_text(f'train: images/train\nnames:\n{names_yaml}\n')
+        _write_image(tmp_path / 'images/train/a.jpg')
+        (tmp_path / 'labels/train').mkdir(parents=True, exist_ok=True)
+        (tmp_path / 'labels/train/a.txt').write_text(label_line + '\n')
+        return scan_yolo(tmp_path)
+
+    def test_sparse_gap_index_never_crosses_to_wrong_name(self, tmp_path: Path) -> None:
+        """Review probe W10 M3: names={0: car, 2: truck}. Index 1 has no
+        name -- a row using cls=1 must be rejected as unmapped, never
+        silently resolved to 'truck' (or 'car')."""
+        scan = self._scan_with_names_dict(tmp_path, {0: 'car', 2: 'truck'}, '1 0.5 0.5 0.2 0.2')
+        codes = {i.code for i in scan.issues.issues()}
+        assert 'label_class_out_of_range' in codes
+        assert scan.entries[0].boxes == []
+        names = {b.dataset_class for b in scan.entries[0].boxes}
+        assert 'truck' not in names
+        assert 'car' not in names
+
+    def test_sparse_present_index_resolves_correctly(self, tmp_path: Path) -> None:
+        """Same sparse dict; cls=2 (the real, present index) must resolve
+        to 'truck', not be rejected."""
+        scan = self._scan_with_names_dict(tmp_path, {0: 'car', 2: 'truck'}, '2 0.5 0.5 0.2 0.2')
+        codes = {i.code for i in scan.issues.issues()}
+        assert 'label_class_out_of_range' not in codes
+        assert len(scan.entries[0].boxes) == 1
+        assert scan.entries[0].boxes[0].dataset_class == 'truck'
+
+    def test_sparse_names_flagged_as_info_issue(self, tmp_path: Path) -> None:
+        scan = self._scan_with_names_dict(tmp_path, {0: 'car', 2: 'truck'}, '0 0.5 0.5 0.2 0.2')
+        codes = {i.code for i in scan.issues.issues()}
+        assert 'data_yaml_names_sparse' in codes
+
+
 def test_data_yaml_path_escaping_root_rejected(tmp_path: Path) -> None:
     """A ``path:`` (or resolved image) outside the allowed roots is
     ``dataset_path_not_allowed`` via the ``path_guard`` callback."""

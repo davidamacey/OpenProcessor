@@ -24,6 +24,7 @@ DatasetIssueCode = Literal[
     'dataset_too_large',
     'data_yaml_invalid',
     'data_yaml_names_missing',
+    'data_yaml_names_sparse',
     'split_dir_missing',
     'coco_json_invalid',
     'coco_category_duplicate_name',
@@ -69,6 +70,9 @@ ISSUE_CATALOG: dict[str, IssueSpec] = {
     'dataset_too_large': IssueSpec('error', True, False, 'Dataset exceeds the preview file limit'),
     'data_yaml_invalid': IssueSpec('error', True, False, 'data.yaml is invalid'),
     'data_yaml_names_missing': IssueSpec('error', True, False, 'data.yaml has no class names'),
+    'data_yaml_names_sparse': IssueSpec(
+        'info', False, False, 'data.yaml class names have a gap in the index range'
+    ),
     'split_dir_missing': IssueSpec('warning', False, False, 'A declared split resolves to nothing'),
     'coco_json_invalid': IssueSpec('error', True, False, 'COCO annotation file is invalid'),
     'coco_category_duplicate_name': IssueSpec(
