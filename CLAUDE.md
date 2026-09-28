@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## IMPORTANT: Read the project vision first
+
+Before making design decisions or judgment calls, read
+[`docs/VISION_AND_GOALS.md`](docs/VISION_AND_GOALS.md) — the canonical
+statement of what OpenProcessor is for, the full v0.1.0 feature scope, and
+the standards this codebase is held to (no dead code, fail-closed
+isolation, class identity by name never index, review depth matched to
+real risk). It also documents what's deliberately out of scope for this
+release and why.
+
 ## IMPORTANT: Python Environment
 
 **ALWAYS call the venv binaries directly — never use `source` to activate:**

@@ -4,6 +4,12 @@
 
 Object detection, face recognition, visual search, OCR, and embeddings - all through a unified REST API with TensorRT acceleration.
 
+OpenProcessor also includes a full dataset-curation subsystem — ingest,
+detect, review and label, import/export datasets, train and promote models
+— designed to work for *any* image domain, not just the built-in
+capabilities above. See [`docs/VISION_AND_GOALS.md`](docs/VISION_AND_GOALS.md)
+for the project's full vision, feature scope, and standards.
+
 ---
 
 ## Quick Start
