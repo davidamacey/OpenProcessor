@@ -10,11 +10,20 @@ through ``src/services/curation/class_label.py``
 Scope note (deviation from the literal any_domain_plan.md W10.17
 wording, which reads "no dict literal sets class_validated: True
 outside class_label.py" with no carve-outs): one pre-existing,
-out-of-scope automated validator — ``clustering/auto_promote.py``
-(majority-agreement auto-validation, not a human or imported label) —
-is allowlisted below. It predates W10, is not part of the W10.0
-human/import label abstraction table, and rewriting it is out of this
-wave's scope. See the report for the full reasoning.
+out-of-scope automated validator — ``clustering/auto_promote.py``'s
+``_merge_promote`` (majority-agreement auto-validation, not a human or
+imported label) — is allowlisted below. It predates W10, is not part
+of the W10.0 human/import label abstraction table, and rewriting it is
+out of this wave's scope. See the report for the full reasoning.
+
+W10 fix-pass note (Opus review 2026-09-28, minor N3): the allowlist is
+scoped to the specific ``(file, function)`` pair, not the whole file —
+a future second writer added anywhere else in ``auto_promote.py`` is
+still caught. The scan is also literal-only (a subscript assignment
+like ``update['class_validated'] = True`` or a variable value like
+``{'class_validated': validated}`` is not detected) -- documented, not
+fixed, in this pass; see ``test_class_sources.py`` for the same
+known limit on its own scanner.
 """
 
 from __future__ import annotations
@@ -28,10 +37,12 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # The one legitimate writer, plus one pre-existing out-of-scope automated
-# validator (see module docstring).
+# validator, narrowed to the exact function (see module docstring).
 _ALLOWED_CLASS_VALIDATED_TRUE_FILES = {
     'src/services/curation/class_label.py',
-    'src/services/curation/clustering/auto_promote.py',
+}
+_ALLOWED_CLASS_VALIDATED_TRUE_FUNCTIONS = {
+    ('src/services/curation/clustering/auto_promote.py', '_merge_promote'),
 }
 
 _SCAN_ROOTS = ('src', 'scripts')
@@ -75,10 +86,28 @@ def _dict_sets_class_validated_true(node: ast.Dict) -> bool:
     return False
 
 
+def _enclosing_function_names(tree: ast.AST) -> dict[int, str]:
+    """Map every ``ast.Dict`` node's ``id()`` to the name of its nearest
+    enclosing function (module-level dicts are absent from the map)."""
+    names: dict[int, str] = {}
+
+    def _walk(node: ast.AST, current_fn: str | None) -> None:
+        fn = current_fn
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            fn = node.name
+        if isinstance(node, ast.Dict) and fn is not None:
+            names[id(node)] = fn
+        for child in ast.iter_child_nodes(node):
+            _walk(child, fn)
+
+    _walk(tree, None)
+    return names
+
+
 def test_no_second_class_validated_writer() -> None:
-    """No dict literal outside class_label.py (+ the documented
-    allowlist) sets ``class_validated: True`` — the "second write body"
-    shape ``label_import.py`` used before this wave.
+    """No dict literal outside class_label.py (+ the documented,
+    function-scoped allowlist) sets ``class_validated: True`` — the
+    "second write body" shape ``label_import.py`` used before this wave.
 
     Excludes OpenSearch query-DSL dicts (``{'term': {'class_validated':
     True}}`` and friends) — those are read filters, not writes.
@@ -90,13 +119,17 @@ def test_no_second_class_validated_writer() -> None:
             continue
         tree = ast.parse(path.read_text(encoding='utf-8'), filename=rel)
         query_ids = _query_dict_ids(tree)
-        violations.extend(
-            f'{rel}:{node.lineno}'
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Dict)
-            and id(node) not in query_ids
-            and _dict_sets_class_validated_true(node)
-        )
+        fn_names = _enclosing_function_names(tree)
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Dict)
+                and id(node) not in query_ids
+                and _dict_sets_class_validated_true(node)
+            ):
+                continue
+            if (rel, fn_names.get(id(node))) in _ALLOWED_CLASS_VALIDATED_TRUE_FUNCTIONS:
+                continue
+            violations.append(f'{rel}:{node.lineno}')
     assert not violations, (
         'dict literal(s) set class_validated: True outside class_label.py: ' + ', '.join(violations)
     )
