@@ -333,17 +333,17 @@ class TestMergeClassRefusesFrozenCrops:
 
 class TestIsHumanOwnedClassPredicate:
     def test_true_for_human_and_human_move(self) -> None:
-        from src.clients.occ import is_human_owned_class
+        from src.clients.occ import is_locked_class
 
-        assert is_human_owned_class({'class_source': 'human'}) is True
-        assert is_human_owned_class({'class_source': 'human_move'}) is True
+        assert is_locked_class({'class_source': 'human'}) is True
+        assert is_locked_class({'class_source': 'human_move'}) is True
 
     def test_false_for_machine_sources(self) -> None:
-        from src.clients.occ import is_human_owned_class
+        from src.clients.occ import is_locked_class
 
-        assert is_human_owned_class({'class_source': 'vlm'}) is False
-        assert is_human_owned_class({'class_source': 'classifier_model'}) is False
-        assert is_human_owned_class({}) is False
+        assert is_locked_class({'class_source': 'vlm'}) is False
+        assert is_locked_class({'class_source': 'classifier_model'}) is False
+        assert is_locked_class({}) is False
 
 
 class TestStripClassWriteFields:
@@ -370,7 +370,7 @@ class TestVlmLabelBatchHumanGuard:
     async def test_human_owned_crop_never_reaches_vlm(self, tmp_path, monkeypatch) -> None:
         """The gap this guards against: ``vlm_label_batch`` fetches by
         caller-supplied crop_id with no upstream filter. Without the
-        per-crop ``is_human_owned_class`` check, a human-owned crop's
+        per-crop ``is_locked_class`` check, a human-owned crop's
         class_source/label_source could get silently overwritten by
         whatever the VLM returned.
 
@@ -441,10 +441,10 @@ class TestPipelineVlmMergerHumanGuard:
         upstream — so a human-owned doc can never reach that merger in
         the first place. This test just pins the predicate's coverage of
         both real human-write shapes so that invariant stays true."""
-        from src.clients.occ import is_human_owned_class
+        from src.clients.occ import is_locked_class
 
-        assert is_human_owned_class({'class_source': 'human', 'class_validated': True}) is True
-        assert is_human_owned_class({'class_source': 'human_move', 'class_validated': True}) is True
+        assert is_locked_class({'class_source': 'human', 'class_validated': True}) is True
+        assert is_locked_class({'class_source': 'human_move', 'class_validated': True}) is True
 
 
 class TestDetectionWorkerBulkWriterHumanGuard:

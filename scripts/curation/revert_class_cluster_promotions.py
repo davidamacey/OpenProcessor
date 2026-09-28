@@ -19,7 +19,7 @@ written by ``auto_promote`` for a ``cluster_id < RESIDUAL_CLUSTER_ID_OFFSET``
 ``confidence`` roll back to what they were immediately before the bad
 promotion, and ``class_validated`` is set back to ``false``.
 
-Human-owned items are never touched (``is_human_owned_class`` guard,
+Human-owned items are never touched (``is_locked_class`` guard,
 mirroring the painless no-op other writers use) -- if a human
 subsequently confirmed a class this script would otherwise revert, the
 human write wins and the item is left alone.
@@ -52,7 +52,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 
-from src.clients.occ import is_human_owned_class, occ_skip_on_conflict_bulk
+from src.clients.occ import is_locked_class, occ_skip_on_conflict_bulk
 from src.config.curation import items_index
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.ingest_class_sources import CLUSTER_MAJORITY_CLASS_SOURCE
@@ -165,7 +165,7 @@ async def _run(opensearch_url: str, *, apply: bool) -> int:
             return 0
 
         def _merge_revert(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
-            if is_human_owned_class(current):
+            if is_locked_class(current):
                 return {}
             # Re-check freshest state: only revert if it's still the
             # cluster_majority_agreement write we scrolled for.

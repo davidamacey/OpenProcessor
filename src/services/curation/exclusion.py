@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.clients.occ import is_human_owned_class
+from src.clients.occ import is_locked_class
 from src.services.curation.cluster_ids import cluster_kind
 
 
@@ -90,7 +90,7 @@ def unexclusion_update(
     if PRIOR_VALIDATED in current and current[PRIOR_VALIDATED] is not None:
         validated = bool(current[PRIOR_VALIDATED])
     else:
-        validated = is_human_owned_class(current)
+        validated = is_locked_class(current)
     class_id = current.get('class_id')
     validated = validated and class_id is not None
 

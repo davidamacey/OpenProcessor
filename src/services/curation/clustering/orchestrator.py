@@ -180,10 +180,10 @@ def _guard_condition_matches(clauses: list[GuardClause], source: dict[str, Any])
     return False
 
 
-# Mirrors src.clients.occ.is_human_owned_class's class_source check (a
+# Mirrors src.clients.occ.is_locked_class's human-marker class_source check (a
 # string containing 'human') plus the class_validated / class_excluded
 # guards vlm.py's _class_locked already applies on its own write path. Kept
-# as its own clause list (rather than calling is_human_owned_class from
+# as its own clause list (rather than calling is_locked_class from
 # painless, which isn't possible) -- test_orchestrator_guarded_writes.py
 # cross-checks the two stay equivalent.
 CLASS_CLUSTER_WRITE_GUARD_CLAUSES: list[GuardClause] = [

@@ -30,8 +30,8 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation.classes import create_registry_class
+from src.services.curation.class_label import human_label_update
 from src.services.curation.export_support import scroll_hits
-from src.services.curation.human_label import human_label_update
 from src.services.curation.new_class_terms import is_open_proposal, proposal_term_query
 
 
