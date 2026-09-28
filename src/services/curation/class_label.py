@@ -143,10 +143,18 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
     """Merge body for a class-label write on an EXISTING item: a
     restorable pre-write snapshot plus :func:`class_label_fields`.
 
-    This is the single function both ``human_label_update``-shaped human
-    writers and dataset import's per-image reconciliation (W10.6 step 3)
-    call — the one class-label writer the AST gate
+    This is the single function every ``human_label_update``-shaped
+    human writer calls — the one class-label writer the AST gate
     (``tests/test_class_label_single_writer.py``) checks for.
+
+    W10 fix-pass correction (Opus review 2026-09-28, minor m10): dataset
+    import's `import_dataset()` (`dataset_import/job.py`) does NOT call
+    this on its update path — it goes through `occ_upsert_bulk`'s
+    generic `_merge_preserving_human` guard instead (now with an
+    explicit `is_locked_item` pre-filter, see the W10 fix-pass CHANGELOG
+    entry), which has no restorable snapshot. Routing dataset import's
+    update path through this function for a real snapshot is future
+    work, not done this pass.
     """
     from src.services.curation.history import record_class_snapshot
 

@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **W10 dataset-import foundation fix pass (post-review).** An
+  independent review of the W10 foundation slice below found 4 majors;
+  all fixed before any route is wired to `import_dataset()`:
+  - **Sparse YOLO `names` dict crossed class indexes** (`yolo.py`): a
+    `data.yaml` `names` dict with a gap (e.g. `{0: car, 2: truck}`, a
+    class pruned from training) built a dense list by sorted-position, so
+    index `1` silently resolved to `truck` instead of being rejected —
+    the exact index-crossing bug this wave exists to close. Now parsed
+    into `dict[int, str]` and looked up by key; a missing index is a
+    clean `label_class_out_of_range` (new info issue
+    `data_yaml_names_sparse` flags the gap).
+  - **Re-import over an existing item could overwrite a locked (human or
+    validated-import) class, keeping `class_source: human`** (`job.py`):
+    `import_dataset()` now mgets existing docs first and drops any
+    `is_locked_item()` match from the write set, reported as a conflict
+    (`DatasetImportReport.conflicts`/`items_locked_skipped`), never
+    applied. `import_ids` is appended, not replaced. The region-box
+    write path had the same hole (`_region_merger` unconditionally
+    overwrote the box list) and is fixed the same way
+    (`regions_locked_skipped`).
+  - **The class-identity E2E test could not detect index-crossing**
+    (`tests/integration/test_class_identity_e2e.py`): every hop compared
+    values derived from the same map, so a deliberate car/truck name
+    swap still passed. Rewritten to tie each box's specific geometry to
+    its specific class name at every hop (import, export through the
+    real `GenericYoloExportService`, promote, predict) — verified to
+    fail against the reversed-names reproduction.
+  - **Lock-rule call sites**: `exclusion.py`'s legacy un-exclude branch
+    now checks `_is_human_marker` instead of the broader `is_locked_class`
+    (a `test_holdout` item with a machine class was incorrectly restored
+    as validated); `_merge_preserving_human` (`occ.py`) now gates the
+    `class_source`/`label_source` guards on `is_locked_class`, not a bare
+    per-value marker check, so an unvalidated ("suggestion") import is no
+    longer incorrectly locked on re-ingest — correcting the "Re-ingest ...
+    now respects it" claim below, which previously only preserved
+    provenance strings, not the class value; `revert_class_cluster_
+    promotions.py` now reports frozen-`test_holdout` skips as their own
+    counter instead of silently folding them in.
+  - **`scripts/curation/import_labeled_dataset.py`'s default (labeled)
+    mode was broken two ways** (posts forbidden fields to
+    `/ingest/batch`, and to the deleted `/import_labels/batch`) with its
+    own test deleted and no replacement. It now fails loudly and
+    immediately when invoked without `--images-only` instead of 422ing
+    deep in a request; `--images-only` is unaffected. Fixed every stale
+    doc pointing at the removed `/import_labels(/batch)` routes.
+  - Narrowed the `auto_promote.py` `class_validated: True` AST-gate
+    allowlist (`test_class_label_single_writer.py`) to the specific
+    `_merge_promote` function, not the whole file.
+
 ### Added
 - **W10 dataset import (partial): the lock rule, class-name mapping, and a
   reduced-scope import job.** See
