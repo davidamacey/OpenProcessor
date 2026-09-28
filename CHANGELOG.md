@@ -296,6 +296,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the legacy scalars this pass).
 
 ### Fixed
+- **W3+W4 prompt-pack/region-profile CRUD fix pass, round 7 (independent
+  Opus review, 2026-09-28): 1 blocker + 1 major (new, both introduced by
+  round 6's `pipeline.py` 3-way split) + 1 minor test-quality gap + 1
+  major (pre-existing, mirror of R6-2).** Fixes every finding of the
+  round-7 section appended to
+  `docs/design/openprocessor_internal/w3_w4_review_2026-09-28.md`:
+  - **Blocker (R7-1, the worker's IVF auto-retrain self-trigger crashed
+    on every run):** `scripts/curation/auto_label_worker.py`'s
+    `_IVF_PIPELINE_PATH` still pointed at `pipeline:pipeline_auto_label`
+    — round 6's split made that name the thin PUBLIC route wrapper,
+    which has no `progress` parameter, while the worker always calls
+    `pipeline_fn(opensearch=, progress=, **args)`. Every IVF centroid
+    auto-retrain the idle worker fired ended `status: failed`, so
+    centroids never refreshed and the worker re-fired (and re-failed) on
+    every idle check. Fixed: point the constant at the internal
+    `pipeline:_run_auto_label` instead. Regression:
+    `tests/curation/test_r7_fixes.py` binds every pipeline path the
+    worker can resolve (the IVF constant and `_run_auto_label`'s own
+    `_pipeline_import_path`) against the worker's real call shape.
+  - **Major (R7-2, with `prompt_pack` omitted and a legacy settings-doc
+    default, the job ran a different pack than it echoed):** R6-1b's
+    `(None, None)` re-resolution (dodging the store-active-pack TOCTOU)
+    fired for EVERY omitted-pack case, including a legacy
+    `settings.defaults.prompt_pack` override or a plain env/file
+    default — neither of which has any staleness to dodge. The job's
+    `summary`/echoed `prompt_pack` kept reporting the settings-doc name
+    while the VLM labeler silently ran `active_prompt_pack()` (the
+    env/file default) instead. Per-item `vlm_prompt_pack` stamps stayed
+    correct (they read `labeler._pack` directly); only the job-level
+    summary and operator expectation were wrong. Fixed: new
+    `omitted_pack_is_store_active()` (`pipeline_params.py`) scopes the
+    omitted signal to "the echoed name really is the config store's own
+    active pack" — both `/start` and the direct-call branch in
+    `_run_auto_label` now gate `prompt_pack_omitted` through it before
+    passing it to `labeler_resolution_args`. Regression:
+    `tests/curation/test_r7_fixes.py` (legacy-settings-doc-default case
+    at both call sites, plus the store-active TOCTOU case still holds).
+  - **Minor (R7-3, the production line applying R6-1b's `labeler_
+    resolution_args` inside the job had no test driving the real
+    execution path):** the landed R6-1b tests checked that `/start` sets
+    the flag and that the helper maps it in isolation, but nothing drove
+    the actual VLM stage through it — a re-implementation of the
+    selection logic in `test_r6_worker_process_cold_store` stayed green
+    even with the production call site reverted. Regression:
+    `tests/curation/test_r7_fixes.py` runs `/start`'s real trigger args
+    through `_run_auto_label(..., run_vlm=True)` for both the
+    active-pack-switch and direct-call shapes, spying on the actual
+    labeler instance obtained, plus a unit-level spy confirming the
+    direct-call branch invokes `omitted_pack_is_store_active` at all.
+  - **Major (R7-4, pre-existing, mirror of R6-2: clone copies the
+    profile but not an env/file pack, and the target's fallback pack was
+    never gated):** R6-2 fixed clone skipping PROFILE validation when
+    the source has no real stored profile. This round's reviewer found
+    the mirror: when the PROFILE axis is cloned but the source's PACK is
+    an env/file default (`revision=None`, never written to the store —
+    `_clone_activations` skips it), the gate's `pending_sibling` for the
+    cloned profile was still the SOURCE's pack body, not the TARGET's
+    actual post-clone fallback pack — so a valid source pairing (e.g. a
+    full multi-box pack + a 3-region profile) could pass the gate while
+    the target actually goes live with ITS OWN stripped pack under that
+    same cloned 3-region profile, a pairing nobody checked. Fixed:
+    `clone_activation_gate.py` gained `pack_will_be_cloned`, mirroring
+    `profile_will_be_cloned`'s exact condition; when the pack won't be
+    cloned, the profile-cloned branch validates against
+    `resolve_prompt_pack()` bound to the target instead of the source
+    body. Also closes Item 4's over-rejection Nit: the pack-only branch
+    now returns early when the pack itself won't be cloned either (was
+    previously always validating a pack body that would never land).
+    Regression: `tests/projects/test_r7_clone_pack_mirror.py`.
+  - Nits: `pipeline_public.py`'s OpenAPI `description` restored to
+    describe the public contract (it had regressed to describing
+    internals after the round-6 split); the internal notes moved to a
+    comment. CHANGELOG's round-5 R5-2 entry corrected (it said the fix
+    keyed off `prompt_pack is None`; the landed fix actually used the
+    dedicated `prompt_pack_resolved` signal). Round-5's m-c/m-d gaps,
+    previously undocumented, now noted under the round-5 entry below.
+  - Landed as permanent tests: `tests/curation/test_r7_fixes.py`,
+    `tests/projects/test_r7_clone_pack_mirror.py`.
 - **W3+W4 prompt-pack/region-profile CRUD fix pass, round 6 (independent
   Opus review, 2026-09-28): 1 blocker (two halves) + 1 major + 4
   test-quality fixes.** Fixes every finding of the round-6 section
@@ -417,8 +495,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     multi_profile` (both key orders).
   - **Blocker (R5-2, round-4's own R4-3 fix missed the no-pack-specified
     default path — the common/Cropwright case):** `pipeline_auto_label`
-    now re-resolves on `prompt_pack is None`, not `prompt_pack_revision
-    is None`. `/start`'s truly-omitted-pack path resolves to `(active_
+    now re-resolves on the dedicated `prompt_pack_resolved` signal (`/start`
+    sets it `True` unconditionally, for every shape of its request), not
+    `prompt_pack_revision is None`. `/start`'s truly-omitted-pack path resolves to `(active_
     name, None)` at request time — `revision=None` there means "follow
     the active pack's PINNED body dynamically" (`get_prompt_pack`'s
     active-name redirect, B1 round-2), not "unresolved." Keying the job's
@@ -468,6 +547,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Minor (m-a, rollback never refreshed its snapshot before gating):**
     `rollback_axis` now calls `store.ensure_fresh(client)` before reading
     the cross-axis gate inputs or the deleted-target check above.
+  - **Known limitation (m-c, residual): a two-axis `PUT /settings` can
+    still half-write if the SECOND axis's *apply* hits an
+    `ActiveConflictError` after the first axis's already committed.**
+    The gate (R5-1) now runs both axes' checks against each other's
+    pending target before either write, so a genuinely invalid pairing
+    is rejected up front — this is only the narrower window where the
+    second axis's OWN OCC check fails after that. Documented, not fixed:
+    apply both axes under one shared OCC token to close it fully.
+  - **Known limitation (m-d, inherent): concurrent single-axis
+    activations on different axes can each pass against the other's old
+    (not pending) state.** OCC here is per axis, so a `prompt_pack`
+    activation racing a `detection_profile` activation (each via its own
+    direct `/activate` route, not the combined `PUT /settings` R5-1
+    covers) can land a pairing neither request's own gate check saw
+    together. This needs a genuine race to trigger, so it's rated minor.
+    Documented, not fixed: either axis's write condition would need to
+    include the other axis's activation `etag`.
   - **Minor (CHANGELOG over-claims from round 4):** corrected — see the
     round-4 entry above, now flagging that clone was not routed through
     the gate and that only `prompt_pack` rollback had a landed test.

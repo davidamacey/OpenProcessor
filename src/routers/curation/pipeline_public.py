@@ -33,6 +33,12 @@ from src.routers.curation.pipeline_params import (
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 
 
+# Internal: a thin wrapper around `_run_auto_label` -- see that function
+# and the module docstring above for the Python-only params
+# (`prompt_pack_resolved`/`prompt_pack_revision`) this always forces,
+# never settable by an HTTP request. Kept as a comment (not the
+# docstring below) since the docstring is the public OpenAPI
+# `description` -- it must describe only the public contract.
 @router.post('/pipeline/auto_label')
 async def pipeline_auto_label(
     opensearch: OpenSearchDep,
@@ -71,13 +77,19 @@ async def pipeline_auto_label(
     detection_profile: Annotated[str | None, Query(include_in_schema=False)] = None,
     prompt_pack: Annotated[str | None, Query(description=_PROMPT_PACK_DESC)] = None,
 ) -> dict[str, Any]:
-    """Public ``POST /pipeline/auto_label`` route (synchronous, no job).
+    """Run the full auto-labeling chain end-to-end, synchronously (no job):
 
-    A thin wrapper around ``_run_auto_label`` that always calls it with
-    ``prompt_pack_resolved=False`` and ``prompt_pack_revision=None`` --
-    those are real Python-only params now, set only by ``/start``'s own
-    resolved pin and by the worker re-invoking ``_run_auto_label``
-    directly -- never settable by an HTTP request.
+    1. (optional) Re-train FAISS clusters on every embedded item.
+    2. Auto-promote items in high-purity clusters (``cluster_propagation``).
+    3. Run the VLM over remaining unvalidated items with the open-vocabulary
+       prompt — high-confidence labels are auto-validated, ``__new__``
+       proposals are flagged for the curator queue.
+
+    Output enumerates each stage's counts so the labeler dashboard can show
+    "this many items still need a human." Idempotent: safe to re-run.
+
+    For a background job with progress polling, see ``POST
+    /pipeline/auto_label/start`` instead.
     """
     from src.routers.curation.pipeline import _run_auto_label
 
