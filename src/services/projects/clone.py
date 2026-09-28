@@ -175,9 +175,18 @@ async def _validate_clone(
 
             source_index = _get_src_cfg().configs_index
             source_active_names: dict[ConfigAxis, str | None] = {}
+            # R5-3 fix (Major, W3/W4 round-5 review): the revision goes
+            # with the name below, both needed to re-resolve the
+            # SOURCE's exact activated body for the target-context gate
+            # check.
+            source_active_refs: dict[ConfigAxis, tuple[str, int | None] | None] = {}
             for axis in activation_axes:
                 src_activation = await get_activation(client, source_index, axis)
-                source_active_names[axis] = (src_activation or {}).get('name')
+                src_name = (src_activation or {}).get('name')
+                source_active_names[axis] = src_name
+                source_active_refs[axis] = (
+                    (src_name, (src_activation or {}).get('revision')) if src_name else None
+                )
 
         with bind_project(target_record):
             from src.config import get_curation_config as _get_cfg
@@ -241,6 +250,24 @@ async def _validate_clone(
                             f"'{source_name}'; activations cannot be cloned",
                             project=target_record.slug,
                         )
+
+            # R5-3 fix (Major, W3/W4 round-5 review): every check above is
+            # SOURCE-shaped (does the target already have something in
+            # the way). None of them ask whether the source's activated
+            # pair is even VALID in the TARGET's own context -- see
+            # ``clone_activation_gate.py`` (split out to stay under the
+            # 700-LOC ratchet).
+            from src.services.projects.clone_activation_gate import (
+                check_activation_pair_in_target_context,
+            )
+
+            await check_activation_pair_in_target_context(
+                client,
+                source=source,
+                target_record=target_record,
+                source_active_refs=source_active_refs,
+                activation_axes=activation_axes,
+            )
     return source, resolved_axes, target_activations
 
 
