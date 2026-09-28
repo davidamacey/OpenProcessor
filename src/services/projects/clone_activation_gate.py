@@ -112,6 +112,12 @@ async def check_activation_pair_in_target_context(
     profile_will_be_cloned = (
         profile_ref is not None and profile_ref[1] is not None and profile_body is not None
     )
+    # R7-4 fix (Major, pre-existing, W3/W4 round-7 review, mirror of
+    # R6-2): same reasoning as `profile_will_be_cloned` above, applied to
+    # the pack axis -- `pack_ref[1] is None` means an env/file pack
+    # (`activate()`'s own invariant for "never written to the store"),
+    # which `_clone_activations` skips exactly like an unstored profile.
+    pack_will_be_cloned = pack_ref is not None and pack_ref[1] is not None and pack_body is not None
 
     from fastapi import HTTPException
 
@@ -122,10 +128,24 @@ async def check_activation_pair_in_target_context(
         assert profile_ref is not None
         p_name, p_rev = profile_ref
         pending_kwargs: dict[str, Any] = {}
-        if pack_ref is not None and pack_body is not None:
+        if pack_will_be_cloned:
+            assert pack_ref is not None
+            assert pack_body is not None
             pending_kwargs['pending_sibling'] = PromptPack.from_dict(
                 {**pack_body, 'name': pack_ref[0]}
             )
+        else:
+            # R7-4 fix: the pack axis will NOT be copied -- the target
+            # keeps running its OWN fallback pack (env/file default)
+            # after the clone, not the source's env/file pack. Validate
+            # the cloned profile against THAT pack, bound to the target
+            # (this function already runs inside `bind_project
+            # (target_record)`), or the gate validates a pairing that
+            # never lands (the same class of gap R6-2 fixed for the
+            # reverse axis).
+            from src.services.labeling.vlm_prompts import resolve_prompt_pack
+
+            pending_kwargs['pending_sibling'] = resolve_prompt_pack()
         try:
             await run_activation_gate(
                 'detection_profile',
@@ -147,8 +167,16 @@ async def check_activation_pair_in_target_context(
             ) from exc
         return
 
-    if pack_ref is None or pack_body is None:
+    if not pack_will_be_cloned:
+        # R7-4 fix: neither the profile-cloned branch above (returned
+        # already) nor this pack-only path has anything to validate when
+        # the pack itself will not be copied either -- also closes Item
+        # 4's over-rejection Nit (a source env/file pack plus an 'off'/
+        # unstored target profile used to still validate a pack body
+        # that would never land).
         return
+    assert pack_ref is not None
+    assert pack_body is not None
 
     # R6-2 fix (Major, W3/W4 round-6 review): the profile axis is NOT
     # going to be copied (source is 'off', or a registry profile with no
