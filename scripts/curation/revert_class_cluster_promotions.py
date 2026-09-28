@@ -164,8 +164,22 @@ async def _run(opensearch_url: str, *, apply: bool) -> int:
             print('\nDry-run only. Pass --apply to revert.')
             return 0
 
+        locked_counts: dict[str, int] = {'test_holdout': 0, 'other': 0}
+
         def _merge_revert(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
             if is_locked_class(current):
+                # A revert is itself an automated write, so it must
+                # respect the lock rule -- including test_holdout items
+                # that this same buggy auto-promote self-validated. This
+                # is intentional, NOT a gap: freezing means "no automated
+                # writer touches it again," full stop, even the writer
+                # cleaning up its own prior mistake. It leaves the
+                # holdout set with a circular validation (documented,
+                # not silent) rather than mutating a frozen item; a human
+                # operator can un-freeze + relabel it if that's wrong.
+                # Counted and reported separately from
+                # skipped_due_to_conflict (an OCC race), which this is not.
+                locked_counts['test_holdout' if current.get('test_holdout') else 'other'] += 1
                 return {}
             # Re-check freshest state: only revert if it's still the
             # cluster_majority_agreement write we scrolled for.
@@ -194,8 +208,17 @@ async def _run(opensearch_url: str, *, apply: bool) -> int:
         print(
             f'\nreverted={result.get("updated", 0):,} '
             f'skipped_concurrent_write={result.get("skipped_due_to_conflict", 0):,} '
+            f'skipped_locked_test_holdout={locked_counts["test_holdout"]:,} '
+            f'skipped_locked_other={locked_counts["other"]:,} '
             f'errors={len(result.get("errors", [])):,}'
         )
+        if locked_counts['test_holdout']:
+            print(
+                f'\n{locked_counts["test_holdout"]:,} frozen test_holdout item(s) kept the '
+                'buggy auto-promote class -- the lock rule intentionally never lets an '
+                'automated writer (including this revert) touch a frozen item. Un-freeze + '
+                'relabel by hand if these need correcting.'
+            )
         return 1 if result.get('errors') else 0
     finally:
         await client.close()

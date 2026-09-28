@@ -169,3 +169,35 @@ async def test_apply_reverts_only_class_range_promotions(
     assert written['doc']['class_name'] == 'class_b'
     assert written['doc']['class_source'] == 'classifier_model'
     assert written['doc']['class_validated'] is False
+
+
+@pytest.mark.asyncio
+async def test_apply_skips_frozen_test_holdout_and_reports_it_distinctly(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A test_holdout item self-validated by the buggy auto-promote is
+    locked (Opus review 2026-09-28, lock-rule call-site m2): the revert
+    must never touch it (this script is itself an automated writer), and
+    must report the skip as its own counter, not silently fold it into
+    skipped_concurrent_write (an OCC race, which this is not)."""
+    hits = [
+        _hit(
+            'crop-frozen-holdout',
+            {
+                'cluster_id': 3,
+                'class_name': 'class_b',
+                'class_source': 'cluster_majority_agreement',
+                'test_holdout': True,
+                'class_id_history': [_history_entry()],
+            },
+        ),
+    ]
+    client = _FakeRevertClient(hits)
+    monkeypatch.setattr(revert_script, 'make_script_opensearch', MagicMock(return_value=client))
+
+    rc = await revert_script._run('http://fake:9200', apply=True)
+
+    assert rc == 0
+    assert client.bulk_calls == []  # never touched
+    out = capsys.readouterr().out
+    assert 'skipped_locked_test_holdout=1' in out
