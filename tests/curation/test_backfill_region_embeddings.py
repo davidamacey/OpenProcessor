@@ -79,12 +79,25 @@ def _tiny_jpeg() -> bytes:
     return buf.getvalue()
 
 
-def _hit(doc_id: str, *, image_path: str | None, bbox: list[float] | None) -> dict[str, Any]:
+def _hit(
+    doc_id: str,
+    *,
+    image_path: str | None,
+    bbox: list[float] | None,
+    score: float = 0.9,
+) -> dict[str, Any]:
     source: dict[str, Any] = {}
     if image_path is not None:
         source['image_path'] = image_path
     if bbox is not None:
-        source['region_bbox_norm'] = bbox
+        source['region_boxes'] = [
+            {
+                'box_id': 'b1',
+                'bbox_norm': bbox,
+                'state': 'accepted',
+                'score': score,
+            }
+        ]
     return {'_id': doc_id, '_source': source}
 
 
@@ -171,5 +184,31 @@ async def test_apply_skips_items_with_unreadable_source_image(
 async def test_selection_query_excludes_items_that_already_have_the_field() -> None:
     """Resumability: the query itself must exclude already-embedded items."""
     query = backfill_script._selection_query()
-    assert {'exists': {'field': 'region_bbox_norm'}} in query['bool']['must']
+    assert {'nested': {'path': 'region_boxes', 'query': {'term': {'state': 'accepted'}}}} in query[
+        'bool'
+    ]['must']
     assert {'exists': {'field': 'region_embedding'}} in query['bool']['must_not']
+
+
+def test_best_accepted_bbox_picks_the_highest_scoring_accepted_box() -> None:
+    from src.config import get_region_fields
+
+    source = {
+        'region_boxes': [
+            {'box_id': 'b1', 'bbox_norm': [0.0, 0.0, 0.1, 0.1], 'state': 'rejected', 'score': 0.99},
+            {'box_id': 'b2', 'bbox_norm': [0.2, 0.2, 0.3, 0.3], 'state': 'accepted', 'score': 0.4},
+            {'box_id': 'b3', 'bbox_norm': [0.4, 0.4, 0.5, 0.5], 'state': 'accepted', 'score': 0.8},
+        ]
+    }
+    assert backfill_script._best_accepted_bbox(source, get_region_fields()) == [0.4, 0.4, 0.5, 0.5]
+
+
+def test_best_accepted_bbox_none_when_no_accepted_box() -> None:
+    from src.config import get_region_fields
+
+    source = {
+        'region_boxes': [
+            {'box_id': 'b1', 'bbox_norm': [0.0, 0.0, 0.1, 0.1], 'state': 'rejected', 'score': 0.9},
+        ]
+    }
+    assert backfill_script._best_accepted_bbox(source, get_region_fields()) is None

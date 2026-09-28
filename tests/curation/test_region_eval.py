@@ -19,17 +19,19 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.config import CurationConfig, RegionStatus
 from src.config.region_fields import RegionFields, get_region_fields
 from src.services.curation.region_eval import (
+    NO_DETECTOR,
     CohortImage,
     RegionFrameError,
     evaluate,
     greedy_match,
     iou,
     parse_yolo_labels,
-    region_record,
+    region_records,
     run_eval,
     to_source_frame,
     yolo_to_xyxy,
 )
+from src.services.detection.cascade_detect import crop_norm_to_source_norm
 
 
 if TYPE_CHECKING:
@@ -88,6 +90,11 @@ def test_greedy_match_is_one_to_one_highest_iou_first() -> None:
 
 
 def test_frames_source_crop_and_unknown() -> None:
+    """``to_source_frame``/``RegionFrameError`` stay as pure, tested geometry
+    helpers even though ``region_records`` no longer wires them in -- every
+    ``region_boxes`` entry is already source-frame by the time it's stored
+    (see the module docstring), so there is no remaining stored per-box
+    frame marker that could ever come back as ``'pixels'``."""
     box = (0.0, 0.0, 0.5, 0.5)
     assert to_source_frame(box, 'source', None) == box
     assert to_source_frame(box, None, None) == box  # pre-provenance rows
@@ -100,14 +107,60 @@ def test_frames_source_crop_and_unknown() -> None:
         to_source_frame(box, 'pixels', item)
 
 
-def test_region_record_reads_configured_field_names() -> None:
-    fields = RegionFields(status='roi_state', bbox_norm='roi_box', detector='roi_by')
-    rec = region_record(
-        {'crop_id': 'c', 'roi_state': 'pending', 'roi_box': [0.1, 0.1, 0.2, 0.2], 'roi_by': 'd'},
+def test_region_records_pending_item_falls_back_to_configured_status_field() -> None:
+    """A box-less item (still pending, or a terminal box-less status) has
+    no ``region_boxes`` entry to read at all -- the one case where
+    ``region_records`` still reads a customizable item-level field."""
+    fields = RegionFields(status='roi_state')
+    recs = region_records({'crop_id': 'c', 'roi_state': 'pending'}, fields)
+    assert len(recs) == 1
+    assert (recs[0].status, recs[0].detector, recs[0].box) == (
+        RegionStatus.PENDING_DETECTION.value,
+        NO_DETECTOR,
+        None,
+    )
+
+
+def test_region_records_reads_configured_boxes_field_name() -> None:
+    fields = RegionFields(boxes='roi_boxes')
+    recs = region_records(
+        {
+            'crop_id': 'c',
+            'roi_boxes': [
+                {
+                    'box_id': 'b1',
+                    'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+                    'state': 'accepted',
+                    'detector': 'd',
+                    'score': 0.7,
+                }
+            ],
+        },
         fields,
     )
-    assert (rec.status, rec.detector) == (RegionStatus.PENDING_DETECTION.value, 'd')
-    assert rec.box == pytest.approx((0.1, 0.1, 0.2, 0.2))
+    assert len(recs) == 1
+    assert (recs[0].status, recs[0].detector, recs[0].score) == (
+        RegionStatus.DETECTED.value,
+        'd',
+        0.7,
+    )
+    assert recs[0].box == pytest.approx((0.1, 0.1, 0.2, 0.2))
+
+
+def test_region_records_maps_every_box_state_to_its_status() -> None:
+    boxes = [
+        {'box_id': 'b1', 'bbox_norm': [0, 0, 0.1, 0.1], 'state': 'accepted'},
+        {'box_id': 'b2', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'rejected'},
+        {'box_id': 'b3', 'bbox_norm': [0.2, 0.2, 0.3, 0.3], 'state': 'false_positive'},
+        {'box_id': 'b4', 'bbox_norm': [0.3, 0.3, 0.4, 0.4], 'state': 'proposed'},
+    ]
+    recs = region_records({'crop_id': 'c', F.boxes: boxes}, F)
+    assert [r.status for r in recs] == [
+        RegionStatus.DETECTED.value,
+        RegionStatus.VERIFY_REJECTED.value,
+        RegionStatus.FALSE_POSITIVE.value,
+        RegionStatus.PENDING_VERIFICATION.value,
+    ]
 
 
 # =============================================================================
@@ -122,6 +175,17 @@ GT_F = (0.20, 0.20, 0.30, 0.30)
 GT_H = (0.50, 0.50, 0.75, 0.75)
 
 
+# Item-level human/machine status -> the box `state` a box-list write would
+# leave for that status (mirrors `RegionStatus.DETECTED` -> `accepted`,
+# `VERIFY_REJECTED` -> `rejected` in the real worker; FALSE_POSITIVE shares
+# its literal string with its box state already).
+_STATUS_TO_BOX_STATE: dict[str, str] = {
+    RegionStatus.DETECTED.value: 'accepted',
+    RegionStatus.VERIFY_REJECTED.value: 'rejected',
+    RegionStatus.FALSE_POSITIVE.value: RegionStatus.FALSE_POSITIVE.value,
+}
+
+
 def _item(crop_id: str, image_id: str, status: str | None, box: Any = None, **extra: Any):
     doc: dict[str, Any] = {
         'crop_id': crop_id,
@@ -131,11 +195,27 @@ def _item(crop_id: str, image_id: str, status: str | None, box: Any = None, **ex
     }
     if status is not None:
         doc[F.status] = status
+    detector = extra.pop('detector', 'det_a')
+    score = extra.pop('score', 0.9)
     if box is not None:
-        doc[F.bbox_norm] = list(box)
-        doc[F.bbox_frame] = extra.pop('frame', 'source')
-    doc[F.detector] = extra.pop('detector', 'det_a')
-    doc[F.score] = extra.pop('score', 0.9)
+        frame = extra.pop('frame', 'source')
+        # `region_boxes` entries are always source-frame (every writer
+        # projects before appending) -- a 'crop'/'item' frame test fixture
+        # projects at construction time instead of at read time.
+        stored_box = (
+            list(crop_norm_to_source_norm(tuple(box), tuple(doc['bbox_norm'])))
+            if frame in ('crop', 'item')
+            else list(box)
+        )
+        doc[F.boxes] = [
+            {
+                'box_id': 'b1',
+                'bbox_norm': stored_box,
+                'state': _STATUS_TO_BOX_STATE.get(status, 'accepted') if status else 'accepted',
+                'detector': detector,
+                'score': score,
+            }
+        ]
     doc.update(extra)
     return crop_id, doc
 
@@ -291,14 +371,6 @@ async def test_wait_pending_times_out_with_pending_reported() -> None:
     assert res.summary['wait_timed_out'] is True
 
 
-@pytest.mark.asyncio
-async def test_unknown_frame_is_refused() -> None:
-    fake = _fake()
-    fake.store[ITEMS]['a1'][F.bbox_frame] = 'pixels'
-    with pytest.raises(RegionFrameError, match='pixels'):
-        await _run(fake)
-
-
 def test_evaluate_all_backgrounds_has_no_recall() -> None:
     res = evaluate([CohortImage(key='k', server_path='k', gt=[], image_id='x')], {})
     t = res.summary['total']
@@ -447,16 +519,13 @@ def test_cli_state_dir_cohort_uses_recorded_ids(monkeypatch, tmp_path: Path) -> 
     assert _run_cli(monkeypatch, _cli_fake(tmp_path), [*argv, '--splits', 'train']) == 1
 
 
-def test_cli_unknown_frame_exits_3(monkeypatch, tmp_path: Path) -> None:
-    data = _dataset(tmp_path / 'ds')
-    fake = _cli_fake(tmp_path)
-    fake.store[ITEMS]['x1'][F.bbox_frame] = 'pixels'
-    argv = [
-        '--dataset',
-        str(data),
-        '--path-map',
-        f'{tmp_path / "ds"}=/server/ds',
-        '--out-dir',
-        str(tmp_path / 'out'),
-    ]
-    assert _run_cli(monkeypatch, fake, argv) == 3
+# test_cli_unknown_frame_exits_3 (and test_unknown_frame_is_refused above)
+# were removed in the W8-cleanup port: both simulated a stored
+# `region_bbox_frame='pixels'` on an item to exercise the CLI's
+# RegionFrameError -> exit(3) path. `region_boxes` entries have no stored
+# per-box frame marker at all (every writer projects to source frame
+# before appending -- see the region_eval module docstring), so that
+# scenario is now structurally impossible to construct; RegionFrameError
+# and the CLI's exit(3) branch remain as defensive code (still directly
+# unit-tested via to_source_frame in test_frames_source_crop_and_unknown)
+# but have no live end-to-end trigger left to test.
