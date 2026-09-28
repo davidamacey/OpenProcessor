@@ -199,3 +199,74 @@ def test_training_candidates_false_positives_matches_the_kept_fp_box() -> None:
     )
     assert resp.status_code == 200, resp.text
     assert {i['crop_id'] for i in resp.json()['items']} == {'fp-item'}
+
+
+def test_low_conf_correct_excludes_a_verifier_rejected_primary_box() -> None:
+    """W8-cleanup M4: the cohort must require the SAME box to be
+    `accepted`, not just any low-score box from the primary detector plus
+    `verified=True` somewhere on the item -- otherwise a primary box the
+    verifier REJECTED at a low score still matches as long as some other
+    (accepted) box exists, contaminating this "primary detector correct
+    but low-confidence" training cohort with cases where the primary
+    detector was actually wrong."""
+    from _region_profile_fixture import REFERENCE_REGION_DETECTOR_MODEL
+
+    fake = QueryFakeOpenSearch(
+        {
+            ITEMS: {
+                'rejected-primary': {
+                    'crop_id': 'rejected-primary',
+                    F.verified: True,
+                    F.boxes: [
+                        {
+                            'box_id': 'b1',
+                            'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+                            'state': 'rejected',
+                            'detector': REFERENCE_REGION_DETECTOR_MODEL,
+                            'score': 0.3,
+                        },
+                        {
+                            'box_id': 'b2',
+                            'bbox_norm': [0.3, 0.3, 0.4, 0.4],
+                            'state': 'accepted',
+                            'detector': 'some_segmenter',
+                            'score': 0.9,
+                        },
+                    ],
+                },
+                'accepted-low-conf': {
+                    'crop_id': 'accepted-low-conf',
+                    F.verified: True,
+                    F.boxes: [
+                        {
+                            'box_id': 'b1',
+                            'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+                            'state': 'accepted',
+                            'detector': REFERENCE_REGION_DETECTOR_MODEL,
+                            'score': 0.4,
+                        }
+                    ],
+                },
+                'accepted-high-conf': {
+                    'crop_id': 'accepted-high-conf',
+                    F.verified: True,
+                    F.boxes: [
+                        {
+                            'box_id': 'b1',
+                            'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+                            'state': 'accepted',
+                            'detector': REFERENCE_REGION_DETECTOR_MODEL,
+                            'score': 0.9,
+                        }
+                    ],
+                },
+            }
+        }
+    )
+    client = _client(fake)
+    resp = client.get(
+        '/curation/projects/default/regions/training_candidates',
+        params={'mode': 'low_conf_correct', 'page_size': 50},
+    )
+    assert resp.status_code == 200, resp.text
+    assert {i['crop_id'] for i in resp.json()['items']} == {'accepted-low-conf'}

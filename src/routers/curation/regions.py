@@ -263,6 +263,13 @@ def _training_candidate_query(
             _reason('detector_blind_spots'),
         )
     if mode == 'low_conf_correct':
+        # W8-cleanup M4 fix: the nested filter must require the SAME box
+        # to also be `accepted` -- otherwise a primary box the verifier
+        # REJECTED at a low score still matches as long as some other
+        # (accepted) box exists on the item, contaminating this "primary
+        # detector correct but low-confidence" training cohort with cases
+        # where the primary detector was actually wrong. Same same-box
+        # nested-filter pattern `detector_blind_spots` already uses above.
         return (
             {
                 'bool': {
@@ -277,6 +284,7 @@ def _training_candidate_query(
                                                 f'{F.boxes}.score': {'lt': REGION_LOW_SCORE_MAX}
                                             }
                                         },
+                                        {'term': {f'{F.boxes}.{F.boxes_state}': 'accepted'}},
                                     ]
                                 }
                             },
