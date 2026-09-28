@@ -2,8 +2,9 @@
 ``src.routers.curation.models``, W4 any_domain_plan.md §4.3): so
 ``profile_validation.py`` (a service module) can check a region
 profile's ``detector_model`` against promoted models without importing a
-router module. ``src.routers.curation.models`` imports these back under
-their old private names for its existing call sites.
+router module. ``src.routers.curation.models`` imports these under their
+real names -- no back-compat re-export of the old private names (this
+project's no-shims rule, owner decision 2026-09-26).
 """
 
 from __future__ import annotations
@@ -11,7 +12,10 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
+from src.clients.pe_encoder import PE_IMAGE_MODEL
 from src.config.curation import get_curation_config
+from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
+from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
 from src.services.training.model_classes import is_model_shared, model_owner_project
 from src.services.training.triton_promote import resolve_triton_models_dir
@@ -22,6 +26,108 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
+
+
+def _core_models() -> tuple[tuple[str, str, str, str], ...]:
+    """Fixed pipeline-model roster, derived from config rather than
+    a hardcoded, domain-specific model list.
+
+    Skips the region-detector / OCR entries entirely when the active
+    ``DetectionProfile`` leaves them unset (empty string default) — a
+    deployment that hasn't wired a detection profile yet just sees the
+    always-present CLIP + PE encoder entries.
+
+    Moved here (W3/W4 review 2026-09-28, Minor 6) from
+    ``src.routers.curation.models`` -- :func:`discover_promoted_models`
+    below needed it and previously imported it back from that router,
+    the exact "service depends on the router it was moved out of" the
+    W4 move was supposed to avoid.
+    """
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    entries: list[tuple[str, str, str, str]] = []
+    # The primary item proposer and (if configured) the secondary
+    # classifier drive most of the label provenance the labeler shows on
+    # /review and /classes (class_source ending '_proposal' / '_model')
+    # -- they were missing here entirely, so /models showed nothing for
+    # the models that produced most of the labels. Both are resolved
+    # from OP_INGEST_PRIMARY_*/OP_INGEST_SECONDARY_* (ingest_profiles.py),
+    # never hardcoded.
+    primary = ingest_primary_profile()
+    if primary.detector_model:
+        entries.append(
+            (
+                primary.detector_model,
+                'Primary Item Proposer',
+                'Proposes item boxes when images are ingested.',
+                'TensorRT detection',
+            )
+        )
+    secondary = ingest_secondary_profile()
+    if secondary is not None and secondary.detector_model:
+        entries.append(
+            (
+                secondary.detector_model,
+                'Secondary Classifier',
+                'Classifies proposed item boxes.',
+                'TensorRT classification',
+            )
+        )
+    region = get_active_region_profile()
+    if region is not None and region.detector_model:
+        entries.append(
+            (
+                region.detector_model,
+                'Region Detector',
+                'Finds the region of interest inside each item crop.',
+                'TensorRT detection',
+            )
+        )
+    if region is not None and region.segmenter_name:
+        entries.append(
+            (
+                region.segmenter_name,
+                'Segmenter',
+                'Refines or re-detects the region of interest on crops the '
+                'primary detector missed.',
+                'Promptable segmentation',
+            )
+        )
+    if region is not None and region.ocr_det_model:
+        entries.append(
+            (
+                region.ocr_det_model,
+                'OCR Text Detector',
+                'Locates text regions inside a crop to seed a re-detection pass.',
+                'TensorRT detection',
+            )
+        )
+    if region is not None and region.ocr_rec_model:
+        entries.append(
+            (
+                region.ocr_rec_model,
+                'OCR Text Recognizer',
+                'Reads text out of a located text region.',
+                'TensorRT recognition',
+            )
+        )
+    entries.append(
+        (
+            TritonModelConfig.CLIP_IMAGE_MODEL,
+            'CLIP Image Encoder',
+            'Generates image embeddings for visual search and clustering.',
+            'TensorRT/ONNX encoder',
+        )
+    )
+    entries.append(
+        (
+            PE_IMAGE_MODEL,
+            'PE-Core-L14-336 Image Encoder',
+            'Generates 1024-d unit-norm embeddings for semantic search.',
+            'ONNX Runtime encoder',
+        )
+    )
+    return tuple(entries)
 
 
 def project_owns_model(model_name: str) -> bool:
@@ -73,8 +179,6 @@ def discover_promoted_models(models_dir: Path | None = None) -> list[dict[str, A
     rather than failing the whole caller's response -- this is
     supplementary discovery.
     """
-    from src.routers.curation.models import _core_models
-
     resolved_dir = models_dir if models_dir is not None else resolve_triton_models_dir()
     fixed_names = {name for name, *_ in _core_models()}
     out: list[dict[str, Any]] = []
@@ -116,6 +220,7 @@ def is_promoted(triton_name: str) -> bool:
 
 
 __all__ = [
+    '_core_models',
     'discover_promoted_models',
     'is_model_shared',  # re-exported from model_classes for convenience
     'is_promoted',

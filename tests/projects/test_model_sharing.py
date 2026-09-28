@@ -87,11 +87,13 @@ def test_sharing_on_a_model_this_project_does_not_own_404s(
     app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ownership itself is proven by test_promote_namespacing.py's
-    _project_owns_model unit tests; this only checks the route wires a
+    project_owns_model unit tests; this only checks the route wires a
     'not owned' result to 404."""
     monkeypatch.setenv('OP_TRITON_MODEL_REPO', str(tmp_path))
     _promote(tmp_path, 'not_mine_det_v3')
-    monkeypatch.setattr('src.routers.curation.models._project_owns_model', lambda _n: False)
+    monkeypatch.setattr(
+        'src.services.training.promoted_models.project_owns_model', lambda _n: False
+    )
 
     r = app_client.put(
         '/curation/projects/default/models/not_mine_det_v3/sharing',

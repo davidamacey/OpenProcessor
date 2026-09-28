@@ -183,8 +183,8 @@ def test_project_owns_model_prefix_isolation() -> None:
     """A project only owns model names under its own prefix; default
     (empty prefix) owns everything not claimed by another known
     project's prefix."""
-    from src.routers.curation.models import _project_owns_model
     from src.services.projects.registry import ProjectRegistry, set_project_registry
+    from src.services.training.promoted_models import project_owns_model
 
     beta = _record('beta')
     registry = ProjectRegistry(lambda: None)
@@ -193,15 +193,15 @@ def test_project_owns_model_prefix_isolation() -> None:
     set_project_registry(registry)
     try:
         with bind_project(beta):
-            assert _project_owns_model('beta__x') is True
-            assert _project_owns_model('other__x') is False
-            assert _project_owns_model('yolov11_small_trt_end2end') is False
+            assert project_owns_model('beta__x') is True
+            assert project_owns_model('other__x') is False
+            assert project_owns_model('yolov11_small_trt_end2end') is False
 
         from src.config.curation import base_curation_config
         from src.config.projects import new_project_record
 
         with bind_project(new_project_record('default', base_curation_config())):
-            assert _project_owns_model('yolov11_small_trt_end2end') is True
-            assert _project_owns_model('beta__x') is False
+            assert project_owns_model('yolov11_small_trt_end2end') is True
+            assert project_owns_model('beta__x') is False
     finally:
         set_project_registry(None)

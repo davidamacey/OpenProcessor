@@ -93,9 +93,9 @@ def listing_fields(model_name: str, registry: ClassRegistryFile) -> dict[str, An
     .../sharing`` route needs it as ``expected_revision``, and it isn't
     meaningful for a model this project doesn't own); a foreign entry is
     never unloadable through this project's ``DELETE /models/{name}``."""
-    from src.routers.curation.models import _project_owns_model
+    from src.services.training.promoted_models import project_owns_model
 
-    owned = _project_owns_model(model_name)
+    owned = project_owns_model(model_name)
     summary: dict[str, Any] | None = None
     if model_classes(model_name):
         mapping = model_class_mapping(
@@ -160,10 +160,10 @@ async def get_model_class_mapping(model_name: str) -> ModelClassMappingResponse:
     for another project's model only once its owner shares it -- 404
     ``model_not_found`` otherwise, so an unshared model's existence and
     classes never reach another project."""
-    from src.routers.curation.models import _project_owns_model
+    from src.services.training.promoted_models import project_owns_model
 
     exists = (resolve_triton_models_dir() / model_name).is_dir()
-    if not exists or not (_project_owns_model(model_name) or _is_foreign_shared(model_name)):
+    if not exists or not (project_owns_model(model_name) or _is_foreign_shared(model_name)):
         raise api_error(
             404,
             'model_not_found',

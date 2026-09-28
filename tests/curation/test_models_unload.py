@@ -169,7 +169,7 @@ def test_unload_propagates_not_promoted_as_404(app_client, monkeypatch):
 
 
 def test_discover_promoted_models_finds_a_promoted_extra(tmp_path):
-    import src.routers.curation.models as models_mod
+    import src.services.training.promoted_models as models_mod
 
     model_dir = tmp_path / 'op_vehicle_smoke_v1'
     model_dir.mkdir()
@@ -177,7 +177,7 @@ def test_discover_promoted_models_finds_a_promoted_extra(tmp_path):
         '{"job_id": "job-abc", "version": "1", "promoted_at": "2026-09-11T00:00:00Z"}'
     )
 
-    found = models_mod._discover_promoted_models(models_dir=tmp_path)
+    found = models_mod.discover_promoted_models(models_dir=tmp_path)
     assert found == [
         {
             'name': 'op_vehicle_smoke_v1',
@@ -189,7 +189,7 @@ def test_discover_promoted_models_finds_a_promoted_extra(tmp_path):
 
 
 def test_discover_promoted_models_skips_fixed_pipeline_models(tmp_path):
-    import src.routers.curation.models as models_mod
+    import src.services.training.promoted_models as models_mod
 
     # A fixed pipeline model dir that happens to also carry a promote.json
     # (plausible if it was itself promoted through this pipeline once) must
@@ -198,34 +198,34 @@ def test_discover_promoted_models_skips_fixed_pipeline_models(tmp_path):
     model_dir.mkdir()
     (model_dir / 'promote.json').write_text('{"job_id": "job-xyz"}')
 
-    found = models_mod._discover_promoted_models(models_dir=tmp_path)
+    found = models_mod.discover_promoted_models(models_dir=tmp_path)
     assert found == []
 
 
 def test_discover_promoted_models_ignores_dirs_without_promote_json(tmp_path):
-    import src.routers.curation.models as models_mod
+    import src.services.training.promoted_models as models_mod
 
     (tmp_path / 'yolov11_small_trt_end2end').mkdir()  # a real dir, no promote.json
 
-    found = models_mod._discover_promoted_models(models_dir=tmp_path)
+    found = models_mod.discover_promoted_models(models_dir=tmp_path)
     assert found == []
 
 
 def test_discover_promoted_models_missing_dir_returns_empty(tmp_path):
-    import src.routers.curation.models as models_mod
+    import src.services.training.promoted_models as models_mod
 
-    found = models_mod._discover_promoted_models(models_dir=tmp_path / 'does_not_exist')
+    found = models_mod.discover_promoted_models(models_dir=tmp_path / 'does_not_exist')
     assert found == []
 
 
 def test_discover_promoted_models_corrupt_promote_json_is_skipped_not_fatal(tmp_path):
-    import src.routers.curation.models as models_mod
+    import src.services.training.promoted_models as models_mod
 
     model_dir = tmp_path / 'op_bad_promote_json'
     model_dir.mkdir()
     (model_dir / 'promote.json').write_text('{not valid json')
 
-    found = models_mod._discover_promoted_models(models_dir=tmp_path)
+    found = models_mod.discover_promoted_models(models_dir=tmp_path)
     # Still discovered (the dir + promote.json presence is the trigger),
     # just with no metadata since the file couldn't be parsed.
     assert found == [

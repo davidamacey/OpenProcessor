@@ -21,7 +21,6 @@ import httpx
 from fastapi import HTTPException, Query
 from pydantic import BaseModel
 
-from src.clients.pe_encoder import PE_IMAGE_MODEL
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
 from src.routers.curation._common import logger, router
@@ -33,6 +32,11 @@ from src.routers.curation._models_class_mapping import (
 from src.routers.curation._models_segmenter import build_segmenter_entry
 from src.routers.curation.vlm import _get_vlm_labeler
 from src.services.detection.profile_registry import get_active_region_profile
+from src.services.training.promoted_models import (
+    _core_models,
+    discover_promoted_models,
+    project_owns_model,
+)
 from src.services.training.triton_promote import (
     ModelNotPromotedError,
     PromoteError,
@@ -40,100 +44,6 @@ from src.services.training.triton_promote import (
     resolve_triton_http_url,
     unload_triton_model,
 )
-
-
-def _core_models() -> tuple[tuple[str, str, str, str], ...]:
-    """Fixed pipeline-model roster, derived from config rather than
-    a hardcoded, domain-specific model list.
-
-    Skips the region-detector / OCR entries entirely when the active
-    ``DetectionProfile`` leaves them unset (empty string default) — a
-    deployment that hasn't wired a detection profile yet just sees the
-    always-present CLIP + PE encoder entries.
-    """
-    entries: list[tuple[str, str, str, str]] = []
-    # The primary item proposer and (if configured) the secondary
-    # classifier drive most of the label provenance the labeler shows on
-    # /review and /classes (class_source ending '_proposal' / '_model')
-    # -- they were missing here entirely, so /models showed nothing for
-    # the models that produced most of the labels. Both are resolved
-    # from OP_INGEST_PRIMARY_*/OP_INGEST_SECONDARY_* (ingest_profiles.py),
-    # never hardcoded.
-    primary = ingest_primary_profile()
-    if primary.detector_model:
-        entries.append(
-            (
-                primary.detector_model,
-                'Primary Item Proposer',
-                'Proposes item boxes when images are ingested.',
-                'TensorRT detection',
-            )
-        )
-    secondary = ingest_secondary_profile()
-    if secondary is not None and secondary.detector_model:
-        entries.append(
-            (
-                secondary.detector_model,
-                'Secondary Classifier',
-                'Classifies proposed item boxes.',
-                'TensorRT classification',
-            )
-        )
-    region = get_active_region_profile()
-    if region is not None and region.detector_model:
-        entries.append(
-            (
-                region.detector_model,
-                'Region Detector',
-                'Finds the region of interest inside each item crop.',
-                'TensorRT detection',
-            )
-        )
-    if region is not None and region.segmenter_name:
-        entries.append(
-            (
-                region.segmenter_name,
-                'Segmenter',
-                'Refines or re-detects the region of interest on crops the '
-                'primary detector missed.',
-                'Promptable segmentation',
-            )
-        )
-    if region is not None and region.ocr_det_model:
-        entries.append(
-            (
-                region.ocr_det_model,
-                'OCR Text Detector',
-                'Locates text regions inside a crop to seed a re-detection pass.',
-                'TensorRT detection',
-            )
-        )
-    if region is not None and region.ocr_rec_model:
-        entries.append(
-            (
-                region.ocr_rec_model,
-                'OCR Text Recognizer',
-                'Reads text out of a located text region.',
-                'TensorRT recognition',
-            )
-        )
-    entries.append(
-        (
-            TritonModelConfig.CLIP_IMAGE_MODEL,
-            'CLIP Image Encoder',
-            'Generates image embeddings for visual search and clustering.',
-            'TensorRT/ONNX encoder',
-        )
-    )
-    entries.append(
-        (
-            PE_IMAGE_MODEL,
-            'PE-Core-L14-336 Image Encoder',
-            'Generates 1024-d unit-norm embeddings for semantic search.',
-            'ONNX Runtime encoder',
-        )
-    )
-    return tuple(entries)
 
 
 # =============================================================================
@@ -223,16 +133,6 @@ def _external_service_model_names() -> frozenset[str]:
         # Best-effort; an unresolvable VLM pack just skips this entry.
         names.add(_get_vlm_labeler().model)
     return frozenset(names)
-
-
-# W4 (any_domain_plan.md §4.3): moved to src.services.training.promoted_models
-# so profile_validation.py (a service module) can discover promoted models
-# without importing a router. Re-imported here under the old private names
-# so every existing call site in this module is unchanged.
-from src.services.training.promoted_models import (  # noqa: E402
-    discover_promoted_models as _discover_promoted_models,
-    project_owns_model as _project_owns_model,
-)
 
 
 _TRITON_METRIC_KEYS: dict[str, str] = {
@@ -420,7 +320,7 @@ async def models_status(
             job_id=promoted.get('job_id'),
             promoted_at=promoted.get('promoted_at'),
         )
-        for promoted in _discover_promoted_models()
+        for promoted in discover_promoted_models()
     )
     if include_other_projects:
         models.extend(
@@ -500,10 +400,9 @@ async def models_status(
 # re-derive them.)
 
 
-# _project_owns_model is imported near the top of this module (W4: moved
-# to src.services.training.promoted_models). PUT /models/{model_name}/sharing
-# lives in _models_sharing.py (kept under the 700-LOC ratchet); imported
-# for its route-registration side effect.
+# PUT /models/{model_name}/sharing lives in _models_sharing.py (kept
+# under the 700-LOC ratchet); imported for its route-registration side
+# effect.
 from src.routers.curation import _models_sharing  # noqa: E402,F401
 
 
@@ -538,7 +437,7 @@ async def unload_model(
       loud explanation. Unloading any of them breaks live serving until
       something else is loaded.
     """
-    if not _project_owns_model(model_name):
+    if not project_owns_model(model_name):
         raise HTTPException(
             status_code=404,
             detail=f'{model_name!r} is not a model owned by this project',
