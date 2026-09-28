@@ -10,6 +10,12 @@ minted box ids from the pipeline's fetch-time snapshot (revision 0,
 box_seq 0) instead of the CURRENT stored values, so the write reset the
 revision backwards and reused ids the concurrent write had already
 claimed.
+
+W8c (r1 wipe-on-replace fix): a fresh-detection pass now also MERGES onto
+whatever is live at write time (``_ItemTask.pending_merge``), rather than
+replacing the box list wholesale -- so the concurrently-added box (``b7``)
+must survive alongside this pass's own freshly-detected box, not just
+avoid an id collision with it.
 """
 
 from __future__ import annotations
@@ -74,13 +80,17 @@ class TestConcurrentRevisionBumpDuringVlmCall:
         # M1: revision advances from the CURRENT (5) value -- 6, never
         # reset back to 1 against the task's stale fetch-time snapshot.
         assert doc[F.revision] == 6
+        # W8c: the concurrently-added box (b7) is a sibling this pass
+        # never touched -- merged back in, not silently discarded.
+        by_id = {b['box_id']: b for b in doc[F.boxes]}
+        assert by_id['b7']['bbox_norm'] == [0.2, 0.2, 0.3, 0.3]
+        assert by_id['b7']['state'] == 'accepted'
         # M1: the freshly-written box's id must never collide with
         # anything already claimed under the CURRENT box_seq (7) -- b8,
         # never a low id like b1 minted off the task's stale seq=0
         # snapshot.
-        ids = [b['box_id'] for b in doc[F.boxes]]
+        ids = list(by_id)
         assert len(ids) == len(set(ids)), f'duplicate/reused box id in {ids}'
-        for bid in ids:
-            assert bid.startswith('b'), f'box id {bid} is not a real b<N> id'
-            assert int(bid[1:]) > 7, f'box id {bid} collides with/precedes the live seq (7)'
+        new_ids = [i for i in ids if i != 'b7']
+        assert new_ids == ['b8'], f'expected exactly one fresh box (b8), got {new_ids}'
         assert doc[F.box_seq] >= 8

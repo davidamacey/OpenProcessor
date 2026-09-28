@@ -920,6 +920,22 @@ async def run(args: argparse.Namespace) -> int:
                     in_q.task_done()
                     continue
 
+                # W8c (r1 fix): every fresh-detection path below (Path 2 and
+                # Path 3, plus the text-hint re-pass they can fall into)
+                # merges its resolved boxes back onto whatever is currently
+                # stored instead of replacing the list wholesale. Reaching
+                # this line already proved `region_status` is a
+                # pending_detection alias (Path 1's block above always
+                # `continue`s), so this is a pure fresh-detection task.
+                # Requeuing a terminal item (e.g. `verify_rejected` ->
+                # `pending_detection`) intentionally leaves a human-sourced
+                # box in `region_boxes` (`region_requeue.apply_requeue`);
+                # without this, this pass's own candidates would silently
+                # discard it. A no-op for the common case (no stored boxes
+                # at all): `merge_boxes_for_write` already replaces
+                # wholesale when `stored` is empty.
+                t.pending_merge = True
+
                 # Path 2: pending + non-secondary-shape — try the
                 # primary detector first (fast Triton call). A profile with
                 # no detector_model has no detector leg: straight to Path 3,

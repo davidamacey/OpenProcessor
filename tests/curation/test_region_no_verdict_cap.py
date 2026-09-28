@@ -198,6 +198,15 @@ class TestCombinedNoVerdictIsCapped:
         def requeue(n: int) -> None:
             if n == 1:
                 fake_os.live['c1'][F.status] = 'pending_detection'
+                # W8c: a real requeue-to-scratch (region_requeue.apply_requeue
+                # with clear_detection=True) drops this pass's machine box
+                # so the next fresh-detection pass merges onto an empty
+                # list -- a bare status flip that left the accepted box in
+                # place would make the worker's own merge-not-replace fix
+                # (r1) keep re-deriving `detected` from it forever.
+                fake_os.live['c1'][F.boxes] = []
+                fake_os.live['c1'][F.count] = 0
+                fake_os.live['c1'][F.rejected_count] = 0
                 fake_os.searchable = copy.deepcopy(fake_os.live)
 
         mocks = await _run(
