@@ -439,19 +439,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     aggregation is a nested agg over the same path (counts BOXES, not
     items, for the by-detector/by-reason breakdown only -- `total`
     still counts items).
-  - **r1 wipe-on-replace fix, both ends.** `region_requeue.apply_requeue`
-    with `clear_detection=True` now drops only this pass's MACHINE-
-    sourced boxes from `region_boxes` (`source != 'human'`), never a
-    human's. Separately (and required regardless of the requeue tool,
-    since a fresh-detection pass can also follow a raw/direct status
-    edit): every fresh-detection path in the streaming worker
-    (`runner.py` Path 2/Path 3 and the text-hint re-pass they can fall
-    into) now sets `_ItemTask.pending_merge = True`, so its own
-    candidates MERGE onto whatever is live at write time
+  - **r1 wipe-on-replace fix, both ends (CORRECTED below -- see "W8c
+    slice 1 fix pass"; this bullet's "never a human's" claim only ever
+    covered a human-CREATED box, `source == 'human'`, not a human's
+    per-box accept/reject VERDICT on a machine-created box, which this
+    pass's own edit routes leave no trace of -- that gap, M3, is closed
+    by the later pass, not this one).** `region_requeue.apply_requeue`
+    with `clear_detection=True` drops only this pass's MACHINE-sourced
+    boxes from `region_boxes` (`source != 'human'`). Separately (and
+    required regardless of the requeue tool, since a fresh-detection pass
+    can also follow a raw/direct status edit): every fresh-detection path
+    in the streaming worker (`runner.py` Path 2/Path 3 and the text-hint
+    re-pass they can fall into) now sets `_ItemTask.pending_merge = True`,
+    so its own candidates MERGE onto whatever is live at write time
     (`region_boxes.merge_boxes_for_write`, the same primitive Path 1's
     B1 fix already uses) instead of replacing the box list wholesale --
-    a no-op for the common case (no stored boxes at all). Red-then-green
-    on `tests/curation/test_region_write_occ_m1.py` (a concurrently
+    a no-op for the common case (no stored boxes at all). **This
+    "merge" semantic for a fresh detection was itself wrong (M1) and is
+    replaced by the later pass below.** Red-then-green on
+    `tests/curation/test_region_write_occ_m1.py` (a concurrently
     human-added box now survives a fresh-detection write instead of
     being silently discarded) and a new
     `query_fakes.py` `nested` query/aggregation double (query + agg;
@@ -496,6 +502,118 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   test_regions_boxes_edit.py` (4 new per-route invalid-`state` tests),
   `tests/curation/test_segmenter_service.py` (2 new: `min_score`
   filters-and-restores, `max_candidates` at/over the new cap).
+- **W8c slice 1 fix pass (independent Opus review response, 2026-09-28):
+  reverify-vs-fresh-detection semantics, requeue-to-pending_verification,
+  human-touch protection scope, empty-batch validation, requeue breakdown
+  reconciliation.** Fixes every finding in
+  `docs/design/openprocessor_internal/w8c_slice1_review_2026-09-28.md`
+  (1 blocker, 3 majors, 1 minor, 1 nit).
+  - **B1 (blocker) + M1: `pending_merge` was overloaded across two
+    unrelated meanings.** The prior pass's `_ItemTask.pending_merge = True`
+    on every fresh-detection task (see the corrected bullet above) was
+    also read by `runner.py`'s `region_visible=False` combined-verify
+    branch to mean "this is Path 1's re-verify" -- so a FRESH item (no
+    stored boxes) that got a not-visible VLM reply was misrouted into the
+    re-verify branch and wrote a phantom `rejected` box with the
+    misleading reason `region_visible_elsewhere` instead of the correct
+    empty `no_region_visible`. The dev/test stack's `fake_vlm` defaults to
+    `region_visible=False`, so this was not an edge case. Separately (M1),
+    "merge" was the wrong semantic for a fresh detection in the first
+    place: a fresh detection is a new answer to "where are the regions?",
+    but merging let a stale MACHINE box from a prior pass (left behind by
+    the documented default `clear_detection=False` requeue) accumulate
+    forever and keep overriding the new pass's own derived status (e.g. a
+    requeued `detection_failed` item that now finds nothing landed in
+    `verify_rejected` from the stale box instead of `no_region_box`).
+    Fix: a new `_ItemTask.reverify: bool = False` (`state.py`), set ONLY
+    at Path 1 (`runner.py`, next to `pending_merge = True`), and read at
+    the not-visible branch instead of `pending_merge`. `bulk_writer._merge`
+    now branches three ways: `reverify` -> `merge_boxes_for_write`
+    (unchanged Path 1 behavior); `pending_merge` (fresh detection) -> keep
+    only stored boxes `region_boxes.is_human_owned` recognizes and REPLACE
+    every machine-sourced one with this pass's own findings; neither ->
+    plain replace (unchanged for every other write path, e.g.
+    `accept_without_vlm`'s sanity-reject branch). Red-then-green: reverted
+    `runner.py`'s `if t.reverify:` back to `if t.pending_merge:` turns
+    `test_region_fresh_detection_replaces_machine_b1_m1.py`'s B1 test red;
+    reverted `bulk_writer._merge`'s `pending_merge` branch back to
+    `merge_boxes_for_write` turns 3 of that file's 4 tests red.
+  - **M2: the ported `pending_verification` requeue query selected items
+    with nothing to re-verify.** A `REQUEUEABLE_STATUSES` item's box(es)
+    are always `rejected` (never `proposed` -- `derive_status` would
+    already report `pending_verification` if one were), so the worker's
+    Path 1 guard (`proposed_stored or t.detector_region_in_source is not
+    None`) always failed for a requeued item and it silently ran a fresh
+    detection pass instead -- the documented operator action ("Re-verify
+    boxes the previous verify prompt rejected") did something else
+    entirely. Fix: `apply_requeue`, for `target=pending_verification`,
+    now rewrites each non-human `rejected` box to `state='proposed',
+    rejection_reason=None` before flipping the item's status; an item
+    left with no `proposed` box after that (its only box(es) are
+    human-owned, or it has none at all) is skipped rather than moved to a
+    mismatched `pending_verification` with nothing to re-verify. The
+    false claim at `runner.py` ("reaching this line already proved
+    `region_status` is a pending_detection alias") is corrected and now
+    logs `region_pending_verification_fallthrough` if that invariant is
+    ever violated (stale/pre-fix data, a direct write). Red-then-green:
+    `tests/curation/test_region_requeue.py` (3 tests) and a new
+    `tests/curation/test_region_requeue_then_worker_m2.py` (requeue, then
+    drive the real streaming worker end-to-end and confirm Path 1 runs,
+    not a fresh detection) all go red against the un-fixed query/merge.
+  - **M3: `clear_detection` (and the fresh-detection replace above) only
+    protected human-CREATED boxes, not a human's accept/reject VERDICT on
+    a machine-created box.** The W8a per-box edit routes (`PATCH
+    /crops/{id}/regions/{box_id}`, `POST /regions/batch_box_state`, and a
+    `PUT .../regions` patch of an existing box) change `state` but left
+    `source`/`detector` exactly as the machine wrote them, so
+    `source == 'human'` alone never recognized the human's action.
+    Fix: those three write paths now also stamp
+    `rejection_reason=REJECT_REASON_HUMAN` when the human sets `state=
+    'rejected'` (matching `boxes_with_status`'s whole-set path); new
+    `region_boxes.is_human_owned(box)` (`source == 'human' or
+    rejection_reason == REJECT_REASON_HUMAN or text_source == 'human'`)
+    is now the shared criterion both `apply_requeue`'s `clear_detection`
+    box-drop and `bulk_writer._merge`'s fresh-detection replace use,
+    replacing the narrower `source == 'human'` check both had. The
+    CHANGELOG wording above is corrected accordingly -- "never a human's"
+    was only ever true for a human-created box.
+  - **m4: an empty batch skipped validation on two routes.**
+    `batch_set_crop_regions` (`PUT /crops/batch_regions`) and
+    `batch_set_region_box_state` (`POST /regions/batch_box_state`) both
+    returned 200 for an empty `crop_ids`/`targets` list before their
+    `_check_box_states`/`validate_box_state` call ever ran, so a bogus
+    `state` alongside an empty target list was silently accepted. Fix:
+    validation now runs unconditionally, before the empty-input early
+    return (which still short-circuits to a 0-updated no-op once
+    validation passes).
+  - **Nit: the requeue breakdown's numbers didn't reconcile with its own
+    item total, and a boxless cohort rendered an empty breakdown.** A
+    nested aggregation has no element to bucket a zero-box item under (not
+    even `NONE_BUCKET`), so a cohort of entirely `no_region_box`/
+    `no_region_visible`/unseeded items showed nothing where the
+    pre-nested-query version showed an explicit `(none)` bucket -- a real
+    regression, now fixed with a new `no_box` field (a sibling, non-nested
+    `filter` aggregation counting ITEMS, so `total - no_box` is exactly
+    the item count with at least one box). The by-detector/by-reason
+    buckets still count BOXES and can still exceed `total - no_box` for a
+    genuinely multi-box item with boxes in different buckets -- documented
+    in `requeue_breakdown`'s docstring as inherent to box-level bucketing
+    (an exact per-bucket item count would need `reverse_nested`, not worth
+    the complexity for a dry-run report), not a bug. The CLI's dry-run
+    header is relabeled "items selected" (was "regions selected", which
+    read as boxes given the per-detector/reason lines directly below it).
+  New/changed tests: `tests/curation/test_region_fresh_detection_replaces_
+  machine_b1_m1.py` (new -- B1, M1 stale-machine-replace, and the combined
+  human+machine case), `tests/curation/test_region_requeue_then_worker_m2.py`
+  (new), `tests/curation/test_region_requeue.py` (3 new + 1 extended +
+  `no_box`/relabel assertions), `tests/curation/test_region_boxes.py`
+  (`is_human_owned` unit tests + an `apply_put_boxes` reject-stamp test),
+  `tests/curation/test_regions_boxes_edit.py` (6 new: 2 empty-batch
+  validation, 2 empty-batch no-op, 2 human-reject-reason stamping),
+  `tests/curation/test_region_write_occ_m1.py` (seeded box now carries
+  `source='human'`, matching what a real concurrent PUT stamps -- the
+  fresh-detection fix now keys survival off that, not off being merely
+  unrecognized as machine-owned).
 - **W2b-finish: independent re-verification of the Opus review fix pass
   (2026-09-27), plus merging in W2's reviewed config-store hot reload.**
   Merged `main` (W2 config store hot reload, `op_global_configs`, P3F
