@@ -46,15 +46,27 @@ def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     return TestClient(app)
 
 
+def _region_box(score: float | None) -> list[dict[str, Any]]:
+    box: dict[str, Any] = {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}
+    if score is not None:
+        box['score'] = score
+    return [box]
+
+
 def _region_docs() -> dict[str, dict[str, Any]]:
+    # W8-cleanup: `region_boxes` is the query filter's source of truth (a
+    # box is what makes an item "in the regions queue" now); `region_score`
+    # stays too, dual-written, since review_sorts.py's 'region_score' sort
+    # (out of this pass's scope -- see the W8-cleanup handback report)
+    # still reads the flat item-level scalar, not the box list.
     scores = {'r01': 0.9, 'r02': 0.5, 'r03': 0.9, 'r04': None, 'r05': 0.7, 'r06': None, 'r07': 0.5}
     docs = {}
     for cid, score in scores.items():
-        doc: dict[str, Any] = {'crop_id': cid, F.bbox_norm: [0.1, 0.1, 0.2, 0.2]}
+        doc: dict[str, Any] = {'crop_id': cid, F.boxes: _region_box(score)}
         if score is not None:
             doc[F.score] = score
         docs[cid] = doc
-    docs['done'] = {'crop_id': 'done', F.bbox_norm: [0.1, 0.1, 0.2, 0.2], F.validated: True}
+    docs['done'] = {'crop_id': 'done', F.boxes: _region_box(None), F.validated: True}
     return docs
 
 
@@ -94,6 +106,9 @@ def test_locate_returns_in_queue_for_a_rejected_candidate(
         F.status: 'verify_rejected',
         F.candidate_bbox_norm: [0.3, 0.6, 0.4, 0.65],
         F.candidate_score: 0.81,
+        F.boxes: [
+            {'box_id': 'b1', 'bbox_norm': [0.3, 0.6, 0.4, 0.65], 'state': 'rejected', 'score': 0.81}
+        ],
     }
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
 

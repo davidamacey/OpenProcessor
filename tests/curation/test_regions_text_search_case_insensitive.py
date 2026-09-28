@@ -44,7 +44,11 @@ def _fake(**docs: dict[str, Any]) -> QueryFakeOpenSearch:
 
 
 def _region_doc(text: str) -> dict[str, Any]:
-    return {F.bbox_norm: [0.1, 0.1, 0.2, 0.2], F.text: text}
+    return {
+        F.boxes: [
+            {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted', 'text': text}
+        ]
+    }
 
 
 def test_region_text_search_matches_regardless_of_stored_or_query_case() -> None:

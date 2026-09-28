@@ -46,7 +46,14 @@ def _docs() -> dict[str, dict[str, Any]]:
     return {
         'detected1': {
             'crop_id': 'detected1',
-            F.bbox_norm: [0.1, 0.1, 0.2, 0.2],
+            F.boxes: [
+                {
+                    'box_id': 'b1',
+                    'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+                    'state': 'accepted',
+                    'score': 0.6,
+                }
+            ],
             F.status: 'detected',
             F.score: 0.6,
         },
@@ -56,16 +63,27 @@ def _docs() -> dict[str, dict[str, Any]]:
             F.candidate_bbox_norm: [0.3, 0.6, 0.4, 0.65],
             F.candidate_score: 0.81,
             F.rejection_reason: 'region_visible_elsewhere',
+            F.boxes: [
+                {
+                    'box_id': 'b1',
+                    'bbox_norm': [0.3, 0.6, 0.4, 0.65],
+                    'state': 'rejected',
+                    'score': 0.81,
+                    'rejection_reason': 'region_visible_elsewhere',
+                }
+            ],
         },
         'validated': {
             'crop_id': 'validated',
-            F.bbox_norm: [0.1, 0.1, 0.2, 0.2],
+            F.boxes: [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}],
             F.status: 'detected',
             F.validated: True,
         },
         'fp': {
             'crop_id': 'fp',
-            F.bbox_norm: [0.1, 0.1, 0.2, 0.2],
+            F.boxes: [
+                {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'false_positive'}
+            ],
             F.status: 'false_positive',
         },
     }
@@ -147,12 +165,28 @@ def test_rejected_items_sort_by_candidate_score_not_arbitrary_tie(
             F.status: 'verify_rejected',
             F.candidate_bbox_norm: [0.3, 0.6, 0.4, 0.65],
             F.candidate_score: 0.2,
+            F.boxes: [
+                {
+                    'box_id': 'b1',
+                    'bbox_norm': [0.3, 0.6, 0.4, 0.65],
+                    'state': 'rejected',
+                    'score': 0.2,
+                }
+            ],
         },
         'rej_high': {
             'crop_id': 'rej_high',
             F.status: 'verify_rejected',
             F.candidate_bbox_norm: [0.3, 0.6, 0.4, 0.65],
             F.candidate_score: 0.9,
+            F.boxes: [
+                {
+                    'box_id': 'b1',
+                    'bbox_norm': [0.3, 0.6, 0.4, 0.65],
+                    'state': 'rejected',
+                    'score': 0.9,
+                }
+            ],
         },
     }
     from src.services.curation import review_sorts
