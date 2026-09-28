@@ -33,6 +33,7 @@ from src.services.curation.region_boxes import (
     boxes_write_fields,
     derive_status,
     read_boxes,
+    validate_box_state,
 )
 from src.services.curation.region_writes import (
     RegionWriteError,
@@ -126,6 +127,17 @@ def _check_text_allowed(elements: list[BoxWriteElement] | list[Any], profile: An
         raise HTTPException(status_code=422, detail={'error': 'region_text_disabled'})
 
 
+def _check_box_states(route: str, elements: list[Any]) -> None:
+    """W8c: 422 ``region_boxes.py:validate_box_state`` per element instead
+    of only serving ``BOX_STATE_ROUTES`` on ``GET .../regions/statuses``
+    without ever enforcing it on write."""
+    for e in elements:
+        try:
+            validate_box_state(route, getattr(e, 'state', None))
+        except RegionBoxWriteError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 def _too_many_boxes_check(n_boxes: int) -> None:
     limit = get_curation_config().region_max_boxes_per_write
     if n_boxes > limit:
@@ -182,6 +194,7 @@ async def _write_one_boxes(opensearch: Any, crop_id: str, rec: _Recorder, writer
 def _regions_put_build(payload: ItemRegionsRequest, profile: Any) -> Any:
     _too_many_boxes_check(len(payload.boxes))
     _check_text_allowed(payload.boxes, profile)
+    _check_box_states('PUT /crops/{crop_id}/regions', payload.boxes)
 
     def _build(current: dict[str, Any]) -> dict[str, Any]:
         F = get_region_fields()
@@ -253,6 +266,7 @@ async def batch_set_crop_regions(
         return {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
     _too_many_boxes_check(len(payload.boxes))
     _check_text_allowed(payload.boxes, profile)
+    _check_box_states('PUT /crops/batch_regions', payload.boxes)
 
     def _build(current: dict[str, Any]) -> dict[str, Any]:
         F = get_region_fields()
@@ -291,6 +305,7 @@ async def patch_crop_region_box(
     if payload.state is None and payload.text is None:
         raise HTTPException(status_code=400, detail='at least one of state, text is required')
     _check_text_allowed([payload], profile)
+    _check_box_states('PATCH /crops/{crop_id}/regions/{box_id}', [payload])
 
     def _build(current: dict[str, Any]) -> dict[str, Any]:
         F = get_region_fields()
@@ -334,6 +349,10 @@ async def batch_set_region_box_state(
     box of each item)."""
     if not payload.targets:
         return {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
+    try:
+        validate_box_state('POST /regions/batch_box_state', payload.state)
+    except RegionBoxWriteError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     by_crop: dict[str, list[str]] = {}
     for t in payload.targets:

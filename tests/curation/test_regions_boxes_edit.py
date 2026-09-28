@@ -312,3 +312,53 @@ def test_batch_box_state_unknown_box_id_is_invalid_not_updated(
     body = resp.json()
     assert body['updated'] == 0
     assert len(body['invalid']) == 1
+
+
+# ---------------------------------------------------------------------------
+# W8c: per-route `state` validation against BOX_STATE_ROUTES
+# ---------------------------------------------------------------------------
+
+
+def test_put_regions_unknown_state_is_422(app_client: TestClient, fake_os: _FakeRegionOS) -> None:
+    resp = app_client.put(
+        '/curation/projects/default/crops/crop-1/regions',
+        json={'boxes': [{'box_id': 'b1', 'state': 'confirmed'}]},
+    )
+    assert resp.status_code == 422
+    assert fake_os._docs['crop-1'][F.boxes][0]['state'] == 'accepted', (
+        'unchanged, rejected up front'
+    )
+
+
+def test_batch_regions_unknown_state_is_422(app_client: TestClient) -> None:
+    resp = app_client.put(
+        '/curation/projects/default/crops/batch_regions',
+        json={'crop_ids': ['crop-2'], 'boxes': [{'box_id': None, 'state': 'bogus'}]},
+    )
+    assert resp.status_code == 422
+
+
+def test_patch_region_box_unknown_state_is_422(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    resp = app_client.patch(
+        '/curation/projects/default/crops/crop-1/regions/b1',
+        json={'state': 'bogus'},
+    )
+    assert resp.status_code == 422
+    assert fake_os._docs['crop-1'][F.boxes][0]['state'] == 'accepted', (
+        'unchanged, rejected up front'
+    )
+
+
+def test_batch_box_state_unknown_state_is_422(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    resp = app_client.post(
+        '/curation/projects/default/regions/batch_box_state',
+        json={'targets': [{'crop_id': 'crop-1', 'box_id': 'b2'}], 'state': 'bogus'},
+    )
+    assert resp.status_code == 422
+    assert fake_os._docs['crop-1'][F.boxes][1]['state'] == 'proposed', (
+        'unchanged, rejected up front'
+    )

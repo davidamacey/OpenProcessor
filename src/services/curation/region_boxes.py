@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from src.config.region_fields import RegionFields, get_region_fields
 from src.config.region_rejection import REJECT_REASON_HUMAN
-from src.config.region_state import RegionStatus
+from src.config.region_state import BOX_STATE_ROUTES, RegionStatus
 
 
 if TYPE_CHECKING:
@@ -313,6 +313,31 @@ class RegionBoxWriteError(ValueError):
     """A human box write the request can't satisfy (422)."""
 
 
+_BOX_STATE_ROUTES_BY_NAME = {r.route: r.states for r in BOX_STATE_ROUTES}
+
+
+def validate_box_state(route: str, state: str | None) -> None:
+    """W8c: enforce ``BOX_STATE_ROUTES`` (``src/config/region_state.py``) on
+    write, not just serve it on ``GET .../regions/statuses``.
+
+    ``route`` is the exact ``BoxStateRoute.route`` string (e.g. ``'PATCH
+    /crops/{crop_id}/regions/{box_id}'``); a route this table doesn't know
+    about is a programming error (``ValueError``), never a client-facing
+    422. ``state=None`` (untouched / no state in this write) is always
+    fine -- the caller may not be setting a state at all.
+    """
+    if state is None:
+        return
+    try:
+        allowed = _BOX_STATE_ROUTES_BY_NAME[route]
+    except KeyError as exc:
+        msg = f'no BOX_STATE_ROUTES entry for route {route!r}'
+        raise ValueError(msg) from exc
+    if state not in allowed:
+        msg = f'state must be one of {sorted(allowed)} for {route}; got {state!r}'
+        raise RegionBoxWriteError(msg)
+
+
 def apply_put_boxes(
     current: dict[str, Any],
     requested: Sequence[dict[str, Any]],
@@ -448,4 +473,5 @@ __all__ = [
     'new_box_placeholder',
     'next_box_id',
     'read_boxes',
+    'validate_box_state',
 ]
