@@ -8,12 +8,18 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from scripts.curation.worker.state import _ItemTask, region_profile
 from src.config import get_region_fields
+from src.config.region_rejection import (
+    REJECT_REASON_NO_VERDICT,
+    REJECT_REASON_SANITY_PREFIX,
+    REJECT_REASON_VERIFIER,
+)
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
+from src.services.curation.region_boxes import RegionBox, derive_status, new_box_placeholder
 from src.services.curation.vlm_class_attempt import (
     class_attempt_fields,
     empty_answer_reason_for_index,
@@ -29,6 +35,10 @@ from src.services.detection.region_text import TEXT_CHOICE_NONE, TEXT_CHOICE_VLM
 from src.services.detection.region_text_rules import region_text_rules
 from src.services.labeling.vlm_client import DEFAULT_MODEL as VLM_MODEL_ID
 from src.services.labeling.vlm_labeler import RegionCrop, VlmCombinedReply, VlmLabeler
+
+
+if TYPE_CHECKING:
+    from src.services.labeling.region_overlay import VlmBoxVerdict
 
 
 logger = get_logger('curation_worker')
@@ -406,42 +416,6 @@ def _combined_class_update(
     return update
 
 
-def _combined_write_doc(
-    *,
-    reply: VlmCombinedReply,
-    candidate_in_source: tuple[float, float, float, float],
-    candidate_score: float,
-    detector: str,
-    detector_version: str,
-    chain: list[str],
-    class_names: list[str] | None,
-    auto_confirmed: bool = False,
-    name_to_id: dict[str, int] | None = None,
-) -> dict[str, Any]:
-    """Compose the happy-path ``detected`` write doc for a combined reply.
-
-    Combines :func:`_region_write_doc` (region side) with
-    :func:`_combined_class_update` (class side) so one helper produces
-    every field the runner needs on a successful combined verification.
-    ``name_to_id`` maps the resolved class_name back to the registry's
-    authoritative class_id (see :func:`_combined_class_update`).
-    """
-    ts = _now_iso()
-    region_doc = _region_write_doc(
-        region_in_source=candidate_in_source,
-        score=candidate_score,
-        detector=detector,
-        detector_version=detector_version,
-        chain=chain,
-        auto_confirmed=auto_confirmed,
-        region_text_reply=reply.region_text_reply,
-        region_text_confidence=reply.region_confidence,
-        confidence=reply.region_confidence,
-    )
-    region_doc.update(_combined_class_update(reply, class_names, now=ts, name_to_id=name_to_id))
-    return region_doc
-
-
 async def _auto_confirm_or_pending(
     *,
     sam_score: float,
@@ -474,3 +448,196 @@ async def _auto_confirm_or_pending(
     if not _bbox_shape_is_plausible(bbox_in_crop):
         return False
     return sam_score >= _SKIP_VLM_VERIFY_SECONDARY_SCORE
+
+
+# =============================================================================
+# W8.5: verdict -> box-list storage (verdicts_to_boxes)
+# =============================================================================
+#
+# Wired into the streaming runner's stage_b_combined (runner.py): the
+# live pipeline calls select_region_candidates() to build the candidate
+# list, then this module's verdicts_to_boxes() to resolve the VLM's
+# per-box verdicts into RegionBox entries, written via
+# region_boxes.boxes_write_fields(). candidate_reject_doc() /
+# no_verdict_reject_doc() (no_verdict.py) are the pre-W8 single-candidate
+# write builders -- no longer called from runner.py, left defined
+# (candidate_reject_doc still backs no_verdict.py's own helpers) rather
+# than swept this pass; see the W8 handback report.
+
+
+@dataclass(frozen=True)
+class TaskBoxInput:
+    """One candidate box going into a verify call (a bounded stand-in for
+    the eventual worker ``TaskBox`` -- see W8.5). ``box_id`` is set for a
+    box read back from storage (``pending_verification``); ``None`` for a
+    fresh candidate, which gets the next id in :func:`verdicts_to_boxes`.
+    """
+
+    bbox_in_crop: tuple[float, float, float, float]
+    bbox_in_source: tuple[float, float, float, float]
+    score: float
+    detector: str
+    detector_version: str
+    source: str
+    box_id: str | None = None
+    hint_text: str | None = None
+    hint_text_confidence: float | None = None
+
+
+def verdicts_to_boxes(
+    candidates: list[TaskBoxInput],
+    verdicts: list[VlmBoxVerdict],
+    *,
+    item_bbox_norm: tuple[float, float, float, float] | None = None,
+    now: str | None = None,
+    force_resolve: bool = False,
+) -> tuple[list[RegionBox], RegionStatus | None, dict[str, Any]]:
+    """Map a combined VLM reply's per-box verdicts onto stored boxes (W8.5).
+
+    ``candidates`` and ``verdicts`` are aligned by position (both length
+    N; ``verdicts[i].box == i + 1``). Every entry in the returned list
+    carries its own ``box_id`` (Cropwright C3/Q15) -- a candidate read
+    back from storage (``cand.box_id`` set, W8 B1) keeps that real id;
+    a fresh candidate (``cand.box_id is None``) gets a PLACEHOLDER id
+    (:func:`~src.services.curation.region_boxes.new_box_placeholder`),
+    not a real ``b<N>`` one. W8 M1: a real id is only safe to mint
+    against the CURRENT ``region_box_seq`` high-water mark, which this
+    function -- called at task-processing time, potentially long before
+    the write actually lands -- does not have; the caller's write path
+    (``bulk_writer._merge``) finalizes placeholders into real ids
+    immediately before the write, against the live doc.
+
+    Returns ``(boxes, status, extra)``:
+
+    - Every verdict ``bbox_correct is None`` (no box got a verdict at
+      all) and ``force_resolve`` is False: ``([], None, {'no_verdict':
+      True})`` -- the caller retries (the no-verdict cap), same as
+      today's single-box no-verdict path. ``force_resolve=True`` (the cap
+      reached) resolves every no-verdict box as ``rejected`` /
+      ``REJECT_REASON_NO_VERDICT`` instead of signalling a retry.
+    - Otherwise: one :class:`RegionBox` per candidate --
+      ``bbox_correct=True`` and the box passes the sanity gate ->
+      ``accepted``; ``True`` but sanity fails -> ``rejected`` /
+      ``sanity_reject:<reason>``; ``False`` -> ``rejected`` /
+      ``region_visible_elsewhere``; ``None`` -> ``rejected`` /
+      ``verifier_no_verdict`` (this box specifically got no verdict, but
+      at least one sibling did). ``status = derive_status(boxes,
+      empty_status=RegionStatus.NO_REGION_BOX)``.
+    """
+    now = now or _now_iso()
+    any_verdict = any(v.bbox_correct is not None for v in verdicts)
+    if not any_verdict and not force_resolve:
+        return [], None, {'no_verdict': True}
+
+    boxes: list[RegionBox] = []
+    for i, (cand, verdict) in enumerate(zip(candidates, verdicts, strict=True)):
+        box_id = cand.box_id if cand.box_id is not None else new_box_placeholder(i)
+        state: str
+        rejection_reason: str | None = None
+        bbox_correct = verdict.bbox_correct
+        if bbox_correct is True:
+            gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_in_crop, item_bbox_norm)
+            if gate_ok:
+                state = 'accepted'
+            else:
+                state = 'rejected'
+                rejection_reason = f'{REJECT_REASON_SANITY_PREFIX}{gate_reason}'
+        elif bbox_correct is False:
+            state = 'rejected'
+            rejection_reason = REJECT_REASON_VERIFIER
+        else:
+            state = 'rejected'
+            rejection_reason = REJECT_REASON_NO_VERDICT
+        boxes.append(
+            RegionBox(
+                box_id=box_id,
+                bbox_norm=cand.bbox_in_source,
+                state=state,
+                score=cand.score,
+                detector=cand.detector,
+                detector_version=cand.detector_version,
+                source=cand.source,
+                bbox_correct=bbox_correct,
+                confidence=verdict.confidence,
+                rejection_reason=rejection_reason,
+                text=verdict.text_reply or cand.hint_text,
+                detected_at=now,
+            )
+        )
+
+    status = derive_status(boxes, empty_status=RegionStatus.NO_REGION_BOX)
+    return boxes, status, {}
+
+
+# =============================================================================
+# W8 M2 fix (pipeline-wiring review, 2026-09-27): item-level verification
+# fields for a box-list write.
+# =============================================================================
+#
+# Pre-W8, every combined-verify write set RegionFields.verified/verifier/
+# verifier_version/verified_at/validated/auto_confirmed at the item level
+# (_region_write_doc above). The W8 box-list rewrite dropped these
+# entirely -- readers that still filter/sort on them (regions.py's
+# `verified` filter, the detector_blind_spots/low_conf_correct training
+# cohorts, region_requeue.py, the auto-confirm review semantics) went
+# blind to every fresh worker write. Box-aware definition (corrected by
+# the 2026-09-27 re-review, R-M4: the first cut used `reply is not None`,
+# which is also true for an all-rejected verdict set and contradicted the
+# existing invariant in test_region_status_invariants.py plus the pre-W8
+# write, which only ever set `verified=True` on an ACCEPTED write):
+# `verified` means the VLM actually CONFIRMED a region this write -- at
+# least one box in the final set is `accepted`; `auto_confirmed` means at
+# least one box was accepted AND every accepted box independently passes
+# `_auto_confirm_or_pending`.
+
+
+def item_verification_fields(
+    *,
+    verified: bool,
+    auto_confirmed: bool = False,
+    now: str | None = None,
+) -> dict[str, Any]:
+    """Item-level ``verified``/``verifier*``/``validated``/``auto_confirmed``
+    fields for a box-list write (W8 M2).
+
+    ``validated`` is always ``False`` here -- the worker never validates a
+    region, only a human does (``RegionFields.validated`` semantics,
+    unchanged from pre-W8). ``verifier``/``verifier_version`` are cleared
+    (``None``) when ``verified`` is False, mirroring the pre-W8
+    ``_region_write_doc`` behaviour.
+    """
+    F = get_region_fields()
+    doc: dict[str, Any] = {
+        F.validated: False,
+        F.auto_confirmed: auto_confirmed,
+        F.verified: verified,
+        F.verifier: VLM_MODEL_ID if verified else None,
+        F.verifier_version: '1' if verified else None,
+    }
+    if verified:
+        doc[F.verified_at] = now or _now_iso()
+    return doc
+
+
+async def boxes_auto_confirmed(boxes: list[RegionBox], candidates: list[TaskBoxInput]) -> bool:
+    """W8 M2: the box-aware ``auto_confirmed`` rule.
+
+    At least one accepted box, AND every accepted box independently
+    passes :func:`_auto_confirm_or_pending` (aligned by position with
+    ``candidates`` -- the same alignment ``verdicts_to_boxes`` produces).
+    A set with zero accepted boxes is never auto-confirmed.
+    """
+    accepted_pairs = [
+        (b, c) for b, c in zip(boxes, candidates, strict=True) if b.state == 'accepted'
+    ]
+    if not accepted_pairs:
+        return False
+    for box, cand in accepted_pairs:
+        ok = await _auto_confirm_or_pending(
+            sam_score=cand.score,
+            bbox_in_crop=cand.bbox_in_crop,
+            vlm_high_conf=box.confidence == 'high',
+        )
+        if not ok:
+            return False
+    return True

@@ -108,6 +108,15 @@ def test_overridability_expresses_a_pre_existing_deployment_shape() -> None:
         status_legacy='roi_status_legacy',
         profile='roi_profile',
         profile_revision='roi_profile_revision',
+        boxes='roi_boxes',
+        boxes_state='roi_state',
+        box_embeddings='roi_box_embeddings',
+        count='roi_count',
+        rejected_count='roi_rejected_count',
+        max_score='roi_max_score',
+        set_complete='roi_set_complete',
+        revision='roi_revision',
+        box_seq='roi_box_seq',
     )
     assert f.status == 'roi_status'
     assert f.bbox_norm == 'roi_bbox_norm'

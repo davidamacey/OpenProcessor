@@ -14,10 +14,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from scripts.curation.worker import combined as combined_mod
-from scripts.curation.worker.state import _ItemTask
 from src.config import get_region_fields
 from src.services.detection.cascade_detect import RegionCandidate
+from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply, _coerce_bool
 
 from .test_region_cascade_integrity import (
@@ -26,7 +25,6 @@ from .test_region_cascade_integrity import (
     _FakeOpenSearch,
     _item,
     _labeler,
-    _profile,
 )
 
 
@@ -52,27 +50,27 @@ class TestNullIsNoVerdict:
     @pytest.mark.parametrize('bbox_answer', [None, 'null', 'none', ''])
     async def test_combined_reply_keeps_null_bbox_answer_as_none(self, bbox_answer: Any) -> None:
         reply = await _labeler(_combined(region_bbox_correct=bbox_answer)).label_combined(
-            'c1', b'x', region_bbox_norm=(0.1, 0.1, 0.5, 0.5), draw_overlay=False
+            'c1', b'x', region_bboxes_norm=[(0.1, 0.1, 0.5, 0.5)], draw_overlay=False
         )
-        assert reply.region_bbox_correct is None
+        assert reply.region_boxes[0].bbox_correct is None
 
     @pytest.mark.asyncio
     async def test_absent_bbox_answer_is_none(self) -> None:
         entry = _combined()
-        del entry['region_bbox_correct']
+        del entry['region_boxes'][0]['region_bbox_correct']
         reply = await _labeler(json.dumps(entry)).label_combined(
-            'c1', b'x', region_bbox_norm=(0.1, 0.1, 0.5, 0.5), draw_overlay=False
+            'c1', b'x', region_bboxes_norm=[(0.1, 0.1, 0.5, 0.5)], draw_overlay=False
         )
-        assert reply.region_bbox_correct is None
+        assert reply.region_boxes[0].bbox_correct is None
 
 
 def _reply(bbox_correct: bool | None) -> VlmCombinedReply:
     return VlmCombinedReply(
         img_id='c1',
         region_visible=True,
-        region_bbox_correct=bbox_correct,
-        region_text_reply='DNV20',
-        region_confidence='high',
+        region_boxes=[
+            VlmBoxVerdict(box=1, bbox_correct=bbox_correct, confidence='high', text_reply='DNV20')
+        ],
     )
 
 
@@ -114,39 +112,8 @@ class TestStreamingWorker:
         assert fake_os.live['c1'][F.status] == 'verify_rejected'
 
 
-class _Vlm:
-    class_names: list[str] = []
-    name_to_id: dict[str, int] = {}
-
-    def __init__(self, reply: VlmCombinedReply) -> None:
-        self._reply = reply
-
-    async def label_combined(self, **_kw: Any) -> VlmCombinedReply:
-        return self._reply
-
-
-class TestCascadeCombinedPath:
-    @pytest.mark.asyncio
-    async def test_null_bbox_verdict_writes_nothing(self) -> None:
-        task = _ItemTask(
-            crop_id='c1',
-            image_path='',
-            item_bbox_norm=(0.1, 0.1, 0.9, 0.9),
-            region_status='pending_detection',
-            class_name='sedan',
-        )
-        task.crop_jpeg = b'x'
-        det = _profile().detector_model
-        resolved = await combined_mod._try_combined_class_region(
-            task,
-            candidate_in_crop=(0.3, 0.6, 0.6, 0.75),
-            candidate_in_source=(0.34, 0.58, 0.58, 0.7),
-            candidate_score=0.9,
-            detector=det,
-            detector_version='1',
-            detector_chain_tag=det,
-            vlm=_Vlm(_reply(None)),  # type: ignore[arg-type]
-        )
-        assert resolved is True
-        assert task.update_doc == {}
-        assert f'{det}:combined_no_verdict' in task.detection_trace
+# test_null_bbox_verdict_writes_nothing (pre-W8 unit test of the deleted
+# combined.py::_try_combined_class_region) is superseded by
+# TestStreamingWorker.test_null_bbox_verdict_leaves_the_item_pending above
+# -- same assertion (a null box verdict writes nothing, the item stays
+# pending) proven at the real runner.py pipeline level.

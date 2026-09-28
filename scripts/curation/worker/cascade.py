@@ -2,6 +2,15 @@
 
 See ``scripts/curation/region_worker_main.py`` for the entry point and
 the ``scripts/curation/worker/`` package for the rest of the split.
+
+The pre-W8 single-candidate cascade (``_process_crop`` + its
+``combined._run_combined_cohort_path`` cohort routing) has been deleted
+-- ``runner.py``'s streaming pipeline is the only production cascade
+(confirmed zero production callers before removal; see the W8 pipeline-
+wiring handback report). This module now only keeps the pending-fetch
+query, the crop/geometry helpers ``runner.py`` still calls, and the
+``SegmenterClient`` / ``SegmenterAllHostsDown`` re-exports other modules
+import from here.
 """
 
 from __future__ import annotations
@@ -9,7 +18,7 @@ from __future__ import annotations
 # ruff: noqa: E402
 import base64  # noqa: F401  — kept for back-compat re-export surface
 import io
-from typing import TYPE_CHECKING, Any, NoReturn
+from typing import TYPE_CHECKING, Any
 
 from PIL import Image
 
@@ -17,14 +26,9 @@ from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, class_state_token
+from src.services.curation.region_boxes import read_boxes
 from src.services.curation.region_scope import parent_classes_clause
-from src.services.detection.cascade_detect import (
-    PaddleOcrTextRecognizer,
-    RegionCandidate,
-    RegionDetector,
-    crop_norm_to_source_norm,
-    is_plausible_region_bbox,
-)
+from src.services.detection.cascade_detect import RegionCandidate
 from src.services.detection.profile_registry import get_active_region_profile
 
 
@@ -35,38 +39,11 @@ from scripts.curation.worker.client import (
     SegmenterAllHostsDown,  # noqa: F401  # back-compat re-export for runner/tests
     SegmenterClient,  # noqa: TC001  # runtime back-compat re-export for shim + tests
 )
-from scripts.curation.worker.combined import _finalize_no_region, _run_combined_cohort_path
-from scripts.curation.worker.no_verdict import cascade_counter, cascade_no_verdict
-from scripts.curation.worker.state import (
-    _PENDING_DETECTION_ALIASES,
-    _PENDING_VERIFICATION_ALIASES,
-    _TERMINAL_STATUSES,
-    JPEG_QUALITY,
-    _is_secondary_shape,
-    _ItemTask,
-    items_index,
-    region_profile,
-)
-from scripts.curation.worker.verify import (
-    _SKIP_VLM_VERIFY_SECONDARY_SCORE,
-    _auto_confirm_or_pending,
-    _bbox_shape_is_plausible,
-    _region_write_doc,
-    _verify_with_vlm,
-)
-from src.config.region_source import (
-    CANDIDATE_DETECTOR,
-    CANDIDATE_DETECTOR_EXISTING,
-    CANDIDATE_SEGMENTER,
-    CANDIDATE_SEGMENTER_TEXT_HINT,
-)
-from src.services.labeling.vlm_labeler import VlmTransportError
+from scripts.curation.worker.state import JPEG_QUALITY, _ItemTask, items_index
 
 
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
-
-    from src.services.labeling.vlm_labeler import VlmLabeler
 
 
 def _build_pending_query(exclude_ids: list[str] | None = None) -> dict[str, Any]:
@@ -147,6 +124,9 @@ async def _fetch_pending(
             F.status,
             F.bbox_norm,
             F.score,
+            F.revision,
+            F.box_seq,
+            F.boxes,
             'class_name',
             'class_source',
             'class_validated',
@@ -194,6 +174,9 @@ async def _fetch_pending(
                 test_holdout=bool(src.get('test_holdout') or False),
                 detector_region_in_source=detector_region_in_source,
                 detector_score=float(src.get(F.score) or 0.0),
+                stored_boxes=read_boxes(src, F),
+                region_revision=int(src.get(F.revision) or 0),
+                region_box_seq=int(src.get(F.box_seq) or 0),
                 request_id=str(src.get('request_id') or '-'),
                 class_token=class_state_token(src),
                 project=project,
@@ -321,376 +304,6 @@ async def _resegment_from_text_hint(
         RegionCandidate(bbox_norm=projected, score=sub_cand.score, source=sub_cand.source),
         sub_box,
     )
-
-
-class _CascadeDoneError(Exception):
-    """Internal control-flow signal: this crop is fully handled.
-
-    Not an error. Raised by a cascade step once the crop either got a
-    write (``task.update_doc`` populated) or hit a no-verdict that must
-    leave it pending for a retry -- either way, no further stage should
-    run. ``_process_crop`` catches it once at the top level instead of
-    every stage returning early, which keeps the function's branching
-    countable by lint tooling while every stage still reads as a plain
-    early-exit.
-    """
-
-
-def _no_verdict_done(
-    task: _ItemTask,
-    *,
-    actor: str,
-    version: str,
-    box: tuple[float, float, float, float] | None,
-    score: float,
-    source: str,
-) -> NoReturn:
-    """The verifier gave no verdict on this box: stop the pass.
-
-    The item stays pending for a retry until the no-verdict cap, then is
-    parked as a reviewable rejected candidate (see ``no_verdict``).
-    """
-    if f'{actor}:hit' not in task.detection_trace:
-        task.detection_trace.append(f'{actor}:hit')
-    cascade_no_verdict(
-        task,
-        actor=actor,
-        detector_version=version,
-        candidate_in_source=box,
-        candidate_score=score,
-        candidate_source=source,
-        event='vlm_reject',
-    )
-    raise _CascadeDoneError
-
-
-async def _process_crop(
-    task: _ItemTask,
-    *,
-    detector: RegionDetector,
-    segmenter: SegmenterClient,
-    ocr_recognizer: PaddleOcrTextRecognizer,
-    vlm: VlmLabeler,
-) -> None:
-    """Run the routing logic for one crop and populate ``task.update_doc``.
-
-    See module docstring for the routing rules.
-    """
-    if task.region_status in _TERMINAL_STATUSES:
-        # Defensive — query already filters these out.
-        return
-
-    if task.crop_jpeg is None:
-        # Cropping failed at fetch time. Leave the doc alone — this is
-        # almost always a transient infra problem (missing volume mount,
-        # storage unmounted, broken JPEG) and writing a terminal status
-        # here would lock the crop out of the detection workflow forever
-        # once the underlying issue is fixed. The worker logs the reason
-        # and the next iteration will retry.
-        return
-
-    try:
-        is_secondary = _is_secondary_shape(task)
-        sam_candidate: RegionCandidate | None = None
-        det_model = region_profile().detector_model
-        det_version = region_profile().detector_version
-        seg_name = region_profile().segmenter_name
-        seg_version = region_profile().segmenter_version
-        ocr_det_model = region_profile().ocr_rec_model
-
-        # ---- Step 0: combined class+region for low-confidence-class cohort. ----
-        # Cohort (Phase C broadened) = ``class_source='coco_yolo11_proposal'``
-        # (primary classifier missed) OR ``class_source in {'item_model',
-        # 'cluster_majority_agreement'}`` with confidence < 0.80, AND a
-        # region candidate exists or can be cheaply produced. One VLM call
-        # returns class + region verify + OCR instead of two/three round-trips.
-        # Implementation lives in ``combined._run_combined_cohort_path``.
-        if await _run_combined_cohort_path(task, detector=detector, segmenter=segmenter, vlm=vlm):
-            raise _CascadeDoneError
-        # Non-cohort or cohort fell back — legacy cascade resumes.
-
-        # ---- Step 1: pending_verify path. ----
-        if (
-            task.region_status in _PENDING_VERIFICATION_ALIASES
-            and task.detector_region_in_source is not None
-        ):
-            region_in_crop = _source_to_crop(task.detector_region_in_source, task.item_bbox_norm)
-            region_jpeg = _crop_region_jpeg(task.crop_jpeg, region_in_crop)
-            outcome = await _verify_with_vlm(vlm, task, region_jpeg)
-            if outcome is None:
-                _no_verdict_done(
-                    task,
-                    actor=det_model,
-                    version=det_version,
-                    box=task.detector_region_in_source,
-                    score=task.detector_score,
-                    source=CANDIDATE_DETECTOR_EXISTING,
-                )
-            ok, conf = outcome.ok, outcome.confidence
-            if ok:
-                # Phase A3 sanity gate. The pending_verify path's region came
-                # from an earlier primary-detector ingest; re-check before
-                # committing the verified write. On reject, record the
-                # detector + reason and fall through to the secondary
-                # segmenter anyway (the trace captures both).
-                gate_ok, gate_reason = is_plausible_region_bbox(region_in_crop, task.item_bbox_norm)
-                if not gate_ok:
-                    task.detection_trace.append(f'{det_model}:sanity_reject:{gate_reason}')
-                    # Fall through to the secondary segmenter.
-                else:
-                    auto = await _auto_confirm_or_pending(
-                        sam_score=task.detector_score,
-                        bbox_in_crop=region_in_crop,
-                        vlm_high_conf=conf == 'high',
-                    )
-                    task.detection_trace.append(f'{det_model}:hit')
-                    task.detection_trace.append(f'{det_model}:vlm_verify_ok')
-                    task.update_doc = _region_write_doc(
-                        region_in_source=task.detector_region_in_source,
-                        score=task.detector_score,
-                        detector=det_model,
-                        detector_version=det_version,
-                        chain=task.detection_trace,
-                        auto_confirmed=bool(auto),
-                        region_text_reply=outcome.text,
-                        region_text_confidence=outcome.text_confidence,
-                        confidence=conf,
-                    )
-                    raise _CascadeDoneError
-            else:
-                task.detection_trace.append(f'{det_model}:vlm_reject')
-            # Verify rejected — fall through to the secondary segmenter.
-
-        # ---- Step 2: primary detector (only if pending + non-secondary-shape,
-        #              and the profile has a detector leg). ----
-        elif task.region_status in _PENDING_DETECTION_ALIASES and not is_secondary and det_model:
-            detector_results = await detector.detect_batch([task.crop_jpeg])
-            cand = detector_results[0] if detector_results else None
-            if cand is None:
-                task.detection_trace.append(f'{det_model}:miss')
-            else:
-                # Phase A3 sanity gate on the fresh primary-detector candidate.
-                gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_norm, task.item_bbox_norm)
-                if not gate_ok:
-                    task.detection_trace.append(f'{det_model}:hit')
-                    task.detection_trace.append(f'{det_model}:sanity_reject:{gate_reason}')
-                    # Fall through to the secondary segmenter.
-                else:
-                    region_jpeg = _crop_region_jpeg(task.crop_jpeg, cand.bbox_norm)
-                    outcome = await _verify_with_vlm(vlm, task, region_jpeg)
-                    if outcome is None:
-                        _no_verdict_done(
-                            task,
-                            actor=det_model,
-                            version=det_version,
-                            box=crop_norm_to_source_norm(cand.bbox_norm, task.item_bbox_norm),
-                            score=cand.score,
-                            source=CANDIDATE_DETECTOR,
-                        )
-                    ok, conf = outcome.ok, outcome.confidence
-                    if ok:
-                        projected = crop_norm_to_source_norm(cand.bbox_norm, task.item_bbox_norm)
-                        auto = await _auto_confirm_or_pending(
-                            sam_score=cand.score,
-                            bbox_in_crop=cand.bbox_norm,
-                            vlm_high_conf=conf == 'high',
-                        )
-                        task.detection_trace.append(f'{det_model}:hit')
-                        task.detection_trace.append(f'{det_model}:vlm_verify_ok')
-                        task.update_doc = _region_write_doc(
-                            region_in_source=projected,
-                            score=cand.score,
-                            detector=det_model,
-                            detector_version=det_version,
-                            chain=task.detection_trace,
-                            auto_confirmed=bool(auto),
-                            region_text_reply=outcome.text,
-                            region_text_confidence=outcome.text_confidence,
-                            confidence=conf,
-                        )
-                        raise _CascadeDoneError
-                    task.detection_trace.append(f'{det_model}:hit')
-                    task.detection_trace.append(f'{det_model}:vlm_reject')
-                    # Primary detector hit but VLM rejected — fall through
-                    # to the secondary segmenter.
-
-        # ---- Step 3: secondary segmenter (always — secondary-shape pending,
-        #              non-secondary primary-detector miss/reject, or
-        #              pending_verify reject). ----
-        sam_candidate = await segmenter.segment(task.crop_jpeg)
-        if sam_candidate is None:
-            task.detection_trace.append(f'{seg_name}:miss')
-        else:
-            # Phase A3 sanity gate. Reject early before the VLM roundtrip.
-            gate_ok, gate_reason = is_plausible_region_bbox(
-                sam_candidate.bbox_norm, task.item_bbox_norm
-            )
-            if not gate_ok:
-                task.detection_trace.append(f'{seg_name}:hit')
-                task.detection_trace.append(f'{seg_name}:sanity_reject:{gate_reason}')
-                # Fall through to text-hint (OCR-hinted secondary-segmenter re-pass).
-            else:
-                # Fast path: skip VLM verify when the secondary segmenter is
-                # very confident AND the bbox shape passes the region
-                # sanity check.
-                if (
-                    sam_candidate.score >= _SKIP_VLM_VERIFY_SECONDARY_SCORE
-                    and _bbox_shape_is_plausible(sam_candidate.bbox_norm)
-                ):
-                    projected = crop_norm_to_source_norm(
-                        sam_candidate.bbox_norm, task.item_bbox_norm
-                    )
-                    task.detection_trace.append(f'{seg_name}:hit')
-                    task.detection_trace.append(f'{seg_name}:skip_vlm_verify')
-                    task.update_doc = _region_write_doc(
-                        region_in_source=projected,
-                        score=sam_candidate.score,
-                        detector=seg_name,
-                        detector_version=seg_version,
-                        chain=task.detection_trace,
-                        region_verified=False,
-                        verifier=None,
-                        verifier_version=None,
-                        extra={get_region_fields().skip_verify: True},
-                    )
-                    raise _CascadeDoneError
-
-                region_jpeg = _crop_region_jpeg(task.crop_jpeg, sam_candidate.bbox_norm)
-                outcome = await _verify_with_vlm(vlm, task, region_jpeg)
-                if outcome is None:
-                    _no_verdict_done(
-                        task,
-                        actor=seg_name,
-                        version=seg_version,
-                        box=crop_norm_to_source_norm(sam_candidate.bbox_norm, task.item_bbox_norm),
-                        score=sam_candidate.score,
-                        source=CANDIDATE_SEGMENTER,
-                    )
-                ok, conf = outcome.ok, outcome.confidence
-                if ok:
-                    projected = crop_norm_to_source_norm(
-                        sam_candidate.bbox_norm, task.item_bbox_norm
-                    )
-                    auto = await _auto_confirm_or_pending(
-                        sam_score=sam_candidate.score,
-                        bbox_in_crop=sam_candidate.bbox_norm,
-                        vlm_high_conf=conf == 'high',
-                    )
-                    task.detection_trace.append(f'{seg_name}:hit')
-                    task.detection_trace.append(f'{seg_name}:vlm_verify_ok')
-                    task.update_doc = _region_write_doc(
-                        region_in_source=projected,
-                        score=sam_candidate.score,
-                        detector=seg_name,
-                        detector_version=seg_version,
-                        chain=task.detection_trace,
-                        auto_confirmed=bool(auto),
-                        region_text_reply=outcome.text,
-                        region_text_confidence=outcome.text_confidence,
-                        confidence=conf,
-                    )
-                    raise _CascadeDoneError
-                task.detection_trace.append(f'{seg_name}:hit')
-                task.detection_trace.append(f'{seg_name}:vlm_reject')
-
-        # ---- Step 4: text-hint-driven secondary-segmenter re-pass. ----
-        # The OCR-detection model is no longer trusted as a region-bbox
-        # source (its text-detect regions are too loose and produced
-        # oversized boxes). When the primary detector + secondary segmenter
-        # both globally missed but the VLM already said the crop contains
-        # the region of interest, run the OCR pipeline to *locate* the
-        # text, then re-prompt the segmenter with a tight sub-crop around
-        # that text region. The segmenter produces the final geometry; the
-        # OCR region is only a hint.
-        # Optional per profile (``text_hint_enabled`` + an OCR pipeline).
-        if region_profile().text_hint_active(segmenter_enabled=segmenter.enabled):
-            try:
-                ocr_regions = await ocr_recognizer.detect_regions(task.crop_jpeg)
-            except Exception as exc:
-                logger.warning('text_hint_ocr_failed', crop_id=task.crop_id, error=str(exc))
-                ocr_regions = []
-            ocr_pick = ocr_recognizer.pick_best_text_region(ocr_regions) if ocr_regions else None
-            if ocr_pick is not None:
-                task.detection_trace.append(f'{ocr_det_model}:text_hint:hit')
-                sub_cand, _sub_box = await _resegment_from_text_hint(
-                    task.crop_jpeg, ocr_pick.bbox_norm, segmenter
-                )
-                if sub_cand is None:
-                    task.detection_trace.append(f'{seg_name}:text_hint:miss')
-                else:
-                    gate_ok, gate_reason = is_plausible_region_bbox(
-                        sub_cand.bbox_norm, task.item_bbox_norm
-                    )
-                    if not gate_ok:
-                        task.detection_trace.append(f'{seg_name}:text_hint:hit')
-                        task.detection_trace.append(
-                            f'{seg_name}:text_hint:sanity_reject:{gate_reason}'
-                        )
-                    else:
-                        region_jpeg = _crop_region_jpeg(task.crop_jpeg, sub_cand.bbox_norm)
-                        outcome = await _verify_with_vlm(vlm, task, region_jpeg)
-                        if outcome is None:
-                            _no_verdict_done(
-                                task,
-                                actor=seg_name,
-                                version=seg_version,
-                                box=crop_norm_to_source_norm(
-                                    sub_cand.bbox_norm, task.item_bbox_norm
-                                ),
-                                score=sub_cand.score,
-                                source=CANDIDATE_SEGMENTER_TEXT_HINT,
-                            )
-                        ok, conf = outcome.ok, outcome.confidence
-                        if ok:
-                            projected = crop_norm_to_source_norm(
-                                sub_cand.bbox_norm, task.item_bbox_norm
-                            )
-                            auto = await _auto_confirm_or_pending(
-                                sam_score=sub_cand.score,
-                                bbox_in_crop=sub_cand.bbox_norm,
-                                vlm_high_conf=conf == 'high',
-                            )
-                            task.detection_trace.append(f'{seg_name}:text_hint:hit')
-                            task.detection_trace.append(f'{seg_name}:text_hint:vlm_verify_ok')
-                            # Pass OCR text through when the VLM read empty so
-                            # the region text isn't lost.
-                            text_out = outcome.text or ocr_pick.text
-                            text_conf_out: str | None = outcome.text_confidence
-                            if not outcome.text and ocr_pick.text:
-                                rc = ocr_pick.rec_score
-                                text_conf_out = (
-                                    'high' if rc >= 0.8 else 'medium' if rc >= 0.5 else 'low'
-                                )
-                            task.update_doc = _region_write_doc(
-                                region_in_source=projected,
-                                score=sub_cand.score,
-                                detector=seg_name,
-                                detector_version=seg_version,
-                                chain=task.detection_trace,
-                                auto_confirmed=bool(auto),
-                                region_text_reply=text_out,
-                                region_text_confidence=text_conf_out,
-                                confidence=conf,
-                            )
-                            raise _CascadeDoneError
-                        task.detection_trace.append(f'{seg_name}:text_hint:hit')
-                        task.detection_trace.append(f'{seg_name}:text_hint:vlm_reject')
-            elif ocr_regions:
-                task.detection_trace.append(f'{ocr_det_model}:text_hint:no_region_shape')
-            else:
-                task.detection_trace.append(f'{ocr_det_model}:text_hint:miss')
-    except _CascadeDoneError:
-        pass
-    except VlmTransportError as exc:
-        # No reply at all (the VLM is unreachable): leave the item pending
-        # and never count it toward the no-verdict cap.
-        logger.warning('cascade_vlm_transport_failed', crop_id=task.crop_id, error=str(exc))
-        task.update_doc = {}
-    else:
-        # ---- Step 5: All detectors missed. Queue for human review. ----
-        _finalize_no_region(task)
-    if task.update_doc:
-        cascade_counter().clear(task.crop_id)
 
 
 # =============================================================================

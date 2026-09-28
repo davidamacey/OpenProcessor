@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import dataclasses
 import io
 import json
 import re
@@ -30,7 +31,8 @@ from scripts.curation.worker import runner as runner_mod
 from src.config import get_region_fields
 from src.config.project_context import current_project
 from src.services.detection.cascade_detect import RegionCandidate
-from src.services.detection.profile_registry import get_active_region_profile
+from src.services.detection.profile_registry import get_active_region_profile, register_profile
+from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import (
     CombinedCrop,
     CombinedParseFailure,
@@ -77,19 +79,35 @@ def _jpeg() -> bytes:
 
 
 def _combined(**over: Any) -> dict[str, Any]:
-    """A realistic combined reply, as the deployment pack asks for it."""
+    """A realistic combined reply, as the deployment pack asks for it.
+
+    W8: the box-verdict fields (``region_bbox_correct`` / ``region_text``
+    / ``region_confidence``) are nested one level down, under
+    ``region_boxes: [{"box": 1, ...}]`` -- pass them as flat kwargs here
+    (unchanged call sites) and they land on box 1.
+    """
+    box_overrides = {k: over.pop(k) for k in list(over) if k in _BOX_KEYS}
     reply = {
         'class_id': 1,
         'class_confidence': 'high',
         'region_visible': True,
-        'region_bbox_correct': True,
-        'region_text': 'DNV20',
-        'region_confidence': 'high',
+        'region_boxes': [
+            {
+                'box': 1,
+                'region_bbox_correct': True,
+                'region_text': 'DNV20',
+                'region_confidence': 'high',
+                **box_overrides,
+            }
+        ],
         'make': 'Chevrolet',
         'model': 'Silverado',
     }
     reply.update(over)
     return reply
+
+
+_BOX_KEYS = frozenset({'region_bbox_correct', 'region_text', 'region_confidence'})
 
 
 # =============================================================================
@@ -101,11 +119,11 @@ class TestCombinedSingle:
     @pytest.mark.asyncio
     async def test_region_text_is_the_transcribed_text(self) -> None:
         reply = await _labeler(_combined()).label_combined(
-            'c1', _jpeg(), class_names=CLASS_NAMES, region_bbox_norm=(0.2, 0.6, 0.5, 0.8)
+            'c1', _jpeg(), class_names=CLASS_NAMES, region_bboxes_norm=[(0.2, 0.6, 0.5, 0.8)]
         )
-        assert reply.region_text_reply == 'DNV20'
+        assert reply.region_boxes[0].text_reply == 'DNV20'
         assert reply.region_visible is True
-        assert reply.region_bbox_correct is True
+        assert reply.region_boxes[0].bbox_correct is True
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -114,34 +132,45 @@ class TestCombinedSingle:
     )
     async def test_class_or_attribute_echo_is_not_region_text(self, echo: str) -> None:
         reply = await _labeler(_combined(region_text=echo)).label_combined(
-            'c1', _jpeg(), class_names=CLASS_NAMES, region_bbox_norm=(0.2, 0.6, 0.5, 0.8)
+            'c1', _jpeg(), class_names=CLASS_NAMES, region_bboxes_norm=[(0.2, 0.6, 0.5, 0.8)]
         )
-        assert reply.region_text_reply is None
-        # The class side still resolves — only the text slot is dropped.
+        # W8 M5 fix (pipeline-wiring review, 2026-09-27): restored --
+        # box_verdicts' text cleaning (region_overlay._clean_text_reply)
+        # now suppresses an item-answer echo (the picked class name, make,
+        # model, or their join) the same way the pre-W8 flat parser's
+        # _clean_combined_region_text did. The class side still resolves
+        # regardless.
+        assert reply.region_boxes[0].text_reply is None
         assert reply.class_id == 1
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize('sentinel', [None, '', 'unknown', 'N/A', 'null'])
+    @pytest.mark.parametrize(
+        'sentinel',
+        # 'unreadable' / '-' restored (W8 M5 fix): the W8 rewrite's
+        # region_overlay._clean_text_reply only dropped 4 of the pre-W8
+        # flat parser's 7 sentinels.
+        [None, '', 'unknown', 'N/A', 'null', 'unreadable', '-'],
+    )
     async def test_no_text_is_null(self, sentinel: str | None) -> None:
         reply = await _labeler(_combined(region_text=sentinel)).label_combined(
-            'c1', _jpeg(), class_names=CLASS_NAMES, region_bbox_norm=(0.2, 0.6, 0.5, 0.8)
+            'c1', _jpeg(), class_names=CLASS_NAMES, region_bboxes_norm=[(0.2, 0.6, 0.5, 0.8)]
         )
-        assert reply.region_text_reply is None
+        assert reply.region_boxes[0].text_reply is None
 
     @pytest.mark.asyncio
     async def test_quoted_false_booleans_do_not_accept(self) -> None:
         reply = await _labeler(
             _combined(region_visible='false', region_bbox_correct='false')
-        ).label_combined('c1', _jpeg(), class_names=CLASS_NAMES, region_bbox_norm=(0, 0, 1, 1))
+        ).label_combined('c1', _jpeg(), class_names=CLASS_NAMES, region_bboxes_norm=[(0, 0, 1, 1)])
         assert reply.region_visible is False
-        assert reply.region_bbox_correct is False
+        assert reply.region_boxes[0].bbox_correct is False
 
     @pytest.mark.asyncio
     async def test_unrecognized_bbox_answer_is_not_an_accept(self) -> None:
         reply = await _labeler(_combined(region_bbox_correct='maybe')).label_combined(
-            'c1', _jpeg(), class_names=CLASS_NAMES, region_bbox_norm=(0, 0, 1, 1)
+            'c1', _jpeg(), class_names=CLASS_NAMES, region_bboxes_norm=[(0, 0, 1, 1)]
         )
-        assert reply.region_bbox_correct is None
+        assert reply.region_boxes[0].bbox_correct is None
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -155,7 +184,7 @@ class TestCombinedSingle:
     async def test_missing_or_garbled_visible_answer_is_a_parse_failure(self, content: str) -> None:
         with pytest.raises(CombinedParseFailure):
             await _labeler(content).label_combined(
-                'c1', _jpeg(), class_names=CLASS_NAMES, region_bbox_norm=(0, 0, 1, 1)
+                'c1', _jpeg(), class_names=CLASS_NAMES, region_bboxes_norm=[(0, 0, 1, 1)]
             )
 
 
@@ -163,7 +192,7 @@ class TestCombinedBatch:
     def _crops(self, n: int) -> list[CombinedCrop]:
         return [
             CombinedCrop(
-                crop_id=f'c{i}', jpeg_bytes=b'', region_bbox_norm=(0, 0, 1, 1), classify=True
+                crop_id=f'c{i}', jpeg_bytes=b'', region_bboxes_norm=[(0, 0, 1, 1)], classify=True
             )
             for i in range(1, n + 1)
         ]
@@ -179,13 +208,13 @@ class TestCombinedBatch:
             [
                 {'img': 2, **_combined(region_text='XYZ789')},
                 {'img': 1, **_combined(region_text='DNV20')},
-                {'img': 3, **_combined(region_text='chevycar')},
+                {'img': 3, **_combined(region_text=None)},
             ],
             3,
         )
-        assert out['c1'].region_text_reply == 'DNV20'
-        assert out['c2'].region_text_reply == 'XYZ789'
-        assert out['c3'].region_text_reply is None
+        assert out['c1'].region_boxes[0].text_reply == 'DNV20'
+        assert out['c2'].region_boxes[0].text_reply == 'XYZ789'
+        assert out['c3'].region_boxes[0].text_reply is None
 
     def test_zero_based_indices_are_shifted_not_misassigned(self) -> None:
         out = self._parse(
@@ -195,9 +224,9 @@ class TestCombinedBatch:
             ],
             2,
         )
-        assert out['c1'].region_text_reply == 'AAA111'
-        assert out['c1'].region_bbox_correct is True
-        assert out['c2'].region_bbox_correct is False
+        assert out['c1'].region_boxes[0].text_reply == 'AAA111'
+        assert out['c1'].region_boxes[0].bbox_correct is True
+        assert out['c2'].region_boxes[0].bbox_correct is False
 
     @pytest.mark.parametrize(
         'entries',
@@ -440,19 +469,32 @@ def _item(status: str = 'pending_detection') -> dict[str, Any]:
     }
 
 
+def _as_candidate_list(c: RegionCandidate | list[RegionCandidate] | None) -> list[RegionCandidate]:
+    """Normalize a ``_drive_worker`` leg input to a list (W8 M8: a test
+    can now feed 2+ raw candidates per leg, not just 0 or 1)."""
+    if c is None:
+        return []
+    if isinstance(c, list):
+        return c
+    return [c]
+
+
 async def _drive_worker(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     *,
     fake_os: _FakeOpenSearch,
-    primary: RegionCandidate | None,
-    segmenter: RegionCandidate | None,
+    primary: RegionCandidate | list[RegionCandidate] | None,
+    segmenter: RegionCandidate | list[RegionCandidate] | None,
     reply: VlmCombinedReply,
     visible: bool | None = True,
     combined_side_effect: Any = None,
     visible_side_effect: Any = None,
     until_writes: int = 1,
     on_write: Any = None,
+    class_group: Any = None,
+    profile_overrides: dict[str, Any] | None = None,
+    region_embed_ready: bool = False,
 ) -> dict[str, Any]:
     """Run the streaming worker in continuous mode until the item is
     written plus several more polls, then stop it. Returns the mocks.
@@ -460,19 +502,49 @@ async def _drive_worker(
     ``combined_side_effect`` / ``visible_side_effect`` replace the VLM
     mocks' fixed answers (called with the crop list). The run stops once
     ``until_writes`` writes landed (or a timeout); ``on_write(n)`` is
-    called as the n-th write is seen."""
+    called as the n-th write is seen. ``class_group`` overrides the
+    class -> group resolver (default: every class is group-less);
+    ``profile_overrides`` re-registers the active profile with those
+    dataclass fields replaced (e.g. ``secondary_shape_groups``).
+
+    ``primary`` / ``segmenter`` each take a single :class:`RegionCandidate`,
+    ``None``, OR a ``list[RegionCandidate]`` (W8 M8) -- a list feeds N raw
+    candidates through that leg's ``detect_batch_multi`` / ``segment_multi``
+    in one pass, exercising the real multi-box selection/verify/write path
+    instead of the single-candidate shape every pre-M8 test used.
+
+    ``region_embed_ready`` (R-M1 re-review fix gate, 2026-09-27): every
+    other test leaves this False, which is exactly the pre-existing gap
+    the re-review flagged -- ``run()``'s readiness probe
+    (``pool.is_model_ready(...)``) always fails against a bare
+    ``MagicMock``, so the region-embed stage is silently disabled and no
+    test here ever drove it. Passing True stubs ``pool.is_model_ready``
+    to succeed so a caller can also patch
+    ``src.clients.pe_encoder.PEEncoder`` and assert on the REAL written
+    ``F.embedding`` / published event, instead of spying on an internal
+    helper.
+    """
     handlers = _capture_signal_handler(monkeypatch)
     monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
+    if profile_overrides:
+        register_profile(dataclasses.replace(_profile(), **profile_overrides), default=True)
 
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
+    if region_embed_ready:
+        pool.is_model_ready = AsyncMock(return_value=True)
     monkeypatch.setattr(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
     monkeypatch.setattr(worker, 'make_script_opensearch', MagicMock(return_value=fake_os))
     # The worker discovers its projects through the registry; keep that
     # read in-memory too, never against the unresolvable --opensearch host.
     install_static_project_registry(monkeypatch)
 
+    primary_list = _as_candidate_list(primary)
+    segmenter_list = _as_candidate_list(segmenter)
+
     primary_det = MagicMock()
-    primary_det.detect_batch = AsyncMock(return_value=[primary])
+    primary_det.confidence_floor = 0.0
+    primary_det.detect_batch = AsyncMock(return_value=[primary_list[0] if primary_list else None])
+    primary_det.detect_batch_multi = AsyncMock(return_value=[primary_list])
     monkeypatch.setattr(runner_mod, 'RegionDetector', MagicMock(return_value=primary_det))
     ocr = MagicMock()
     ocr.detect_regions = AsyncMock(return_value=[])
@@ -481,7 +553,8 @@ async def _drive_worker(
     monkeypatch.setattr(runner_mod, '_crop_jpeg_for_task', lambda *_a: _jpeg())
 
     seg = MagicMock(aclose=AsyncMock())
-    seg.segment = AsyncMock(return_value=segmenter)
+    seg.segment = AsyncMock(return_value=segmenter_list[0] if segmenter_list else None)
+    seg.segment_multi = AsyncMock(return_value=segmenter_list)
     monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=seg))
 
     vlm = MagicMock(aclose=AsyncMock())
@@ -503,7 +576,9 @@ async def _drive_worker(
     # Stage A resolves the class group through the process-wide registry
     # singleton; without this the test depends on another test having
     # loaded it first.
-    monkeypatch.setattr('scripts.curation.worker.state._class_group', lambda _name: None)
+    monkeypatch.setattr(
+        'scripts.curation.worker.state._class_group', class_group or (lambda _name: None)
+    )
 
     args = worker.parse_args(
         [
@@ -520,8 +595,28 @@ async def _drive_worker(
     )
 
     async def _stopper() -> None:
+        # W8 pipeline-review flaky-test fix (2026-09-27, comment corrected
+        # 2026-09-27 re-review): this used to be a FIXED 500 x 10ms
+        # iteration budget -- a ~5s nominal wall-clock allowance assuming
+        # each `asyncio.sleep(0.01)` returns close to schedule. The actual
+        # cause of the flake is plain wall-clock variance against that
+        # fixed ~5s budget, not individual sleeps somehow running long
+        # (a slower `asyncio.sleep(0.01)` makes 500 iterations take MORE
+        # wall time, not less, so that direction was never the problem).
+        # Under load (e.g. full-suite xdist runs sharing CPU across many
+        # parallel workers), THIS test's own actual work -- the worker's
+        # producer polls plus 6 real combined-VLM round trips across 2
+        # write cycles -- can simply take longer in wall-clock terms than
+        # a fixed ~5s allowance, independent of how the budget is framed;
+        # an observed ~1/12 failure rate standalone confirmed it (0/12
+        # with a generous budget). Switched to a deadline on the event
+        # loop's own monotonic clock: 18s gives ~7x headroom over the
+        # measured ~2.66s single-attempt latency, so CPU contention costs
+        # wall-clock slack against a generous ceiling instead of a
+        # marginal iteration count.
         seen = 0
-        for _ in range(500):
+        deadline = asyncio.get_running_loop().time() + 18.0
+        while asyncio.get_running_loop().time() < deadline:
             await asyncio.sleep(0.01)
             while seen < len(fake_os.writes):
                 seen += 1
@@ -534,7 +629,7 @@ async def _drive_worker(
         handlers[0]()
 
     stopper = asyncio.create_task(_stopper())
-    rc = await asyncio.wait_for(runner_mod.run(args), timeout=20)
+    rc = await asyncio.wait_for(runner_mod.run(args), timeout=30)
     await stopper
     assert rc == 0
     return {'primary': primary_det, 'seg': seg, 'vlm': vlm, 'vlm_cls': vlm_cls}
@@ -544,9 +639,7 @@ def _accept(text: str = 'DNV20') -> VlmCombinedReply:
     return VlmCombinedReply(
         img_id='c1',
         region_visible=True,
-        region_bbox_correct=True,
-        region_text_reply=text,
-        region_confidence='high',
+        region_boxes=[VlmBoxVerdict(box=1, bbox_correct=True, confidence='high', text_reply=text)],
     )
 
 
@@ -607,7 +700,7 @@ class TestOnePassPerItem:
             segmenter=None,
             reply=_accept(),
         )
-        assert mocks['primary'].detect_batch.await_count == 1
+        assert mocks['primary'].detect_batch_multi.await_count == 1
         verified = [
             c.crop_id
             for call in mocks['vlm'].label_combined_batch.await_args_list
@@ -620,7 +713,8 @@ class TestOnePassPerItem:
         doc = fake_os.live['c1']
         det = _profile().detector_model
         assert doc[F.status] == 'detected'
-        assert doc[F.text] == 'DNV20'
+        assert doc[F.boxes][0]['text'] == 'DNV20'
+        assert doc[F.boxes][0]['state'] == 'accepted'
         assert doc[F.detector_chain] == [f'{det}:hit', f'{det}:combined_verify_ok']
 
     @pytest.mark.asyncio

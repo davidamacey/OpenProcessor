@@ -22,7 +22,9 @@ from src.services.detection.profile_registry import get_active_region_profile
 
 
 if TYPE_CHECKING:
+    from scripts.curation.worker.verify import TaskBoxInput
     from src.config import DetectionProfile
+    from src.services.curation.region_boxes import RegionBox
     from src.services.detection.region_text import OcrLine
 
 
@@ -157,6 +159,82 @@ class _ItemTask:
     # the downstream VLM verify returns an empty read.
     candidate_text: str | None = None
     candidate_text_confidence: float | None = None
+    # W8: every selected candidate for this item (select_region_candidates
+    # output, wrapped as TaskBoxInput -- box_id set only when read back
+    # from an existing pending_verification box). Drives the multi-box
+    # VLM overlay + verdicts_to_boxes write path. The singular
+    # candidate_* fields above stay populated with candidates[0] (best
+    # candidate) for the no-VLM-configured fallback (accept_without_vlm)
+    # and the region-embedding stage, which are still single-box.
+    candidates: list[TaskBoxInput] = field(default_factory=list)
+    # W8 B1 fix: this item's full stored ``region_boxes`` list, read
+    # alongside this task's other fields at fetch time. Path 1
+    # (pending_verification) builds its VLM candidates from this list's
+    # ``proposed`` boxes -- the real source of truth -- rather than the
+    # legacy single scalar. This is a FETCH-TIME SNAPSHOT, used only to
+    # decide what to re-verify; the actual write-time merge (never
+    # discarding an untouched sibling box) re-reads the live list fresh
+    # (see ``bulk_writer._merge`` / M1).
+    stored_boxes: list[RegionBox] = field(default_factory=list)
+    # Current stored region_revision / region_box_seq high-water marks
+    # (read alongside this task's other fields), kept for logging/back-
+    # compat -- the actual revision/seq bump at write time now always
+    # reads the CURRENT live doc (M1 fix), never this snapshot.
+    region_revision: int = 0
+    region_box_seq: int = 0
+    # W8 B1 + M1 fix: this pass's own resolved box list (not yet merged
+    # with any concurrently-stored siblings, ids not yet finalized) plus
+    # the status to fall back to once the write-time merge is empty.
+    # ``None`` means this write doesn't touch the box list at all (e.g.
+    # ``unreadable_crop_update``). Set by ``runner._box_list_doc`` and
+    # ``region_text_stage.accept_without_vlm``; consumed by
+    # ``bulk_writer._merge``, which re-reads the live doc immediately
+    # before the write and merges/mints ids/derives the final status
+    # against THAT, never this snapshot.
+    pending_boxes: list[RegionBox] | None = None
+    pending_empty_status: RegionStatus | None = None
+    # W8 B1 fix: whether the write-time merge (bulk_writer._merge) should
+    # touch `pending_boxes` against the CURRENT stored list at all
+    # (preserving a sibling box this pass never itself decided) or
+    # REPLACE the stored list outright with exactly `pending_boxes`.
+    # Default False (replace) -- matches every pre-B1 write path's
+    # existing behaviour (e.g. `accept_without_vlm`'s DETECTION_FAILED
+    # sanity-reject branch, which owns the whole list it writes).
+    #
+    # True covers TWO distinct cases, disambiguated by `reverify` below
+    # (W8c B1/M1 fix, 2026-09-28 re-review): `reverify=True` is Path 1
+    # (re-verifying a stored `proposed` box) -- `bulk_writer._merge` calls
+    # `merge_boxes_for_write`, which keeps every stored sibling this pass
+    # never touched, by id. `reverify=False` is a FRESH detection pass
+    # (Path 2/3, or the text-hint re-pass they fall into) -- "merge" is
+    # the wrong semantic there: a fresh detection is a new answer to
+    # "where are the regions?", so `bulk_writer._merge` instead keeps
+    # only stored siblings a human owns (`region_boxes.is_human_owned`)
+    # and REPLACES every machine-sourced one with this pass's own
+    # `pending_boxes` -- otherwise a requeued item's stale rejected
+    # machine box would accumulate forever and keep overriding the new
+    # pass's derived status (M1).
+    pending_merge: bool = False
+    # W8c B1 fix (2026-09-28 re-review): True ONLY for Path 1
+    # (`runner.py`'s pending-verification branch, re-verifying a stored
+    # `proposed` box). Read at the VLM `region_visible=False` branch
+    # (`runner.py`, combined-verify handling) to pick "resolve the
+    # re-verified candidate(s) as `rejected`, keeping their stored ids"
+    # instead of the fresh-detection "no box, terminal `no_region_visible`"
+    # branch. Before this flag existed, that decision was (incorrectly)
+    # keyed off `pending_merge` alone -- which every fresh-detection pass
+    # ALSO sets (see above) -- so a fresh item with no stored boxes at all
+    # that got `region_visible=False` was misrouted into the re-verify
+    # branch and wrote a phantom `rejected` box instead of the correct
+    # empty `no_region_visible` (B1, the dev/test stack's `fake_vlm`
+    # defaults to `region_visible=False`, so this was not an edge case).
+    reverify: bool = False
+    # A FORCED final status that must win over whatever
+    # ``derive_status(merged_boxes)`` would otherwise compute -- only
+    # ``accept_without_vlm``'s sanity-gate-reject branch uses this
+    # (``detection_failed`` is not part of ``derive_status``'s box-state
+    # vocabulary). ``None`` means "derive it from pending_empty_status".
+    pending_status: RegionStatus | None = None
     # Detection trace — list of "<detector>:<tag>" strings the task
     # accumulates as it moves through the cascade, serialized as
     # ``RegionFields.detector_chain`` on every write that produces a
@@ -182,9 +260,10 @@ class _ItemTask:
     # without one is a bug and :func:`bind_task_project` refuses it.
     project: Any = None
     # Minor 5 (W2 review, 2026-09-27): True once a VLM call actually ran
-    # for this task this pass (visibility gate, combined class+region, or
-    # verify -- see cascade.py/combined.py/verify.py's call sites). The
-    # bulk writer only stamps ``vlm_prompt_pack`` on a write when this is
+    # for this task this pass (visibility gate or combined class+region
+    # -- see runner.py's call sites; W8 deleted the separate per-crop
+    # verify_region cascade in cascade.py/combined.py). The bulk writer
+    # only stamps ``vlm_prompt_pack`` on a write when this is
     # True, so a deployment with no VLM configured (or a write path that
     # skipped the VLM, e.g. the high-confidence segmenter auto-skip) never
     # gets a stamp implying a VLM ran.

@@ -130,6 +130,72 @@ HUMAN_WRITABLE_STATUSES: frozenset[RegionStatus] = frozenset(
 )
 
 
+@dataclass(frozen=True)
+class BoxStateInfo:
+    """What one per-box ``state`` (W8) means, served on ``box_states``.
+
+    ``tone`` is a semantic meaning, not a CSS color (W8.7, Cropwright
+    ask, coordinator-approved 2026-09-26): Cropwright maps tone to its
+    own theme palette instead of keeping its own state->color rules.
+    """
+
+    label: str
+    role: str
+    tone: str
+    human_writable: bool
+    exported: bool
+    dashed: bool = False
+    dim: bool = False
+    badge: str | None = None
+
+
+BOX_STATE_INFO: dict[str, BoxStateInfo] = {
+    'proposed': BoxStateInfo('awaiting verification', 'proposed', 'proposed', True, False),
+    'accepted': BoxStateInfo('accepted', 'accepted', 'accepted', True, True),
+    'rejected': BoxStateInfo('rejected', 'rejected', 'rejected', True, False, dashed=True),
+    'false_positive': BoxStateInfo(
+        'false positive', 'false_positive', 'neutral', True, False, dim=True, badge='false pos'
+    ),
+}
+
+
+@dataclass(frozen=True)
+class BoxStateRoute:
+    """Which per-box ``state`` values one region-box write route accepts,
+    and what a new box (``box_id: null``) defaults to when the route
+    doesn't set one explicitly (W8.7/W8.8). The served list
+    (``box_state_routes`` on ``GET {prefix}/regions/statuses``) and the
+    routes' own validators both read this table, so they can't drift."""
+
+    route: str
+    states: tuple[str, ...]
+    new_box_default: str | None
+
+
+BOX_STATE_ROUTES: tuple[BoxStateRoute, ...] = (
+    BoxStateRoute(
+        route='PUT /crops/{crop_id}/regions',
+        states=tuple(BOX_STATE_INFO),
+        new_box_default='accepted',
+    ),
+    BoxStateRoute(
+        route='PUT /crops/batch_regions',
+        states=tuple(BOX_STATE_INFO),
+        new_box_default='accepted',
+    ),
+    BoxStateRoute(
+        route='PATCH /crops/{crop_id}/regions/{box_id}',
+        states=tuple(BOX_STATE_INFO),
+        new_box_default=None,
+    ),
+    BoxStateRoute(
+        route='POST /regions/batch_box_state',
+        states=tuple(BOX_STATE_INFO),
+        new_box_default=None,
+    ),
+)
+
+
 def region_status_catalog() -> dict[str, Any]:
     """The lifecycle vocabulary served by ``GET {prefix}/regions/statuses``."""
     return {
@@ -148,10 +214,30 @@ def region_status_catalog() -> dict[str, Any]:
         'confirm_status': CONFIRM_STATUS.value,
         'reject_status': REJECT_STATUS.value,
         'false_positive_status': FALSE_POSITIVE_STATUS.value,
+        'box_states': [
+            {
+                'value': value,
+                'label': info.label,
+                'role': info.role,
+                'tone': info.tone,
+                'human_writable': info.human_writable,
+                'exported': info.exported,
+                'dashed': info.dashed,
+                'dim': info.dim,
+                'badge': info.badge,
+            }
+            for value, info in BOX_STATE_INFO.items()
+        ],
+        'box_state_routes': [
+            {'route': r.route, 'states': list(r.states), 'new_box_default': r.new_box_default}
+            for r in BOX_STATE_ROUTES
+        ],
     }
 
 
 __all__ = [
+    'BOX_STATE_INFO',
+    'BOX_STATE_ROUTES',
     'CONFIRM_STATUS',
     'FALSE_POSITIVE_STATUS',
     'HUMAN_WRITABLE_STATUSES',
@@ -159,6 +245,8 @@ __all__ = [
     'REGION_STATUS_INFO',
     'REJECT_STATUS',
     'TERMINAL_STATUSES',
+    'BoxStateInfo',
+    'BoxStateRoute',
     'RegionStatus',
     'RegionStatusInfo',
     'region_status_catalog',

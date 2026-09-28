@@ -32,16 +32,28 @@ class RejectionReasonEntry(BaseModel):
 
     id: str = Field(description='The stored value (match=exact) or its prefix (match=prefix).')
     label: str
-    kind: Literal['model_verdict', 'automatic', 'needs_human'] = Field(
+    kind: Literal['model_verdict', 'automatic', 'needs_human', 'human'] = Field(
         description=(
             'model_verdict: the verifier judged the box wrong; automatic: a '
-            'geometry check rejected it; needs_human: no verdict was given.'
+            'geometry check rejected it; needs_human: no verdict was given; '
+            'human: a reviewer rejected it by hand.'
         )
     )
     match: Literal['exact', 'prefix']
     label_template: str | None = Field(
         default=None,
         description='For match=prefix: label with {detail} = the rest of the stored value.',
+    )
+
+
+class RegionProfileLimits(BaseModel):
+    """W8 write-size guards, never hardcoded by a client."""
+
+    max_boxes_per_write: int = Field(
+        description=(
+            "Abuse guard: max element count of one crop's boxes in a PUT/batch PUT, or the "
+            'targets count of one batch_box_state call. See OP_REGION_MAX_BOXES_PER_WRITE.'
+        )
     )
 
 
@@ -62,6 +74,13 @@ class RegionProfileSummary(BaseModel):
     )
     text_hint_enabled: bool = Field(
         description='Whether the OCR text-hint re-pass is enabled after a segmenter miss.'
+    )
+    limits: RegionProfileLimits = Field(
+        description=(
+            'W8: served write-size guards. max_boxes_per_write is an abuse guard on the '
+            'element count of one region-box write request, not a labeling rule -- human '
+            'box lists are otherwise unbounded.'
+        )
     )
 
 

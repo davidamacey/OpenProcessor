@@ -27,15 +27,17 @@ import pytest
 from opensearchpy import AsyncOpenSearch
 from opensearchpy.serializer import JSONSerializer
 
-from scripts.curation.worker import combined as combined_mod
 from scripts.curation.worker.bulk_writer import _bulk_update
 from scripts.curation.worker.fairness import FairnessScheduler, fetch_pending_multi_project
-from scripts.curation.worker.state import _ItemTask, bind_task_project
+from scripts.curation.worker.state import _ItemTask, bind_task_project, bound_class_catalog
+from scripts.curation.worker.verify import TaskBoxInput, _combined_class_update, verdicts_to_boxes
 from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
 from src.config import get_region_fields
 from src.config.curation import IndexRole, base_curation_config
 from src.config.project_context import bind_project, try_current_project
 from src.config.projects import ProjectRecord, resources_for_new
+from src.services.curation.region_boxes import boxes_write_fields
+from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 from src.services.projects.guard import cross_project_access_count, install_project_guard
 
@@ -250,8 +252,7 @@ class _CatalogVlm:
             class_id=len(class_names) - 1,
             class_confidence='high',
             region_visible=True,
-            region_bbox_correct=True,
-            region_confidence='high',
+            region_boxes=[VlmBoxVerdict(box=1, bbox_correct=True, confidence='high')],
         )
 
 
@@ -259,11 +260,9 @@ class _CatalogVlm:
 async def test_detection_worker_keeps_every_read_and_write_in_its_project(
     projects: dict[str, ProjectRecord],
     world: tuple[AsyncOpenSearch, _RecordingTransport],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client, transport = world
     rejected_before = cross_project_access_count()
-    monkeypatch.setattr(combined_mod, '_auto_confirm_or_pending', _no_auto_confirm)
     vlm = _CatalogVlm()
 
     tasks = await fetch_pending_multi_project(
@@ -277,19 +276,34 @@ async def test_detection_worker_keeps_every_read_and_write_in_its_project(
 
     async def _consume(task: _ItemTask) -> None:
         # As a pipeline consumer does: bind the item's project, then run
-        # the combined class+region call on it.
+        # the combined class+region call on it (W8: box-list path).
         bind_task_project(task)
         task.crop_jpeg = b'jpeg'
-        assert await combined_mod._try_combined_class_region(
-            task,
-            candidate_in_crop=(0.3, 0.3, 0.6, 0.6),
-            candidate_in_source=(0.2, 0.2, 0.4, 0.4),
-            candidate_score=0.9,
+        class_names, name_to_id = bound_class_catalog()
+        reply = await vlm.label_combined(
+            img_id=task.crop_id,
+            jpeg_bytes=task.crop_jpeg,
+            class_names=class_names,
+            region_bboxes_norm=[(0.3, 0.3, 0.6, 0.6)],
+        )
+        cand = TaskBoxInput(
+            bbox_in_crop=(0.3, 0.3, 0.6, 0.6),
+            bbox_in_source=(0.2, 0.2, 0.4, 0.4),
+            score=0.9,
             detector='det',
             detector_version='1',
-            detector_chain_tag='det',
-            vlm=vlm,  # type: ignore[arg-type]
+            source='det',
         )
+        boxes, status, _extra = verdicts_to_boxes(
+            [cand], reply.region_boxes, item_bbox_norm=task.item_bbox_norm
+        )
+        assert status is not None
+        F = get_region_fields()
+        task.update_doc = {
+            F.status: status,
+            **boxes_write_fields(boxes),
+            **_combined_class_update(reply, class_names, name_to_id=name_to_id),
+        }
 
     # Interleave the two projects' items across concurrent consumers.
     await asyncio.gather(*(_consume(t) for t in sorted(tasks, key=lambda t: t.crop_id[-1])))
@@ -307,10 +321,6 @@ async def test_detection_worker_keeps_every_read_and_write_in_its_project(
         assert doc['class_name'] == CLASSES[slug][-1]
     for img_id, shown in vlm.prompts:
         assert shown == CLASSES[img_id.split('-')[0]], f'{img_id} saw {shown}'
-
-
-async def _no_auto_confirm(**_kw: Any) -> bool:
-    return False
 
 
 @pytest.mark.asyncio

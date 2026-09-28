@@ -40,6 +40,28 @@ if TYPE_CHECKING:
 log = logging.getLogger('segmenter')
 
 
+# W8c: verified against the upstream source (facebookresearch/sam3,
+# ``sam3/model/sam3_image_processor.py``, ``Sam3Processor.__init__``) --
+# not runnable here (no docker run; the package isn't installed in this
+# environment), so this is a read of the public GitHub source, not a
+# live probe. Two numbers matter for this server's config:
+#   - ``Sam3Processor.__init__(..., confidence_threshold=0.5)`` is the
+#     ONLY SAM 3 score threshold (the mask `> 0.5` binarization in
+#     `_rectangularity` is a shape signal, not a detection floor). It's
+#     read as a plain instance attribute (`self.confidence_threshold`)
+#     by both the upstream `_forward_grounding` and this file's
+#     mask-disabled patch, so setting the attribute on a leased
+#     processor overrides it for exactly the call it's set for.
+#   - `build_sam3_image_model`'s decoder defaults to `num_queries=200`
+#     (``sam3/model_builder.py``) -- i.e. SAM 3 itself never proposes
+#     more than ~200 raw candidates per image before any score filter.
+#     128 is comfortably under that, so raising this server's
+#     `max_candidates` ceiling to 128 never asks for more top-K entries
+#     than the model could possibly produce.
+DEFAULT_CONFIDENCE_THRESHOLD = 0.5
+MAX_CANDIDATES_CAP = 128
+
+
 @dataclass(frozen=True, slots=True)
 class Candidate:
     """One segmented instance, in the *input image's* normalized frame.
@@ -345,13 +367,21 @@ class ProcessorPool:
         return bool(self._processors)
 
     @contextlib.asynccontextmanager
-    async def acquire(self) -> AsyncIterator[Any]:
+    async def acquire(self, min_score: float | None = None) -> AsyncIterator[Any]:
         """Yield the next available processor, waiting only if all are busy.
 
         Tries each processor once in round-robin order and takes the
         first whose lock is free; if they are all busy, blocks on the
         round-robin-selected one. That keeps fairness without preferring
         any single instance.
+
+        ``min_score`` (W8c): when given, sets the leased processor's
+        ``confidence_threshold`` for the duration of this call (this is
+        the only SAM 3 score threshold -- see the module-level note above
+        ``DEFAULT_CONFIDENCE_THRESHOLD``) and restores whatever value it
+        had before on release, even on error. ``None`` leaves the
+        processor's own default untouched -- no per-instance state leaks
+        between callers that don't ask for a floor.
 
         Raises:
             RuntimeError: if the pool is empty (model not loaded yet).
@@ -370,9 +400,15 @@ class ProcessorPool:
                 idx = candidate
                 break
         await self._locks[idx].acquire()
+        processor = self._processors[idx]
+        previous_threshold = getattr(processor, 'confidence_threshold', None)
         try:
-            yield self._processors[idx]
+            if min_score is not None:
+                processor.confidence_threshold = min_score
+            yield processor
         finally:
+            if min_score is not None:
+                processor.confidence_threshold = previous_threshold
             self._locks[idx].release()
 
 
@@ -552,6 +588,8 @@ def segment_images(
 
 
 __all__ = [
+    'DEFAULT_CONFIDENCE_THRESHOLD',
+    'MAX_CANDIDATES_CAP',
     'Candidate',
     'ProcessorPool',
     'device_name',

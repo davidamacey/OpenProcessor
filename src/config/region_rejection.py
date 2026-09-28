@@ -34,8 +34,11 @@ REJECT_REASON_VERIFIER = 'region_visible_elsewhere'
 REJECT_REASON_NO_VERDICT = 'verifier_no_verdict'
 # The geometry gate rejected the box; its own reason follows the prefix.
 REJECT_REASON_SANITY_PREFIX = 'sanity_reject:'
+# A human reviewer rejected the box (W8.7). Every OTHER reason here is a
+# machine verdict; this is the one a person wrote by hand.
+REJECT_REASON_HUMAN = 'human'
 
-REJECTION_REASON_KINDS: tuple[str, ...] = ('model_verdict', 'automatic', 'needs_human')
+REJECTION_REASON_KINDS: tuple[str, ...] = ('model_verdict', 'automatic', 'needs_human', 'human')
 
 
 @dataclass(frozen=True)
@@ -72,6 +75,11 @@ REJECTION_REASON_INFO: dict[str, RejectionReasonInfo] = {
         'Verifier gave no verdict — needs human review',
         'needs_human',
         short_label='verifier gave no verdict',
+    ),
+    REJECT_REASON_HUMAN: RejectionReasonInfo(
+        'Rejected by a reviewer',
+        'human',
+        short_label='rejected by a reviewer',
     ),
 }
 
@@ -128,6 +136,7 @@ def rejection_reason_catalog() -> list[dict[str, Any]]:
 __all__ = [
     'REJECTION_REASON_INFO',
     'REJECTION_REASON_KINDS',
+    'REJECT_REASON_HUMAN',
     'REJECT_REASON_NO_VERDICT',
     'REJECT_REASON_SANITY_PREFIX',
     'REJECT_REASON_VERIFIER',

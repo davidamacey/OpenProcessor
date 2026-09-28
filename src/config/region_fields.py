@@ -115,6 +115,22 @@ class RegionFields:
     cluster_subid: str = 'region_cluster_subid'
     cluster_distance: str = 'region_cluster_distance'
 
+    # W8 multi-box list. ``boxes`` is the indirected storage name of the
+    # list itself; the element keys inside each list entry are FIXED
+    # strings (see docs/design/openprocessor_internal/any_domain_plan.md
+    # W8.2) since the list is new and no deployment has legacy names for
+    # them. ``boxes_state`` below is only used to build nested queries
+    # (``box_query``) against the fixed element key ``state``.
+    boxes: str = 'region_boxes'
+    boxes_state: str = 'state'
+    box_embeddings: str = 'region_box_embeddings'
+    count: str = 'region_count'
+    rejected_count: str = 'region_rejected_count'
+    max_score: str = 'region_max_score'
+    set_complete: str = 'region_set_complete'
+    revision: str = 'region_revision'
+    box_seq: str = 'region_box_seq'
+
     class_id: str = 'region_class_id'
     label_source: str = 'region_label_source'
     source: str = 'region_source'

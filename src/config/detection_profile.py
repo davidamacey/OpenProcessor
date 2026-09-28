@@ -35,6 +35,19 @@ class DetectionProfile:
     input_size: int = 640
     confidence_floor: float = 0.4
     batch_limit: int = 16
+    # W8 multi-box candidate selection (src/services/detection/
+    # region_candidates.py select_region_candidates): greedy class-
+    # agnostic NMS IoU threshold across an item's candidates, and the
+    # max candidates kept per item after NMS. ``confidence_floor``
+    # above doubles as the selection floor (``min_score``) -- one
+    # per-detector-leg threshold, not a second one.
+    #
+    # M4 (W8 pipeline-wiring review, 2026-09-27): default is 1, matching
+    # any_domain_plan.md W8.4/W8.9 -- multi-box is opt-in per profile,
+    # never silently on. The spec's field name is ``max_regions_per_item``
+    # (a deployment sets it > 1 explicitly to enable multi-box).
+    region_nms_iou: float = 0.5
+    max_regions_per_item: int = 1
     letterbox_fill: tuple[int, int, int] = (114, 114, 114)
     # Optional backbone feature-map output of a raw-output (secondary)
     # detector, requested only when Triton reports the model has it.

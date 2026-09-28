@@ -178,7 +178,6 @@ PORTED_PATHS: tuple[str, ...] = (
     'scripts/curation/worker/',
     'scripts/curation/region_worker_main.py',
     'tests/curation/test_region_worker.py',
-    'tests/curation/test_label_combined_wireup.py',
     'tests/curation/test_segmenter_telemetry.py',
     'tests/integration/test_segmenter_circuit_breaker.py',
     # Remaining services.

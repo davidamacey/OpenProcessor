@@ -59,7 +59,17 @@ VLM_DISMISS_FIELDS: tuple[str, ...] = (
 
 
 def region_state_fields() -> tuple[str, ...]:
-    """Storage names of every region field a human region write can change."""
+    """Storage names of every region field a human region write can change.
+
+    W8 pin 4: gains the per-item box-list fields (``boxes``, ``count``,
+    ``rejected_count``, ``max_score``, ``set_complete``) alongside the
+    pre-W8 per-box scalars, so ``POST /crops/{id}/region/undo`` restores
+    whichever shape the write actually touched. The legacy scalars stay
+    in this tuple (deliberately NOT dropped, unlike the AD W8.7 end-state)
+    because the worker pipeline (W8b) still writes them exclusively this
+    pass; dropping them here would silently stop undo from restoring a
+    worker-written region. See the W8 handback report.
+    """
     F = get_region_fields()
     return (
         F.bbox_norm,
@@ -89,6 +99,12 @@ def region_state_fields() -> tuple[str, ...]:
         F.cluster_id,
         F.cluster_subid,
         F.cluster_distance,
+        # W8 per-item box list (pin 4).
+        F.boxes,
+        F.count,
+        F.rejected_count,
+        F.max_score,
+        F.set_complete,
     )
 
 

@@ -11,6 +11,7 @@ import ast
 from pathlib import Path
 
 from src.config import PENDING_STATUSES, TERMINAL_STATUSES, RegionStatus
+from src.config.region_state import BOX_STATE_INFO, region_status_catalog
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -104,3 +105,26 @@ def test_no_bare_status_literal_outside_the_enum_module() -> None:
                 violations.append(f'{path.relative_to(_REPO_ROOT)}:{node.lineno}: {node.value!r}')
 
     assert violations == []
+
+
+def test_box_states_catalog_has_a_tone_per_entry() -> None:
+    """W8.7 pin: each served box_states entry carries a semantic ``tone``
+    (a meaning, not a CSS color) so Cropwright maps tone to its own
+    theme palette instead of keeping its own state->color rules."""
+    catalog = region_status_catalog()
+    box_states = catalog['box_states']
+    values = {e['value'] for e in box_states}
+    assert values == {'proposed', 'accepted', 'rejected', 'false_positive'}
+    tones = {e['value']: e['tone'] for e in box_states}
+    assert tones == {
+        'proposed': 'proposed',
+        'accepted': 'accepted',
+        'rejected': 'rejected',
+        'false_positive': 'neutral',
+    }
+    for entry in box_states:
+        assert entry['tone'] in ('accepted', 'proposed', 'rejected', 'neutral')
+
+
+def test_box_state_info_matches_catalog() -> None:
+    assert set(BOX_STATE_INFO) == {'proposed', 'accepted', 'rejected', 'false_positive'}

@@ -528,6 +528,7 @@ def test_health_region_profile_reflects_the_active_profile(
         'text_reader': 'both',
         'reads_text': True,
         'text_hint_enabled': True,
+        'limits': {'max_boxes_per_write': 500},
     }
 
 

@@ -8,13 +8,24 @@ grades the text reading, not the box) but never written to
 ``RegionFields.confidence`` itself, so the mapped field stayed 0/N forever.
 It is already cleared on requeue (``region_requeue.py``'s
 ``detection_fields``), so a write here is the only missing piece.
+
+W8: every live worker write path's box confidence now lands on
+``RegionBox.confidence`` (per box, via ``verify.verdicts_to_boxes`` --
+already covered by that function's own dedicated tests) instead of the
+item-level ``RegionFields.confidence`` this file's now-deleted
+``_combined_write_doc`` used to set. ``_region_write_doc`` itself is no
+longer called from the live pipeline either (the segmenter
+high-confidence auto-skip and no-VLM-configured paths both build a
+``RegionBox`` directly now) -- it stays defined and tested here as the
+legacy single-scalar write-doc builder Item 2 (legacy scalar field
+removal) will reconcile, not deleted mid-pass while the scalar fields it
+targets are still read by ~20 other consumers untouched this pass.
 """
 
 from __future__ import annotations
 
-from scripts.curation.worker.verify import _combined_write_doc, _region_write_doc
+from scripts.curation.worker.verify import _region_write_doc
 from src.config import get_region_fields
-from src.services.labeling.vlm_labeler import VlmCombinedReply
 
 
 F = get_region_fields()
@@ -41,21 +52,3 @@ def test_region_write_doc_omits_confidence_when_not_given() -> None:
         chain=[],
     )
     assert F.confidence not in doc
-
-
-def test_combined_write_doc_carries_region_confidence_into_confidence_field() -> None:
-    doc = _combined_write_doc(
-        reply=VlmCombinedReply(
-            img_id='c1',
-            region_visible=True,
-            region_bbox_correct=True,
-            region_confidence='high',
-        ),
-        candidate_in_source=(0.1, 0.1, 0.2, 0.2),
-        candidate_score=0.9,
-        detector='det_model',
-        detector_version='1',
-        chain=[],
-        class_names=None,
-    )
-    assert doc[F.confidence] == 'high'

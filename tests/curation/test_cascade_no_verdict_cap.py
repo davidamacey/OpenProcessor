@@ -1,43 +1,51 @@
-"""The per-crop cascade (``_process_crop``) bounds no-verdict retries too.
+"""The streaming worker's Stage B (combined VLM call) bounds no-verdict
+retries.
 
-``_verify_with_vlm`` returns ``None`` when the region verifier gives no
-usable answer and the cascade leaves the item pending (no write). At
-temperature 0 that answer is often deterministic, so the same bound the
-streaming worker uses applies here: after
-``OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS`` no-verdict passes the item is
-parked as a reviewable ``verify_rejected`` / ``verifier_no_verdict``. A VLM
-transport failure is no reply at all -- retried, never counted.
+W8: the pre-W8 per-crop cascade (``_process_crop``) and its
+``combined.py`` cohort helper are deleted -- ``runner.py``'s
+``stage_b_combined`` is the only production no-verdict-cap consumer now,
+via :func:`scripts.curation.worker.verify.verdicts_to_boxes`'s
+``force_resolve`` split. A box with no verdict at all (null / absent /
+unparseable, on every candidate offered) leaves the item pending for a
+retry instead of writing a reject; at
+``OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS`` it is parked as a reviewable
+``verify_rejected`` box (``rejection_reason=verifier_no_verdict``). A VLM
+transport failure is no reply at all -- retried, never counted (see
+``TestCascadeVerifyNoVerdictIsCapped`` in ``test_region_cascade_integrity
+.py``-style ``_drive_worker`` harness, reused here).
 """
 
 from __future__ import annotations
 
 import io
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from typing import TYPE_CHECKING, Any
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 from PIL import Image
 
-import scripts.curation.region_worker_main as worker
-from scripts.curation.worker import combined as combined_mod, no_verdict
 from src.config import get_region_fields
 from src.config.region_rejection import REJECT_REASON_NO_VERDICT
-from src.config.region_source import CANDIDATE_DETECTOR, CANDIDATE_DETECTOR_EXISTING
 from src.services.detection.cascade_detect import RegionCandidate
+from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import (
     RegionCrop,
     VlmCombinedReply,
     VlmLabeler,
-    VlmRegionVerdict,
     VlmTransportError,
 )
+
+from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch, _item
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 pytestmark = pytest.mark.usefixtures('reference_region_profile')
 
 ENV = 'OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS'
-EXISTING_BOX = (0.2, 0.2, 0.3, 0.22)
 
 
 @pytest.fixture(autouse=True)
@@ -52,152 +60,74 @@ def _jpeg() -> bytes:
     return buf.getvalue()
 
 
-def _task(**kw: Any) -> Any:
-    base: dict[str, Any] = {
-        'crop_id': 'crop-1',
-        'image_path': '/dev/null/never-read',
-        'item_bbox_norm': (0.0, 0.0, 1.0, 1.0),
-        'region_status': 'pending_verify',
-        'class_name': 'audi',
-        'group': 'cars',
-        'detector_region_in_source': EXISTING_BOX,
-        'detector_score': 0.7,
-        'crop_jpeg': _jpeg(),
-    }
-    base.update(kw)
-    return worker._ItemTask(**base)
+def _no_verdict_reply() -> VlmCombinedReply:
+    return VlmCombinedReply(
+        img_id='c1',
+        region_visible=True,
+        region_boxes=[VlmBoxVerdict(box=1, bbox_correct=None, confidence=None)],
+    )
 
 
-def _vlm(*answers: Any) -> MagicMock:
-    """``verify_region`` answering ``answers`` in turn (an exception type is
-    raised), then the last answer forever."""
-    seq = list(answers)
+class TestCombinedNoVerdictIsCapped:
+    """Ported from the deleted ``TestCascadeVerifyNoVerdictIsCapped`` /
+    ``TestCombinedCohortNoVerdictIsCapped`` -- same intent (bounded
+    retries, then a reviewable park), proven against the live streaming
+    pipeline via ``_drive_worker`` instead of the deleted per-crop
+    cascade helpers."""
 
-    async def verify_region(_crop: RegionCrop, **_kw: Any) -> Any:
-        a = seq.pop(0) if len(seq) > 1 else seq[0]
-        if isinstance(a, type) and issubclass(a, Exception):
-            raise a('upstream down')
-        return a
-
-    g = MagicMock()
-    g.verify_region = AsyncMock(side_effect=verify_region)
-    g.aclose = AsyncMock()
-    return g
-
-
-def _accept() -> VlmRegionVerdict:
-    return VlmRegionVerdict(crop_id='crop-1', is_region=True, confidence='high', reason='ok')
-
-
-def _mocks() -> dict[str, Any]:
-    segmenter = MagicMock()
-    segmenter.segment = AsyncMock(return_value=None)
-    ocr = MagicMock()
-    ocr.detect_regions = AsyncMock(return_value=[])
-    ocr.pick_best_text_region = MagicMock(return_value=None)
-    detector = MagicMock()
-    detector.detect_batch = AsyncMock(return_value=[])
-    return {'segmenter': segmenter, 'ocr_recognizer': ocr, 'detector': detector}
-
-
-async def _pass(vlm: MagicMock, **task_kw: Any) -> Any:
-    task = _task(**task_kw)
-    await worker._process_crop(task, vlm=vlm, **_mocks())
-    return task
-
-
-class TestCascadeVerifyNoVerdictIsCapped:
     @pytest.mark.asyncio
-    async def test_parks_the_existing_box_after_the_cap(self) -> None:
-        F = get_region_fields()
-        vlm = _vlm(None)
-        for _ in range(no_verdict.DEFAULT_MAX_NO_VERDICT_ATTEMPTS - 1):
-            assert (await _pass(vlm)).update_doc == {}
-        task = await _pass(vlm)
-        doc = task.update_doc
-        assert doc[F.status] == 'verify_rejected'
-        assert doc[F.rejection_reason] == REJECT_REASON_NO_VERDICT
-        assert doc[F.bbox_correct] is None
-        assert doc[F.bbox_norm] is None
-        assert doc[F.candidate_bbox_norm] == list(EXISTING_BOX)
-        assert doc[F.candidate_source] == CANDIDATE_DETECTOR_EXISTING
-        det = worker.region_profile().detector_model
-        assert (
-            f'{det}:combined_verify_reject:{REJECT_REASON_NO_VERDICT}' not in doc[F.detector_chain]
+    async def test_null_box_verdict_is_parked_after_the_cap(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(ENV, '2')
+        fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
+        mocks = await _drive_worker(
+            tmp_path,
+            monkeypatch,
+            fake_os=fake_os,
+            primary=RegionCandidate(bbox_norm=(0.3, 0.6, 0.6, 0.75), score=0.9, source='det'),
+            segmenter=None,
+            reply=_no_verdict_reply(),
         )
-        assert f'{det}:vlm_reject:{REJECT_REASON_NO_VERDICT}' in doc[F.detector_chain]
-
-    @pytest.mark.asyncio
-    async def test_fresh_detector_box_is_parked_the_same_way(self) -> None:
         F = get_region_fields()
-        cand = RegionCandidate(bbox_norm=(0.3, 0.4, 0.5, 0.45), score=0.82, source='det')
-        vlm = _vlm(None)
-        m = _mocks()
-        m['detector'].detect_batch = AsyncMock(return_value=[cand])
-        for i in range(no_verdict.DEFAULT_MAX_NO_VERDICT_ATTEMPTS):
-            task = _task(region_status='pending', detector_region_in_source=None)
-            await worker._process_crop(task, vlm=vlm, **m)
-            if i < no_verdict.DEFAULT_MAX_NO_VERDICT_ATTEMPTS - 1:
-                assert task.update_doc == {}
-        assert task.update_doc[F.rejection_reason] == REJECT_REASON_NO_VERDICT
-        assert task.update_doc[F.candidate_source] == CANDIDATE_DETECTOR
-        assert task.update_doc[F.candidate_score] == pytest.approx(0.82)
-
-    @pytest.mark.asyncio
-    async def test_real_verdict_clears_the_count(self) -> None:
-        F = get_region_fields()
-        vlm = _vlm(None, None, _accept(), None)
-        assert (await _pass(vlm)).update_doc == {}
-        assert (await _pass(vlm)).update_doc == {}
-        assert (await _pass(vlm)).update_doc[F.status] == 'detected'
-        # Requeued later: a fresh count, not the stale two.
-        assert (await _pass(vlm)).update_doc == {}
-        assert (await _pass(vlm)).update_doc == {}
-        assert (await _pass(vlm)).update_doc[F.rejection_reason] == REJECT_REASON_NO_VERDICT
-
-    @pytest.mark.asyncio
-    async def test_transport_failure_is_never_capped(self) -> None:
-        vlm = _vlm(VlmTransportError)
-        for _ in range(no_verdict.DEFAULT_MAX_NO_VERDICT_ATTEMPTS * 3):
-            task = await _pass(vlm)
-            assert task.update_doc == {}
-        assert vlm.verify_region.await_args.kwargs == {'raise_on_transport': True}
-
-
-class TestCombinedCohortNoVerdictIsCapped:
-    @pytest.mark.asyncio
-    async def test_null_box_verdict_is_parked_after_the_cap(self) -> None:
-        F = get_region_fields()
-        reply = VlmCombinedReply(img_id='c1', region_visible=True, region_bbox_correct=None)
-        vlm = MagicMock()
-        vlm.class_names = []
-        vlm.label_combined = AsyncMock(return_value=reply)
-        det = worker.region_profile().detector_model
-        for i in range(no_verdict.DEFAULT_MAX_NO_VERDICT_ATTEMPTS):
-            task = _task(
-                crop_id='c1', region_status='pending_detection', detector_region_in_source=None
-            )
-            resolved = await combined_mod._try_combined_class_region(
-                task,
-                candidate_in_crop=(0.3, 0.6, 0.6, 0.75),
-                candidate_in_source=(0.3, 0.6, 0.6, 0.75),
-                candidate_score=0.9,
-                detector=det,
-                detector_version='1',
-                detector_chain_tag=det,
-                vlm=vlm,
-                candidate_source=CANDIDATE_DETECTOR,
-            )
-            assert resolved is True
-            if i < no_verdict.DEFAULT_MAX_NO_VERDICT_ATTEMPTS - 1:
-                assert task.update_doc == {}
-        doc = task.update_doc
-        assert doc[F.rejection_reason] == REJECT_REASON_NO_VERDICT
-        assert doc[F.bbox_correct] is None
-        assert doc[F.candidate_source] == CANDIDATE_DETECTOR
+        doc = fake_os.live['c1']
+        assert doc[F.status] == 'verify_rejected'
+        assert doc[F.boxes][0]['rejection_reason'] == REJECT_REASON_NO_VERDICT
+        assert doc[F.boxes][0]['bbox_correct'] is None
         # The reply's class side lands with it.
         assert doc[F.visible] is True
         assert 'vlm_verify_completed_at' in doc
+        assert mocks['vlm'].label_combined_batch.await_count >= 2
+
+    @pytest.mark.asyncio
+    async def test_transport_failure_is_never_capped(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(ENV, '2')
+
+        async def _always_fails(crops: Any, **_kw: Any) -> Any:
+            msg = 'upstream down'
+            from src.services.labeling.vlm_labeler import CombinedTransportError
+
+            raise CombinedTransportError(msg)
+
+        fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
+        mocks = await _drive_worker(
+            tmp_path,
+            monkeypatch,
+            fake_os=fake_os,
+            primary=RegionCandidate(bbox_norm=(0.3, 0.6, 0.6, 0.75), score=0.9, source='det'),
+            segmenter=None,
+            reply=_no_verdict_reply(),
+            combined_side_effect=_always_fails,
+            until_writes=0,
+        )
+        F = get_region_fields()
+        # No write at all -- a transport failure is retried forever, never
+        # counted toward the cap, never parked.
+        assert fake_os.writes == []
+        assert fake_os.live['c1'][F.status] == 'pending_detection'
+        assert mocks['vlm'].label_combined_batch.await_count >= 2
 
 
 class TestVerifyPlateTransportSignal:

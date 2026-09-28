@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
-from scripts.curation.worker.verify import _combined_write_doc, _region_write_doc
+from scripts.curation.worker.verify import _region_write_doc
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
 from src.services.curation.region_validation_repair import (
@@ -27,9 +27,11 @@ from src.services.curation.region_validation_repair import (
 from src.services.curation.review_queries import build_tab_query
 from src.services.curation.wire import serialize_item
 from src.services.detection.cascade_detect import RegionCandidate
+from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
 from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch, _item
+from .test_region_text_worker import _drive
 
 
 if TYPE_CHECKING:
@@ -53,25 +55,22 @@ class TestWorkerWrites:
         assert doc[F.validated] is False
         assert doc[F.auto_confirmed] is True
 
-    def test_combined_accept_never_validates(self) -> None:
-        doc = _combined_write_doc(
-            reply=VlmCombinedReply(img_id='c1', region_visible=True, region_bbox_correct=True),
-            candidate_in_source=(0.1, 0.1, 0.2, 0.2),
-            candidate_score=0.9,
-            detector='det_model',
-            detector_version='1',
-            chain=[],
-            class_names=None,
-            auto_confirmed=False,
-        )
-        assert doc[F.validated] is False
-        assert doc[F.auto_confirmed] is False
-
     @pytest.mark.asyncio
     @pytest.mark.usefixtures('reference_region_profile')
-    async def test_streaming_worker_auto_confirm_leaves_region_unvalidated(
+    async def test_streaming_worker_combined_accept_writes_an_accepted_box(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """W8: the combined-call accept path writes the box-list shape
+        (``region_boxes[i].state == 'accepted'``) AND restores the
+        item-level ``region_verified``/``region_auto_confirmed``/
+        ``region_validated`` fields (W8 M2 fix, pipeline-wiring review
+        2026-09-27) -- these stopped being written when the box-list
+        rewrite landed, going blind every reader that still filters on
+        them (regions.py's ``verified`` filter, the training-candidate
+        cohorts, region_requeue.py). ``region_validated`` stays human-only
+        (unchanged, DQ-M1); ``region_auto_confirmed`` is the box-aware
+        rule: >=1 accepted box, VLM confidence 'high' here, so it fires.
+        """
         fake = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         await _drive_worker(
             tmp_path,
@@ -82,14 +81,71 @@ class TestWorkerWrites:
             reply=VlmCombinedReply(
                 img_id='c1',
                 region_visible=True,
-                region_bbox_correct=True,
-                region_text_reply='DNV20',
-                region_confidence='high',
+                region_boxes=[
+                    VlmBoxVerdict(box=1, bbox_correct=True, confidence='high', text_reply='DNV20')
+                ],
             ),
         )
         doc = fake.live['c1']
         assert doc[F.status] == 'detected'
+        assert doc[F.boxes][0]['state'] == 'accepted'
+        # M2: item-level verification fields restored.
+        assert doc[F.verified] is True
+        assert doc[F.validated] is False
         assert doc[F.auto_confirmed] is True
+        assert doc[F.verifier] is not None
+        assert doc[F.verifier_version] is not None
+        assert doc[F.verified_at] is not None
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures('reference_region_profile')
+    async def test_streaming_worker_low_confidence_accept_is_not_auto_confirmed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """M2 box-aware rule: an accepted box the VLM only rated 'medium'
+        confidence, off a detector score below the auto-confirm floor,
+        is verified (the VLM did answer) but NOT auto-confirmed."""
+        fake = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
+        await _drive_worker(
+            tmp_path,
+            monkeypatch,
+            fake_os=fake,
+            primary=RegionCandidate(bbox_norm=(0.3, 0.6, 0.6, 0.75), score=0.5, source='det'),
+            segmenter=None,
+            reply=VlmCombinedReply(
+                img_id='c1',
+                region_visible=True,
+                region_boxes=[VlmBoxVerdict(box=1, bbox_correct=True, confidence='medium')],
+            ),
+        )
+        doc = fake.live['c1']
+        assert doc[F.status] == 'detected'
+        assert doc[F.verified] is True
+        assert doc[F.auto_confirmed] is False
+        assert doc[F.validated] is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures('reference_region_profile')
+    async def test_streaming_worker_no_vlm_path_is_unverified_and_unconfirmed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """M2: the no-VLM-configured accept path (``accept_without_vlm``)
+        never calls the VLM -- verified/auto_confirmed must both stay
+        False, the same as the pre-W8 skip-verify write."""
+        fake = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
+        await _drive(
+            tmp_path,
+            monkeypatch,
+            fake_os=fake,
+            primary=RegionCandidate(bbox_norm=(0.3, 0.6, 0.6, 0.75), score=0.9, source='det'),
+            segmenter=None,
+            vlm_url='',
+        )
+        doc = fake.live['c1']
+        assert doc[F.status] == 'detected'
+        assert doc[F.boxes][0]['state'] == 'accepted'
+        assert doc[F.verified] is False
+        assert doc[F.auto_confirmed] is False
         assert doc[F.validated] is False
 
 

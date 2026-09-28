@@ -8,9 +8,19 @@ evaluates the subset of the query DSL those paths use:
 
 - ``term`` / ``terms`` / ``exists`` / ``match_all`` and ``bool`` with
   ``must`` / ``filter`` / ``must_not`` / ``should`` (``should`` = any-of);
+- ``nested`` (W8c): matches the parent doc when any element of the nested
+  list field satisfies the inner query. Elements are re-keyed with the
+  ``<path>.`` prefix (e.g. ``region_boxes.detector``) before evaluation, so
+  a nested clause's field names — always the full dotted path, matching
+  real OpenSearch and :func:`~src.services.curation.region_boxes.box_query`
+  — resolve the same way a top-level field does;
 - ``search`` with ``size``, a single-field ``sort``, ``search_after``,
   ``scroll`` (everything in the first page) and ``terms`` aggregations
-  (with ``missing`` and nested sub-aggregations, incl. ``top_hits``);
+  (with ``missing`` and nested sub-aggregations, incl. ``top_hits``), plus
+  a ``nested`` aggregation (flattens each doc's nested elements, prefixed
+  the same way, before running its sub-aggs — so a nested terms agg
+  counts BOXES, not items; fine for dry-run reporting, not exact for an
+  item with 2+ boxes in the same bucket);
 - ``count``, ``get``, ``update`` (``if_seq_no`` honoured), ``mget``,
   ``bulk`` (``update`` with ``if_seq_no`` and ``index``), ``indices.refresh``.
 
@@ -71,9 +81,24 @@ def _term_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
     return value in _values(doc, field)
 
 
+def _nested_elements(doc: dict[str, Any], path: str) -> list[dict[str, Any]]:
+    """Every element of ``doc[path]``, re-keyed with the ``<path>.`` prefix
+    so a nested clause's dotted field names resolve like a top-level field."""
+    elements = doc.get(path) or []
+    if not isinstance(elements, list):
+        return []
+    prefix = f'{path}.'
+    return [{f'{prefix}{k}': v for k, v in el.items()} for el in elements if isinstance(el, dict)]
+
+
+def _nested_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
+    return any(matches(el, clause['query']) for el in _nested_elements(doc, clause['path']))
+
+
 _LEAF_MATCHERS = {
     'exists': lambda doc, clause: bool(_values(doc, clause['field'])),
     'wildcard': _wildcard_matches,
+    'nested': _nested_matches,
 }
 
 
@@ -158,6 +183,14 @@ def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, An
             if spec.get('aggs'):
                 filter_bucket.update(_aggregate(kept, spec['aggs']))
             out[name] = filter_bucket
+            continue
+        if 'nested' in spec:
+            path = spec['nested']['path']
+            flattened = [el for doc in docs for el in _nested_elements(doc, path)]
+            nested_bucket: dict[str, Any] = {'doc_count': len(flattened)}
+            if spec.get('aggs'):
+                nested_bucket.update(_aggregate(flattened, spec['aggs']))
+            out[name] = nested_bucket
             continue
         if 'terms' not in spec:
             raise NotImplementedError(f'agg not supported by fake: {spec}')

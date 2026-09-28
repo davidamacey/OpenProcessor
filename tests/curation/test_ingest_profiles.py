@@ -232,18 +232,16 @@ def test_class_sources_follow_profile_names(clean_env: pytest.MonkeyPatch) -> No
     assert cs.confident_class_sources() == ('clf_model', 'human', 'proposer_model', 'vlm')
 
 
-def test_worker_cohort_gate_uses_configured_names(clean_env: pytest.MonkeyPatch) -> None:
-    from scripts.curation.worker.combined import _is_combined_cohort
-
-    clean_env.setenv('OP_INGEST_PRIMARY_NAME', 'proposer')
-    clean_env.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'clf')
-    clean_env.setenv('OP_INGEST_SECONDARY_NAME', 'clf')
-    assert _is_combined_cohort('proposer_proposal', 0.99)
-    assert _is_combined_cohort('proposer_low_conf', 0.99)
-    assert _is_combined_cohort('clf_model', 0.5)
-    assert not _is_combined_cohort('clf_model', 0.95)
-    # A name from some other deployment is not special.
-    assert not _is_combined_cohort('coco_yolo11_proposal', 0.99)
+# A pre-W8 unit test named test_worker_cohort_gate_uses_configured_names
+# lived here, covering the deleted combined module's cohort-gate helper.
+# That "cohort gate" concept doesn't exist in the live streaming
+# pipeline: the runner's combined stage always takes the combined-call
+# path for every candidate; the write-guard in
+# tests/curation/test_write_guards.py decides only whether that call
+# also fills the class fields, not whether the call happens at all. So
+# the test was removed rather than ported. The env-name resolution it
+# exercised is still covered by the classifier/confident class-sources
+# assertions above.
 
 
 def test_confident_sources_resolved_from_env_at_import(clean_env: pytest.MonkeyPatch) -> None:

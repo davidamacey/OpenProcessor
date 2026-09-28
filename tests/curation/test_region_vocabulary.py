@@ -114,6 +114,29 @@ def test_region_profile_summary_serves_both_display_names(
         profile_registry._reset_registry_for_tests()
 
 
+def test_region_profile_summary_serves_max_boxes_per_write_limit(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W8: the served abuse guard (element count of one write request,
+    not a labeling rule) travels on region_profile.limits so Cropwright
+    never hardcodes it."""
+    import src.config.curation as curation_config_mod
+    from src.services.detection import profile_registry
+
+    monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
+    monkeypatch.setenv('OP_REGION_MAX_BOXES_PER_WRITE', '250')
+    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
+    profile_registry._reset_registry_for_tests()
+    try:
+        resp = client.get('/curation/projects/default/regions/vocabulary')
+        assert resp.status_code == 200, resp.text
+        summary = resp.json()['region_profile']
+        assert summary['limits'] == {'max_boxes_per_write': 250}
+    finally:
+        monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
+        profile_registry._reset_registry_for_tests()
+
+
 def test_regions_vocabulary_env_configured_detector_reflected(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -251,6 +274,7 @@ def test_regions_vocabulary_serves_the_region_text_rules(client: TestClient) -> 
 @pytest.mark.usefixtures('reference_region_profile')
 def test_regions_vocabulary_serves_the_rejection_reasons(client: TestClient) -> None:
     from src.config.region_rejection import (
+        REJECT_REASON_HUMAN,
         REJECT_REASON_NO_VERDICT,
         REJECT_REASON_SANITY_PREFIX,
         REJECT_REASON_VERIFIER,
@@ -264,6 +288,7 @@ def test_regions_vocabulary_serves_the_rejection_reasons(client: TestClient) -> 
         REJECT_REASON_VERIFIER,
         REJECT_REASON_SANITY_PREFIX,
         REJECT_REASON_NO_VERDICT,
+        REJECT_REASON_HUMAN,
     }
     assert by_id[REJECT_REASON_VERIFIER] == {
         'id': 'region_visible_elsewhere',
@@ -275,6 +300,7 @@ def test_regions_vocabulary_serves_the_rejection_reasons(client: TestClient) -> 
     assert by_id[REJECT_REASON_SANITY_PREFIX]['match'] == 'prefix'
     assert by_id[REJECT_REASON_SANITY_PREFIX]['kind'] == 'automatic'
     assert by_id[REJECT_REASON_NO_VERDICT]['kind'] == 'needs_human'
+    assert by_id[REJECT_REASON_HUMAN]['kind'] == 'human'
 
 
 def test_regions_vocabulary_response_is_typed_in_openapi(client: TestClient) -> None:

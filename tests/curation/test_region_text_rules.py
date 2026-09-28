@@ -25,6 +25,7 @@ from src.services.detection.region_text import (
     resolve_region_text,
 )
 from src.services.detection.region_text_rules import RegionTextRules, text_key
+from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack, prompt_text_examples
 
@@ -224,9 +225,9 @@ class TestWriters:
         reply = VlmCombinedReply(
             img_id='c1',
             region_visible=True,
-            region_bbox_correct=True,
-            region_text_reply='XYZ987',
-            region_confidence='high',
+            region_boxes=[
+                VlmBoxVerdict(box=1, bbox_correct=True, confidence='high', text_reply='XYZ987')
+            ],
         )
         await _drive(
             tmp_path,
@@ -239,15 +240,20 @@ class TestWriters:
             text_reader='vlm_then_ocr',
         )
         doc = fake_os.live['c1']
-        assert doc[F.text] == 'ABC1234'
-        assert doc[F.text_source] == 'ocr'
-        assert doc[F.text_vlm] == 'XYZ987'
-        assert doc[F.text_vlm_invalid] == 'placeholder'
-        assert doc[F.text_choice] == 'vlm_invalid'
+        box = doc[F.boxes][0]
+        assert box['text'] == 'ABC1234'
+        assert box['text_source'] == 'ocr'
+        assert box['text_vlm'] == 'XYZ987'
+        assert box['text_vlm_invalid'] == 'placeholder'
+        assert box['text_choice'] == 'vlm_invalid'
 
 
 @pytest.mark.usefixtures('reference_region_profile')
 def test_human_typed_text_records_the_human_choice() -> None:
+    """``region_text`` moved off the item-level ``region_meta`` route onto
+    the per-box ``PATCH /crops/{crop_id}/regions/{box_id}`` route (W8, D
+    decision, 2026-09-26): human-typed text still records ``text_source``
+    / ``text_choice`` == human, now per box."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
@@ -257,7 +263,23 @@ def test_human_typed_text_records_the_human_choice() -> None:
 
     index = get_curation_config().items_index
     fake = QueryFakeOpenSearch(
-        {index: {'c1': {'crop_id': 'c1', F.text: 'ABC123', F.text_choice: 'vlm_only'}}}
+        {
+            index: {
+                'c1': {
+                    'crop_id': 'c1',
+                    F.boxes: [
+                        {
+                            'box_id': 'b1',
+                            'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+                            'state': 'accepted',
+                            'text': 'ABC123',
+                            'text_choice': 'vlm_only',
+                        }
+                    ],
+                    F.count: 1,
+                }
+            }
+        }
     )
     app = FastAPI()
     from _curation_app import mount_curation_routers
@@ -266,8 +288,9 @@ def test_human_typed_text_records_the_human_choice() -> None:
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as client:
         resp = client.patch(
-            '/curation/projects/default/crops/c1/region_meta', json={'region_text': 'VWY7977'}
+            '/curation/projects/default/crops/c1/regions/b1', json={'text': 'VWY7977'}
         )
     assert resp.status_code == 200, resp.text
     doc = fake.docs(index)['c1']
-    assert (doc[F.text], doc[F.text_source], doc[F.text_choice]) == ('VWY7977', 'human', 'human')
+    box = doc[F.boxes][0]
+    assert (box['text'], box['text_source'], box['text_choice']) == ('VWY7977', 'human', 'human')

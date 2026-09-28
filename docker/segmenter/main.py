@@ -16,10 +16,13 @@ Wire contract (the shipped client's expectations, which this server is
 built to match):
 
 * ``POST /segment`` — request ``{crop_jpeg_b64, text_prompt,
-  max_candidates}``, response ``{candidates: [{bbox_norm, score,
+  max_candidates, min_score}``, response ``{candidates: [{bbox_norm, score,
   mask_iou}], ...}``.
 * ``POST /segment/batch`` — the same thing for N images in one round trip.
-* ``GET /health`` — ``loaded`` flips true once the model pool is up.
+* ``GET /health`` — ``loaded`` flips true once the model pool is up; also
+  serves ``max_candidates`` (the server's top-K ceiling) and
+  ``default_min_score`` (the score floor a request gets when it omits
+  ``min_score`` -- the upstream SAM 3 processor's own default).
 
 Coordinate frame: ``bbox_norm`` is normalized to the **submitted image**.
 When that image is a crop of a larger frame, re-projecting to the source
@@ -105,8 +108,16 @@ class SegmentRequest(BaseModel):
     max_candidates: int = Field(
         default=4,
         ge=1,
-        le=32,
+        le=sam3_backend.MAX_CANDIDATES_CAP,
         description='Top-K candidates to return, sorted by score descending.',
+    )
+    min_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description='Score floor applied on this call in place of the processor default'
+        " (``GET /health``'s ``default_min_score``, the upstream"
+        ' ``Sam3Processor.confidence_threshold``). Unset = the processor default.',
     )
 
 
@@ -124,7 +135,8 @@ class BatchSegmentRequest(BaseModel):
         min_length=1,
         description='Applied to every image in the batch.',
     )
-    max_candidates: int = Field(default=4, ge=1, le=32)
+    max_candidates: int = Field(default=4, ge=1, le=sam3_backend.MAX_CANDIDATES_CAP)
+    min_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class SegmentCandidate(BaseModel):
@@ -167,6 +179,8 @@ class HealthResponse(BaseModel):
     device: str
     loaded: bool
     instances: int
+    max_candidates: int
+    default_min_score: float
 
 
 # =============================================================================
@@ -212,10 +226,17 @@ def _require_ready() -> None:
         raise HTTPException(status_code=503, detail='model still loading')
 
 
-async def _run(images: Sequence[Image.Image], prompt: str, top_k: int) -> list[list[Candidate]]:
-    """Acquire a processor and run the batch on it, off the event loop."""
+async def _run(
+    images: Sequence[Image.Image], prompt: str, top_k: int, min_score: float | None = None
+) -> list[list[Candidate]]:
+    """Acquire a processor and run the batch on it, off the event loop.
+
+    ``min_score`` (W8c) sets the leased processor's score floor for just
+    this call (``ProcessorPool.acquire``); ``None`` leaves the processor's
+    own default (``GET /health``'s ``default_min_score``) untouched.
+    """
     _require_ready()
-    async with _pool.acquire() as processor:
+    async with _pool.acquire(min_score=min_score) as processor:
         return await asyncio.to_thread(
             sam3_backend.segment_images, processor, images, prompt, top_k
         )
@@ -236,6 +257,8 @@ async def health() -> HealthResponse:
         device=sam3_backend.device_name(),
         loaded=loaded,
         instances=len(_pool),
+        max_candidates=sam3_backend.MAX_CANDIDATES_CAP,
+        default_min_score=sam3_backend.DEFAULT_CONFIDENCE_THRESHOLD,
     )
 
 
@@ -245,7 +268,7 @@ async def segment(req: SegmentRequest) -> SegmentResponse:
     _require_ready()
     images = _decode_all([req.crop_jpeg_b64])
     t0 = time.perf_counter()
-    per_image = await _run(images, req.text_prompt, req.max_candidates)
+    per_image = await _run(images, req.text_prompt, req.max_candidates, req.min_score)
     elapsed = (time.perf_counter() - t0) * 1000.0
     return SegmentResponse(
         candidates=_to_wire(per_image[0]),
@@ -266,7 +289,7 @@ async def segment_batch(req: BatchSegmentRequest) -> BatchSegmentResponse:
     _require_ready()
     images = _decode_all(req.crops_jpeg_b64)
     t0 = time.perf_counter()
-    per_image = await _run(images, req.text_prompt, req.max_candidates)
+    per_image = await _run(images, req.text_prompt, req.max_candidates, req.min_score)
     elapsed = (time.perf_counter() - t0) * 1000.0
     return BatchSegmentResponse(
         results=[

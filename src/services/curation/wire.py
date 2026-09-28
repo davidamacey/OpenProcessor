@@ -35,8 +35,33 @@ WIRE_REGION_FIELDS = RegionFields()
 
 # `prefix` is not a document key; the embedding is a 1024-d vector no client
 # needs; `*_legacy` columns are rollback-only storage.
+#
+# The per-item box-list summary fields and the list itself are excluded
+# from the GENERIC per-attribute loop below (:func:`region_to_wire`)
+# because they're served by :func:`region_boxes_to_wire` instead, with
+# their own fixed wire keys (``region_boxes``, ``region_count``, …) --
+# not the ``region_wire_key(attr)`` derivation this module uses for the
+# legacy per-box scalars. ``boxes_state`` is never a top-level document
+# key at all (it names the FIXED element key `state` inside one
+# ``region_boxes`` list entry, used only to build nested queries via
+# ``region_boxes.box_query``).
 _NON_WIRE_REGION_ATTRS = frozenset(
-    {'prefix', 'embedding', 'bbox_norm_legacy', 'score_legacy', 'status_legacy'}
+    {
+        'prefix',
+        'embedding',
+        'bbox_norm_legacy',
+        'score_legacy',
+        'status_legacy',
+        'boxes',
+        'boxes_state',
+        'box_embeddings',
+        'count',
+        'rejected_count',
+        'max_score',
+        'set_complete',
+        'revision',
+        'box_seq',
+    }
 )
 
 REGION_WIRE_ATTRS: tuple[str, ...] = tuple(
@@ -359,7 +384,43 @@ def serialize_item(
     item.update(region_to_wire(src, f))
     item['region_bbox_in_parent'] = region_bbox_in_parent(src, f)
     item['region_candidate_bbox_in_parent'] = region_candidate_bbox_in_parent(src, f)
+    item.update(region_boxes_to_wire(src, f, crop_id=crop_id, prefix=prefix))
     return item
+
+
+def region_boxes_to_wire(
+    src: dict[str, Any],
+    storage: RegionFields | None = None,
+    *,
+    crop_id: str = '',
+    prefix: str = '',
+) -> dict[str, Any]:
+    """The W8 per-item box list plus its item-level summary fields
+    (any_domain_plan.md W8.9). Additive alongside the legacy per-box
+    scalar wire keys above -- see the W8 handback report for why those
+    are not removed yet. Each ``RegionBoxWire`` element also carries
+    ``bbox_in_parent`` (the item-crop frame, derived; ``None`` with no
+    usable item box) and ``thumbnail_url`` (``crop_id`` unset -> both
+    keys omitted, e.g. a bare doc with no crop identity)."""
+    from src.services.curation.region_boxes import read_boxes
+
+    f = storage or get_region_fields()
+    boxes = []
+    for box in read_boxes(src, f):
+        doc = box.to_doc()
+        doc['bbox_in_parent'] = _source_to_parent(src, box.bbox_norm)
+        doc['thumbnail_url'] = (
+            f'{prefix}/crops/{crop_id}/region_thumbnail?box_id={box.box_id}' if crop_id else None
+        )
+        boxes.append(doc)
+    return {
+        'region_boxes': boxes,
+        'region_count': int(src.get(f.count) or 0),
+        'region_rejected_count': int(src.get(f.rejected_count) or 0),
+        'region_max_score': src.get(f.max_score),
+        'region_set_complete': src.get(f.set_complete),
+        'region_revision': int(src.get(f.revision) or 0),
+    }
 
 
 ITEM_WIRE_KEYS: frozenset[str] = frozenset(serialize_item({}, 'x', api_prefix=''))
@@ -397,6 +458,7 @@ __all__ = [
     'item_list_source_excludes',
     'item_source_excludes',
     'region_bbox_in_parent',
+    'region_boxes_to_wire',
     'region_candidate_bbox_in_parent',
     'region_event_payload',
     'region_to_wire',

@@ -8,6 +8,163 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **W8 multi-box regions (partial, foundational slice).** Laid the core
+  storage primitives for the per-item region-box list
+  (`src/services/curation/region_boxes.py`): `RegionBox`, `read_boxes`,
+  `boxes_write_fields`, `next_box_id` (never reuses an id after a delete),
+  `derive_status` (fixed accepted > false_positive > proposed > rejected >
+  empty precedence), `box_query`/`has_any_box_query` nested-query helpers,
+  and `BOX_STATES`. Added the new `RegionFields` attributes for the list
+  and its item-level summary fields (`region_boxes`, `region_box_embeddings`,
+  `region_count`, `region_rejected_count`, `region_max_score`,
+  `region_set_complete`, `region_revision`, `region_box_seq`,
+  `region_boxes_migrated_at`, `region_legacy_scalars`).
+  Added the served per-box `box_states` vocabulary with a semantic `tone`
+  field (W8.7 pin) to `GET /regions/statuses`. Added the served,
+  operator-tunable write-size abuse guard `region_max_boxes_per_write`
+  (env `OP_REGION_MAX_BOXES_PER_WRITE`, default 500), served on
+  `region_profile.limits.max_boxes_per_write` (`/health` and
+  `/regions/vocabulary`).
+  The worker pipeline rewrite (candidate selection, numbered VLM
+  overlay, verdict-to-storage) landed in the later "W8 pipeline wiring"
+  entry below; removal of the old scalar routes/fields, embeddings, and
+  clustering remain open (W8c) — see the handback report.
+- **W8a multi-box region human edit routes.** New, additive routes
+  alongside the existing single-scalar ones (legacy fields/routes NOT
+  removed this pass -- the worker pipeline still writes them
+  exclusively; see the handback report):
+  - `PUT /crops/{crop_id}/regions` -- sets the full per-item box list,
+    sibling-preserving (an element with only `box_id` leaves that box
+    untouched); `box_id: null` mints a new box defaulting to `accepted`
+    when `state` is omitted (W8 pin 2); `frame: "parent"` projects into
+    the source frame server-side (W8 pin 1); optional `region_status`
+    applies a whole-set status to the built list in the same write (W8
+    pin 3; Enter confirms only `proposed` boxes, never boxes already
+    settled); a stale `expected_region_revision` is 409
+    `region_conflict` (current revision + box ids + item); over
+    `region_profile.limits.max_boxes_per_write` is 422 `too_many_boxes`.
+  - `PUT /crops/batch_regions` -- same new-boxes-only semantics across
+    many crops (`box_id` must be `null`, else 422 `box_id_in_batch`).
+  - `PATCH /crops/{crop_id}/regions/{box_id}` -- per-box `state`/`text`
+    patch; every sibling box is left untouched (per-box states persist
+    independently).
+  - `POST /regions/batch_box_state` -- one state on many `{crop_id,
+    box_id}` targets across items (region-gallery triage), never
+    touching a target's sibling boxes (contrast `batch_status`, which
+    flips every box of each item).
+  - `src/services/curation/region_boxes.py` gained `apply_put_boxes`
+    (the sibling-preserving merge) and `boxes_with_status` (the W8.7
+    whole-set table: `detected` accepts every `proposed` box and 422s
+    `no_boxes`/`no_accepted_box` when empty/still-empty-of-accepted;
+    `false_positive` flips every box; `verify_rejected` rejects every
+    box with `rejection_reason: human`; `no_region_visible` clears the
+    list).
+  - `serialize_item`/`ItemDoc` now carry `region_boxes` (list) plus the
+    item-level summary fields `region_count`, `region_rejected_count`,
+    `region_max_score`, `region_set_complete`, `region_revision`,
+    additive alongside the existing per-box scalar wire keys.
+  - New module `src/routers/curation/regions_boxes_edit.py` (kept
+    separate from `regions_edit.py` to stay under the 700-LOC module
+    ceiling); added to `tests/curation/test_cross_project_leak.py`'s
+    route/body/prepare maps.
+  - **Not done** (deferred to W8b/W8c, see the handback report):
+    deleting the legacy scalar `RegionFields` attrs/mappings/routes,
+    `test_no_legacy_region_scalars.py`, and updating
+    `POST /crops/{id}/region/undo` to restore the box list (pin 4) --
+    undo still only restores the legacy scalar snapshot today.
+- **W8b multi-box region infrastructure (candidate selection, VLM
+  overlay, verdict-to-box mapping) — standalone, NOT yet wired into the
+  worker's streaming pipeline.** `src/services/detection/
+  region_candidates.py` (new): `select_region_candidates()` — floor /
+  deterministic tie-break / greedy class-agnostic NMS / cap over a list
+  of `RegionCandidate`, the one function every candidate leg (detector,
+  segmenter, text-hint re-pass) and `POST /region_profiles/test` will
+  use once wired. `src/services/labeling/region_overlay.py` (new):
+  `draw_region_overlay` (numbered red-rectangle tags, 1-based, one code
+  path for N=1..N), `overlay_description`, `render_region_block`,
+  `VlmBoxVerdict`, `box_verdicts`. **D-B (owner decision, 2026-09-26):**
+  the pre-W8 flat VLM reply shape is dropped — list shape only (N=1 is a
+  list of one); a reply lacking the list key raises
+  `MultiRegionKeysMissingError` (`code=pack_multi_region_keys_missing`),
+  not a flat-shape fallback. `scripts/curation/worker/verify.py` gains
+  `TaskBoxInput` and `verdicts_to_boxes` — maps a combined reply's
+  per-box verdicts onto a `list[RegionBox]` (every entry carries its own
+  `box_id`, Cropwright C3/Q15), applying the sanity gate per box and the
+  no-verdict retry/force-resolve split from the single-box cascade.
+  **Superseded by the W8 pipeline-wiring pass below** — these primitives
+  are now the live worker's only code path; this bullet is kept for the
+  historical record of what W8b added standalone.
+  `src/config/region_rejection.py` gains `REJECT_REASON_HUMAN`
+  (a human reviewer's per-box rejection is now a labelled catalog
+  entry); `src/config/region_state.py` gains `BOX_STATE_ROUTES`, served
+  as `box_state_routes` on `GET /regions/statuses`.
+- **W8 pipeline wiring: the multi-box primitives now drive the live
+  detection worker end to end.** `scripts/curation/worker/runner.py`'s
+  streaming stages (`stage_a_consumer`, `stage_a_sam_consumer`,
+  `stage_b_combined`) now select N candidates per item
+  (`select_region_candidates`, new `DetectionProfile` fields
+  `region_nms_iou`/`max_regions_per_item`, the latter renamed from
+  `region_max_candidates` and defaulted to 1 by the correctness pass
+  below -- multi-box is opt-in per profile, never silently on), render
+  one numbered VLM
+  overlay per crop (`render_region_block`) instead of a single-box
+  prompt, and map the reply's per-box verdicts onto `RegionBox` entries
+  (`verdicts_to_boxes`) written via `boxes_write_fields` — every write
+  path (`stage_b_combined`, the segmenter high-confidence skip,
+  `accept_without_vlm`) now produces `region_boxes`/`region_count`/
+  `region_revision`/`region_box_seq`, not the legacy scalar fields.
+  `RegionDetector` gained `detect_multi`/`detect_batch_multi` (decode
+  every anchor above the confidence floor, not just top-1, capped to
+  300 before NMS); `SegmenterClient` gained `segment_multi` (the
+  segmenter's HTTP response already returned every candidate; `segment`
+  only ever kept the top one). `VlmLabeler.label_combined`/
+  `label_combined_batch` take `region_bboxes_norm: list[...]` (was a
+  single `region_bbox_norm`) and `VlmCombinedReply.region_boxes:
+  list[VlmBoxVerdict]` (was flat `region_bbox_correct`/`region_text`/
+  `region_confidence`); `vlm_prompts.py`'s built-in packs
+  (`GENERIC_ITEM_PACK`, `GENERIC_REGION_PACK`) and the
+  `examples/prompt_packs/vehicle_wheel.json` example were rewritten to
+  ask for the nested `region_boxes` shape the parser now requires (a
+  real gap from the W8b pass: the prompts still asked for the old flat
+  shape while the parser demanded the new one).
+  Deleted `scripts/curation/worker/combined.py` and
+  `cascade.py::_process_crop` (dead: the streaming pipeline never had a
+  legacy two-call cascade fallback; every candidate always went through
+  one combined VLM call). Their test coverage was ported onto the real
+  pipeline (`tests/curation/test_region_cascade_integrity.py`'s
+  `_drive_worker` harness) rather than deleted outright, including a
+  full re-port of `tests/curation/test_region_worker.py`'s per-routing-
+  row cascade tests; a few rows describing pre-W8 intra-pass fallback
+  behaviour (detector/verify reject -> immediately try the secondary
+  segmenter in the same pass) were replaced with tests asserting the
+  new, correct invariant instead: a combined-verify reject is terminal
+  (`verify_rejected`) for that pass, not a same-pass fallback trigger.
+  **Not done this pass** (see the handback report): deleting the legacy
+  scalar `RegionFields` routes/fields (W8c), per-box embeddings/
+  clustering/FP matching, undo-snapshot simplification to box-list-only,
+  review-queue/stats/export per-box row shapes, and segmenter service
+  `min_score`/candidate-cap config.
+  **Correctness note (2026-09-27):** an independent review of this exact
+  wiring found a blocker (a `pending_verification` item's stored
+  candidate/sibling boxes were read from the wrong source and then
+  discarded on write) and 8 majors (stale-revision/box-id reuse under
+  concurrent writes, item-level verify/auto-confirm fields silently
+  dropped, the region embedding could source a rejected box, multi-box
+  silently on by default, a VLM text-echo filter and a text-free-profile
+  leak fix each ported incompletely, two more packs still on the flat
+  reply shape, and weak N>1 test coverage that let 5 of 6 targeted
+  mutations survive the suite). All fixed in the pass documented under
+  `### Fixed` below — this bullet's "every write path... now produces"
+  claim above was accurate for the happy path only.
+- **W8: explicit OpenSearch mapping for `region_boxes` /
+  `region_box_embeddings`.** `_items_body()` now maps the W8 nested list
+  and its sibling per-box-embedding field explicitly (fixed element-key
+  properties, not dynamic-inferred), plus the item-level summary fields.
+  No separate `ensure_items_*` step (stacks are re-created).
+- **W8: `RegionBoxWire` gains `bbox_in_parent` and `thumbnail_url` per
+  box** on the item wire (`region_boxes_to_wire`), so a client can render
+  and link a box without a second geometry projection or an extra
+  `crop_id` round-trip.
 - **W2b: per-project configurable keymap.** `src/config/keymap_actions.json`
   (+ a pydantic model) is the action registry: contexts, groups, defaults,
   `modifiable`, and the wire grammar (combo syntax, locked keys, browser-
@@ -35,7 +192,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on `tab`, `box_edit.delete_box`) ship now, served `available: false` on
   a project with no region profile. Exported to
   `contracts/json/keymap_actions.json` via `generate_contracts.py`.
-
 - **`op_global_configs`: the global (non-project-scoped) config store
   (W2 review M3, 2026-09-27).** `src/services/config_store/store.py`
   gains a sibling to the per-project `ConfigStore`: `global_configs_index()`
@@ -72,7 +228,392 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `_FakeIndices` gained `exists`/`create` for the new index-bootstrap
   test.
 
+### Changed
+- **W8 (breaking): `region_text` removed from `PATCH
+  /crops/{id}/region_meta`.** D decision (owner, 2026-09-26): it was
+  always a per-box value riding on an item-level route.
+  `ItemRegionMetaRequest` no longer has the field at all
+  (`extra='forbid'` 422s a stale client that still sends it, whether or
+  not the profile reads text) — per-box text now goes through `PUT
+  /crops/{crop_id}/regions` / `PATCH /crops/{crop_id}/regions/{box_id}`
+  (W8a), which gained the same text-free-profile guard (422
+  `region_text_disabled`) and human-provenance stamp
+  (`text_source='human'`, `text_confidence=1.0`,
+  `text_choice='human'`) per box that `region_meta` used to apply at the
+  item level. No back-compat window.
+- **W8 pin 4: `POST /crops/{id}/region/undo` restores the box-list
+  snapshot, not just the legacy scalar.** `edit_history.py`'s snapshot
+  set gained the per-item box-list fields alongside the pre-W8 per-box
+  scalars (additive, not a replacement — the worker still writes only
+  the legacy scalars this pass).
+
 ### Fixed
+- **W8 pipeline-wiring correctness fixes (independent Opus review,
+  2026-09-27): 1 blocker + 8 majors.** Fixes every finding of
+  `docs/design/openprocessor_internal/w8_pipeline_review_2026-09-27.md`
+  against the W8 pipeline-wiring pass above.
+  - **B1 (blocker, data loss):** `pending_verification` re-verification
+    now reads its candidate from the item's stored `region_boxes` list
+    (whichever boxes are `state=='proposed'`, keeping their `box_id`),
+    never the legacy single scalar. The write path merges the resolved
+    verdict boxes back into the CURRENT stored list (`region_boxes.
+    merge_boxes_for_write`) instead of replacing it outright, so an
+    untouched sibling box (already accepted/rejected, or a second
+    proposed box) is never silently discarded (`_ItemTask.pending_merge`,
+    opt-in only for this path — every fresh-detection write keeps its
+    pre-existing replace behaviour, unchanged).
+  - **M1 (stale revision/box-id reuse):** the box-list write
+    (`region_boxes`, `region_count`, `region_revision`, `region_box_seq`,
+    ids) is now computed inside `bulk_writer._merge`, against the live
+    doc `occ_skip_on_conflict_bulk` re-reads immediately before the
+    write, never the task's own fetch-time snapshot. Fresh candidates
+    get a placeholder id (`region_boxes.new_box_placeholder`) at
+    selection time and a real one only at write time
+    (`region_boxes.finalize_box_ids`, minted against the CURRENT
+    `region_box_seq`), so a concurrent write's ids can never collide and
+    the revision only ever increments forward.
+  - **M2 (item-level verify fields dropped):** `region_verified`/
+    `region_verifier`/`region_verifier_version`/`region_verified_at`/
+    `region_validated`/`region_auto_confirmed` are written again on
+    every box-list write (`verify.item_verification_fields`).
+    `region_auto_confirmed`'s box-aware rule: at least one accepted box,
+    and every accepted box independently passes the pre-W8 2-of-2
+    auto-confirm policy (`verify.boxes_auto_confirmed`). The skip-verify
+    and no-VLM-configured paths stay `verified=False`/
+    `auto_confirmed=False`, matching pre-W8 behaviour.
+    **Correctness note (2026-09-28 re-review confirmation):** the fields
+    were genuinely restored, but `verified`'s reconstructed rule
+    (`reply is not None`) was wrong -- true even for a VLM rejection or
+    a not-visible answer, contradicting the pre-W8 write and the
+    existing `test_region_status_invariants.py` invariant. Corrected in
+    the fix pass below (R-M4): `verified` now requires at least one
+    ACCEPTED box.
+  - **M3 (embedding from a rejected box):** the region-embedding source
+    (`_ItemTask.candidate_in_crop`) now syncs to the first ACCEPTED box
+    (`runner._sync_accepted_candidate`), never `candidates[0]` (the
+    top-scored candidate, which the VLM may have rejected while
+    accepting a lower-scored sibling).
+    **Correctness note (2026-09-28 re-review confirmation):** the
+    selection logic itself was correct, but moving the box-list's status
+    write into `bulk_writer._merge` (M1's fix, same commit) removed
+    `F.status` from `t.update_doc` before `region_embed_stage.
+    _eligible_tasks` and `bulk_writer._publish_region_events` ever read
+    it, so this fix had NO OBSERVABLE EFFECT: no region embedding and no
+    `crop.region_verified` event were produced for ANY worker output,
+    including the single-box case that worked before this whole pass.
+    The gate didn't catch it because the embed stage is disabled by
+    default in `_drive_worker` and the M3 test spied on
+    `_sync_accepted_candidate` instead of asserting the real written
+    output. Fixed below (R-M1), with a real end-to-end test replacing
+    the spy.
+  - **M4 (multi-box silently on by default):** `DetectionProfile.
+    region_max_candidates` renamed to `max_regions_per_item`
+    (any_domain_plan.md W8.4/W8.9's name), default changed 3 -> 1.
+    Multi-box is now opt-in per profile.
+  - **M5 (echo-suppression filter dropped):** `region_overlay.
+    box_verdicts`/`_clean_text_reply` gained an `echoes` parameter (the
+    reply's picked class name, `make`, `model`, and their join);
+    `vlm_labeler._combined_reply_from_entry` computes and passes it,
+    restoring the pre-W8 flat parser's `_clean_combined_region_text`
+    suppression on the new per-box path. Also restored the full 7-value
+    sentinel set (`unreadable`/`-` were missing from the W8 rewrite's
+    4-value set).
+  - **M6 (text-free leak, rejected boxes):** the prior pass's
+    `_box_with_resolved_text` leak fix only ran on accepted boxes. New
+    `region_text_stage.resolve_rejected_box_text` runs on every
+    rejected/no-verdict box too (both the ordinary reject path and the
+    no-verdict-cap-reached path): drops the raw VLM text entirely on a
+    text-free profile, and holds it to the same `region_text_rules` an
+    accepted box's reading is held to on a text-reading profile.
+  - **M7 (flat-shape prompt bug, 2 more files):** `data/
+    prompt_pack.example.json` and `docker/test/fake_vlm.py` rewritten to
+    the nested `region_boxes` shape (the built-in packs and
+    `examples/prompt_packs/vehicle_wheel.json` were already fixed by the
+    prior pass).
+  - **M8 (weak N>1 test coverage):** `_drive_worker`'s `primary`/
+    `segmenter` params now accept a list of raw candidates (not just 0 or
+    1), and new tests drive 2-3 candidates through the detector leg, the
+    segmenter leg, and the combined VLM stage, asserting per-box outcomes
+    (state, score, id, text) distinctly — confirmed to catch the review's
+    "cap forced to 1" and "skip-verify guard removed" mutations by
+    reproducing them against the new tests.
+  - **Flaky test fix:** `test_region_no_verdict_cap.py::
+    test_real_verdict_before_the_cap_writes_normally_and_clears_the_count`'s
+    harness (`_drive_worker`'s `_stopper`) used a FIXED 500 x 10ms poll
+    budget (5s) regardless of actual wall-clock elapsed; under load
+    `asyncio.sleep(0.01)` can itself take longer than 10ms, so a
+    multi-retry scenario (6 combined-VLM round trips across 2 write
+    cycles) could run out of budget one retry short of the cap and stop
+    the worker early (~1/12 standalone failure rate, reproduced). Changed
+    to a deadline-based wait (18s, still well under the outer 30s
+    timeout) — 0/12 failures after the fix; this was a harness
+    time-budget issue, not a pipeline logic bug (the B1/M1 fixes above
+    were unrelated, separately reproduced and fixed bugs found while
+    investigating).
+  New tests: `tests/curation/test_region_pending_verification_b1.py`,
+  `tests/curation/test_region_write_occ_m1.py`,
+  `tests/curation/test_region_multi_box_pipeline.py`; extended
+  `test_region_auto_confirm.py`, `test_text_free_worker.py`,
+  `test_region_cascade_integrity.py`, `test_vlm_prompts.py`,
+  `test_verdicts_to_boxes.py`, `test_detection_profile.py`.
+- **W8 pipeline-wiring fix pass 3 (re-review confirmation, 2026-09-28):
+  1 blocker + 3 majors introduced/left open by the previous fix pass.**
+  Fixes every new finding of the "Re-review 2026-09-27, fix-pass
+  confirmation" section appended to
+  `docs/design/openprocessor_internal/w8_pipeline_review_2026-09-27.md`.
+  - **R-B1 (blocker, livelock):** in merge mode (Path 1 re-verifying a
+    stored `proposed` box), a `region_visible=False` combined-VLM reply
+    now resolves each re-verified candidate to a `rejected` box (keeping
+    its id, reason `region_visible_elsewhere`) via `derive_status` over
+    the full merged list, instead of writing an empty box list.
+    Previously `merge_boxes_for_write(stored, [])` never touched the
+    stored box's id, so it stayed `proposed` forever: every poll made
+    another VLM call and bumped the revision, unbounded --
+    `docker/test/fake_vlm.py` defaults `region_visible` to `false`, so
+    this would have hit immediately in the dev/E2E stack. Fresh-detection
+    writes (no stored box to lose) are unchanged: still an empty list,
+    terminal `no_region_visible`.
+  - **R-M1 (major regression, silent):** restored a PROVISIONAL
+    `F.status` directly onto `t.update_doc` in `runner._box_list_doc`
+    and `region_text_stage.accept_without_vlm` (computed the same way
+    `derive_status` would from this task's own boxes, so it can only
+    ever under-report eligibility, never over-report it) so
+    `region_embed_stage._eligible_tasks` -- which runs BEFORE
+    `bulk_writer._merge` -- can see it again. `bulk_writer._merge` now
+    also corrects `task.update_doc[F.status]` to the REAL merged status
+    once it's known, so `_publish_region_events` (which runs AFTER the
+    merge) reads the accurate value. Region embeddings and
+    `crop.region_verified` events are written/published again for every
+    worker output, not just the ones this pass happened to also touch.
+  - **R-M2 (major regression):** `region_text_stage.accept_without_vlm`
+    now reuses `cand.box_id` (the stored box's own id, set when the
+    candidate came from a stored `proposed` box) instead of always
+    minting `new_box_placeholder(0)`. The no-VLM Path-1 accept used to
+    leave the human's stored box `proposed` forever AND mint a brand-new
+    duplicate `accepted` box for the same geometry.
+  - **R-M3 (M1 residual):** `region_boxes.merge_boxes_for_write` gained
+    an optional `baseline` parameter (the task's fetch-time
+    `stored_boxes` snapshot); `bulk_writer._merge` now passes it. A box a
+    human moved or deleted DURING its own VLM re-verification call is
+    detected per-box (baseline vs. the live re-read doc) and the human's
+    newer state wins -- a move is no longer silently reverted to the
+    stale geometry the VLM verified against, and a delete is no longer
+    resurrected by the pass's now-stale verdict.
+  - **R-M4 (M2 semantics):** `verified` is `reply is not None AND at
+    least one box accepted`, never `reply is not None` alone -- a VLM
+    rejection or a not-visible answer is a real reply but never a
+    confirmed region. Restores the pre-W8 semantics and the
+    `test_region_status_invariants.py` invariant this contradicted.
+  - **Nit:** corrected the `_stopper` deadline-fix comment
+    (`test_region_cascade_integrity.py`) -- it described the flake's
+    cause backwards (a slower `asyncio.sleep(0.01)` makes a fixed
+    500-iteration budget take MORE wall time, not less); the real cause
+    is plain wall-clock variance against a fixed ~5s budget under xdist
+    CPU contention.
+  New tests: `tests/curation/test_region_not_visible_terminal_r_b1.py`,
+  `tests/curation/test_region_no_vlm_reuses_box_id_r_m2.py`,
+  `tests/curation/test_region_merge_concurrent_edit_m1.py`; rewrote
+  `test_region_multi_box_pipeline.py`'s M3 embedding test to drive the
+  real embed stage + event publisher end-to-end (asserting the written
+  `F.embedding` and the published event) instead of spying on
+  `_sync_accepted_candidate`; extended `test_region_rejected_candidate.py`
+  and `test_region_no_verdict_cap.py` with `verified is False` assertions
+  on rejected writes. **Not fixed this pass, confirmed pre-existing and
+  left for W8c** (per the review's r1): a requeue from a terminal status
+  to `pending_detection`/`pending_verification` still runs in "replace"
+  mode against any stored boxes, including human-sourced ones -- the
+  requeue boundary itself, plus the legacy-scalar readers listed in the
+  original W8 pipeline review, remain W8c scope.
+- **W8c pass 1 (r1 requeue fix, per-route box-state validation,
+  segmenter `min_score`/128-candidate config).** Partial pass -- the
+  legacy scalar field/route deletion and the per-box embeddings/
+  clustering/FP-matching work this wave was scoped for are NOT done
+  this pass; see the handback report for the exact remaining list.
+  - **Requeue query ported off the deleted-in-spirit legacy scalars.**
+    `region_requeue.requeue_query` filtered on item-level `F.detector` /
+    `F.rejection_reason` / `F.bbox_norm`, none of which a W8 worker
+    write ever populates -- so requeueing a W8-written cohort by
+    detector/reason, or to `pending_verification`, silently matched
+    nothing. Now a nested `region_boxes` query
+    (`region_boxes.box_query`/`has_any_box_query`); `requeue_breakdown`'s
+    aggregation is a nested agg over the same path (counts BOXES, not
+    items, for the by-detector/by-reason breakdown only -- `total`
+    still counts items).
+  - **r1 wipe-on-replace fix, both ends (CORRECTED below -- see "W8c
+    slice 1 fix pass"; this bullet's "never a human's" claim only ever
+    covered a human-CREATED box, `source == 'human'`, not a human's
+    per-box accept/reject VERDICT on a machine-created box, which this
+    pass's own edit routes leave no trace of -- that gap, M3, is closed
+    by the later pass, not this one).** `region_requeue.apply_requeue`
+    with `clear_detection=True` drops only this pass's MACHINE-sourced
+    boxes from `region_boxes` (`source != 'human'`). Separately (and
+    required regardless of the requeue tool, since a fresh-detection pass
+    can also follow a raw/direct status edit): every fresh-detection path
+    in the streaming worker (`runner.py` Path 2/Path 3 and the text-hint
+    re-pass they can fall into) now sets `_ItemTask.pending_merge = True`,
+    so its own candidates MERGE onto whatever is live at write time
+    (`region_boxes.merge_boxes_for_write`, the same primitive Path 1's
+    B1 fix already uses) instead of replacing the box list wholesale --
+    a no-op for the common case (no stored boxes at all). **This
+    "merge" semantic for a fresh detection was itself wrong (M1) and is
+    replaced by the later pass below.** Red-then-green on
+    `tests/curation/test_region_write_occ_m1.py` (a concurrently
+    human-added box now survives a fresh-detection write instead of
+    being silently discarded) and a new
+    `query_fakes.py` `nested` query/aggregation double (query + agg;
+    additive, every existing test unaffected).
+  - **Per-route box `state` validation (prior-pass gap).**
+    `BOX_STATE_ROUTES` (`src/config/region_state.py`) was served on `GET
+    .../regions/statuses` but never enforced on write. New
+    `region_boxes.validate_box_state(route, state)`, wired into all four
+    W8a box-write routes (`PUT /crops/{id}/regions`, `PUT
+    /crops/batch_regions`, `PATCH /crops/{id}/regions/{box_id}`, `POST
+    /regions/batch_box_state`) -- an unrecognized `state` is now a 422
+    instead of being written verbatim into `region_boxes`.
+  - **Segmenter `min_score` + the 128-candidate ceiling
+    (`docker/segmenter/`).** Verified against the upstream source (no
+    `docker run`; the `sam3` package isn't installed in this
+    environment, so this is a read of the public
+    `facebookresearch/sam3` GitHub source, not a live probe):
+    `Sam3Processor.__init__(..., confidence_threshold=0.5)` is SAM 3's
+    only score threshold, read as a plain instance attribute by both the
+    upstream `_forward_grounding` and this repo's mask-disabled patch;
+    `build_sam3_image_model`'s decoder defaults to `num_queries=200`, so
+    a 128-candidate top-K ceiling never asks for more than the model can
+    produce. `SegmentRequest`/`BatchSegmentRequest` gain `min_score:
+    float | None` (sent to the server; `None` = the processor default);
+    `max_candidates`'s `le` rises from 32 to 128
+    (`sam3_backend.MAX_CANDIDATES_CAP`). `ProcessorPool.acquire(
+    min_score=...)` sets the leased processor's `confidence_threshold`
+    for just that call and restores the prior value on release (even on
+    error), so no per-instance state leaks between callers. `GET
+    /health` now serves `max_candidates` and `default_min_score`. Scope
+    note: this is the segmenter-server half of `any_domain_plan.md`
+    W8.4 only -- the client-side half (`DetectionProfile.
+    segmenter_min_score`, `SegmenterClient` sending `min_score`,
+    `region_candidates.py`, the detector-leg port) is separate, larger
+    W8.4 scope and is NOT done this pass.
+  New/extended tests: `tests/curation/test_region_requeue.py` (rewritten
+  onto a `region_boxes`-shaped corpus), `tests/curation/query_fakes.py`
+  (`nested` query/agg support), `tests/curation/test_region_write_occ_m1.py`,
+  `tests/curation/test_region_no_verdict_cap.py` (one scenario's manual
+  requeue helper updated to clear `region_boxes`, matching what the real
+  `apply_requeue(clear_detection=True)` now does), `tests/curation/
+  test_regions_boxes_edit.py` (4 new per-route invalid-`state` tests),
+  `tests/curation/test_segmenter_service.py` (2 new: `min_score`
+  filters-and-restores, `max_candidates` at/over the new cap).
+- **W8c slice 1 fix pass (independent Opus review response, 2026-09-28):
+  reverify-vs-fresh-detection semantics, requeue-to-pending_verification,
+  human-touch protection scope, empty-batch validation, requeue breakdown
+  reconciliation.** Fixes every finding in
+  `docs/design/openprocessor_internal/w8c_slice1_review_2026-09-28.md`
+  (1 blocker, 3 majors, 1 minor, 1 nit).
+  - **B1 (blocker) + M1: `pending_merge` was overloaded across two
+    unrelated meanings.** The prior pass's `_ItemTask.pending_merge = True`
+    on every fresh-detection task (see the corrected bullet above) was
+    also read by `runner.py`'s `region_visible=False` combined-verify
+    branch to mean "this is Path 1's re-verify" -- so a FRESH item (no
+    stored boxes) that got a not-visible VLM reply was misrouted into the
+    re-verify branch and wrote a phantom `rejected` box with the
+    misleading reason `region_visible_elsewhere` instead of the correct
+    empty `no_region_visible`. The dev/test stack's `fake_vlm` defaults to
+    `region_visible=False`, so this was not an edge case. Separately (M1),
+    "merge" was the wrong semantic for a fresh detection in the first
+    place: a fresh detection is a new answer to "where are the regions?",
+    but merging let a stale MACHINE box from a prior pass (left behind by
+    the documented default `clear_detection=False` requeue) accumulate
+    forever and keep overriding the new pass's own derived status (e.g. a
+    requeued `detection_failed` item that now finds nothing landed in
+    `verify_rejected` from the stale box instead of `no_region_box`).
+    Fix: a new `_ItemTask.reverify: bool = False` (`state.py`), set ONLY
+    at Path 1 (`runner.py`, next to `pending_merge = True`), and read at
+    the not-visible branch instead of `pending_merge`. `bulk_writer._merge`
+    now branches three ways: `reverify` -> `merge_boxes_for_write`
+    (unchanged Path 1 behavior); `pending_merge` (fresh detection) -> keep
+    only stored boxes `region_boxes.is_human_owned` recognizes and REPLACE
+    every machine-sourced one with this pass's own findings; neither ->
+    plain replace (unchanged for every other write path, e.g.
+    `accept_without_vlm`'s sanity-reject branch). Red-then-green: reverted
+    `runner.py`'s `if t.reverify:` back to `if t.pending_merge:` turns
+    `test_region_fresh_detection_replaces_machine_b1_m1.py`'s B1 test red;
+    reverted `bulk_writer._merge`'s `pending_merge` branch back to
+    `merge_boxes_for_write` turns 3 of that file's 4 tests red.
+  - **M2: the ported `pending_verification` requeue query selected items
+    with nothing to re-verify.** A `REQUEUEABLE_STATUSES` item's box(es)
+    are always `rejected` (never `proposed` -- `derive_status` would
+    already report `pending_verification` if one were), so the worker's
+    Path 1 guard (`proposed_stored or t.detector_region_in_source is not
+    None`) always failed for a requeued item and it silently ran a fresh
+    detection pass instead -- the documented operator action ("Re-verify
+    boxes the previous verify prompt rejected") did something else
+    entirely. Fix: `apply_requeue`, for `target=pending_verification`,
+    now rewrites each non-human `rejected` box to `state='proposed',
+    rejection_reason=None` before flipping the item's status; an item
+    left with no `proposed` box after that (its only box(es) are
+    human-owned, or it has none at all) is skipped rather than moved to a
+    mismatched `pending_verification` with nothing to re-verify. The
+    false claim at `runner.py` ("reaching this line already proved
+    `region_status` is a pending_detection alias") is corrected and now
+    logs `region_pending_verification_fallthrough` if that invariant is
+    ever violated (stale/pre-fix data, a direct write). Red-then-green:
+    `tests/curation/test_region_requeue.py` (3 tests) and a new
+    `tests/curation/test_region_requeue_then_worker_m2.py` (requeue, then
+    drive the real streaming worker end-to-end and confirm Path 1 runs,
+    not a fresh detection) all go red against the un-fixed query/merge.
+  - **M3: `clear_detection` (and the fresh-detection replace above) only
+    protected human-CREATED boxes, not a human's accept/reject VERDICT on
+    a machine-created box.** The W8a per-box edit routes (`PATCH
+    /crops/{id}/regions/{box_id}`, `POST /regions/batch_box_state`, and a
+    `PUT .../regions` patch of an existing box) change `state` but left
+    `source`/`detector` exactly as the machine wrote them, so
+    `source == 'human'` alone never recognized the human's action.
+    Fix: those three write paths now also stamp
+    `rejection_reason=REJECT_REASON_HUMAN` when the human sets `state=
+    'rejected'` (matching `boxes_with_status`'s whole-set path); new
+    `region_boxes.is_human_owned(box)` (`source == 'human' or
+    rejection_reason == REJECT_REASON_HUMAN or text_source == 'human'`)
+    is now the shared criterion both `apply_requeue`'s `clear_detection`
+    box-drop and `bulk_writer._merge`'s fresh-detection replace use,
+    replacing the narrower `source == 'human'` check both had. The
+    CHANGELOG wording above is corrected accordingly -- "never a human's"
+    was only ever true for a human-created box.
+  - **m4: an empty batch skipped validation on two routes.**
+    `batch_set_crop_regions` (`PUT /crops/batch_regions`) and
+    `batch_set_region_box_state` (`POST /regions/batch_box_state`) both
+    returned 200 for an empty `crop_ids`/`targets` list before their
+    `_check_box_states`/`validate_box_state` call ever ran, so a bogus
+    `state` alongside an empty target list was silently accepted. Fix:
+    validation now runs unconditionally, before the empty-input early
+    return (which still short-circuits to a 0-updated no-op once
+    validation passes).
+  - **Nit: the requeue breakdown's numbers didn't reconcile with its own
+    item total, and a boxless cohort rendered an empty breakdown.** A
+    nested aggregation has no element to bucket a zero-box item under (not
+    even `NONE_BUCKET`), so a cohort of entirely `no_region_box`/
+    `no_region_visible`/unseeded items showed nothing where the
+    pre-nested-query version showed an explicit `(none)` bucket -- a real
+    regression, now fixed with a new `no_box` field (a sibling, non-nested
+    `filter` aggregation counting ITEMS, so `total - no_box` is exactly
+    the item count with at least one box). The by-detector/by-reason
+    buckets still count BOXES and can still exceed `total - no_box` for a
+    genuinely multi-box item with boxes in different buckets -- documented
+    in `requeue_breakdown`'s docstring as inherent to box-level bucketing
+    (an exact per-bucket item count would need `reverse_nested`, not worth
+    the complexity for a dry-run report), not a bug. The CLI's dry-run
+    header is relabeled "items selected" (was "regions selected", which
+    read as boxes given the per-detector/reason lines directly below it).
+  New/changed tests: `tests/curation/test_region_fresh_detection_replaces_
+  machine_b1_m1.py` (new -- B1, M1 stale-machine-replace, and the combined
+  human+machine case), `tests/curation/test_region_requeue_then_worker_m2.py`
+  (new), `tests/curation/test_region_requeue.py` (3 new + 1 extended +
+  `no_box`/relabel assertions), `tests/curation/test_region_boxes.py`
+  (`is_human_owned` unit tests + an `apply_put_boxes` reject-stamp test),
+  `tests/curation/test_regions_boxes_edit.py` (6 new: 2 empty-batch
+  validation, 2 empty-batch no-op, 2 human-reject-reason stamping),
+  `tests/curation/test_region_write_occ_m1.py` (seeded box now carries
+  `source='human'`, matching what a real concurrent PUT stamps -- the
+  fresh-detection fix now keys survival off that, not off being merely
+  unrecognized as machine-owned).
 - **W2b-finish: independent re-verification of the Opus review fix pass
   (2026-09-27), plus merging in W2's reviewed config-store hot reload.**
   Merged `main` (W2 config store hot reload, `op_global_configs`, P3F

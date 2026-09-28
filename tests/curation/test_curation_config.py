@@ -169,6 +169,29 @@ def test_from_env_probe_actionable_min_confidence_unset_stays_default(
 
 
 # =============================================================================
+# OP_REGION_MAX_BOXES_PER_WRITE (W8: served abuse guard, human box lists are
+# unbounded -- this caps the element count of one write request, not a
+# labeling rule)
+# =============================================================================
+
+
+def test_region_max_boxes_per_write_default_is_500() -> None:
+    assert CurationConfig().region_max_boxes_per_write == 500
+
+
+def test_from_env_overrides_region_max_boxes_per_write(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_REGION_MAX_BOXES_PER_WRITE', '250')
+    assert CurationConfig.from_env().region_max_boxes_per_write == 250
+
+
+def test_from_env_region_max_boxes_per_write_unset_stays_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv('OP_REGION_MAX_BOXES_PER_WRITE', raising=False)
+    assert CurationConfig.from_env().region_max_boxes_per_write == 500
+
+
+# =============================================================================
 # OP_SOURCE_PATH_ALIASES (named source roots served at /images/root/{alias})
 # =============================================================================
 

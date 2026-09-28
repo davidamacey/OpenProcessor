@@ -34,7 +34,12 @@ still building (first boot also downloads weights), so the container
 healthcheck probes the flag rather than the socket.
 
 ```jsonc
-{"status": "healthy", "model": "sam3", "device": "cuda:0", "loaded": true, "instances": 2}
+{
+  "status": "healthy", "model": "sam3", "device": "cuda:0", "loaded": true, "instances": 2,
+  "max_candidates": 128,       // this server's top-K ceiling
+  "default_min_score": 0.5     // score floor a request gets when it omits min_score
+                                // (the upstream Sam3Processor's own confidence_threshold)
+}
 ```
 
 ### `POST /segment`
@@ -43,7 +48,9 @@ healthcheck probes the flag rather than the socket.
 {
   "crop_jpeg_b64": "<base64 jpeg>",  // data: prefix tolerated
   "text_prompt": "shipping label",    // REQUIRED — no default
-  "max_candidates": 4                // optional, top-K by score
+  "max_candidates": 4,                // optional, top-K by score, 1-128
+  "min_score": 0.4                    // optional score floor for this call;
+                                       // omit for the processor default (GET /health)
 }
 ```
 
@@ -66,7 +73,7 @@ Returns:
 
 ### `POST /segment/batch`
 
-`{crops_jpeg_b64: [...], text_prompt, max_candidates}` → `results[]`
+`{crops_jpeg_b64: [...], text_prompt, max_candidates, min_score}` → `results[]`
 aligned 1:1 with the request order. N images run under one processor
 lock and one HTTP round trip. The caller chunks; 4–16 per request is the
 useful range — bigger batches hold a processor longer and cut overall

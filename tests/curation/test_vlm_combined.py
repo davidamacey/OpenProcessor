@@ -8,8 +8,13 @@ back to the separate-call paths.
 The upstream VLM's own wire-reply keys (what the reply's JSON object is
 keyed by) are read via ``RegionFields`` in ``vlm_labeler.py`` rather than
 hardcoded — these fixtures use the generic ``RegionFields``
-defaults (``region_visible``, ``region_bbox_correct``, ``region_text``,
-``region_confidence``) so the tests stay domain-neutral.
+defaults (``region_visible``, ``region_boxes`` -- W8 list shape, one
+verdict object per candidate box: ``box`` (1-based), ``region_bbox_correct``,
+``region_text``, ``region_confidence``) so the tests stay domain-neutral.
+
+Single-box overlay-drawing coverage (numbered tag rendering) lives in
+``tests/curation/test_region_overlay.py`` -- this file only exercises
+``VlmLabeler``'s own request/response wiring.
 """
 
 from __future__ import annotations
@@ -28,7 +33,6 @@ from src.services.labeling.vlm_labeler import (
     CombinedTransportError,
     VlmCombinedReply,
     VlmLabeler,
-    _draw_bbox_overlay,
 )
 
 
@@ -58,17 +62,6 @@ def _make_jpeg(size: tuple[int, int] = (200, 100)) -> bytes:
     return buf.getvalue()
 
 
-class TestDrawBboxOverlay:
-    def test_returns_bytes_for_valid_jpeg(self) -> None:
-        out = _draw_bbox_overlay(_make_jpeg(), (0.1, 0.1, 0.5, 0.5))
-        assert out is not None
-        # Re-decodable.
-        Image.open(io.BytesIO(out)).verify()
-
-    def test_returns_none_on_garbage(self) -> None:
-        assert _draw_bbox_overlay(b'not an image', (0.1, 0.1, 0.5, 0.5)) is None
-
-
 class TestLabelCombined:
     @pytest.mark.asyncio
     async def test_parses_full_reply(self) -> None:
@@ -77,25 +70,31 @@ class TestLabelCombined:
                 'class_id': 12,
                 'class_confidence': 'high',
                 'region_visible': True,
-                'region_bbox_correct': True,
-                'region_text': 'ABC1234',
-                'region_confidence': 'medium',
+                'region_boxes': [
+                    {
+                        'box': 1,
+                        'region_bbox_correct': True,
+                        'region_text': 'ABC1234',
+                        'region_confidence': 'medium',
+                    }
+                ],
             }
         )
         reply = await labeler.label_combined(
             'crop-1',
             _make_jpeg(),
             class_names=['widget', 'gadget'],
-            region_bbox_norm=(0.1, 0.7, 0.9, 0.95),
+            region_bboxes_norm=[(0.1, 0.7, 0.9, 0.95)],
         )
         assert isinstance(reply, VlmCombinedReply)
         assert reply.img_id == 'crop-1'
         assert reply.class_id == 12
         assert reply.class_confidence == 'high'
         assert reply.region_visible is True
-        assert reply.region_bbox_correct is True
-        assert reply.region_text_reply == 'ABC1234'
-        assert reply.region_confidence == 'medium'
+        assert len(reply.region_boxes) == 1
+        assert reply.region_boxes[0].bbox_correct is True
+        assert reply.region_boxes[0].text_reply == 'ABC1234'
+        assert reply.region_boxes[0].confidence == 'medium'
         # JSON-mode flag must be set so the upstream server grammar-
         # constrains output.
         sent = labeler._client.post.await_args.kwargs['json']
@@ -107,20 +106,21 @@ class TestLabelCombined:
             {
                 'class_id': None,
                 'region_visible': True,
-                'region_bbox_correct': False,
-                'region_text': None,
+                'region_boxes': [
+                    {'box': 1, 'region_bbox_correct': False, 'region_text': None},
+                ],
             }
         )
         reply = await labeler.label_combined(
             'crop-2',
             _make_jpeg(),
             class_names=None,
-            region_bbox_norm=(0.1, 0.7, 0.9, 0.95),
+            region_bboxes_norm=[(0.1, 0.7, 0.9, 0.95)],
         )
         assert reply.class_id is None
         assert reply.region_visible is True
-        assert reply.region_bbox_correct is False
-        assert reply.region_text_reply is None
+        assert reply.region_boxes[0].bbox_correct is False
+        assert reply.region_boxes[0].text_reply is None
 
     @pytest.mark.asyncio
     async def test_invalid_json_raises_combined_parse_failure(self) -> None:
@@ -147,12 +147,37 @@ class TestLabelCombined:
             {
                 'class_id': 1,
                 'region_visible': True,
-                'region_text': 'A' * 100,
+                'region_boxes': [{'box': 1, 'region_text': 'A' * 100}],
             }
         )
-        reply = await labeler.label_combined('crop-6', _make_jpeg(), class_names=['widget'])
-        assert reply.region_text_reply is not None
-        assert len(reply.region_text_reply) == 32
+        reply = await labeler.label_combined(
+            'crop-6',
+            _make_jpeg(),
+            class_names=['widget'],
+            region_bboxes_norm=[(0.1, 0.7, 0.9, 0.95)],
+        )
+        assert reply.region_boxes[0].text_reply is not None
+        assert len(reply.region_boxes[0].text_reply) == 32
+
+    @pytest.mark.asyncio
+    async def test_no_candidate_boxes_skips_box_verdict_parsing(self) -> None:
+        """N=0: no ``region_boxes`` key required in the reply at all."""
+        labeler = _make_labeler({'class_id': 0, 'region_visible': False})
+        reply = await labeler.label_combined('crop-7', _make_jpeg(), class_names=['widget'])
+        assert reply.region_boxes == []
+
+    @pytest.mark.asyncio
+    async def test_missing_region_boxes_key_raises_when_candidates_offered(self) -> None:
+        """D-B: N>=1 candidates offered but the reply lacks the list key
+        is a hard parse failure -- no flat-shape fallback."""
+        labeler = _make_labeler({'class_id': 0, 'region_visible': True})
+        with pytest.raises(CombinedParseFailure):
+            await labeler.label_combined(
+                'crop-8',
+                _make_jpeg(),
+                class_names=['widget'],
+                region_bboxes_norm=[(0.1, 0.7, 0.9, 0.95)],
+            )
 
 
 class TestLabelCombinedBatch:
@@ -176,9 +201,14 @@ class TestLabelCombinedBatch:
                     'class_id': 0,
                     'class_confidence': 'high',
                     'region_visible': True,
-                    'region_bbox_correct': True,
-                    'region_text': 'ABC123',
-                    'region_confidence': 'high',
+                    'region_boxes': [
+                        {
+                            'box': 1,
+                            'region_bbox_correct': True,
+                            'region_text': 'ABC123',
+                            'region_confidence': 'high',
+                        }
+                    ],
                     'make': 'Ford',
                     'model': 'F150',
                 },
@@ -187,9 +217,9 @@ class TestLabelCombinedBatch:
                     'class_id': 1,
                     'class_confidence': 'medium',
                     'region_visible': True,
-                    'region_bbox_correct': False,
-                    'region_text': None,
-                    'region_confidence': None,
+                    'region_boxes': [
+                        {'box': 1, 'region_bbox_correct': False, 'region_text': None},
+                    ],
                     'make': '',
                     'model': '',
                 },
@@ -197,8 +227,7 @@ class TestLabelCombinedBatch:
                     'img': 3,
                     'class_id': None,
                     'region_visible': False,
-                    'region_bbox_correct': None,
-                    'region_text': None,
+                    'region_boxes': [{'box': 1, 'region_bbox_correct': None}],
                     'make': '',
                     'model': '',
                 },
@@ -206,7 +235,9 @@ class TestLabelCombinedBatch:
         )
         crops = [
             CombinedCrop(
-                crop_id=f'c{i}', jpeg_bytes=_make_jpeg(), region_bbox_norm=(0.1, 0.7, 0.9, 0.95)
+                crop_id=f'c{i}',
+                jpeg_bytes=_make_jpeg(),
+                region_bboxes_norm=[(0.1, 0.7, 0.9, 0.95)],
             )
             for i in range(1, 4)
         ]
@@ -214,13 +245,13 @@ class TestLabelCombinedBatch:
         assert set(out.keys()) == {'c1', 'c2', 'c3'}
         # Happy path: detected.
         assert out['c1'] is not None
-        assert out['c1'].region_bbox_correct is True
-        assert out['c1'].region_text_reply == 'ABC123'
+        assert out['c1'].region_boxes[0].bbox_correct is True
+        assert out['c1'].region_boxes[0].text_reply == 'ABC123'
         assert out['c1'].make == 'Ford'
         # Bbox-wrong-but-region-visible.
         assert out['c2'] is not None
         assert out['c2'].region_visible is True
-        assert out['c2'].region_bbox_correct is False
+        assert out['c2'].region_boxes[0].bbox_correct is False
         # No-region-visible.
         assert out['c3'] is not None
         assert out['c3'].region_visible is False
@@ -229,7 +260,12 @@ class TestLabelCombinedBatch:
     async def test_payload_is_multi_image_with_per_image_directives(self) -> None:
         labeler = _make_labeler(
             [
-                {'img': i, 'class_id': 0, 'region_visible': True, 'region_bbox_correct': True}
+                {
+                    'img': i,
+                    'class_id': 0,
+                    'region_visible': True,
+                    'region_boxes': [{'box': 1, 'region_bbox_correct': True}],
+                }
                 for i in (1, 2)
             ]
         )
@@ -237,11 +273,11 @@ class TestLabelCombinedBatch:
             CombinedCrop(
                 crop_id='a',
                 jpeg_bytes=_make_jpeg(),
-                region_bbox_norm=(0.1, 0.7, 0.9, 0.95),
+                region_bboxes_norm=[(0.1, 0.7, 0.9, 0.95)],
                 classify=True,
             ),
             CombinedCrop(
-                crop_id='b', jpeg_bytes=_make_jpeg(), region_bbox_norm=None, classify=False
+                crop_id='b', jpeg_bytes=_make_jpeg(), region_bboxes_norm=[], classify=False
             ),
         ]
         await labeler.label_combined_batch(crops, class_names=['widget'])
@@ -260,14 +296,21 @@ class TestLabelCombinedBatch:
     async def test_short_array_returns_none_for_missing_entries(self) -> None:
         # Only 1 entry in the response — second crop should sentinel to None.
         labeler = _make_labeler(
-            [{'img': 1, 'class_id': 0, 'region_visible': True, 'region_bbox_correct': True}]
+            [
+                {
+                    'img': 1,
+                    'class_id': 0,
+                    'region_visible': True,
+                    'region_boxes': [{'box': 1, 'region_bbox_correct': True}],
+                }
+            ]
         )
         crops = [
             CombinedCrop(
-                crop_id='c1', jpeg_bytes=_make_jpeg(), region_bbox_norm=(0.1, 0.7, 0.9, 0.95)
+                crop_id='c1', jpeg_bytes=_make_jpeg(), region_bboxes_norm=[(0.1, 0.7, 0.9, 0.95)]
             ),
             CombinedCrop(
-                crop_id='c2', jpeg_bytes=_make_jpeg(), region_bbox_norm=(0.1, 0.7, 0.9, 0.95)
+                crop_id='c2', jpeg_bytes=_make_jpeg(), region_bboxes_norm=[(0.1, 0.7, 0.9, 0.95)]
             ),
         ]
         out = await labeler.label_combined_batch(crops, class_names=['widget'])
@@ -280,7 +323,7 @@ class TestLabelCombinedBatch:
         # caller can leave them in pending for the next poll.
         labeler = _make_labeler('')
         crops = [
-            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=_make_jpeg(), region_bbox_norm=None)
+            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=_make_jpeg(), region_bboxes_norm=[])
             for i in range(1, 4)
         ]
         out = await labeler.label_combined_batch(crops, class_names=['widget'])
@@ -293,8 +336,8 @@ class TestLabelCombinedBatch:
         labeler = _make_labeler({})
         labeler._client.post = AsyncMock(side_effect=httpx.ConnectError('boom'))
         crops = [
-            CombinedCrop(crop_id='c1', jpeg_bytes=_make_jpeg(), region_bbox_norm=None),
-            CombinedCrop(crop_id='c2', jpeg_bytes=_make_jpeg(), region_bbox_norm=None),
+            CombinedCrop(crop_id='c1', jpeg_bytes=_make_jpeg(), region_bboxes_norm=[]),
+            CombinedCrop(crop_id='c2', jpeg_bytes=_make_jpeg(), region_bboxes_norm=[]),
         ]
         with pytest.raises(CombinedTransportError):
             await labeler.label_combined_batch(crops, class_names=['widget'])
@@ -308,18 +351,19 @@ class TestLabelCombinedBatch:
                 'class_id': 0,
                 'class_confidence': 'high',
                 'region_visible': True,
-                'region_bbox_correct': True,
-                'region_text': 'XYZ789',
+                'region_boxes': [{'box': 1, 'region_bbox_correct': True, 'region_text': 'XYZ789'}],
             }
         )
         crops = [
             CombinedCrop(
-                crop_id='only', jpeg_bytes=_make_jpeg(), region_bbox_norm=(0.1, 0.7, 0.9, 0.95)
+                crop_id='only',
+                jpeg_bytes=_make_jpeg(),
+                region_bboxes_norm=[(0.1, 0.7, 0.9, 0.95)],
             ),
         ]
         out = await labeler.label_combined_batch(crops, class_names=['widget'])
         assert out['only'] is not None
-        assert out['only'].region_text_reply == 'XYZ789'
+        assert out['only'].region_boxes[0].text_reply == 'XYZ789'
         sent = labeler._client.post.await_args.kwargs['json']
         # Single-image path uses response_format json_object.
         assert sent.get('response_format') == {'type': 'json_object'}
@@ -329,16 +373,45 @@ class TestLabelCombinedBatch:
         # 8 crops with max_images_per_call=4 → 2 upstream calls.
         labeler = _make_labeler(
             [
-                {'img': i + 1, 'class_id': 0, 'region_visible': True, 'region_bbox_correct': True}
+                {
+                    'img': i + 1,
+                    'class_id': 0,
+                    'region_visible': True,
+                    'region_boxes': [{'box': 1, 'region_bbox_correct': True}],
+                }
                 for i in range(4)
             ]
         )
         labeler.max_images_per_call = 4
         crops = [
-            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=_make_jpeg(), region_bbox_norm=None)
+            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=_make_jpeg(), region_bboxes_norm=[])
             for i in range(8)
         ]
         out = await labeler.label_combined_batch(crops, class_names=['widget'])
         assert len(out) == 8
         # Both chunks made one upstream call each.
         assert labeler._client.post.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_multi_box_reply_aligns_by_position(self) -> None:
+        """W8: 2 candidate boxes on one crop -> 2 verdicts, aligned by
+        1-based ``box`` number."""
+        labeler = _make_labeler(
+            {
+                'class_id': 0,
+                'region_visible': True,
+                'region_boxes': [
+                    {'box': 1, 'region_bbox_correct': True, 'region_confidence': 'high'},
+                    {'box': 2, 'region_bbox_correct': False, 'region_confidence': 'low'},
+                ],
+            }
+        )
+        reply = await labeler.label_combined(
+            'crop-multi',
+            _make_jpeg(),
+            class_names=['widget'],
+            region_bboxes_norm=[(0.1, 0.1, 0.4, 0.4), (0.5, 0.5, 0.9, 0.9)],
+        )
+        assert len(reply.region_boxes) == 2
+        assert reply.region_boxes[0].bbox_correct is True
+        assert reply.region_boxes[1].bbox_correct is False

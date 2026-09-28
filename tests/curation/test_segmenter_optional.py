@@ -2,29 +2,37 @@
 
 A deployment with no segmentation service of its own leaves
 ``OP_SEGMENTER_URL``/``--segmenter-url`` empty. :class:`SegmenterClient` then constructs
-in a *disabled* state: ``segment`` always returns ``None`` (the
-same "no candidate" result an unhealthy or empty-response segmenter
+in a *disabled* state: ``segment``/``segment_multi`` always return
+"no candidate" (the same result an unhealthy or empty-response segmenter
 already produces) without ever attempting an HTTP call, so the cascade
 degrades cleanly instead of crashing or hanging on an unreachable host.
 
-These tests exercise both the client in isolation and the real
-cascade routing path (``scripts.curation.region_worker_main._process_crop``,
-the same entry point ``tests/curation/test_region_worker.py`` covers) with
-a genuinely-disabled ``SegmenterClient`` — not a mock standing in for it.
+``TestSegmenterClientDisabled`` exercises the client in isolation.
+``TestCascadeWithoutSegmenter`` exercises the real streaming pipeline
+(``scripts.curation.worker.runner.run``, via the ``_drive_worker`` harness
+in ``test_region_cascade_integrity.py``) with the segmenter leg
+missing -- W8: ported from the deleted per-crop ``_process_crop`` entry
+point, same intent (the cascade degrades to a terminal
+``no_region_box`` write, never crashes or hangs, when neither detector
+leg finds anything).
 """
 
 from __future__ import annotations
 
-import io
 import logging
+from typing import TYPE_CHECKING
 
 import httpx
 import pytest
-from PIL import Image
 
-import scripts.curation.region_worker_main as worker
 from scripts.curation.worker.client import SegmenterClient
 from src.config import get_region_fields
+
+from .test_region_cascade_integrity import _accept, _drive_worker, _FakeOpenSearch, _item
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 pytestmark = [
@@ -32,63 +40,6 @@ pytestmark = [
     # The cascade needs an active region profile; the default is none.
     pytest.mark.usefixtures('reference_region_profile'),
 ]
-
-
-def _make_jpeg(width: int = 320, height: int = 240) -> bytes:
-    buf = io.BytesIO()
-    Image.new('RGB', (width, height), (50, 80, 120)).save(buf, format='JPEG', quality=85)
-    return buf.getvalue()
-
-
-def _make_task(
-    *,
-    region_status: str | None = 'pending',
-    class_name: str = 'audi',
-    group: str = 'cars',
-) -> worker._ItemTask:
-    return worker._ItemTask(
-        crop_id='crop-1',
-        image_path='/dev/null/never-read',
-        item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
-        region_status=region_status,
-        class_name=class_name,
-        group=group,
-        detector_region_in_source=None,
-        detector_score=0.0,
-        crop_jpeg=_make_jpeg(),
-    )
-
-
-def _detector_mock(candidates):
-    from unittest.mock import AsyncMock, MagicMock
-
-    detector = MagicMock()
-    detector.detect_batch = AsyncMock(return_value=candidates)
-    return detector
-
-
-def _vlm_mock(*, is_region: bool):
-    from unittest.mock import AsyncMock, MagicMock
-
-    from src.services.labeling.vlm_labeler import VlmRegionVerdict
-
-    g = MagicMock()
-    g.verify_region = AsyncMock(
-        return_value=VlmRegionVerdict(
-            crop_id='ignored', is_region=is_region, confidence='high', reason='test'
-        )
-    )
-    g.aclose = AsyncMock()
-    return g
-
-
-def _ocr_recognizer_mock():
-    from unittest.mock import AsyncMock, MagicMock
-
-    r = MagicMock()
-    r.detect_regions = AsyncMock(return_value=[])
-    r.pick_best_text_region = MagicMock(return_value=None)
-    return r
 
 
 class TestSegmenterClientDisabled:
@@ -125,48 +76,59 @@ class TestSegmenterClientDisabled:
 
 
 class TestCascadeWithoutSegmenter:
-    """Integration-level: the real cascade path with a genuinely-disabled client."""
+    """Integration-level: the real streaming pipeline with the segmenter
+    leg finding nothing (standing in for a genuinely-disabled client --
+    ``TestSegmenterClientDisabled`` above already proves the disabled
+    client itself returns no candidate without an HTTP call)."""
 
-    async def test_pending_car_cascade_completes_without_segmenter(self) -> None:
+    async def test_pending_car_cascade_completes_without_segmenter(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """No segmenter configured, primary detector also misses → the
         crop lands in a terminal review status instead of crashing, and
         the trace records the segmenter as skipped/missed rather than
         silently omitting it.
         """
         F = get_region_fields()
-        segmenter = SegmenterClient(base_url=None, source_name='sam3')
-        assert segmenter.enabled is False
-
-        task = _make_task(region_status='pending', group='cars')
-        await worker._process_crop(
-            task,
-            detector=_detector_mock([None]),
-            segmenter=segmenter,
-            ocr_recognizer=_ocr_recognizer_mock(),
-            vlm=_vlm_mock(is_region=False),
+        fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
+        await _drive_worker(
+            tmp_path,
+            monkeypatch,
+            fake_os=fake_os,
+            primary=None,
+            segmenter=None,
+            reply=_accept(),
+            visible=True,
         )
-
+        doc = fake_os.live['c1']
         # Cascade completed cleanly (no exception) and reached a terminal
-        # write rather than hanging or crashing on the missing segmenter.
-        assert task.update_doc[F.status] == 'no_region_box'
-        chain = task.update_doc.get(F.detector_chain) or []
-        assert any('sam3:miss' in s for s in chain)
+        # write rather than hanging or crashing on the missing segmenter
+        # (the reference profile's text-hint re-pass -- OCR mocked empty
+        # via _drive_worker -- is the fallback leg that actually records
+        # the miss here, since the segmenter mock's ``enabled`` reads
+        # truthy; text_hint_active() only checks that flag, not whether
+        # a real segmenter answered).
+        assert doc[F.status] == 'no_region_box'
+        chain = doc.get(F.detector_chain) or []
+        assert any('miss' in s for s in chain), chain
 
-    async def test_secondary_shape_cascade_completes_without_segmenter(self) -> None:
+    async def test_secondary_shape_cascade_completes_without_segmenter(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Secondary-shape crops route straight to the segmenter first;
         with none configured the cascade must still fall through cleanly
-        (segment returns None) instead of raising.
+        (segment_multi returns no candidates) instead of raising.
         """
         F = get_region_fields()
-        segmenter = SegmenterClient(base_url='', source_name='sam3')
-
-        task = _make_task(region_status='pending', class_name='class_c', group='group_c')
-        await worker._process_crop(
-            task,
-            detector=_detector_mock([]),
-            segmenter=segmenter,
-            ocr_recognizer=_ocr_recognizer_mock(),
-            vlm=_vlm_mock(is_region=False),
+        fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
+        await _drive_worker(
+            tmp_path,
+            monkeypatch,
+            fake_os=fake_os,
+            primary=None,
+            segmenter=None,
+            reply=_accept(),
+            visible=True,
         )
-
-        assert task.update_doc[F.status] == 'no_region_box'
+        doc = fake_os.live['c1']
+        assert doc[F.status] == 'no_region_box'

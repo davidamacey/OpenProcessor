@@ -37,6 +37,7 @@ from src.config.region_rejection import (
     rejection_reason_catalog,
 )
 from src.services.detection.cascade_detect import RegionCandidate
+from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import (
     CombinedCrop,
     CombinedParseFailure,
@@ -63,9 +64,9 @@ def _reply(bbox_correct: bool | None) -> VlmCombinedReply:
     return VlmCombinedReply(
         img_id='c1',
         region_visible=True,
-        region_bbox_correct=bbox_correct,
-        region_text_reply='DNV20',
-        region_confidence='high',
+        region_boxes=[
+            VlmBoxVerdict(box=1, bbox_correct=bbox_correct, confidence='high', text_reply='DNV20')
+        ],
         make='Chevrolet',
     )
 
@@ -113,16 +114,20 @@ async def _run(
 def _assert_no_verdict_reject(doc: dict[str, Any]) -> None:
     F = get_region_fields()
     assert doc[F.status] == 'verify_rejected'
-    assert doc[F.rejection_reason] == REJECT_REASON_NO_VERDICT
+    box = doc[F.boxes][0]
+    assert box['rejection_reason'] == REJECT_REASON_NO_VERDICT
+    assert box['state'] == 'rejected'
     # No verdict was given: null, never false.
-    assert F.bbox_correct in doc
-    assert doc[F.bbox_correct] is None
-    # The box is kept as a reviewable candidate, never as an accepted region.
-    assert doc[F.bbox_norm] is None
-    assert doc[F.candidate_bbox_norm] is not None
-    assert doc[F.candidate_detector] == _profile().detector_model
+    assert box['bbox_correct'] is None
+    # The box is kept as a reviewable candidate (with its geometry), never
+    # accepted.
+    assert box['bbox_norm'] is not None
+    assert box['detector'] == _profile().detector_model
     det = _profile().detector_model
     assert f'{det}:combined_verify_reject:{REJECT_REASON_NO_VERDICT}' in doc[F.detector_chain]
+    # R-M4: the cap-reached write rejects every candidate -- never
+    # `verified=True` just because a reply was eventually received.
+    assert doc[F.verified] is False
 
 
 class TestCombinedNoVerdictIsCapped:
@@ -193,6 +198,15 @@ class TestCombinedNoVerdictIsCapped:
         def requeue(n: int) -> None:
             if n == 1:
                 fake_os.live['c1'][F.status] = 'pending_detection'
+                # W8c: a real requeue-to-scratch (region_requeue.apply_requeue
+                # with clear_detection=True) drops this pass's machine box
+                # so the next fresh-detection pass merges onto an empty
+                # list -- a bare status flip that left the accepted box in
+                # place would make the worker's own merge-not-replace fix
+                # (r1) keep re-deriving `detected` from it forever.
+                fake_os.live['c1'][F.boxes] = []
+                fake_os.live['c1'][F.count] = 0
+                fake_os.live['c1'][F.rejected_count] = 0
                 fake_os.searchable = copy.deepcopy(fake_os.live)
 
         mocks = await _run(
@@ -204,7 +218,7 @@ class TestCombinedNoVerdictIsCapped:
             on_write=requeue,
         )
         assert fake_os.writes[0][1][F.status] == 'detected'
-        assert fake_os.writes[0][1][F.rejection_reason] is None
+        assert fake_os.writes[0][1][F.boxes][0]['rejection_reason'] is None
         assert len(fake_os.writes) == 2
         _assert_no_verdict_reject(fake_os.writes[1][1])
         assert mocks['vlm'].label_combined_batch.await_count == 3 + 3
@@ -218,8 +232,9 @@ class TestCombinedNoVerdictIsCapped:
         await _run(tmp_path, monkeypatch, fake_os, combined=_scripted(_reply(None), _reply(False)))
         F = get_region_fields()
         doc = fake_os.writes[0][1]
-        assert doc[F.rejection_reason] == REJECT_REASON_VERIFIER
-        assert doc[F.bbox_correct] is False
+        box = doc[F.boxes][0]
+        assert box['rejection_reason'] == REJECT_REASON_VERIFIER
+        assert box['bbox_correct'] is False
 
     @pytest.mark.asyncio
     async def test_transport_failure_keeps_retrying_and_never_writes(
@@ -270,7 +285,7 @@ class TestVisibilityNoVerdictIsCapped:
         )
         F = get_region_fields()
         assert mocks['vlm'].region_visible_batch.await_count == DEFAULT_MAX_NO_VERDICT_ATTEMPTS
-        mocks['seg'].segment.assert_awaited_once()
+        mocks['seg'].segment_multi.assert_awaited_once()
         doc = fake_os.writes[0][1]
         assert doc[F.status] == 'detected'
         assert 'vlm_visible:no_verdict' in doc[F.detector_chain]
@@ -291,7 +306,7 @@ class TestVisibilityNoVerdictIsCapped:
         mocks = await _run(tmp_path, monkeypatch, fake_os, primary=None, visible=visible)
         F = get_region_fields()
         assert mocks['vlm'].region_visible_batch.await_count == 2
-        mocks['seg'].segment.assert_not_awaited()
+        mocks['seg'].segment_multi.assert_not_awaited()
         assert fake_os.writes[0][1][F.status] == 'no_region_visible'
 
 
@@ -304,10 +319,7 @@ class TestLabelerSeparatesTransportFromNoVerdict:
     @pytest.mark.asyncio
     @pytest.mark.parametrize('n_crops', [1, 3])
     async def test_batch_http_failure_raises_transport_failure(self, n_crops: int) -> None:
-        crops = [
-            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=b'x', region_bbox_norm=None)
-            for i in range(n_crops)
-        ]
+        crops = [CombinedCrop(crop_id=f'c{i}', jpeg_bytes=b'x') for i in range(n_crops)]
         with pytest.raises(CombinedTransportError):
             await self._labeler().label_combined_batch(crops, draw_overlay=False)
 
@@ -323,9 +335,7 @@ class TestLabelerSeparatesTransportFromNoVerdict:
         lab._post_chat = AsyncMock(  # type: ignore[method-assign]
             return_value={'choices': [{'message': {'content': 'no json'}}]}
         )
-        crops = [
-            CombinedCrop(crop_id=f'c{i}', jpeg_bytes=b'x', region_bbox_norm=None) for i in range(2)
-        ]
+        crops = [CombinedCrop(crop_id=f'c{i}', jpeg_bytes=b'x') for i in range(2)]
         assert await lab.label_combined_batch(crops, draw_overlay=False) == {
             'c0': None,
             'c1': None,
@@ -394,6 +404,7 @@ class TestRejectionReasonVocabulary:
 
         from scripts.curation.worker.region_text_stage import accept_without_vlm
         from scripts.curation.worker.state import _ItemTask
+        from scripts.curation.worker.verify import TaskBoxInput
 
         t = _ItemTask(
             crop_id='c1',
@@ -403,11 +414,20 @@ class TestRejectionReasonVocabulary:
             class_name='sedan',
         )
         t.crop_jpeg = b'x'
-        t.candidate_in_crop = (0.5, 0.5, 0.5, 0.6)  # zero width
-        t.candidate_in_source = (0.5, 0.5, 0.5, 0.6)
-        t.candidate_source = 'detector'
+        t.candidates = [
+            TaskBoxInput(
+                bbox_in_crop=(0.5, 0.5, 0.5, 0.6),  # zero width
+                bbox_in_source=(0.5, 0.5, 0.5, 0.6),
+                score=0.9,
+                detector='detector',
+                detector_version='1',
+                source='detector',
+            )
+        ]
         asyncio.run(accept_without_vlm(t, ocr=MagicMock(), profile=_profile()))
-        F = get_region_fields()
-        assert (
-            t.update_doc[F.rejection_reason] == f'{REJECT_REASON_SANITY_PREFIX}degenerate_zero_size'
-        )
+        # W8 B1/M1: the box list is stashed on `t.pending_boxes` (the
+        # writer merges + finalizes ids against the live doc at write
+        # time), not computed straight onto `t.update_doc` any more.
+        assert t.pending_boxes is not None
+        box = t.pending_boxes[0]
+        assert box.rejection_reason == f'{REJECT_REASON_SANITY_PREFIX}degenerate_zero_size'

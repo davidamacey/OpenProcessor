@@ -128,11 +128,20 @@ def _text_rules(profile: Any) -> dict[str, Any] | None:
 
 def region_profile_summary(profile: Any) -> dict[str, Any]:
     """``{name, display_name, display_name_singular, region_class_name,
-    text_reader, reads_text, text_hint_enabled}`` for one
+    text_reader, reads_text, text_hint_enabled, limits}`` for one
     ``DetectionProfile`` -- served on ``GET /health`` and
     ``GET /regions/vocabulary``. THE signal a client keys on to decide
     whether region-scoped UI/routes are available; ``reads_text`` is the
-    one to key text UI on (``text_reader`` is ``'none'`` when false)."""
+    one to key text UI on (``text_reader`` is ``'none'`` when false).
+
+    ``limits.max_boxes_per_write`` (W8) is the served abuse guard on one
+    human region-box write request -- an element count, not a labeling
+    rule. It comes from the bound project's ``CurationConfig``, never a
+    hardcoded number, so Cropwright never duplicates it.
+    """
+    from src.config.curation import get_curation_config
+
+    config = get_curation_config()
     return {
         'name': profile.name,
         'display_name': profile.display_name,
@@ -141,6 +150,7 @@ def region_profile_summary(profile: Any) -> dict[str, Any]:
         'text_reader': profile.text_reader,
         'reads_text': profile.reads_text,
         'text_hint_enabled': profile.text_hint_enabled,
+        'limits': {'max_boxes_per_write': config.region_max_boxes_per_write},
     }
 
 

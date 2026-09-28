@@ -409,5 +409,64 @@ class SegmenterClient:
             rectangularity=(float(top['mask_iou']) if top.get('mask_iou') is not None else None),
         )
 
+    async def segment_multi(self, crop_jpeg: bytes) -> list[RegionCandidate]:
+        """Segment one crop, keeping every candidate (W8 multi-candidate leg).
+
+        Same HTTP call and payload as :meth:`segment` -- the segmenter
+        service already returns its full ``candidates`` list; this just
+        stops discarding everything but the top one. Malformed entries
+        (missing/short ``bbox_norm``) are dropped rather than failing the
+        whole response. Raises :class:`SegmenterAllHostsDown` if every
+        host is UNHEALTHY. Returns ``[]`` on a single-host failure, no
+        candidates, or when this client is disabled.
+        """
+        if not self.enabled:
+            return []
+        t0 = self._now()
+        b64 = base64.b64encode(crop_jpeg).decode('ascii')
+        payload = {
+            'crop_jpeg_b64': b64,
+            'text_prompt': self.text_prompt,
+            'max_candidates': self.max_candidates,
+        }
+        url = await self._pick_healthy_url()
+        timing: dict[str, float] = {}
+        resp = await self._post_with_retry(url, payload, timing=timing)
+        if resp is None:
+            self._record_timings(url, t0, timing, outcome='error', t_end=None)
+            await self._on_failure(url)
+            return []
+
+        try:
+            body = resp.json()
+        except ValueError:
+            t_end = self._now()
+            self._record_timings(url, t0, timing, outcome='error', t_end=t_end)
+            logger.warning('segmenter_bad_json')
+            await self._on_failure(url)
+            return []
+
+        await self._on_success(url)
+
+        cands = body.get('candidates') or []
+        out: list[RegionCandidate] = []
+        for c in cands:
+            bbox = c.get('bbox_norm')
+            if not bbox or len(bbox) != 4:
+                continue
+            out.append(
+                RegionCandidate(
+                    bbox_norm=(float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])),
+                    score=float(c.get('score') or 0.0),
+                    source=self.source_name,
+                    rectangularity=(
+                        float(c['mask_iou']) if c.get('mask_iou') is not None else None
+                    ),
+                )
+            )
+        t_end = self._now()
+        self._record_timings(url, t0, timing, outcome='hit' if out else 'miss', t_end=t_end)
+        return out
+
 
 __all__ = ['SegmenterAllHostsDown', 'SegmenterClient']

@@ -87,6 +87,7 @@ def route_params(slug: str) -> dict[str, str]:
         'tab': 'uncertainty',
         'alias': f'{slug}-source',
         'artifact': 'results.csv',
+        'box_id': 'b1',
     }
 
 
@@ -151,12 +152,22 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/probe/run'): {'json': {'job_id': f'{slug}-job-0001'}},
         ('PUT', '/models/{model_name}/sharing'): {'json': {'shared': True, 'expected_revision': 1}},
         ('PUT', '/crops/{crop_id}/region'): {'json': {'region_bbox_norm': [0.1, 0.1, 0.4, 0.4]}},
-        ('PATCH', '/crops/{crop_id}/region_meta'): {'json': {'region_text': f'{slug}TXT'}},
+        ('PATCH', '/crops/{crop_id}/region_meta'): {
+            'json': {'region_rejection_reason': f'{slug}-note'}
+        },
         ('PUT', '/crops/batch_region'): {
             'json': {'crop_ids': [proposal], 'region_bbox_norm': [0.1, 0.1, 0.4, 0.4]}
         },
         ('POST', '/regions/batch_status'): {
             'json': {'crop_ids': [item], 'region_status': 'false_positive'}
+        },
+        ('PUT', '/crops/{crop_id}/regions'): {
+            'json': {'boxes': [{'box_id': None, 'bbox_norm': [0.1, 0.1, 0.4, 0.4]}]}
+        },
+        ('PUT', '/crops/batch_regions'): {'json': {'crop_ids': [proposal], 'boxes': []}},
+        ('PATCH', '/crops/{crop_id}/regions/{box_id}'): {'json': {'state': 'accepted'}},
+        ('POST', '/regions/batch_box_state'): {
+            'json': {'targets': [{'crop_id': item, 'box_id': 'b1'}], 'state': 'accepted'}
         },
         ('POST', '/test_holdout/freeze'): {'json': {'percent': 10}},
         ('POST', '/review/new_class_proposals/resolve'): {
@@ -328,9 +339,43 @@ def _promoted_model(env: LeakEnv, slug: str) -> None:
     )
 
 
+def _region_box_seeded(env: LeakEnv, slug: str) -> None:
+    """A box ``b1`` on the item, so the per-box PATCH/batch_box_state
+    routes (W8a) have a real box_id to act on. Writes directly into the
+    fake transport's store (not through the app's own PUT
+    /crops/{crop_id}/regions): another sweep call earlier in the same
+    run may already have bumped this item's region_box_seq, which would
+    make a fresh app-level write mint ``b2``/``b3``/... instead of the
+    fixed ``b1`` this route's path param names -- writing the doc
+    directly keeps the seeded id deterministic regardless of sweep
+    order."""
+    from src.config import get_region_fields
+    from src.config.curation import IndexRole
+
+    F = get_region_fields()
+    index = env.records[slug].resources.indexes[IndexRole.ITEMS]
+    doc_id = f'{slug}-item-0001'
+    doc = env.transport.store.setdefault(index, {}).setdefault(doc_id, {})
+    doc[F.boxes] = [
+        {
+            'box_id': 'b1',
+            'bbox_norm': [0.1, 0.1, 0.4, 0.4],
+            'state': 'accepted',
+            'score': 1.0,
+            'detector': 'human',
+            'source': 'human',
+        }
+    ]
+    doc[F.box_seq] = max(int(doc.get(F.box_seq) or 0), 1)
+    doc[F.count] = 1
+    doc[F.rejected_count] = 0
+
+
 PREPARE: dict[tuple[str, str], Any] = {
     ('PUT', '/models/{model_name}/sharing'): _promoted_model,
     ('DELETE', '/models/{model_name}'): _promoted_model,
+    ('PATCH', '/crops/{crop_id}/regions/{box_id}'): _region_box_seeded,
+    ('POST', '/regions/batch_box_state'): _region_box_seeded,
     ('POST', '/probe/cancel'): _running_job('probe'),
     ('POST', '/scores/cancel'): _running_job('scores'),
     ('POST', '/select/cancel'): _running_job('select'),
