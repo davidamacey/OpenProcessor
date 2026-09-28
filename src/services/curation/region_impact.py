@@ -13,8 +13,10 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
+from src.config import PENDING_STATUSES
 from src.config.curation import items_index
 from src.config.region_fields import get_region_fields
+from src.services.curation.region_eval import LEGACY_STATUS_ALIASES
 from src.services.curation.region_scope import parent_classes_clause
 
 
@@ -22,12 +24,10 @@ if TYPE_CHECKING:
     from src.config import DetectionProfile
 
 #: Both the current and legacy pending-status spellings (operators rename
-#: 'pending' -> 'pending_detection' etc.; the worker reads both).
-_PENDING_STATUSES: tuple[str, ...] = (
-    'pending_detection',
-    'pending_verification',
-    'pending',
-    'pending_verify',
+#: 'pending' -> 'pending_detection' etc.; the worker reads both). Sourced
+#: from the enum module + region_eval's alias map, not re-literaled here.
+_PENDING_STATUSES: tuple[str, ...] = tuple(status.value for status in PENDING_STATUSES) + tuple(
+    LEGACY_STATUS_ALIASES
 )
 
 #: Sentinel terms-agg bucket key for "no region_profile stamp at all"

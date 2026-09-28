@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from src.config.settings import TritonModelConfig
 from src.routers.curation._config_common_models import ActiveRef, ValidationReport
 
 
@@ -65,7 +66,7 @@ class RegionProfileBody(BaseModel):
     ocr_det_prob_floor: float = 0.30
     ocr_rec_model: str = 'paddleocr_rec_trt'
     ocr_rec_version: str = '1'
-    ocr_pipeline_model: str = 'ocr_pipeline'
+    ocr_pipeline_model: str = TritonModelConfig.OCR_PIPELINE_MODEL
     text_reader: str = 'vlm_then_ocr'
     text_crop_margin: float = 0.05
     text_crop_min_height: int = 56
