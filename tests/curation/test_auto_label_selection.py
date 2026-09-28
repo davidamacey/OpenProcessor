@@ -104,7 +104,10 @@ def test_start_rejects_any_detection_profile(client: TestClient, value: str) -> 
     assert r.status_code == 422
     detail = r.json()['detail']
     assert detail['param'] == 'detection_profile'
-    assert 'OP_REGION_PROFILE' in detail['error']
+    # W4 reworded E7 off the OP_REGION_PROFILE env var onto the region-profile
+    # CRUD activation route (region_profiles.py) now that it's the real config
+    # surface for detection.
+    assert 'POST /region_profiles/{name}/activate' in detail['error']
 
 
 @pytest.mark.usefixtures('packs')
@@ -133,7 +136,7 @@ def test_start_omitted_resolves_to_settings_default(client: TestClient) -> None:
 async def test_start_honors_settings_doc_default_when_omitted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.routers.curation import pipeline
+    from src.routers.curation import pipeline_start
     from src.services.curation.autolabel import job
 
     captured: dict[str, Any] = {}
@@ -147,7 +150,7 @@ async def test_start_honors_settings_doc_default_when_omitted(
         'src.clients.curation_opensearch.get_curation_settings',
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
-    await pipeline.pipeline_auto_label_start(opensearch=object())
+    await pipeline_start.pipeline_auto_label_start(opensearch=object())
     assert captured['prompt_pack'] == 'food_v2'
 
 

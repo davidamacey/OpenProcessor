@@ -1366,6 +1366,24 @@
         "title": "CancelResponse",
         "type": "object"
       },
+      "Choice": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "Choice",
+        "type": "object"
+      },
       "ClassCreateRequest": {
         "properties": {
           "group": {
@@ -2171,6 +2189,7 @@
               "unknown_revision",
               "active_conflict",
               "no_previous",
+              "previous_deleted",
               "no_active_profile",
               "unknown_pack",
               "unknown_profile",
@@ -2333,6 +2352,73 @@
           "message"
         ],
         "title": "ConfigErrorDetail",
+        "type": "object"
+      },
+      "ConfigVocabularyResponse": {
+        "properties": {
+          "detectors": {
+            "items": {
+              "$ref": "#/components/schemas/DetectorEntry"
+            },
+            "title": "Detectors",
+            "type": "array"
+          },
+          "labels": {
+            "$ref": "#/components/schemas/VocabularyLabels"
+          },
+          "model_choices": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Model Choices",
+            "type": "array"
+          },
+          "ocr": {
+            "$ref": "#/components/schemas/OcrBlock"
+          },
+          "prompt_pack_calls": {
+            "items": {
+              "$ref": "#/components/schemas/PromptPackCallEntry"
+            },
+            "title": "Prompt Pack Calls",
+            "type": "array"
+          },
+          "registry_classes": {
+            "items": {
+              "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__RegistryClassEntry"
+            },
+            "title": "Registry Classes",
+            "type": "array"
+          },
+          "segmenters": {
+            "items": {
+              "$ref": "#/components/schemas/SegmenterEntry"
+            },
+            "title": "Segmenters",
+            "type": "array"
+          },
+          "text_reader_modes": {
+            "items": {
+              "$ref": "#/components/schemas/TextReaderModeEntry"
+            },
+            "title": "Text Reader Modes",
+            "type": "array"
+          },
+          "vlm": {
+            "$ref": "#/components/schemas/VlmBlock"
+          }
+        },
+        "required": [
+          "detectors",
+          "segmenters",
+          "vlm",
+          "ocr",
+          "text_reader_modes",
+          "registry_classes",
+          "prompt_pack_calls"
+        ],
+        "title": "ConfigVocabularyResponse",
         "type": "object"
       },
       "Coverage": {
@@ -3008,6 +3094,74 @@
           "blocking_detail"
         ],
         "title": "DeleteDryRunResponse",
+        "type": "object"
+      },
+      "DetectorEntry": {
+        "additionalProperties": true,
+        "properties": {
+          "choice": {
+            "$ref": "#/components/schemas/Choice"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "promoted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Promoted At"
+          },
+          "ready": {
+            "default": false,
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "versions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "choice",
+          "source"
+        ],
+        "title": "DetectorEntry",
         "type": "object"
       },
       "DryRunDirReport": {
@@ -3996,7 +4150,7 @@
           "region_profile": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/RegionProfileSummary"
+                "$ref": "#/components/schemas/src__routers__curation___region_vocabulary_models__RegionProfileSummary"
               },
               {
                 "type": "null"
@@ -7088,6 +7242,281 @@
         "title": "NotCoveredClass",
         "type": "object"
       },
+      "OcrBlock": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "det_models": {
+            "items": {
+              "$ref": "#/components/schemas/OcrModelEntry"
+            },
+            "title": "Det Models",
+            "type": "array"
+          },
+          "pipeline_models": {
+            "items": {
+              "$ref": "#/components/schemas/OcrModelEntry"
+            },
+            "title": "Pipeline Models",
+            "type": "array"
+          },
+          "rec_models": {
+            "items": {
+              "$ref": "#/components/schemas/OcrModelEntry"
+            },
+            "title": "Rec Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "available",
+          "pipeline_models",
+          "det_models",
+          "rec_models"
+        ],
+        "title": "OcrBlock",
+        "type": "object"
+      },
+      "OcrModelEntry": {
+        "properties": {
+          "choice": {
+            "$ref": "#/components/schemas/Choice"
+          },
+          "configured": {
+            "default": false,
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ready": {
+            "default": false,
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "required": [
+          "name",
+          "choice",
+          "source"
+        ],
+        "title": "OcrModelEntry",
+        "type": "object"
+      },
+      "PackTestPackRef": {
+        "properties": {
+          "draft": {
+            "title": "Draft",
+            "type": "boolean"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "name",
+          "revision",
+          "draft"
+        ],
+        "title": "PackTestPackRef",
+        "type": "object"
+      },
+      "PackTestPrompt": {
+        "properties": {
+          "system": {
+            "title": "System",
+            "type": "string"
+          },
+          "user_text": {
+            "title": "User Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "system",
+          "user_text"
+        ],
+        "title": "PackTestPrompt",
+        "type": "object"
+      },
+      "PackTestRequest": {
+        "properties": {
+          "call": {
+            "title": "Call",
+            "type": "string"
+          },
+          "class_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Names"
+          },
+          "crop_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Crop Ids",
+            "type": "array"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PromptPackBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pack_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack Name"
+          },
+          "pack_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack Revision"
+          },
+          "profile_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Name"
+          },
+          "use_region_box": {
+            "default": "current",
+            "title": "Use Region Box",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call"
+        ],
+        "title": "PackTestRequest",
+        "type": "object"
+      },
+      "PackTestResponse": {
+        "properties": {
+          "call": {
+            "title": "Call",
+            "type": "string"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "pack": {
+            "$ref": "#/components/schemas/PackTestPackRef"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/PackTestPrompt"
+          },
+          "raw_reply": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Reply"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "call",
+          "pack",
+          "prompt",
+          "validation"
+        ],
+        "title": "PackTestResponse",
+        "type": "object"
+      },
       "PatchProjectRequest": {
         "description": "``PATCH {prefix}`` (P3). The slug is immutable.",
         "properties": {
@@ -7749,7 +8178,8 @@
               "settings_defaults",
               "classes",
               "activations",
-              "keymap"
+              "keymap",
+              "prompt_packs"
             ],
             "items": {
               "type": "string"
@@ -8412,6 +8842,830 @@
         "title": "PromoteResponse",
         "type": "object"
       },
+      "PromptPackActivateRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "title": "PromptPackActivateRequest",
+        "type": "object"
+      },
+      "PromptPackBody": {
+        "description": "Every :class:`~src.services.labeling.vlm_prompts.PromptPack` field\nexcept ``name``. Defaults to ``''``/``{}`` so a partial draft can be\nposted to ``/validate`` -- ``pack_validation.validate_pack`` reports\nmissing content as issues, not a pydantic 422.",
+        "properties": {
+          "class_descriptions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Class Descriptions",
+            "type": "object"
+          },
+          "class_system": {
+            "default": "",
+            "title": "Class System",
+            "type": "string"
+          },
+          "class_user_template": {
+            "default": "",
+            "title": "Class User Template",
+            "type": "string"
+          },
+          "combined_batch_rules": {
+            "default": "",
+            "title": "Combined Batch Rules",
+            "type": "string"
+          },
+          "combined_batch_system": {
+            "default": "",
+            "title": "Combined Batch System",
+            "type": "string"
+          },
+          "combined_system": {
+            "default": "",
+            "title": "Combined System",
+            "type": "string"
+          },
+          "combined_user_template": {
+            "default": "",
+            "title": "Combined User Template",
+            "type": "string"
+          },
+          "open_class_system": {
+            "default": "",
+            "title": "Open Class System",
+            "type": "string"
+          },
+          "open_class_user_template": {
+            "default": "",
+            "title": "Open Class User Template",
+            "type": "string"
+          },
+          "region_batch_system": {
+            "default": "",
+            "title": "Region Batch System",
+            "type": "string"
+          },
+          "region_batch_user": {
+            "default": "",
+            "title": "Region Batch User",
+            "type": "string"
+          },
+          "region_system": {
+            "default": "",
+            "title": "Region System",
+            "type": "string"
+          },
+          "region_user": {
+            "default": "",
+            "title": "Region User",
+            "type": "string"
+          },
+          "region_visible_system": {
+            "default": "",
+            "title": "Region Visible System",
+            "type": "string"
+          },
+          "region_visible_user": {
+            "default": "",
+            "title": "Region Visible User",
+            "type": "string"
+          },
+          "synonyms": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Synonyms",
+            "type": "object"
+          }
+        },
+        "title": "PromptPackBody",
+        "type": "object"
+      },
+      "PromptPackCallEntry": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "PromptPackCallEntry",
+        "type": "object"
+      },
+      "PromptPackCallSchema": {
+        "properties": {
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "testable": {
+            "default": true,
+            "title": "Testable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "fields"
+        ],
+        "title": "PromptPackCallSchema",
+        "type": "object"
+      },
+      "PromptPackCloneRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "from_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Project"
+          },
+          "new_name": {
+            "title": "New Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "builtin",
+                  "file",
+                  "template",
+                  "stored"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "new_name"
+        ],
+        "title": "PromptPackCloneRequest",
+        "type": "object"
+      },
+      "PromptPackCreateRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/PromptPackBody"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "body"
+        ],
+        "title": "PromptPackCreateRequest",
+        "type": "object"
+      },
+      "PromptPackDoc": {
+        "properties": {
+          "active": {
+            "default": false,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "active_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Revision"
+          },
+          "body": {
+            "$ref": "#/components/schemas/PromptPackBody"
+          },
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "enum": [
+              "builtin",
+              "file",
+              "template",
+              "stored"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "description",
+          "body"
+        ],
+        "title": "PromptPackDoc",
+        "type": "object"
+      },
+      "PromptPackFieldSchema": {
+        "properties": {
+          "allowed_placeholders": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Placeholders",
+            "type": "array"
+          },
+          "expected_reply_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Expected Reply Keys",
+            "type": "array"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "formatted": {
+            "title": "Formatted",
+            "type": "boolean"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "help": {
+            "title": "Help",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "map"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "optional_reply_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Optional Reply Keys",
+            "type": "array"
+          },
+          "required_placeholders": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Placeholders",
+            "type": "array"
+          },
+          "used_by": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Used By",
+            "type": "array"
+          }
+        },
+        "required": [
+          "field",
+          "label",
+          "group",
+          "kind",
+          "formatted",
+          "required_placeholders",
+          "allowed_placeholders",
+          "expected_reply_keys",
+          "optional_reply_keys",
+          "used_by",
+          "help"
+        ],
+        "title": "PromptPackFieldSchema",
+        "type": "object"
+      },
+      "PromptPackList": {
+        "properties": {
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "packs": {
+            "items": {
+              "$ref": "#/components/schemas/PromptPackSummary"
+            },
+            "title": "Packs",
+            "type": "array"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/PromptPackTemplateSummary"
+            },
+            "title": "Templates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "packs",
+          "templates",
+          "active",
+          "config_revision"
+        ],
+        "title": "PromptPackList",
+        "type": "object"
+      },
+      "PromptPackPlaceholderHelp": {
+        "properties": {
+          "example": {
+            "title": "Example",
+            "type": "string"
+          },
+          "meaning": {
+            "title": "Meaning",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "meaning",
+          "example"
+        ],
+        "title": "PromptPackPlaceholderHelp",
+        "type": "object"
+      },
+      "PromptPackRevisionSummary": {
+        "properties": {
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "saved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved At"
+          }
+        },
+        "required": [
+          "revision",
+          "saved_at",
+          "cloned_from",
+          "description"
+        ],
+        "title": "PromptPackRevisionSummary",
+        "type": "object"
+      },
+      "PromptPackRevisionsResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/PromptPackRevisionSummary"
+            },
+            "title": "Revisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "revisions"
+        ],
+        "title": "PromptPackRevisionsResponse",
+        "type": "object"
+      },
+      "PromptPackRollbackRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "PromptPackRollbackRequest",
+        "type": "object"
+      },
+      "PromptPackSaveRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/PromptPackBody"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision",
+          "body"
+        ],
+        "title": "PromptPackSaveRequest",
+        "type": "object"
+      },
+      "PromptPackSchema": {
+        "properties": {
+          "calls": {
+            "items": {
+              "$ref": "#/components/schemas/PromptPackCallSchema"
+            },
+            "title": "Calls",
+            "type": "array"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/PromptPackFieldSchema"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "placeholders": {
+            "items": {
+              "$ref": "#/components/schemas/PromptPackPlaceholderHelp"
+            },
+            "title": "Placeholders",
+            "type": "array"
+          },
+          "reply_key_contract": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "object"
+            },
+            "title": "Reply Key Contract",
+            "type": "object"
+          }
+        },
+        "required": [
+          "fields",
+          "placeholders",
+          "calls"
+        ],
+        "title": "PromptPackSchema",
+        "type": "object"
+      },
+      "PromptPackSummary": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "active_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Revision"
+          },
+          "asks_region_text": {
+            "title": "Asks Region Text",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "enum": [
+              "builtin",
+              "file",
+              "template",
+              "stored"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "description",
+          "asks_region_text",
+          "active"
+        ],
+        "title": "PromptPackSummary",
+        "type": "object"
+      },
+      "PromptPackTemplateSummary": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "read_only": {
+            "const": true,
+            "default": true,
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "source": {
+            "const": "template",
+            "default": "template",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path"
+        ],
+        "title": "PromptPackTemplateSummary",
+        "type": "object"
+      },
+      "PromptPackValidateRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/PromptPackBody"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "PromptPackValidateRequest",
+        "type": "object"
+      },
       "QuantizeRequest": {
         "additionalProperties": false,
         "description": "Export a run to ONNX variants and score them in the same job.",
@@ -8499,6 +9753,603 @@
         "title": "RegionDependencyStatusResponse",
         "type": "object"
       },
+      "RegionProfileActivateRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "title": "RegionProfileActivateRequest",
+        "type": "object"
+      },
+      "RegionProfileBody": {
+        "additionalProperties": true,
+        "description": "Every :class:`~src.config.DetectionProfile` field except ``name``,\nJSON-typed (tuples/frozensets round-trip as lists). Defaults mirror\nthe dataclass so a partial draft validates with informative issues\nrather than a pydantic 422.",
+        "properties": {
+          "aspect_max": {
+            "default": 8.0,
+            "title": "Aspect Max",
+            "type": "number"
+          },
+          "aspect_min": {
+            "default": 1.2,
+            "title": "Aspect Min",
+            "type": "number"
+          },
+          "assigns_class": {
+            "default": false,
+            "title": "Assigns Class",
+            "type": "boolean"
+          },
+          "auto_confirm_area_frac": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Auto Confirm Area Frac",
+            "type": "array"
+          },
+          "auto_confirm_aspect": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Auto Confirm Aspect",
+            "type": "array"
+          },
+          "batch_limit": {
+            "default": 16,
+            "title": "Batch Limit",
+            "type": "integer"
+          },
+          "class_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Class Ids",
+            "type": "array"
+          },
+          "confidence_floor": {
+            "default": 0.4,
+            "title": "Confidence Floor",
+            "type": "number"
+          },
+          "detector_model": {
+            "default": "",
+            "title": "Detector Model",
+            "type": "string"
+          },
+          "detector_version": {
+            "default": "1",
+            "title": "Detector Version",
+            "type": "string"
+          },
+          "display_name": {
+            "default": "",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_singular": {
+            "default": "",
+            "title": "Display Name Singular",
+            "type": "string"
+          },
+          "feature_output": {
+            "default": "sppf_feat",
+            "title": "Feature Output",
+            "type": "string"
+          },
+          "human_detector_name": {
+            "default": "human",
+            "title": "Human Detector Name",
+            "type": "string"
+          },
+          "human_detector_version": {
+            "default": "1",
+            "title": "Human Detector Version",
+            "type": "string"
+          },
+          "input_size": {
+            "default": 640,
+            "title": "Input Size",
+            "type": "integer"
+          },
+          "labels_path": {
+            "default": "",
+            "title": "Labels Path",
+            "type": "string"
+          },
+          "letterbox_fill": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Letterbox Fill",
+            "type": "array"
+          },
+          "max_regions_per_item": {
+            "default": 1,
+            "title": "Max Regions Per Item",
+            "type": "integer"
+          },
+          "ocr_det_input_size": {
+            "default": 640,
+            "title": "Ocr Det Input Size",
+            "type": "integer"
+          },
+          "ocr_det_model": {
+            "default": "paddleocr_det_trt",
+            "title": "Ocr Det Model",
+            "type": "string"
+          },
+          "ocr_det_prob_floor": {
+            "default": 0.3,
+            "title": "Ocr Det Prob Floor",
+            "type": "number"
+          },
+          "ocr_det_version": {
+            "default": "1",
+            "title": "Ocr Det Version",
+            "type": "string"
+          },
+          "ocr_pipeline_model": {
+            "default": "ocr_pipeline",
+            "title": "Ocr Pipeline Model",
+            "type": "string"
+          },
+          "ocr_rec_model": {
+            "default": "paddleocr_rec_trt",
+            "title": "Ocr Rec Model",
+            "type": "string"
+          },
+          "ocr_rec_version": {
+            "default": "1",
+            "title": "Ocr Rec Version",
+            "type": "string"
+          },
+          "parent_classes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Parent Classes",
+            "type": "array"
+          },
+          "region_class_name": {
+            "default": "",
+            "title": "Region Class Name",
+            "type": "string"
+          },
+          "region_nms_iou": {
+            "default": 0.5,
+            "title": "Region Nms Iou",
+            "type": "number"
+          },
+          "secondary_shape_groups": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Secondary Shape Groups",
+            "type": "array"
+          },
+          "segmenter_name": {
+            "default": "sam3",
+            "title": "Segmenter Name",
+            "type": "string"
+          },
+          "segmenter_text_prompt": {
+            "default": "",
+            "title": "Segmenter Text Prompt",
+            "type": "string"
+          },
+          "segmenter_version": {
+            "default": "1",
+            "title": "Segmenter Version",
+            "type": "string"
+          },
+          "text_border_margin": {
+            "default": 0.08,
+            "title": "Text Border Margin",
+            "type": "number"
+          },
+          "text_charset": {
+            "default": "",
+            "title": "Text Charset",
+            "type": "string"
+          },
+          "text_crop_margin": {
+            "default": 0.05,
+            "title": "Text Crop Margin",
+            "type": "number"
+          },
+          "text_crop_min_height": {
+            "default": 56,
+            "title": "Text Crop Min Height",
+            "type": "integer"
+          },
+          "text_format": {
+            "default": "",
+            "title": "Text Format",
+            "type": "string"
+          },
+          "text_hint_aspect_max": {
+            "default": 7.0,
+            "title": "Text Hint Aspect Max",
+            "type": "number"
+          },
+          "text_hint_aspect_min": {
+            "default": 1.5,
+            "title": "Text Hint Aspect Min",
+            "type": "number"
+          },
+          "text_hint_enabled": {
+            "default": true,
+            "title": "Text Hint Enabled",
+            "type": "boolean"
+          },
+          "text_hint_len_max": {
+            "default": 10,
+            "title": "Text Hint Len Max",
+            "type": "integer"
+          },
+          "text_hint_len_min": {
+            "default": 4,
+            "title": "Text Hint Len Min",
+            "type": "integer"
+          },
+          "text_hint_rec_floor": {
+            "default": 0.7,
+            "title": "Text Hint Rec Floor",
+            "type": "number"
+          },
+          "text_hint_require_letters_and_digits": {
+            "default": false,
+            "title": "Text Hint Require Letters And Digits",
+            "type": "boolean"
+          },
+          "text_join": {
+            "default": " ",
+            "title": "Text Join",
+            "type": "string"
+          },
+          "text_len_max": {
+            "default": 0,
+            "title": "Text Len Max",
+            "type": "integer"
+          },
+          "text_len_min": {
+            "default": 1,
+            "title": "Text Len Min",
+            "type": "integer"
+          },
+          "text_min_confidence": {
+            "default": 0.0,
+            "title": "Text Min Confidence",
+            "type": "number"
+          },
+          "text_min_height_ratio": {
+            "default": 0.6,
+            "title": "Text Min Height Ratio",
+            "type": "number"
+          },
+          "text_pattern": {
+            "default": "[A-Z0-9 -]{2,}",
+            "title": "Text Pattern",
+            "type": "string"
+          },
+          "text_placeholders": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Text Placeholders",
+            "type": "array"
+          },
+          "text_reader": {
+            "default": "vlm_then_ocr",
+            "title": "Text Reader",
+            "type": "string"
+          },
+          "text_reject_sequences": {
+            "default": false,
+            "title": "Text Reject Sequences",
+            "type": "boolean"
+          },
+          "text_stopwords": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Text Stopwords",
+            "type": "array"
+          },
+          "text_uppercase": {
+            "default": false,
+            "title": "Text Uppercase",
+            "type": "boolean"
+          }
+        },
+        "title": "RegionProfileBody",
+        "type": "object"
+      },
+      "RegionProfileCloneRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "from_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Project"
+          },
+          "new_name": {
+            "title": "New Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "env",
+                  "registered",
+                  "stored",
+                  "template"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "new_name"
+        ],
+        "title": "RegionProfileCloneRequest",
+        "type": "object"
+      },
+      "RegionProfileCreateRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/RegionProfileBody"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "body"
+        ],
+        "title": "RegionProfileCreateRequest",
+        "type": "object"
+      },
+      "RegionProfileDeactivateRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "RegionProfileDeactivateRequest",
+        "type": "object"
+      },
+      "RegionProfileDoc": {
+        "properties": {
+          "active": {
+            "default": false,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "active_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Revision"
+          },
+          "body": {
+            "$ref": "#/components/schemas/RegionProfileBody"
+          },
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "effective": {
+            "$ref": "#/components/schemas/RegionProfileEffective"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "enum": [
+              "env",
+              "registered",
+              "stored",
+              "template"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "description",
+          "body",
+          "effective"
+        ],
+        "title": "RegionProfileDoc",
+        "type": "object"
+      },
+      "RegionProfileEffective": {
+        "properties": {
+          "legs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Legs",
+            "type": "array"
+          },
+          "reads_text": {
+            "title": "Reads Text",
+            "type": "boolean"
+          },
+          "segmenter_enabled": {
+            "title": "Segmenter Enabled",
+            "type": "boolean"
+          },
+          "text_hint_active": {
+            "title": "Text Hint Active",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reads_text",
+          "text_hint_active",
+          "legs",
+          "segmenter_enabled"
+        ],
+        "title": "RegionProfileEffective",
+        "type": "object"
+      },
       "RegionProfileLimits": {
         "description": "W8 write-size guards, never hardcoded by a client.",
         "properties": {
@@ -8514,56 +10365,224 @@
         "title": "RegionProfileLimits",
         "type": "object"
       },
-      "RegionProfileSummary": {
-        "description": "The active region profile's identity, served on ``GET /health`` and\n``GET /regions/vocabulary`` -- THE signal a client keys on to decide\nwhether region-scoped UI/routes are available at all.",
+      "RegionProfileList": {
+        "properties": {
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/src__routers__curation___region_profile_models__RegionProfileSummary"
+            },
+            "title": "Profiles",
+            "type": "array"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/RegionProfileTemplateSummary"
+            },
+            "title": "Templates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "profiles",
+          "templates",
+          "active",
+          "config_revision"
+        ],
+        "title": "RegionProfileList",
+        "type": "object"
+      },
+      "RegionProfileRevisionSummary": {
+        "properties": {
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "saved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved At"
+          }
+        },
+        "required": [
+          "revision",
+          "saved_at",
+          "cloned_from",
+          "description"
+        ],
+        "title": "RegionProfileRevisionSummary",
+        "type": "object"
+      },
+      "RegionProfileRevisionsResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/RegionProfileRevisionSummary"
+            },
+            "title": "Revisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "revisions"
+        ],
+        "title": "RegionProfileRevisionsResponse",
+        "type": "object"
+      },
+      "RegionProfileRollbackRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "RegionProfileRollbackRequest",
+        "type": "object"
+      },
+      "RegionProfileSaveRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/RegionProfileBody"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision",
+          "body"
+        ],
+        "title": "RegionProfileSaveRequest",
+        "type": "object"
+      },
+      "RegionProfileTemplateSummary": {
         "properties": {
           "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "display_name_singular": {
-            "title": "Display Name Singular",
-            "type": "string"
-          },
-          "limits": {
-            "$ref": "#/components/schemas/RegionProfileLimits",
-            "description": "W8: served write-size guards. max_boxes_per_write is an abuse guard on the element count of one region-box write request, not a labeling rule -- human box lists are otherwise unbounded."
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
           },
           "name": {
             "title": "Name",
             "type": "string"
           },
-          "reads_text": {
-            "description": "False for a text-free profile: no region text is read, stored or editable.",
-            "title": "Reads Text",
-            "type": "boolean"
-          },
-          "region_class_name": {
-            "title": "Region Class Name",
+          "path": {
+            "title": "Path",
             "type": "string"
           },
-          "text_hint_enabled": {
-            "description": "Whether the OCR text-hint re-pass is enabled after a segmenter miss.",
-            "title": "Text Hint Enabled",
+          "read_only": {
+            "const": true,
+            "default": true,
+            "title": "Read Only",
             "type": "boolean"
           },
-          "text_reader": {
-            "description": "The profile's text reader; 'none' for a text-free profile.",
-            "title": "Text Reader",
+          "reads_text": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reads Text"
+          },
+          "source": {
+            "const": "template",
+            "default": "template",
+            "title": "Source",
             "type": "string"
           }
         },
         "required": [
           "name",
-          "display_name",
-          "display_name_singular",
-          "region_class_name",
-          "text_reader",
-          "reads_text",
-          "text_hint_enabled",
-          "limits"
+          "path"
         ],
-        "title": "RegionProfileSummary",
+        "title": "RegionProfileTemplateSummary",
+        "type": "object"
+      },
+      "RegionProfileValidateRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/RegionProfileBody"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "RegionProfileValidateRequest",
         "type": "object"
       },
       "RegionVocabularyResponse": {
@@ -8585,7 +10604,7 @@
           "region_profile": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/RegionProfileSummary"
+                "$ref": "#/components/schemas/src__routers__curation___region_vocabulary_models__RegionProfileSummary"
               },
               {
                 "type": "null"
@@ -8638,76 +10657,6 @@
           "rejection_reasons"
         ],
         "title": "RegionVocabularyResponse",
-        "type": "object"
-      },
-      "RegistryClassEntry": {
-        "description": "Single class entry in ``class_registry.json``.\n\nThe on-disk file uses ``id`` / ``name`` keys for backward\ncompatibility with older label-file schemas. Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
-        "properties": {
-          "added_at": {
-            "title": "Added At",
-            "type": "string"
-          },
-          "class_id": {
-            "title": "Class Id",
-            "type": "integer"
-          },
-          "class_name": {
-            "title": "Class Name",
-            "type": "string"
-          },
-          "deprecated": {
-            "default": false,
-            "title": "Deprecated",
-            "type": "boolean"
-          },
-          "group": {
-            "default": "unknown",
-            "title": "Group",
-            "type": "string"
-          },
-          "hotkey_letter": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hotkey Letter"
-          },
-          "merged_into": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Merged Into"
-          },
-          "notes": {
-            "default": "",
-            "title": "Notes",
-            "type": "string"
-          },
-          "sample_count": {
-            "default": 0,
-            "title": "Sample Count",
-            "type": "integer"
-          },
-          "validated_count": {
-            "default": 0,
-            "title": "Validated Count",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "class_id",
-          "class_name"
-        ],
-        "title": "RegistryClassEntry",
         "type": "object"
       },
       "RejectionReasonEntry": {
@@ -9225,6 +11174,78 @@
         "title": "ScoresComputeRequest",
         "type": "object"
       },
+      "SegmenterEntry": {
+        "properties": {
+          "choice": {
+            "$ref": "#/components/schemas/Choice"
+          },
+          "default_min_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Min Score"
+          },
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "masks": {
+            "default": true,
+            "title": "Masks",
+            "type": "boolean"
+          },
+          "max_candidates": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Candidates"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "choice",
+          "endpoint",
+          "status"
+        ],
+        "title": "SegmenterEntry",
+        "type": "object"
+      },
+      "SegmenterPromptValidateRequest": {
+        "properties": {
+          "sole_leg": {
+            "default": true,
+            "title": "Sole Leg",
+            "type": "boolean"
+          },
+          "text_prompt": {
+            "title": "Text Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text_prompt"
+        ],
+        "title": "SegmenterPromptValidateRequest",
+        "type": "object"
+      },
       "SelectDiverseRequest": {
         "properties": {
           "k": {
@@ -9531,6 +11552,43 @@
           "min_per_class"
         ],
         "title": "TestHoldoutFreezeResponse",
+        "type": "object"
+      },
+      "TextReaderModeEntry": {
+        "properties": {
+          "choice": {
+            "$ref": "#/components/schemas/Choice"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "needs_ocr": {
+            "title": "Needs Ocr",
+            "type": "boolean"
+          },
+          "needs_vlm": {
+            "title": "Needs Vlm",
+            "type": "boolean"
+          },
+          "reads_text": {
+            "title": "Reads Text",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "choice",
+          "label",
+          "reads_text",
+          "needs_vlm",
+          "needs_ocr"
+        ],
+        "title": "TextReaderModeEntry",
         "type": "object"
       },
       "TrainCampaignSpec": {
@@ -10605,7 +12663,51 @@
               "keymap_class_hotkey_conflict",
               "keymap_class_hotkey_shadowed",
               "keymap_focus_key",
-              "keymap_context_no_confirm"
+              "keymap_context_no_confirm",
+              "pack_name_invalid",
+              "pack_name_reserved",
+              "pack_field_missing",
+              "pack_field_empty",
+              "pack_field_too_long",
+              "pack_placeholder_missing",
+              "pack_placeholder_unknown",
+              "pack_template_format_error",
+              "pack_placeholder_in_verbatim_field",
+              "pack_reply_key_missing",
+              "pack_asks_text_profile_text_free",
+              "pack_no_text_profile_reads_text",
+              "pack_synonym_target_unknown",
+              "pack_description_class_unknown",
+              "pack_example_values",
+              "pack_multi_region_keys_missing",
+              "profile_name_invalid",
+              "profile_name_reserved",
+              "profile_field_unknown",
+              "profile_field_type",
+              "profile_field_range",
+              "region_class_name_invalid",
+              "text_reader_invalid",
+              "text_regex_invalid",
+              "detector_model_not_found",
+              "detector_model_not_ready",
+              "detector_model_not_shared",
+              "detector_model_other_project",
+              "detector_model_classes_unmapped",
+              "triton_unreachable",
+              "no_candidate_source",
+              "segmenter_prompt_empty",
+              "segmenter_prompt_too_long",
+              "segmenter_prompt_too_many_phrases",
+              "segmenter_prompt_multiline",
+              "segmenter_not_configured",
+              "segmenter_unreachable",
+              "ocr_model_not_found",
+              "ocr_model_not_ready",
+              "vlm_not_configured",
+              "text_hint_inactive_no_ocr",
+              "text_fields_ignored",
+              "display_name_missing",
+              "parent_class_unknown"
             ],
             "title": "Code",
             "type": "string"
@@ -10682,6 +12784,122 @@
           "ok"
         ],
         "title": "ValidationReport",
+        "type": "object"
+      },
+      "VlmActiveRef": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "VlmActiveRef",
+        "type": "object"
+      },
+      "VlmBlock": {
+        "properties": {
+          "active": {
+            "$ref": "#/components/schemas/VlmActiveRef"
+          },
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/VlmEndpointEntry"
+            },
+            "title": "Endpoints",
+            "type": "array"
+          }
+        },
+        "required": [
+          "active",
+          "endpoints"
+        ],
+        "title": "VlmBlock",
+        "type": "object"
+      },
+      "VlmEndpointEntry": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "locality": {
+            "title": "Locality",
+            "type": "string"
+          },
+          "max_images_per_call": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Images Per Call"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "resolved_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Model"
+          },
+          "sends_images_externally": {
+            "title": "Sends Images Externally",
+            "type": "boolean"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "model",
+          "locality",
+          "sends_images_externally",
+          "status",
+          "active"
+        ],
+        "title": "VlmEndpointEntry",
         "type": "object"
       },
       "VlmLabelBatchRequest": {
@@ -10936,6 +13154,19 @@
         "title": "VocabularyEntry",
         "type": "object"
       },
+      "VocabularyLabels": {
+        "properties": {
+          "scope": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Scope",
+            "type": "object"
+          }
+        },
+        "title": "VocabularyLabels",
+        "type": "object"
+      },
       "_PathLookupRequest": {
         "description": "Bulk path-existence check input. Capped client-side to 10k paths.",
         "properties": {
@@ -11086,6 +13317,76 @@
         "title": "_PublishEvent",
         "type": "object"
       },
+      "src__clients__curation_opensearch__RegistryClassEntry": {
+        "description": "Single class entry in ``class_registry.json``.\n\nThe on-disk file uses ``id`` / ``name`` keys for backward\ncompatibility with older label-file schemas. Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
+        "properties": {
+          "added_at": {
+            "title": "Added At",
+            "type": "string"
+          },
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "deprecated": {
+            "default": false,
+            "title": "Deprecated",
+            "type": "boolean"
+          },
+          "group": {
+            "default": "unknown",
+            "title": "Group",
+            "type": "string"
+          },
+          "hotkey_letter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotkey Letter"
+          },
+          "merged_into": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged Into"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          },
+          "sample_count": {
+            "default": 0,
+            "title": "Sample Count",
+            "type": "integer"
+          },
+          "validated_count": {
+            "default": 0,
+            "title": "Validated Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name"
+        ],
+        "title": "RegistryClassEntry",
+        "type": "object"
+      },
       "src__routers__curation___common_models__BatchIngestResponse": {
         "properties": {
           "results": {
@@ -11113,6 +13414,201 @@
           "summary"
         ],
         "title": "BatchIngestResponse",
+        "type": "object"
+      },
+      "src__routers__curation___region_profile_models__RegionProfileSummary": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "active_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Revision"
+          },
+          "detector_model": {
+            "title": "Detector Model",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_singular": {
+            "title": "Display Name Singular",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "max_regions_per_item": {
+            "title": "Max Regions Per Item",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_classes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Parent Classes",
+            "type": "array"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "reads_text": {
+            "title": "Reads Text",
+            "type": "boolean"
+          },
+          "region_class_name": {
+            "title": "Region Class Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "segmenter_text_prompt": {
+            "title": "Segmenter Text Prompt",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "env",
+              "registered",
+              "stored",
+              "template"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "text_reader": {
+            "title": "Text Reader",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "display_name",
+          "display_name_singular",
+          "region_class_name",
+          "text_reader",
+          "reads_text",
+          "detector_model",
+          "segmenter_text_prompt",
+          "parent_classes",
+          "max_regions_per_item",
+          "active"
+        ],
+        "title": "RegionProfileSummary",
+        "type": "object"
+      },
+      "src__routers__curation___region_vocabulary_models__RegionProfileSummary": {
+        "description": "The active region profile's identity, served on ``GET /health`` and\n``GET /regions/vocabulary`` -- THE signal a client keys on to decide\nwhether region-scoped UI/routes are available at all.",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_singular": {
+            "title": "Display Name Singular",
+            "type": "string"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/RegionProfileLimits",
+            "description": "W8: served write-size guards. max_boxes_per_write is an abuse guard on the element count of one region-box write request, not a labeling rule -- human box lists are otherwise unbounded."
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reads_text": {
+            "description": "False for a text-free profile: no region text is read, stored or editable.",
+            "title": "Reads Text",
+            "type": "boolean"
+          },
+          "region_class_name": {
+            "title": "Region Class Name",
+            "type": "string"
+          },
+          "text_hint_enabled": {
+            "description": "Whether the OCR text-hint re-pass is enabled after a segmenter miss.",
+            "title": "Text Hint Enabled",
+            "type": "boolean"
+          },
+          "text_reader": {
+            "description": "The profile's text reader; 'none' for a text-free profile.",
+            "title": "Text Reader",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "display_name_singular",
+          "region_class_name",
+          "text_reader",
+          "reads_text",
+          "text_hint_enabled",
+          "limits"
+        ],
+        "title": "RegionProfileSummary",
+        "type": "object"
+      },
+      "src__routers__curation__config_vocabulary__RegistryClassEntry": {
+        "properties": {
+          "choice": {
+            "$ref": "#/components/schemas/Choice"
+          },
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name",
+          "choice"
+        ],
+        "title": "RegistryClassEntry",
         "type": "object"
       }
     }
@@ -12660,7 +15156,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RegistryClassEntry"
+                  "$ref": "#/components/schemas/src__clients__curation_opensearch__RegistryClassEntry"
                 }
               }
             },
@@ -12712,7 +15208,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RegistryClassEntry"
+                  "$ref": "#/components/schemas/src__clients__curation_opensearch__RegistryClassEntry"
                 }
               }
             },
@@ -13313,6 +15809,58 @@
           }
         },
         "summary": "Cluster Representatives",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/config/vocabulary": {
+      "get": {
+        "operationId": "get_config_vocabulary_curation_projects__project__config_vocabulary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_other_projects",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Other Projects",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigVocabularyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Config Vocabulary",
         "tags": [
           "Curation"
         ]
@@ -17085,7 +19633,7 @@
     },
     "/curation/projects/{project}/pipeline/auto_label": {
       "post": {
-        "description": "Run the full auto-labeling chain end-to-end:\n\n1. (optional) Re-train FAISS clusters on every embedded item.\n2. Auto-promote items in high-purity clusters (``cluster_propagation``).\n3. Run the VLM over remaining unvalidated items with the open-vocabulary\n   prompt — high-confidence labels are auto-validated, ``__new__``\n   proposals are flagged for the curator queue.\n\nOutput enumerates each stage's counts so the labeler dashboard can show\n\"this many items still need a human.\" Idempotent: safe to re-run.",
+        "description": "Run the full auto-labeling chain end-to-end, synchronously (no job):\n\n1. (optional) Re-train FAISS clusters on every embedded item.\n2. Auto-promote items in high-purity clusters (``cluster_propagation``).\n3. Run the VLM over remaining unvalidated items with the open-vocabulary\n   prompt — high-confidence labels are auto-validated, ``__new__``\n   proposals are flagged for the curator queue.\n\nOutput enumerates each stage's counts so the labeler dashboard can show\n\"this many items still need a human.\" Idempotent: safe to re-run.\n\nFor a background job with progress polling, see ``POST\n/pipeline/auto_label/start`` instead.",
         "operationId": "pipeline_auto_label_curation_projects__project__pipeline_auto_label_post",
         "parameters": [
           {
@@ -17355,14 +19903,6 @@
               ],
               "description": "Per-run VLM prompt_pack (an id from GET /methods axis=prompt_pack) used by the labeling stage. Overrides the settings default for this job only; never written to settings. Unset = settings default. Unknown id -> 422.",
               "title": "Prompt Pack"
-            }
-          },
-          {
-            "in": "query",
-            "name": "progress",
-            "required": false,
-            "schema": {
-              "title": "Progress"
             }
           }
         ],
@@ -18014,6 +20554,1644 @@
           }
         },
         "summary": "Probe Status",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs": {
+      "get": {
+        "operationId": "list_prompt_packs_curation_projects__project__prompt_packs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Prompt Packs",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "post": {
+        "operationId": "create_prompt_pack_curation_projects__project__prompt_packs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptPackCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Prompt Pack",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/active": {
+      "get": {
+        "operationId": "get_active_prompt_pack_route_curation_projects__project__prompt_packs_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Active Prompt Pack Route Curation Projects  Project  Prompt Packs Active Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Active Prompt Pack Route",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/active/rollback": {
+      "post": {
+        "operationId": "rollback_active_prompt_pack_curation_projects__project__prompt_packs_active_rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptPackRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Rollback Active Prompt Pack Curation Projects  Project  Prompt Packs Active Rollback Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rollback Active Prompt Pack",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/schema": {
+      "get": {
+        "operationId": "get_prompt_pack_schema_curation_projects__project__prompt_packs_schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Prompt Pack Schema",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/test": {
+      "post": {
+        "description": "Render the requested call's prompt for a draft/saved/active pack.\n\nScope note (documented deviation): this preview renders the exact\nsystem/user text a call would send, and runs the same validator as\nevery other write path, but does not itself round-trip a live crop\nthrough the VLM -- wiring image resolution + a raw VLM completion\ninto this route is out of this wave's scope; ``raw_reply``/\n``latency_ms`` are always ``null``. Never writes.",
+        "operationId": "test_prompt_pack_curation_projects__project__prompt_packs_test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackTestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Prompt Pack",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/validate": {
+      "post": {
+        "operationId": "validate_prompt_pack_route_curation_projects__project__prompt_packs_validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Profile"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptPackValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Validate Prompt Pack Route Curation Projects  Project  Prompt Packs Validate Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Prompt Pack Route",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/{name}": {
+      "delete": {
+        "operationId": "delete_prompt_pack_route_curation_projects__project__prompt_packs__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": true,
+            "schema": {
+              "title": "Expected Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Prompt Pack Route",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "get": {
+        "operationId": "get_prompt_pack_route_curation_projects__project__prompt_packs__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Prompt Pack Route",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "put": {
+        "operationId": "save_prompt_pack_curation_projects__project__prompt_packs__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptPackSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Prompt Pack",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/{name}/activate": {
+      "post": {
+        "operationId": "activate_prompt_pack_route_curation_projects__project__prompt_packs__name__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptPackActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Activate Prompt Pack Route Curation Projects  Project  Prompt Packs  Name  Activate Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Prompt Pack Route",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/{name}/clone": {
+      "post": {
+        "operationId": "clone_prompt_pack_curation_projects__project__prompt_packs__name__clone_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptPackCloneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clone Prompt Pack",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/{name}/revisions": {
+      "get": {
+        "operationId": "list_prompt_pack_revisions_curation_projects__project__prompt_packs__name__revisions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackRevisionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Prompt Pack Revisions",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/{name}/revisions/{revision}": {
+      "get": {
+        "operationId": "get_prompt_pack_revision_curation_projects__project__prompt_packs__name__revisions__revision__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "title": "Revision",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Prompt Pack Revision",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles": {
+      "get": {
+        "operationId": "list_region_profiles_curation_projects__project__region_profiles_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_templates",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Templates",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Region Profiles",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "post": {
+        "operationId": "create_region_profile_curation_projects__project__region_profiles_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegionProfileCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Region Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles/active": {
+      "get": {
+        "operationId": "get_active_region_profile_route_curation_projects__project__region_profiles_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Active Region Profile Route Curation Projects  Project  Region Profiles Active Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Active Region Profile Route",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles/active/impact": {
+      "get": {
+        "operationId": "get_active_region_profile_impact_curation_projects__project__region_profiles_active_impact_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Active Region Profile Impact Curation Projects  Project  Region Profiles Active Impact Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Active Region Profile Impact",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles/active/rollback": {
+      "post": {
+        "operationId": "rollback_active_region_profile_curation_projects__project__region_profiles_active_rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegionProfileRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Rollback Active Region Profile Curation Projects  Project  Region Profiles Active Rollback Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rollback Active Region Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles/deactivate": {
+      "post": {
+        "operationId": "deactivate_region_profile_curation_projects__project__region_profiles_deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegionProfileDeactivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Deactivate Region Profile Curation Projects  Project  Region Profiles Deactivate Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deactivate Region Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles/schema": {
+      "get": {
+        "operationId": "get_region_profile_schema_curation_projects__project__region_profiles_schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Region Profile Schema Curation Projects  Project  Region Profiles Schema Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Region Profile Schema",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles/test": {
+      "post": {
+        "description": "Preview a draft/saved profile's effective legs and run its\nvalidator. Scope note (documented deviation, mirrors W3's\n``/prompt_packs/test``): no live crop/segmenter/detector round-trip;\n``/prompt_packs/test`` already covers the VLM leg's prompt preview.\nNever writes.",
+        "operationId": "test_region_profile_curation_projects__project__region_profiles_test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegionProfileValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Test Region Profile Curation Projects  Project  Region Profiles Test Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Region Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles/validate": {
+      "post": {
+        "operationId": "validate_region_profile_route_curation_projects__project__region_profiles_validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "for_activation",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "For Activation",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegionProfileValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Validate Region Profile Route Curation Projects  Project  Region Profiles Validate Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Region Profile Route",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles/validate_segmenter_prompt": {
+      "post": {
+        "operationId": "validate_segmenter_prompt_route_curation_projects__project__region_profiles_validate_segmenter_prompt_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SegmenterPromptValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Validate Segmenter Prompt Route Curation Projects  Project  Region Profiles Validate Segmenter Prompt Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Segmenter Prompt Route",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles/{name}": {
+      "delete": {
+        "operationId": "delete_region_profile_route_curation_projects__project__region_profiles__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": true,
+            "schema": {
+              "title": "Expected Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Region Profile Route",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "get": {
+        "operationId": "get_region_profile_route_curation_projects__project__region_profiles__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Region Profile Route",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "put": {
+        "operationId": "save_region_profile_curation_projects__project__region_profiles__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegionProfileSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Region Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles/{name}/activate": {
+      "post": {
+        "operationId": "activate_region_profile_route_curation_projects__project__region_profiles__name__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegionProfileActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Activate Region Profile Route Curation Projects  Project  Region Profiles  Name  Activate Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Region Profile Route",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles/{name}/clone": {
+      "post": {
+        "operationId": "clone_region_profile_curation_projects__project__region_profiles__name__clone_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegionProfileCloneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clone Region Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles/{name}/revisions": {
+      "get": {
+        "operationId": "list_region_profile_revisions_curation_projects__project__region_profiles__name__revisions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileRevisionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Region Profile Revisions",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_profiles/{name}/revisions/{revision}": {
+      "get": {
+        "operationId": "get_region_profile_revision_curation_projects__project__region_profiles__name__revisions__revision__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "title": "Revision",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Region Profile Revision",
         "tags": [
           "Curation"
         ]

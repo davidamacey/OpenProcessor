@@ -316,6 +316,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `missed_labels`, `unmatched_detections`, `disagreements`). The
   `labels_confirmed` OpenSearch index/mapping stay (mappings are never
   dropped) as documented legacy — nothing writes it anymore.
+- **W4 region-profile CRUD and vocabulary.** Full per-project region-profile
+  lifecycle mirroring W3's pack CRUD:
+  `src/services/config_store/{profiles,profile_validation}.py`,
+  `src/routers/curation/{_region_profile_models,region_profiles,
+  config_vocabulary}.py`, `src/services/curation/region_impact.py`.
+  Routes: `GET/POST /region_profiles`, `/schema`, `/validate`,
+  `/validate_segmenter_prompt`, `/test`, `/{name}`,
+  `/{name}/revisions[/{revision}]`, `/{name}/clone` (`from_project`
+  read-only, pinned by a test mirroring W3's), `PUT/DELETE /{name}`,
+  `/active`, `/active/impact`, `/{name}/activate`, `/active/rollback`,
+  `/deactivate`; `GET /config/vocabulary`.
+  `src/services/training/promoted_models.py` (moved off
+  `routers/curation/models.py` in the W3 pass) backs the new
+  `detector_model_not_shared` / `detector_model_other_project` /
+  `detector_model_classes_unmapped` sharing checks in
+  `profile_validation.py`, using `model_classes.py`'s by-name matching.
+  `region_impact.py` aggregates the items index by `region_profile` (+
+  revision) plus validated/pending counts for the activation-impact
+  response; per glue G2, `ActivationImpact` ships WITHOUT
+  `suggested_reprocess` (W10 had not merged when this wave was built --
+  whichever of W4/W10 merges second adds the field per the coordinator's
+  merge-order call). `regions_requeue.py` / `region_requeue.py` /
+  `reprocess.py` are untouched, per G2.
+  `pipeline_params.py`'s `DETECTION_PROFILE_REJECTED` reworded off
+  `OP_REGION_PROFILE` (E7) to name the config-store activation route.
+  Every new route registered in the leak-sweep, with its own
+  PREPARE-resets-to-revision-1 hook mirroring W3's.
+- **W3 prompt-pack CRUD.** Full per-project prompt-pack lifecycle on top
+  of W2's config store: `src/services/config_store/{packs,pack_validation}.py`,
+  `src/services/config_store/activation_view.py` (shared active-config
+  response builder for packs and, later, region profiles),
+  `src/routers/curation/{_prompt_pack_models,prompt_packs}.py`. Routes:
+  `GET/POST /prompt_packs`, `/schema`, `/validate`, `/test`, `/{name}`,
+  `/{name}/revisions[/{revision}]`, `/{name}/clone` (with the one
+  legitimate cross-project read in this wave, `from_project`, bound
+  read-only and pinned by a test), `PUT/DELETE /{name}`, `/active`,
+  `/{name}/activate`, `/active/rollback`. `REPLY_KEY_CONTRACT` and
+  `FORMATTED_PLACEHOLDERS` added to `vlm_prompts.py`; the W8 list-shape
+  multi-box pairing check (`pack_multi_region_keys_missing`) is a
+  warning everywhere except activation pairing, where it is a
+  never-bypassable error. `CLONEABLE_AXES` gained `prompt_packs`
+  (every stored pack, current revision only) with a matching
+  `_clone_prompt_packs` in `src/services/projects/clone.py`.
+- **W4 prep: promoted-model discovery moved to a service module.**
+  `src/services/training/promoted_models.py` (`discover_promoted_models`,
+  `project_owns_model`) moved out of `src/routers/curation/models.py` so
+  service code (region-profile validation) can use it without importing
+  a router; `models.py` re-imports both under their old private names.
 - **W8 multi-box regions (partial, foundational slice).** Laid the core
   storage primitives for the per-item region-box list
   (`src/services/curation/region_boxes.py`): `RegionBox`, `read_boxes`,
@@ -556,6 +604,549 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the legacy scalars this pass).
 
 ### Fixed
+- **W3+W4 prompt-pack/region-profile CRUD fix pass, round 7 (independent
+  Opus review, 2026-09-28): 1 blocker + 1 major (new, both introduced by
+  round 6's `pipeline.py` 3-way split) + 1 minor test-quality gap + 1
+  major (pre-existing, mirror of R6-2).** Fixes every finding of the
+  round-7 section appended to
+  `docs/design/openprocessor_internal/w3_w4_review_2026-09-28.md`:
+  - **Blocker (R7-1, the worker's IVF auto-retrain self-trigger crashed
+    on every run):** `scripts/curation/auto_label_worker.py`'s
+    `_IVF_PIPELINE_PATH` still pointed at `pipeline:pipeline_auto_label`
+    — round 6's split made that name the thin PUBLIC route wrapper,
+    which has no `progress` parameter, while the worker always calls
+    `pipeline_fn(opensearch=, progress=, **args)`. Every IVF centroid
+    auto-retrain the idle worker fired ended `status: failed`, so
+    centroids never refreshed and the worker re-fired (and re-failed) on
+    every idle check. Fixed: point the constant at the internal
+    `pipeline:_run_auto_label` instead. Regression:
+    `tests/curation/test_r7_fixes.py` binds every pipeline path the
+    worker can resolve (the IVF constant and `_run_auto_label`'s own
+    `_pipeline_import_path`) against the worker's real call shape.
+  - **Major (R7-2, with `prompt_pack` omitted and a legacy settings-doc
+    default, the job ran a different pack than it echoed):** R6-1b's
+    `(None, None)` re-resolution (dodging the store-active-pack TOCTOU)
+    fired for EVERY omitted-pack case, including a legacy
+    `settings.defaults.prompt_pack` override or a plain env/file
+    default — neither of which has any staleness to dodge. The job's
+    `summary`/echoed `prompt_pack` kept reporting the settings-doc name
+    while the VLM labeler silently ran `active_prompt_pack()` (the
+    env/file default) instead. Per-item `vlm_prompt_pack` stamps stayed
+    correct (they read `labeler._pack` directly); only the job-level
+    summary and operator expectation were wrong. Fixed: new
+    `omitted_pack_is_store_active()` (`pipeline_params.py`) scopes the
+    omitted signal to "the echoed name really is the config store's own
+    active pack" — both `/start` and the direct-call branch in
+    `_run_auto_label` now gate `prompt_pack_omitted` through it before
+    passing it to `labeler_resolution_args`. Regression:
+    `tests/curation/test_r7_fixes.py` (legacy-settings-doc-default case
+    at both call sites, plus the store-active TOCTOU case still holds).
+  - **Minor (R7-3, the production line applying R6-1b's `labeler_
+    resolution_args` inside the job had no test driving the real
+    execution path):** the landed R6-1b tests checked that `/start` sets
+    the flag and that the helper maps it in isolation, but nothing drove
+    the actual VLM stage through it — a re-implementation of the
+    selection logic in `test_r6_worker_process_cold_store` stayed green
+    even with the production call site reverted. Regression:
+    `tests/curation/test_r7_fixes.py` runs `/start`'s real trigger args
+    through `_run_auto_label(..., run_vlm=True)` for both the
+    active-pack-switch and direct-call shapes, spying on the actual
+    labeler instance obtained, plus a unit-level spy confirming the
+    direct-call branch invokes `omitted_pack_is_store_active` at all.
+  - **Major (R7-4, pre-existing, mirror of R6-2: clone copies the
+    profile but not an env/file pack, and the target's fallback pack was
+    never gated):** R6-2 fixed clone skipping PROFILE validation when
+    the source has no real stored profile. This round's reviewer found
+    the mirror: when the PROFILE axis is cloned but the source's PACK is
+    an env/file default (`revision=None`, never written to the store —
+    `_clone_activations` skips it), the gate's `pending_sibling` for the
+    cloned profile was still the SOURCE's pack body, not the TARGET's
+    actual post-clone fallback pack — so a valid source pairing (e.g. a
+    full multi-box pack + a 3-region profile) could pass the gate while
+    the target actually goes live with ITS OWN stripped pack under that
+    same cloned 3-region profile, a pairing nobody checked. Fixed:
+    `clone_activation_gate.py` gained `pack_will_be_cloned`, mirroring
+    `profile_will_be_cloned`'s exact condition; when the pack won't be
+    cloned, the profile-cloned branch validates against
+    `resolve_prompt_pack()` bound to the target instead of the source
+    body. Also closes Item 4's over-rejection Nit: the pack-only branch
+    now returns early when the pack itself won't be cloned either (was
+    previously always validating a pack body that would never land).
+    Regression: `tests/projects/test_r7_clone_pack_mirror.py`.
+  - Nits: `pipeline_public.py`'s OpenAPI `description` restored to
+    describe the public contract (it had regressed to describing
+    internals after the round-6 split); the internal notes moved to a
+    comment. CHANGELOG's round-5 R5-2 entry corrected (it said the fix
+    keyed off `prompt_pack is None`; the landed fix actually used the
+    dedicated `prompt_pack_resolved` signal). Round-5's m-c/m-d gaps,
+    previously undocumented, now noted under the round-5 entry below.
+  - Landed as permanent tests: `tests/curation/test_r7_fixes.py`,
+    `tests/projects/test_r7_clone_pack_mirror.py`.
+- **W3+W4 prompt-pack/region-profile CRUD fix pass, round 6 (independent
+  Opus review, 2026-09-28): 1 blocker (two halves) + 1 major + 4
+  test-quality fixes.** Fixes every finding of the round-6 section
+  appended to
+  `docs/design/openprocessor_internal/w3_w4_review_2026-09-28.md`:
+  - **Blocker (R6-1, both halves required together):** `/start` jobs run
+    in the `auto_label_worker` container, a SEPARATE process from the
+    API that received `/start` — round 4/5's fixes were validated only
+    in-process, where the config-store snapshot is naturally warm/shared,
+    which masked this entirely.
+    - **(a) Cold store in the worker:** nothing on the job path ever
+      refreshed that process's config-store snapshot, so a pinned
+      `(name, revision)` resolved at `/start` time 404'd
+      (`ValueError: unknown prompt pack`) the moment `_run_auto_label`
+      (the renamed internal implementation, split from the public route
+      below) called `_get_vlm_labeler` — for every VLM auto-label run on
+      a stored pack, including an explicit `@rev` pin (broken since
+      round 4's fix, not just this round). Fixed with a
+      `get_config_store().ensure_fresh(opensearch)` at the top of
+      `_run_auto_label`, scoped to `prompt_pack_resolved=True` (a
+      `/start`-originated job trigger) — the synchronous public route
+      runs entirely in-process and doesn't need it; adding it
+      unconditionally there was proven, by a genuine
+      `test_cross_project_leak.py` regression, to add a real (if
+      TTL-gated) extra OpenSearch call with no correctness benefit.
+    - **(b) The omitted-pack case still served an un-activated draft
+      once the store is warm:** the job's `(active_name, None)`
+      placeholder for an omitted `prompt_pack` only redirects to the
+      pinned body while `active_name` is STILL the active pack —
+      reactivating a different pack between `/start` and the VLM stage
+      actually running (a window spanning the whole pre-VLM pipeline,
+      not a tight race) makes it silently serve the old name's
+      un-activated CURRENT doc (round-1 B1, reachable again once (a) is
+      fixed). Fixed with a new `prompt_pack_omitted` signal, computed
+      from the raw query param before resolution and threaded through
+      the job trigger separately from the echoed `(prompt_pack,
+      prompt_pack_revision)` (kept for `summary`/job-status display);
+      `labeler_resolution_args()` (`pipeline_params.py`, directly
+      unit-tested) resolves the VLM labeler against `(None, None)` —
+      always "whatever is active right now" — whenever this is set,
+      instead of the echoed name.
+    - Regression: `test_r6_worker_process_cold_store` (both the omitted
+      and explicit-`@rev`-pin shapes, cold-store simulated via
+      `reset_config_stores()` between `/start` and the job) and
+      `test_r6_omitted_job_after_active_switch_serves_draft`
+      (in-process, an activation change during the run).
+    - `pipeline.py`'s `POST /pipeline/auto_label` and
+      `POST /pipeline/auto_label/start` routes split into
+      `pipeline_public.py` / `pipeline_start.py` (700-LOC ratchet,
+      needed once this fix's code landed) — `pipeline.py` keeps only the
+      internal `_run_auto_label` implementation, re-exporting
+      `pipeline_auto_label` for existing direct-call test sites.
+  - **Major (R6-2, the clone pack axis was ungated in the target's own
+    context):** R5-3's gate skipped ALL cross-axis validation whenever
+    the source's `detection_profile` activation wasn't itself going to
+    be cloned (`off`, or an env/registry profile with no stored
+    revision) — `_clone_activations`'s own skip condition requires a
+    NON-`None` activation revision (env/registry ids never carry one);
+    the gate's condition didn't check that, so it also (wrongly) treated
+    "a body merely resolved for validation" as "will be cloned." In both
+    trigger cases, the target falls back to its OWN existing/default
+    profile, and nothing validated the cloned PACK against that. Fixed:
+    `check_activation_pair_in_target_context` now matches
+    `_clone_activations`'s exact "will this axis be copied" condition,
+    and when the profile axis won't be copied, runs the pack's
+    cross-axis-only checks (`check_multi_region_keys`, `_check_text_mode`
+    — deliberately NOT the full `for_activation` gate, which would also
+    re-run intrinsic completeness checks against pre-existing source
+    packs never validated end-to-end, the same scoping reasoning R5-3
+    itself used) against the target's real post-clone profile
+    (`_resolve_profile(None)`, bound to the target project context this
+    function already runs in). Regression: `test_r6_clone_pack_only_gap`
+    (both trigger variants).
+  - **Test-quality fixes** (all previously vacuous — mutation-proven to
+    stay green when the fix they claimed to guard was reverted):
+    1. The walk-all-writers test's combined-PUT entry now asserts 422
+       specifically and that the bad pairing never went live, instead of
+       accepting either 409 or 422 for ANY reason.
+    2. The landed R5-3 clone test now patches Triton READY (matching
+       `test_r6_clone_cause.py`'s pattern) and asserts the exact error
+       code set, so it can no longer pass because Triton was simply
+       unreachable rather than because the ownership check fired.
+    3. Landed guards for 3 previously-untested fixes: the pack-side
+       `pending_sibling` override (`{pack, off}` over-rejection,
+       `test_r6_combined_stripped_with_profile_off_is_accepted`), m-a's
+       rollback `ensure_fresh`
+       (`test_r6_rollback_refreshes_snapshot_before_gating`), and the
+       `GET /active` source-label fix for a deleted-but-still-activated
+       pack (`test_r6_active_label_stored_for_deleted_but_still_
+       activated_pack`).
+    4. `prompt_pack_resolved`/`prompt_pack_revision` are no longer
+       reachable from an HTTP request at all (previously hidden
+       `Query(include_in_schema=False)` params directly on the combined
+       route, settable via `?prompt_pack_resolved=true` to skip the
+       unknown-pack 422) — real Python-only params on `_run_auto_label`
+       now, set only by `/start`'s resolved pin and the worker's direct
+       call; the public `pipeline_auto_label` route always forces them
+       off.
+  - Landed as permanent tests: `tests/curation/test_r6_probes.py`,
+    `tests/projects/test_r6_clone_cause.py`; `tests/curation/
+    test_r5_probes.py` and `tests/projects/test_r5_clone_probes.py`
+    updated in place for items 1 and 2 above.
+- **W3+W4 prompt-pack/region-profile CRUD fix pass, round 5 (independent
+  Opus review, 2026-09-28): 2 blockers + 1 major + 1 structural test +
+  3 minors.** Fixes every finding of the round-5 section appended to
+  `docs/design/openprocessor_internal/w3_w4_review_2026-09-28.md`:
+  - **Blocker (R5-1, introduced by round 4's own m1 fix — combined
+    pack+profile `PUT /settings` checked each axis against the OTHER's
+    OLD stored value, not its PENDING one):** `run_activation_gate` gained
+    an optional `pending_sibling` override; `PUT /settings` now resolves
+    BOTH axes' target bodies first (`_resolve_config_store_axis`, the
+    gate-free half of the old `_prepare_config_store_axis`), then gates
+    each axis using the OTHER axis's PENDING target from the SAME
+    request (`_pending_sibling_for_gate`) when both are set in one call.
+    Before this fix, a single `PUT /settings` could pair a multi-box-
+    stripped pack with a multi-region profile even though `/activate`
+    (with `force`) still correctly 422s that exact pairing standalone.
+    Regression: `test_r5_two_axis_put_cannot_pair_stripped_pack_with_
+    multi_profile` (both key orders).
+  - **Blocker (R5-2, round-4's own R4-3 fix missed the no-pack-specified
+    default path — the common/Cropwright case):** `pipeline_auto_label`
+    now re-resolves on the dedicated `prompt_pack_resolved` signal (`/start`
+    sets it `True` unconditionally, for every shape of its request), not
+    `prompt_pack_revision is None`. `/start`'s truly-omitted-pack path resolves to `(active_
+    name, None)` at request time — `revision=None` there means "follow
+    the active pack's PINNED body dynamically" (`get_prompt_pack`'s
+    active-name redirect, B1 round-2), not "unresolved." Keying the job's
+    re-resolution off the revision re-entered the N7 "bare name -> latest
+    saved revision" branch on that already-resolved name, silently
+    running an un-activated draft — the original round-1 B1 bug, reachable
+    again via the default path since the job no longer crashes.
+    Regression: `test_r5_start_job_runs_what_the_request_resolved[-1]`
+    (the omitted-query case; the two explicit-pack cases were already
+    covered by R4-3's own tests).
+  - **Major (R5-3, project clone never routed through the gate at all):**
+    `run_activation_gate` gained an optional `body` override (skips the
+    name-based `build_record` lookup, validates a caller-supplied body
+    instead) so a caller can validate one project's body bound to a
+    DIFFERENT project's context. `_validate_clone` now re-resolves the
+    source's active `detection_profile` body and runs the gate bound to
+    the TARGET (its own class registry, Triton state, `project_slug`)
+    before any write, using the source's active pack as
+    `pending_sibling` when the pack axis is cloned alongside it. Scoped
+    to `detection_profile` (the axis with today's actual target-specific
+    condition, `detector_model_not_shared`) rather than also re-running
+    full `prompt_pack` `for_activation` validation, which would reject
+    pre-existing source packs on unrelated completeness checks with no
+    reported gap behind it. Regression:
+    `test_r5_clone_activates_source_private_detector_in_target`.
+  - **Structural test (asked for in round 4, still missing per round 5):**
+    `test_r5_walk_every_activation_writer_rejects_gate_failing_pair`
+    enumerates every real activation-writing call site — direct activate
+    ×2, settings-bridge ×2 axes + the combined-request case, rollback ×2,
+    and clone — against the SAME gate-failing pack+profile pair, so a
+    future caller that skips the gate on any of these paths turns it red.
+    Confirms `detection_profile` rollback rejects the pair too (round 5
+    found it worked but had no landed test — see the m4 correction
+    below).
+  - **Minor (m-b, rollback to a deleted pack/profile resurrected it as
+    active, and `GET /active` mislabeled its `source` as `'env'`):** the
+    gate validates the immutable `<kind>:<name>@<rev>` revision-copy doc,
+    which survives a `DELETE` of the CURRENT doc, so a target deleted
+    while it was `previous` used to come back active. `rollback_axis` now
+    refuses (`LookupError('previous_deleted')` -> 409 `previous_deleted`,
+    new `ConfigErrorDetail` code) when the target's revision was
+    genuinely stored (M6: env/file ids never carry a revision) but is no
+    longer in the store's current names. `activation_view.py`'s `source`
+    field fix (a non-`None` revision alone now implies `'stored'`) is
+    kept as defense in depth for any activation state the rejection
+    doesn't cover. Regression: `test_r5_rollback_to_deleted_pack`.
+  - **Minor (m-a, rollback never refreshed its snapshot before gating):**
+    `rollback_axis` now calls `store.ensure_fresh(client)` before reading
+    the cross-axis gate inputs or the deleted-target check above.
+  - **Known limitation (m-c, residual): a two-axis `PUT /settings` can
+    still half-write if the SECOND axis's *apply* hits an
+    `ActiveConflictError` after the first axis's already committed.**
+    The gate (R5-1) now runs both axes' checks against each other's
+    pending target before either write, so a genuinely invalid pairing
+    is rejected up front — this is only the narrower window where the
+    second axis's OWN OCC check fails after that. Documented, not fixed:
+    apply both axes under one shared OCC token to close it fully.
+  - **Known limitation (m-d, inherent): concurrent single-axis
+    activations on different axes can each pass against the other's old
+    (not pending) state.** OCC here is per axis, so a `prompt_pack`
+    activation racing a `detection_profile` activation (each via its own
+    direct `/activate` route, not the combined `PUT /settings` R5-1
+    covers) can land a pairing neither request's own gate check saw
+    together. This needs a genuine race to trigger, so it's rated minor.
+    Documented, not fixed: either axis's write condition would need to
+    include the other axis's activation `etag`.
+  - **Minor (CHANGELOG over-claims from round 4):** corrected — see the
+    round-4 entry above, now flagging that clone was not routed through
+    the gate and that only `prompt_pack` rollback had a landed test.
+  - Landed as permanent tests: `tests/curation/test_r5_probes.py`,
+    `tests/projects/test_r5_clone_probes.py`.
+- **W3+W4 prompt-pack/region-profile CRUD fix pass, round 4 (independent
+  Opus review, 2026-09-28): 1 blocker + 2 majors + 5 minors.** Fixes every
+  finding of the round-4 section appended to
+  `docs/design/openprocessor_internal/w3_w4_review_2026-09-28.md`:
+  - **Blocker (R4-1, rollback bypassed the activation gate — the 4th
+    round of "fixed the probed caller, missed a sibling"):** consolidated
+    the `for_activation` gate into ONE shared function,
+    `run_activation_gate` (new `src/services/config_store/
+    activation_gate.py`), and routed every DIRECT activation writer
+    through it: `POST /prompt_packs/{name}/activate`, `POST
+    /region_profiles/{name}/activate`, `PUT /settings` (the round-3 N1
+    fix, now delegating to the shared function instead of its own copy),
+    and — the previously ungated path — `POST /prompt_packs/active/
+    rollback` / `POST /region_profiles/active/rollback` (wired into the
+    shared `rollback_axis` in `activation_apply.py`, so both axes'
+    rollback get it in one place). Rollback runs the gate with no
+    `force`, mirroring the settings bridge. A rollback target naming a
+    revision that is no longer the STORED CURRENT one (e.g. superseded by
+    a later, never-activated PUT) is still resolvable: the gate accepts
+    an optional OpenSearch client and falls back to the immutable
+    `<kind>:<name>@<rev>` revision-copy doc when the in-memory snapshot
+    only has the current revision. One test,
+    `test_r4_rollback_bypasses_multibox_gate`, plus the settings-bridge
+    N1 probes, now walk activate/settings/rollback with a gate-failing
+    revision — **round-5 review found this was still incomplete: project
+    clone (a separate activation writer, `_clone_activations` ->
+    `index.activate`) was never routed through the gate, and only the
+    `prompt_pack` axis of rollback had a landed test, not
+    `detection_profile`. Both closed in the round-5 fix pass below.**
+  - **Major (R4-2, `expected_active` shape bug, same class as round-3's
+    N3a but in `settings.py`):** `_activate_config_store_axis` (now split
+    into `_prepare_config_store_axis`/`_apply_config_store_axis`, see
+    m1 below) folded an explicit deactivation (`'off'`) into Python
+    `None` when building `expected_active` — but `index.activate`'s OCC
+    only treats `None` as "no doc has ever been written"; an explicit
+    deactivation stores a real `{'name': None, 'revision': None}` doc.
+    Every `PUT /settings` after one deactivation 409'd `active_conflict`
+    on both axes. Fixed to map `'off'` to the real doc shape.
+  - **Major (R4-3, predates this branch; `/pipeline/auto_label/start`
+    jobs crashed, and the pin was discarded):** `pipeline_auto_label`
+    (`routers/curation/pipeline.py`) now accepts a hidden
+    `prompt_pack_revision` param — `/start`'s background job trigger was
+    already putting it in the job args, and the function had no such
+    parameter, so every `/start` job raised `TypeError`. When the caller
+    supplies it (i.e. `/start` already resolved-and-pinned), the function
+    uses it as-is instead of re-running `resolve_run_prompt_pack` on the
+    bare name, which (after N7) would silently re-pin to the LATEST
+    saved revision instead of the one the request actually pinned.
+  - **Minor (m1, two-axis `PUT /settings` half-applies):** resolving +
+    gating both config-store axes now happens BEFORE either is activated
+    (`_prepare_config_store_axis` / `_apply_config_store_axis` split), so
+    a second axis's 422 can no longer leave the first axis's activation
+    committed.
+  - **Minor (m2, N3 name-collision check read a stale/cached target
+    store):** the activations-axis "target already has a stored config
+    under this name" check in `clone.py` now reads the specific doc
+    straight from the client instead of the 1s-TTL `ConfigStore`
+    snapshot, closing (most of) the narrow cross-worker race window.
+  - **Minor (m3, the landed N4 test was vacuous):**
+    `test_r3_rollback_transient_error_status` now asserts on the STORED
+    `activation:*` doc (`get_activation`) instead of `GET /active`'s
+    in-process snapshot, which was stale in both the pre-fix and
+    post-fix worlds and so passed either way.
+  - **Minor (m4, missing test coverage):** landed
+    `test_r4_n1_profile_settings_gate` (profile axis of the settings-
+    bridge gate), `test_r4_n5_profile_pinned_copy_missing` (profile side
+    of the pinned-copy fail-open fix), and
+    `test_r4_settings_reactivate_after_off` (on→off→on through
+    `PUT /settings`, both axes).
+  - **Minor (m5, test hygiene):** fixed stale "Round-3" docstrings on the
+    now-permanent round-3 probe files; gave
+    `test_r3_r1_far_past_revision` real assertions (both a
+    revision-that-once-existed-but-is-no-longer-current/active AND a
+    never-saved revision now assert the specific 422 wording, instead of
+    only printing the outcome); tightened
+    `test_r3_existing_target_previously_deactivated` to require success
+    (not "success or a clean 409"); made `_apply_clone`'s
+    `target_activations` parameter required (no more silent
+    "assume the target is empty" default a future caller could
+    reintroduce N3a through).
+  - Landed as permanent tests: `tests/curation/test_r4_probes.py`,
+    `tests/projects/test_r4_clone_probes.py`.
+- **W3+W4 prompt-pack/region-profile CRUD fix pass, round 3 (independent
+  Opus review, 2026-09-28): 1 blocker + 2 majors + 4 minors + 1 nit.**
+  Fixes every finding of the round-3 section appended to
+  `docs/design/openprocessor_internal/w3_w4_review_2026-09-28.md`:
+  - **Blocker (`PUT /curation/settings` bypassed activation validation):**
+    `_activate_config_store_axis` (`routers/curation/settings.py`) now
+    runs the same `for_activation` `validate_pack`/`validate_profile`
+    gate `POST /{name}/activate` runs, before activating a
+    `defaults.prompt_pack`/`defaults.detection_profile` value — a
+    multi-box-stripped revision that `/activate` correctly 422s (even
+    with `force`) can no longer go live through the Cropwright
+    default-pack dropdown's settings route instead. No `force` support on
+    this bridge — any blocking error always 422s.
+  - **Major (wrong provenance stamp on a per-run draft pin):**
+    `get_prompt_pack(name, revision=N)` now tags the resolved
+    `PromptPack` instance with the exact revision it served;
+    `prompt_pack_stamp` prefers that tag over re-deriving from the
+    store's *active* ref, so a per-run `name@<draft rev>` pin (never
+    activated) stamps VLM writes with the draft's own revision, not
+    whatever happens to be currently active. Also fixes the same-shaped
+    bug for a per-run bare `name` (no `@rev`), which now correctly
+    resolves to the *latest* saved revision per any_domain_plan.md §3.7
+    instead of the active one (`resolve_run_prompt_pack` pins the current
+    stored revision explicitly for that case) — the "default/omitted"
+    path (no `prompt_pack` param at all) is unchanged and still serves
+    the active pinned body.
+  - **Major (`clone_settings_into` half-writes before a 409):**
+    `_validate_clone`'s `activations` axis check now (a) captures the
+    target's REAL existing activation doc (including a
+    previously-deactivated `{'name': None, 'revision': None}` one) and
+    threads it through as `_clone_activations`'s `expected_active`
+    instead of assuming an empty target, and (b) refuses up front when
+    the target already has a STORED (even never-activated) pack/profile
+    sharing the source's active name for either axis — both cases the
+    old `existing.get('name')`-only check missed, which used to write
+    settings/keymap/pack/activation docs before a spurious 409.
+  - **Minor (500 after a committed activation):** `activate_axis`
+    (`store.py`) and a new shared `rollback_axis` (replacing
+    `rollback_pack`/`rollback_profile`'s own write-then-resolve calls
+    into `index.rollback`) now resolve the pinned body BEFORE writing the
+    activation doc, so a transient error on that read aborts cleanly with
+    nothing committed instead of surfacing a 500 after the write already
+    landed.
+  - **Minor (pinned-copy 404/decode failure fails open):**
+    `active_prompt_pack()` / `get_active_region_profile()` no longer fall
+    back to the unvalidated current doc when the ref names a revision and
+    the pinned copy is missing or malformed — only when the current doc
+    genuinely IS that same revision. Otherwise falls back to the env/file
+    default and logs an error, closing the other half of round-2's B1
+    fix.
+  - **Minor (circular import in the `vlm_prompts`/`vlm_prompt_resolution`
+    split):** `vlm_prompt_resolution.py`'s module-level import of
+    `PromptPack`/`BUILT_IN_PACKS`/`_BUILT_IN_NAMES` is now `TYPE_CHECKING`
+    plus per-call-site lazy imports, so importing it before `vlm_prompts`
+    in a cold interpreter no longer raises `ImportError`.
+  - **Nit (misleading 422 message):** the per-run `name@<far-past
+    revision>` 422 no longer says "unknown revision" (the revision can
+    genuinely exist in history) — it now says the revision isn't
+    resolvable in this process, and names the actual scope: the current
+    saved revision or the currently-activated revision only, not a full
+    historical lookup.
+  - Landed as permanent tests: `tests/curation/test_r3_activation_probes.py`,
+    `tests/projects/test_r3_clone_probes.py`.
+- **W3+W4 prompt-pack/region-profile CRUD fix pass (independent Opus
+  review, 2026-09-28): 2 blockers + 5 majors + isolation gaps.** Fixes
+  every finding of
+  `docs/design/openprocessor_internal/w3_w4_review_2026-09-28.md`:
+  - **Blocker 1 (activation revision pin ignored):** `ConfigSnapshot`
+    gained `active_pack_body`/`active_profile_body` (`store.py`), resolved
+    at activation/rollback time from the immutable `<kind>:<name>@<rev>`
+    revision copy, not the current-by-name doc. `active_prompt_pack()`
+    (`vlm_prompts.py`) and `get_active_region_profile()`
+    (`profile_registry.py`) now serve that pinned body. A `PUT` on the
+    active pack/profile still writes a new revision (per
+    any_domain_plan.md §4.4) but no longer changes what's running until a
+    separate `/activate` call re-validates it — closing the path where a
+    PUT could silently bypass the "never-bypassable" multi-box check.
+  - **Blocker 2 (default clone 409s after partial writes):** `_clone_activations`
+    (`services/projects/clone.py`) now reuses the revision
+    `_clone_prompt_packs`/`_clone_regions` already wrote for the same
+    name instead of re-`save_config`-ing with `expected_revision=None`,
+    so the default (all-axes) clone from a source with an active stored
+    pack no longer 409s `target_not_empty` partway through.
+  - **Major (name validation bypassed by PUT/clone):** PUT now 404s an
+    unknown name (creation is POST's job) and runs `_check_name`; clone
+    validates `new_name` the same way, both for packs and region profiles.
+  - **Major (template pack activation lies):** `POST /prompt_packs/{name}/activate`
+    now 403s a template, mirroring the region-profile route's existing guard.
+  - **Major (`ActivationImpact.items_total` capped at 10k, untested):**
+    `region_impact.py` sets `track_total_hits: True`;
+    `tests/curation/test_region_impact.py` pins every field's arithmetic
+    against a seeded fake response (previously no test asserted any
+    number).
+  - **Major (`from_project` clone 500s on a stale-target name collision):**
+    both clone routes now refresh the target's own store after the
+    source's read-only bind exits, and map `RevisionConflictError` to 409
+    `name_conflict` instead of a bare 500.
+  - **Isolation gaps:** `test_cross_project_leak.py`'s marker set now
+    includes `f'{slug}-model'` (the pattern `_stored_prompt_pack`/
+    `_stored_region_profile` already seed), so a config-store *content*
+    leak into a list response is now detectable; a new
+    `test_from_project_clone_reads_source_index_only_under_the_real_guard`
+    drives `from_project` through the real guarded transport for both
+    clone routes, pinning that the source `configs` index is only ever
+    read, never written.
+  - **Refactor:** the duplicated from-project clone-source resolution in
+    both routers is now one shared `services/config_store/clone_shared.py`.
+    `src/routers/curation/models.py`'s compat re-import of
+    `discover_promoted_models`/`project_owns_model` under old private
+    names is gone (no-shims rule) — `_core_models()` moved down into
+    `services/training/promoted_models.py` so the service no longer
+    depends back on the router it was extracted from; all call sites
+    updated. Removed dead code: `packs.RESERVED_NAME_ERROR`,
+    `pack_source`/`profile_source`, the `get_activation` re-export from
+    `packs.__all__`, the `del check_multi_region_keys` breadcrumb, and
+    `region_profiles.py`'s duplicate `store2`.
+  - **Deferred (documented, not fixed this pass):** `GET
+    /region_profiles/schema` is left as an explicit `TODO` (still a
+    placeholder — every field types as `'string'`/`'advanced'`/`enum:
+    None`) rather than implemented, since it's out of scope for a
+    blockers/majors fix pass; activating a stored pack/profile by an
+    explicit past `revision` number remains unreachable (`build_record`
+    returns `None` for a non-current revision) — request field kept,
+    not wired; deleting a pack/profile that is only an activation's
+    `previous` (not the current active) is still allowed.
+- **W3+W4 prompt-pack/region-profile CRUD fix pass, round 2 (independent
+  Opus review, 2026-09-28): the round-1 fix pass above left B1 and B2
+  only partly fixed.** Fixes every round-2 finding of
+  `docs/design/openprocessor_internal/w3_w4_review_2026-09-28.md`:
+  - **Blocker 1 remaining (activation pin bypassed by other callers):**
+    round 1 pinned `active_prompt_pack()`/`get_active_region_profile()`,
+    but the API's own VLM write routes (`/vlm/label_batch` and 3
+    siblings, via `_get_vlm_labeler(await _default_pack_name(...))`) and
+    the pipeline's omitted-`prompt_pack` default still resolved the
+    active pack BY NAME, serving the un-activated current doc under the
+    activated revision's stamp — the original bug via a new call site.
+    `get_prompt_pack()` (`vlm_prompts.py`, resolution logic split into
+    the new `vlm_prompt_resolution.py` to stay under the 700-LOC ratchet)
+    now redirects a by-name lookup of the store's currently active pack
+    to the same pinned body `active_prompt_pack()` serves, and resolves
+    an explicit `name@<rev>` against the pinned-active revision's copy
+    too when it isn't the current one (fixes the R1 regression below in
+    the same change). A transient pinned-revision fetch failure in
+    `_resolve_active_body` (`store.py`) no longer falls open to the
+    unvalidated current doc: only a genuine 404 means "nothing to pin"
+    now — any other exception propagates so `refresh()` marks the
+    snapshot `stale` and keeps the last known-good pinned body.
+  - **Blocker 2 (clone partial-write 409 + activation-skip regression):**
+    the round-1 fix only passed its own test because that test called
+    `_apply_clone` directly, skipping `_validate_clone`'s store warm-up —
+    in the real `clone_settings`/`clone_settings_into` flow the target
+    store's 1s cache TTL hid `_clone_prompt_packs`'s just-written pack
+    from `_clone_activations`'s `already_cloned` check, so a clone
+    finishing inside that window (the typical case) still 409'd
+    `target_not_empty` after settings/classes/keymap/packs had already
+    landed. `_clone_prompt_packs` now returns what it wrote
+    (`{name: StoredConfig}`) and `_clone_activations` takes that as an
+    explicit argument instead of re-reading the target store's cache —
+    never needs to see what was just written, so the race is gone
+    entirely (no sleep needed to make the real flow pass). The round-1
+    fix also activated the source's *current* pack body instead of its
+    *activated* one when a sibling axis had already written that name,
+    undoing W2 Minor 2 and opening a clone-shaped activation-gate bypass;
+    `_clone_activations` now always activates the source's fetched
+    ACTIVATED body, reusing the sibling axis's write only when it's
+    byte-identical, else saving the activated body as an additional
+    revision so the target lands in the same current-vs-activated split
+    state as the source.
+  - **Regression (R1, introduced by this round's own B1 fix):**
+    `resolve_run_prompt_pack` (`pipeline_params.py`) now validates
+    `name@<rev>` at request time via `get_prompt_pack` (422 for a
+    genuinely unknown revision) instead of accepting any syntactically
+    valid pin and only failing the background job later — fixes
+    `?prompt_pack=name@<the-still-active-but-superseded-revision>`
+    (exactly B1's motivating case) 202-then-job-failing.
+  - **M1b (missing safety-net test for the read-only clone-source
+    guard):** confirmed live-correct but untested — removing
+    `read_only=True` from any of the four `bind_project(source,
+    read_only=True)` binds in `clone.py` or the one in
+    `clone_shared.py`'s `read_source_record` left the whole suite green.
+    New `tests/projects/test_source_read_only_write_guard.py` plants a
+    real write attempt (via the guard's own `check_request`) inside each
+    of the five source binds and asserts `ProjectReadOnly` stops it;
+    manually confirmed each test goes red when its corresponding
+    `read_only=True` is removed.
+  - Round-1's probe tests (`test_p*`/`test_c*`) are landed as permanent
+    regression tests: `tests/curation/test_w34_round2_activation_regression.py`,
+    `tests/projects/test_w34_round2_clone_regression.py`.
 - **W8 pipeline-wiring correctness fixes (independent Opus review,
   2026-09-27): 1 blocker + 8 majors.** Fixes every finding of
   `docs/design/openprocessor_internal/w8_pipeline_review_2026-09-27.md`

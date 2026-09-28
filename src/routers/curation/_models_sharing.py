@@ -55,10 +55,10 @@ async def set_model_sharing(
     """Opt a promoted model into (or out of) cross-project sharing. Only
     the owning project may call this -- 404 for anyone else, matching
     every other ownership check in this router."""
-    from src.routers.curation.models import _project_owns_model
+    from src.services.training.promoted_models import project_owns_model
 
     project = get_curation_config().project_slug
-    if not _project_owns_model(model_name):
+    if not project_owns_model(model_name):
         raise api_error(
             404,
             'model_not_found',

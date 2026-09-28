@@ -232,13 +232,51 @@ def get_active_region_profile() -> DetectionProfile | None:
     try:
         from src.services.config_store import get_config_store
 
-        ref = get_config_store().current.active_profile
+        snapshot = get_config_store().current
+        ref = snapshot.active_profile
     except Exception:  # pragma: no cover - config_store always importable
-        ref = None
+        ref, snapshot = None, None
     if ref == 'off':
         return None
     if ref is not None:
-        name, _revision = ref
+        name, revision = ref
+        # B1 fix (W3/W4 review 2026-09-28): serve the revision pinned at
+        # activation time, not whatever `<name>`'s current doc says now --
+        # a PUT after activation must not go live until a separate
+        # activate call re-runs the for-activation checks.
+        if (
+            snapshot is not None
+            and snapshot.active_profile_body is not None
+            and snapshot.active_profile_body.name == name
+        ):
+            try:
+                return region_profile_from_dict(
+                    {**snapshot.active_profile_body.body, 'name': name}, source=name
+                )
+            except Exception as exc:
+                logger.warning(
+                    'active_region_profile_pinned_body_invalid', name=name, error=str(exc)
+                )
+                # N5 fix (W3/W4 round-3 review): a decode failure on the
+                # pinned body must not fail open to the current
+                # (possibly-draft) doc below either.
+                return _REGISTRY.get(_DEFAULT_NAME) if _DEFAULT_NAME is not None else None
+        if revision is not None:
+            # N5 fix: the ref names a specific activated revision with no
+            # pinned copy (a genuine 404 in `_resolve_active_body`,
+            # distinct from "no revision to pin", which never reaches
+            # here). `get_profiles().get(name)` would otherwise silently
+            # serve the CURRENT, unvalidated stored profile under the
+            # active name -- the B1 failure class. Only reuse it when it
+            # genuinely IS that same revision; else fail closed to the
+            # env default and log loudly.
+            stored_current = snapshot.profiles.get(name) if snapshot is not None else None
+            if stored_current is not None and stored_current.revision == revision:
+                profile = get_profiles().get(name)
+                if profile is not None:
+                    return profile
+            logger.error('active_region_profile_pinned_body_missing', name=name, revision=revision)
+            return _REGISTRY.get(_DEFAULT_NAME) if _DEFAULT_NAME is not None else None
         profile = get_profiles().get(name)
         if profile is not None:
             return profile

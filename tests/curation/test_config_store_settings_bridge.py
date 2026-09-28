@@ -92,14 +92,36 @@ def test_put_prompt_pack_null_deactivates(app_client: TestClient) -> None:
     assert r.json()['defaults']['prompt_pack'] == 'off'
 
 
-def test_put_detection_profile_off_and_on(app_client: TestClient) -> None:
+def test_put_detection_profile_off_and_on(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """W2: detection_profile is now settable through the store, unlike
     the prior read-only behavior."""
     from src.config import DetectionProfile
     from src.services.detection import profile_registry
 
+    # N1 fix (W3/W4 round-3 review): `PUT /settings` now runs the same
+    # `for_activation` validation `POST /{name}/activate` runs -- a bare
+    # `DetectionProfile(name='wheel')` (no detector, no segmenter) can
+    # never produce a box and genuinely fails that gate now, same as it
+    # would on the direct activate route. `text_reader='none'` skips the
+    # OCR-model checks (this test is about the settings-bridge plumbing,
+    # not OCR); the detector model is reported READY the same way
+    # `test_region_profiles_router.py`'s `app_client` fixture does.
+    async def _fake_repo_index() -> list[dict]:
+        return [{'name': 'wheel_detector', 'state': 'READY', 'version': '1'}]
+
+    from src.services.triton_control import TritonControlService
+
+    monkeypatch.setattr(
+        TritonControlService, 'get_repository_index', lambda _self: _fake_repo_index()
+    )
+
     profile_registry._reset_registry_for_tests()
-    profile_registry.register_profile(DetectionProfile(name='wheel'), default=True)
+    profile_registry.register_profile(
+        DetectionProfile(name='wheel', detector_model='wheel_detector', text_reader='none'),
+        default=True,
+    )
     try:
         r = app_client.put(
             '/curation/projects/default/settings', json={'defaults': {'detection_profile': 'wheel'}}

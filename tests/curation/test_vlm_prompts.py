@@ -6,16 +6,45 @@ deployment-config resolution + fallback behavior.
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack, resolve_prompt_pack
 
 
-if TYPE_CHECKING:
-    from pathlib import Path
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_vlm_prompt_resolution_importable_before_vlm_prompts() -> None:
+    """N6 fix (W3/W4 round-3 review): ``vlm_prompt_resolution.py`` used to
+    import ``PromptPack``/``BUILT_IN_PACKS``/``_BUILT_IN_NAMES`` from
+    ``vlm_prompts.py`` at module level, while ``vlm_prompts.py`` itself
+    imports this module back (for its re-export block) AFTER defining
+    those names -- fine when ``vlm_prompts`` loads first (every existing
+    caller's order), but importing ``vlm_prompt_resolution`` FIRST in a
+    cold interpreter raised ``ImportError: cannot import name
+    'active_prompt_pack' from partially initialized module`` because
+    ``vlm_prompts``'s own import of this module hit it mid-initialization.
+    Run in a subprocess so this genuinely starts from a cold
+    ``sys.modules``, not whatever the test session already imported."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            '-c',
+            'import src.services.labeling.vlm_prompt_resolution as m; '
+            'assert callable(m.active_prompt_pack)',
+        ],
+        check=False,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_to_dict_from_dict_round_trips() -> None:

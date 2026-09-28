@@ -18,6 +18,7 @@ import src.routers.curation.bakeoff
 import src.routers.curation.classes
 import src.routers.curation.clusters
 import src.routers.curation.cohorts
+import src.routers.curation.config_vocabulary
 import src.routers.curation.crop_context
 import src.routers.curation.crops
 import src.routers.curation.edit_undo
@@ -36,6 +37,8 @@ import src.routers.curation.pipeline_control
 import src.routers.curation.pipeline_events
 import src.routers.curation.pipeline_health
 import src.routers.curation.probe
+import src.routers.curation.prompt_packs
+import src.routers.curation.region_profiles
 import src.routers.curation.regions
 import src.routers.curation.regions_boxes_edit
 import src.routers.curation.regions_edit

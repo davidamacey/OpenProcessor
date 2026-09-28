@@ -98,7 +98,9 @@ async def test_clone_activations_copies_active_pack_and_profile() -> None:
             expected_active=None,
         )
 
-    await _apply_clone(client, target_record=target, source=source, axes=['activations'])
+    await _apply_clone(
+        client, target_record=target, source=source, axes=['activations'], target_activations=None
+    )
 
     with bind_project(target):
         from src.config import get_curation_config
@@ -160,7 +162,9 @@ async def test_clone_activations_copies_the_activated_revision_not_the_current_b
             expected_revision=doc_v1['revision'],
         )
 
-    await _apply_clone(client, target_record=target, source=source, axes=['activations'])
+    await _apply_clone(
+        client, target_record=target, source=source, axes=['activations'], target_activations=None
+    )
 
     with bind_project(target):
         from src.config import get_curation_config
@@ -177,7 +181,9 @@ async def test_clone_activations_is_a_noop_when_source_has_none() -> None:
     target = _record('delta')
 
     # No panic, no write, when the source axis was never activated.
-    await _apply_clone(client, target_record=target, source=source, axes=['activations'])
+    await _apply_clone(
+        client, target_record=target, source=source, axes=['activations'], target_activations=None
+    )
 
     with bind_project(target):
         from src.config import get_curation_config
@@ -235,7 +241,13 @@ async def test_clone_activations_refuses_a_target_that_already_has_one_up_front(
         )
 
     with pytest.raises(HTTPException) as exc_info:
-        await _apply_clone(client, target_record=target, source=source, axes=['activations'])
+        await _apply_clone(
+            client,
+            target_record=target,
+            source=source,
+            axes=['activations'],
+            target_activations=None,
+        )
     assert exc_info.value.status_code == 409
     assert exc_info.value.detail['error'] == 'target_not_empty'
 
