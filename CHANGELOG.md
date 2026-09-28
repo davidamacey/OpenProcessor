@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **W8-cleanup Items 1-2: seven production files silently read retired
+  item-level region scalars instead of `region_boxes`.** The current
+  box-list worker only ever writes per-item `region_bbox_norm`/
+  `region_score`/`region_detector`/`region_text*`/`region_detected_at`/
+  `region_candidate_*` on the pre-W8 `PUT /crops/{id}/region` write chain
+  (unchanged this pass); every other reader of those fields was silently
+  scoring/filtering/aggregating against permanently-empty data for any
+  item processed under the current pipeline. Ported off them, onto
+  `region_boxes` nested queries/reads:
+  - `scripts/curation/backfill_region_embeddings.py` (selection + crop
+    bbox now from an accepted box; picks the highest-score one as the
+    interim single-embedding representative — per-box embeddings are
+    Item 5, not done this pass).
+  - `region_eval.py` (`region_record` → `region_records`, one record per
+    box; a box-less item falls back to the item-level `region_status`,
+    which the worker still writes). Removed
+    `test_unknown_frame_is_refused` / `test_cli_unknown_frame_exits_3`:
+    `region_boxes` entries are always source-frame (every writer
+    projects before appending), so the frame-refusal scenario they
+    exercised is now structurally impossible.
+  - `review_queries.py`'s `regions` review tab (has-a-box / rejected-
+    candidate / text-search clauses; `region_reason()`'s rejection
+    reason now reads the item's rejected box).
+  - `regions_fp.py`'s `GET /regions/clusters` cluster-membership filter.
+  - `export_single_class_rows.py`'s region-mode row collector (every
+    accepted box on an item now becomes its own label line/row entry,
+    not just the first — a natural side effect of reading the list).
+  - `stats.py`'s `/stats/dataset`: `region_detectors` (now a nested agg),
+    `region_boxed`, and `regions_validated_by_human`'s "drew a box"
+    clause.
+  - `regions.py`'s `GET /regions` browse + `GET
+    /regions/training_candidates` (default filter, min/max score,
+    detector, text search, all five training-cohort modes, and the
+    `region_detected_at` sort — now a nested sort with `mode='max'`).
+    `cluster_id`/`cluster_subid`/`cluster_distance` deliberately left
+    item-level and unchanged: still actively written by the region-FP
+    clustering job (Item 5's per-box clustering wasn't attempted this
+    pass, so there is nothing stale to port here).
+  - `PATCH /crops/{id}/region_meta` / `POST /regions/batch_status`:
+    ported onto `region_boxes.boxes_with_status` (new
+    `region_writes.human_status_box_write`) rather than deleted — both
+    keep a legitimate whole-item purpose. Reopens a verifier-rejected
+    candidate box on a human CONFIRM (the pre-W8 candidate-promotion
+    reversal `boxes_with_status` doesn't do on its own) and keeps the
+    legacy per-item mirror fields (`bbox_norm`/`score`/`detector`/...)
+    `wire.py` still serves additively in sync with the box list instead
+    of letting them go stale.
+  New `tests/test_no_legacy_region_scalars.py`: a scoped ratchet guard
+  (see its module docstring for exactly what it does and does NOT cover)
+  against these eight files regressing back to the scalars just removed
+  from each.
+
+  **Not done this pass (W8-cleanup Item 3, deliberately deferred):**
+  `PUT /crops/{id}/region` / `PUT /crops/batch_region` and
+  `region_writes.py`'s single-box write chain (`region_box_write`,
+  `region_box_doc`, `region_confirm_doc`, `same_box`,
+  `candidate_promotion`, `human_status_fields`) are still live — deleting
+  them needs ~5 test files' PUT-region coverage (same-box confirm,
+  candidate-promotion reversal, parent-frame projection, degenerate-bbox
+  validation, undo) migrated to the W8a box routes first, which did not
+  fit this pass without rushing it. `wire.py`'s legacy per-item mirror
+  fields and two confirmed-dead pre-W8 write builders in
+  `scripts/curation/worker/verify.py` (`_region_write_doc`,
+  `_region_reject_doc` — zero call sites) / `no_verdict.py`
+  (`cascade_no_verdict` → `no_verdict_reject_doc` → `candidate_reject_doc`
+  — zero call sites) were left in place; see the handback report.
+
 ### Added
 - **W8 multi-box regions (partial, foundational slice).** Laid the core
   storage primitives for the per-item region-box list
