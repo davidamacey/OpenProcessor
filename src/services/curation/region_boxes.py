@@ -190,7 +190,12 @@ def finalize_box_ids(
     return result
 
 
-def merge_boxes_for_write(stored: Sequence[RegionBox], new: Sequence[RegionBox]) -> list[RegionBox]:
+def merge_boxes_for_write(
+    stored: Sequence[RegionBox],
+    new: Sequence[RegionBox],
+    *,
+    baseline: Sequence[RegionBox] | None = None,
+) -> list[RegionBox]:
     """Merge this pass's resolved ``new`` boxes back into the item's full
     ``stored`` list, in stored order (W8 B1).
 
@@ -202,12 +207,50 @@ def merge_boxes_for_write(stored: Sequence[RegionBox], new: Sequence[RegionBox])
     stored counterpart (this pass's own fresh detection) is appended, in
     ``new``'s order. ``stored`` empty (the common fresh-detection case --
     no prior box list at all) is a pure replace: unchanged behaviour.
+
+    ``baseline`` (M1 residual / R-M3 fix, 2026-09-27 re-review): the
+    snapshot of ``stored`` this pass actually READ before sending its
+    candidates to the VLM (``_ItemTask.stored_boxes``, fetch-time). If a
+    box a candidate in ``new`` targets has since changed in ``stored``
+    (a human moved it) relative to that snapshot, the human's newer
+    state wins -- this pass's verdict for that box id is dropped and the
+    CURRENT ``stored`` copy passes through untouched instead of being
+    overwritten with geometry the VLM verified against a version that no
+    longer exists. If the box has since been DELETED from ``stored``
+    entirely (present in ``baseline``, absent from ``stored``), it is not
+    resurrected by appending ``new``'s entry for it. Only checked for ids
+    ``baseline`` actually knows about -- a box neither this pass nor
+    ``baseline`` has ever seen (a genuinely fresh detection minted this
+    same pass) is unaffected and appended as before. ``baseline=None``
+    (the default) disables the guard entirely -- existing callers that
+    never pass it keep the pre-fix behaviour.
     """
     if not stored:
         return list(new)
+    baseline_by_id = {b.box_id: b for b in (baseline or ())}
     remaining = {b.box_id: b for b in new}
-    merged = [remaining.pop(s.box_id, s) for s in stored]
-    merged.extend(b for b in new if b.box_id in remaining)
+    merged: list[RegionBox] = []
+    for s in stored:
+        candidate = remaining.pop(s.box_id, None)
+        if candidate is None:
+            merged.append(s)
+            continue
+        base = baseline_by_id.get(s.box_id)
+        if base is not None and base != s:
+            # Human edit landed on this exact box while this pass's VLM
+            # call was in flight -- keep the human's current state, drop
+            # this pass's now-stale verdict for it.
+            merged.append(s)
+            continue
+        merged.append(candidate)
+    for b in new:
+        if b.box_id not in remaining:
+            continue
+        if b.box_id in baseline_by_id:
+            # Existed at fetch time, missing from `stored` now -- deleted
+            # by a human during this pass. Must not be resurrected.
+            continue
+        merged.append(b)
     return merged
 
 

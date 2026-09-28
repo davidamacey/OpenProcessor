@@ -175,7 +175,15 @@ async def _bulk_update_one_project(
         if task.pending_boxes is not None:
             stored_now = read_boxes(current, F)
             merged = (
-                merge_boxes_for_write(stored_now, task.pending_boxes)
+                # R-M3 fix (M1 residual, 2026-09-27 re-review):
+                # `task.stored_boxes` is the fetch-time snapshot this
+                # pass's candidates were actually built from and sent to
+                # the VLM against -- passed as `baseline` so a box a
+                # human moved or deleted DURING that VLM call is detected
+                # (per-box, by comparing `baseline` to `stored_now`) and
+                # never silently overwritten/resurrected by this pass's
+                # now-stale verdict for it.
+                merge_boxes_for_write(stored_now, task.pending_boxes, baseline=task.stored_boxes)
                 if task.pending_merge
                 else list(task.pending_boxes)
             )
@@ -190,6 +198,18 @@ async def _bulk_update_one_project(
                 )
                 update[F.status] = derive_status(merged, empty_status=task.pending_empty_status)
             update.update(boxes_write_fields(merged, current_src=current))
+            # R-M1 fix (2026-09-27 re-review): correct the PROVISIONAL
+            # ``F.status`` ``_box_list_doc`` / ``accept_without_vlm``
+            # stamped onto ``task.update_doc`` at task-processing time
+            # (computed from this task's own boxes alone, before any
+            # merge with a stored sibling) to the REAL merged status
+            # computed just above. ``region_embed_stage._eligible_tasks``
+            # already ran (before this merge, off the provisional value --
+            # see ``_box_list_doc``'s docstring for why that's safe) and
+            # cannot be redone here, but ``_publish_region_events`` reads
+            # ``task.update_doc`` AFTER this merge, so give it the
+            # accurate value instead of the provisional one.
+            task.update_doc[F.status] = update[F.status]
         # Item text read this pass rides on the region write; it is not
         # class data, so the human-label guard below leaves it alone.
         update.update(task.item_text_update)
