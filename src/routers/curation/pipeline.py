@@ -155,6 +155,16 @@ async def pipeline_auto_label(
     cluster_id: Annotated[int | None, Query(description=_CLUSTER_ID_DESC)] = None,
     detection_profile: Annotated[str | None, Query(include_in_schema=False)] = None,
     prompt_pack: Annotated[str | None, Query(description=_PROMPT_PACK_DESC)] = None,
+    # R4-3 fix (W3/W4 round-4 review): `/start` calls `resolve_run_prompt_pack`
+    # once at request time and puts BOTH the resolved name and its revision
+    # into the background job's trigger args. The worker then calls this
+    # function directly with those trigger args as kwargs
+    # (`pipeline_fn(opensearch=, progress=, **trigger_args)`) -- until this
+    # param existed, that raised `TypeError: unexpected keyword argument
+    # 'prompt_pack_revision'`, so EVERY `/start` job crashed. Hidden from
+    # the public schema: a direct `POST /pipeline/auto_label` caller has no
+    # prior resolution to hand back, so it never sets this.
+    prompt_pack_revision: Annotated[int | None, Query(include_in_schema=False)] = None,
     progress: Any = None,
 ) -> dict[str, Any]:
     """Run the full auto-labeling chain end-to-end:
@@ -177,7 +187,17 @@ async def pipeline_auto_label(
     from src.services.labeling.vlm_labeler import ItemCrop
 
     reject_detection_profile(detection_profile)
-    prompt_pack, prompt_pack_revision = await resolve_run_prompt_pack(opensearch, prompt_pack)
+    if prompt_pack_revision is None:
+        # No prior resolution handed in (a direct synchronous call, or a
+        # truly-omitted per-run pack that tracks the active pack
+        # dynamically) -- resolve/pin it now, same as before this fix.
+        prompt_pack, prompt_pack_revision = await resolve_run_prompt_pack(opensearch, prompt_pack)
+    # `/start` already resolved AND pinned this exact
+    # `(prompt_pack, prompt_pack_revision)` at request time when the
+    # branch above is skipped -- re-running `resolve_run_prompt_pack` on
+    # the bare name here would silently re-pin to whatever is CURRENTLY
+    # the latest saved revision (N7), discarding the request's pin. Use
+    # it as-is.
     summary: dict[str, Any] = {
         'stages': {},
         'class_id': class_id,
