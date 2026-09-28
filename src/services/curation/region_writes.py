@@ -28,6 +28,7 @@ import dataclasses
 from typing import Any
 
 from src.config import get_region_fields
+from src.config.region_rejection import REJECT_REASON_NO_VERDICT, REJECT_REASON_VERIFIER
 from src.config.region_state import CONFIRM_STATUS, REGION_STATUS_INFO, RegionStatus
 from src.services.curation.region_boxes import (
     boxes_with_status,
@@ -215,21 +216,37 @@ def human_status_box_write(
     force-sets every box (including a rejected one) to
     ``false_positive``.
 
-    Also maintains the legacy per-item mirror fields
+    Only a box the *verifier* rejected (:data:`REJECT_REASON_VERIFIER` /
+    :data:`REJECT_REASON_NO_VERDICT`) is reopened by a whole-set CONFIRM
+    (W8-cleanup M3) -- a human's own earlier per-box rejection or a
+    sanity-gate reject must never be silently overridden by a later
+    whole-set confirm. When nothing is reopenable,
+    :func:`~src.services.curation.region_boxes.boxes_with_status` raises
+    ``no_accepted_box`` (422), matching pre-W8 behavior for e.g. a
+    ``detection_failed`` item whose only box is sanity-rejected.
+
+    The legacy per-item mirror fields
     (``bbox_norm``/``score``/``detector``/``detector_version``/``source``/
     ``bbox_frame``/``rejection_reason``, plus clearing the retired
     ``candidate_*`` fields) that :func:`~src.services.curation.wire.
-    region_to_wire` still serves additively -- an accepted or
-    false_positive box is the new source of truth for them; anything else
-    clears them, mirroring the box list rather than going stale.
+    region_to_wire` still serves additively are maintained by
+    :func:`~src.services.curation.region_boxes.boxes_write_fields` itself
+    now (W8-cleanup M2) -- every box writer refreshes them the same way:
+    ``bbox_norm``/``score``/``detector``/``detector_version``/``source``
+    mirror the highest-scoring accepted-or-false_positive box, cleared to
+    ``None`` when there is none (never a rejected box's coordinates --
+    ``bbox_norm`` is an accepted region to every reader). ``rejection_reason``
+    mirrors the highest-scoring *rejected* box independently, since
+    showing a reason never makes a box look accepted.
     """
     F = get_region_fields()
     status = RegionStatus(region_status)
     boxes = read_boxes(current, F)
     if status == CONFIRM_STATUS and not any(b.state in ('proposed', 'accepted') for b in boxes):
+        reopenable_reasons = (REJECT_REASON_VERIFIER, REJECT_REASON_NO_VERDICT)
         boxes = [
             dataclasses.replace(b, state='proposed', rejection_reason=None)
-            if b.state == 'rejected'
+            if b.state == 'rejected' and b.rejection_reason in reopenable_reasons
             else b
             for b in boxes
         ]
@@ -248,22 +265,12 @@ def human_status_box_write(
     # box list, so this only matters for that one case.
     doc[F.status] = derive_status(new_boxes, empty_status=status).value
 
-    rep = next(
-        (b for b in new_boxes if b.state in ('accepted', RegionStatus.FALSE_POSITIVE.value)), None
-    )
-    if rep is not None:
-        doc[F.bbox_norm] = list(rep.bbox_norm)
-        doc[F.score] = rep.score
-        doc[F.detector] = rep.detector
-        doc[F.detector_version] = rep.detector_version
-        doc[F.source] = rep.source
-        doc[F.bbox_frame] = 'source'
-    elif REGION_STATUS_INFO[status].clears_box:
-        doc[F.bbox_norm] = None
-        doc[F.score] = None
-    rejected_rep = next((b for b in new_boxes if b.state == 'rejected'), None)
-    doc[F.rejection_reason] = rejected_rep.rejection_reason if rejected_rep else None
-    doc.update(candidate_clear_fields())
+    if not new_boxes and REGION_STATUS_INFO[status].wants_reason and rejection_reason is not None:
+        # M1(a): a box-less status (only NO_REGION_VISIBLE) has no box left
+        # to carry the reason -- boxes_write_fields's mirror derivation
+        # cleared it to None above; store it on the item directly, the one
+        # case the mirror can't cover.
+        doc[F.rejection_reason] = rejection_reason
 
     if current.get(F.status) == status.value:
         # Re-asserting the stored status (a bulk write over a mixed

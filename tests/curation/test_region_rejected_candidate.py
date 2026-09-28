@@ -20,6 +20,7 @@ from curation.query_fakes import QueryFakeOpenSearch
 from scripts.curation.worker.verify import _region_write_doc, candidate_reject_doc
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
+from src.config.region_rejection import REJECT_REASON_HUMAN, REJECT_REASON_SANITY_PREFIX
 from src.services.curation.edit_history import EditKind, restore_edit_state
 from src.services.curation.wire import serialize_item
 from src.services.detection.cascade_detect import RegionCandidate
@@ -316,6 +317,75 @@ class TestHumanReversal:
             json={'region_status': 'detected', 'region_label_source': 'human'},
         )
         assert resp.status_code == 422
+
+    def test_confirm_never_reopens_a_human_rejected_or_sanity_rejected_box(
+        self, client: TestClient, fake_os: QueryFakeOpenSearch
+    ) -> None:
+        """W8-cleanup M3: a whole-set CONFIRM must only reopen a box the
+        VERIFIER rejected -- never a human's own per-box rejection, and
+        never a sanity-gate reject. Two boxes here: one rejected by a
+        human, one by the sanity gate. Neither is reopenable, so CONFIRM
+        must 422 exactly like pre-W8's `human_status_fields` did for a
+        boxless-equivalent (no `candidate_*` populated)."""
+        fake_os.docs(INDEX)['mixedrej'] = {
+            'crop_id': 'mixedrej',
+            F.status: 'detection_failed',
+            F.boxes: [
+                {
+                    'box_id': 'b1',
+                    'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+                    'state': 'rejected',
+                    'rejection_reason': REJECT_REASON_HUMAN,
+                },
+                {
+                    'box_id': 'b2',
+                    'bbox_norm': [0.3, 0.3, 0.31, 0.31],
+                    'state': 'rejected',
+                    'rejection_reason': f'{REJECT_REASON_SANITY_PREFIX}degenerate_zero_size',
+                },
+            ],
+        }
+        resp = client.patch(
+            '/curation/projects/default/crops/mixedrej/region_meta',
+            json={'region_status': 'detected', 'region_label_source': 'human'},
+        )
+        assert resp.status_code == 422, resp.text
+        doc = _doc(fake_os, 'mixedrej')
+        assert [b['state'] for b in doc[F.boxes]] == ['rejected', 'rejected']
+
+    def test_confirm_only_reopens_the_verifier_rejected_box_in_a_mixed_set(
+        self, client: TestClient, fake_os: QueryFakeOpenSearch
+    ) -> None:
+        """A whole-set CONFIRM over a box a human rejected plus a box the
+        VERIFIER rejected must reopen only the verifier one."""
+        fake_os.docs(INDEX)['mixedrej2'] = {
+            'crop_id': 'mixedrej2',
+            F.status: 'verify_rejected',
+            F.boxes: [
+                {
+                    'box_id': 'b1',
+                    'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+                    'state': 'rejected',
+                    'rejection_reason': REJECT_REASON_HUMAN,
+                },
+                {
+                    'box_id': 'b2',
+                    'bbox_norm': [0.3, 0.6, 0.4, 0.65],
+                    'state': 'rejected',
+                    'score': 0.9,
+                    'rejection_reason': 'region_visible_elsewhere',
+                },
+            ],
+        }
+        resp = client.patch(
+            '/curation/projects/default/crops/mixedrej2/region_meta',
+            json={'region_status': 'detected', 'region_label_source': 'human'},
+        )
+        assert resp.status_code == 200, resp.text
+        doc = _doc(fake_os, 'mixedrej2')
+        by_id = {b['box_id']: b for b in doc[F.boxes]}
+        assert by_id['b1']['state'] == 'rejected'
+        assert by_id['b2']['state'] == 'accepted'
 
 
 def test_undo_of_an_older_snapshot_leaves_fields_it_never_recorded() -> None:
