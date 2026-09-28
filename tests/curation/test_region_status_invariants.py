@@ -177,6 +177,30 @@ def test_patch_meta_reason_only_updates_the_item_level_mirror(
     assert resp.json()['item']['region_rejection_reason'] == 'blurry'
 
 
+def test_patch_meta_reason_only_on_box_less_item_updates_not_wipes_the_reason(
+    client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    """W8-cleanup N3 regression: a reason-only PATCH on a box-less
+    `no_region_visible` item (M1(a)'s case) must update the stored
+    reason, not erase it -- `boxes_write_fields([])` always re-derives
+    `rejection_reason=None` from an empty box list."""
+    fake_os._docs['no-region-1'] = {
+        'crop_id': 'no-region-1',
+        F.status: RegionStatus.NO_REGION_VISIBLE.value,
+        F.boxes: [],
+        F.rejection_reason: 'X',
+    }
+    fake_os._seq['no-region-1'] = 0
+    resp = client.patch(
+        '/curation/projects/default/crops/no-region-1/region_meta',
+        json={'region_rejection_reason': 'Y'},
+    )
+    assert resp.status_code == 200, resp.text
+    doc = fake_os._docs['no-region-1']
+    assert doc[F.rejection_reason] == 'Y'
+    assert resp.json()['item']['region_rejection_reason'] == 'Y'
+
+
 # ------------------------------------------------------------- M2: the mirror
 
 

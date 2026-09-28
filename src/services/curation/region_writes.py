@@ -286,6 +286,30 @@ def human_status_box_write(
     return doc
 
 
+def reason_only_box_write(current: dict[str, Any], reason: str | None) -> dict[str, Any]:
+    """W8-cleanup N3: a reason-only PATCH (no status change) over the
+    current box list.
+
+    Patches every currently-rejected box's ``rejection_reason``, same as
+    ``human_status_box_write``'s per-status reason update. For a box-less
+    item (``no_region_visible``), there is no rejected box for
+    :func:`~src.services.curation.region_boxes.boxes_write_fields` to
+    derive a mirror reason from, so it always clears the item-level
+    ``rejection_reason`` to ``None`` -- restore the reason this request
+    is setting in that case, matching M1(a)'s box-less mirror.
+    """
+    F = get_region_fields()
+    boxes = read_boxes(current, F)
+    new_boxes = [
+        dataclasses.replace(b, rejection_reason=reason) if b.state == 'rejected' else b
+        for b in boxes
+    ]
+    doc = dict(boxes_write_fields(new_boxes, current_src=current))
+    if not any(b.state == 'rejected' for b in new_boxes):
+        doc[F.rejection_reason] = reason
+    return doc
+
+
 def region_box_doc(
     region_bbox_norm: list[float] | None, *, label_source: str, now: str
 ) -> dict[str, Any]:

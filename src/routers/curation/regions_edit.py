@@ -12,7 +12,6 @@ concern.
 
 from __future__ import annotations
 
-import dataclasses
 from typing import Any
 
 from fastapi import HTTPException
@@ -33,12 +32,13 @@ from src.routers.curation._common import (
     router,
 )
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
-from src.services.curation.region_boxes import RegionBoxWriteError, boxes_write_fields, read_boxes
+from src.services.curation.region_boxes import RegionBoxWriteError
 from src.services.curation.region_writes import (
     RegionWriteError,
     human_status_box_write,
     parent_to_source_bbox,
     post_write_item,
+    reason_only_box_write,
     region_box_write,
     validate_bbox_norm,
 )
@@ -209,15 +209,9 @@ async def patch_crop_region_meta(
             # reason already on the item's rejected box(es) -- the retired
             # item-level region_rejection_reason scalar covered this same
             # case unconditionally; now it patches every currently-rejected
-            # box.
-            boxes = read_boxes(current, F)
-            new_boxes = [
-                dataclasses.replace(b, rejection_reason=payload.region_rejection_reason)
-                if b.state == 'rejected'
-                else b
-                for b in boxes
-            ]
-            doc.update(boxes_write_fields(new_boxes, current_src=current))
+            # box (or, box-less, the item mirror -- W8-cleanup N3, see
+            # reason_only_box_write's docstring).
+            doc.update(reason_only_box_write(current, payload.region_rejection_reason))
         return doc
 
     rec = _Recorder(_build, 'human:patch_region_meta')
