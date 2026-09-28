@@ -8,6 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W8-cleanup Items 1-2 confirmation-review fix pass (round 2).** An
+  independent confirmation review of the round-1 fix pass found the M2
+  mirror redesign (moving the legacy per-item mirror into
+  `region_boxes.boxes_write_fields`) introduced three new regressions;
+  all fixed:
+  - **N1: a `detected` item with one accepted box and a rejected sibling
+    stored a `region_rejection_reason`**, so the labeler rendered a red
+    "Rejection" row instead of "needs human confirmation" on ordinary
+    multi-box items. `rejection_reason` is now only mirrored when there
+    is no accepted-or-false_positive representative on the item.
+  - **N2: a higher-scoring false-positive box could outrank an accepted
+    box for the mirror.** `_mirror_representative` now always prefers
+    the best accepted box, falling back to the best false-positive box
+    only when no accepted box exists.
+  - **N3: a reason-only PATCH on a box-less item (`no_region_visible`)
+    wiped the reason M1(a) had just stored**, because
+    `boxes_write_fields([])` always re-derives `rejection_reason=None`
+    from an empty box list. Added `region_writes.reason_only_box_write`,
+    which restores the item-level reason when there's no rejected box to
+    carry it; `regions_edit.py`'s reason-only PATCH branch now routes
+    through it instead of writing `F.rejection_reason` directly.
+  - **Minor:** documented, at the `no_accepted_box` raise in
+    `boxes_with_status`, that a whole-set human reject followed by
+    CONFIRM now 422s (pre-W8: 200) — intentional, matching M3's "never
+    reopen a human-rejected box" rule; a per-box and whole-set human
+    reject share the same reason and can't be told apart.
 - **W8-cleanup Items 1-2 review fix pass.** An independent review of the
   items-1-2 port (see `docs/design/openprocessor_internal/
   w8_cleanup_items1_2_review_2026-09-28.md`) found the default regions-tab

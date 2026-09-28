@@ -301,18 +301,23 @@ def _best(boxes: Sequence[RegionBox]) -> RegionBox | None:
 
 def _mirror_representative(boxes: Sequence[RegionBox]) -> RegionBox | None:
     """The box the legacy ``bbox_norm``/``score``/``detector``/... mirror
-    fields describe (W8-cleanup M2c): the highest-scoring
-    accepted-or-false_positive box, if any -- the *best* one, not the
-    first one written.
+    fields describe (W8-cleanup M2c): the best *accepted* box if one
+    exists, else the highest-scoring ``false_positive`` box -- an
+    accepted box always outranks an FP box regardless of relative score
+    (W8-cleanup N2), because an accepted box is the real region and an
+    FP box is only a fallback representative when there is no real one.
 
-    Deliberately never a rejected box: :mod:`region_boxes`'s own module
-    docstring says a box in ``candidate_bbox_norm`` (rejected) is
-    NOT ``bbox_norm``, because ``bbox_norm`` is an accepted region to
-    every reader (browse, export, clustering). Falling back to a
-    rejected box's coordinates here would make a rejected box look
-    accepted to all of them.
+    Deliberately never a rejected box: :mod:`region_fields`'s module
+    docstring (see ``region_fields.py``) says a box in
+    ``candidate_bbox_norm`` (rejected) is NOT ``bbox_norm``, because
+    ``bbox_norm`` is an accepted region to every reader (browse, export,
+    clustering). Falling back to a rejected box's coordinates here would
+    make a rejected box look accepted to all of them.
     """
-    return _best([b for b in boxes if b.state in ('accepted', RegionStatus.FALSE_POSITIVE.value)])
+    accepted = _best([b for b in boxes if b.state == 'accepted'])
+    if accepted is not None:
+        return accepted
+    return _best([b for b in boxes if b.state == RegionStatus.FALSE_POSITIVE.value])
 
 
 def boxes_write_fields(
@@ -373,12 +378,17 @@ def boxes_write_fields(
         doc[F.detector] = None
         doc[F.detector_version] = None
         doc[F.source] = None
-    # `rejection_reason` mirrors the highest-scoring REJECTED box
-    # independently of the accepted/FP mirror above -- unlike
-    # bbox_norm/score/..., showing a rejection reason never makes a
-    # rejected box look accepted to a reader.
+    # `rejection_reason` mirrors the highest-scoring REJECTED box, but
+    # only when there is no accepted-or-FP representative (W8-cleanup
+    # N1): once an item has a real region (`rep` above), it is
+    # `detected`/`false_positive`, not rejected, and must not carry a
+    # rejection reason from a rejected sibling box -- that would make
+    # the labeler render a red "Rejection" row on an item that actually
+    # needs human confirmation.
     rejected_rep = _best([b for b in boxes if b.state == 'rejected'])
-    doc[F.rejection_reason] = rejected_rep.rejection_reason if rejected_rep else None
+    doc[F.rejection_reason] = (
+        rejected_rep.rejection_reason if (rep is None and rejected_rep) else None
+    )
     doc.update(
         dict.fromkeys(
             (
@@ -517,6 +527,12 @@ def boxes_with_status(status: str, boxes: Sequence[RegionBox]) -> list[RegionBox
             raise RegionBoxWriteError(msg)
         result = [_replace(b, state='accepted') if b.state == 'proposed' else b for b in boxes]
         if not any(b.state == 'accepted' for b in result):
+            # W8-cleanup M3 note: a CONFIRM after a whole-set HUMAN reject
+            # now 422s here (pre-W8 it returned 200), because M3's allow-
+            # list only reopens verifier/no-verdict rejections, never a
+            # `human` one -- a per-box human reject and a whole-set human
+            # reject share the same reason and can't be told apart, and
+            # `POST .../region/undo` is the documented way back. Intentional.
             msg = 'no_accepted_box'
             raise RegionBoxWriteError(msg)
         return result
