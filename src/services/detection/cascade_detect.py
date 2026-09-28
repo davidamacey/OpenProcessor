@@ -341,7 +341,7 @@ def _decode_yolo_output(
 # head emits thousands of anchors, and greedy NMS there is O(n^2) --
 # keeping only the top-scoring ``_MAX_PRE_NMS_ANCHORS`` bounds that cost
 # regardless of how noisy the raw output is. Comfortably above any
-# profile's ``region_max_candidates`` (single digits in practice).
+# profile's ``max_regions_per_item`` (single digits in practice).
 _MAX_PRE_NMS_ANCHORS = 300
 
 

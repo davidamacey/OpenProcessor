@@ -27,6 +27,7 @@ import dataclasses
 from typing import TYPE_CHECKING, Any
 
 from scripts.curation.worker.cascade import _crop_region_jpeg, _expand_bbox
+from scripts.curation.worker.verify import item_verification_fields
 from src.config import get_region_fields
 from src.config.region_rejection import REJECT_REASON_SANITY_PREFIX
 from src.config.region_source import (
@@ -38,7 +39,7 @@ from src.config.region_source import (
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.item_text import item_text_update
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields, next_box_id
+from src.services.curation.region_boxes import RegionBox, new_box_placeholder
 from src.services.detection.cascade_detect import is_plausible_region_bbox
 from src.services.detection.region_text import (
     TEXT_CHOICE_OCR_ONLY,
@@ -228,6 +229,36 @@ def _box_with_resolved_text(box: RegionBox, doc: dict[str, Any], F: RegionFields
     return dataclasses.replace(box, **updates)
 
 
+def resolve_rejected_box_text(
+    box: RegionBox,
+    *,
+    profile: DetectionProfile,
+    F: RegionFields,
+    rules: RegionTextRules | None = None,
+) -> RegionBox:
+    """W8 M6 fix: a non-accepted box must never carry a raw, unvalidated
+    VLM text reply the way an accepted box's ``apply_region_text`` output
+    is validated.
+
+    ``verdicts_to_boxes`` provisionally sets a rejected/no-verdict box's
+    ``text`` straight from the VLM's own reply (or the candidate's OCR
+    hint) with no profile/rules gate at all -- the accepted-box path's
+    ``_box_with_resolved_text`` fix only ever runs on accepted boxes. A
+    text-free profile (``reads_text=False``) drops it entirely, same as
+    an accepted box would; a text-reading profile keeps it only if it
+    passes the same :func:`~src.services.detection.region_text_rules
+    .region_text_rules` an accepted box's VLM reading is held to.
+    """
+    if not profile.reads_text:
+        return _box_with_resolved_text(box, {}, F)
+    if box.text is None:
+        return box
+    rules = rules or region_text_rules(profile)
+    if rules.invalid_reason(box.text) is not None:
+        return dataclasses.replace(box, text=None)
+    return box
+
+
 async def accept_without_vlm(
     t: _ItemTask,
     *,
@@ -255,12 +286,17 @@ async def accept_without_vlm(
     actor, version = cand.detector, cand.detector_version
     if f'{actor}:hit' not in t.detection_trace:
         t.detection_trace.append(f'{actor}:hit')
-    current_src = {F.revision: t.region_revision, F.box_seq: t.region_box_seq}
+    # W8 B1 + M1 fix: this pass's own box (fresh id -- a placeholder,
+    # finalized against the CURRENT stored box_seq at write time) is
+    # stashed for the writer to merge with any concurrently-stored
+    # siblings and derive the final status from, never computed here
+    # against this task's own (possibly stale) fetch-time snapshot -- see
+    # ``_ItemTask.pending_boxes`` / ``bulk_writer._merge``.
     gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_in_crop, t.item_bbox_norm)
     if not gate_ok:
         t.detection_trace.append(f'{actor}:sanity_reject:{gate_reason}')
         box = RegionBox(
-            box_id=next_box_id([], seq=t.region_box_seq),
+            box_id=new_box_placeholder(0),
             bbox_norm=cand.bbox_in_source,
             state='rejected',
             score=cand.score,
@@ -269,15 +305,16 @@ async def accept_without_vlm(
             source=cand.source,
             rejection_reason=f'{REJECT_REASON_SANITY_PREFIX}{gate_reason}',
         )
+        t.pending_boxes = [box]
+        t.pending_status = RegionStatus.DETECTION_FAILED
         t.update_doc = {
-            F.status: RegionStatus.DETECTION_FAILED,
             F.detector_chain: list(t.detection_trace),
-            **boxes_write_fields([box], current_src=current_src),
+            **item_verification_fields(verified=False),
         }
         return
     t.detection_trace.append(f'{actor}:{ACCEPTED_UNVERIFIED}')
     box = RegionBox(
-        box_id=next_box_id([], seq=t.region_box_seq),
+        box_id=new_box_placeholder(0),
         bbox_norm=cand.bbox_in_source,
         state='accepted',
         score=cand.score,
@@ -299,10 +336,11 @@ async def accept_without_vlm(
         rules=rules,
     )
     box = _box_with_resolved_text(box, text_doc, F)
+    t.pending_boxes = [box]
+    t.pending_empty_status = RegionStatus.DETECTED
     t.update_doc = {
-        F.status: RegionStatus.DETECTED,
         F.detector_chain: list(t.detection_trace),
-        **boxes_write_fields([box], current_src=current_src),
+        **item_verification_fields(verified=False),
     }
 
 
@@ -341,4 +379,5 @@ __all__ = [
     'item_text_fields',
     'read_item_lines',
     'read_region_text',
+    'resolve_rejected_box_text',
 ]

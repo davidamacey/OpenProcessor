@@ -24,6 +24,7 @@ from src.services.detection.profile_registry import get_active_region_profile
 if TYPE_CHECKING:
     from scripts.curation.worker.verify import TaskBoxInput
     from src.config import DetectionProfile
+    from src.services.curation.region_boxes import RegionBox
     from src.services.detection.region_text import OcrLine
 
 
@@ -166,11 +167,48 @@ class _ItemTask:
     # candidate) for the no-VLM-configured fallback (accept_without_vlm)
     # and the region-embedding stage, which are still single-box.
     candidates: list[TaskBoxInput] = field(default_factory=list)
+    # W8 B1 fix: this item's full stored ``region_boxes`` list, read
+    # alongside this task's other fields at fetch time. Path 1
+    # (pending_verification) builds its VLM candidates from this list's
+    # ``proposed`` boxes -- the real source of truth -- rather than the
+    # legacy single scalar. This is a FETCH-TIME SNAPSHOT, used only to
+    # decide what to re-verify; the actual write-time merge (never
+    # discarding an untouched sibling box) re-reads the live list fresh
+    # (see ``bulk_writer._merge`` / M1).
+    stored_boxes: list[RegionBox] = field(default_factory=list)
     # Current stored region_revision / region_box_seq high-water marks
-    # (read alongside this task's other fields) -- boxes_write_fields'
-    # ``current_src`` needs these to bump them correctly.
+    # (read alongside this task's other fields), kept for logging/back-
+    # compat -- the actual revision/seq bump at write time now always
+    # reads the CURRENT live doc (M1 fix), never this snapshot.
     region_revision: int = 0
     region_box_seq: int = 0
+    # W8 B1 + M1 fix: this pass's own resolved box list (not yet merged
+    # with any concurrently-stored siblings, ids not yet finalized) plus
+    # the status to fall back to once the write-time merge is empty.
+    # ``None`` means this write doesn't touch the box list at all (e.g.
+    # ``unreadable_crop_update``). Set by ``runner._box_list_doc`` and
+    # ``region_text_stage.accept_without_vlm``; consumed by
+    # ``bulk_writer._merge``, which re-reads the live doc immediately
+    # before the write and merges/mints ids/derives the final status
+    # against THAT, never this snapshot.
+    pending_boxes: list[RegionBox] | None = None
+    pending_empty_status: RegionStatus | None = None
+    # W8 B1 fix: whether the write-time merge (bulk_writer._merge) should
+    # MERGE `pending_boxes` into the CURRENT stored list (preserving any
+    # sibling box this pass never touched) or REPLACE the stored list
+    # outright. Default False (replace) -- matches every pre-B1 write
+    # path's existing behaviour (a fresh detection pass, Path 2/3, starts
+    # the box list over). Only Path 1's re-verify of a stored `proposed`
+    # box (the real B1 fix target) sets this True: that pass never
+    # touched sibling boxes (already accepted/rejected/a second proposed
+    # box) and must not discard them.
+    pending_merge: bool = False
+    # A FORCED final status that must win over whatever
+    # ``derive_status(merged_boxes)`` would otherwise compute -- only
+    # ``accept_without_vlm``'s sanity-gate-reject branch uses this
+    # (``detection_failed`` is not part of ``derive_status``'s box-state
+    # vocabulary). ``None`` means "derive it from pending_empty_status".
+    pending_status: RegionStatus | None = None
     # Detection trace — list of "<detector>:<tag>" strings the task
     # accumulates as it moves through the cascade, serialized as
     # ``RegionFields.detector_chain`` on every write that produces a

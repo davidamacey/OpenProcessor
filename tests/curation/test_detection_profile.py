@@ -29,6 +29,17 @@ def test_defaults_match_reference_constants() -> None:
     assert profile.aspect_max == 8.0
 
 
+def test_max_regions_per_item_defaults_to_1() -> None:
+    """W8 M4 fix (pipeline-wiring review, 2026-09-27): multi-box is
+    opt-in per profile, never silently on. The spec (any_domain_plan.md
+    W8.4/W8.9) names the field ``max_regions_per_item`` with default 1 --
+    a profile that never sets it reproduces today's single-region
+    behaviour exactly."""
+    profile = DetectionProfile(name='license_plate')
+    assert profile.max_regions_per_item == 1
+    assert not hasattr(profile, 'region_max_candidates')
+
+
 def test_text_pattern_is_a_plain_str_not_compiled() -> None:
     """A frozen dataclass holding a compiled re.Pattern is not cleanly
     serializable and breaks equality in tests — text_pattern must stay a
@@ -123,7 +134,7 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'DISPLAY_NAME': 'Env Regions',
         'DISPLAY_NAME_SINGULAR': 'Env Region',
         'REGION_NMS_IOU': '0.4',
-        'REGION_MAX_CANDIDATES': '5',
+        'MAX_REGIONS_PER_ITEM': '5',
     }
     prefix = 'OP_TEST_DETECTION_'
     for suffix, value in env_values.items():

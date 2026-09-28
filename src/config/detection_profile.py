@@ -41,8 +41,13 @@ class DetectionProfile:
     # max candidates kept per item after NMS. ``confidence_floor``
     # above doubles as the selection floor (``min_score``) -- one
     # per-detector-leg threshold, not a second one.
+    #
+    # M4 (W8 pipeline-wiring review, 2026-09-27): default is 1, matching
+    # any_domain_plan.md W8.4/W8.9 -- multi-box is opt-in per profile,
+    # never silently on. The spec's field name is ``max_regions_per_item``
+    # (a deployment sets it > 1 explicitly to enable multi-box).
     region_nms_iou: float = 0.5
-    region_max_candidates: int = 3
+    max_regions_per_item: int = 1
     letterbox_fill: tuple[int, int, int] = (114, 114, 114)
     # Optional backbone feature-map output of a raw-output (secondary)
     # detector, requested only when Triton reports the model has it.

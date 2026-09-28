@@ -26,6 +26,7 @@ from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, class_state_token
+from src.services.curation.region_boxes import read_boxes
 from src.services.curation.region_scope import parent_classes_clause
 from src.services.detection.cascade_detect import RegionCandidate
 from src.services.detection.profile_registry import get_active_region_profile
@@ -125,6 +126,7 @@ async def _fetch_pending(
             F.score,
             F.revision,
             F.box_seq,
+            F.boxes,
             'class_name',
             'class_source',
             'class_validated',
@@ -172,6 +174,7 @@ async def _fetch_pending(
                 test_holdout=bool(src.get('test_holdout') or False),
                 detector_region_in_source=detector_region_in_source,
                 detector_score=float(src.get(F.score) or 0.0),
+                stored_boxes=read_boxes(src, F),
                 region_revision=int(src.get(F.revision) or 0),
                 region_box_seq=int(src.get(F.box_seq) or 0),
                 request_id=str(src.get('request_id') or '-'),

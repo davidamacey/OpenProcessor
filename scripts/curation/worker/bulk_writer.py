@@ -20,6 +20,13 @@ from src.core.logging import get_logger
 from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
 from src.services.curation.class_write_guard import class_write_allowed
 from src.services.curation.history import merge_region_chain, record_class_snapshot
+from src.services.curation.region_boxes import (
+    boxes_write_fields,
+    derive_status,
+    finalize_box_ids,
+    merge_boxes_for_write,
+    read_boxes,
+)
 from src.services.curation.wire import region_event_payload
 
 
@@ -125,7 +132,12 @@ async def _bulk_update_one_project(
     n_skipped_empty = 0
     by_id: dict[str, _ItemTask] = {}
     for t in tasks:
-        if not t.update_doc:
+        # `t.pending_boxes is not None` is also a real write even when
+        # `t.update_doc` itself is empty -- the box-list fields (status,
+        # region_boxes, revision, ...) are computed below, inside
+        # `_merge`, against the live doc (W8 B1/M1), not stashed onto
+        # `update_doc` at task-processing time.
+        if not t.update_doc and t.pending_boxes is None:
             n_skipped_empty += 1
             continue
         eligible.append(t)
@@ -149,6 +161,35 @@ async def _bulk_update_one_project(
             )
             return {}
         update = dict(task.update_doc)
+        # W8 B1 + M1 fix: the box list write is finished HERE, against
+        # the live `current` doc this closure was just handed (re-read
+        # immediately before the write by `occ_skip_on_conflict_bulk`) --
+        # never against `task`'s own (possibly stale) fetch-time
+        # snapshot. This is what actually fixes both bugs: B1 (a stored
+        # sibling box getting silently discarded) because the merge base
+        # is the CURRENT stored list, not this task's snapshot of it; M1
+        # (a stale/reused revision and box_seq) because `current_src` for
+        # `boxes_write_fields` -- and the ids `finalize_box_ids` mints --
+        # both come from `current`, never `task.region_revision` /
+        # `task.region_box_seq`.
+        if task.pending_boxes is not None:
+            stored_now = read_boxes(current, F)
+            merged = (
+                merge_boxes_for_write(stored_now, task.pending_boxes)
+                if task.pending_merge
+                else list(task.pending_boxes)
+            )
+            merged = finalize_box_ids(
+                merged, existing=stored_now, seq=int(current.get(F.box_seq) or 0)
+            )
+            if task.pending_status is not None:
+                update[F.status] = task.pending_status
+            else:
+                assert task.pending_empty_status is not None, (
+                    'pending_boxes set without pending_status or pending_empty_status'
+                )
+                update[F.status] = derive_status(merged, empty_status=task.pending_empty_status)
+            update.update(boxes_write_fields(merged, current_src=current))
         # Item text read this pass rides on the region write; it is not
         # class data, so the human-label guard below leaves it alone.
         update.update(task.item_text_update)

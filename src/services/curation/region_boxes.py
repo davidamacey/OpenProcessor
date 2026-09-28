@@ -18,6 +18,7 @@ handback report for the full list of what remains.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -129,6 +130,85 @@ def next_box_id(existing: Iterable[_HasBoxId], *, seq: int) -> str:
             except ValueError:
                 continue
     return f'b{max(seq, max_existing) + 1}'
+
+
+@dataclass(frozen=True)
+class _IdOnly:
+    """Structural stand-in satisfying :class:`_HasBoxId` -- lets
+    :func:`next_box_id` / :func:`finalize_box_ids` walk ids already spoken
+    for (stored boxes plus ones assigned earlier in the same call) without
+    needing a full :class:`RegionBox`."""
+
+    box_id: str
+
+
+# W8 M1 fix (pipeline-wiring review, 2026-09-27): a fresh candidate box's
+# REAL id (``b<N>``) is only safe to mint against the CURRENT stored
+# ``region_box_seq`` high-water mark, which is only known at write time
+# (inside the bulk-writer's OCC merge, which re-reads the live doc
+# immediately before writing -- see ``bulk_writer._merge``). Minting a
+# real id at task-processing time off a possibly-stale fetch-time
+# snapshot let a concurrent write's ids collide (the review's M1 probe).
+# A placeholder is assigned instead at candidate-resolution time and
+# swapped for a real id in :func:`finalize_box_ids`, called from the
+# merge closure. Never matches ``b<digits>`` or a human/real box id.
+_PLACEHOLDER_PREFIX = '\x00pending:'
+
+
+def new_box_placeholder(index: int) -> str:
+    """A temporary id for a fresh (not yet persisted) candidate box.
+
+    ``index`` only needs to be unique within the same candidate list
+    (multiple fresh boxes in one pass) -- see the module docstring above
+    :data:`_PLACEHOLDER_PREFIX`.
+    """
+    return f'{_PLACEHOLDER_PREFIX}{index}'
+
+
+def finalize_box_ids(
+    boxes: Sequence[RegionBox], *, existing: Iterable[_HasBoxId], seq: int
+) -> list[RegionBox]:
+    """Replace every placeholder id in ``boxes`` with a real one minted
+    against the CURRENT ``seq`` high-water mark (W8 M1).
+
+    ``existing`` is the live stored box list (read fresh, immediately
+    before this call) so a real id already spoken for -- by a box this
+    pass never touched, including one a concurrent human write just
+    added -- is never reused. Boxes that already carry a real id
+    (re-verified from a stored ``proposed`` box, W8 B1) pass through
+    unchanged and also claim their id against ``existing`` for the rest
+    of this call's minting.
+    """
+    assigned: list[_HasBoxId] = list(existing)
+    result: list[RegionBox] = []
+    for box in boxes:
+        finalized = box
+        if box.box_id.startswith(_PLACEHOLDER_PREFIX):
+            finalized = dataclasses.replace(box, box_id=next_box_id(assigned, seq=seq))
+        assigned.append(_IdOnly(box_id=finalized.box_id))
+        result.append(finalized)
+    return result
+
+
+def merge_boxes_for_write(stored: Sequence[RegionBox], new: Sequence[RegionBox]) -> list[RegionBox]:
+    """Merge this pass's resolved ``new`` boxes back into the item's full
+    ``stored`` list, in stored order (W8 B1).
+
+    A stored box this pass touched (its id appears in ``new``) is
+    replaced in place; any stored box this pass never sent to the VLM --
+    a sibling in another state (already accepted/rejected/false_positive,
+    or a second ``proposed`` box this pass didn't select) -- is carried
+    through unchanged, never silently dropped. A box in ``new`` with no
+    stored counterpart (this pass's own fresh detection) is appended, in
+    ``new``'s order. ``stored`` empty (the common fresh-detection case --
+    no prior box list at all) is a pure replace: unchanged behaviour.
+    """
+    if not stored:
+        return list(new)
+    remaining = {b.box_id: b for b in new}
+    merged = [remaining.pop(s.box_id, s) for s in stored]
+    merged.extend(b for b in new if b.box_id in remaining)
+    return merged
 
 
 def derive_status(boxes: Sequence[RegionBox], *, empty_status: RegionStatus) -> RegionStatus:
@@ -319,7 +399,10 @@ __all__ = [
     'boxes_with_status',
     'boxes_write_fields',
     'derive_status',
+    'finalize_box_ids',
     'has_any_box_query',
+    'merge_boxes_for_write',
+    'new_box_placeholder',
     'next_box_id',
     'read_boxes',
 ]
