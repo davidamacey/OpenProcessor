@@ -371,29 +371,49 @@ async def _clone_activations(
 
         with bind_project(target_record):
             from src.config import get_curation_config as _get_cfg
+            from src.services.config_store import get_config_store
             from src.services.config_store.index import ActiveConflictError, RevisionConflictError
 
             target_index = _get_cfg().configs_index
+            # B2 fix (W3/W4 review 2026-09-28): when the `prompt_packs`
+            # axis ran first (the default, both axes selected), it already
+            # wrote this exact name/body into the target -- re-saving here
+            # with `expected_revision=None` ("must not exist") would 409
+            # `target_not_empty` against our own sibling axis's write,
+            # after settings/classes/keymap/packs already landed. Reuse
+            # the revision `_clone_prompt_packs` just wrote instead of
+            # writing again.
+            target_store = get_config_store()
+            await target_store.ensure_fresh(client)
+            already_cloned = (
+                target_store.current.packs.get(name)
+                if kind == 'prompt_pack'
+                else target_store.current.profiles.get(name)
+            )
             # M5 (defense in depth -- _validate_clone already refuses an
             # occupied target up front): a conflict here is still mapped
             # to a structured 409, never a bare 500, in case the target
             # changed between validation and this write.
             try:
-                doc = await save_config(
-                    client,
-                    target_index,
-                    kind=kind,
-                    name=name,
-                    body=body,
-                    expected_revision=None,
-                    cloned_from=source.slug,
-                )
+                if already_cloned is not None:
+                    revision = already_cloned.revision
+                else:
+                    doc = await save_config(
+                        client,
+                        target_index,
+                        kind=kind,
+                        name=name,
+                        body=body,
+                        expected_revision=None,
+                        cloned_from=source.slug,
+                    )
+                    revision = doc['revision']
                 await activate(
                     client,
                     target_index,
                     axis=axis,
                     name=name,
-                    revision=doc['revision'],
+                    revision=revision,
                     expected_active=None,
                 )
             except RevisionConflictError as exc:
