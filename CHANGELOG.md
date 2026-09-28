@@ -296,6 +296,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the legacy scalars this pass).
 
 ### Fixed
+- **W3+W4 prompt-pack/region-profile CRUD fix pass, round 5 (independent
+  Opus review, 2026-09-28): 2 blockers + 1 major + 1 structural test +
+  3 minors.** Fixes every finding of the round-5 section appended to
+  `docs/design/openprocessor_internal/w3_w4_review_2026-09-28.md`:
+  - **Blocker (R5-1, introduced by round 4's own m1 fix — combined
+    pack+profile `PUT /settings` checked each axis against the OTHER's
+    OLD stored value, not its PENDING one):** `run_activation_gate` gained
+    an optional `pending_sibling` override; `PUT /settings` now resolves
+    BOTH axes' target bodies first (`_resolve_config_store_axis`, the
+    gate-free half of the old `_prepare_config_store_axis`), then gates
+    each axis using the OTHER axis's PENDING target from the SAME
+    request (`_pending_sibling_for_gate`) when both are set in one call.
+    Before this fix, a single `PUT /settings` could pair a multi-box-
+    stripped pack with a multi-region profile even though `/activate`
+    (with `force`) still correctly 422s that exact pairing standalone.
+    Regression: `test_r5_two_axis_put_cannot_pair_stripped_pack_with_
+    multi_profile` (both key orders).
+  - **Blocker (R5-2, round-4's own R4-3 fix missed the no-pack-specified
+    default path — the common/Cropwright case):** `pipeline_auto_label`
+    now re-resolves on `prompt_pack is None`, not `prompt_pack_revision
+    is None`. `/start`'s truly-omitted-pack path resolves to `(active_
+    name, None)` at request time — `revision=None` there means "follow
+    the active pack's PINNED body dynamically" (`get_prompt_pack`'s
+    active-name redirect, B1 round-2), not "unresolved." Keying the job's
+    re-resolution off the revision re-entered the N7 "bare name -> latest
+    saved revision" branch on that already-resolved name, silently
+    running an un-activated draft — the original round-1 B1 bug, reachable
+    again via the default path since the job no longer crashes.
+    Regression: `test_r5_start_job_runs_what_the_request_resolved[-1]`
+    (the omitted-query case; the two explicit-pack cases were already
+    covered by R4-3's own tests).
+  - **Major (R5-3, project clone never routed through the gate at all):**
+    `run_activation_gate` gained an optional `body` override (skips the
+    name-based `build_record` lookup, validates a caller-supplied body
+    instead) so a caller can validate one project's body bound to a
+    DIFFERENT project's context. `_validate_clone` now re-resolves the
+    source's active `detection_profile` body and runs the gate bound to
+    the TARGET (its own class registry, Triton state, `project_slug`)
+    before any write, using the source's active pack as
+    `pending_sibling` when the pack axis is cloned alongside it. Scoped
+    to `detection_profile` (the axis with today's actual target-specific
+    condition, `detector_model_not_shared`) rather than also re-running
+    full `prompt_pack` `for_activation` validation, which would reject
+    pre-existing source packs on unrelated completeness checks with no
+    reported gap behind it. Regression:
+    `test_r5_clone_activates_source_private_detector_in_target`.
+  - **Structural test (asked for in round 4, still missing per round 5):**
+    `test_r5_walk_every_activation_writer_rejects_gate_failing_pair`
+    enumerates every real activation-writing call site — direct activate
+    ×2, settings-bridge ×2 axes + the combined-request case, rollback ×2,
+    and clone — against the SAME gate-failing pack+profile pair, so a
+    future caller that skips the gate on any of these paths turns it red.
+    Confirms `detection_profile` rollback rejects the pair too (round 5
+    found it worked but had no landed test — see the m4 correction
+    below).
+  - **Minor (m-b, rollback to a deleted pack/profile resurrected it as
+    active, and `GET /active` mislabeled its `source` as `'env'`):** the
+    gate validates the immutable `<kind>:<name>@<rev>` revision-copy doc,
+    which survives a `DELETE` of the CURRENT doc, so a target deleted
+    while it was `previous` used to come back active. `rollback_axis` now
+    refuses (`LookupError('previous_deleted')` -> 409 `previous_deleted`,
+    new `ConfigErrorDetail` code) when the target's revision was
+    genuinely stored (M6: env/file ids never carry a revision) but is no
+    longer in the store's current names. `activation_view.py`'s `source`
+    field fix (a non-`None` revision alone now implies `'stored'`) is
+    kept as defense in depth for any activation state the rejection
+    doesn't cover. Regression: `test_r5_rollback_to_deleted_pack`.
+  - **Minor (m-a, rollback never refreshed its snapshot before gating):**
+    `rollback_axis` now calls `store.ensure_fresh(client)` before reading
+    the cross-axis gate inputs or the deleted-target check above.
+  - **Minor (CHANGELOG over-claims from round 4):** corrected — see the
+    round-4 entry above, now flagging that clone was not routed through
+    the gate and that only `prompt_pack` rollback had a landed test.
+  - Landed as permanent tests: `tests/curation/test_r5_probes.py`,
+    `tests/projects/test_r5_clone_probes.py`.
 - **W3+W4 prompt-pack/region-profile CRUD fix pass, round 4 (independent
   Opus review, 2026-09-28): 1 blocker + 2 majors + 5 minors.** Fixes every
   finding of the round-4 section appended to
@@ -304,23 +379,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     round of "fixed the probed caller, missed a sibling"):** consolidated
     the `for_activation` gate into ONE shared function,
     `run_activation_gate` (new `src/services/config_store/
-    activation_gate.py`), and routed EVERY activation writer through it:
-    `POST /prompt_packs/{name}/activate`, `POST /region_profiles/{name}/
-    activate`, `PUT /settings` (the round-3 N1 fix, now delegating to the
-    shared function instead of its own copy), and — the previously
-    ungated path — `POST /prompt_packs/active/rollback` /
-    `POST /region_profiles/active/rollback` (wired into the shared
-    `rollback_axis` in `activation_apply.py`, so both axes' rollback get
-    it in one place). Rollback runs the gate with no `force`, mirroring
-    the settings bridge. A rollback target naming a revision that is no
-    longer the STORED CURRENT one (e.g. superseded by a later,
-    never-activated PUT) is still resolvable: the gate accepts an
-    optional OpenSearch client and falls back to the immutable
+    activation_gate.py`), and routed every DIRECT activation writer
+    through it: `POST /prompt_packs/{name}/activate`, `POST
+    /region_profiles/{name}/activate`, `PUT /settings` (the round-3 N1
+    fix, now delegating to the shared function instead of its own copy),
+    and — the previously ungated path — `POST /prompt_packs/active/
+    rollback` / `POST /region_profiles/active/rollback` (wired into the
+    shared `rollback_axis` in `activation_apply.py`, so both axes'
+    rollback get it in one place). Rollback runs the gate with no
+    `force`, mirroring the settings bridge. A rollback target naming a
+    revision that is no longer the STORED CURRENT one (e.g. superseded by
+    a later, never-activated PUT) is still resolvable: the gate accepts
+    an optional OpenSearch client and falls back to the immutable
     `<kind>:<name>@<rev>` revision-copy doc when the in-memory snapshot
     only has the current revision. One test,
     `test_r4_rollback_bypasses_multibox_gate`, plus the settings-bridge
-    N1 probes, now walk activate/settings/rollback on both axes with a
-    gate-failing revision.
+    N1 probes, now walk activate/settings/rollback with a gate-failing
+    revision — **round-5 review found this was still incomplete: project
+    clone (a separate activation writer, `_clone_activations` ->
+    `index.activate`) was never routed through the gate, and only the
+    `prompt_pack` axis of rollback had a landed test, not
+    `detection_profile`. Both closed in the round-5 fix pass below.**
   - **Major (R4-2, `expected_active` shape bug, same class as round-3's
     N3a but in `settings.py`):** `_activate_config_store_axis` (now split
     into `_prepare_config_store_axis`/`_apply_config_store_axis`, see
