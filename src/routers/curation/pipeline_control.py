@@ -64,7 +64,7 @@ async def vlm_label_cluster(
     ``total`` is the number selected, ``result.stages.vlm`` the outcome.
     ``409`` while another auto-label job runs.
     """
-    from src.routers.curation.pipeline import pipeline_auto_label_start
+    from src.routers.curation.pipeline_start import pipeline_auto_label_start
 
     return await pipeline_auto_label_start(
         opensearch,

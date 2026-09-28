@@ -19844,7 +19844,7 @@
     },
     "/curation/projects/{project}/pipeline/auto_label": {
       "post": {
-        "description": "Run the full auto-labeling chain end-to-end:\n\n1. (optional) Re-train FAISS clusters on every embedded item.\n2. Auto-promote items in high-purity clusters (``cluster_propagation``).\n3. Run the VLM over remaining unvalidated items with the open-vocabulary\n   prompt — high-confidence labels are auto-validated, ``__new__``\n   proposals are flagged for the curator queue.\n\nOutput enumerates each stage's counts so the labeler dashboard can show\n\"this many items still need a human.\" Idempotent: safe to re-run.",
+        "description": "Public ``POST /pipeline/auto_label`` route (synchronous, no job).\n\nA thin wrapper around ``_run_auto_label`` that always calls it with\n``prompt_pack_resolved=False`` and ``prompt_pack_revision=None`` --\nthose are real Python-only params now, set only by ``/start``'s own\nresolved pin and by the worker re-invoking ``_run_auto_label``\ndirectly -- never settable by an HTTP request.",
         "operationId": "pipeline_auto_label_curation_projects__project__pipeline_auto_label_post",
         "parameters": [
           {
@@ -20114,14 +20114,6 @@
               ],
               "description": "Per-run VLM prompt_pack (an id from GET /methods axis=prompt_pack) used by the labeling stage. Overrides the settings default for this job only; never written to settings. Unset = settings default. Unknown id -> 422.",
               "title": "Prompt Pack"
-            }
-          },
-          {
-            "in": "query",
-            "name": "progress",
-            "required": false,
-            "schema": {
-              "title": "Progress"
             }
           }
         ],

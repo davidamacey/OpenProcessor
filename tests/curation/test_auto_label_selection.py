@@ -136,7 +136,7 @@ def test_start_omitted_resolves_to_settings_default(client: TestClient) -> None:
 async def test_start_honors_settings_doc_default_when_omitted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.routers.curation import pipeline
+    from src.routers.curation import pipeline_start
     from src.services.curation.autolabel import job
 
     captured: dict[str, Any] = {}
@@ -150,7 +150,7 @@ async def test_start_honors_settings_doc_default_when_omitted(
         'src.clients.curation_opensearch.get_curation_settings',
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
-    await pipeline.pipeline_auto_label_start(opensearch=object())
+    await pipeline_start.pipeline_auto_label_start(opensearch=object())
     assert captured['prompt_pack'] == 'food_v2'
 
 

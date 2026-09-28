@@ -223,12 +223,18 @@ def test_r4_settings_two_axes_partial_write(app_client, monkeypatch):
 # ---- N7 + job re-resolution: a request-time pin is lost at job start --------
 def test_r4_start_job_args_accepted_by_pipeline_fn():
     """The worker calls pipeline_fn(opensearch=, progress=, **trigger_args);
-    /pipeline/auto_label/start puts 'prompt_pack_revision' in those args."""
+    /pipeline/auto_label/start puts 'prompt_pack_revision' in those args.
+
+    R6-m1 fix (W3/W4 round-6 review): the worker's target is
+    ``_run_auto_label`` now, not the public ``pipeline_auto_label`` route
+    wrapper -- the route no longer accepts these params at all (they
+    would otherwise be reachable from an HTTP request)."""
     import inspect
 
-    from src.routers.curation.pipeline import pipeline_auto_label
+    from src.routers.curation.pipeline import _run_auto_label
 
-    assert 'prompt_pack_revision' in inspect.signature(pipeline_auto_label).parameters
+    assert 'prompt_pack_revision' in inspect.signature(_run_auto_label).parameters
+    assert 'prompt_pack_omitted' in inspect.signature(_run_auto_label).parameters
 
 
 def test_r4_job_reresolution_keeps_request_pin(app_client, monkeypatch):
@@ -269,7 +275,7 @@ def test_r4_job_reresolution_keeps_request_pin(app_client, monkeypatch):
     monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', _must_not_be_called)
     fake_os = _FakeOpenSearch({})
     summary = asyncio.run(
-        pipeline.pipeline_auto_label(
+        pipeline._run_auto_label(
             opensearch=fake_os,
             train_clusters=False,
             promote_min_purity=0.85,

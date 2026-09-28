@@ -185,4 +185,37 @@ async def resolve_run_prompt_pack(
         stored = get_config_store().current.packs.get(resolved)
         if stored is not None:
             revision = stored.revision
+    # NOTE (R6-1b, W3/W4 round-6 review): `resolved` here still echoes the
+    # active pack's NAME for the omitted-param case (`requested is None`)
+    # -- several callers (job summaries, `/start`'s own response) read
+    # this purely for display and must keep seeing it. The job/labeler
+    # resolution side of the omitted-pack fix (never resolve the VLM
+    # labeler against this echoed name once it can go stale) lives in
+    # ``pipeline.py``'s ``prompt_pack_omitted`` plumbing instead, not
+    # here -- see ``pipeline_auto_label_start`` and ``_run_auto_label``.
     return resolved, revision
+
+
+def labeler_resolution_args(
+    prompt_pack: str | None, prompt_pack_revision: int | None, *, prompt_pack_omitted: bool
+) -> tuple[str | None, int | None]:
+    """What ``_get_vlm_labeler`` must be called with for the VLM stage
+    (R6-1b fix, W3/W4 round-6 review, Blocker).
+
+    ``(prompt_pack, prompt_pack_revision)`` are the RESOLVED echo values
+    (kept for ``summary``/job-status display -- existing callers read
+    those directly). When the original request omitted ``prompt_pack``
+    entirely, the labeler must instead resolve against ``(None, None)``
+    -- always "whatever is active right now" -- because the echoed name
+    can go stale between request time and whenever the VLM stage actually
+    runs (a window spanning the whole pre-VLM pipeline, not a tight
+    race): once a different pack is activated, ``get_prompt_pack(name,
+    revision=None)`` no longer redirects that OLD name to its pinned
+    body and instead silently serves its un-activated CURRENT draft
+    (round-1 B1, reachable again once a separate process's config-store
+    snapshot is warm, R6-1a). Split out as its own function so it is
+    directly unit-testable without driving the whole pipeline.
+    """
+    if prompt_pack_omitted:
+        return None, None
+    return prompt_pack, prompt_pack_revision

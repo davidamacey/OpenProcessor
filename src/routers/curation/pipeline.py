@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import HTTPException, Query
+from fastapi import Query
 
 from src.clients.curation_opensearch import mget_crops
 from src.config import get_region_fields
@@ -15,7 +15,6 @@ from src.routers.curation._common import (
     get_class_registry,
     items_index,
     logger,
-    router,
 )
 from src.routers.curation.pipeline_params import (
     AUTO_PROMOTE_DESC as _AUTO_PROMOTE_DESC,
@@ -24,7 +23,7 @@ from src.routers.curation.pipeline_params import (
     CLUSTER_SCOPED_SKIP,
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
-    RUN_VLM_DESC as _RUN_VLM_DESC,
+    labeler_resolution_args,
     reject_detection_profile,
     resolve_run_prompt_pack,
 )
@@ -47,80 +46,14 @@ VLM_SWEEP_SOURCE_FIELDS: tuple[str, ...] = (
 )
 
 
-@router.post('/pipeline/auto_label/start')
-async def pipeline_auto_label_start(
-    opensearch: OpenSearchDep,
-    train_clusters: Annotated[bool, Query()] = True,
-    promote_min_purity: Annotated[float, Query(ge=0.5, le=1.0)] = PROMOTE_MIN_PURITY,
-    promote_min_members: Annotated[int, Query(ge=2, le=1000)] = PROMOTE_MIN_MEMBERS,
-    vlm_batch_size: Annotated[int, Query(ge=4, le=64)] = 32,
-    vlm_concurrency: Annotated[int, Query(ge=1, le=128)] = 16,
-    max_vlm_crops: Annotated[int, Query(ge=0, le=100000)] = 0,
-    classifier_confidence_skip_vlm: Annotated[float, Query(ge=0.0, le=1.0)] = 0.80,
-    clustering_method: Annotated[str | None, Query()] = None,
-    run_vlm: Annotated[bool, Query(description=_RUN_VLM_DESC)] = False,
-    recluster_unvalidated: Annotated[bool, Query(description='Merge candidate clusters.')] = False,
-    run_auto_promote: Annotated[bool, Query(description=_AUTO_PROMOTE_DESC)] = False,
-    reassign_only: Annotated[bool, Query(description=_REASSIGN_ONLY_DESC)] = False,
-    # Cluster scope (primary-subject gate).
-    gate_max_rank: Annotated[int | None, Query(ge=1)] = None,
-    gate_min_blur_ratio: Annotated[float | None, Query(ge=0.0)] = None,
-    n_clusters: Annotated[int | None, Query(ge=2, le=4096)] = None,
-    class_id: Annotated[int | None, Query(description=_CLASS_ID_DESC)] = None,
-    cluster_id: Annotated[int | None, Query(description=_CLUSTER_ID_DESC)] = None,
-    detection_profile: Annotated[str | None, Query(include_in_schema=False)] = None,
-    prompt_pack: Annotated[str | None, Query(description=_PROMPT_PACK_DESC)] = None,
-) -> dict[str, Any]:
-    """Kick off auto_label as a background job. Returns immediately.
-
-    Poll ``GET /pipeline/auto_label/status/{job_id}`` (the returned
-    ``job_id``) for this job's progress.
-    Only one job runs at a time; a second start request returns HTTP 409
-    while a job is in flight.
-    """
-    from src.services.curation.autolabel import job as auto_label_job
-
-    # Resolved here (422 before queueing) so the job args echo what runs.
-    reject_detection_profile(detection_profile)
-    prompt_pack, prompt_pack_revision = await resolve_run_prompt_pack(opensearch, prompt_pack)
-    try:
-        return auto_label_job.start_job(
-            pipeline_auto_label,
-            {
-                'opensearch': opensearch,
-                'train_clusters': train_clusters,
-                'promote_min_purity': promote_min_purity,
-                'promote_min_members': promote_min_members,
-                'vlm_batch_size': vlm_batch_size,
-                'vlm_concurrency': vlm_concurrency,
-                'max_vlm_crops': max_vlm_crops,
-                'classifier_confidence_skip_vlm': classifier_confidence_skip_vlm,
-                'clustering_method': clustering_method,
-                'run_vlm': run_vlm,
-                'recluster_unvalidated': recluster_unvalidated,
-                'run_auto_promote': run_auto_promote,
-                'reassign_only': reassign_only,
-                'gate_max_rank': gate_max_rank,
-                'gate_min_blur_ratio': gate_min_blur_ratio,
-                'n_clusters': n_clusters,
-                'class_id': class_id,
-                'cluster_id': cluster_id,
-                'prompt_pack': prompt_pack,
-                'prompt_pack_revision': prompt_pack_revision,
-                # R5-2 fix: always set, even for the omitted-pack default
-                # case -- `/start` already ran `resolve_run_prompt_pack`
-                # above for every shape of this request, so the job must
-                # never re-run it.
-                'prompt_pack_resolved': True,
-            },
-        )
-    except RuntimeError as exc:
-        # 409 makes it unambiguous in the UI that a run is already in flight.
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+# POST /pipeline/auto_label/start (the job-dispatch route) lives in
+# pipeline_start.py (700-LOC ratchet split, same pattern as
+# _region_profile_clone.py). It imports `_run_auto_label` back from this
+# module at call time (not at import time, to dodge the circular import).
+from src.routers.curation import pipeline_start  # noqa: E402,F401
 
 
-@router.post('/pipeline/auto_label')
-async def pipeline_auto_label(
+async def _run_auto_label(
     opensearch: OpenSearchDep,
     # Annotated defaults (not `= Query(...)`): the auto-label worker calls
     # this function directly with only the args in its trigger file, and a
@@ -166,19 +99,41 @@ async def pipeline_auto_label(
     # function directly with those trigger args as kwargs
     # (`pipeline_fn(opensearch=, progress=, **trigger_args)`) -- until this
     # param existed, that raised `TypeError: unexpected keyword argument
-    # 'prompt_pack_revision'`, so EVERY `/start` job crashed. Hidden from
-    # the public schema: a direct `POST /pipeline/auto_label` caller has no
-    # prior resolution to hand back, so it never sets this.
-    prompt_pack_revision: Annotated[int | None, Query(include_in_schema=False)] = None,
+    # 'prompt_pack_revision'`, so EVERY `/start` job crashed.
+    #
+    # R6-m1 fix (Minor, W3/W4 round-6 review): this function is no longer
+    # the HTTP route handler (see `pipeline_auto_label` below) -- these two
+    # params used to be `Query(include_in_schema=False)`, which hides them
+    # from the OpenAPI docs but does NOT stop a client from setting them on
+    # the wire (`?prompt_pack=nope&prompt_pack_resolved=true` skipped the
+    # unknown-pack 422 below). Splitting the internal implementation
+    # (called directly by the worker, and by `/start`'s own resolved pin)
+    # from the public route (which always forces `prompt_pack_resolved=
+    # False`, `prompt_pack_revision=None`) makes that no longer reachable
+    # from any request at all, internal-only for real this time.
+    prompt_pack_revision: int | None = None,
     # R5-2 fix (W3/W4 round-5 review, Blocker): whether `/start` already
     # called `resolve_run_prompt_pack` for THIS request -- distinct from
     # "the resolution pinned a revision" (`prompt_pack_revision is not
     # None`), which `/start`'s truly-omitted-pack path never does on
-    # purpose (see below). A direct `POST /pipeline/auto_label` caller
-    # never sets this, so an explicit-but-unvalidated `prompt_pack` (e.g.
-    # an unknown name) still gets resolved-and-422'd here, same as
-    # before this fix.
-    prompt_pack_resolved: Annotated[bool, Query(include_in_schema=False)] = False,
+    # purpose (see below). The public route always calls this with
+    # `False`, so an explicit-but-unvalidated `prompt_pack` (e.g. an
+    # unknown name) still gets resolved-and-422'd here, same as before
+    # this fix.
+    prompt_pack_resolved: bool = False,
+    # R6-1b fix (Blocker, W3/W4 round-6 review): whether the ORIGINAL
+    # request omitted `prompt_pack` entirely -- distinct from `prompt_pack`
+    # /`prompt_pack_revision`, which keep echoing the RESOLVED name for
+    # `summary`/job-status display. The echoed name can go stale between
+    # `/start` and the VLM stage actually running (`get_prompt_pack(name,
+    # revision=None)` only redirects to the pinned body while `name` is
+    # STILL the active pack; round-1 B1, reachable again once R6-1a warms
+    # a separate process's snapshot). When `True`, `labeler_resolution_
+    # args` below uses `None` instead, always re-deriving "whatever is
+    # active right now". `/start` sets this from the raw query param
+    # before resolution; a direct call (`prompt_pack_resolved=False`)
+    # computes it itself, same way, a few lines down.
+    prompt_pack_omitted: bool = False,
     progress: Any = None,
 ) -> dict[str, Any]:
     """Run the full auto-labeling chain end-to-end:
@@ -191,6 +146,11 @@ async def pipeline_auto_label(
 
     Output enumerates each stage's counts so the labeler dashboard can show
     "this many items still need a human." Idempotent: safe to re-run.
+
+    Internal implementation, called directly by the auto-label worker
+    (via ``/start``'s job trigger) and by the public route below --
+    never a route itself (R6-m1 fix): `prompt_pack_revision` /
+    `prompt_pack_resolved` must never be reachable from an HTTP request.
     """
     import asyncio as _asyncio
 
@@ -201,6 +161,27 @@ async def pipeline_auto_label(
     from src.services.labeling.vlm_labeler import ItemCrop
 
     reject_detection_profile(detection_profile)
+    if opensearch is not None and prompt_pack_resolved:
+        # R6-1a fix (Blocker, W3/W4 round-6 review): auto_label_worker runs
+        # this in its OWN container/process, with its own config-store
+        # snapshot that starts empty and was refreshed nowhere on the job
+        # path -- `/start`'s own `ensure_fresh` runs in the yolo-api
+        # process, and a different process's in-memory snapshot does not
+        # inherit that. Without this, a `(name, revision)` pin resolved at
+        # `/start` time 404s here every time ("unknown prompt pack") the
+        # moment `_get_vlm_labeler` reads it. Scoped to `prompt_pack_
+        # resolved` (true only for a job trigger carrying a `/start`-
+        # resolved pin) rather than unconditional: the synchronous public
+        # route always passes `prompt_pack_resolved=False` and runs
+        # entirely in-process (no cross-process staleness to guard
+        # against), and `resolve_run_prompt_pack` below already refreshes
+        # when it needs to. An unconditional refresh here was proven, by a
+        # genuine `test_cross_project_leak.py` regression, to add a real
+        # (if TTL-gated) extra OpenSearch call to a route that never
+        # needed one -- not worth it for zero correctness gain there.
+        from src.services.config_store import get_config_store
+
+        await get_config_store().ensure_fresh(opensearch)
     if not prompt_pack_resolved:
         # No prior resolution handed in -- a direct synchronous call
         # (`prompt_pack_resolved` is never set for that route, even when
@@ -225,6 +206,13 @@ async def pipeline_auto_label(
         # request"), set `True` unconditionally there (pinned, bare-name,
         # AND omitted alike) -- so this branch only fires for a call that
         # never went through `/start`'s resolver at all.
+        #
+        # R6-1b fix: capture "was `prompt_pack` omitted" from the RAW
+        # incoming param before `resolve_run_prompt_pack` overwrites it
+        # below -- this branch is the only place besides `/start` itself
+        # that ever resolves an omitted pack, so it must compute the same
+        # signal `/start` passes through explicitly.
+        prompt_pack_omitted = not isinstance(prompt_pack, str)
         prompt_pack, prompt_pack_revision = await resolve_run_prompt_pack(opensearch, prompt_pack)
     # `/start` already resolved this `(prompt_pack, prompt_pack_revision)`
     # at request time when the branch above is skipped -- re-running
@@ -444,12 +432,22 @@ async def pipeline_auto_label(
         {'class_name': c.class_name, 'group': getattr(c, 'group', None)} for c in labelable
     ]
     # The run's selected pack (resolve_prompt_pack() default when unset).
-    labeler = _get_vlm_labeler(prompt_pack, prompt_pack_revision)
+    #
+    # R6-1b fix: when the request omitted `prompt_pack`, resolve the
+    # labeler against `None`/`None` -- ALWAYS "whatever is active right
+    # now" -- never the echoed `(prompt_pack, prompt_pack_revision)`
+    # name/revision, which can go stale between request time and here
+    # (`prompt_pack`/`prompt_pack_revision` themselves are left untouched
+    # for `summary`'s display).
+    _labeler_pack, _labeler_revision = labeler_resolution_args(
+        prompt_pack, prompt_pack_revision, prompt_pack_omitted=prompt_pack_omitted
+    )
+    labeler = _get_vlm_labeler(_labeler_pack, _labeler_revision)
     class_catalog = format_class_catalog(class_dicts, labeler._pack)
 
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
-    _pack_stamp = prompt_pack_stamp(labeler._pack, revision=prompt_pack_revision)
+    _pack_stamp = prompt_pack_stamp(labeler._pack, revision=_labeler_revision)
 
     # Count how many crops bypass the synonym/fuzzy force-fit because the
     # VLM's confidence is low — those route straight to the raw-label
@@ -690,3 +688,11 @@ async def pipeline_auto_label(
         if k in after and k in baseline
     }
     return summary
+
+
+# POST /pipeline/auto_label (the public route) lives in pipeline_public.py
+# (700-LOC ratchet split, same pattern as _region_profile_clone.py).
+# Re-exported as `pipeline.pipeline_auto_label` too (not just imported for
+# route-registration side effects) -- many existing tests call this name
+# directly as `pipeline.pipeline_auto_label(...)`, predating the split.
+from src.routers.curation.pipeline_public import pipeline_auto_label  # noqa: E402,F401
