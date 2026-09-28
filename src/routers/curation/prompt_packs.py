@@ -311,6 +311,13 @@ async def rollback_active_prompt_pack(
     try:
         await rollback_pack(opensearch, expected_active=expected)
     except LookupError as exc:
+        # m-b fix (W3/W4 round-5 review): `previous_deleted` is distinct
+        # from `no_previous` -- the pack was deleted while it was the
+        # rollback target, not "there is no target."
+        if exc.args and exc.args[0] == 'previous_deleted':
+            raise api_error(
+                409, 'previous_deleted', 'the previous pack was deleted; cannot roll back to it'
+            ) from exc
         raise api_error(
             409, 'no_previous', 'there is no previous activation to roll back to'
         ) from exc

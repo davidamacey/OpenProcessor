@@ -2209,6 +2209,7 @@
               "unknown_revision",
               "active_conflict",
               "no_previous",
+              "previous_deleted",
               "no_active_profile",
               "unknown_pack",
               "unknown_profile",

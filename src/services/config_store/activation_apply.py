@@ -76,6 +76,15 @@ async def rollback_axis(
     ``previous``."""
     from src.services.config_store.index import get_activation
 
+    # m-a fix (W3/W4 round-5 review): refresh the in-memory snapshot
+    # BEFORE gating -- the gate's cross-axis inputs
+    # (`get_active_region_profile()` / `active_prompt_pack()`) and the
+    # deleted-target check just below both read `store.current`, which
+    # the activate routes and the settings bridge already refresh first
+    # but this path never did, so it could gate against a snapshot
+    # another process's write had already superseded.
+    await store.ensure_fresh(client)
+
     current_doc = await get_activation(client, store.index, axis)
     previous = (current_doc or {}).get('previous')
     if not previous:
@@ -91,11 +100,28 @@ async def rollback_axis(
     # No `force` here: rollback has no bypass flag, mirroring the
     # settings bridge.
     previous_name = previous.get('name')
+    previous_revision = previous.get('revision')
     if previous_name is not None:
+        # m-b fix (W3/W4 round-5 review): the gate validates the
+        # immutable `<kind>:<name>@<rev>` revision-copy doc, which
+        # survives a `DELETE` of the CURRENT doc -- so without this
+        # check, rolling back to a target deleted while it was
+        # `previous` resurrects it as active (and `GET /active` used to
+        # mislabel its `source` too, fixed separately in
+        # activation_view.py). A non-`None` `previous_revision` proves
+        # this target was a stored config at activation time (env/file
+        # ids never carry a revision, M6); if it is no longer in the
+        # store's current names, it was deleted since, and rollback must
+        # refuse, not resurrect it.
+        stored_names = store.current.packs if axis == 'prompt_pack' else store.current.profiles
+        if previous_revision is not None and previous_name not in stored_names:
+            msg = 'previous_deleted'
+            raise LookupError(msg)
+
         from src.services.config_store.activation_gate import run_activation_gate
 
         await run_activation_gate(
-            axis, previous_name, previous.get('revision'), force=False, client=client
+            axis, previous_name, previous_revision, force=False, client=client
         )
 
     return await activate_and_apply(

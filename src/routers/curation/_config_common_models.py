@@ -51,6 +51,10 @@ ErrorCode = Literal[
     'unknown_revision',
     'active_conflict',
     'no_previous',
+    # m-b fix (W3/W4 round-5 review): rollback's `previous` target was
+    # deleted since it was activated -- distinct from `no_previous`
+    # (there was never a target at all).
+    'previous_deleted',
     'no_active_profile',
     'unknown_pack',
     'unknown_profile',

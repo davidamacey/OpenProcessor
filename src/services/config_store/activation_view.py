@@ -35,7 +35,16 @@ async def build_active_config_response(client: Any, *, axis: Axis) -> ActiveConf
         source = 'off'
     else:
         active = ActiveRef(name=ref[0], revision=ref[1])
-        source = 'stored' if ref[0] in stored_names else 'env'
+        # Minor m-b fix (W3/W4 round-5 review): `ref[0] in stored_names`
+        # only sees names the store CURRENTLY lists -- a pack/profile
+        # deleted while it is (or becomes, via rollback) the activation's
+        # target drops out of `stored_names` even though the activated
+        # revision is real (the gate validated it via the immutable
+        # `<kind>:<name>@<rev>` copy, not this list). Reporting `'env'`
+        # for that case is misleading: env/file ids never carry a
+        # revision (M6 above) at all, so a non-`None` `ref[1]` already
+        # proves this was a stored config, deleted or not.
+        source = 'stored' if (ref[1] is not None or ref[0] in stored_names) else 'env'
 
     activation_doc = await get_activation(client, store.index, axis)
     activated_at = (activation_doc or {}).get('activated_at') if source != 'env' else None
