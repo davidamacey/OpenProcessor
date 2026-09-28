@@ -121,4 +121,36 @@ async def resolve_run_prompt_pack(
                 'valid_ids': exc.valid,
             },
         ) from exc
+    if revision is not None and opensearch is not None:
+        # R1 fix (W3/W4 review 2026-09-28): validate + pin the exact
+        # revision at REQUEST time, not job-start time -- an unresolvable
+        # `name@rev` (including the currently-*activated*-but-superseded
+        # revision right after a PUT moves "current" forward, §3.7's own
+        # motivating case) used to be accepted with a 202 and only fail
+        # once the background job called `_get_vlm_labeler`. §3.7 requires
+        # a 422 here instead. `get_prompt_pack` resolves `name@rev` against
+        # both the current doc and the store's pinned-active-revision copy
+        # (B1 round-2 fix), so this covers exactly the revision the job
+        # will resolve later. `opensearch=None` (no client -- unit tests
+        # exercising this resolver in isolation, same contract as
+        # `resolve_effective_default`) skips the store lookup entirely,
+        # same as before this fix -- there is nothing to validate against.
+        from src.services.config_store import get_config_store
+        from src.services.labeling.vlm_prompts import get_prompt_pack
+
+        await get_config_store().ensure_fresh(opensearch)
+        # `revision is not None` only when `requested` carried an explicit
+        # `name@rev` (checked above), so `resolve_strategy_selection` was
+        # called with a non-`None` `name_only` and, having not raised,
+        # always returns that same non-`None` name.
+        assert resolved is not None
+        if get_prompt_pack(resolved, revision=revision) is None:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    'error': f'unknown revision {revision} for prompt_pack {resolved!r}',
+                    'axis': 'prompt_pack',
+                    'requested': requested,
+                },
+            )
     return resolved, revision

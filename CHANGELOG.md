@@ -358,6 +358,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     returns `None` for a non-current revision) — request field kept,
     not wired; deleting a pack/profile that is only an activation's
     `previous` (not the current active) is still allowed.
+- **W3+W4 prompt-pack/region-profile CRUD fix pass, round 2 (independent
+  Opus review, 2026-09-28): the round-1 fix pass above left B1 and B2
+  only partly fixed.** Fixes every round-2 finding of
+  `docs/design/openprocessor_internal/w3_w4_review_2026-09-28.md`:
+  - **Blocker 1 remaining (activation pin bypassed by other callers):**
+    round 1 pinned `active_prompt_pack()`/`get_active_region_profile()`,
+    but the API's own VLM write routes (`/vlm/label_batch` and 3
+    siblings, via `_get_vlm_labeler(await _default_pack_name(...))`) and
+    the pipeline's omitted-`prompt_pack` default still resolved the
+    active pack BY NAME, serving the un-activated current doc under the
+    activated revision's stamp — the original bug via a new call site.
+    `get_prompt_pack()` (`vlm_prompts.py`, resolution logic split into
+    the new `vlm_prompt_resolution.py` to stay under the 700-LOC ratchet)
+    now redirects a by-name lookup of the store's currently active pack
+    to the same pinned body `active_prompt_pack()` serves, and resolves
+    an explicit `name@<rev>` against the pinned-active revision's copy
+    too when it isn't the current one (fixes the R1 regression below in
+    the same change). A transient pinned-revision fetch failure in
+    `_resolve_active_body` (`store.py`) no longer falls open to the
+    unvalidated current doc: only a genuine 404 means "nothing to pin"
+    now — any other exception propagates so `refresh()` marks the
+    snapshot `stale` and keeps the last known-good pinned body.
+  - **Blocker 2 (clone partial-write 409 + activation-skip regression):**
+    the round-1 fix only passed its own test because that test called
+    `_apply_clone` directly, skipping `_validate_clone`'s store warm-up —
+    in the real `clone_settings`/`clone_settings_into` flow the target
+    store's 1s cache TTL hid `_clone_prompt_packs`'s just-written pack
+    from `_clone_activations`'s `already_cloned` check, so a clone
+    finishing inside that window (the typical case) still 409'd
+    `target_not_empty` after settings/classes/keymap/packs had already
+    landed. `_clone_prompt_packs` now returns what it wrote
+    (`{name: StoredConfig}`) and `_clone_activations` takes that as an
+    explicit argument instead of re-reading the target store's cache —
+    never needs to see what was just written, so the race is gone
+    entirely (no sleep needed to make the real flow pass). The round-1
+    fix also activated the source's *current* pack body instead of its
+    *activated* one when a sibling axis had already written that name,
+    undoing W2 Minor 2 and opening a clone-shaped activation-gate bypass;
+    `_clone_activations` now always activates the source's fetched
+    ACTIVATED body, reusing the sibling axis's write only when it's
+    byte-identical, else saving the activated body as an additional
+    revision so the target lands in the same current-vs-activated split
+    state as the source.
+  - **Regression (R1, introduced by this round's own B1 fix):**
+    `resolve_run_prompt_pack` (`pipeline_params.py`) now validates
+    `name@<rev>` at request time via `get_prompt_pack` (422 for a
+    genuinely unknown revision) instead of accepting any syntactically
+    valid pin and only failing the background job later — fixes
+    `?prompt_pack=name@<the-still-active-but-superseded-revision>`
+    (exactly B1's motivating case) 202-then-job-failing.
+  - **M1b (missing safety-net test for the read-only clone-source
+    guard):** confirmed live-correct but untested — removing
+    `read_only=True` from any of the four `bind_project(source,
+    read_only=True)` binds in `clone.py` or the one in
+    `clone_shared.py`'s `read_source_record` left the whole suite green.
+    New `tests/projects/test_source_read_only_write_guard.py` plants a
+    real write attempt (via the guard's own `check_request`) inside each
+    of the five source binds and asserts `ProjectReadOnly` stops it;
+    manually confirmed each test goes red when its corresponding
+    `read_only=True` is removed.
+  - Round-1's probe tests (`test_p*`/`test_c*`) are landed as permanent
+    regression tests: `tests/curation/test_w34_round2_activation_regression.py`,
+    `tests/projects/test_w34_round2_clone_regression.py`.
 - **W8 pipeline-wiring correctness fixes (independent Opus review,
   2026-09-27): 1 blocker + 8 majors.** Fixes every finding of
   `docs/design/openprocessor_internal/w8_pipeline_review_2026-09-27.md`

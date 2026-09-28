@@ -263,23 +263,34 @@ async def _apply_clone(
                     }
                 )
 
+    written_packs: dict[str, Any] = {}
     if 'prompt_packs' in axes:
-        await _clone_prompt_packs(client, target_record=target_record, source=source)
+        written_packs = await _clone_prompt_packs(
+            client, target_record=target_record, source=source
+        )
 
     if 'activations' in axes:
-        await _clone_activations(client, target_record=target_record, source=source)
+        await _clone_activations(
+            client, target_record=target_record, source=source, written_packs=written_packs
+        )
 
     return conflicts
 
 
 async def _clone_prompt_packs(
     client: Any, *, target_record: ProjectRecord, source: ProjectRecord
-) -> None:
+) -> dict[str, Any]:
     """W3: copy every source-project STORED prompt pack (current revision
     only -- revision history is not carried over) into the target. A
     no-op when the source has none. ``activations`` (if also cloned)
-    still owns copying which pack is active."""
+    still owns copying which pack is active.
+
+    Returns ``{name: StoredConfig}`` for exactly what was written here, so
+    :func:`_clone_activations` can tell (without re-reading the target
+    store's cache -- see the B2 fix note there) whether the pack it needs
+    to activate was already written by this axis, and with what body."""
     from src.services.config_store.index import save_config
+    from src.services.config_store.store import StoredConfig
 
     with bind_project(source, read_only=True):
         from src.services.config_store import get_config_store
@@ -289,14 +300,15 @@ async def _clone_prompt_packs(
         packs = dict(source_store.current.packs)
 
     if not packs:
-        return
+        return {}
 
+    written: dict[str, StoredConfig] = {}
     with bind_project(target_record):
         from src.config import get_curation_config as _get_cfg
 
         target_index = _get_cfg().configs_index
         for name, stored in packs.items():
-            await save_config(
+            doc = await save_config(
                 client,
                 target_index,
                 kind='prompt_pack',
@@ -306,10 +318,22 @@ async def _clone_prompt_packs(
                 description=stored.description,
                 cloned_from=f'{source.slug}:{name}@{stored.revision}',
             )
+            written[name] = StoredConfig(
+                kind='prompt_pack',
+                name=name,
+                revision=int(doc['revision']),
+                body=stored.body,
+                description=stored.description,
+            )
+    return written
 
 
 async def _clone_activations(
-    client: Any, *, target_record: ProjectRecord, source: ProjectRecord
+    client: Any,
+    *,
+    target_record: ProjectRecord,
+    source: ProjectRecord,
+    written_packs: dict[str, Any] | None = None,
 ) -> None:
     """Glue G1 (projects_plan.md §11 W2): copy the source's active
     ``prompt_pack``/``detection_profile`` -- the stored config body plus
@@ -371,32 +395,44 @@ async def _clone_activations(
 
         with bind_project(target_record):
             from src.config import get_curation_config as _get_cfg
-            from src.services.config_store import get_config_store
             from src.services.config_store.index import ActiveConflictError, RevisionConflictError
 
             target_index = _get_cfg().configs_index
-            # B2 fix (W3/W4 review 2026-09-28): when the `prompt_packs`
-            # axis ran first (the default, both axes selected), it already
-            # wrote this exact name/body into the target -- re-saving here
-            # with `expected_revision=None` ("must not exist") would 409
-            # `target_not_empty` against our own sibling axis's write,
-            # after settings/classes/keymap/packs already landed. Reuse
-            # the revision `_clone_prompt_packs` just wrote instead of
-            # writing again.
-            target_store = get_config_store()
-            await target_store.ensure_fresh(client)
-            already_cloned = (
-                target_store.current.packs.get(name)
-                if kind == 'prompt_pack'
-                else target_store.current.profiles.get(name)
-            )
+            # B2 fix (round 2, W3/W4 review 2026-09-28): the round-1 fix
+            # re-read the target store's cache here to detect a sibling
+            # `prompt_packs` axis write, but that cache has a 1s TTL
+            # (`ensure_fresh`) -- a clone that finishes inside that window
+            # (the common case) saw the stale, pre-write cache and 409'd
+            # `target_not_empty` against its own just-written pack, after
+            # settings/classes/keymap/packs had already landed. Take the
+            # sibling axis's write as an explicit argument instead
+            # (`written_packs`, only ever populated for kind='prompt_pack'
+            # -- there is no bulk 'region_profiles' clone axis) so this
+            # never needs to re-read what was just written.
+            #
+            # W2 Minor 2 must still hold even when the sibling axis wrote
+            # first: the body actually made ACTIVE in the target is always
+            # the source's ACTIVATED body (`body`, fetched above from the
+            # immutable `<kind>:<name>@<rev>` copy) -- never the source's
+            # merely-current one. When `_clone_prompt_packs` already wrote
+            # that exact same body (the common case: the source's current
+            # doc is byte-identical to what's active), reuse its revision
+            # instead of a redundant write. When the source has since
+            # edited without reactivating (current diverges from
+            # activated), the sibling axis's write only covers the
+            # *current* doc -- a
+            # second revision carrying the *activated* body is saved here
+            # so the target ends up in the same current-vs-activated split
+            # state as the source, and the target's active pack is never
+            # promoted from an unvalidated draft.
+            sibling_written = (written_packs or {}).get(name) if kind == 'prompt_pack' else None
             # M5 (defense in depth -- _validate_clone already refuses an
             # occupied target up front): a conflict here is still mapped
             # to a structured 409, never a bare 500, in case the target
             # changed between validation and this write.
             try:
-                if already_cloned is not None:
-                    revision = already_cloned.revision
+                if sibling_written is not None and sibling_written.body == body:
+                    revision = sibling_written.revision
                 else:
                     doc = await save_config(
                         client,
@@ -404,7 +440,7 @@ async def _clone_activations(
                         kind=kind,
                         name=name,
                         body=body,
-                        expected_revision=None,
+                        expected_revision=sibling_written.revision if sibling_written else None,
                         cloned_from=source.slug,
                     )
                     revision = doc['revision']

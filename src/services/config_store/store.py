@@ -26,6 +26,8 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
 
+from opensearchpy.exceptions import NotFoundError
+
 from src.core.logging import get_logger
 from src.services.config_store.index import (
     ConfigAxis,
@@ -79,8 +81,7 @@ class ConfigSnapshot:
     # B1 fix: the *activated revision's* body, pinned at activation time --
     # independent of `packs[name]`/`profiles[name]`'s "current" doc, which
     # a later PUT advances without changing what's live. `None` means no
-    # resolvable pinned body (never activated / 'off' / copy gone) --
-    # callers fall back to the env/file default.
+    # resolvable pinned body -- callers fall back to the env/file default.
     active_pack_body: StoredConfig | None = None
     active_profile_body: StoredConfig | None = None
     loaded_at: float = 0.0
@@ -115,12 +116,10 @@ async def _resolve_active_body(
     ref: AxisRef,
     current: dict[str, StoredConfig],
 ) -> StoredConfig | None:
-    """B1 fix: the activated ref's *exact* body -- reuse the already-loaded
+    """B1 fix: the activated ref's *exact* body -- reuse the loaded
     "current" doc when its revision matches, else fetch the immutable
-    ``<kind>:<name>@<rev>`` copy, so a later PUT (which only advances the
-    "current" doc) can never change what this resolves to. ``None`` when
-    there's nothing to pin (never activated, 'off', or the pinned copy
-    is gone)."""
+    ``<kind>:<name>@<rev>`` copy, so a later PUT never changes what this
+    resolves to. ``None`` when there's nothing to pin."""
     if not isinstance(ref, tuple):
         return None
     name, pinned_revision = ref
@@ -129,9 +128,11 @@ async def _resolve_active_body(
         return local
     if pinned_revision is None:
         return None
+    # B1 round-2: only a 404 means "nothing to pin"; any other exception
+    # must propagate (never fail-open, §3.6) -- `refresh()` then stales.
     try:
         doc = await client.get(index=index, id=config_doc_id(kind, name, pinned_revision))
-    except Exception as exc:  # NotFoundError (deleted) or a transient I/O error
+    except NotFoundError as exc:
         logger.warning(
             'config_store_active_revision_fetch_failed', kind=kind, name=name, error=str(exc)
         )
