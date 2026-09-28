@@ -296,6 +296,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the legacy scalars this pass).
 
 ### Fixed
+- **W3+W4 prompt-pack/region-profile CRUD fix pass (independent Opus
+  review, 2026-09-28): 2 blockers + 5 majors + isolation gaps.** Fixes
+  every finding of
+  `docs/design/openprocessor_internal/w3_w4_review_2026-09-28.md`:
+  - **Blocker 1 (activation revision pin ignored):** `ConfigSnapshot`
+    gained `active_pack_body`/`active_profile_body` (`store.py`), resolved
+    at activation/rollback time from the immutable `<kind>:<name>@<rev>`
+    revision copy, not the current-by-name doc. `active_prompt_pack()`
+    (`vlm_prompts.py`) and `get_active_region_profile()`
+    (`profile_registry.py`) now serve that pinned body. A `PUT` on the
+    active pack/profile still writes a new revision (per
+    any_domain_plan.md §4.4) but no longer changes what's running until a
+    separate `/activate` call re-validates it — closing the path where a
+    PUT could silently bypass the "never-bypassable" multi-box check.
+  - **Blocker 2 (default clone 409s after partial writes):** `_clone_activations`
+    (`services/projects/clone.py`) now reuses the revision
+    `_clone_prompt_packs`/`_clone_regions` already wrote for the same
+    name instead of re-`save_config`-ing with `expected_revision=None`,
+    so the default (all-axes) clone from a source with an active stored
+    pack no longer 409s `target_not_empty` partway through.
+  - **Major (name validation bypassed by PUT/clone):** PUT now 404s an
+    unknown name (creation is POST's job) and runs `_check_name`; clone
+    validates `new_name` the same way, both for packs and region profiles.
+  - **Major (template pack activation lies):** `POST /prompt_packs/{name}/activate`
+    now 403s a template, mirroring the region-profile route's existing guard.
+  - **Major (`ActivationImpact.items_total` capped at 10k, untested):**
+    `region_impact.py` sets `track_total_hits: True`;
+    `tests/curation/test_region_impact.py` pins every field's arithmetic
+    against a seeded fake response (previously no test asserted any
+    number).
+  - **Major (`from_project` clone 500s on a stale-target name collision):**
+    both clone routes now refresh the target's own store after the
+    source's read-only bind exits, and map `RevisionConflictError` to 409
+    `name_conflict` instead of a bare 500.
+  - **Isolation gaps:** `test_cross_project_leak.py`'s marker set now
+    includes `f'{slug}-model'` (the pattern `_stored_prompt_pack`/
+    `_stored_region_profile` already seed), so a config-store *content*
+    leak into a list response is now detectable; a new
+    `test_from_project_clone_reads_source_index_only_under_the_real_guard`
+    drives `from_project` through the real guarded transport for both
+    clone routes, pinning that the source `configs` index is only ever
+    read, never written.
+  - **Refactor:** the duplicated from-project clone-source resolution in
+    both routers is now one shared `services/config_store/clone_shared.py`.
+    `src/routers/curation/models.py`'s compat re-import of
+    `discover_promoted_models`/`project_owns_model` under old private
+    names is gone (no-shims rule) — `_core_models()` moved down into
+    `services/training/promoted_models.py` so the service no longer
+    depends back on the router it was extracted from; all call sites
+    updated. Removed dead code: `packs.RESERVED_NAME_ERROR`,
+    `pack_source`/`profile_source`, the `get_activation` re-export from
+    `packs.__all__`, the `del check_multi_region_keys` breadcrumb, and
+    `region_profiles.py`'s duplicate `store2`.
+  - **Deferred (documented, not fixed this pass):** `GET
+    /region_profiles/schema` is left as an explicit `TODO` (still a
+    placeholder — every field types as `'string'`/`'advanced'`/`enum:
+    None`) rather than implemented, since it's out of scope for a
+    blockers/majors fix pass; activating a stored pack/profile by an
+    explicit past `revision` number remains unreachable (`build_record`
+    returns `None` for a non-current revision) — request field kept,
+    not wired; deleting a pack/profile that is only an activation's
+    `previous` (not the current active) is still allowed.
 - **W8 pipeline-wiring correctness fixes (independent Opus review,
   2026-09-27): 1 blocker + 8 majors.** Fixes every finding of
   `docs/design/openprocessor_internal/w8_pipeline_review_2026-09-27.md`
