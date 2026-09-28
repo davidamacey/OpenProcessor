@@ -231,13 +231,16 @@ def human_status_box_write(
     ``candidate_*`` fields) that :func:`~src.services.curation.wire.
     region_to_wire` still serves additively are maintained by
     :func:`~src.services.curation.region_boxes.boxes_write_fields` itself
-    now (W8-cleanup M2) -- every box writer refreshes them the same way:
-    ``bbox_norm``/``score``/``detector``/``detector_version``/``source``
-    mirror the highest-scoring accepted-or-false_positive box, cleared to
-    ``None`` when there is none (never a rejected box's coordinates --
-    ``bbox_norm`` is an accepted region to every reader). ``rejection_reason``
-    mirrors the highest-scoring *rejected* box independently, since
-    showing a reason never makes a box look accepted.
+    now (W8-cleanup M2, tightened by N1/N2) -- every box writer refreshes
+    them the same way: ``bbox_norm``/``score``/``detector``/
+    ``detector_version``/``source`` mirror the highest-scoring *accepted*
+    box, falling back to the highest-scoring false_positive box only when
+    there is no accepted one, and cleared to ``None`` when there is
+    neither (never a rejected box's coordinates -- ``bbox_norm`` is an
+    accepted region to every reader). ``rejection_reason`` mirrors the
+    highest-scoring *rejected* box only when there is no accepted-or-FP
+    representative -- a ``detected`` or false-positive item never carries
+    a rejection reason, matching pre-W8 behavior.
     """
     F = get_region_fields()
     status = RegionStatus(region_status)
@@ -297,6 +300,13 @@ def reason_only_box_write(current: dict[str, Any], reason: str | None) -> dict[s
     derive a mirror reason from, so it always clears the item-level
     ``rejection_reason`` to ``None`` -- restore the reason this request
     is setting in that case, matching M1(a)'s box-less mirror.
+
+    W8-cleanup R3-1: that restore must only fire for a truly box-less
+    item, the same ``not new_boxes`` guard M1(a) uses in
+    :func:`human_status_box_write`. A looser "no rejected box" condition
+    also matched an accepted-only, false-positive-only, or proposed-only
+    item, and stored a reason on it -- the exact wrong-mirror symptom N1
+    fixed.
     """
     F = get_region_fields()
     boxes = read_boxes(current, F)
@@ -305,7 +315,7 @@ def reason_only_box_write(current: dict[str, Any], reason: str | None) -> dict[s
         for b in boxes
     ]
     doc = dict(boxes_write_fields(new_boxes, current_src=current))
-    if not any(b.state == 'rejected' for b in new_boxes):
+    if not new_boxes:
         doc[F.rejection_reason] = reason
     return doc
 

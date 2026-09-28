@@ -201,6 +201,24 @@ def test_patch_meta_reason_only_on_box_less_item_updates_not_wipes_the_reason(
     assert resp.json()['item']['region_rejection_reason'] == 'Y'
 
 
+def test_patch_meta_reason_only_on_accepted_only_item_does_not_store_reason(
+    client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    """W8-cleanup R3-1 regression: a reason-only PATCH on an item with no
+    rejected box (e.g. an accepted-only `detected` item) must not store or
+    serve a `region_rejection_reason` -- `reason_only_box_write`'s original
+    N3 condition (`not any(rejected box)`) was true for any non-rejected
+    item, not just a box-less one, which brought back N1's symptom."""
+    resp = client.patch(
+        '/curation/projects/default/crops/boxed-1/region_meta',
+        json={'region_rejection_reason': 'Y'},
+    )
+    assert resp.status_code == 200, resp.text
+    doc = fake_os._docs['boxed-1']
+    assert doc[F.rejection_reason] is None
+    assert resp.json()['item']['region_rejection_reason'] is None
+
+
 # ------------------------------------------------------------- M2: the mirror
 
 

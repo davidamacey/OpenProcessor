@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W8-cleanup Items 1-2 confirmation-review fix pass (round 3).** A
+  third independent confirmation review of the round-2 N1/N2/N3 fixes
+  found one residual: `region_writes.reason_only_box_write`'s N3 fix
+  restored the item-level `region_rejection_reason` whenever the item
+  had no *rejected* box, instead of when it had no box at all — so a
+  reason-only PATCH on an accepted-only `detected` item, an FP-only
+  item, or a proposed-only item incorrectly stored the reason, bringing
+  back N1's exact symptom. The condition is now `not new_boxes`, the
+  same box-less guard `human_status_box_write` uses for M1(a). Also
+  updated `human_status_box_write`'s docstring, which still described
+  the pre-N1/N2 mirror rules.
 - **W8-cleanup Items 1-2 confirmation-review fix pass (round 2).** An
   independent confirmation review of the round-1 fix pass found the M2
   mirror redesign (moving the legacy per-item mirror into
