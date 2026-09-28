@@ -28,14 +28,7 @@ LEGACY_TAB_CLAUSES: dict[str, list[dict]] = {
         {'probe_pred_entropy': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}
     ],
     'regions': [
-        {'region_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
-        {
-            'region_candidate_score': {
-                'order': 'desc',
-                'missing': '_last',
-                'unmapped_type': 'double',
-            }
-        },
+        {'region_max_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
     ],
     'model_disagreements': [
         {'probe_pred_entropy': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}

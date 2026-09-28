@@ -55,13 +55,12 @@ def _docs() -> dict[str, dict[str, Any]]:
                 }
             ],
             F.status: 'detected',
-            F.score: 0.6,
+            F.max_score: 0.6,
         },
         'rejected1': {
             'crop_id': 'rejected1',
             F.status: 'verify_rejected',
-            F.candidate_bbox_norm: [0.3, 0.6, 0.4, 0.65],
-            F.candidate_score: 0.81,
+            F.max_score: 0.81,
             F.rejection_reason: 'region_visible_elsewhere',
             F.boxes: [
                 {
@@ -153,18 +152,17 @@ def test_rejected_item_reason_mentions_rejection(monkeypatch: pytest.MonkeyPatch
     assert items['detected1']['reason'] == 'region detected — needs human confirmation'
 
 
-def test_rejected_items_sort_by_candidate_score_not_arbitrary_tie(
+def test_rejected_items_sort_by_max_score_not_arbitrary_tie(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Both rejected items are missing `region_score` (tie on the first
-    sort key); the second key (`region_candidate_score`) must still order
-    them deterministically by score, not by insertion/shard order."""
+    """Both rejected items carry only `region_max_score` (B1 fix) -- the
+    single sort key must still order them deterministically by score, not
+    by insertion/shard order."""
     docs = {
         'rej_low': {
             'crop_id': 'rej_low',
             F.status: 'verify_rejected',
-            F.candidate_bbox_norm: [0.3, 0.6, 0.4, 0.65],
-            F.candidate_score: 0.2,
+            F.max_score: 0.2,
             F.boxes: [
                 {
                     'box_id': 'b1',
@@ -177,8 +175,7 @@ def test_rejected_items_sort_by_candidate_score_not_arbitrary_tie(
         'rej_high': {
             'crop_id': 'rej_high',
             F.status: 'verify_rejected',
-            F.candidate_bbox_norm: [0.3, 0.6, 0.4, 0.65],
-            F.candidate_score: 0.9,
+            F.max_score: 0.9,
             F.boxes: [
                 {
                     'box_id': 'b1',
@@ -193,12 +190,8 @@ def test_rejected_items_sort_by_candidate_score_not_arbitrary_tie(
 
     registry = review_sorts.get_review_sorts()
     clause = registry['region_score'].clause
-    assert clause[0][F.score]['order'] == 'desc'
-    assert clause[1][F.candidate_score]['order'] == 'desc'
+    assert clause[0][F.max_score]['order'] == 'desc'
 
-    # The fake's search() only sorts on the first field, so assert the
-    # ordering semantics directly against the clause + locate's own
-    # generic before_query rather than relying on the fake's sort.
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
     lo = client.get(
         '/curation/projects/default/review/regions/locate', params={'crop_id': 'rej_low'}
