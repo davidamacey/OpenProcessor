@@ -85,6 +85,33 @@ def test_class_cluster_write_guard_matches_is_locked_class() -> None:
     assert not orch._guard_condition_matches(orch.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, normal)
 
 
+def test_class_cluster_write_guard_intentionally_diverges_on_test_holdout() -> None:
+    """W10 fix pass (Opus review 2026-09-28, lock-rule call-site m3): an
+    unvalidated ``test_holdout`` item IS locked by ``is_locked_class``
+    (its class must never be touched by an automated writer), but this
+    clause list intentionally does NOT guard it -- this write is cluster
+    PLACEMENT (cluster_id/cluster_distance), not a class write, so
+    residual clustering may still assign a holdout item's cluster id.
+    Pins the divergence the (now corrected) module comment documents,
+    so a future accidental narrowing/widening of either side is caught."""
+    holdout_unvalidated = {
+        'class_source': 'item_model',
+        'class_validated': False,
+        'test_holdout': True,
+    }
+    assert is_locked_class(holdout_unvalidated)
+    assert not orch._guard_condition_matches(
+        orch.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, holdout_unvalidated
+    )
+
+    # A validated import IS covered on both sides -- is_locked_class's
+    # import branch requires class_validated=True, which this clause
+    # list already guards generically (not a divergence).
+    validated_import = {'class_source': 'external_label', 'class_validated': True}
+    assert is_locked_class(validated_import)
+    assert orch._guard_condition_matches(orch.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, validated_import)
+
+
 def test_class_cluster_write_guard_script_text_names_same_fields_as_predicate() -> None:
     """The painless source literally names the fields/values
     CLASS_CLUSTER_WRITE_GUARD_CLAUSES encodes -- a future edit to the

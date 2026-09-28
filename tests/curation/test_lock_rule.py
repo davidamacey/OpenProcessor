@@ -123,10 +123,24 @@ class TestReingestPreservesImportedLabel:
     ``occ_upsert_bulk`` (``ingest.py``'s ``_CROP_HUMAN_FIELD_GUARDS =
     ('label_source', 'class_source')``). Red before W10:
     ``_merge_preserving_human`` used ``_is_human_marker``, which does not
-    recognize import provenance."""
+    recognize import provenance.
 
-    def test_import_class_source_preserved(self) -> None:
-        existing = {'class_source': 'external_label', 'label_source': 'import', 'class_id': 3}
+    W10 fix-pass note (Opus review 2026-09-28, lock-rule call-site m4):
+    the guard now fires on ``is_locked_class`` for these two fields, which
+    requires ``class_validated=True`` for an import to lock — matching
+    ``is_locked_class``'s own contract that an unvalidated ("suggestion")
+    import is NOT locked. The prior version of this test asserted the
+    opposite (preserved with no ``class_validated`` at all) and is now
+    the ``test_unvalidated_import_not_preserved`` case below.
+    """
+
+    def test_validated_import_class_source_preserved(self) -> None:
+        existing = {
+            'class_source': 'external_label',
+            'label_source': 'import',
+            'class_id': 3,
+            'class_validated': True,
+        }
         new_doc = {'class_source': 'coco_yolo11', 'label_source': 'ingest', 'class_id': 7}
         merged, preserved = _merge_preserving_human(
             new_doc=new_doc,
@@ -136,6 +150,26 @@ class TestReingestPreservesImportedLabel:
         assert merged['class_source'] == 'external_label'
         assert merged['label_source'] == 'import'
         assert set(preserved) == {'label_source', 'class_source'}
+
+    def test_unvalidated_suggestion_import_not_preserved(self) -> None:
+        """is_locked_class explicitly does NOT lock an unvalidated
+        (``label_trust: suggestion``) import — the merge guard must
+        agree, so a fresh ingest pass is free to overwrite it."""
+        existing = {
+            'class_source': 'external_label',
+            'label_source': 'import',
+            'class_id': 3,
+            'class_validated': False,
+        }
+        new_doc = {'class_source': 'coco_yolo11', 'label_source': 'ingest', 'class_id': 7}
+        merged, preserved = _merge_preserving_human(
+            new_doc=new_doc,
+            existing=existing,
+            human_field_guards=['label_source', 'class_source'],
+        )
+        assert merged['class_source'] == 'coco_yolo11'
+        assert merged['label_source'] == 'ingest'
+        assert preserved == []
 
     def test_machine_class_source_not_preserved(self) -> None:
         existing = {'class_source': 'vlm', 'label_source': 'vlm'}

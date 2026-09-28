@@ -180,12 +180,22 @@ def _guard_condition_matches(clauses: list[GuardClause], source: dict[str, Any])
     return False
 
 
-# Mirrors src.clients.occ.is_locked_class's human-marker class_source check (a
-# string containing 'human') plus the class_validated / class_excluded
-# guards vlm.py's _class_locked already applies on its own write path. Kept
-# as its own clause list (rather than calling is_locked_class from
-# painless, which isn't possible) -- test_orchestrator_guarded_writes.py
-# cross-checks the two stay equivalent.
+# NOT a full mirror of src.clients.occ_locks.is_locked_class (W10 fix
+# pass, Opus review 2026-09-28, lock-rule call-site m3): this covers the
+# human-marker class_source check (a string containing 'human') plus the
+# class_validated / class_excluded guards vlm.py's _class_locked already
+# applies on its own write path, but it deliberately does NOT cover
+# is_locked_class's `test_holdout` clause. This write is cluster
+# PLACEMENT (cluster_id/cluster_distance), not a class write, so an
+# unvalidated holdout item may still have its cluster assignment updated
+# by residual clustering -- freezing a holdout item's CLASS is a
+# separate guard (vlm.py, the region worker, class_write_guard.py), not
+# this one. Kept as its own clause list (rather than calling
+# is_locked_class from painless, which isn't possible);
+# test_orchestrator_guarded_writes.py cross-checks the two stay
+# equivalent on the fields this clause list DOES cover (human-marker,
+# class_validated, class_excluded), with explicit holdout/validated-
+# import samples pinning the intended divergence.
 CLASS_CLUSTER_WRITE_GUARD_CLAUSES: list[GuardClause] = [
     ('class_validated', 'eq', True),
     ('class_excluded', 'eq', True),

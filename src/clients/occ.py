@@ -625,6 +625,18 @@ def _apply_fill_if_absent(
     return filled
 
 
+# Guards that describe the item's CLASS state (as opposed to a region-
+# level field like region_text_source) must fire on the same contract
+# is_locked_class() defines, not a narrower per-value string check --
+# otherwise re-ingest preserves an unvalidated ("suggestion") import's
+# class_source/label_source the same as a human's or a VALIDATED
+# import's, which is_locked_class explicitly does NOT lock (W10 fix
+# pass, Opus review 2026-09-28, lock-rule call-site m4). Region-only
+# guard fields (region_label_source, region_text_source, ...) keep the
+# narrower per-value check -- is_locked_class doesn't speak to them.
+_CLASS_LOCK_GUARD_FIELDS = frozenset({'class_source', 'label_source'})
+
+
 def _merge_preserving_human(
     *,
     new_doc: dict[str, Any],
@@ -634,11 +646,15 @@ def _merge_preserving_human(
     """Build the update body that preserves any human- or import-set
     guard fields.
 
-    A guard "fires" when the existing doc's value matches
-    :func:`_is_locked_marker` — a string containing ``human``, or one of
-    the import provenance markers (W10). Non-locked source values
-    (``ingest``, ``item_model``, ``vlm``, etc.) do not trip preservation;
-    ingest is free to overwrite them with its fresh-pass value.
+    For ``class_source``/``label_source``, a guard "fires" exactly when
+    :func:`is_locked_class` says the item's class is locked (human-set,
+    a VALIDATED import, or ``test_holdout``) -- matching that contract
+    means an unvalidated ("suggestion") import's provenance is free to
+    be overwritten by a fresh ingest pass, same as ``ingest``/``vlm``/etc.
+    Every other guard field keeps the narrower :func:`_is_locked_marker`
+    per-value check (a string containing ``human``, or an import
+    provenance marker) -- ``is_locked_class`` doesn't speak to
+    region-level fields.
 
     Returns ``(merged_doc, preserved_field_names)``. ``preserved_field_names``
     counts each guard that actually fired (used by the per-field Grafana
@@ -648,7 +664,12 @@ def _merge_preserving_human(
     preserved: list[str] = []
     for field in human_field_guards:
         existing_val = existing.get(field)
-        if _is_locked_marker(existing_val):
+        fires = (
+            is_locked_class(existing)
+            if field in _CLASS_LOCK_GUARD_FIELDS
+            else _is_locked_marker(existing_val)
+        )
+        if fires:
             merged[field] = existing_val
             preserved.append(field)
             for companion in _HUMAN_GUARD_COMPANIONS.get(field, ()):
