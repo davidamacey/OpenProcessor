@@ -391,7 +391,18 @@ def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
             'region_detectors': {
                 'nested': {'path': fields.boxes},
                 'aggs': {
-                    'by_detector': {'terms': {'field': f'{fields.boxes}.detector', 'size': 16}}
+                    'by_detector': {
+                        'terms': {'field': f'{fields.boxes}.detector', 'size': 16},
+                        # M1 fix: without `reverse_nested`, this counts
+                        # BOXES, not crops -- an item with 2 accepted boxes
+                        # from the same detector (or an accepted + a
+                        # rejected/FP box) counted twice, inflating
+                        # `total_detected` / `by_detector` below, which
+                        # this dashboard number is documented (see
+                        # `by_detector counts crops...` below) to count as
+                        # one crop per detector.
+                        'aggs': {'crops': {'reverse_nested': {}}},
+                    }
                 },
             },
             # region-verifier breakdown — VLM (AI) vs human. Item-level
@@ -538,7 +549,12 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
     profile = region_profile_or_neutral()
     region_detector_buckets: dict[str, int] = {}
     for b in ((aggs.get('region_detectors') or {}).get('by_detector') or {}).get('buckets') or []:
-        region_detector_buckets[str(b.get('key', ''))] = int(b.get('doc_count', 0))
+        # `crops.doc_count` (M1 fix), not the bucket's own `doc_count` --
+        # the bucket counts BOXES under the nested agg; `reverse_nested`
+        # un-nests back to the parent crop, so a crop with >1 matching box
+        # is counted once.
+        crop_count = (b.get('crops') or {}).get('doc_count', b.get('doc_count', 0))
+        region_detector_buckets[str(b.get('key', ''))] = int(crop_count)
     regions_by_detector = _sum_prefixed(region_detector_buckets, profile.detector_model)
     regions_by_segmenter = _sum_prefixed(region_detector_buckets, profile.segmenter_name)
     regions_by_human_drew = _sum_prefixed(region_detector_buckets, profile.human_detector_name)

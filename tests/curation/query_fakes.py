@@ -81,14 +81,25 @@ def _term_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
     return value in _values(doc, field)
 
 
+_REVERSE_NESTED_PARENT_KEY = '__parent_id__'
+
+
 def _nested_elements(doc: dict[str, Any], path: str) -> list[dict[str, Any]]:
     """Every element of ``doc[path]``, re-keyed with the ``<path>.`` prefix
-    so a nested clause's dotted field names resolve like a top-level field."""
+    so a nested clause's dotted field names resolve like a top-level field.
+
+    Each flattened element also carries a private ``__parent_id__`` (the
+    parent doc's identity) so a ``reverse_nested`` sub-agg can count
+    distinct parent docs instead of nested elements."""
     elements = doc.get(path) or []
     if not isinstance(elements, list):
         return []
     prefix = f'{path}.'
-    return [{f'{prefix}{k}': v for k, v in el.items()} for el in elements if isinstance(el, dict)]
+    return [
+        {f'{prefix}{k}': v for k, v in el.items()} | {_REVERSE_NESTED_PARENT_KEY: id(doc)}
+        for el in elements
+        if isinstance(el, dict)
+    ]
 
 
 def _nested_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
@@ -147,6 +158,20 @@ def matches(doc: dict[str, Any], query: dict[str, Any] | None) -> bool:
 def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for name, spec in aggs.items():
+        if 'cardinality' in spec:
+            field = spec['cardinality']['field']
+            distinct = {v for d in docs for v in _values(d, field)}
+            out[name] = {'value': len(distinct)}
+            continue
+        if 'reverse_nested' in spec:
+            # Count distinct PARENT docs the current group's nested
+            # elements came from, not the elements themselves -- an item
+            # with 2 boxes matching the same terms bucket counts once.
+            parent_ids = {
+                d[_REVERSE_NESTED_PARENT_KEY] for d in docs if _REVERSE_NESTED_PARENT_KEY in d
+            }
+            out[name] = {'doc_count': len(parent_ids) if parent_ids else len(docs)}
+            continue
         if 'top_hits' in spec:
             size = spec['top_hits'].get('size', 3)
             out[name] = {'hits': {'hits': [{'_source': copy.deepcopy(d)} for d in docs[:size]]}}
