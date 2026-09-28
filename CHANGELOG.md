@@ -424,6 +424,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mode against any stored boxes, including human-sourced ones -- the
   requeue boundary itself, plus the legacy-scalar readers listed in the
   original W8 pipeline review, remain W8c scope.
+- **W8c pass 1 (r1 requeue fix, per-route box-state validation,
+  segmenter `min_score`/128-candidate config).** Partial pass -- the
+  legacy scalar field/route deletion and the per-box embeddings/
+  clustering/FP-matching work this wave was scoped for are NOT done
+  this pass; see the handback report for the exact remaining list.
+  - **Requeue query ported off the deleted-in-spirit legacy scalars.**
+    `region_requeue.requeue_query` filtered on item-level `F.detector` /
+    `F.rejection_reason` / `F.bbox_norm`, none of which a W8 worker
+    write ever populates -- so requeueing a W8-written cohort by
+    detector/reason, or to `pending_verification`, silently matched
+    nothing. Now a nested `region_boxes` query
+    (`region_boxes.box_query`/`has_any_box_query`); `requeue_breakdown`'s
+    aggregation is a nested agg over the same path (counts BOXES, not
+    items, for the by-detector/by-reason breakdown only -- `total`
+    still counts items).
+  - **r1 wipe-on-replace fix, both ends.** `region_requeue.apply_requeue`
+    with `clear_detection=True` now drops only this pass's MACHINE-
+    sourced boxes from `region_boxes` (`source != 'human'`), never a
+    human's. Separately (and required regardless of the requeue tool,
+    since a fresh-detection pass can also follow a raw/direct status
+    edit): every fresh-detection path in the streaming worker
+    (`runner.py` Path 2/Path 3 and the text-hint re-pass they can fall
+    into) now sets `_ItemTask.pending_merge = True`, so its own
+    candidates MERGE onto whatever is live at write time
+    (`region_boxes.merge_boxes_for_write`, the same primitive Path 1's
+    B1 fix already uses) instead of replacing the box list wholesale --
+    a no-op for the common case (no stored boxes at all). Red-then-green
+    on `tests/curation/test_region_write_occ_m1.py` (a concurrently
+    human-added box now survives a fresh-detection write instead of
+    being silently discarded) and a new
+    `query_fakes.py` `nested` query/aggregation double (query + agg;
+    additive, every existing test unaffected).
+  - **Per-route box `state` validation (prior-pass gap).**
+    `BOX_STATE_ROUTES` (`src/config/region_state.py`) was served on `GET
+    .../regions/statuses` but never enforced on write. New
+    `region_boxes.validate_box_state(route, state)`, wired into all four
+    W8a box-write routes (`PUT /crops/{id}/regions`, `PUT
+    /crops/batch_regions`, `PATCH /crops/{id}/regions/{box_id}`, `POST
+    /regions/batch_box_state`) -- an unrecognized `state` is now a 422
+    instead of being written verbatim into `region_boxes`.
+  - **Segmenter `min_score` + the 128-candidate ceiling
+    (`docker/segmenter/`).** Verified against the upstream source (no
+    `docker run`; the `sam3` package isn't installed in this
+    environment, so this is a read of the public
+    `facebookresearch/sam3` GitHub source, not a live probe):
+    `Sam3Processor.__init__(..., confidence_threshold=0.5)` is SAM 3's
+    only score threshold, read as a plain instance attribute by both the
+    upstream `_forward_grounding` and this repo's mask-disabled patch;
+    `build_sam3_image_model`'s decoder defaults to `num_queries=200`, so
+    a 128-candidate top-K ceiling never asks for more than the model can
+    produce. `SegmentRequest`/`BatchSegmentRequest` gain `min_score:
+    float | None` (sent to the server; `None` = the processor default);
+    `max_candidates`'s `le` rises from 32 to 128
+    (`sam3_backend.MAX_CANDIDATES_CAP`). `ProcessorPool.acquire(
+    min_score=...)` sets the leased processor's `confidence_threshold`
+    for just that call and restores the prior value on release (even on
+    error), so no per-instance state leaks between callers. `GET
+    /health` now serves `max_candidates` and `default_min_score`. Scope
+    note: this is the segmenter-server half of `any_domain_plan.md`
+    W8.4 only -- the client-side half (`DetectionProfile.
+    segmenter_min_score`, `SegmenterClient` sending `min_score`,
+    `region_candidates.py`, the detector-leg port) is separate, larger
+    W8.4 scope and is NOT done this pass.
+  New/extended tests: `tests/curation/test_region_requeue.py` (rewritten
+  onto a `region_boxes`-shaped corpus), `tests/curation/query_fakes.py`
+  (`nested` query/agg support), `tests/curation/test_region_write_occ_m1.py`,
+  `tests/curation/test_region_no_verdict_cap.py` (one scenario's manual
+  requeue helper updated to clear `region_boxes`, matching what the real
+  `apply_requeue(clear_detection=True)` now does), `tests/curation/
+  test_regions_boxes_edit.py` (4 new per-route invalid-`state` tests),
+  `tests/curation/test_segmenter_service.py` (2 new: `min_score`
+  filters-and-restores, `max_candidates` at/over the new cap).
 - **W2b-finish: independent re-verification of the Opus review fix pass
   (2026-09-27), plus merging in W2's reviewed config-store hot reload.**
   Merged `main` (W2 config store hot reload, `op_global_configs`, P3F
