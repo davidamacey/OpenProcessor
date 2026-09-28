@@ -14,6 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'integration'))
 from ingest_fakes import FakeOpenSearch
 
 from src.clients.curation_opensearch import ClassRegistry
+from src.config import get_curation_config
+from src.config.region_fields import get_region_fields
 from src.services.curation.dataset_import.job import (
     _image_id_for,
     import_dataset,
@@ -22,6 +24,7 @@ from src.services.curation.dataset_import.job import (
 )
 from src.services.curation.dataset_import.mapping import ClassMappingEntry, resolve_mapping
 from src.services.curation.dataset_import.yolo import scan_yolo
+from src.services.curation.region_boxes import read_boxes
 from src.services.detection.geometry import crop_id as _crop_id
 
 
@@ -73,8 +76,8 @@ async def test_import_maps_classes_by_name_not_index(tmp_path: Path) -> None:
         scan,
         resolved,
         import_id='imp_test',
-        images_index='op_curation_images',
-        items_index='op_curation_items',
+        images_index=get_curation_config().images_index,
+        items_index=get_curation_config().items_index,
     )
     assert report.items_created == 2
     classes_written = {doc['class_name'] for doc in fake_os.items.values()}
@@ -119,8 +122,8 @@ async def test_create_action_materializes_a_real_class_id(tmp_path: Path) -> Non
         scan,
         resolved,
         import_id='imp_test2',
-        images_index='op_curation_images',
-        items_index='op_curation_items',
+        images_index=get_curation_config().images_index,
+        items_index=get_curation_config().items_index,
     )
     assert report.items_created == 2
     truck_docs = [d for d in fake_os.items.values() if d['class_name'] == 'truck']
@@ -172,8 +175,8 @@ async def test_reimport_never_overwrites_a_locked_human_label(tmp_path: Path) ->
         scan,
         resolved,
         import_id='imp_reimport',
-        images_index='op_curation_images',
-        items_index='op_curation_items',
+        images_index=get_curation_config().images_index,
+        items_index=get_curation_config().items_index,
     )
 
     # The human label survives untouched.
@@ -191,3 +194,51 @@ async def test_reimport_never_overwrites_a_locked_human_label(tmp_path: Path) ->
     assert report.items_created == 1
     truck_docs = [d for d in fake_os.items.values() if d['class_name'] == 'truck']
     assert len(truck_docs) == 1
+
+
+@pytest.mark.asyncio
+async def test_first_validated_import_writes_region_boxes(tmp_path: Path) -> None:
+    """R2-M1 regression: a first-ever import under the default
+    ``label_trust='validated'`` must not treat the class it just wrote to
+    the parent item as a pre-existing lock and drop the region boxes. On
+    fresh items with no prior human/validated state, ``boxes_written``
+    must be nonzero."""
+    dataset_root = tmp_path / 'ds'
+    dataset_root.mkdir(parents=True, exist_ok=True)
+    (dataset_root / 'data.yaml').write_text('train: images/train\nnames:\n  0: car\n  1: plate\n')
+    _write_image(dataset_root / 'images/train/a.jpg')
+    (dataset_root / 'labels/train').mkdir(parents=True, exist_ok=True)
+    # car box, with a 'plate' region box fully contained inside it.
+    (dataset_root / 'labels/train/a.txt').write_text('0 0.3 0.3 0.2 0.2\n1 0.3 0.3 0.05 0.05\n')
+
+    registry = ClassRegistry(path=tmp_path / 'class_registry.json')
+    registry.add_class('car')
+
+    scan = scan_yolo(dataset_root)
+    mapping_entries = [
+        ClassMappingEntry(dataset_class='car', action='map', class_id=0),
+        ClassMappingEntry(dataset_class='plate', action='region'),
+    ]
+    resolved = resolve_mapping(
+        ['car', 'plate'], mapping_entries, registry_classes=registry_class_views(registry)
+    )
+    assert resolved.ok
+
+    fake_os = FakeOpenSearch()
+    report = await import_dataset(
+        fake_os,
+        scan,
+        resolved,
+        import_id='imp_regions',
+        images_index=get_curation_config().images_index,
+        items_index=get_curation_config().items_index,
+        # label_trust defaults to 'validated' -- deliberately not overridden.
+    )
+
+    assert report.boxes_written == 1
+    assert report.regions_locked_skipped == 0
+    assert report.conflicts == []
+    parent_doc = next(iter(fake_os.items.values()))
+    region_fields = get_region_fields()
+    assert parent_doc.get(region_fields.status) is not None
+    assert read_boxes(parent_doc, region_fields)

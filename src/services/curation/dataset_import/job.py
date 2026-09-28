@@ -263,10 +263,12 @@ async def import_dataset(
                 ParentCandidate(key=cid, bbox_norm=box.bbox_norm, class_name=item_target.class_name)
             )
 
+        locked_parent_ids: set[str] = set()
         if item_docs:
             item_docs, locked_ids = await _split_locked_items(
                 opensearch, item_docs, items_index=items_index
             )
+            locked_parent_ids = set(locked_ids)
             for cid in locked_ids:
                 report.conflicts.append(
                     f'{cid}: item is locked (human-set, validated import, or test_holdout); '
@@ -316,16 +318,26 @@ async def import_dataset(
                 fields[region_fields.verifier_version] = import_id
 
                 lock_state = {'locked': False}
+                parent_locked_pre_import = parent_key in locked_parent_ids
 
                 def _region_merger(
                     _current: dict[str, Any],
                     _fields: dict[str, Any] = fields,
                     _lock_state: dict[str, bool] = lock_state,
+                    _parent_locked_pre_import: bool = parent_locked_pre_import,
                 ) -> dict[str, Any]:
                     # W10 M2 fix (companion bug): never overwrite a
                     # locked item's box list (a human-owned or imported
-                    # box, or the item's class itself is locked).
-                    if is_locked_item(_current, region_fields) or any(
+                    # box). R2-M1 fix: the lock decision must come from
+                    # state that existed BEFORE this import run (whether
+                    # the parent item was already locked and therefore
+                    # skipped by ``_split_locked_items`` above) or from
+                    # pre-existing locked boxes -- NOT from
+                    # ``is_locked_class(_current)``, which would see the
+                    # validated class this same import just wrote to the
+                    # parent moments earlier and treat its own write as a
+                    # foreign lock.
+                    if _parent_locked_pre_import or any(
                         is_locked_box(b) for b in read_boxes(_current, region_fields)
                     ):
                         _lock_state['locked'] = True
