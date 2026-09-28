@@ -360,7 +360,7 @@ def _run_job(c, monkeypatch, query):
     args = {k: v for k, v in captured.items() if k != 'opensearch'}
     args['train_clusters'] = False
     args['run_vlm'] = False
-    summary = asyncio.run(pipeline.pipeline_auto_label(opensearch=_FakeOpenSearch({}), **args))
+    summary = asyncio.run(pipeline._run_auto_label(opensearch=_FakeOpenSearch({}), **args))
     return captured, summary
 
 
@@ -479,7 +479,19 @@ def test_r5_walk_every_activation_writer_rejects_gate_failing_pair(
         and served_prof is not None
         and served_prof.max_regions_per_item > 1
     )
-    results['settings_combined'] = 409 if combined_pair_live else 422
+    # R6-m2 fix (W3/W4 round-6 review): the old `409 if combined_pair_live
+    # else 422` bucketed BOTH outcomes into the shared `(409, 422)` loop
+    # assertion below, so this entry passed even when the gate was
+    # disabled entirely -- the round-5 mutation proved it stays green
+    # while `test_r5_two_axis_put...` (the dedicated R5-1 test) correctly
+    # goes red. Assert directly on what actually matters: the request was
+    # rejected (422 specifically -- this route's own gate-failure code,
+    # not some unrelated `active_conflict` 409) AND the bad pairing never
+    # went live. Not folded into `results`/the shared loop below, so a
+    # future change to that loop's acceptance set can't silently make
+    # this vacuous again.
+    assert r.status_code == 422, f'combined PUT did not reject the bad pairing: {r.status_code}'
+    assert not combined_pair_live, 'combined PUT let the gate-failing pack+profile pair go live'
 
     # Reset to a clean, valid baseline before the rollback cases.
     assert c.put(SETTINGS, json={'defaults': {'prompt_pack': 'good'}}).status_code == 200

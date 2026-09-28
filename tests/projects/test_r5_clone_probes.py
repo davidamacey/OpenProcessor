@@ -33,6 +33,24 @@ async def test_r5_clone_activates_source_private_detector_in_target(tmp_path, mo
     monkeypatch.setattr(mc, 'is_model_shared', lambda _n: False)
     monkeypatch.setattr(pm, 'is_model_shared', lambda _n: False)
 
+    # R6-m3 fix (W3/W4 round-6 review): the real clone call below
+    # (`_into`) goes through `check_activation_pair_in_target_context` ->
+    # `run_activation_gate` -> `validate_profile`'s OWN, unpatched
+    # `TritonControlService.get_repository_index` -- unreachable in a
+    # test, so the clone 422s on `detector_model_not_found` before the
+    # ownership check (`detector_model_not_shared`) ever runs. With
+    # ownership disabled entirely (`project_slug=None`), the test stayed
+    # green for the wrong reason: it could not tell "ownership check
+    # works" from "Triton just wasn't set up." Patch Triton READY here
+    # too (matching `test_r6_clone_cause.py`'s pattern) so the real clone
+    # path genuinely exercises the ownership check.
+    from src.services.triton_control import TritonControlService
+
+    async def _repo():
+        return [{'name': 'alpha__wheel_det', 'state': 'READY', 'version': '1'}]
+
+    monkeypatch.setattr(TritonControlService, 'get_repository_index', lambda _s: _repo())
+
     client = Fake()
     source, target = _record('alpha', tmp_path), _record('beta', tmp_path)
     body = {'detector_model': 'alpha__wheel_det', 'text_reader': 'none'}
@@ -56,14 +74,31 @@ async def test_r5_clone_activates_source_private_detector_in_target(tmp_path, mo
     assert 'detector_model_not_shared' in codes
 
     _patch_lifecycle(monkeypatch, source, target)
+    clone_codes: list[str] = []
     try:
         await _into(client, source, target)
         outcome = 'ok'
     except Exception as exc:
         outcome = repr(exc)[:200]
+        cause = exc.__cause__
+        detail = getattr(cause, 'detail', cause)
+        if isinstance(detail, dict) and 'report' in detail:
+            clone_codes = sorted(e['code'] for e in detail['report']['errors'])
     with bind_project(target):
         act = await get_activation(client, get_curation_config().configs_index, 'detection_profile')
-    print('clone ->', outcome, '| target detection_profile activation:', act and act.get('name'))
+    print(
+        'clone ->',
+        outcome,
+        clone_codes,
+        '| target detection_profile activation:',
+        act and act.get('name'),
+    )
     assert not (act and act.get('name') == 'private_rp'), (
         "clone activated a profile using another project's non-shared detector in the target"
     )
+    # R6-m3 fix: with Triton actually READY, the clone must fail on the
+    # ownership check specifically -- not "Triton wasn't set up"
+    # (`detector_model_not_found`), which would pass this test for the
+    # wrong reason (mutation-proven: disabling the ownership check
+    # entirely still left the OLD version of this test green).
+    assert clone_codes == ['detector_model_not_shared'], clone_codes
