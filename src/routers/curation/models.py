@@ -13,17 +13,15 @@ guard for free.
 from __future__ import annotations
 
 import contextlib
-import json
 import os
 import re
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 
 import httpx
 from fastapi import HTTPException, Query
 from pydantic import BaseModel
 
 from src.clients.pe_encoder import PE_IMAGE_MODEL
-from src.config.curation import get_curation_config
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
 from src.routers.curation._common import logger, router
@@ -40,13 +38,8 @@ from src.services.training.triton_promote import (
     PromoteError,
     UnloadResult,
     resolve_triton_http_url,
-    resolve_triton_models_dir,
     unload_triton_model,
 )
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def _core_models() -> tuple[tuple[str, str, str, str], ...]:
@@ -232,57 +225,14 @@ def _external_service_model_names() -> frozenset[str]:
     return frozenset(names)
 
 
-def _discover_promoted_models(
-    models_dir: Path | None = None,
-) -> list[dict[str, Any]]:
-    """Models promoted through this pipeline that aren't one of the fixed
-    :func:`_core_models`.
-
-    Every ``TritonPromoter.promote()`` call writes a ``promote.json``
-    back-pointer into the model's repo directory — its presence is
-    exactly "this was promoted through `/curation/train/promote`",
-    independent of Triton's own load state. Surfacing these lets
-    `/models` show (and the unload endpoint remove) a throwaway/
-    experimental promote without a shell into the host.
-
-    Best-effort: any I/O error scanning the repo returns an empty list
-    rather than failing the whole `/models/status` response — this is
-    supplementary discovery, not the pipeline's core models.
-    """
-    resolved_dir = models_dir if models_dir is not None else resolve_triton_models_dir()
-    fixed_names = {name for name, *_ in _core_models()}
-    out: list[dict[str, Any]] = []
-    try:
-        entries = sorted(resolved_dir.iterdir())
-    except OSError:
-        return out
-    for entry in entries:
-        if not entry.is_dir() or entry.name in fixed_names:
-            continue
-        # Project scoping (docs/design/openprocessor_internal/
-        # projects_plan.md §5.3, D1): the shared Triton repo holds every
-        # project's promoted models side by side. Only this project's own
-        # are listed here; another project's shared ones come from
-        # discover_foreign_shared_models, on request only.
-        if not _project_owns_model(entry.name):
-            continue
-        promote_json = entry / 'promote.json'
-        if not promote_json.is_file():
-            continue
-        try:
-            meta = json.loads(promote_json.read_text(encoding='utf-8'))
-        except (OSError, ValueError) as exc:
-            logger.warning('models_status_promote_json_unreadable', name=entry.name, error=str(exc))
-            meta = {}
-        out.append(
-            {
-                'name': entry.name,
-                'job_id': meta.get('job_id'),
-                'version': meta.get('version'),
-                'promoted_at': meta.get('promoted_at'),
-            }
-        )
-    return out
+# W4 (any_domain_plan.md §4.3): moved to src.services.training.promoted_models
+# so profile_validation.py (a service module) can discover promoted models
+# without importing a router. Re-imported here under the old private names
+# so every existing call site in this module is unchanged.
+from src.services.training.promoted_models import (  # noqa: E402
+    discover_promoted_models as _discover_promoted_models,
+    project_owns_model as _project_owns_model,
+)
 
 
 _TRITON_METRIC_KEYS: dict[str, str] = {
@@ -550,47 +500,10 @@ async def models_status(
 # re-derive them.)
 
 
-def _project_owns_model(model_name: str) -> bool:
-    """True if ``model_name`` (a ``triton_name``) belongs to the bound
-    project's namespace (docs/design/openprocessor_internal/projects_plan.md
-    §5.3/§5.5: ``triton_name = model_prefix + requested``).
-
-    ``default``'s ``model_prefix`` stays the empty string (the one
-    deliberate exception to "no default special case" -- every
-    pre-projects / core-pipeline model, never namespaced, keeps
-    resolving as default's own). A non-empty prefix owns exactly the
-    names it produces. A namespaced name (contains ``'__'``) that isn't
-    ours belongs to some other project -- registered or not, since only
-    a project's own non-empty prefix ever produces one. An *unprefixed*
-    name (no ``'__'`` at all) carries no project's namespace, so it is
-    owned by ``default`` alone.
-    """
-    from src.config.projects import DEFAULT_SLUG
-    from src.services.projects.registry import get_project_registry
-    from src.services.training.model_classes import model_owner_project
-
-    cfg = get_curation_config()
-    # promote.json names the owner outright; the prefix rule alone would
-    # hand `default` another project's model once that project is missing
-    # from the registry snapshot (deleted, or a stale snapshot).
-    recorded_owner = model_owner_project(model_name)
-    if recorded_owner is not None and recorded_owner != cfg.project_slug:
-        return False
-    own_prefix = cfg.model_prefix
-    if own_prefix:
-        return model_name.startswith(own_prefix)
-    other_prefixes = (
-        record.resources.model_prefix
-        for slug, record in get_project_registry().snapshot().items()
-        if slug != DEFAULT_SLUG and record.resources.model_prefix
-    )
-    return not any(model_name.startswith(prefix) for prefix in other_prefixes)
-
-
-# PUT /models/{model_name}/sharing lives in _models_sharing.py (kept
-# under the 700-LOC ratchet); imported for its route-registration
-# side effect and so `_project_owns_model` above stays this module's
-# single definition (that submodule imports it back from here).
+# _project_owns_model is imported near the top of this module (W4: moved
+# to src.services.training.promoted_models). PUT /models/{model_name}/sharing
+# lives in _models_sharing.py (kept under the 700-LOC ratchet); imported
+# for its route-registration side effect.
 from src.routers.curation import _models_sharing  # noqa: E402,F401
 
 

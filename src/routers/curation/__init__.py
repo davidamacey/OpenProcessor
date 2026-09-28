@@ -36,6 +36,7 @@ import src.routers.curation.pipeline_control
 import src.routers.curation.pipeline_events
 import src.routers.curation.pipeline_health
 import src.routers.curation.probe
+import src.routers.curation.prompt_packs
 import src.routers.curation.regions
 import src.routers.curation.regions_boxes_edit
 import src.routers.curation.regions_edit

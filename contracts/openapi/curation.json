@@ -7179,6 +7179,201 @@
         "title": "NotCoveredClass",
         "type": "object"
       },
+      "PackTestPackRef": {
+        "properties": {
+          "draft": {
+            "title": "Draft",
+            "type": "boolean"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "name",
+          "revision",
+          "draft"
+        ],
+        "title": "PackTestPackRef",
+        "type": "object"
+      },
+      "PackTestPrompt": {
+        "properties": {
+          "system": {
+            "title": "System",
+            "type": "string"
+          },
+          "user_text": {
+            "title": "User Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "system",
+          "user_text"
+        ],
+        "title": "PackTestPrompt",
+        "type": "object"
+      },
+      "PackTestRequest": {
+        "properties": {
+          "call": {
+            "title": "Call",
+            "type": "string"
+          },
+          "class_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Names"
+          },
+          "crop_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Crop Ids",
+            "type": "array"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PromptPackBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pack_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack Name"
+          },
+          "pack_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack Revision"
+          },
+          "profile_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Name"
+          },
+          "use_region_box": {
+            "default": "current",
+            "title": "Use Region Box",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call"
+        ],
+        "title": "PackTestRequest",
+        "type": "object"
+      },
+      "PackTestResponse": {
+        "properties": {
+          "call": {
+            "title": "Call",
+            "type": "string"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "pack": {
+            "$ref": "#/components/schemas/PackTestPackRef"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/PackTestPrompt"
+          },
+          "raw_reply": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Reply"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "call",
+          "pack",
+          "prompt",
+          "validation"
+        ],
+        "title": "PackTestResponse",
+        "type": "object"
+      },
       "PatchProjectRequest": {
         "description": "``PATCH {prefix}`` (P3). The slug is immutable.",
         "properties": {
@@ -7840,7 +8035,8 @@
               "settings_defaults",
               "classes",
               "activations",
-              "keymap"
+              "keymap",
+              "prompt_packs"
             ],
             "items": {
               "type": "string"
@@ -8501,6 +8697,812 @@
           "triton_loaded"
         ],
         "title": "PromoteResponse",
+        "type": "object"
+      },
+      "PromptPackActivateRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "title": "PromptPackActivateRequest",
+        "type": "object"
+      },
+      "PromptPackBody": {
+        "description": "Every :class:`~src.services.labeling.vlm_prompts.PromptPack` field\nexcept ``name``. Defaults to ``''``/``{}`` so a partial draft can be\nposted to ``/validate`` -- ``pack_validation.validate_pack`` reports\nmissing content as issues, not a pydantic 422.",
+        "properties": {
+          "class_descriptions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Class Descriptions",
+            "type": "object"
+          },
+          "class_system": {
+            "default": "",
+            "title": "Class System",
+            "type": "string"
+          },
+          "class_user_template": {
+            "default": "",
+            "title": "Class User Template",
+            "type": "string"
+          },
+          "combined_batch_rules": {
+            "default": "",
+            "title": "Combined Batch Rules",
+            "type": "string"
+          },
+          "combined_batch_system": {
+            "default": "",
+            "title": "Combined Batch System",
+            "type": "string"
+          },
+          "combined_system": {
+            "default": "",
+            "title": "Combined System",
+            "type": "string"
+          },
+          "combined_user_template": {
+            "default": "",
+            "title": "Combined User Template",
+            "type": "string"
+          },
+          "open_class_system": {
+            "default": "",
+            "title": "Open Class System",
+            "type": "string"
+          },
+          "open_class_user_template": {
+            "default": "",
+            "title": "Open Class User Template",
+            "type": "string"
+          },
+          "region_batch_system": {
+            "default": "",
+            "title": "Region Batch System",
+            "type": "string"
+          },
+          "region_batch_user": {
+            "default": "",
+            "title": "Region Batch User",
+            "type": "string"
+          },
+          "region_system": {
+            "default": "",
+            "title": "Region System",
+            "type": "string"
+          },
+          "region_user": {
+            "default": "",
+            "title": "Region User",
+            "type": "string"
+          },
+          "region_visible_system": {
+            "default": "",
+            "title": "Region Visible System",
+            "type": "string"
+          },
+          "region_visible_user": {
+            "default": "",
+            "title": "Region Visible User",
+            "type": "string"
+          },
+          "synonyms": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Synonyms",
+            "type": "object"
+          }
+        },
+        "title": "PromptPackBody",
+        "type": "object"
+      },
+      "PromptPackCallSchema": {
+        "properties": {
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "testable": {
+            "default": true,
+            "title": "Testable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "fields"
+        ],
+        "title": "PromptPackCallSchema",
+        "type": "object"
+      },
+      "PromptPackCloneRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "from_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Project"
+          },
+          "new_name": {
+            "title": "New Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "builtin",
+                  "file",
+                  "template",
+                  "stored"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "new_name"
+        ],
+        "title": "PromptPackCloneRequest",
+        "type": "object"
+      },
+      "PromptPackCreateRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/PromptPackBody"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "body"
+        ],
+        "title": "PromptPackCreateRequest",
+        "type": "object"
+      },
+      "PromptPackDoc": {
+        "properties": {
+          "active": {
+            "default": false,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "active_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Revision"
+          },
+          "body": {
+            "$ref": "#/components/schemas/PromptPackBody"
+          },
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "enum": [
+              "builtin",
+              "file",
+              "template",
+              "stored"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "description",
+          "body"
+        ],
+        "title": "PromptPackDoc",
+        "type": "object"
+      },
+      "PromptPackFieldSchema": {
+        "properties": {
+          "allowed_placeholders": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Placeholders",
+            "type": "array"
+          },
+          "expected_reply_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Expected Reply Keys",
+            "type": "array"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "formatted": {
+            "title": "Formatted",
+            "type": "boolean"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "help": {
+            "title": "Help",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "map"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "optional_reply_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Optional Reply Keys",
+            "type": "array"
+          },
+          "required_placeholders": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Placeholders",
+            "type": "array"
+          },
+          "used_by": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Used By",
+            "type": "array"
+          }
+        },
+        "required": [
+          "field",
+          "label",
+          "group",
+          "kind",
+          "formatted",
+          "required_placeholders",
+          "allowed_placeholders",
+          "expected_reply_keys",
+          "optional_reply_keys",
+          "used_by",
+          "help"
+        ],
+        "title": "PromptPackFieldSchema",
+        "type": "object"
+      },
+      "PromptPackList": {
+        "properties": {
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "packs": {
+            "items": {
+              "$ref": "#/components/schemas/PromptPackSummary"
+            },
+            "title": "Packs",
+            "type": "array"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/PromptPackTemplateSummary"
+            },
+            "title": "Templates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "packs",
+          "templates",
+          "active",
+          "config_revision"
+        ],
+        "title": "PromptPackList",
+        "type": "object"
+      },
+      "PromptPackPlaceholderHelp": {
+        "properties": {
+          "example": {
+            "title": "Example",
+            "type": "string"
+          },
+          "meaning": {
+            "title": "Meaning",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "meaning",
+          "example"
+        ],
+        "title": "PromptPackPlaceholderHelp",
+        "type": "object"
+      },
+      "PromptPackRevisionSummary": {
+        "properties": {
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "saved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved At"
+          }
+        },
+        "required": [
+          "revision",
+          "saved_at",
+          "cloned_from",
+          "description"
+        ],
+        "title": "PromptPackRevisionSummary",
+        "type": "object"
+      },
+      "PromptPackRevisionsResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/PromptPackRevisionSummary"
+            },
+            "title": "Revisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "revisions"
+        ],
+        "title": "PromptPackRevisionsResponse",
+        "type": "object"
+      },
+      "PromptPackRollbackRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "PromptPackRollbackRequest",
+        "type": "object"
+      },
+      "PromptPackSaveRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/PromptPackBody"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision",
+          "body"
+        ],
+        "title": "PromptPackSaveRequest",
+        "type": "object"
+      },
+      "PromptPackSchema": {
+        "properties": {
+          "calls": {
+            "items": {
+              "$ref": "#/components/schemas/PromptPackCallSchema"
+            },
+            "title": "Calls",
+            "type": "array"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/PromptPackFieldSchema"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "placeholders": {
+            "items": {
+              "$ref": "#/components/schemas/PromptPackPlaceholderHelp"
+            },
+            "title": "Placeholders",
+            "type": "array"
+          },
+          "reply_key_contract": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "object"
+            },
+            "title": "Reply Key Contract",
+            "type": "object"
+          }
+        },
+        "required": [
+          "fields",
+          "placeholders",
+          "calls"
+        ],
+        "title": "PromptPackSchema",
+        "type": "object"
+      },
+      "PromptPackSummary": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "active_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Revision"
+          },
+          "asks_region_text": {
+            "title": "Asks Region Text",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "enum": [
+              "builtin",
+              "file",
+              "template",
+              "stored"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "description",
+          "asks_region_text",
+          "active"
+        ],
+        "title": "PromptPackSummary",
+        "type": "object"
+      },
+      "PromptPackTemplateSummary": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "read_only": {
+            "const": true,
+            "default": true,
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "source": {
+            "const": "template",
+            "default": "template",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path"
+        ],
+        "title": "PromptPackTemplateSummary",
+        "type": "object"
+      },
+      "PromptPackValidateRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/PromptPackBody"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "PromptPackValidateRequest",
         "type": "object"
       },
       "QuantizeRequest": {
@@ -10696,7 +11698,51 @@
               "keymap_class_hotkey_conflict",
               "keymap_class_hotkey_shadowed",
               "keymap_focus_key",
-              "keymap_context_no_confirm"
+              "keymap_context_no_confirm",
+              "pack_name_invalid",
+              "pack_name_reserved",
+              "pack_field_missing",
+              "pack_field_empty",
+              "pack_field_too_long",
+              "pack_placeholder_missing",
+              "pack_placeholder_unknown",
+              "pack_template_format_error",
+              "pack_placeholder_in_verbatim_field",
+              "pack_reply_key_missing",
+              "pack_asks_text_profile_text_free",
+              "pack_no_text_profile_reads_text",
+              "pack_synonym_target_unknown",
+              "pack_description_class_unknown",
+              "pack_example_values",
+              "pack_multi_region_keys_missing",
+              "profile_name_invalid",
+              "profile_name_reserved",
+              "profile_field_unknown",
+              "profile_field_type",
+              "profile_field_range",
+              "region_class_name_invalid",
+              "text_reader_invalid",
+              "text_regex_invalid",
+              "detector_model_not_found",
+              "detector_model_not_ready",
+              "detector_model_not_shared",
+              "detector_model_other_project",
+              "detector_model_classes_unmapped",
+              "triton_unreachable",
+              "no_candidate_source",
+              "segmenter_prompt_empty",
+              "segmenter_prompt_too_long",
+              "segmenter_prompt_too_many_phrases",
+              "segmenter_prompt_multiline",
+              "segmenter_not_configured",
+              "segmenter_unreachable",
+              "ocr_model_not_found",
+              "ocr_model_not_ready",
+              "vlm_not_configured",
+              "text_hint_inactive_no_ocr",
+              "text_fields_ignored",
+              "display_name_missing",
+              "parent_class_unknown"
             ],
             "title": "Code",
             "type": "string"
@@ -18225,6 +19271,749 @@
           }
         },
         "summary": "Probe Status",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs": {
+      "get": {
+        "operationId": "list_prompt_packs_curation_projects__project__prompt_packs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Prompt Packs",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "post": {
+        "operationId": "create_prompt_pack_curation_projects__project__prompt_packs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptPackCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Prompt Pack",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/active": {
+      "get": {
+        "operationId": "get_active_prompt_pack_route_curation_projects__project__prompt_packs_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Active Prompt Pack Route Curation Projects  Project  Prompt Packs Active Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Active Prompt Pack Route",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/active/rollback": {
+      "post": {
+        "operationId": "rollback_active_prompt_pack_curation_projects__project__prompt_packs_active_rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptPackRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Rollback Active Prompt Pack Curation Projects  Project  Prompt Packs Active Rollback Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rollback Active Prompt Pack",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/schema": {
+      "get": {
+        "operationId": "get_prompt_pack_schema_curation_projects__project__prompt_packs_schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Prompt Pack Schema",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/test": {
+      "post": {
+        "description": "Render the requested call's prompt for a draft/saved/active pack.\n\nScope note (documented deviation): this preview renders the exact\nsystem/user text a call would send, and runs the same validator as\nevery other write path, but does not itself round-trip a live crop\nthrough the VLM -- wiring image resolution + a raw VLM completion\ninto this route is out of this wave's scope; ``raw_reply``/\n``latency_ms`` are always ``null``. Never writes.",
+        "operationId": "test_prompt_pack_curation_projects__project__prompt_packs_test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackTestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Prompt Pack",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/validate": {
+      "post": {
+        "operationId": "validate_prompt_pack_route_curation_projects__project__prompt_packs_validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Profile"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptPackValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Validate Prompt Pack Route Curation Projects  Project  Prompt Packs Validate Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Prompt Pack Route",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/{name}": {
+      "delete": {
+        "operationId": "delete_prompt_pack_route_curation_projects__project__prompt_packs__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": true,
+            "schema": {
+              "title": "Expected Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Prompt Pack Route",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "get": {
+        "operationId": "get_prompt_pack_route_curation_projects__project__prompt_packs__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Prompt Pack Route",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "put": {
+        "operationId": "save_prompt_pack_curation_projects__project__prompt_packs__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptPackSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Prompt Pack",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/{name}/activate": {
+      "post": {
+        "operationId": "activate_prompt_pack_route_curation_projects__project__prompt_packs__name__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptPackActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Activate Prompt Pack Route Curation Projects  Project  Prompt Packs  Name  Activate Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Prompt Pack Route",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/{name}/clone": {
+      "post": {
+        "operationId": "clone_prompt_pack_curation_projects__project__prompt_packs__name__clone_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptPackCloneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clone Prompt Pack",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/{name}/revisions": {
+      "get": {
+        "operationId": "list_prompt_pack_revisions_curation_projects__project__prompt_packs__name__revisions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackRevisionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Prompt Pack Revisions",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/prompt_packs/{name}/revisions/{revision}": {
+      "get": {
+        "operationId": "get_prompt_pack_revision_curation_projects__project__prompt_packs__name__revisions__revision__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "title": "Revision",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptPackDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Prompt Pack Revision",
         "tags": [
           "Curation"
         ]

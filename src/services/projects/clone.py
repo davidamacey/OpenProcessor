@@ -101,6 +101,25 @@ async def _validate_clone(
                 project=target_record.slug,
             )
 
+    if 'prompt_packs' in resolved_axes:
+        # W3: every STORED pack (not just the active one -- 'activations'
+        # already covers that), so refuse up front if the target already
+        # has any of its own, same "clone is a byte-identical starting
+        # point, never a merge" rule as 'classes'.
+        from src.services.config_store import get_config_store
+
+        with bind_project(target_record):
+            target_store = get_config_store()
+            await target_store.ensure_fresh(client)
+            if target_store.current.packs:
+                raise api_error(
+                    409,
+                    'target_not_empty',
+                    f"'{target_record.slug}' already has stored prompt packs; "
+                    'prompt_packs cannot be cloned',
+                    project=target_record.slug,
+                )
+
     if 'activations' in resolved_axes:
         # M5: a clone is "every check before the first write" -- a
         # target that already has ITS OWN activation on either axis
@@ -244,10 +263,49 @@ async def _apply_clone(
                     }
                 )
 
+    if 'prompt_packs' in axes:
+        await _clone_prompt_packs(client, target_record=target_record, source=source)
+
     if 'activations' in axes:
         await _clone_activations(client, target_record=target_record, source=source)
 
     return conflicts
+
+
+async def _clone_prompt_packs(
+    client: Any, *, target_record: ProjectRecord, source: ProjectRecord
+) -> None:
+    """W3: copy every source-project STORED prompt pack (current revision
+    only -- revision history is not carried over) into the target. A
+    no-op when the source has none. ``activations`` (if also cloned)
+    still owns copying which pack is active."""
+    from src.services.config_store.index import save_config
+
+    with bind_project(source, read_only=True):
+        from src.services.config_store import get_config_store
+
+        source_store = get_config_store()
+        await source_store.ensure_fresh(client)
+        packs = dict(source_store.current.packs)
+
+    if not packs:
+        return
+
+    with bind_project(target_record):
+        from src.config import get_curation_config as _get_cfg
+
+        target_index = _get_cfg().configs_index
+        for name, stored in packs.items():
+            await save_config(
+                client,
+                target_index,
+                kind='prompt_pack',
+                name=name,
+                body=stored.body,
+                expected_revision=None,
+                description=stored.description,
+                cloned_from=f'{source.slug}:{name}@{stored.revision}',
+            )
 
 
 async def _clone_activations(

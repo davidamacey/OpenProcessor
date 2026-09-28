@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **W3 prompt-pack CRUD.** Full per-project prompt-pack lifecycle on top
+  of W2's config store: `src/services/config_store/{packs,pack_validation}.py`,
+  `src/services/config_store/activation_view.py` (shared active-config
+  response builder for packs and, later, region profiles),
+  `src/routers/curation/{_prompt_pack_models,prompt_packs}.py`. Routes:
+  `GET/POST /prompt_packs`, `/schema`, `/validate`, `/test`, `/{name}`,
+  `/{name}/revisions[/{revision}]`, `/{name}/clone` (with the one
+  legitimate cross-project read in this wave, `from_project`, bound
+  read-only and pinned by a test), `PUT/DELETE /{name}`, `/active`,
+  `/{name}/activate`, `/active/rollback`. `REPLY_KEY_CONTRACT` and
+  `FORMATTED_PLACEHOLDERS` added to `vlm_prompts.py`; the W8 list-shape
+  multi-box pairing check (`pack_multi_region_keys_missing`) is a
+  warning everywhere except activation pairing, where it is a
+  never-bypassable error. `CLONEABLE_AXES` gained `prompt_packs`
+  (every stored pack, current revision only) with a matching
+  `_clone_prompt_packs` in `src/services/projects/clone.py`.
+- **W4 prep: promoted-model discovery moved to a service module.**
+  `src/services/training/promoted_models.py` (`discover_promoted_models`,
+  `project_owns_model`) moved out of `src/routers/curation/models.py` so
+  service code (region-profile validation) can use it without importing
+  a router; `models.py` re-imports both under their old private names.
 - **W8 multi-box regions (partial, foundational slice).** Laid the core
   storage primitives for the per-item region-box list
   (`src/services/curation/region_boxes.py`): `RegionBox`, `read_boxes`,

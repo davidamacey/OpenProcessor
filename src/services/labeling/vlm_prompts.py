@@ -414,6 +414,85 @@ def prompt_text_examples(pack: PromptPack) -> frozenset[str]:
     return frozenset(out)
 
 
+# ---------------------------------------------------------------------------
+# Reply-key contract (W3, any_domain_plan.md §3.3) -- the wire keys each
+# pack "call" (a system+user template pair) must ask the VLM to return,
+# so ``pack_validation.py`` can check a draft pack names every key its
+# matching parser reads. Keys named here are the RegionFields *default*
+# names (``region_visible``, ``region_bbox_correct``, ``region_text``,
+# ``region_confidence``, ``region_boxes``, ``region_set_complete``) --
+# callers that need a deployment's actual (possibly overridden) field
+# names resolve them via ``get_region_fields()`` and remap this table,
+# since a pack's prose always talks about the *default* vocabulary the
+# parser reads through ``RegionFields``.
+# ---------------------------------------------------------------------------
+
+REPLY_KEY_CONTRACT: dict[str, dict[str, list[str]]] = {
+    'classify': {
+        'fields': ['class_system', 'class_user_template'],
+        'required': ['img', 'class', 'confidence'],
+        'optional': ['make', 'model'],
+    },
+    'open_classify': {
+        'fields': ['open_class_system', 'open_class_user_template'],
+        'required': ['img', 'class', 'confidence', 'proposed_class'],
+        'optional': [],
+    },
+    'combined': {
+        'fields': ['combined_system', 'combined_user_template'],
+        'required': [
+            'class_id',
+            'class_confidence',
+            'region_visible',
+            'region_bbox_correct',
+            'region_confidence',
+        ],
+        'optional': ['region_text'],
+        # W8: the list-shaped per-box verdict keys -- required whenever the
+        # active/given profile's max_regions_per_item > 1 (D-B, list shape
+        # only; see pack_validation.pack_multi_region_keys_missing).
+        'multi_region': ['region_boxes', 'box', 'region_bbox_correct', 'region_confidence'],
+    },
+    'combined_batch': {
+        'fields': ['combined_batch_system', 'combined_batch_rules'],
+        'required': [
+            'img',
+            'results',
+            'class_id',
+            'class_confidence',
+            'region_visible',
+            'region_bbox_correct',
+            'region_confidence',
+        ],
+        'optional': ['region_text'],
+        'multi_region': ['region_boxes', 'box', 'region_bbox_correct', 'region_confidence'],
+    },
+    'region_verify': {
+        'fields': ['region_system', 'region_user'],
+        'required': ['is_region', 'confidence'],
+        'optional': ['reason', 'text', 'text_confidence'],
+    },
+    'region_verify_batch': {
+        'fields': ['region_batch_system', 'region_batch_user'],
+        'required': ['img', 'is_region', 'confidence'],
+        'optional': ['reason', 'text', 'text_confidence'],
+    },
+    'region_visible': {
+        'fields': ['region_visible_system', 'region_visible_user'],
+        'required': ['results', 'img', 'visible'],
+        'optional': [],
+    },
+}
+
+# The three fields that go through ``str.format`` -- every other field is
+# sent verbatim (any_domain_plan.md §3.3).
+FORMATTED_PLACEHOLDERS: dict[str, tuple[str, ...]] = {
+    'class_user_template': ('class_names_csv',),
+    'open_class_user_template': ('class_names_csv',),
+    'combined_user_template': ('class_block', 'region_block'),
+}
+
+
 BUILT_IN_PACKS: tuple[PromptPack, ...] = (GENERIC_ITEM_PACK, GENERIC_REGION_PACK)
 _BUILT_IN_NAMES = frozenset(p.name for p in BUILT_IN_PACKS)
 
@@ -591,8 +670,10 @@ def prompt_pack_stamp(pack: PromptPack) -> str:
 
 __all__ = [
     'BUILT_IN_PACKS',
+    'FORMATTED_PLACEHOLDERS',
     'GENERIC_ITEM_PACK',
     'GENERIC_REGION_PACK',
+    'REPLY_KEY_CONTRACT',
     'PromptPack',
     'active_prompt_pack',
     'available_prompt_packs',

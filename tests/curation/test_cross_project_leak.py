@@ -71,6 +71,12 @@ CLASS_NAMES = {'default': 'default_cardinal', 'alpha': 'alpha_zebra', 'beta': 'b
 EMBED_DIM = 8
 
 
+def _prompt_pack_body() -> dict[str, Any]:
+    body = GENERIC_ITEM_PACK.to_dict()
+    body.pop('name')
+    return body
+
+
 def route_params(slug: str) -> dict[str, str]:
     """Every path parameter a scoped route may carry, filled with ``slug``'s
     ids. A route with a parameter missing here fails ("unmapped route")."""
@@ -88,6 +94,7 @@ def route_params(slug: str) -> dict[str, str]:
         'alias': f'{slug}-source',
         'artifact': 'results.csv',
         'box_id': 'b1',
+        'revision': '1',
     }
 
 
@@ -216,6 +223,26 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/archive'): {'json': {'expected_revision': 1}},
         ('POST', '/unarchive'): {'json': {'expected_revision': 1}},
         ('POST', '/clone_settings'): {'json': {'from': slug, 'expected_revision': 1}},
+        # W3: prompt-pack CRUD. '{name}' (route_params) is a stored pack
+        # PREPARE resets to revision 1 immediately before each of these
+        # (see the _prompt_pack_* PREPARE hooks) -- independent of
+        # whatever an earlier route in the same pass left behind.
+        ('POST', '/prompt_packs'): {
+            'json': {'name': f'{slug}-newpack', 'body': _prompt_pack_body()}
+        },
+        ('POST', '/prompt_packs/validate'): {'json': {'name': None, 'body': _prompt_pack_body()}},
+        ('POST', '/prompt_packs/test'): {'json': {'call': 'region_visible'}},
+        ('POST', '/prompt_packs/active/rollback'): {'json': {'expected_active': None}},
+        ('POST', '/prompt_packs/{name}/clone'): {
+            'json': {'new_name': f'{slug}-clone', 'source': 'stored'}
+        },
+        ('PUT', '/prompt_packs/{name}'): {
+            'json': {'expected_revision': 1, 'body': _prompt_pack_body()}
+        },
+        ('DELETE', '/prompt_packs/{name}'): {'params': {'expected_revision': '1'}},
+        ('POST', '/prompt_packs/{name}/activate'): {
+            'json': {'revision': None, 'expected_active': None, 'force': False}
+        },
     }
 
 
@@ -248,6 +275,8 @@ NO_WRITE: dict[tuple[str, str], str] = {
     ('POST', '/archive'): 'mutates the shared project registry doc, not project data',
     ('POST', '/unarchive'): 'mutates the shared project registry doc, not project data',
     ('POST', '/clone_settings'): 'mutates the shared project registry doc, not project data',
+    ('POST', '/prompt_packs/validate'): 'dry-run report; never writes',
+    ('POST', '/prompt_packs/test'): 'renders a prompt preview; never writes',
 }
 
 # Routes whose ``{crop_id}`` is a seeded item other than ``-item-0001``,
@@ -300,6 +329,10 @@ UNSEEDED_WRITES: dict[tuple[str, str], str] = {
     ('DELETE', '/models/{model_name}'): 'see EXPECTED_5XX: no live Triton to confirm the unload',
     ('POST', '/vlm/label_cluster/{cluster_id}'): (
         '409s: /pipeline/auto_label/start already queued a run earlier in the pass'
+    ),
+    ('POST', '/prompt_packs/active/rollback'): (
+        'a fresh per-slug config store has no prior activation to roll back to '
+        '(409 no_previous); rollback success is covered by test_prompt_packs_router.py'
     ),
 }
 
@@ -371,6 +404,46 @@ def _region_box_seeded(env: LeakEnv, slug: str) -> None:
     doc[F.rejected_count] = 0
 
 
+def _stored_prompt_pack(env: Any, slug: str) -> None:
+    """(Re-)seed ``pack:<slug>-model`` at a known revision 1, with no
+    activation recorded, directly in the fake transport's store --
+    mirrors ``_region_box_seeded``. Run fresh immediately before EACH
+    mutating ``/prompt_packs/{name}...`` route, so every one of them is
+    independent of what an earlier route in the same pass left behind
+    (revision-based OCC here is enforced entirely by comparing the
+    stored ``revision`` field, never real OpenSearch ``if_seq_no``, so
+    resetting that field is enough)."""
+    from src.config.curation import IndexRole
+
+    index = env.records[slug].resources.indexes[IndexRole.CONFIGS]
+    name = f'{slug}-model'
+    now = '2026-01-01T00:00:00+00:00'
+    body = _prompt_pack_body()
+    docs = env.transport.store.setdefault(index, {})
+    doc = {
+        'doc_type': 'config',
+        'kind': 'prompt_pack',
+        'name': name,
+        'revision': 1,
+        'body': body,
+        'description': '',
+        'created_at': now,
+        'updated_at': now,
+        'updated_by': None,
+        'cloned_from': None,
+    }
+    docs[f'pack:{name}'] = doc
+    docs[f'pack:{name}@1'] = {**doc, 'doc_type': 'revision'}
+    meta = docs.setdefault('meta:config_revision', {'doc_type': 'meta', 'config_revision': 0})
+    meta['config_revision'] = int(meta.get('config_revision', 0)) + 1
+    # No leftover activation from an earlier route in this same pass --
+    # 'expected_active: None' in route_bodies must match reality.
+    docs.pop('activation:prompt_pack', None)
+    from src.services.config_store.store import reset_config_stores
+
+    reset_config_stores()
+
+
 PREPARE: dict[tuple[str, str], Any] = {
     ('PUT', '/models/{model_name}/sharing'): _promoted_model,
     ('DELETE', '/models/{model_name}'): _promoted_model,
@@ -380,6 +453,10 @@ PREPARE: dict[tuple[str, str], Any] = {
     ('POST', '/scores/cancel'): _running_job('scores'),
     ('POST', '/select/cancel'): _running_job('select'),
     ('POST', '/viz/projection/cancel'): _running_job('viz'),
+    ('POST', '/prompt_packs/{name}/clone'): _stored_prompt_pack,
+    ('PUT', '/prompt_packs/{name}'): _stored_prompt_pack,
+    ('DELETE', '/prompt_packs/{name}'): _stored_prompt_pack,
+    ('POST', '/prompt_packs/{name}/activate'): _stored_prompt_pack,
 }
 
 
