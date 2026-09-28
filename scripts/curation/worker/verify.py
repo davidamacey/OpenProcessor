@@ -580,10 +580,15 @@ def verdicts_to_boxes(
 # entirely -- readers that still filter/sort on them (regions.py's
 # `verified` filter, the detector_blind_spots/low_conf_correct training
 # cohorts, region_requeue.py, the auto-confirm review semantics) went
-# blind to every fresh worker write. Box-aware definition: `verified`
-# means the VLM actually rendered a verdict this write (`reply is not
-# None`); `auto_confirmed` means at least one box was accepted AND every
-# accepted box independently passes `_auto_confirm_or_pending`.
+# blind to every fresh worker write. Box-aware definition (corrected by
+# the 2026-09-27 re-review, R-M4: the first cut used `reply is not None`,
+# which is also true for an all-rejected verdict set and contradicted the
+# existing invariant in test_region_status_invariants.py plus the pre-W8
+# write, which only ever set `verified=True` on an ACCEPTED write):
+# `verified` means the VLM actually CONFIRMED a region this write -- at
+# least one box in the final set is `accepted`; `auto_confirmed` means at
+# least one box was accepted AND every accepted box independently passes
+# `_auto_confirm_or_pending`.
 
 
 def item_verification_fields(

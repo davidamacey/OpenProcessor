@@ -31,7 +31,7 @@ from src.services.curation.metrics import (
     OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS,
     OP_STAGE_REGION_DETECTOR_DURATION_SECONDS,
 )
-from src.services.curation.region_boxes import RegionBox, new_box_placeholder
+from src.services.curation.region_boxes import RegionBox, derive_status, new_box_placeholder
 from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.detection.cascade_detect import (
     PaddleOcrTextRecognizer,
@@ -264,11 +264,28 @@ def _box_list_doc(
     this module that already equals what ``derive_status`` would compute
     from ``boxes`` alone, so this is a no-op for the common (no stored
     siblings) case.
+
+    R-M1 fix (2026-09-27 re-review): also stash a PROVISIONAL ``F.status``
+    directly onto ``doc`` (``t.update_doc``). The real, post-merge status
+    is only known inside ``bulk_writer._merge`` (it can differ when a
+    stored sibling box changes what the merged list derives to), but two
+    consumers read ``t.update_doc`` BEFORE that merge ever runs --
+    ``region_embed_stage._eligible_tasks`` (called from ``writer()``
+    ahead of ``_bulk_update``) and ``bulk_writer._publish_region_events``
+    (reads ``t.update_doc`` after the fact, never the merged dict). Using
+    ``derive_status(boxes)`` here is always safe in the direction that
+    matters: an accepted box in ``boxes`` guarantees the merged status is
+    ALSO ``detected`` (accepted is top precedence), so eligibility can
+    never be a false positive; it can only under-embed a merge-mode item
+    whose OWN boxes are all rejected but whose merged status is
+    ``detected`` because of an already-accepted sibling -- and that
+    sibling's own pass already wrote (and this worker never re-embeds)
+    its embedding, so nothing is lost.
     """
     F = get_region_fields()
     t.pending_boxes = list(boxes)
     t.pending_empty_status = status
-    doc: dict[str, Any] = {}
+    doc: dict[str, Any] = {F.status: status}
     if t.detection_trace:
         doc[F.detector_chain] = list(t.detection_trace)
     if extra:
@@ -1568,20 +1585,70 @@ async def run(args: argparse.Namespace) -> int:
 
                         if reply is not None and not reply.region_visible:
                             # region_visible=False — no region in this crop,
-                            # regardless of any per-box verdict. The VLM
-                            # did render a verdict this call (W8 M2:
-                            # verified=True), it just said "nothing here".
+                            # regardless of any per-box verdict.
                             metrics['combined_no_region_visible'] += 1
                             t.detection_trace.append(f'{actor}:combined_no_region_visible')
+                            if t.pending_merge:
+                                # R-B1 fix (2026-09-27 re-review, "fix-pass
+                                # confirmation"): this pass is RE-VERIFYING
+                                # stored `proposed` box(es) (Path 1). Writing
+                                # an empty box list here never touches their
+                                # stored ids -- `merge_boxes_for_write`
+                                # leaves any stored box absent from the new
+                                # list completely untouched -- so a human-
+                                # proposed box the VLM says isn't visible
+                                # stayed `proposed` forever: every poll made
+                                # another VLM call and bumped the revision,
+                                # unbounded (the review's livelock probe).
+                                # Resolve each re-verified candidate as
+                                # `rejected`, keeping its id, so a human can
+                                # still reverse the verdict from the review
+                                # queue -- the merged status then comes from
+                                # `derive_status` over the FULL list, same as
+                                # every other verdict branch, and is always
+                                # a TERMINAL status (verify_rejected unless a
+                                # sibling box is in a different state).
+                                visible_false_boxes = [
+                                    resolve_rejected_box_text(
+                                        RegionBox(
+                                            box_id=cand.box_id or new_box_placeholder(i),
+                                            bbox_norm=cand.bbox_in_source,
+                                            state='rejected',
+                                            score=cand.score,
+                                            detector=cand.detector,
+                                            detector_version=cand.detector_version,
+                                            source=cand.source,
+                                            rejection_reason=REJECT_REASON_VERIFIER,
+                                        ),
+                                        profile=rt.profile,
+                                        F=F,
+                                        rules=rt.text_rules,
+                                    )
+                                    for i, cand in enumerate(t.candidates)
+                                ]
+                                visible_false_status = derive_status(
+                                    visible_false_boxes,
+                                    empty_status=RegionStatus.NO_REGION_VISIBLE,
+                                )
+                            else:
+                                # Fresh detection (no stored box to lose) --
+                                # unchanged from before: no box, terminal
+                                # no_region_visible.
+                                visible_false_boxes = []
+                                visible_false_status = RegionStatus.NO_REGION_VISIBLE
                             t.update_doc = _box_list_doc(
                                 t,
-                                [],
-                                RegionStatus.NO_REGION_VISIBLE,
+                                visible_false_boxes,
+                                visible_false_status,
                                 extra={
                                     **_combined_class_update(
                                         reply, effective_class_names, name_to_id=name_to_id
                                     ),
-                                    **item_verification_fields(verified=True),
+                                    # R-M4 fix: `verified` means the VLM
+                                    # CONFIRMED a region -- never true on
+                                    # this branch, since no box here is
+                                    # ever accepted.
+                                    **item_verification_fields(verified=False),
                                 },
                             )
                             combined_no_verdict.clear(t.crop_id)
@@ -1676,19 +1743,21 @@ async def run(args: argparse.Namespace) -> int:
                             # no-verdict sentinel) -- narrows the type for
                             # mypy.
                             assert status is not None
-                            # W8 M2: `verified` reflects whether the VLM
-                            # actually answered this final attempt (a
-                            # parse failure means `reply is None` -- no
-                            # verdict was rendered this call); every box
-                            # here is rejected, so auto_confirmed is
-                            # always False.
+                            # R-M4 fix: `verified` means the VLM CONFIRMED a
+                            # region (>=1 accepted box), never merely "a
+                            # reply was received" -- force_resolve only ever
+                            # resolves a no-verdict box as rejected, so every
+                            # box here is rejected and `verified` is always
+                            # False; auto_confirmed is likewise always False.
                             t.update_doc = _box_list_doc(
                                 t,
                                 boxes,
                                 status,
                                 extra={
                                     **(class_update or {}),
-                                    **item_verification_fields(verified=reply is not None),
+                                    **item_verification_fields(
+                                        verified=any(b.state == 'accepted' for b in boxes)
+                                    ),
                                 },
                             )
                             await out_q.put(t)
@@ -1762,20 +1831,22 @@ async def run(args: argparse.Namespace) -> int:
                         # (the top-scoring candidate, which the VLM may
                         # have just rejected while accepting a sibling).
                         _sync_accepted_candidate(t, resolved_boxes)
-                        # W8 M2: this call DID reach the VLM (we're past
-                        # both the region_visible=False branch and the
-                        # no-verdict/cap branch, both of which `continue`)
-                        # -- verified=True always here. auto_confirmed is
-                        # the box-aware rule: >=1 accepted box AND every
-                        # accepted box independently passes the same
-                        # 2-of-2 auto-confirm policy the pre-W8 single-box
-                        # path used.
+                        # auto_confirmed is the box-aware rule: >=1 accepted
+                        # box AND every accepted box independently passes
+                        # the same 2-of-2 auto-confirm policy the pre-W8
+                        # single-box path used.
                         auto_confirmed = await boxes_auto_confirmed(resolved_boxes, t.candidates)
                         # We're past the ``extra.get('no_verdict')`` branch
                         # above (which always ``continue``s) -- verdicts_to_boxes
                         # only returns a None status alongside that sentinel,
                         # so a real status is guaranteed here too.
                         assert status is not None
+                        # R-M4 fix: `verified` means the VLM CONFIRMED a
+                        # region -- at least one accepted box -- never just
+                        # "a reply was received" (which is also true for an
+                        # all-rejected verdict set, e.g. every candidate
+                        # rejected as region_visible_elsewhere).
+                        any_accepted = any(b.state == 'accepted' for b in resolved_boxes)
                         t.update_doc = _box_list_doc(
                             t,
                             resolved_boxes,
@@ -1783,7 +1854,7 @@ async def run(args: argparse.Namespace) -> int:
                             extra={
                                 **(class_update or {}),
                                 **item_verification_fields(
-                                    verified=True, auto_confirmed=auto_confirmed
+                                    verified=any_accepted, auto_confirmed=auto_confirmed
                                 ),
                             },
                         )
