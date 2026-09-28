@@ -13,10 +13,25 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
-from src.services.labeling.vlm_prompts import _BUILT_IN_NAMES, BUILT_IN_PACKS, PromptPack
+
+
+# N6 fix (W3/W4 round-3 review): a module-level `from
+# src.services.labeling.vlm_prompts import PromptPack, ...` here is a
+# circular import in a cold interpreter -- `vlm_prompts.py` imports this
+# module back (for its re-export block) AFTER defining `PromptPack`/
+# `BUILT_IN_PACKS`/`_BUILT_IN_NAMES`, so whichever module is imported
+# FIRST works, but importing this module before `vlm_prompts` raises
+# ImportError on the half-initialized `vlm_prompts` module (nothing
+# imports this module first today, so this was latent, not yet
+# triggered). `from __future__ import annotations` already makes every
+# annotation below a deferred string, so `TYPE_CHECKING` is enough for
+# static analysis; every runtime use imports lazily inside the function
+# that needs it instead.
+if TYPE_CHECKING:
+    from src.services.labeling.vlm_prompts import PromptPack
 
 
 logger = get_logger(__name__)
@@ -35,6 +50,8 @@ def _load_pack_file(path: Path) -> PromptPack | None:
     cached = _PACK_FILE_CACHE.get(str(path))
     if cached is not None and cached[0] == mtime:
         return cached[1]
+    from src.services.labeling.vlm_prompts import PromptPack
+
     try:
         pack = PromptPack.from_json(path)
     except Exception as exc:
@@ -98,6 +115,8 @@ def available_prompt_packs(cfg: Any | None = None) -> dict[str, PromptPack]:
     is skipped; otherwise the default pack wins, then the earlier
     ``OP_PROMPT_PACK_PATHS`` entry.
     """
+    from src.services.labeling.vlm_prompts import _BUILT_IN_NAMES, BUILT_IN_PACKS
+
     config = _config(cfg)
     packs: dict[str, PromptPack] = {p.name: p for p in BUILT_IN_PACKS}
     default = resolve_prompt_pack(config)
@@ -124,6 +143,8 @@ def _stored_packs() -> dict[str, PromptPack]:
         from src.services.config_store import get_config_store
     except Exception:  # pragma: no cover - config_store always importable
         return {}
+    from src.services.labeling.vlm_prompts import PromptPack
+
     snapshot = get_config_store().current
     packs: dict[str, PromptPack] = {}
     for name, stored in snapshot.packs.items():
@@ -151,15 +172,41 @@ def active_prompt_pack(cfg: Any | None = None) -> PromptPack:
     # env/file default, same as clearing a legacy settings override did.
     if ref is None or ref == 'off':
         return resolve_prompt_pack(cfg)
-    name, _revision = ref
+    name, revision = ref
     # B1 fix: serve the pinned-at-activation revision, not `<name>`'s
     # current doc -- a PUT must not go live until a re-activate.
     pinned = snapshot.active_pack_body
     if pinned is not None and pinned.name == name:
+        from src.services.labeling.vlm_prompts import PromptPack
+
         try:
             return PromptPack.from_dict({**pinned.body, 'name': name})
         except Exception as exc:
             logger.warning('active_prompt_pack_pinned_body_invalid', name=name, error=str(exc))
+            # N5 fix (W3/W4 round-3 review): a decode failure on the
+            # pinned body must not fail open to the unvalidated current
+            # doc below either -- same reasoning as the missing-copy
+            # case right after this block.
+            return resolve_prompt_pack(cfg)
+    if revision is not None:
+        # N5 fix: the ref names a specific activated revision, but there
+        # is no pinned copy for it (`_resolve_active_body` hit a genuine
+        # 404 -- distinct from "no revision to pin", which never reaches
+        # here since `revision` would be `None`). Falling back to
+        # `available_prompt_packs().get(name)` would silently serve
+        # `name`'s CURRENT, unvalidated doc under the active name --
+        # exactly the B1 failure class this store exists to prevent.
+        # Only reuse the current doc when it genuinely IS that same
+        # revision (nothing lost); otherwise fail closed to the env/file
+        # default and log loudly, since this should not happen in
+        # steady state.
+        stored_current = snapshot.packs.get(name)
+        if stored_current is not None and stored_current.revision == revision:
+            pack = available_prompt_packs(cfg).get(name)
+            if pack is not None:
+                return pack
+        logger.error('active_prompt_pack_pinned_body_missing', name=name, revision=revision)
+        return resolve_prompt_pack(cfg)
     pack = available_prompt_packs(cfg).get(name)
     return pack if pack is not None else resolve_prompt_pack(cfg)
 
@@ -189,11 +236,26 @@ def get_prompt_pack(
             stored = pinned if matches else None
         if stored is None:
             return None
+        from src.services.labeling.vlm_prompts import PromptPack
+
         try:
-            return PromptPack.from_dict({**stored.body, 'name': name})
+            pack = PromptPack.from_dict({**stored.body, 'name': name})
         except Exception as exc:
             logger.warning('get_prompt_pack_stored_body_invalid', name=name, error=str(exc))
             return None
+        # N2 fix (W3/W4 round-3 review): tag the EXACT revision this call
+        # resolved -- explicitly pinned per-run (`name@rev`), which can
+        # be a still-active-but-superseded revision or, per N7, the
+        # current/latest one -- onto the returned instance so
+        # `prompt_pack_stamp` can stamp the body that actually produced
+        # the write, not whichever revision happens to be *activated* at
+        # write time. `PromptPack` is a frozen dataclass with no such
+        # field; `object.__setattr__` bypasses the frozen check for this
+        # untracked, non-dataclass attribute (ignored by `__eq__`/
+        # `__repr__`, so `inst._pack != pack` cache comparisons in
+        # `_get_vlm_labeler` are unaffected).
+        object.__setattr__(pack, '_resolved_revision', stored.revision)
+        return pack
     try:
         from src.services.config_store import get_config_store
 
@@ -205,15 +267,36 @@ def get_prompt_pack(
     return available_prompt_packs(cfg).get(name)
 
 
-def prompt_pack_stamp(pack: PromptPack) -> str:
+def prompt_pack_stamp(pack: PromptPack, *, revision: int | None = None) -> str:
     """``"<name>@<revision|sha12>"`` provenance stamp for ``vlm_prompt_pack``
     (any_domain_plan.md §3.7/§9 W2) -- every VLM write site stamps this
     onto the item it wrote so a later audit can tell which pack produced
-    the write. When ``pack`` is the store's currently *activated* pack,
-    the stamp uses its exact saved revision; otherwise (a file/built-in
-    pack the store never activated) a content hash distinguishes two
-    edits of the same name.
+    the write.
+
+    ``revision``, when given, is the revision that was ACTUALLY resolved
+    and served for this call (N2 fix, W3/W4 round-3 review): a caller
+    that pinned a per-run ``name@<revision>`` (including a draft revision
+    that was never activated -- exactly §3.7's motivating per-run-pin
+    workflow) must pass that resolved revision through here, or every
+    write it produces gets mis-stamped with whatever the *active*
+    revision happens to be, not the body that actually produced the
+    write. When ``revision`` is omitted (the "default/active pack" call
+    sites, which never resolve a revision independently of the store's
+    own active ref), the stamp falls back to matching ``pack`` against
+    the store's currently *activated* pack, unchanged from before this
+    fix. Otherwise (a file/built-in pack, or a name the store has no
+    revision for) a content hash distinguishes two edits of the same
+    name.
     """
+    if revision is None:
+        # `get_prompt_pack(name, revision=N)` tags the pack it resolved
+        # with the exact revision it served (N2 fix) -- prefer that over
+        # re-deriving from the store's active ref, so a caller that
+        # already resolved the pack (and cannot re-thread the revision
+        # through several layers) still stamps correctly.
+        revision = getattr(pack, '_resolved_revision', None)
+    if revision is not None:
+        return f'{pack.name}@{revision}'
     try:
         from src.services.config_store import get_config_store
 
@@ -221,9 +304,9 @@ def prompt_pack_stamp(pack: PromptPack) -> str:
     except Exception:  # pragma: no cover - config_store always importable
         ref = None
     if isinstance(ref, tuple):
-        name, revision = ref
-        if name == pack.name and revision is not None:
-            return f'{pack.name}@{revision}'
+        name, active_revision = ref
+        if name == pack.name and active_revision is not None:
+            return f'{pack.name}@{active_revision}'
     digest = hashlib.sha256(json.dumps(pack.to_dict(), sort_keys=True).encode()).hexdigest()[:12]
     return f'{pack.name}@{digest}'
 

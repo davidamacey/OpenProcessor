@@ -78,12 +78,15 @@ async def _validate_clone(
     target_record: ProjectRecord,
     from_slug: str,
     axes: list[str] | None,
-) -> tuple[ProjectRecord, list[str]]:
+) -> tuple[ProjectRecord, list[str], dict[str, dict[str, Any] | None]]:
     """Every refusal a clone can hit, checked before anything is written:
     the source-shaped checks in :func:`_validate_clone_source`, plus
     ``classes`` into a target that already has items (409
     ``target_not_empty`` -- a clone is always a byte-identical starting
-    point, never a merge). Returns the source record and resolved axes."""
+    point, never a merge). Returns the source record, resolved axes, and
+    (N3 fix) each activation axis's REAL existing target doc (``None``
+    when no doc exists at all) -- ``_clone_activations`` must use this as
+    ``expected_active`` instead of assuming an empty target."""
     source, resolved_axes = await _validate_clone_source(
         client, target_slug=target_record.slug, from_slug=from_slug, axes=axes
     )
@@ -120,6 +123,7 @@ async def _validate_clone(
                     project=target_record.slug,
                 )
 
+    target_activations: dict[str, dict[str, Any] | None] = {}
     if 'activations' in resolved_axes:
         # M5: a clone is "every check before the first write" -- a
         # target that already has ITS OWN activation on either axis
@@ -128,13 +132,57 @@ async def _validate_clone(
         # `activate(expected_active=None)` assuming an empty target)
         # only after `settings_defaults`/`classes` had already been
         # written. Refuse up front instead, same as `classes`.
+        #
+        # N3 fix (W3/W4 round-3 review): two more target-not-empty shapes
+        # `existing and existing.get('name')` alone missed, both proven by
+        # the reviewer to half-write before a 409 through
+        # `clone_settings_into` (the real revision the old B2 fix was
+        # scoped to, since a brand-new target can never hit either):
+        #
+        # (a) the target once DEACTIVATED this axis. That leaves a real
+        #     stored activation doc shaped `{'name': None, 'revision':
+        #     None}` -- truthy as a dict, so `existing and
+        #     existing.get('name')` correctly treats it as "empty" here
+        #     (no refusal), but `_clone_activations` then called
+        #     `activate(..., expected_active=None)` unconditionally,
+        #     which mismatches the *actual* stored previous value
+        #     (`{'name': None, 'revision': None}` != Python `None`) and
+        #     raises `ActiveConflictError` -- a false "already has an
+        #     active X" 409 raised only after settings/keymap/pack writes
+        #     had already landed. Fix: capture the REAL existing doc here
+        #     (`None` only when no doc exists at all) and thread it
+        #     through as `expected_active`, so the write-time check
+        #     matches what is truly stored.
+        # (b) the target has a saved, never-activated pack/profile
+        #     sharing a NAME with the source's currently-active one on
+        #     this axis. `existing.get('name')` is about the target's own
+        #     active name, not a stored-but-inactive one, so this slipped
+        #     through and `_clone_activations`'s `save_config(...,
+        #     expected_revision=None)` treated the target's existing
+        #     stored doc as "new", corrupting its revision history before
+        #     the ensuing `ActiveConflictError`/`RevisionConflictError`.
+        #     Fix: check the source's active NAME (per axis) against the
+        #     target's config-store snapshot for either kind, up front.
+        from src.services.config_store import get_config_store
         from src.services.config_store.index import ConfigAxis, get_activation
+
+        activation_axes: tuple[ConfigAxis, ...] = ('prompt_pack', 'detection_profile')
+
+        with bind_project(source, read_only=True):
+            from src.config import get_curation_config as _get_src_cfg
+
+            source_index = _get_src_cfg().configs_index
+            source_active_names: dict[ConfigAxis, str | None] = {}
+            for axis in activation_axes:
+                src_activation = await get_activation(client, source_index, axis)
+                source_active_names[axis] = (src_activation or {}).get('name')
 
         with bind_project(target_record):
             from src.config import get_curation_config as _get_cfg
 
             target_index = _get_cfg().configs_index
-            activation_axes: tuple[ConfigAxis, ...] = ('prompt_pack', 'detection_profile')
+            target_store = get_config_store()
+            await target_store.ensure_fresh(client)
             for axis in activation_axes:
                 # Minor 3 (W2 review): `get_activation` already maps a
                 # real (or fake -- tests/projects/conftest.py's
@@ -150,11 +198,42 @@ async def _validate_clone(
                         'activations cannot be cloned',
                         project=target_record.slug,
                     )
-    return source, resolved_axes
+                # `activate()`'s own OCC check compares `expected_active`
+                # against exactly `{'name':..., 'revision':...}` built
+                # from the stored doc, not the raw `_source` (which also
+                # carries `doc_type`/`axis`/`activated_at`/`previous`) --
+                # normalize the same way here so this genuinely matches.
+                target_activations[axis] = (
+                    {'name': existing.get('name'), 'revision': existing.get('revision')}
+                    if existing is not None
+                    else None
+                )
+
+                source_name = source_active_names.get(axis)
+                if source_name:
+                    stored_map = (
+                        target_store.current.packs
+                        if axis == 'prompt_pack'
+                        else target_store.current.profiles
+                    )
+                    if source_name in stored_map:
+                        raise api_error(
+                            409,
+                            'target_not_empty',
+                            f"'{target_record.slug}' already has a stored {axis} named "
+                            f"'{source_name}'; activations cannot be cloned",
+                            project=target_record.slug,
+                        )
+    return source, resolved_axes, target_activations
 
 
 async def _apply_clone(
-    client: Any, *, target_record: ProjectRecord, source: ProjectRecord, axes: list[str]
+    client: Any,
+    *,
+    target_record: ProjectRecord,
+    source: ProjectRecord,
+    axes: list[str],
+    target_activations: dict[str, dict[str, Any] | None] | None = None,
 ) -> list[dict[str, Any]]:
     """Copy the validated axes. Reads the source under a read-only bind so
     the guard rejects any accidental write to it. Returns the ``keymap``
@@ -271,7 +350,11 @@ async def _apply_clone(
 
     if 'activations' in axes:
         await _clone_activations(
-            client, target_record=target_record, source=source, written_packs=written_packs
+            client,
+            target_record=target_record,
+            source=source,
+            written_packs=written_packs,
+            target_activations=target_activations or {},
         )
 
     return conflicts
@@ -334,6 +417,7 @@ async def _clone_activations(
     target_record: ProjectRecord,
     source: ProjectRecord,
     written_packs: dict[str, Any] | None = None,
+    target_activations: dict[str, dict[str, Any] | None] | None = None,
 ) -> None:
     """Glue G1 (projects_plan.md §11 W2): copy the source's active
     ``prompt_pack``/``detection_profile`` -- the stored config body plus
@@ -444,13 +528,20 @@ async def _clone_activations(
                         cloned_from=source.slug,
                     )
                     revision = doc['revision']
+                # N3 fix: use the REAL existing target doc captured during
+                # validation (`_validate_clone`) as `expected_active`,
+                # not a bare `None` -- a target that once deactivated this
+                # axis has a real stored doc shaped `{'name': None,
+                # 'revision': None}`, which mismatches Python `None` and
+                # raised a false 409 here, after every other axis had
+                # already committed.
                 await activate(
                     client,
                     target_index,
                     axis=axis,
                     name=name,
                     revision=revision,
-                    expected_active=None,
+                    expected_active=(target_activations or {}).get(axis),
                 )
             except RevisionConflictError as exc:
                 raise api_error(
@@ -481,11 +572,15 @@ async def clone_settings(
     every other axis/outcome. ``create_project`` (M7) logs these today
     rather than threading them through its own return shape, which every
     other project-lifecycle test call site also unpacks."""
-    source, resolved_axes = await _validate_clone(
+    source, resolved_axes, target_activations = await _validate_clone(
         client, target_record=target_record, from_slug=from_slug, axes=axes
     )
     return await _apply_clone(
-        client, target_record=target_record, source=source, axes=resolved_axes
+        client,
+        target_record=target_record,
+        source=source,
+        axes=resolved_axes,
+        target_activations=target_activations,
     )
 
 
@@ -514,10 +609,16 @@ async def clone_settings_into(
     record, seq, term = await _get_mutable_record(client, slug)
     _require_transition(record, 'clone settings into', frozenset({'active'}))
     _require_revision(record, expected_revision)
-    source, resolved_axes = await _validate_clone(
+    source, resolved_axes, target_activations = await _validate_clone(
         client, target_record=record, from_slug=from_slug, axes=axes
     )
-    conflicts = await _apply_clone(client, target_record=record, source=source, axes=resolved_axes)
+    conflicts = await _apply_clone(
+        client,
+        target_record=record,
+        source=source,
+        axes=resolved_axes,
+        target_activations=target_activations,
+    )
     updated = replace(record, revision=record.revision + 1, updated_at=_now())
     await write_record(client, updated, if_seq_no=seq, if_primary_term=term)
     await get_project_registry().ensure_fresh()

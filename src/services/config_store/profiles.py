@@ -20,10 +20,9 @@ from src.services.config_store.index import (
     config_doc_id,
     delete_config as _delete_config,
     get_config_revision,
-    rollback as _rollback,
     save_config as _save_config,
 )
-from src.services.config_store.store import AxisRef, StoredConfig
+from src.services.config_store.store import StoredConfig
 
 
 if TYPE_CHECKING:
@@ -299,23 +298,17 @@ async def activate_profile(
 async def rollback_profile(
     client: Any, *, expected_active: dict[str, Any] | None
 ) -> dict[str, Any]:
-    from src.services.config_store.store import _resolve_active_body
+    # N4 fix (W3/W4 round-3 review): `rollback_axis` resolves the pinned
+    # body BEFORE writing the new activation doc, so a transient error
+    # aborts cleanly instead of surfacing a 500 after the write already
+    # committed. Replaces the old write-then-resolve call into
+    # ``index.rollback``.
+    from src.services.config_store.activation_apply import rollback_axis
 
     store = get_config_store()
-    result = await _rollback(
-        client, store.index, axis='detection_profile', expected_active=expected_active
+    return await rollback_axis(
+        store, client, axis='detection_profile', expected_active=expected_active
     )
-    ref: AxisRef = (result['name'], result['revision']) if result.get('name') else 'off'
-    # B1 fix: pin the rolled-back-to revision's body, same as activate.
-    body_ref = await _resolve_active_body(
-        client, store.index, kind='region_profile', ref=ref, current=store.current.profiles
-    )
-    store.apply_local(
-        config_revision=result['config_revision'],
-        active_profile=ref,
-        active_profile_body=body_ref,
-    )
-    return result
 
 
 __all__ = [

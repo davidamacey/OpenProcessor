@@ -352,32 +352,11 @@ async def activate_axis(
     ``PUT /settings`` bridge now; W3/W4's activate routes later) gets
     both for free.
     """
-    from src.services.config_store.index import activate as _activate
+    from src.services.config_store.activation_apply import activate_and_apply
 
-    result = await _activate(
-        client,
-        store.index,
-        axis=axis,
-        name=name,
-        revision=revision,
-        expected_active=expected_active,
+    result = await activate_and_apply(
+        store, client, axis=axis, name=name, revision=revision, expected_active=expected_active
     )
-    ref: AxisRef = (name, revision) if name else 'off'
-    kind: ConfigKind = 'prompt_pack' if axis == 'prompt_pack' else 'region_profile'
-    current_map = store.current.packs if axis == 'prompt_pack' else store.current.profiles
-    # B1 fix: pin the exact body being activated now, not a later
-    # re-derivation by name that a subsequent PUT could change.
-    body_ref = await _resolve_active_body(
-        client, store.index, kind=kind, ref=ref, current=current_map
-    )
-    patch: dict[str, Any] = {'config_revision': result['config_revision']}
-    if axis == 'prompt_pack':
-        patch['active_pack'] = ref
-        patch['active_pack_body'] = body_ref
-    else:
-        patch['active_profile'] = ref
-        patch['active_profile_body'] = body_ref
-    store.apply_local(**patch)
     if publish_event:
         from src.services.curation.event_hub import get_event_hub
 

@@ -296,6 +296,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the legacy scalars this pass).
 
 ### Fixed
+- **W3+W4 prompt-pack/region-profile CRUD fix pass, round 3 (independent
+  Opus review, 2026-09-28): 1 blocker + 2 majors + 4 minors + 1 nit.**
+  Fixes every finding of the round-3 section appended to
+  `docs/design/openprocessor_internal/w3_w4_review_2026-09-28.md`:
+  - **Blocker (`PUT /curation/settings` bypassed activation validation):**
+    `_activate_config_store_axis` (`routers/curation/settings.py`) now
+    runs the same `for_activation` `validate_pack`/`validate_profile`
+    gate `POST /{name}/activate` runs, before activating a
+    `defaults.prompt_pack`/`defaults.detection_profile` value — a
+    multi-box-stripped revision that `/activate` correctly 422s (even
+    with `force`) can no longer go live through the Cropwright
+    default-pack dropdown's settings route instead. No `force` support on
+    this bridge — any blocking error always 422s.
+  - **Major (wrong provenance stamp on a per-run draft pin):**
+    `get_prompt_pack(name, revision=N)` now tags the resolved
+    `PromptPack` instance with the exact revision it served;
+    `prompt_pack_stamp` prefers that tag over re-deriving from the
+    store's *active* ref, so a per-run `name@<draft rev>` pin (never
+    activated) stamps VLM writes with the draft's own revision, not
+    whatever happens to be currently active. Also fixes the same-shaped
+    bug for a per-run bare `name` (no `@rev`), which now correctly
+    resolves to the *latest* saved revision per any_domain_plan.md §3.7
+    instead of the active one (`resolve_run_prompt_pack` pins the current
+    stored revision explicitly for that case) — the "default/omitted"
+    path (no `prompt_pack` param at all) is unchanged and still serves
+    the active pinned body.
+  - **Major (`clone_settings_into` half-writes before a 409):**
+    `_validate_clone`'s `activations` axis check now (a) captures the
+    target's REAL existing activation doc (including a
+    previously-deactivated `{'name': None, 'revision': None}` one) and
+    threads it through as `_clone_activations`'s `expected_active`
+    instead of assuming an empty target, and (b) refuses up front when
+    the target already has a STORED (even never-activated) pack/profile
+    sharing the source's active name for either axis — both cases the
+    old `existing.get('name')`-only check missed, which used to write
+    settings/keymap/pack/activation docs before a spurious 409.
+  - **Minor (500 after a committed activation):** `activate_axis`
+    (`store.py`) and a new shared `rollback_axis` (replacing
+    `rollback_pack`/`rollback_profile`'s own write-then-resolve calls
+    into `index.rollback`) now resolve the pinned body BEFORE writing the
+    activation doc, so a transient error on that read aborts cleanly with
+    nothing committed instead of surfacing a 500 after the write already
+    landed.
+  - **Minor (pinned-copy 404/decode failure fails open):**
+    `active_prompt_pack()` / `get_active_region_profile()` no longer fall
+    back to the unvalidated current doc when the ref names a revision and
+    the pinned copy is missing or malformed — only when the current doc
+    genuinely IS that same revision. Otherwise falls back to the env/file
+    default and logs an error, closing the other half of round-2's B1
+    fix.
+  - **Minor (circular import in the `vlm_prompts`/`vlm_prompt_resolution`
+    split):** `vlm_prompt_resolution.py`'s module-level import of
+    `PromptPack`/`BUILT_IN_PACKS`/`_BUILT_IN_NAMES` is now `TYPE_CHECKING`
+    plus per-call-site lazy imports, so importing it before `vlm_prompts`
+    in a cold interpreter no longer raises `ImportError`.
+  - **Nit (misleading 422 message):** the per-run `name@<far-past
+    revision>` 422 no longer says "unknown revision" (the revision can
+    genuinely exist in history) — it now says the revision isn't
+    resolvable in this process, and names the actual scope: the current
+    saved revision or the currently-activated revision only, not a full
+    historical lookup.
+  - Landed as permanent tests: `tests/curation/test_r3_activation_probes.py`,
+    `tests/projects/test_r3_clone_probes.py`.
 - **W3+W4 prompt-pack/region-profile CRUD fix pass (independent Opus
   review, 2026-09-28): 2 blockers + 5 majors + isolation gaps.** Fixes
   every finding of

@@ -395,7 +395,7 @@ async def pipeline_auto_label(
 
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
-    _pack_stamp = prompt_pack_stamp(labeler._pack)
+    _pack_stamp = prompt_pack_stamp(labeler._pack, revision=prompt_pack_revision)
 
     # Count how many crops bypass the synonym/fuzzy force-fit because the
     # VLM's confidence is low — those route straight to the raw-label

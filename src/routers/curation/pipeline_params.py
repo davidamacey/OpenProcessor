@@ -145,12 +145,44 @@ async def resolve_run_prompt_pack(
         # always returns that same non-`None` name.
         assert resolved is not None
         if get_prompt_pack(resolved, revision=revision) is None:
+            # Nit (W3/W4 round-3 review): reworded off "unknown revision"
+            # -- revision `1` of `resolved` can genuinely EXIST (it may
+            # even be an earlier activation's `previous`), so that wording
+            # is misleading. This process only ever resolves a per-run
+            # pin against its own process-cached current doc plus the
+            # store's currently-*activated*-revision pin (§3.7) -- not a
+            # full historical lookup of every revision the name ever had.
             raise HTTPException(
                 status_code=422,
                 detail={
-                    'error': f'unknown revision {revision} for prompt_pack {resolved!r}',
+                    'error': (
+                        f'revision {revision} of prompt_pack {resolved!r} is not resolvable '
+                        'in this process (only the current saved revision or the '
+                        'currently-activated revision can be pinned per run)'
+                    ),
                     'axis': 'prompt_pack',
                     'requested': requested,
                 },
             )
+    elif requested is not None and opensearch is not None:
+        # N7 fix (W3/W4 round-3 review): an explicit per-run bare `name`
+        # (no `@rev`) means "latest saved revision" per any_domain_plan.md
+        # §3.7 ("Per-run `?prompt_pack=` ... accepts `name` (latest saved
+        # revision)"), NOT the config-store's *active* revision --
+        # that's the separate "Default (active) pack" behavior, which
+        # applies only when `prompt_pack` is omitted entirely (`requested
+        # is None` here, `revision` stays `None` and `_get_vlm_labeler`
+        # falls through to the pinned-active body, unchanged). Pin the
+        # exact current revision now so the job resolves the same body
+        # `_get_vlm_labeler`/`get_prompt_pack(name, revision=N)` will
+        # serve later, instead of letting `revision=None` ride through to
+        # `get_prompt_pack`'s active-pack redirect (B1/round-2's pinning,
+        # which must stay untouched for the omitted-param path).
+        from src.services.config_store import get_config_store
+
+        await get_config_store().ensure_fresh(opensearch)
+        assert resolved is not None
+        stored = get_config_store().current.packs.get(resolved)
+        if stored is not None:
+            revision = stored.revision
     return resolved, revision
