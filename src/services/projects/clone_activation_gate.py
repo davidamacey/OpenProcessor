@@ -90,34 +90,115 @@ async def check_activation_pair_in_target_context(
 
     profile_ref = source_active_refs.get('detection_profile')
     profile_body = source_bodies.get('detection_profile')
-    if profile_ref is None or profile_body is None:
-        return
+    pack_ref = source_active_refs.get('prompt_pack')
+    pack_body = source_bodies.get('prompt_pack')
+
+    # `_clone_activations` will actually copy the detection_profile axis
+    # only when a name AND a NON-`None` activation revision both exist --
+    # it reads the immutable `<kind>:<name>@<rev>` revision-copy doc via
+    # `config_doc_id(kind, name, revision)`, and `revision=None` in the
+    # activation record means "an env/file id, never written to the
+    # store" (`activate()`'s own invariant), which resolves to
+    # `config_doc_id(kind, name, None)` == `<kind>:<name>` -- a doc that
+    # was never stored either, so the lookup 404s and that axis is
+    # skipped there. `source_bodies['detection_profile']` above is NOT
+    # a safe proxy for "will be cloned": `build_profile_record` happily
+    # resolves an env/registry-registered profile's body even with
+    # `revision=None` (there is nothing wrong with reading it for
+    # validation purposes), so checking only "a body resolved" wrongly
+    # treated an unstored registry profile as "will be cloned" (R6-2's
+    # second variant). Match `_clone_activations`'s exact condition here
+    # instead, or the gate validates a pairing that never lands.
+    profile_will_be_cloned = (
+        profile_ref is not None and profile_ref[1] is not None and profile_body is not None
+    )
 
     from fastapi import HTTPException
 
     from src.services.config_store.activation_gate import run_activation_gate
     from src.services.labeling.vlm_prompts import PromptPack
 
-    p_name, p_rev = profile_ref
-    pending_kwargs: dict[str, Any] = {}
-    pack_ref = source_active_refs.get('prompt_pack')
-    pack_body = source_bodies.get('prompt_pack')
-    if pack_ref is not None and pack_body is not None:
-        pending_kwargs['pending_sibling'] = PromptPack.from_dict({**pack_body, 'name': pack_ref[0]})
-    try:
-        await run_activation_gate(
-            'detection_profile', p_name, p_rev, client=client, body=profile_body, **pending_kwargs
-        )
-    except HTTPException as exc:
+    if profile_will_be_cloned:
+        assert profile_ref is not None
+        p_name, p_rev = profile_ref
+        pending_kwargs: dict[str, Any] = {}
+        if pack_ref is not None and pack_body is not None:
+            pending_kwargs['pending_sibling'] = PromptPack.from_dict(
+                {**pack_body, 'name': pack_ref[0]}
+            )
+        try:
+            await run_activation_gate(
+                'detection_profile',
+                p_name,
+                p_rev,
+                client=client,
+                body=profile_body,
+                **pending_kwargs,
+            )
+        except HTTPException as exc:
+            raise api_error(
+                422,
+                'validation_failed',
+                f"'{target_record.slug}' cannot clone active detection_profile "
+                f"'{p_name}' from '{source.slug}': it does not pass activation "
+                "validation in the target project's own context (e.g. a detector "
+                'the target does not own or share)',
+                project=target_record.slug,
+            ) from exc
+        return
+
+    if pack_ref is None or pack_body is None:
+        return
+
+    # R6-2 fix (Major, W3/W4 round-6 review): the profile axis is NOT
+    # going to be copied (source is 'off', or a registry profile with no
+    # stored revision), so the target keeps its OWN existing/fallback
+    # profile after the clone -- `_resolve_profile(None)` resolves
+    # exactly that, bound to the target project context this function
+    # already runs in. Validating the cloned pack against the SOURCE's
+    # (off/unstored) profile, or skipping this axis entirely, both let a
+    # multi-box-stripped pack land live under the target's own
+    # multi-region default profile.
+    #
+    # Deliberately NOT the full `run_activation_gate('prompt_pack', ...)`
+    # (`validate_pack(..., for_activation=True)`) here: that also runs
+    # every INTRINSIC completeness check (required fields, placeholders,
+    # reply keys, registry class-name coverage) against the cloned pack,
+    # which several existing minimal test-fixture packs -- and plausibly
+    # some real ones -- were never validated against end-to-end (same
+    # scoping reasoning the original R5-3 fix used for the profile axis,
+    # see the module docstring). The confirmed gap is specifically the
+    # CROSS-AXIS pack/profile pairing (multi-box reply keys, text-mode
+    # mismatch), so only those two checks run here.
+    from src.routers.curation.prompt_packs import _resolve_profile
+    from src.services.config_store.pack_validation import _check_text_mode, check_multi_region_keys
+
+    pk_name, _pk_rev = pack_ref
+    target_profile = _resolve_profile(None)
+    max_regions = target_profile.max_regions_per_item if target_profile is not None else 1
+    cross_axis_issues = [
+        *(
+            [
+                check_multi_region_keys(
+                    pack_body, max_regions_per_item=max_regions, for_activation=True
+                )
+            ]
+            if max_regions > 1
+            else []
+        ),
+        *_check_text_mode(pack_body, target_profile),
+    ]
+    blocking = [i for i in cross_axis_issues if i is not None and i.severity == 'error']
+    if blocking:
         raise api_error(
             422,
             'validation_failed',
-            f"'{target_record.slug}' cannot clone active detection_profile "
-            f"'{p_name}' from '{source.slug}': it does not pass activation "
-            "validation in the target project's own context (e.g. a detector "
-            'the target does not own or share)',
+            f"'{target_record.slug}' cannot clone active prompt_pack "
+            f"'{pk_name}' from '{source.slug}': it does not pass activation "
+            "validation against the target project's own detection profile",
             project=target_record.slug,
-        ) from exc
+            report={'ok': False, 'errors': [i.model_dump() for i in blocking], 'warnings': []},
+        )
 
 
 __all__ = ['check_activation_pair_in_target_context']
