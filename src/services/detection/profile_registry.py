@@ -232,13 +232,31 @@ def get_active_region_profile() -> DetectionProfile | None:
     try:
         from src.services.config_store import get_config_store
 
-        ref = get_config_store().current.active_profile
+        snapshot = get_config_store().current
+        ref = snapshot.active_profile
     except Exception:  # pragma: no cover - config_store always importable
-        ref = None
+        ref, snapshot = None, None
     if ref == 'off':
         return None
     if ref is not None:
         name, _revision = ref
+        # B1 fix (W3/W4 review 2026-09-28): serve the revision pinned at
+        # activation time, not whatever `<name>`'s current doc says now --
+        # a PUT after activation must not go live until a separate
+        # activate call re-runs the for-activation checks.
+        if (
+            snapshot is not None
+            and snapshot.active_profile_body is not None
+            and snapshot.active_profile_body.name == name
+        ):
+            try:
+                return region_profile_from_dict(
+                    {**snapshot.active_profile_body.body, 'name': name}, source=name
+                )
+            except Exception as exc:
+                logger.warning(
+                    'active_region_profile_pinned_body_invalid', name=name, error=str(exc)
+                )
         profile = get_profiles().get(name)
         if profile is not None:
             return profile

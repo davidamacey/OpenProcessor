@@ -27,7 +27,13 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.core.logging import get_logger
-from src.services.config_store.index import ConfigAxis, get_activation, get_config_revision
+from src.services.config_store.index import (
+    ConfigAxis,
+    ConfigKind,
+    config_doc_id,
+    get_activation,
+    get_config_revision,
+)
 
 
 if TYPE_CHECKING:
@@ -70,6 +76,13 @@ class ConfigSnapshot:
     profiles: dict[str, StoredConfig] = field(default_factory=dict)
     active_pack: AxisRef = None
     active_profile: AxisRef = None
+    # B1 fix: the *activated revision's* body, pinned at activation time --
+    # independent of `packs[name]`/`profiles[name]`'s "current" doc, which
+    # a later PUT advances without changing what's live. `None` means no
+    # resolvable pinned body (never activated / 'off' / copy gone) --
+    # callers fall back to the env/file default.
+    active_pack_body: StoredConfig | None = None
+    active_profile_body: StoredConfig | None = None
     loaded_at: float = 0.0
     stale: bool = False
 
@@ -92,6 +105,48 @@ def _axis_ref(activation_doc: dict[str, Any] | None) -> AxisRef:
     # (`_next_revision` starts at 1), so 0 was never a legitimate value
     # here in the first place.
     return (activation_doc['name'], int(revision) if revision is not None else None)
+
+
+async def _resolve_active_body(
+    client: Any,
+    index: str,
+    *,
+    kind: ConfigKind,
+    ref: AxisRef,
+    current: dict[str, StoredConfig],
+) -> StoredConfig | None:
+    """B1 fix: the activated ref's *exact* body -- reuse the already-loaded
+    "current" doc when its revision matches, else fetch the immutable
+    ``<kind>:<name>@<rev>`` copy, so a later PUT (which only advances the
+    "current" doc) can never change what this resolves to. ``None`` when
+    there's nothing to pin (never activated, 'off', or the pinned copy
+    is gone)."""
+    if not isinstance(ref, tuple):
+        return None
+    name, pinned_revision = ref
+    local = current.get(name)
+    if local is not None and (pinned_revision is None or local.revision == pinned_revision):
+        return local
+    if pinned_revision is None:
+        return None
+    try:
+        doc = await client.get(index=index, id=config_doc_id(kind, name, pinned_revision))
+    except Exception as exc:  # NotFoundError (deleted) or a transient I/O error
+        logger.warning(
+            'config_store_active_revision_fetch_failed', kind=kind, name=name, error=str(exc)
+        )
+        return None
+    src = doc['_source']
+    return StoredConfig(
+        kind=kind,
+        name=name,
+        revision=int(src['revision']),
+        body=src.get('body') or {},
+        description=src.get('description') or '',
+        created_at=src.get('created_at'),
+        updated_at=src.get('updated_at'),
+        cloned_from=src.get('cloned_from'),
+    )
 
 
 class ConfigStore:
@@ -174,12 +229,22 @@ class ConfigStore:
 
         pack_activation = await get_activation(client, self.index, 'prompt_pack')
         profile_activation = await get_activation(client, self.index, 'detection_profile')
+        active_pack = _axis_ref(pack_activation)
+        active_profile = _axis_ref(profile_activation)
+        active_pack_body = await _resolve_active_body(
+            client, self.index, kind='prompt_pack', ref=active_pack, current=packs
+        )
+        active_profile_body = await _resolve_active_body(
+            client, self.index, kind='region_profile', ref=active_profile, current=profiles
+        )
         return ConfigSnapshot(
             config_revision=revision,
             packs=packs,
             profiles=profiles,
-            active_pack=_axis_ref(pack_activation),
-            active_profile=_axis_ref(profile_activation),
+            active_pack=active_pack,
+            active_profile=active_profile,
+            active_pack_body=active_pack_body,
+            active_profile_body=active_profile_body,
             loaded_at=time.monotonic(),
             stale=False,
         )
@@ -238,6 +303,8 @@ class ConfigStore:
             profiles=profiles,
             active_pack=patch.get('active_pack', current.active_pack),
             active_profile=patch.get('active_profile', current.active_profile),
+            active_pack_body=patch.get('active_pack_body', current.active_pack_body),
+            active_profile_body=patch.get('active_profile_body', current.active_profile_body),
             loaded_at=time.monotonic(),
             stale=False,
         )
@@ -295,11 +362,20 @@ async def activate_axis(
         expected_active=expected_active,
     )
     ref: AxisRef = (name, revision) if name else 'off'
+    kind: ConfigKind = 'prompt_pack' if axis == 'prompt_pack' else 'region_profile'
+    current_map = store.current.packs if axis == 'prompt_pack' else store.current.profiles
+    # B1 fix: pin the exact body being activated now, not a later
+    # re-derivation by name that a subsequent PUT could change.
+    body_ref = await _resolve_active_body(
+        client, store.index, kind=kind, ref=ref, current=current_map
+    )
     patch: dict[str, Any] = {'config_revision': result['config_revision']}
     if axis == 'prompt_pack':
         patch['active_pack'] = ref
+        patch['active_pack_body'] = body_ref
     else:
         patch['active_profile'] = ref
+        patch['active_profile_body'] = body_ref
     store.apply_local(**patch)
     if publish_event:
         from src.services.curation.event_hub import get_event_hub

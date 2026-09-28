@@ -625,6 +625,14 @@ def active_prompt_pack(cfg: Any | None = None) -> PromptPack:
     if ref is None or ref == 'off':
         return resolve_prompt_pack(cfg)
     name, _revision = ref
+    # B1 fix: serve the pinned-at-activation revision, not `<name>`'s
+    # current doc -- a PUT must not go live until a re-activate.
+    pinned = snapshot.active_pack_body
+    if pinned is not None and pinned.name == name:
+        try:
+            return PromptPack.from_dict({**pinned.body, 'name': name})
+        except Exception as exc:
+            logger.warning('active_prompt_pack_pinned_body_invalid', name=name, error=str(exc))
     pack = available_prompt_packs(cfg).get(name)
     return pack if pack is not None else resolve_prompt_pack(cfg)
 
@@ -633,13 +641,20 @@ def get_prompt_pack(
     name: str, cfg: Any | None = None, *, revision: int | None = None
 ) -> PromptPack | None:
     """The selectable pack called ``name``, or ``None`` if not configured.
+    ``revision=<N>`` resolves only against this process's cached snapshot
+    (no I/O); ``None`` (honest, not a wrong-revision body) unless ``N`` is
+    the *current* stored revision."""
+    if revision is not None:
+        from src.services.config_store import get_config_store
 
-    ``revision=None`` (the default) means "latest saved" -- W2 has no
-    CRUD to save more than one revision yet, so this is currently
-    equivalent to the un-revisioned lookup; W3 makes it exact once a
-    pack can have more than one revision.
-    """
-    del revision  # W3 resolves a specific past revision from history docs
+        stored = get_config_store().current.packs.get(name)
+        if stored is None or stored.revision != revision:
+            return None
+        try:
+            return PromptPack.from_dict({**stored.body, 'name': name})
+        except Exception as exc:
+            logger.warning('get_prompt_pack_stored_body_invalid', name=name, error=str(exc))
+            return None
     return available_prompt_packs(cfg).get(name)
 
 

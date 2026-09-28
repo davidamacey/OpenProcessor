@@ -21,20 +21,17 @@ from src.services.config_store.index import (
     RevisionConflictError,
     config_doc_id,
     delete_config as _delete_config,
-    get_activation,
     get_config_revision,
     rollback as _rollback,
     save_config as _save_config,
 )
-from src.services.config_store.store import StoredConfig
+from src.services.config_store.store import AxisRef, StoredConfig
 from src.services.labeling.vlm_prompts import BUILT_IN_PACKS, PromptPack
 
 
 PackSource = Literal['builtin', 'file', 'template', 'stored']
 
 _TEMPLATES_DIR = Path(__file__).resolve().parents[3] / 'examples' / 'prompt_packs'
-
-RESERVED_NAME_ERROR = 'name_conflict'
 
 
 @dataclass(frozen=True)
@@ -116,19 +113,6 @@ def _active_ref() -> tuple[str | None, int | None]:
     if ref is None or ref == 'off':
         return None, None
     return ref
-
-
-def pack_source(name: str) -> PackSource | None:
-    store = get_config_store()
-    if name in store.current.packs:
-        return 'stored'
-    if name in {p.name for p in BUILT_IN_PACKS}:
-        return 'builtin'
-    if name in builtin_and_file_bodies():
-        return 'file'
-    if name in _template_names():
-        return 'template'
-    return None
 
 
 def build_record(name: str, *, revision: int | None = None) -> PackRecord | None:
@@ -313,19 +297,26 @@ async def activate_pack(
 
 
 async def rollback_pack(client: Any, *, expected_active: dict[str, Any] | None) -> dict[str, Any]:
+    from src.services.config_store.store import _resolve_active_body
+
     store = get_config_store()
     result = await _rollback(
         client, store.index, axis='prompt_pack', expected_active=expected_active
     )
+    ref: AxisRef = (result['name'], result['revision']) if result.get('name') else 'off'
+    # B1 fix: pin the rolled-back-to revision's body, same as activate.
+    body_ref = await _resolve_active_body(
+        client, store.index, kind='prompt_pack', ref=ref, current=store.current.packs
+    )
     store.apply_local(
         config_revision=result['config_revision'],
-        active_pack=((result['name'], result['revision']) if result.get('name') else 'off'),
+        active_pack=ref,
+        active_pack_body=body_ref,
     )
     return result
 
 
 __all__ = [
-    'RESERVED_NAME_ERROR',
     'ActiveConflictError',
     'PackRecord',
     'RevisionConflictError',
@@ -335,11 +326,9 @@ __all__ = [
     'build_record',
     'builtin_and_file_bodies',
     'delete_pack',
-    'get_activation',
     'get_revision_record',
     'list_revisions',
     'load_template',
-    'pack_source',
     'rollback_pack',
     'save_pack',
 ]

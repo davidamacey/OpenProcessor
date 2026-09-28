@@ -23,7 +23,7 @@ from src.services.config_store.index import (
     rollback as _rollback,
     save_config as _save_config,
 )
-from src.services.config_store.store import StoredConfig
+from src.services.config_store.store import AxisRef, StoredConfig
 
 
 if TYPE_CHECKING:
@@ -120,17 +120,6 @@ def _active_ref() -> tuple[str | None, int | None]:
     if ref is None or ref == 'off':
         return None, None
     return ref
-
-
-def profile_source(name: str) -> ProfileSource | None:
-    store = get_config_store()
-    if name in store.current.profiles:
-        return 'stored'
-    if name in _registered_bodies():
-        return 'registered'
-    if name in _template_names():
-        return 'template'
-    return None
 
 
 def build_record(name: str, *, revision: int | None = None) -> ProfileRecord | None:
@@ -310,13 +299,21 @@ async def activate_profile(
 async def rollback_profile(
     client: Any, *, expected_active: dict[str, Any] | None
 ) -> dict[str, Any]:
+    from src.services.config_store.store import _resolve_active_body
+
     store = get_config_store()
     result = await _rollback(
         client, store.index, axis='detection_profile', expected_active=expected_active
     )
+    ref: AxisRef = (result['name'], result['revision']) if result.get('name') else 'off'
+    # B1 fix: pin the rolled-back-to revision's body, same as activate.
+    body_ref = await _resolve_active_body(
+        client, store.index, kind='region_profile', ref=ref, current=store.current.profiles
+    )
     store.apply_local(
         config_revision=result['config_revision'],
-        active_profile=(result['name'], result['revision']) if result.get('name') else 'off',
+        active_profile=ref,
+        active_profile_body=body_ref,
     )
     return result
 
@@ -333,7 +330,6 @@ __all__ = [
     'get_revision_record',
     'list_revisions',
     'load_template',
-    'profile_source',
     'rollback_profile',
     'save_profile',
 ]
