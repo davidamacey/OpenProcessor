@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from src.config.region_state import RegionStatus
 from src.services.curation.export_support import scroll_hits
+from src.services.curation.region_boxes import accepted, read_boxes
 
 
 if TYPE_CHECKING:
@@ -190,7 +191,7 @@ class RowCollector:
             'class_id',
             'test_holdout',
             'cluster_id',
-            f.bbox_norm,
+            f.boxes,
             f.status,
             f.cluster_id,
             f.cluster_subid,
@@ -268,9 +269,17 @@ class RowCollector:
             row.has_test_crop = row.has_test_crop or bool(src.get('test_holdout'))
             status = str(src.get(f.status) or '')
             if status in POSITIVE_REGION_STATUSES:
-                box = xyxy_to_yolo(src.get(f.bbox_norm))
-                if box is not None:
-                    row.boxes.append((0, *box))
+                # W8-cleanup: an item can carry more than one accepted box
+                # now (region_boxes, not the retired single region_bbox_norm
+                # scalar) -- every accepted box on this item becomes its own
+                # label line on the frame.
+                any_box = False
+                for b in accepted(read_boxes(src, f)):
+                    box = xyxy_to_yolo(list(b.bbox_norm))
+                    if box is not None:
+                        row.boxes.append((0, *box))
+                        any_box = True
+                if any_box:
                     cluster_keys[frame_key].append(f'pos:{self._region_cluster_key(src)}')
             elif status in HARD_NEGATIVE_REGION_STATUSES:
                 row.is_hard_negative = True
@@ -309,10 +318,16 @@ class RowCollector:
             )
             status = str(src.get(f.status) or '')
             if status in POSITIVE_REGION_STATUSES:
-                box = reproject_into_crop(src.get(f.bbox_norm), parent)
-                if box is None:
-                    continue  # region didn't land inside its own parent crop
-                row.boxes.append((0, *box))
+                # W8-cleanup: every accepted box on this item that lands
+                # inside its own parent crop becomes a label line; if none
+                # do, this item is dropped entirely (unchanged behavior
+                # from the pre-W8 single-box case).
+                for b in accepted(read_boxes(src, f)):
+                    box = reproject_into_crop(list(b.bbox_norm), parent)
+                    if box is not None:
+                        row.boxes.append((0, *box))
+                if not row.boxes:
+                    continue  # no accepted box landed inside its own parent crop
                 row.stratum = f'pos:{self._region_cluster_key(src)}'
             elif status in HARD_NEGATIVE_REGION_STATUSES:
                 row.is_hard_negative = True
