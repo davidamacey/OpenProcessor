@@ -159,7 +159,28 @@ def app_client_config_store(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     fake_os = FakeConfigOpenSearch()
+
+    # N1 fix (W3/W4 round-3 review): `PUT /settings` now runs the same
+    # `for_activation` validation `POST /{name}/activate` runs, so a
+    # `detection_profile` PUT needs its models reported READY the same
+    # way `test_region_profiles_router.py`'s `app_client` fixture already
+    # does for the direct activate route -- 'license_plate_detector' is
+    # `reference_region_profile`'s configured detector model.
+    async def _fake_repo_index() -> list[dict]:
+        return [
+            {'name': 'license_plate_detector', 'state': 'READY', 'version': '1'},
+            {'name': 'paddleocr_det_trt', 'state': 'READY', 'version': '1'},
+            {'name': 'paddleocr_rec_trt', 'state': 'READY', 'version': '1'},
+            {'name': 'ocr_pipeline', 'state': 'READY', 'version': '1'},
+        ]
+
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    from src.services.triton_control import TritonControlService
+
+    monkeypatch.setattr(
+        TritonControlService, 'get_repository_index', lambda _self: _fake_repo_index()
+    )
+
     app = FastAPI()
     from _curation_app import mount_curation_routers
 

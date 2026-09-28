@@ -94,10 +94,16 @@ async def test_b2_real_flow_validate_then_apply(monkeypatch):
     source, target = _record('alpha'), _record('beta')
     await _seed(client, source, edit_after_activate=False)
     monkeypatch.setattr(lifecycle_mod, '_resolve_existing', AsyncMock(return_value=source))
-    src_rec, axes = await _validate_clone(
+    src_rec, axes, target_activations = await _validate_clone(
         client, target_record=target, from_slug='alpha', axes=['prompt_packs', 'activations']
     )
-    await _apply_clone(client, target_record=target, source=src_rec, axes=axes)
+    await _apply_clone(
+        client,
+        target_record=target,
+        source=src_rec,
+        axes=axes,
+        target_activations=target_activations,
+    )
 
 
 @pytest.mark.asyncio
@@ -137,8 +143,14 @@ async def test_b2_real_flow_passes_only_after_cache_ttl(monkeypatch):
     source, target = _record('alpha'), _record('beta')
     await _seed(client, source, edit_after_activate=False)
     monkeypatch.setattr(lifecycle_mod, '_resolve_existing', AsyncMock(return_value=source))
-    src_rec, axes = await _validate_clone(
+    src_rec, axes, target_activations = await _validate_clone(
         client, target_record=target, from_slug='alpha', axes=['prompt_packs', 'activations']
     )
     await asyncio.sleep(1.1)
-    await _apply_clone(client, target_record=target, source=src_rec, axes=axes)
+    await _apply_clone(
+        client,
+        target_record=target,
+        source=src_rec,
+        axes=axes,
+        target_activations=target_activations,
+    )
