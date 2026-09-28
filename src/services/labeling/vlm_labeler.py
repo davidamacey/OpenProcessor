@@ -518,7 +518,18 @@ def _combined_reply_from_entry(
     class_conf_raw = entry.get('class_confidence')
     make = str(entry.get('make') or '').strip()[:48]
     model_name = str(entry.get('model') or '').strip()[:48]
-    region_boxes = box_verdicts(entry, n_boxes, fields) if n_boxes > 0 else []
+    # M5 fix (W8 pipeline-wiring review, 2026-09-27): suppress a per-box
+    # text reply that's really the item's own class/make/model echoed
+    # back into the text slot -- ported from the pre-W8 flat parser's
+    # ``_clean_combined_region_text`` echo check, dropped (not ported)
+    # when the per-box list shape replaced it.
+    picked_class = (
+        class_names[class_id]
+        if class_names and class_id is not None and 0 <= class_id < len(class_names)
+        else ''
+    )
+    echoes = (picked_class, make, model_name, f'{make} {model_name}'.strip())
+    region_boxes = box_verdicts(entry, n_boxes, fields, echoes=echoes) if n_boxes > 0 else []
     return VlmCombinedReply(
         img_id=img_id,
         class_id=class_id,

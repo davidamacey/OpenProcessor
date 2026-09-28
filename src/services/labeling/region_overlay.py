@@ -188,11 +188,34 @@ def _normalize_confidence(value: Any) -> ConfidenceLevel | None:
     return None
 
 
-def _clean_text_reply(value: Any) -> str | None:
+# M5 fix (W8 pipeline-wiring review, 2026-09-27): the pre-W8 flat parser's
+# full sentinel set (vlm_labeler._TEXT_SENTINELS) -- the W8 rewrite's
+# ``_clean_text_reply`` only dropped 4 of these 7, silently storing
+# "unreadable"/"-" as if they were real region text.
+_TEXT_SENTINELS = frozenset({'', 'null', 'none', 'unknown', 'unreadable', 'n/a', '-'})
+
+
+def _echo_key(value: str) -> str:
+    """Case- and separator-insensitive form ("Adventure Bike" == "adventurebike")."""
+    return ''.join(ch for ch in value.casefold() if ch.isalnum())
+
+
+def _clean_text_reply(value: Any, *, echoes: tuple[str, ...] = ()) -> str | None:
+    """The region's transcribed text from a per-box reply, or ``None``.
+
+    Drops sentinels and any value that is really one of the reply's own
+    item-level answers echoed into the text slot (``echoes``: the class
+    name it picked, its ``make`` / ``model``, both joined) -- M5: this
+    suppression lived in the pre-W8 flat parser
+    (``vlm_labeler._clean_combined_region_text``) and was dropped, not
+    ported, when the per-box list shape replaced it.
+    """
     if value is None or isinstance(value, bool | dict | list):
         return None
     text = str(value).strip()
-    if not text or text.lower() in ('unknown', 'n/a', 'none', 'null'):
+    if not text or text.lower() in _TEXT_SENTINELS:
+        return None
+    if _echo_key(text) in {_echo_key(e) for e in echoes if e}:
         return None
     return text[:32]
 
@@ -218,7 +241,11 @@ def _coerce_box_number(value: Any) -> int | None:
 
 
 def box_verdicts(
-    entry: dict[str, Any], n: int, fields: RegionFields | None = None
+    entry: dict[str, Any],
+    n: int,
+    fields: RegionFields | None = None,
+    *,
+    echoes: tuple[str, ...] = (),
 ) -> list[VlmBoxVerdict]:
     """The reply's per-box verdicts, always length ``n`` (W8.6).
 
@@ -228,6 +255,11 @@ def box_verdicts(
     ``fields.text`` are read. An out-of-range or duplicate ``box`` is
     ignored (first wins), logged ``vlm_box_index_invalid``. A number with
     no matching element gets ``bbox_correct=None`` (no verdict).
+
+    ``echoes`` (M5): the reply's own item-level answers (the class name
+    it picked, ``make``, ``model``, both joined) -- a per-box ``text``
+    reply that's really one of those echoed back is dropped, never
+    stored as if it were text read off the region.
 
     Raises :class:`MultiRegionKeysMissingError` when ``entry`` doesn't
     carry the list key at all.
@@ -261,7 +293,7 @@ def box_verdicts(
                 box=i,
                 bbox_correct=_coerce_bool(element.get(fields.bbox_correct)),
                 confidence=_normalize_confidence(element.get(fields.confidence)),
-                text_reply=_clean_text_reply(element.get(fields.text)),
+                text_reply=_clean_text_reply(element.get(fields.text), echoes=echoes),
             )
         )
     return verdicts
