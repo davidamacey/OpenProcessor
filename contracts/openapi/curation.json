@@ -1136,21 +1136,6 @@
             "title": "Failed",
             "type": "integer"
           },
-          "labels_imported": {
-            "default": 0,
-            "title": "Labels Imported",
-            "type": "integer"
-          },
-          "mismatches": {
-            "default": 0,
-            "title": "Mismatches",
-            "type": "integer"
-          },
-          "missed_labels": {
-            "default": 0,
-            "title": "Missed Labels",
-            "type": "integer"
-          },
           "secondary_detector_failures": {
             "default": 0,
             "title": "Secondary Detector Failures",
@@ -1159,11 +1144,6 @@
           "successful": {
             "default": 0,
             "title": "Successful",
-            "type": "integer"
-          },
-          "unmatched_detections": {
-            "default": 0,
-            "title": "Unmatched Detections",
             "type": "integer"
           }
         },
@@ -4061,53 +4041,6 @@
         "title": "HealthResponse",
         "type": "object"
       },
-      "ImportLabelsBatchRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ImportLabelsRequest"
-            },
-            "minItems": 1,
-            "title": "Items",
-            "type": "array"
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "title": "ImportLabelsBatchRequest",
-        "type": "object"
-      },
-      "ImportLabelsRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "detect_mismatches": {
-            "default": false,
-            "title": "Detect Mismatches",
-            "type": "boolean"
-          },
-          "image_path": {
-            "title": "Image Path",
-            "type": "string"
-          },
-          "label_source": {
-            "default": "external_label",
-            "title": "Label Source",
-            "type": "string"
-          },
-          "label_txt_path": {
-            "title": "Label Txt Path",
-            "type": "string"
-          }
-        },
-        "required": [
-          "image_path",
-          "label_txt_path"
-        ],
-        "title": "ImportLabelsRequest",
-        "type": "object"
-      },
       "IngestBatchConfig": {
         "properties": {
           "enabled": {
@@ -4136,20 +4069,8 @@
       },
       "IngestBatchItem": {
         "additionalProperties": false,
-        "description": "One batch entry: an image, and optionally its ground-truth labels.\n\n``label_txt_path`` is what makes an \"ingest an already-labeled\ndataset and compare the detector against ground truth\" pass a single\ncall instead of an ingest followed by a second\n``POST /import_labels/batch`` round trip.",
+        "description": "One batch entry: an image to ingest.",
         "properties": {
-          "label_txt_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional companion YOLO .txt label file for this image",
-            "title": "Label Txt Path"
-          },
           "path": {
             "description": "Absolute path to a JPEG on a mounted volume",
             "title": "Path",
@@ -4171,12 +4092,6 @@
       "IngestBatchRequest": {
         "additionalProperties": false,
         "properties": {
-          "detect_mismatches": {
-            "default": false,
-            "description": "Flag labels whose IoU-matched item carried a different detector class, and report the count as summary.mismatches",
-            "title": "Detect Mismatches",
-            "type": "boolean"
-          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/IngestBatchItem"
@@ -4184,12 +4099,6 @@
             "minItems": 1,
             "title": "Items",
             "type": "array"
-          },
-          "label_source": {
-            "default": "external_label",
-            "description": "label_source recorded on labels imported from label_txt_path",
-            "title": "Label Source",
-            "type": "string"
           }
         },
         "required": [
@@ -11179,14 +11088,6 @@
       },
       "src__routers__curation___common_models__BatchIngestResponse": {
         "properties": {
-          "disagreements": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Disagreements",
-            "type": "array"
-          },
           "results": {
             "items": {
               "$ref": "#/components/schemas/IngestImageResponse"
@@ -16218,121 +16119,9 @@
         ]
       }
     },
-    "/curation/projects/{project}/import_labels": {
-      "post": {
-        "description": "Import a single YOLO ``.txt`` label file against an already-ingested image.",
-        "operationId": "curation_import_labels_curation_projects__project__import_labels_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImportLabelsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "integer"
-                  },
-                  "title": "Response Curation Import Labels Curation Projects  Project  Import Labels Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Curation Import Labels",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
-    "/curation/projects/{project}/import_labels/batch": {
-      "post": {
-        "description": "Batch-import YOLO ``.txt`` label files against already-ingested images.\n\nWith ``detect_mismatches`` the response also carries the per-label\n``disagreements`` records (same shape as ``POST /ingest/batch``).",
-        "operationId": "curation_import_labels_batch_curation_projects__project__import_labels_batch_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImportLabelsBatchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Curation Import Labels Batch Curation Projects  Project  Import Labels Batch Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Curation Import Labels Batch",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
     "/curation/projects/{project}/ingest/batch": {
       "post": {
-        "description": "Ingest a batch of images from paths already reachable inside the container.\n\nEvery item shares its ``source`` tag independently; a per-item read\nfailure is reported as a ``failed`` result rather than aborting the\nwhole batch. Items that carry a ``label_txt_path`` also have their\nground-truth YOLO labels imported in the same call.\n\nThe whole-image detector inference is issued in batched Triton calls\n(one per ``DetectionProfile.batch_limit`` chunk), so a larger batch\nis materially faster than the same images posted one at a time.",
+        "description": "Ingest a batch of images from paths already reachable inside the container.\n\nEvery item shares its ``source`` tag independently; a per-item read\nfailure is reported as a ``failed`` result rather than aborting the\nwhole batch. To ingest an already-labeled dataset, use\n``POST /datasets/imports`` (W10) instead.\n\nThe whole-image detector inference is issued in batched Triton calls\n(one per ``DetectionProfile.batch_limit`` chunk), so a larger batch\nis materially faster than the same images posted one at a time.",
         "operationId": "curation_ingest_batch_curation_projects__project__ingest_batch_post",
         "parameters": [
           {

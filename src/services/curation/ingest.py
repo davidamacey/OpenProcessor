@@ -623,10 +623,7 @@ class CurationIngestService:
         self,
         images: list[bytes],
         image_paths: list[str],
-        label_paths: list[str | None] | None = None,
         source: str = 'batch',
-        label_source: str = '',
-        detect_mismatches: bool = False,
         whole_frame_from_bytes: bool = False,
         source_identifiers: list[str | None] | None = None,
         ingest_run_id: str | None = None,
@@ -635,28 +632,19 @@ class CurationIngestService:
 
         Delegates to :func:`src.services.curation.ingest_batch.run_ingest_batch`
         — see that module's docstring for why the batch path is more than
-        ``ingest_one`` run N times concurrently.
+        ``ingest_one`` run N times concurrently. To ingest an
+        already-labeled dataset, use ``POST /datasets/imports`` (W10)
+        instead.
 
         Args:
             images: Raw image bytes, one per entry.
             image_paths: Source paths, index-aligned with ``images``.
-            label_paths: Optional companion YOLO ``.txt`` paths,
-                index-aligned with ``images`` (``None`` per entry to skip
-                that image). Supplying them ingests images *and* their
-                ground-truth labels in one call, which is what a
-                re-ingest-and-verify pass over an already-labeled dataset
-                needs.
             source: Provenance tag stamped on every document.
-            label_source: ``label_source`` recorded on the imported
-                labels; defaults to the label importer's own default.
-            detect_mismatches: Record (and count) labels whose IoU-matched
-                item carried a different detector class — the
-                model-vs-ground-truth disagreement report.
             whole_frame_from_bytes: See :meth:`ingest_one`.
 
         Raises:
-            ValueError: If ``image_paths`` or ``label_paths`` is not the
-                same length as ``images``.
+            ValueError: If ``image_paths`` is not the same length as
+                ``images``.
         """
         from src.services.curation.ingest_batch import run_ingest_batch
 
@@ -664,10 +652,7 @@ class CurationIngestService:
             self,
             images,
             image_paths,
-            label_paths=label_paths,
             source=source,
-            label_source=label_source,
-            detect_mismatches=detect_mismatches,
             whole_frame_from_bytes=whole_frame_from_bytes,
             source_identifiers=source_identifiers,
             ingest_run_id=ingest_run_id,

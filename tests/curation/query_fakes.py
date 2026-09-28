@@ -349,6 +349,17 @@ class QueryFakeOpenSearch:
                 self._bump(idx, doc_id)
                 items.append({op: {'_id': doc_id, 'status': 201}})
                 continue
+            if op == 'create':
+                if doc_id in self.docs(idx):
+                    errors = True
+                    items.append(
+                        {op: {'_id': doc_id, 'status': 409, 'error': {'type': 'version_conflict'}}}
+                    )
+                    continue
+                self.docs(idx)[doc_id] = copy.deepcopy(payload)
+                self._bump(idx, doc_id)
+                items.append({op: {'_id': doc_id, 'status': 201}})
+                continue
             if op != 'update':
                 raise NotImplementedError(op)
             if doc_id not in self.docs(idx):

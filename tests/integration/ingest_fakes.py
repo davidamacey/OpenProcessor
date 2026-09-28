@@ -4,8 +4,8 @@ Fakes the OpenSearch / Triton / PE-encoder I/O boundary (per this repo's
 house rule: don't add the repo's first live-stack dependency) so ingest
 can run through the real app and the real
 ``CurationIngestService``. Used by ``test_ingest_roundtrip.py`` (path
-ingest), ``test_ingest_upload.py`` (byte upload) and
-``test_import_labeled_dataset.py`` (labeled-dataset driver).
+ingest), ``test_ingest_upload.py`` (byte upload) and the dataset-import
+tests (``tests/curation/dataset_import/``, ``test_class_identity_e2e.py``).
 """
 
 from __future__ import annotations

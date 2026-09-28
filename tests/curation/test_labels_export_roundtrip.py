@@ -6,11 +6,11 @@ only the confirmed-labels index while the labeler and auto-promote wrote only
 out with zero rows. On this codebase the contract is the other way round:
 
 - every labeling path (single / batch human label, cluster move, cluster
-  auto-promote, YOLO label import) sets ``class_validated=true`` on the item;
+  auto-promote, dataset import) sets ``class_validated=true`` on the item;
 - :class:`~src.services.curation.export.GenericYoloExportService` selects
   ``class_validated=true`` items straight from the items index and never
-  reads the confirmed-labels index, which only ``label_import`` writes (as a
-  provenance ledger of imported ground truth).
+  reads the confirmed-labels index, which nothing writes anymore (W10:
+  dataset import's own ledger is the provenance record now).
 
 These tests run each real write path against one query-evaluating in-memory
 OpenSearch and then run the real exporter over the result, so they fail if
@@ -133,26 +133,56 @@ async def test_human_labels_alone_produce_a_non_empty_export(fake, registry, tmp
 @pytest.mark.asyncio
 @pytest.mark.usefixtures('reference_ingest_profiles')
 async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, monkeypatch):
+    """The fifth "every label path" writer, post-W10: dataset import.
+
+    Ported from the pre-W10 version of this test, which used the since-
+    deleted ``label_import.import_yolo_labels`` (a parallel write path
+    with no OCC, no restorable snapshot — any_domain_plan.md W10.1 I2).
+    Dataset import now goes through the SAME ``class_label_update()`` /
+    ``occ_upsert_bulk()`` primitive every other writer exercised by this
+    test uses.
+    """
+    from PIL import Image
+
     from src.services.curation.clustering.orchestrator import auto_promote_clusters
-    from src.services.curation.label_import import import_yolo_labels
+    from src.services.curation.dataset_import.job import import_dataset, registry_class_views
+    from src.services.curation.dataset_import.mapping import ClassMappingEntry, resolve_mapping
+    from src.services.curation.dataset_import.yolo import scan_yolo
 
     await _human_label_paths(fake, registry, monkeypatch)
 
     promoted = await auto_promote_clusters(fake, min_purity=0.85, min_members=4)
     assert promoted['promoted'] == 4
 
-    txt = tmp_path / 'imp.txt'
-    txt.write_text('1 0.7 0.7 0.2 0.2\n')
-    assert await import_yolo_labels(Path('/data/imp.jpg'), txt, registry, fake) == 1
+    ds_root = tmp_path / 'one_image_ds'
+    (ds_root / 'images/train').mkdir(parents=True)
+    (ds_root / 'labels/train').mkdir(parents=True)
+    (ds_root / 'data.yaml').write_text('train: images/train\nnames:\n  0: widget\n  1: gadget\n')
+    Image.new('RGB', (10, 10)).save(ds_root / 'images/train/imp.jpg')
+    (ds_root / 'labels/train/imp.txt').write_text('1 0.7 0.7 0.2 0.2\n')
+
+    scan = scan_yolo(ds_root)
+    resolved = resolve_mapping(
+        ['gadget'],
+        [ClassMappingEntry(dataset_class='gadget', action='map', class_id=1)],
+        registry_classes=registry_class_views(registry),
+    )
+    assert resolved.ok
+    report = await import_dataset(
+        fake, scan, resolved, import_id='imp_test', images_index=IMAGES, items_index=ITEMS
+    )
+    assert report.items_created == 1
 
     items = fake.docs(ITEMS)
+    imported_ids = {i for i, d in items.items() if d.get('import_ids') == ['imp_test']}
+    assert len(imported_ids) == 1
     validated = {i for i, d in items.items() if d.get('class_validated') is True}
-    assert validated == {'h1', 'b1', 'b2', 'm1', 'ap0', 'ap1', 'ap2', 'ap3'} | {
-        i for i, d in items.items() if d.get('image_id') == 'imp'
-    }
+    assert validated == {'h1', 'b1', 'b2', 'm1', 'ap0', 'ap1', 'ap2', 'ap3'} | imported_ids
     assert 'never' not in validated
-    # the confirmed-labels index is a ledger of imported labels only
-    assert len(fake.docs(CONFIRMED)) == 1
+    # W10 (any_domain_plan.md I13): dataset import no longer writes the
+    # labels_confirmed ledger at all -- the import's own ledger (not
+    # built this pass; see the wave report) is the record now.
+    assert fake.docs(CONFIRMED) == {}
 
     result = await _export(fake, registry, tmp_path)
     assert result.image_count == len(validated) == 9

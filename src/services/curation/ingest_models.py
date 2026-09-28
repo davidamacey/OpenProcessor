@@ -7,7 +7,7 @@ without importing each other at module scope.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -30,10 +30,6 @@ class IngestSummary(BaseModel):
     successful: int = 0
     duplicates: int = 0
     failed: int = 0
-    labels_imported: int = 0
-    mismatches: int = 0
-    missed_labels: int = 0
-    unmatched_detections: int = 0
     crops_indexed: int = 0
     # F-43: a configured secondary detector (OP_INGEST_SECONDARY_DETECTOR_MODEL)
     # that errors (e.g. DEADLINE_EXCEEDED) per-item used to be swallowed --
@@ -77,9 +73,6 @@ class BatchIngestResult(BaseModel):
     status: Literal['success', 'partial', 'error'] = 'success'
     summary: IngestSummary = Field(default_factory=IngestSummary)
     results: list[IngestResult] = Field(default_factory=list)
-    # Model-vs-label disagreement records (``detect_mismatches``); see the
-    # DISAGREEMENT_* kinds in src.services.curation.label_import.
-    disagreements: list[dict[str, Any]] = Field(default_factory=list)
 
 
 __all__ = ['BatchIngestResult', 'IngestResult', 'IngestSummary']

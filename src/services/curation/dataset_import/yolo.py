@@ -6,8 +6,9 @@ implementation here rather than a straight move of
 ``yolo_dataset.py`` stays in place, still used by
 ``scripts/curation/eval_regions_vs_gt.py``, which this pass does not
 touch). The row-level rules (clamp tolerance, polygon-to-box,
-class-range checks) are new — the pre-W10 importer
-(``label_import.py::_parse_yolo_txt``) had none of them.
+class-range checks) are new — the pre-W10 per-image importer (now
+deleted, along with the rest of the ``label_import`` module) had none
+of them.
 """
 
 from __future__ import annotations

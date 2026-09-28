@@ -158,6 +158,9 @@ _DYNAMIC_WRITES: dict[str, str | None] = {
     # the empty answer -- 'vlm', or the one ingest stamps for its detector.
     'VLM_CLASS_SOURCE': 'vlm',
     'ingest_source': None,
+    # W10: class_label.py's ItemLabel.imported() class_source (the existing
+    # "Imported label" catalog entry, class_sources.py's _FIXED_ENTRIES).
+    'LABEL_IMPORT_CLASS_SOURCE': 'external_label',
 }
 
 

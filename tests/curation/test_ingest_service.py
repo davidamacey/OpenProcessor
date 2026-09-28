@@ -635,93 +635,6 @@ class TestBatchedTritonInference:
         assert len(os_fake.images) == 1
 
 
-class TestBatchLabelImport:
-    """Regression guards for G12 — ``ingest_batch`` accepts companion
-    ground-truth labels again."""
-
-    @pytest.mark.asyncio
-    async def test_batch_imports_companion_labels(self, tmp_path: Any) -> None:
-        svc, os_fake, _ = _make_service(registry=_two_class_registry())
-        data = _jpeg_bytes(seed=600)
-        image_path = tmp_path / 'img.jpg'
-        image_path.write_bytes(data)
-        label_path = tmp_path / 'img.txt'
-        # One label covering the same region the fake detector proposes,
-        # agreeing with the detected class.
-        label_path.write_text('1 0.325 0.325 0.55 0.55\n')
-
-        result = await svc.ingest_batch(
-            [data],
-            [str(image_path)],
-            label_paths=[str(label_path)],
-            label_source='ground_truth',
-        )
-
-        assert result.summary.successful == 1
-        assert result.summary.labels_imported == 1
-        assert any(d.get('label_source') == 'ground_truth' for d in os_fake.items.values())
-        # The imported label replaced the detector's class, so the class
-        # provenance must follow — not keep claiming the detector.
-        [item] = list(os_fake.items.values())
-        assert item['class_detector'] == 'ground_truth'
-        assert item['class_labeler'] == 'label_import'
-
-    @pytest.mark.asyncio
-    async def test_batch_without_label_paths_imports_nothing(self, tmp_path: Any) -> None:
-        svc, _, _ = _make_service()
-        data = _jpeg_bytes(seed=601)
-        image_path = tmp_path / 'img.jpg'
-        image_path.write_bytes(data)
-
-        result = await svc.ingest_batch([data], [str(image_path)])
-        assert result.summary.labels_imported == 0
-
-    @pytest.mark.asyncio
-    async def test_batch_reports_label_vs_detector_mismatches(self, tmp_path: Any) -> None:
-        """``detect_mismatches`` surfaces where the detector disagreed with
-        ground truth — the report a re-ingest-and-verify pass needs."""
-        svc, os_fake, _ = _make_service(registry=_two_class_registry())
-        data = _jpeg_bytes(seed=602)
-        image_path = tmp_path / 'img.jpg'
-        image_path.write_bytes(data)
-        label_path = tmp_path / 'img.txt'
-        # Same box as the detector's proposal, but class 0 vs detected 1.
-        label_path.write_text('0 0.325 0.325 0.55 0.55\n')
-
-        result = await svc.ingest_batch(
-            [data],
-            [str(image_path)],
-            label_paths=[str(label_path)],
-            detect_mismatches=True,
-        )
-
-        assert result.summary.labels_imported == 1
-        assert result.summary.mismatches == 1
-        # The ground-truth label still wins; the mismatch is a report only.
-        [item] = list(os_fake.items.values())
-        assert item['class_id'] == 0
-
-    @pytest.mark.asyncio
-    async def test_mismatch_not_counted_when_flag_off(self, tmp_path: Any) -> None:
-        svc, _, _ = _make_service(registry=_two_class_registry())
-        data = _jpeg_bytes(seed=603)
-        image_path = tmp_path / 'img.jpg'
-        image_path.write_bytes(data)
-        label_path = tmp_path / 'img.txt'
-        label_path.write_text('0 0.325 0.325 0.55 0.55\n')
-
-        result = await svc.ingest_batch(
-            [data], [str(image_path)], label_paths=[str(label_path)], detect_mismatches=False
-        )
-        assert result.summary.mismatches == 0
-
-    @pytest.mark.asyncio
-    async def test_mismatched_label_paths_length_rejected(self) -> None:
-        svc, _, _ = _make_service()
-        with pytest.raises(ValueError, match='label_paths'):
-            await svc.ingest_batch([b'x', b'y'], ['/a.jpg', '/b.jpg'], label_paths=[None])
-
-
 class TestCropCreatedEvents:
     """N2 — ingest publishes ``crop.created`` for every item doc it newly
     writes, only after the write succeeded, and a publish failure can
@@ -948,26 +861,6 @@ class TestRegionStatusSeeding:
         assert {d[self._status_field()] for d in os_fake.items.values()} == {
             RegionStatus.PENDING_DETECTION.value
         }
-
-    @pytest.mark.asyncio
-    @pytest.mark.usefixtures('reference_region_profile')
-    async def test_batch_label_import_seeds_items_it_creates(self, tmp_path: Any) -> None:
-        """A label the detector missed becomes a new item — it needs region
-        detection as much as a detector-created one."""
-        from src.config import RegionStatus
-
-        svc, os_fake, _ = _make_service(detections=[], registry=_two_class_registry())
-        data = _jpeg_bytes(seed=900)
-        image_path = tmp_path / 'img.jpg'
-        image_path.write_bytes(data)
-        label_path = tmp_path / 'img.txt'
-        label_path.write_text('1 0.5 0.5 0.2 0.2\n')
-
-        result = await svc.ingest_batch([data], [str(image_path)], label_paths=[str(label_path)])
-
-        assert result.summary.labels_imported == 1
-        [item] = list(os_fake.items.values())
-        assert item[self._status_field()] == RegionStatus.PENDING_DETECTION.value
 
     @pytest.mark.usefixtures('reference_region_profile')
     def test_ingest_response_reports_seeded_count(self) -> None:

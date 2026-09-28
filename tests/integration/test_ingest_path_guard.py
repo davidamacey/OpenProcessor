@@ -72,12 +72,15 @@ def test_batch_refuses_a_path_outside_the_source_roots(
     assert by_path[str(inside)]['status'] != 'failed'
 
 
-def test_batch_refuses_a_label_txt_path_outside_the_source_roots(
+def test_batch_rejects_the_removed_label_txt_path_field(
     client: TestClient, tmp_path: Path, served_root: Path
 ) -> None:
-    """BA-5: label_txt_path gets the same root guard as the image path --
-    a client-controlled label file path must not escape the configured
-    source roots either."""
+    """W10: ``label_txt_path`` is removed from ``/ingest/batch`` outright
+    (no back-compat) -- ``IngestBatchItem`` is ``extra='forbid'``, so a
+    caller still sending it 422s instead of the field silently being
+    ignored. Its BA-5 path-guard coverage lives on for the
+    ``POST /datasets/imports`` (W10) path instead (not yet exercised at
+    the HTTP-route level -- see the dataset-import package's own tests)."""
     inside_image = _jpeg(served_root, 'labeled.jpg')
     outside_label = tmp_path / 'evil.txt'
     outside_label.write_text('0 0.5 0.5 0.2 0.2\n')
@@ -93,11 +96,7 @@ def test_batch_refuses_a_label_txt_path_outside_the_source_roots(
             ]
         },
     )
-    assert resp.status_code == 200, resp.text
-    result = resp.json()['results'][0]
-    assert result['status'] == 'failed'
-    assert result['error_kind'] == 'unservable_path'
-    assert str(outside_label) in result['error']
+    assert resp.status_code == 422, resp.text
 
 
 def test_batch_over_the_configured_item_cap_is_413(

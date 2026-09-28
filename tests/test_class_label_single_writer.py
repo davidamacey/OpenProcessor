@@ -44,6 +44,25 @@ def _iter_py_files() -> list[Path]:
     return files
 
 
+# OpenSearch query-DSL wrapper keys: a dict literal that is the value of
+# one of these is a query filter (e.g. {'term': {'class_validated':
+# True}}), never a write body -- excluded the same way
+# test_class_sources.py's scanner excludes query dicts.
+_QUERY_WRAPPER_KEYS = frozenset(
+    {'term', 'terms', 'match', 'bool', 'filter', 'must', 'must_not', 'should'}
+)
+
+
+def _query_dict_ids(tree: ast.AST) -> set[int]:
+    ids: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values, strict=False):
+                if isinstance(key, ast.Constant) and key.value in _QUERY_WRAPPER_KEYS:
+                    ids.add(id(value))
+    return ids
+
+
 def _dict_sets_class_validated_true(node: ast.Dict) -> bool:
     for key, value in zip(node.keys, node.values, strict=False):
         if (
@@ -59,17 +78,24 @@ def _dict_sets_class_validated_true(node: ast.Dict) -> bool:
 def test_no_second_class_validated_writer() -> None:
     """No dict literal outside class_label.py (+ the documented
     allowlist) sets ``class_validated: True`` — the "second write body"
-    shape ``label_import.py`` used before this wave."""
+    shape ``label_import.py`` used before this wave.
+
+    Excludes OpenSearch query-DSL dicts (``{'term': {'class_validated':
+    True}}`` and friends) — those are read filters, not writes.
+    """
     violations: list[str] = []
     for path in _iter_py_files():
         rel = path.relative_to(REPO_ROOT).as_posix()
         if rel in _ALLOWED_CLASS_VALIDATED_TRUE_FILES:
             continue
         tree = ast.parse(path.read_text(encoding='utf-8'), filename=rel)
+        query_ids = _query_dict_ids(tree)
         violations.extend(
             f'{rel}:{node.lineno}'
             for node in ast.walk(tree)
-            if isinstance(node, ast.Dict) and _dict_sets_class_validated_true(node)
+            if isinstance(node, ast.Dict)
+            and id(node) not in query_ids
+            and _dict_sets_class_validated_true(node)
         )
     assert not violations, (
         'dict literal(s) set class_validated: True outside class_label.py: ' + ', '.join(violations)
