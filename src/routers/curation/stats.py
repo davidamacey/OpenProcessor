@@ -33,6 +33,7 @@ from src.services.curation.ingest_class_sources import (
     classifier_class_sources,
     unlabeled_proposal_class_sources,
 )
+from src.services.curation.region_boxes import box_query
 from src.services.detection.profile_registry import region_profile_or_neutral
 
 
@@ -383,29 +384,46 @@ def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
             # segmenter / human region detections show up here. The dashboard
             # surfaces "detector found N regions" from this, NOT from
             # class_source (which never carries a region-detector value).
+            #
+            # W8-cleanup: the detector lives on each box in region_boxes now
+            # (the retired item-level region_detector scalar), so this is a
+            # nested agg over the box list, not a plain terms agg.
             'region_detectors': {
-                'terms': {'field': fields.detector, 'size': 16},
+                'nested': {'path': fields.boxes},
+                'aggs': {
+                    'by_detector': {
+                        'terms': {'field': f'{fields.boxes}.detector', 'size': 16},
+                        # M1 fix: without `reverse_nested`, this counts
+                        # BOXES, not crops -- an item with 2 accepted boxes
+                        # from the same detector (or an accepted + a
+                        # rejected/FP box) counted twice, inflating
+                        # `total_detected` / `by_detector` below, which
+                        # this dashboard number is documented (see
+                        # `by_detector counts crops...` below) to count as
+                        # one crop per detector.
+                        'aggs': {'crops': {'reverse_nested': {}}},
+                    }
+                },
             },
-            # region-verifier breakdown — VLM (AI) vs human. When the
-            # operator hits 'Confirm' on the region-review page the
-            # detector's bbox stays put (fields.detector unchanged) but
-            # fields.verifier is set to 'human'. So this is the real
-            # "human-confirmed region count", distinct from
-            # fields.detector='human' which only fires when the operator
-            # draws a brand-new bbox in the region editor.
+            # region-verifier breakdown — VLM (AI) vs human. Item-level
+            # (unaffected by W8): a region's per-item ``verified``/
+            # ``verifier`` fields describe the item's own verification pass,
+            # not any one box.
             'region_verifiers': {
                 'terms': {'field': fields.verifier, 'size': 16},
             },
             # Operator-touched regions: anything where the validated flag
-            # is True AND a human was involved (either drew the bbox OR
+            # is True AND a human was involved (either drew a box OR
             # confirmed an AI-proposed one). The dashboard surfaces this as
-            # the honest "you confirmed N regions today" number.
+            # the honest "you confirmed N regions today" number. "drew a
+            # box" is now a nested check (any box with detector='human'),
+            # not the retired item-level region_detector scalar.
             'regions_validated_by_human': {
                 'filter': {
                     'bool': {
                         'filter': [{'term': {fields.validated: True}}],
                         'should': [
-                            {'term': {fields.detector: 'human'}},
+                            box_query({'term': {f'{fields.boxes}.detector': 'human'}}, fields),
                             {'term': {fields.verifier: 'human'}},
                         ],
                         'minimum_should_match': 1,
@@ -418,8 +436,23 @@ def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
             # Crops that actually carry a region box right now. This — not
             # total_detected (which sums detector CREDIT, including
             # rejected/failed attempts) — is the honest "crops with a
-            # region" number and matches the region cluster view.
-            'region_boxed': {'filter': {'exists': {'field': fields.bbox_norm}}},
+            # region" number and matches the region cluster view. W8-cleanup:
+            # a box is "carried" when it's accepted, or false_positive (kept
+            # for FP analysis/training) -- the retired region_bbox_norm
+            # scalar's existence used to mean the same thing.
+            'region_boxed': {
+                'filter': box_query(
+                    {
+                        'terms': {
+                            f'{fields.boxes}.{fields.boxes_state}': [
+                                'accepted',
+                                RegionStatus.FALSE_POSITIVE.value,
+                            ]
+                        }
+                    },
+                    fields,
+                )
+            },
             'no_label_source': {
                 'filter': {
                     'bool': {
@@ -515,8 +548,13 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
     # region_total is the denominator for "% of crops with a region detection".
     profile = region_profile_or_neutral()
     region_detector_buckets: dict[str, int] = {}
-    for b in (aggs.get('region_detectors') or {}).get('buckets') or []:
-        region_detector_buckets[str(b.get('key', ''))] = int(b.get('doc_count', 0))
+    for b in ((aggs.get('region_detectors') or {}).get('by_detector') or {}).get('buckets') or []:
+        # `crops.doc_count` (M1 fix), not the bucket's own `doc_count` --
+        # the bucket counts BOXES under the nested agg; `reverse_nested`
+        # un-nests back to the parent crop, so a crop with >1 matching box
+        # is counted once.
+        crop_count = (b.get('crops') or {}).get('doc_count', b.get('doc_count', 0))
+        region_detector_buckets[str(b.get('key', ''))] = int(crop_count)
     regions_by_detector = _sum_prefixed(region_detector_buckets, profile.detector_model)
     regions_by_segmenter = _sum_prefixed(region_detector_buckets, profile.segmenter_name)
     regions_by_human_drew = _sum_prefixed(region_detector_buckets, profile.human_detector_name)

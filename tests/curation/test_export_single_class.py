@@ -153,7 +153,11 @@ def _region_item(
 ) -> dict[str, Any]:
     doc = _item(idx, class_id, test_holdout=test_holdout)
     doc[_F.status] = status.value
-    doc[_F.bbox_norm] = region_bbox
+    doc[_F.boxes] = (
+        [{'box_id': 'b1', 'bbox_norm': list(region_bbox), 'state': 'accepted'}]
+        if region_bbox is not None
+        else []
+    )
     doc[_F.cluster_id] = region_cluster_id
     return doc
 

@@ -11,6 +11,17 @@ region box out of its source image, encodes it through the same
 (:class:`~src.clients.pe_encoder.PEEncoder`), L2-normalizes (the
 encoder already does this), and writes the vector back.
 
+W8-cleanup port: selection and cropping now read the W8 ``region_boxes``
+list (:mod:`src.services.curation.region_boxes`) instead of the retired
+item-level ``region_bbox_norm`` scalar, which the current worker no
+longer writes. An item can carry more than one ``accepted`` box; this
+script still writes ONE item-level ``region_embedding`` (that field
+hasn't moved to per-box storage yet -- see Item 5 of the W8-cleanup
+plan), so it picks the highest-``score`` accepted box as the item's
+representative crop. Interim choice, not a semantic ranking of which
+box "matters most" -- a per-box embeddings replacement should embed
+every accepted box.
+
 Resumable by construction: the selection query excludes items that
 already carry the field, so re-running only picks up items ingested
 or accepted since the last pass. Land the region-FP centroid store
@@ -49,6 +60,8 @@ from scripts.curation.worker.state import _crop_jpeg_from_disk
 from src.clients.pe_encoder import PEEncoder
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_curation_config, get_region_fields
+from src.config.region_state import RegionStatus
+from src.services.curation.region_boxes import box_query, read_boxes
 from src.services.detection.region_embed import embed_region_crops
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project
@@ -71,13 +84,61 @@ logger = logging.getLogger('backfill_region_embeddings')
 
 
 def _selection_query() -> dict[str, Any]:
+    """Items still carrying a box worth embedding, that haven't been yet.
+
+    W8-cleanup M5 fix: ``state in ['accepted', 'false_positive']``, not
+    ``accepted`` alone. Pre-W8 selection was ``exists
+    region_bbox_norm``, and a false-positive item keeps its box (that's
+    the whole point of FP status -- it's a hard negative kept for
+    training/analysis), so FP items were always selected. The other
+    ported W8 readers (``regions.py``, ``regions_fp.py``, ``stats.py``)
+    all already treat FP the same way (``state in [accepted,
+    false_positive]``); this query silently narrowed to accepted-only
+    when it was ported, which starves ``build_region_fp_centroids``
+    (status=false_positive AND exists region_embedding) of its inputs --
+    the classic hard-negative case (VLM-rejected, human-marked-FP) never
+    gets embedded, since the worker's embed stage only runs at
+    DETECTED-write time.
+    """
     F = get_region_fields()
     return {
         'bool': {
-            'must': [{'exists': {'field': F.bbox_norm}}],
+            'must': [
+                box_query(
+                    {
+                        'terms': {
+                            f'{F.boxes}.{F.boxes_state}': [
+                                'accepted',
+                                RegionStatus.FALSE_POSITIVE.value,
+                            ],
+                        }
+                    },
+                    F,
+                )
+            ],
             'must_not': [{'exists': {'field': F.embedding}}],
         },
     }
+
+
+def _best_accepted_bbox(source: dict[str, Any], F: Any) -> list[float] | None:
+    """The representative box's ``bbox_norm``, or ``None``.
+
+    See the module docstring: an item-level embedding still needs exactly
+    one representative crop even though ``region_boxes`` may hold several
+    boxes. Prefers the highest-``score`` accepted box; falls back to the
+    highest-``score`` false-positive box (M5) so an FP-only item -- which
+    has no accepted box at all -- still gets a representative crop for
+    the FP centroid store.
+    """
+    boxes = read_boxes(source, F)
+    candidates = [b for b in boxes if b.state == 'accepted']
+    if not candidates:
+        candidates = [b for b in boxes if b.state == RegionStatus.FALSE_POSITIVE.value]
+    if not candidates:
+        return None
+    best = max(candidates, key=lambda b: b.score if b.score is not None else -1.0)
+    return list(best.bbox_norm)
 
 
 async def _scroll_candidates(
@@ -87,7 +148,7 @@ async def _scroll_candidates(
     body = {
         'size': _SCROLL_PAGE,
         'query': _selection_query(),
-        '_source': ['image_path', F.bbox_norm],
+        '_source': ['image_path', F.boxes],
     }
     out: list[dict[str, Any]] = []
     resp = await client.search(index=index, body=body, scroll='5m')
@@ -142,7 +203,7 @@ async def _run(
             for h in batch:
                 source = h.get('_source') or {}
                 image_path = source.get('image_path')
-                bbox = source.get(F.bbox_norm)
+                bbox = _best_accepted_bbox(source, F)
                 if not image_path or not bbox or len(bbox) != 4:
                     n_missing_image += 1
                     continue

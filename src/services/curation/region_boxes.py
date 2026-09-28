@@ -293,6 +293,33 @@ def derive_status(boxes: Sequence[RegionBox], *, empty_status: RegionStatus) -> 
 _UNCHANGED = object()
 
 
+def _best(boxes: Sequence[RegionBox]) -> RegionBox | None:
+    if not boxes:
+        return None
+    return max(boxes, key=lambda b: b.score if b.score is not None else -1.0)
+
+
+def _mirror_representative(boxes: Sequence[RegionBox]) -> RegionBox | None:
+    """The box the legacy ``bbox_norm``/``score``/``detector``/... mirror
+    fields describe (W8-cleanup M2c): the best *accepted* box if one
+    exists, else the highest-scoring ``false_positive`` box -- an
+    accepted box always outranks an FP box regardless of relative score
+    (W8-cleanup N2), because an accepted box is the real region and an
+    FP box is only a fallback representative when there is no real one.
+
+    Deliberately never a rejected box: :mod:`region_fields`'s module
+    docstring (see ``region_fields.py``) says a box in
+    ``candidate_bbox_norm`` (rejected) is NOT ``bbox_norm``, because
+    ``bbox_norm`` is an accepted region to every reader (browse, export,
+    clustering). Falling back to a rejected box's coordinates here would
+    make a rejected box look accepted to all of them.
+    """
+    accepted = _best([b for b in boxes if b.state == 'accepted'])
+    if accepted is not None:
+        return accepted
+    return _best([b for b in boxes if b.state == RegionStatus.FALSE_POSITIVE.value])
+
+
 def boxes_write_fields(
     boxes: Sequence[RegionBox],
     *,
@@ -305,6 +332,16 @@ def boxes_write_fields(
     ``current_src`` is the OCC-read ``_source`` every writer already
     holds; it supplies the current ``region_revision`` / ``region_box_seq``
     high-water marks (both default to 0 when absent).
+
+    Also (re)computes the legacy per-item mirror fields (``bbox_norm``,
+    ``score``, ``detector``, ``detector_version``, ``source``,
+    ``bbox_frame``, ``rejection_reason``) from :func:`_mirror_representative`
+    on *every* call, and clears the retired ``candidate_*`` fields --
+    W8-cleanup M2's fix for the mirror going stale on any writer that
+    isn't ``human_status_box_write`` (per-box PATCH, ``PUT
+    .../regions``, ``POST regions/batch_box_state``, requeue, the
+    worker). A caller with nothing left to mirror (empty box list) gets
+    every mirror field cleared to ``None``.
     """
     F = F or get_region_fields()
     current_src = current_src or {}
@@ -327,6 +364,42 @@ def boxes_write_fields(
         F.revision: int(current_src.get(F.revision) or 0) + 1,
         F.box_seq: max(current_seq, max_id_seen),
     }
+    rep = _mirror_representative(boxes)
+    if rep is not None:
+        doc[F.bbox_norm] = list(rep.bbox_norm)
+        doc[F.score] = rep.score
+        doc[F.detector] = rep.detector
+        doc[F.detector_version] = rep.detector_version
+        doc[F.source] = rep.source
+        doc[F.bbox_frame] = 'source'
+    else:
+        doc[F.bbox_norm] = None
+        doc[F.score] = None
+        doc[F.detector] = None
+        doc[F.detector_version] = None
+        doc[F.source] = None
+    # `rejection_reason` mirrors the highest-scoring REJECTED box, but
+    # only when there is no accepted-or-FP representative (W8-cleanup
+    # N1): once an item has a real region (`rep` above), it is
+    # `detected`/`false_positive`, not rejected, and must not carry a
+    # rejection reason from a rejected sibling box -- that would make
+    # the labeler render a red "Rejection" row on an item that actually
+    # needs human confirmation.
+    rejected_rep = _best([b for b in boxes if b.state == 'rejected'])
+    doc[F.rejection_reason] = (
+        rejected_rep.rejection_reason if (rep is None and rejected_rep) else None
+    )
+    doc.update(
+        dict.fromkeys(
+            (
+                F.candidate_bbox_norm,
+                F.candidate_score,
+                F.candidate_detector,
+                F.candidate_detector_version,
+                F.candidate_source,
+            )
+        )
+    )
     if set_complete is not _UNCHANGED:
         doc[F.set_complete] = set_complete
     return doc
@@ -454,6 +527,12 @@ def boxes_with_status(status: str, boxes: Sequence[RegionBox]) -> list[RegionBox
             raise RegionBoxWriteError(msg)
         result = [_replace(b, state='accepted') if b.state == 'proposed' else b for b in boxes]
         if not any(b.state == 'accepted' for b in result):
+            # W8-cleanup M3 note: a CONFIRM after a whole-set HUMAN reject
+            # now 422s here (pre-W8 it returned 200), because M3's allow-
+            # list only reopens verifier/no-verdict rejections, never a
+            # `human` one -- a per-box human reject and a whole-set human
+            # reject share the same reason and can't be told apart, and
+            # `POST .../region/undo` is the documented way back. Intentional.
             msg = 'no_accepted_box'
             raise RegionBoxWriteError(msg)
         return result

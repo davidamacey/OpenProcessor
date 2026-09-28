@@ -8,14 +8,18 @@ background images) and reports recall / precision / F1 / mean IoU, the
 false-positive gate on background images, and why each missed box was
 missed.
 
-Coordinate frames. Region boxes are written normalized to the source frame
-(``RegionFields.bbox_frame == 'source'``); an absent frame is read the same
-way (pre-provenance rows). A crop-relative frame (``'crop'`` / ``'item'``)
-is re-projected through the item's own ``bbox_norm`` (the item crop in
-source coordinates) with
-:func:`~src.services.detection.cascade_detect.crop_norm_to_source_norm`.
-Any other frame value raises :class:`RegionFrameError` instead of scoring
-boxes in an unknown coordinate system.
+Coordinate frames. W8-cleanup port: boxes now come from the item's
+``region_boxes`` list (:mod:`src.services.curation.region_boxes`), whose
+element ``bbox_norm`` is ALWAYS stored in source-frame coordinates --
+every writer (the cascade, the human PUT-box routes) projects into source
+frame before a box is appended to the list, so there is no longer a
+per-box (or per-item) stored frame marker to read. ``to_source_frame`` /
+:class:`RegionFrameError` / ``CROP_FRAMES`` stay as pure, tested geometry
+helpers (a future crop-relative ingestion path would need them again) but
+:func:`region_records` no longer calls them -- an item with no boxes at
+all (pending, or a terminal box-less status) falls back to the item-level
+``RegionFields.status`` field, which the worker still writes as a
+same-request denormalization of the box list.
 
 Image states (a frame is one cohort image; its items are the objects the
 ingest detector found on it):
@@ -42,6 +46,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config.region_state import PENDING_STATUSES, RegionStatus
 from src.services.curation.export_support import scroll_hits
+from src.services.curation.region_boxes import read_boxes
 from src.services.detection.cascade_detect import crop_norm_to_source_norm
 
 
@@ -219,21 +224,50 @@ def normalize_status(raw: Any) -> str:
     return LEGACY_STATUS_ALIASES.get(value, value)
 
 
-def region_record(src: dict[str, Any], fields: RegionFields, doc_id: str = '') -> RegionRecord:
-    box = as_box(src.get(fields.bbox_norm))
-    if box is not None:
-        frame = src.get(fields.bbox_frame)
-        box = to_source_frame(
-            box, None if frame is None else str(frame), as_box(src.get('bbox_norm'))
+# Per-box ``state`` (W8) -> the RegionStatus-shaped vocabulary this
+# evaluator has always scored against. ``proposed`` (awaiting verification)
+# is treated as a pending value, same as the item-level pending statuses.
+_BOX_STATE_TO_STATUS: dict[str, str] = {
+    'accepted': RegionStatus.DETECTED.value,
+    'rejected': RegionStatus.VERIFY_REJECTED.value,
+    RegionStatus.FALSE_POSITIVE.value: RegionStatus.FALSE_POSITIVE.value,
+    'proposed': RegionStatus.PENDING_VERIFICATION.value,
+}
+
+
+def region_records(
+    src: dict[str, Any], fields: RegionFields, doc_id: str = ''
+) -> list[RegionRecord]:
+    """One :class:`RegionRecord` per box in the item's ``region_boxes`` list.
+
+    An item with no boxes at all (still pending, or a terminal box-less
+    status like ``no_region_visible`` / ``detection_failed``) falls back to
+    a single box-less record built from the item-level
+    ``RegionFields.status`` field -- the only case where a region status
+    exists without any entry in the box list.
+    """
+    crop_id = str(src.get('crop_id') or doc_id)
+    boxes = read_boxes(src, fields)
+    if not boxes:
+        return [
+            RegionRecord(
+                crop_id=crop_id,
+                status=normalize_status(src.get(fields.status)),
+                detector=NO_DETECTOR,
+                score=None,
+                box=None,
+            )
+        ]
+    return [
+        RegionRecord(
+            crop_id=crop_id,
+            status=_BOX_STATE_TO_STATUS.get(b.state, b.state),
+            detector=str(b.detector or NO_DETECTOR),
+            score=b.score,
+            box=as_box(list(b.bbox_norm)),
         )
-    score = src.get(fields.score)
-    return RegionRecord(
-        crop_id=str(src.get('crop_id') or doc_id),
-        status=normalize_status(src.get(fields.status)),
-        detector=str(src.get(fields.detector) or NO_DETECTOR),
-        score=float(score) if isinstance(score, (int, float)) else None,
-        box=box,
-    )
+        for b in boxes
+    ]
 
 
 def _chunks(values: list[str], n: int = TERMS_CHUNK) -> Iterable[list[str]]:
@@ -277,10 +311,7 @@ async def fetch_regions(
         'image_path',
         'bbox_norm',
         fields.status,
-        fields.bbox_norm,
-        fields.bbox_frame,
-        fields.detector,
-        fields.score,
+        fields.boxes,
     ]
     out: dict[str, list[RegionRecord]] = defaultdict(list)
     for chunk in _chunks(sorted(set(image_ids))):
@@ -292,7 +323,7 @@ async def fetch_regions(
         )
         for hit in hits:
             src = hit.get('_source') or {}
-            out[str(src.get('image_id'))].append(region_record(src, fields, str(hit.get('_id'))))
+            out[str(src.get('image_id'))].extend(region_records(src, fields, str(hit.get('_id'))))
     return dict(out)
 
 
@@ -590,6 +621,7 @@ __all__ = [
     'greedy_match',
     'iou',
     'parse_yolo_labels',
+    'region_records',
     'resolve_image_ids',
     'run_eval',
     'to_source_frame',

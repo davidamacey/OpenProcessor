@@ -97,6 +97,169 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     OpenSearch to resolve the project) when `--images-only` was not
     passed, so the disabled-mode guard fails immediately/cheaply instead
     of after an OpenSearch round-trip.
+- **W8-cleanup Items 1-2 confirmation-review fix pass (round 3).** A
+  third independent confirmation review of the round-2 N1/N2/N3 fixes
+  found one residual: `region_writes.reason_only_box_write`'s N3 fix
+  restored the item-level `region_rejection_reason` whenever the item
+  had no *rejected* box, instead of when it had no box at all — so a
+  reason-only PATCH on an accepted-only `detected` item, an FP-only
+  item, or a proposed-only item incorrectly stored the reason, bringing
+  back N1's exact symptom. The condition is now `not new_boxes`, the
+  same box-less guard `human_status_box_write` uses for M1(a). Also
+  updated `human_status_box_write`'s docstring, which still described
+  the pre-N1/N2 mirror rules.
+- **W8-cleanup Items 1-2 confirmation-review fix pass (round 2).** An
+  independent confirmation review of the round-1 fix pass found the M2
+  mirror redesign (moving the legacy per-item mirror into
+  `region_boxes.boxes_write_fields`) introduced three new regressions;
+  all fixed:
+  - **N1: a `detected` item with one accepted box and a rejected sibling
+    stored a `region_rejection_reason`**, so the labeler rendered a red
+    "Rejection" row instead of "needs human confirmation" on ordinary
+    multi-box items. `rejection_reason` is now only mirrored when there
+    is no accepted-or-false_positive representative on the item.
+  - **N2: a higher-scoring false-positive box could outrank an accepted
+    box for the mirror.** `_mirror_representative` now always prefers
+    the best accepted box, falling back to the best false-positive box
+    only when no accepted box exists.
+  - **N3: a reason-only PATCH on a box-less item (`no_region_visible`)
+    wiped the reason M1(a) had just stored**, because
+    `boxes_write_fields([])` always re-derives `rejection_reason=None`
+    from an empty box list. Added `region_writes.reason_only_box_write`,
+    which restores the item-level reason when there's no rejected box to
+    carry it; `regions_edit.py`'s reason-only PATCH branch now routes
+    through it instead of writing `F.rejection_reason` directly.
+  - **Minor:** documented, at the `no_accepted_box` raise in
+    `boxes_with_status`, that a whole-set human reject followed by
+    CONFIRM now 422s (pre-W8: 200) — intentional, matching M3's "never
+    reopen a human-rejected box" rule; a per-box and whole-set human
+    reject share the same reason and can't be told apart.
+- **W8-cleanup Items 1-2 review fix pass.** An independent review of the
+  items-1-2 port (see `docs/design/openprocessor_internal/
+  w8_cleanup_items1_2_review_2026-09-28.md`) found the default regions-tab
+  sort silently broken on any real W8-written index plus five majors; all
+  fixed:
+  - **Blocker: `review_sorts.py`'s `region_score` sort never matched what
+    the worker writes.** Nothing in the W8 worker writes `region_score`/
+    `region_candidate_score` (only dead code and human single-box paths
+    do), so every W8 item tied on `missing: '_last'` and fell back to the
+    `crop_id` tiebreak — a 0.95-score item could sort dead last behind a
+    0.2-score legacy row. Now sorts on the flat `region_max_score` (every
+    box writer maintains it via `boxes_write_fields`, covering a
+    rejected-only item's own score too, so no second sort key is needed).
+    Removed the `region_score`/`region_candidate_score` fixture
+    dual-writes in `test_review_locate.py` / `test_review_regions_rejected_router.py`
+    that hid this in production-shaped-looking tests.
+  - **Major: a `no_region_visible` reject with a reason dropped the
+    reason entirely**, and a reason-only PATCH updated the box but not
+    the item-level mirror the labeler reads as authoritative. Both fixed
+    in `human_status_box_write`.
+  - **Major: the legacy per-item mirror (`bbox_norm`/`score`/`detector`/
+    ...) went stale in three ways** — a `verify_rejected` write kept a
+    prior confirm's box/score, every writer other than
+    `human_status_box_write` (per-box PATCH, `PUT .../regions`,
+    `POST regions/batch_box_state`, requeue, the worker) never touched
+    it, and it mirrored the first accepted box instead of the
+    best-scoring one. Fixed by moving the mirror computation into
+    `region_boxes.boxes_write_fields` itself (every box writer routes
+    through it), always deriving from the highest-scoring
+    accepted-or-false_positive box (never a rejected one — `bbox_norm` is
+    an accepted region to every reader) with `rejection_reason` mirrored
+    from the highest-scoring rejected box independently.
+  - **Major: a whole-set CONFIRM reopened every rejected box**, including
+    ones a human rejected per-box or the sanity gate rejected — overriding
+    a human's own earlier verdict and turning degenerate sanity-rejected
+    geometry into an accepted training box. Now only reopens a box the
+    *verifier* rejected (`region_visible_elsewhere` / `verifier_no_verdict`);
+    a `detection_failed` item whose only box is sanity-rejected 422s
+    again, matching pre-W8.
+  - **Major: the `low_conf_correct` training cohort admitted a primary
+    box the verifier rejected**, as long as some other accepted box
+    existed on the item. Added the same same-box `state == 'accepted'`
+    nested filter `detector_blind_spots` already used.
+  - **Major: the region-embeddings backfill stopped selecting
+    false-positive items**, starving the FP centroid store
+    (`build_region_fp_centroids`) of its inputs — the classic
+    VLM-rejected/human-marked-FP hard negative was never embedded.
+    Selection now matches `state in [accepted, false_positive]` (like
+    every other ported W8 reader); the representative crop falls back to
+    the highest-scoring FP box when there's no accepted one.
+  - **Minor: `/stats/dataset`'s `region_detectors` agg counted boxes, not
+    crops** — an item with 2 accepted boxes from the same detector
+    counted twice. Added `reverse_nested` so a crop counts once
+    regardless of how many of its boxes match.
+  - **Guard test gaps:** `tests/test_no_legacy_region_scalars.py` was a
+    no-op for `export_single_class_rows.py`'s `f = self.fields` local
+    alias, and missed `get_region_fields().<attr>` inline calls and bare
+    wire-name string literals. Strengthened to catch all three (still
+    excluding a legitimate wire-name collision with a Pydantic model
+    field name in `regions_edit.py`).
+- **W8-cleanup Items 1-2: seven production files silently read retired
+  item-level region scalars instead of `region_boxes`.** The current
+  box-list worker only ever writes per-item `region_bbox_norm`/
+  `region_score`/`region_detector`/`region_text*`/`region_detected_at`/
+  `region_candidate_*` on the pre-W8 `PUT /crops/{id}/region` write chain
+  (unchanged this pass); every other reader of those fields was silently
+  scoring/filtering/aggregating against permanently-empty data for any
+  item processed under the current pipeline. Ported off them, onto
+  `region_boxes` nested queries/reads:
+  - `scripts/curation/backfill_region_embeddings.py` (selection + crop
+    bbox now from an accepted box; picks the highest-score one as the
+    interim single-embedding representative — per-box embeddings are
+    Item 5, not done this pass).
+  - `region_eval.py` (`region_record` → `region_records`, one record per
+    box; a box-less item falls back to the item-level `region_status`,
+    which the worker still writes). Removed
+    `test_unknown_frame_is_refused` / `test_cli_unknown_frame_exits_3`:
+    `region_boxes` entries are always source-frame (every writer
+    projects before appending), so the frame-refusal scenario they
+    exercised is now structurally impossible.
+  - `review_queries.py`'s `regions` review tab (has-a-box / rejected-
+    candidate / text-search clauses; `region_reason()`'s rejection
+    reason now reads the item's rejected box).
+  - `regions_fp.py`'s `GET /regions/clusters` cluster-membership filter.
+  - `export_single_class_rows.py`'s region-mode row collector (every
+    accepted box on an item now becomes its own label line/row entry,
+    not just the first — a natural side effect of reading the list).
+  - `stats.py`'s `/stats/dataset`: `region_detectors` (now a nested agg),
+    `region_boxed`, and `regions_validated_by_human`'s "drew a box"
+    clause.
+  - `regions.py`'s `GET /regions` browse + `GET
+    /regions/training_candidates` (default filter, min/max score,
+    detector, text search, all five training-cohort modes, and the
+    `region_detected_at` sort — now a nested sort with `mode='max'`).
+    `cluster_id`/`cluster_subid`/`cluster_distance` deliberately left
+    item-level and unchanged: still actively written by the region-FP
+    clustering job (Item 5's per-box clustering wasn't attempted this
+    pass, so there is nothing stale to port here).
+  - `PATCH /crops/{id}/region_meta` / `POST /regions/batch_status`:
+    ported onto `region_boxes.boxes_with_status` (new
+    `region_writes.human_status_box_write`) rather than deleted — both
+    keep a legitimate whole-item purpose. Reopens a verifier-rejected
+    candidate box on a human CONFIRM (the pre-W8 candidate-promotion
+    reversal `boxes_with_status` doesn't do on its own) and keeps the
+    legacy per-item mirror fields (`bbox_norm`/`score`/`detector`/...)
+    `wire.py` still serves additively in sync with the box list instead
+    of letting them go stale.
+  New `tests/test_no_legacy_region_scalars.py`: a scoped ratchet guard
+  (see its module docstring for exactly what it does and does NOT cover)
+  against these eight files regressing back to the scalars just removed
+  from each.
+
+  **Not done this pass (W8-cleanup Item 3, deliberately deferred):**
+  `PUT /crops/{id}/region` / `PUT /crops/batch_region` and
+  `region_writes.py`'s single-box write chain (`region_box_write`,
+  `region_box_doc`, `region_confirm_doc`, `same_box`,
+  `candidate_promotion`, `human_status_fields`) are still live — deleting
+  them needs ~5 test files' PUT-region coverage (same-box confirm,
+  candidate-promotion reversal, parent-frame projection, degenerate-bbox
+  validation, undo) migrated to the W8a box routes first, which did not
+  fit this pass without rushing it. `wire.py`'s legacy per-item mirror
+  fields and two confirmed-dead pre-W8 write builders in
+  `scripts/curation/worker/verify.py` (`_region_write_doc`,
+  `_region_reject_doc` — zero call sites) / `no_verdict.py`
+  (`cascade_no_verdict` → `no_verdict_reject_doc` → `candidate_reject_doc`
+  — zero call sites) were left in place; see the handback report.
 
 ### Added
 - **W10 dataset import (partial): the lock rule, class-name mapping, and a

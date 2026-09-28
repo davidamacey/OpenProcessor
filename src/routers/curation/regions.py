@@ -24,6 +24,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
+from src.services.curation.region_boxes import box_query
 from src.services.curation.region_vocabulary import region_vocabulary_catalog
 from src.services.curation.review_queries import region_text_clause
 from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
@@ -103,8 +104,30 @@ async def list_regions(
     await _ensure_indexes(opensearch)
     # Every clause here is a pure predicate (exists/term/range/
     # wildcard-as-boolean-match) -- filter context, not must.
+    #
+    # W8-cleanup: "has a region box" (the default, no `status` filter) now
+    # means "has an accepted or false_positive box in region_boxes" -- the
+    # retired region_bbox_norm scalar's existence used to mean the same
+    # thing. cluster_id / region_cluster_id / region_cluster_subid /
+    # cluster_distance are untouched: they stay item-level scalars,
+    # written by the region-FP clustering job, not by the box-list model
+    # (per-box clustering is W8-cleanup Item 5, not done this pass).
     filt: list[dict[str, Any]] = (
-        [{'exists': {'field': F.bbox_norm}}] if status is None else [{'term': {F.status: status}}]
+        [
+            box_query(
+                {
+                    'terms': {
+                        f'{F.boxes}.{F.boxes_state}': [
+                            'accepted',
+                            RegionStatus.FALSE_POSITIVE.value,
+                        ]
+                    }
+                },
+                F,
+            )
+        ]
+        if status is None
+        else [{'term': {F.status: status}}]
     )
     must_not: list[dict[str, Any]] = []
     if not include_test:
@@ -125,13 +148,13 @@ async def list_regions(
             rng['gte'] = min_score
         if max_score is not None:
             rng['lte'] = max_score
-        filt.append({'range': {F.score: rng}})
+        filt.append(box_query({'range': {f'{F.boxes}.score': rng}}, F))
     if verified is not None:
         filt.append({'term': {F.verified: verified}})
     if detector is not None:
-        filt.append({'term': {F.detector: detector}})
+        filt.append(box_query({'term': {f'{F.boxes}.detector': detector}}, F))
     if text:
-        filt.append(region_text_clause(F.text, text))
+        filt.append(box_query(region_text_clause(f'{F.boxes}.text', text), F))
 
     # In a bucket, either group by sub-cluster (subid asc, then outliers within
     # each subid) so refine results render as contiguous, paginated groups — or
@@ -139,6 +162,7 @@ async def list_regions(
     _distance_sort = {
         F.cluster_distance: {'order': 'desc', 'missing': '_last', 'unmapped_type': 'float'}
     }
+    sort: list[dict[str, Any]]
     if region_cluster_id is not None and sort_by_subid:
         sort = [
             {
@@ -153,7 +177,22 @@ async def list_regions(
     elif region_cluster_id is not None:
         sort = [_distance_sort]
     else:
-        sort = [{F.detected_at: {'order': 'desc', 'missing': '_last'}}]
+        # W8-cleanup: region_detected_at is per-box now (region_boxes has
+        # no item-level detected_at any more). A nested sort with
+        # mode='max' orders by the item's most-recently-detected box --
+        # the closest read of "most recently detected" a per-item listing
+        # can still give without Item 5's per-box row shape.
+        sort = [
+            {
+                f'{F.boxes}.detected_at': {
+                    'order': 'desc',
+                    'missing': '_last',
+                    'unmapped_type': 'date',
+                    'nested': {'path': F.boxes},
+                    'mode': 'max',
+                }
+            }
+        ]
     sort.append({'crop_id': {'order': 'asc'}})
     guard_page_depth(page, page_size)
     body: dict[str, Any] = {
@@ -191,12 +230,26 @@ def _training_candidate_query(
         # region, the VLM verified. These are the high-signal training
         # examples — the next primary-detector training cycle needs
         # exactly these crops to expand its recall.
+        # W8-cleanup: detector + accepted-box are now checked together on
+        # the SAME box, via a nested query -- the retired item-level
+        # region_bbox_norm/region_detector scalars used to describe one
+        # box implicitly; a nested bool.filter keeps that same-box
+        # guarantee against region_boxes' now-possibly-multiple boxes.
         return (
             {
                 'bool': {
                     'filter': [
-                        {'exists': {'field': F.bbox_norm}},
-                        {'term': {F.detector: profile.segmenter_name}},
+                        box_query(
+                            {
+                                'bool': {
+                                    'filter': [
+                                        {'term': {f'{F.boxes}.detector': profile.segmenter_name}},
+                                        {'term': {f'{F.boxes}.{F.boxes_state}': 'accepted'}},
+                                    ]
+                                }
+                            },
+                            F,
+                        ),
                         {'term': {F.verified: True}},
                         {
                             'term': {
@@ -210,13 +263,34 @@ def _training_candidate_query(
             _reason('detector_blind_spots'),
         )
     if mode == 'low_conf_correct':
+        # W8-cleanup M4 fix: the nested filter must require the SAME box
+        # to also be `accepted` -- otherwise a primary box the verifier
+        # REJECTED at a low score still matches as long as some other
+        # (accepted) box exists on the item, contaminating this "primary
+        # detector correct but low-confidence" training cohort with cases
+        # where the primary detector was actually wrong. Same same-box
+        # nested-filter pattern `detector_blind_spots` already uses above.
         return (
             {
                 'bool': {
                     'filter': [
-                        {'term': {F.detector: profile.detector_model}},
+                        box_query(
+                            {
+                                'bool': {
+                                    'filter': [
+                                        {'term': {f'{F.boxes}.detector': profile.detector_model}},
+                                        {
+                                            'range': {
+                                                f'{F.boxes}.score': {'lt': REGION_LOW_SCORE_MAX}
+                                            }
+                                        },
+                                        {'term': {f'{F.boxes}.{F.boxes_state}': 'accepted'}},
+                                    ]
+                                }
+                            },
+                            F,
+                        ),
                         {'term': {F.verified: True}},
-                        {'range': {F.score: {'lt': REGION_LOW_SCORE_MAX}}},
                     ],
                     'must_not': [{'term': {'test_holdout': True}}],
                 }
@@ -233,7 +307,7 @@ def _training_candidate_query(
             {
                 'bool': {
                     'filter': [
-                        {'exists': {'field': F.bbox_norm}},
+                        box_query({'term': {f'{F.boxes}.{F.boxes_state}': 'accepted'}}, F),
                         {'term': {F.detector_chain: f'{profile.detector_model}:hit'}},
                         {'term': {F.detector_chain: f'{profile.segmenter_name}:hit'}},
                     ],
@@ -262,13 +336,23 @@ def _training_candidate_query(
         # Human marked a detected box as "not a region" but the box +
         # provenance were KEPT (region status='false_positive'). These
         # feed the dedicated detector training run as hard negatives —
-        # the detector fired here and should learn not to.
+        # the detector fired here and should learn not to. The box's own
+        # state carries the same signal as the item's status now, so the
+        # nested check replaces the retired region_bbox_norm existence
+        # check.
         return (
             {
                 'bool': {
                     'filter': [
                         {'term': {F.status: RegionStatus.FALSE_POSITIVE}},
-                        {'exists': {'field': F.bbox_norm}},
+                        box_query(
+                            {
+                                'term': {
+                                    f'{F.boxes}.{F.boxes_state}': RegionStatus.FALSE_POSITIVE.value
+                                }
+                            },
+                            F,
+                        ),
                     ],
                     'must_not': [{'term': {'test_holdout': True}}],
                 }
@@ -314,7 +398,18 @@ async def training_candidates(
         '_source': {'excludes': _REGION_SOURCE_EXCLUDES},
         'query': query,
         'sort': [
-            {F.detected_at: {'order': 'desc', 'missing': '_last'}},
+            # W8-cleanup: region_detected_at is per-box now -- see
+            # list_regions' matching sort for the same nested/mode='max'
+            # reasoning.
+            {
+                f'{F.boxes}.detected_at': {
+                    'order': 'desc',
+                    'missing': '_last',
+                    'unmapped_type': 'date',
+                    'nested': {'path': F.boxes},
+                    'mode': 'max',
+                }
+            },
             {'crop_id': {'order': 'asc'}},
         ],
         'track_total_hits': True,

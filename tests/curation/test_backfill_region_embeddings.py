@@ -79,12 +79,25 @@ def _tiny_jpeg() -> bytes:
     return buf.getvalue()
 
 
-def _hit(doc_id: str, *, image_path: str | None, bbox: list[float] | None) -> dict[str, Any]:
+def _hit(
+    doc_id: str,
+    *,
+    image_path: str | None,
+    bbox: list[float] | None,
+    score: float = 0.9,
+) -> dict[str, Any]:
     source: dict[str, Any] = {}
     if image_path is not None:
         source['image_path'] = image_path
     if bbox is not None:
-        source['region_bbox_norm'] = bbox
+        source['region_boxes'] = [
+            {
+                'box_id': 'b1',
+                'bbox_norm': bbox,
+                'state': 'accepted',
+                'score': score,
+            }
+        ]
     return {'_id': doc_id, '_source': source}
 
 
@@ -171,5 +184,139 @@ async def test_apply_skips_items_with_unreadable_source_image(
 async def test_selection_query_excludes_items_that_already_have_the_field() -> None:
     """Resumability: the query itself must exclude already-embedded items."""
     query = backfill_script._selection_query()
-    assert {'exists': {'field': 'region_bbox_norm'}} in query['bool']['must']
+    assert {
+        'nested': {
+            'path': 'region_boxes',
+            'query': {'terms': {'region_boxes.state': ['accepted', 'false_positive']}},
+        }
+    } in query['bool']['must']
     assert {'exists': {'field': 'region_embedding'}} in query['bool']['must_not']
+
+
+def test_selection_query_matches_a_false_positive_only_item() -> None:
+    """W8-cleanup M5: the selection query used to silently narrow to
+    `accepted`-only, which starved `build_region_fp_centroids`
+    (status=false_positive AND exists region_embedding) of its inputs --
+    the classic hard-negative case (VLM-rejected, human-marked-FP) was
+    never selected for embedding. Exercise the query against the real
+    `region_boxes` nested-match semantics, not just its literal shape."""
+    from curation.query_fakes import QueryFakeOpenSearch, matches
+
+    fp_only = {
+        'crop_id': 'fp-only',
+        'region_boxes': [
+            {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'false_positive'}
+        ],
+    }
+    rejected_only = {
+        'crop_id': 'rejected-only',
+        'region_boxes': [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'rejected'}],
+    }
+    already_embedded = {
+        'crop_id': 'already-embedded',
+        'region_boxes': [
+            {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'false_positive'}
+        ],
+        'region_embedding': [1.0, 0.0, 0.0],
+    }
+    fake = QueryFakeOpenSearch(
+        {
+            'items': {
+                'fp-only': fp_only,
+                'rejected-only': rejected_only,
+                'already-embedded': already_embedded,
+            }
+        }
+    )
+    query = backfill_script._selection_query()
+    matched = {doc_id for doc_id, doc in fake.docs('items').items() if matches(doc, query)}
+    assert matched == {'fp-only'}
+
+
+@pytest.mark.asyncio
+async def test_apply_writes_embeddings_for_a_false_positive_only_item(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """M5: an FP-only item (no accepted box at all) must still get a
+    representative crop -- `_best_accepted_bbox` falls back to the
+    highest-scoring false-positive box."""
+    hit = {
+        '_id': 'fp-crop',
+        '_source': {
+            'image_path': '/data/a.jpg',
+            'region_boxes': [
+                {
+                    'box_id': 'b1',
+                    'bbox_norm': [0.1, 0.1, 0.5, 0.5],
+                    'state': 'false_positive',
+                    'score': 0.7,
+                }
+            ],
+        },
+    }
+    client = _FakeOSClient([hit])
+    fake_pe = _FakePE()
+    monkeypatch.setattr(backfill_script, 'make_script_opensearch', MagicMock(return_value=client))
+    monkeypatch.setattr(backfill_script, 'AsyncTritonPool', _FakeTritonPool)
+    monkeypatch.setattr(backfill_script, 'PEEncoder', lambda **_kw: fake_pe)
+    monkeypatch.setattr(
+        backfill_script,
+        '_crop_jpeg_from_disk',
+        lambda image_path, bbox: _tiny_jpeg(),  # noqa: ARG005
+    )
+
+    rc = await backfill_script._run(
+        'http://fake:9200', 'fake-triton:8001', apply=True, max_docs=None
+    )
+
+    assert rc == 0
+    assert len(client.bulk_calls) == 1
+    assert client.bulk_calls[0]['id'] == 'fp-crop'
+
+
+def test_best_accepted_bbox_picks_the_highest_scoring_accepted_box() -> None:
+    from src.config import get_region_fields
+
+    source = {
+        'region_boxes': [
+            {'box_id': 'b1', 'bbox_norm': [0.0, 0.0, 0.1, 0.1], 'state': 'rejected', 'score': 0.99},
+            {'box_id': 'b2', 'bbox_norm': [0.2, 0.2, 0.3, 0.3], 'state': 'accepted', 'score': 0.4},
+            {'box_id': 'b3', 'bbox_norm': [0.4, 0.4, 0.5, 0.5], 'state': 'accepted', 'score': 0.8},
+        ]
+    }
+    assert backfill_script._best_accepted_bbox(source, get_region_fields()) == [0.4, 0.4, 0.5, 0.5]
+
+
+def test_best_accepted_bbox_falls_back_to_the_highest_scoring_fp_box() -> None:
+    """M5: an FP-only item (no accepted box) must still get a
+    representative crop."""
+    from src.config import get_region_fields
+
+    source = {
+        'region_boxes': [
+            {
+                'box_id': 'b1',
+                'bbox_norm': [0.0, 0.0, 0.1, 0.1],
+                'state': 'false_positive',
+                'score': 0.3,
+            },
+            {
+                'box_id': 'b2',
+                'bbox_norm': [0.2, 0.2, 0.3, 0.3],
+                'state': 'false_positive',
+                'score': 0.7,
+            },
+        ]
+    }
+    assert backfill_script._best_accepted_bbox(source, get_region_fields()) == [0.2, 0.2, 0.3, 0.3]
+
+
+def test_best_accepted_bbox_none_when_no_accepted_or_fp_box() -> None:
+    from src.config import get_region_fields
+
+    source = {
+        'region_boxes': [
+            {'box_id': 'b1', 'bbox_norm': [0.0, 0.0, 0.1, 0.1], 'state': 'rejected', 'score': 0.9},
+        ]
+    }
+    assert backfill_script._best_accepted_bbox(source, get_region_fields()) is None

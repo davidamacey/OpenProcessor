@@ -134,19 +134,20 @@ class _FakeRegionOS:
 
 @pytest.fixture
 def fake_os() -> _FakeRegionOS:
+    def _pending_verification_item(crop_id: str) -> dict[str, Any]:
+        # A proposed box on each: PATCH region_meta / batch_status's
+        # whole-set transition (boxes_with_status) needs one to promote to
+        # 'detected', reject to 'verify_rejected', or mark 'false_positive'.
+        return {
+            'crop_id': crop_id,
+            F.status: 'pending_verification',
+            F.boxes: [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'proposed'}],
+        }
+
     return _FakeRegionOS(
         {
-            # A box on each: confirming ('detected') needs one.
-            'crop-1': {
-                'crop_id': 'crop-1',
-                F.status: 'pending_detection',
-                F.bbox_norm: [0.1, 0.1, 0.2, 0.2],
-            },
-            'crop-2': {
-                'crop_id': 'crop-2',
-                F.status: 'pending_detection',
-                F.bbox_norm: [0.1, 0.1, 0.2, 0.2],
-            },
+            'crop-1': _pending_verification_item('crop-1'),
+            'crop-2': _pending_verification_item('crop-2'),
         }
     )
 

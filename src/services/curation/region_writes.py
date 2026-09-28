@@ -24,10 +24,18 @@ of re-deriving it.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 from src.config import get_region_fields
+from src.config.region_rejection import REJECT_REASON_NO_VERDICT, REJECT_REASON_VERIFIER
 from src.config.region_state import CONFIRM_STATUS, REGION_STATUS_INFO, RegionStatus
+from src.services.curation.region_boxes import (
+    boxes_with_status,
+    boxes_write_fields,
+    derive_status,
+    read_boxes,
+)
 from src.services.curation.wire import serialize_item
 from src.services.detection.cascade_detect import crop_norm_to_source_norm, region_provenance
 from src.services.detection.profile_registry import region_profile_or_neutral
@@ -172,6 +180,146 @@ def human_status_fields(region_status: str, current: dict[str, Any]) -> dict[str
     return doc
 
 
+def human_status_box_write(
+    region_status: str, current: dict[str, Any], *, rejection_reason: str | None = None
+) -> dict[str, Any]:
+    """W8-cleanup: the ``region_boxes``-based whole-set status write backing
+    ``PATCH /crops/{id}/region_meta`` and ``POST /regions/batch_status``.
+
+    Replaces :func:`human_status_fields` (which built the pre-W8 single
+    ``region_bbox_norm``/``region_score`` doc) for these two routes only --
+    ``PUT /crops/{id}/region`` and its batch form still build on the old
+    single-box shape via :func:`region_box_write` until they're removed
+    (see the W8-cleanup plan's Item 2/3).
+
+    Delegates the actual box-list transition to
+    :func:`~src.services.curation.region_boxes.boxes_with_status` (raises
+    :class:`~src.services.curation.region_boxes.RegionBoxWriteError` for
+    the same invariant violations ``human_status_fields`` used to raise
+    :class:`RegionWriteError` for -- confirming with no box to confirm).
+    ``rejection_reason`` overrides the default
+    (:data:`~src.config.region_rejection.REJECT_REASON_HUMAN`) on every
+    box that transition just rejected -- the closest per-box equivalent of
+    the old item-level ``region_rejection_reason`` PATCH field.
+
+    Pre-W8, confirming (or marking false-positive) a verifier-rejected
+    candidate promoted it via :func:`candidate_promotion` --
+    :func:`~src.services.curation.region_boxes.boxes_with_status` never
+    revives an already-``rejected`` box on its own (by design: a
+    whole-set confirm must not override a per-box decision that already
+    settled a box). A human CONFIRM is the one deliberate exception to
+    that rule -- it is explicitly reversing the earlier rejection -- so a
+    box list with nothing ``proposed``/``accepted`` to confirm has its
+    ``rejected`` box(es) reopened to ``proposed`` (reason cleared) right
+    before the transition. ``false_positive`` needs no such step:
+    :func:`~src.services.curation.region_boxes.boxes_with_status` already
+    force-sets every box (including a rejected one) to
+    ``false_positive``.
+
+    Only a box the *verifier* rejected (:data:`REJECT_REASON_VERIFIER` /
+    :data:`REJECT_REASON_NO_VERDICT`) is reopened by a whole-set CONFIRM
+    (W8-cleanup M3) -- a human's own earlier per-box rejection or a
+    sanity-gate reject must never be silently overridden by a later
+    whole-set confirm. When nothing is reopenable,
+    :func:`~src.services.curation.region_boxes.boxes_with_status` raises
+    ``no_accepted_box`` (422), matching pre-W8 behavior for e.g. a
+    ``detection_failed`` item whose only box is sanity-rejected.
+
+    The legacy per-item mirror fields
+    (``bbox_norm``/``score``/``detector``/``detector_version``/``source``/
+    ``bbox_frame``/``rejection_reason``, plus clearing the retired
+    ``candidate_*`` fields) that :func:`~src.services.curation.wire.
+    region_to_wire` still serves additively are maintained by
+    :func:`~src.services.curation.region_boxes.boxes_write_fields` itself
+    now (W8-cleanup M2, tightened by N1/N2) -- every box writer refreshes
+    them the same way: ``bbox_norm``/``score``/``detector``/
+    ``detector_version``/``source`` mirror the highest-scoring *accepted*
+    box, falling back to the highest-scoring false_positive box only when
+    there is no accepted one, and cleared to ``None`` when there is
+    neither (never a rejected box's coordinates -- ``bbox_norm`` is an
+    accepted region to every reader). ``rejection_reason`` mirrors the
+    highest-scoring *rejected* box only when there is no accepted-or-FP
+    representative -- a ``detected`` or false-positive item never carries
+    a rejection reason, matching pre-W8 behavior.
+    """
+    F = get_region_fields()
+    status = RegionStatus(region_status)
+    boxes = read_boxes(current, F)
+    if status == CONFIRM_STATUS and not any(b.state in ('proposed', 'accepted') for b in boxes):
+        reopenable_reasons = (REJECT_REASON_VERIFIER, REJECT_REASON_NO_VERDICT)
+        boxes = [
+            dataclasses.replace(b, state='proposed', rejection_reason=None)
+            if b.state == 'rejected' and b.rejection_reason in reopenable_reasons
+            else b
+            for b in boxes
+        ]
+    new_boxes = boxes_with_status(status.value, boxes)
+    if rejection_reason is not None and status == RegionStatus.VERIFY_REJECTED:
+        new_boxes = [
+            dataclasses.replace(b, rejection_reason=rejection_reason)
+            if b.state == 'rejected'
+            else b
+            for b in new_boxes
+        ]
+    doc: dict[str, Any] = dict(boxes_write_fields(new_boxes, current_src=current))
+    # `empty_status=status`: only NO_REGION_VISIBLE ever leaves `new_boxes`
+    # empty (boxes_with_status returns `[]` for it) -- every other status
+    # is reflected by derive_status's own precedence over the now-uniform
+    # box list, so this only matters for that one case.
+    doc[F.status] = derive_status(new_boxes, empty_status=status).value
+
+    if not new_boxes and REGION_STATUS_INFO[status].wants_reason and rejection_reason is not None:
+        # M1(a): a box-less status (only NO_REGION_VISIBLE) has no box left
+        # to carry the reason -- boxes_write_fields's mirror derivation
+        # cleared it to None above; store it on the item directly, the one
+        # case the mirror can't cover.
+        doc[F.rejection_reason] = rejection_reason
+
+    if current.get(F.status) == status.value:
+        # Re-asserting the stored status (a bulk write over a mixed
+        # selection) changes nothing derived from it beyond the box
+        # states above: verified and the region-cluster placement stay as
+        # stored. Confirming is the one exception -- it is an explicit
+        # verification.
+        if status == CONFIRM_STATUS:
+            doc[F.verified] = True
+    else:
+        doc[F.verified] = status == CONFIRM_STATUS
+        doc.update(fp_cluster_fields(status.value))
+    return doc
+
+
+def reason_only_box_write(current: dict[str, Any], reason: str | None) -> dict[str, Any]:
+    """W8-cleanup N3: a reason-only PATCH (no status change) over the
+    current box list.
+
+    Patches every currently-rejected box's ``rejection_reason``, same as
+    ``human_status_box_write``'s per-status reason update. For a box-less
+    item (``no_region_visible``), there is no rejected box for
+    :func:`~src.services.curation.region_boxes.boxes_write_fields` to
+    derive a mirror reason from, so it always clears the item-level
+    ``rejection_reason`` to ``None`` -- restore the reason this request
+    is setting in that case, matching M1(a)'s box-less mirror.
+
+    W8-cleanup R3-1: that restore must only fire for a truly box-less
+    item, the same ``not new_boxes`` guard M1(a) uses in
+    :func:`human_status_box_write`. A looser "no rejected box" condition
+    also matched an accepted-only, false-positive-only, or proposed-only
+    item, and stored a reason on it -- the exact wrong-mirror symptom N1
+    fixed.
+    """
+    F = get_region_fields()
+    boxes = read_boxes(current, F)
+    new_boxes = [
+        dataclasses.replace(b, rejection_reason=reason) if b.state == 'rejected' else b
+        for b in boxes
+    ]
+    doc = dict(boxes_write_fields(new_boxes, current_src=current))
+    if not new_boxes:
+        doc[F.rejection_reason] = reason
+    return doc
+
+
 def region_box_doc(
     region_bbox_norm: list[float] | None, *, label_source: str, now: str
 ) -> dict[str, Any]:
@@ -307,6 +455,7 @@ __all__ = [
     'candidate_clear_fields',
     'candidate_promotion',
     'fp_cluster_fields',
+    'human_status_box_write',
     'human_status_fields',
     'parent_to_source_bbox',
     'post_write_item',

@@ -79,6 +79,52 @@ def test_boxes_write_fields_sets_counts_and_bumps_revision() -> None:
     assert doc[F.boxes] == [b.to_doc() for b in boxes]
 
 
+def test_boxes_write_fields_accepted_plus_rejected_has_no_item_level_reason() -> None:
+    # W8-cleanup N1 regression: an ordinary multi-box `detected` item
+    # (one accepted box, one rejected sibling) must NOT carry a
+    # rejection reason on the item mirror -- that field is only for
+    # box-less rejected/no_region_visible items. Otherwise the labeler
+    # renders a red "Rejection" row instead of "needs confirmation".
+    boxes = [
+        RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='accepted', score=0.9),
+        RegionBox(
+            box_id='b2',
+            bbox_norm=(0, 0, 1, 1),
+            state='rejected',
+            score=0.5,
+            rejection_reason='region_visible_elsewhere',
+        ),
+    ]
+    doc = boxes_write_fields(boxes, current_src={})
+    assert doc[F.rejection_reason] is None
+
+
+def test_boxes_write_fields_all_rejected_keeps_item_level_reason() -> None:
+    boxes = [
+        RegionBox(
+            box_id='b1',
+            bbox_norm=(0, 0, 1, 1),
+            state='rejected',
+            score=0.5,
+            rejection_reason='blurry',
+        ),
+    ]
+    doc = boxes_write_fields(boxes, current_src={})
+    assert doc[F.rejection_reason] == 'blurry'
+
+
+def test_boxes_write_fields_mirror_prefers_accepted_over_higher_scoring_fp() -> None:
+    # W8-cleanup N2 regression: an accepted box must win the mirror even
+    # when a false_positive sibling scores higher.
+    boxes = [
+        RegionBox(box_id='b1', bbox_norm=(0.1, 0.1, 0.2, 0.2), state='false_positive', score=0.95),
+        RegionBox(box_id='b2', bbox_norm=(0.5, 0.5, 0.6, 0.6), state='accepted', score=0.4),
+    ]
+    doc = boxes_write_fields(boxes, current_src={})
+    assert doc[F.bbox_norm] == [0.5, 0.5, 0.6, 0.6]
+    assert doc[F.score] == 0.4
+
+
 def test_boxes_write_fields_empty_list() -> None:
     doc = boxes_write_fields([], current_src={})
     assert doc[F.count] == 0

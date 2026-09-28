@@ -83,7 +83,12 @@ def _fake_dataset_search_response() -> dict[str, Any]:
                     ],
                 },
             },
-            'region_detectors': {'buckets': [{'key': 'region_detector_v1', 'doc_count': 3}]},
+            # W8-cleanup: region_detectors is a nested agg over region_boxes
+            # now (the detector lives on each box, not an item scalar).
+            'region_detectors': {
+                'doc_count': 3,
+                'by_detector': {'buckets': [{'key': 'region_detector_v1', 'doc_count': 3}]},
+            },
             'region_verifiers': {'buckets': [{'key': 'human', 'doc_count': 2}]},
             'regions_validated_by_human': {'doc_count': 2},
             'region_status': {'buckets': [{'key': 'detected', 'doc_count': 3}]},

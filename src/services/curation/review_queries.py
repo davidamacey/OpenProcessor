@@ -25,6 +25,7 @@ from src.services.curation.ingest_class_sources import (
     classifier_class_sources,
     unlabeled_proposal_class_sources,
 )
+from src.services.curation.region_boxes import box_query
 from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
 from src.services.curation.vlm_class_attempt import VLM_CLASS_EMPTY_REASON_FIELD, EmptyClassReason
 
@@ -238,10 +239,24 @@ def region_reason(src: dict[str, Any], fields: Any, default: str) -> str:
     human review", contradicting itself. :func:`compose_rejection_reason`
     words the reason from the served rejection-reason vocabulary and only
     says "needs human review" for a ``needs_human``-kind reason.
+
+    W8-cleanup: the rejection reason lives on the rejected box itself now
+    (``region_boxes[].rejection_reason``), not an item-level scalar. The
+    first ``rejected`` box's reason is used -- a ``verify_rejected`` item
+    only ever carries one kept candidate box in practice.
     """
     if src.get(fields.status) != RegionStatus.VERIFY_REJECTED.value:
         return default
-    why = src.get(fields.rejection_reason)
+    from src.services.curation.region_boxes import read_boxes
+
+    why = next(
+        (
+            b.rejection_reason
+            for b in read_boxes(src, fields)
+            if b.state == 'rejected' and b.rejection_reason
+        ),
+        None,
+    )
     if why:
         return compose_rejection_reason(why)
     return 'needs human review: verifier rejected this candidate with no reason recorded'
@@ -395,16 +410,26 @@ def build_tab_query(
         # No class_validated exclusion: region review is independent of the
         # item's class. VLM and cluster agreement validate most classes
         # automatically, so excluding them hid nearly every unreviewed region.
+        #
+        # W8-cleanup: `region_bbox_norm` / `region_candidate_bbox_norm` are
+        # retired -- a box is now `accepted` (the old "has bbox_norm")
+        # or `rejected` (the old "has a kept candidate") inside the item's
+        # `region_boxes` list, checked via a nested query.
+        has_accepted_box = box_query(
+            {'term': {f'{fields.boxes}.{fields.boxes_state}': 'accepted'}}, fields
+        )
         rejected_candidate = {
             'bool': {
                 'filter': [
                     {'term': {fields.status: RegionStatus.VERIFY_REJECTED}},
-                    {'exists': {'field': fields.candidate_bbox_norm}},
+                    box_query(
+                        {'term': {f'{fields.boxes}.{fields.boxes_state}': 'rejected'}}, fields
+                    ),
                 ]
             }
         }
         if region_status_filter == RegionStatus.DETECTED.value:
-            must.append({'exists': {'field': fields.bbox_norm}})
+            must.append(has_accepted_box)
             must_not.append({'term': {fields.status: RegionStatus.NO_REGION_VISIBLE}})
             must_not.append({'term': {fields.status: RegionStatus.VERIFY_REJECTED}})
             must_not.append({'term': {fields.status: RegionStatus.FALSE_POSITIVE}})
@@ -415,13 +440,14 @@ def build_tab_query(
         else:
             # 'all': today's accepted-but-unvalidated boxes, plus a
             # rejected candidate that still has a box to show. A
-            # false_positive keeps its box too (`bbox_norm` stays set —
-            # see RegionFields.candidate_bbox_norm's docstring) but is
-            # terminal and must never re-enter the human queue.
+            # false_positive keeps its box too (its state stays
+            # 'false_positive', not 'accepted' -- see
+            # RegionStatus.FALSE_POSITIVE's docstring) but is terminal and
+            # must never re-enter the human queue.
             must.append(
                 {
                     'bool': {
-                        'should': [{'exists': {'field': fields.bbox_norm}}, rejected_candidate],
+                        'should': [has_accepted_box, rejected_candidate],
                         'minimum_should_match': 1,
                     }
                 }
@@ -431,9 +457,10 @@ def build_tab_query(
             reason = 'region detected — needs human confirmation'
         # Substring search on region text, case-insensitive: stored case
         # depends on whichever writer set the text, so don't assume an
-        # uppercase canonical form.
+        # uppercase canonical form. Per-box now (the fixed 'text' element
+        # key, not RegionFields-indirected -- see region_boxes.py).
         if text and 'text' in tab_filters(tab):
-            must.append(region_text_clause(fields.text, text))
+            must.append(box_query(region_text_clause(f'{fields.boxes}.text', text), fields))
         # Default sort: region score desc (falling back to the rejected
         # candidate's score when there is no accepted region score), so
         # the high-confidence items are reviewed first — see

@@ -32,7 +32,9 @@ _QUALIFYING: dict[str, dict[str, Any]] = {
     'vlm_low_conf': {'class_source': 'vlm', 'vlm_confidence': 'low', 'confidence': 0.3},
     'outliers': {'cluster_distance': 0.6},
     'uncertainty': {'probe_pred_entropy': 1.5},
-    'regions': {F.bbox_norm: [0.1, 0.1, 0.2, 0.2]},
+    'regions': {
+        F.boxes: [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}]
+    },
     'new_class_proposals': {'needs_new_class': True},
     'primary_low_conf': {'class_source': sorted(unlabeled_proposal_class_sources())[0]},
     'classifier_blind_spots': {'class_source': sorted(unlabeled_proposal_class_sources())[0]},

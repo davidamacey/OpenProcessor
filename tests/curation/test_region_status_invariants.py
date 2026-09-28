@@ -43,11 +43,18 @@ def _boxed(crop_id: str) -> dict[str, Any]:
     return {
         'crop_id': crop_id,
         'bbox_norm': [0.0, 0.0, 0.5, 0.5],
-        F.bbox_norm: list(BOX),
-        F.score: 0.91,
+        # W8-cleanup: PATCH region_meta / POST batch_status now operate on
+        # region_boxes (boxes_with_status), not the retired item-level
+        # region_bbox_norm/region_score scalars -- an accepted box is what
+        # a DETECTED item actually carries under the box-list model.
+        F.boxes: [{'box_id': 'b1', 'bbox_norm': list(BOX), 'state': 'accepted', 'score': 0.91}],
         F.status: RegionStatus.DETECTED.value,
         F.verified: True,
     }
+
+
+def _box_states(doc: dict[str, Any]) -> list[str]:
+    return [b['state'] for b in doc.get(F.boxes) or []]
 
 
 @pytest.fixture
@@ -87,8 +94,7 @@ def test_batch_status_no_region_visible_clears_box(
     assert resp.status_code == 200, resp.text
     for cid in ('boxed-1', 'boxed-2'):
         doc = fake_os._docs[cid]
-        assert doc[F.bbox_norm] is None
-        assert doc[F.score] is None
+        assert doc[F.boxes] == []
         assert doc[F.verified] is False
 
 
@@ -101,8 +107,7 @@ def test_patch_meta_no_region_visible_clears_box(
     )
     assert resp.status_code == 200, resp.text
     doc = fake_os._docs['boxed-1']
-    assert doc[F.bbox_norm] is None
-    assert doc[F.score] is None
+    assert doc[F.boxes] == []
     assert doc[F.verified] is False
 
 
@@ -113,8 +118,152 @@ def test_false_positive_keeps_box(client: TestClient, fake_os: _FakeRegionOS) ->
     )
     assert resp.status_code == 200, resp.text
     doc = fake_os._docs['boxed-1']
-    assert doc[F.bbox_norm] == BOX
+    assert _box_states(doc) == ['false_positive']
+    assert doc[F.boxes][0]['bbox_norm'] == BOX
     assert doc[F.verified] is False
+
+
+# ------------------------------------------------------- M1: rejection reason
+
+
+def test_patch_meta_no_region_visible_with_reason_persists_it(
+    client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    """W8-cleanup M1(a): the main Reject action (`no_region_visible`) with
+    a reason used to drop the reason entirely -- `boxes_with_status`
+    returns `[]` for it, so no box could carry it, and the mirror was set
+    to `None` unconditionally."""
+    resp = client.patch(
+        '/curation/projects/default/crops/boxed-1/region_meta',
+        json={'region_status': 'no_region_visible', 'region_rejection_reason': 'glare'},
+    )
+    assert resp.status_code == 200, resp.text
+    doc = fake_os._docs['boxed-1']
+    assert doc[F.boxes] == []
+    assert doc[F.rejection_reason] == 'glare'
+    assert resp.json()['item']['region_rejection_reason'] == 'glare'
+
+
+def test_patch_meta_reason_only_updates_the_item_level_mirror(
+    client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    """W8-cleanup M1(b): a reason-only PATCH (no status change) used to
+    patch the box's `rejection_reason` but never the item-level mirror
+    the labeler reads as authoritative -- the operator saw the stale
+    reason right after changing it."""
+    fake_os._docs['rejected-1'] = {
+        'crop_id': 'rejected-1',
+        F.status: RegionStatus.VERIFY_REJECTED.value,
+        F.boxes: [
+            {
+                'box_id': 'b1',
+                'bbox_norm': list(BOX),
+                'state': 'rejected',
+                'score': 0.5,
+                'rejection_reason': 'region_visible_elsewhere',
+            }
+        ],
+        F.rejection_reason: 'region_visible_elsewhere',
+    }
+    fake_os._seq['rejected-1'] = 0
+    resp = client.patch(
+        '/curation/projects/default/crops/rejected-1/region_meta',
+        json={'region_rejection_reason': 'blurry'},
+    )
+    assert resp.status_code == 200, resp.text
+    doc = fake_os._docs['rejected-1']
+    assert doc[F.boxes][0]['rejection_reason'] == 'blurry'
+    assert doc[F.rejection_reason] == 'blurry'
+    assert resp.json()['item']['region_rejection_reason'] == 'blurry'
+
+
+def test_patch_meta_reason_only_on_box_less_item_updates_not_wipes_the_reason(
+    client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    """W8-cleanup N3 regression: a reason-only PATCH on a box-less
+    `no_region_visible` item (M1(a)'s case) must update the stored
+    reason, not erase it -- `boxes_write_fields([])` always re-derives
+    `rejection_reason=None` from an empty box list."""
+    fake_os._docs['no-region-1'] = {
+        'crop_id': 'no-region-1',
+        F.status: RegionStatus.NO_REGION_VISIBLE.value,
+        F.boxes: [],
+        F.rejection_reason: 'X',
+    }
+    fake_os._seq['no-region-1'] = 0
+    resp = client.patch(
+        '/curation/projects/default/crops/no-region-1/region_meta',
+        json={'region_rejection_reason': 'Y'},
+    )
+    assert resp.status_code == 200, resp.text
+    doc = fake_os._docs['no-region-1']
+    assert doc[F.rejection_reason] == 'Y'
+    assert resp.json()['item']['region_rejection_reason'] == 'Y'
+
+
+def test_patch_meta_reason_only_on_accepted_only_item_does_not_store_reason(
+    client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    """W8-cleanup R3-1 regression: a reason-only PATCH on an item with no
+    rejected box (e.g. an accepted-only `detected` item) must not store or
+    serve a `region_rejection_reason` -- `reason_only_box_write`'s original
+    N3 condition (`not any(rejected box)`) was true for any non-rejected
+    item, not just a box-less one, which brought back N1's symptom."""
+    resp = client.patch(
+        '/curation/projects/default/crops/boxed-1/region_meta',
+        json={'region_rejection_reason': 'Y'},
+    )
+    assert resp.status_code == 200, resp.text
+    doc = fake_os._docs['boxed-1']
+    assert doc[F.rejection_reason] is None
+    assert resp.json()['item']['region_rejection_reason'] is None
+
+
+# ------------------------------------------------------------- M2: the mirror
+
+
+def test_verify_rejected_clears_the_bbox_norm_mirror(
+    client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    """W8-cleanup M2(a): a human `verify_rejected` must clear the mirror,
+    not keep the now-rejected box's bbox/score/detector as if it were
+    still an accepted region -- `bbox_norm` is treated as an accepted
+    region by every reader (browse, export, clustering); leaving a
+    rejected box's coordinates there would make it look accepted."""
+    resp = client.patch(
+        '/curation/projects/default/crops/boxed-1/region_meta',
+        json={'region_status': 'verify_rejected'},
+    )
+    assert resp.status_code == 200, resp.text
+    doc = fake_os._docs['boxed-1']
+    assert _box_states(doc) == ['rejected']
+    assert doc[F.bbox_norm] is None
+    assert doc[F.score] is None
+    assert doc[F.detector] is None
+
+
+def test_mirror_reflects_the_highest_scoring_accepted_box(
+    client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    """W8-cleanup M2(c): the mirror must reflect the BEST accepted box,
+    not the first one written."""
+    fake_os._docs['multi-1'] = {
+        'crop_id': 'multi-1',
+        F.status: RegionStatus.DETECTED.value,
+        F.boxes: [
+            {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted', 'score': 0.5},
+            {'box_id': 'b2', 'bbox_norm': [0.3, 0.3, 0.4, 0.4], 'state': 'proposed', 'score': 0.95},
+        ],
+    }
+    fake_os._seq['multi-1'] = 0
+    resp = client.patch(
+        '/curation/projects/default/crops/multi-1/regions/b2',
+        json={'state': 'accepted'},
+    )
+    assert resp.status_code == 200, resp.text
+    doc = fake_os._docs['multi-1']
+    assert doc[F.score] == 0.95
+    assert doc[F.bbox_norm] == [0.3, 0.3, 0.4, 0.4]
 
 
 # ------------------------------------------------------------ derived verified
@@ -138,8 +287,10 @@ def test_batch_status_rejection_unsets_verified(client: TestClient, fake_os: _Fa
         json={'crop_ids': ['boxed-1'], 'region_status': 'verify_rejected', 'region_verified': True},
     )
     assert resp.status_code == 200, resp.text
-    assert fake_os._docs['boxed-1'][F.verified] is False
-    assert fake_os._docs['boxed-1'][F.bbox_norm] == BOX
+    doc = fake_os._docs['boxed-1']
+    assert doc[F.verified] is False
+    assert _box_states(doc) == ['rejected']
+    assert doc[F.boxes][0]['bbox_norm'] == BOX
 
 
 def test_patch_meta_detected_sets_verified(client: TestClient, fake_os: _FakeRegionOS) -> None:

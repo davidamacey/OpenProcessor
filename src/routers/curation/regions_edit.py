@@ -32,18 +32,20 @@ from src.routers.curation._common import (
     router,
 )
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
+from src.services.curation.region_boxes import RegionBoxWriteError
 from src.services.curation.region_writes import (
     RegionWriteError,
-    human_status_fields,
+    human_status_box_write,
     parent_to_source_bbox,
     post_write_item,
+    reason_only_box_write,
     region_box_write,
     validate_bbox_norm,
 )
 from src.services.curation.wire import region_wire_key
 
 
-def _write_error(exc: RegionWriteError) -> HTTPException:
+def _write_error(exc: RegionWriteError | RegionBoxWriteError) -> HTTPException:
     return HTTPException(status_code=422, detail=str(exc))
 
 
@@ -92,7 +94,7 @@ async def _write_one(
         )
     except OCCFinalConflictError:
         raise
-    except RegionWriteError as exc:
+    except (RegionWriteError, RegionBoxWriteError) as exc:
         raise _write_error(exc) from exc
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
@@ -183,7 +185,6 @@ async def patch_crop_region_meta(
         base[F.label_source] = payload.region_label_source
         wire_fields.append('region_status')
     if 'region_rejection_reason' in fields_set:
-        base[F.rejection_reason] = payload.region_rejection_reason
         wire_fields.append('region_rejection_reason')
     # Operator-initiated edits are terminal — keep the row out of the
     # /review/regions queue. AI-source patches (auto-relabel jobs) skip
@@ -194,7 +195,23 @@ async def patch_crop_region_meta(
     def _build(current: dict[str, Any]) -> dict[str, Any]:
         doc = dict(base)
         if 'region_status' in fields_set:
-            doc.update(human_status_fields(str(payload.region_status), current))
+            doc.update(
+                human_status_box_write(
+                    str(payload.region_status),
+                    current,
+                    rejection_reason=payload.region_rejection_reason
+                    if 'region_rejection_reason' in fields_set
+                    else None,
+                )
+            )
+        elif 'region_rejection_reason' in fields_set:
+            # W8-cleanup: no status change, just editing the rejection
+            # reason already on the item's rejected box(es) -- the retired
+            # item-level region_rejection_reason scalar covered this same
+            # case unconditionally; now it patches every currently-rejected
+            # box (or, box-less, the item mirror -- W8-cleanup N3, see
+            # reason_only_box_write's docstring).
+            doc.update(reason_only_box_write(current, payload.region_rejection_reason))
         return doc
 
     rec = _Recorder(_build, 'human:patch_region_meta')
@@ -256,7 +273,7 @@ async def _batch_write(
                 rec = _Recorder(build, writer_id)
                 try:
                     update_doc = rec(source)
-                except RegionWriteError as exc:
+                except (RegionWriteError, RegionBoxWriteError) as exc:
                     invalid.append({'crop_id': crop_id, 'detail': str(exc)})
                     continue
                 pending.append((crop_id, update_doc, rec))
@@ -356,6 +373,6 @@ async def batch_set_region_status(
         base[F.validated] = True
 
     def _build(current: dict[str, Any]) -> dict[str, Any]:
-        return {**base, **human_status_fields(payload.region_status, current)}
+        return {**base, **human_status_box_write(payload.region_status, current)}
 
     return await _batch_write(opensearch, payload.crop_ids, _build, 'human:batch_set_region_status')

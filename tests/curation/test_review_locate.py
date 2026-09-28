@@ -46,21 +46,36 @@ def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     return TestClient(app)
 
 
+def _region_box(score: float | None) -> list[dict[str, Any]]:
+    box: dict[str, Any] = {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}
+    if score is not None:
+        box['score'] = score
+    return [box]
+
+
 def _region_docs() -> dict[str, dict[str, Any]]:
+    # Production-shaped: only `region_boxes` + the flat `region_max_score`
+    # counter every box writer maintains via `boxes_write_fields` -- no
+    # `region_score`/`region_candidate_score` dual-write. The real W8
+    # worker never writes those two scalars (see B1), so a fixture that
+    # dual-writes them hides a broken sort instead of exercising the
+    # production shape.
     scores = {'r01': 0.9, 'r02': 0.5, 'r03': 0.9, 'r04': None, 'r05': 0.7, 'r06': None, 'r07': 0.5}
     docs = {}
     for cid, score in scores.items():
-        doc: dict[str, Any] = {'crop_id': cid, F.bbox_norm: [0.1, 0.1, 0.2, 0.2]}
+        doc: dict[str, Any] = {'crop_id': cid, F.boxes: _region_box(score)}
         if score is not None:
-            doc[F.score] = score
+            doc[F.max_score] = score
         docs[cid] = doc
-    docs['done'] = {'crop_id': 'done', F.bbox_norm: [0.1, 0.1, 0.2, 0.2], F.validated: True}
+    docs['done'] = {'crop_id': 'done', F.boxes: _region_box(None), F.validated: True}
     return docs
 
 
 def _expected_regions_order(docs: dict[str, dict[str, Any]]) -> list[str]:
     queue = [d for d in docs.values() if not d.get(F.validated)]
-    queue.sort(key=lambda d: (d.get(F.score) is None, -(d.get(F.score) or 0.0), d['crop_id']))
+    queue.sort(
+        key=lambda d: (d.get(F.max_score) is None, -(d.get(F.max_score) or 0.0), d['crop_id'])
+    )
     return [d['crop_id'] for d in queue]
 
 
@@ -92,8 +107,10 @@ def test_locate_returns_in_queue_for_a_rejected_candidate(
     docs['rej'] = {
         'crop_id': 'rej',
         F.status: 'verify_rejected',
-        F.candidate_bbox_norm: [0.3, 0.6, 0.4, 0.65],
-        F.candidate_score: 0.81,
+        F.max_score: 0.81,
+        F.boxes: [
+            {'box_id': 'b1', 'bbox_norm': [0.3, 0.6, 0.4, 0.65], 'state': 'rejected', 'score': 0.81}
+        ],
     }
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
 

@@ -43,14 +43,10 @@ LEGACY_SORT_CLAUSE = {
         {'probe_pred_entropy': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}
     ],
     'regions': [
-        {'region_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
-        {
-            'region_candidate_score': {
-                'order': 'desc',
-                'missing': '_last',
-                'unmapped_type': 'double',
-            }
-        },
+        # W8-cleanup B1 fix: sorts on the flat `region_max_score` (every
+        # box writer maintains it), not the unwritten legacy
+        # `region_score`/`region_candidate_score` scalars.
+        {'region_max_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
     ],
     'primary_low_conf': [
         {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
