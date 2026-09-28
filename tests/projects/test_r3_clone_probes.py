@@ -1,4 +1,5 @@
-"""Round-3 reviewer probes: REAL clone_settings flow (validate -> apply), no sleep."""
+"""Round-3 reviewer probes, landed as permanent regression tests (round 4
+confirmed all fixed): REAL clone_settings flow (validate -> apply), no sleep."""
 
 from __future__ import annotations
 
@@ -219,4 +220,12 @@ async def test_r3_existing_target_previously_deactivated(tmp_path, monkeypatch):
         outcome = f'{exc.status_code} {exc.detail}'
     after = set(client._docs.get(tidx, {}))
     print('deactivated-target clone ->', outcome, '| new target docs:', sorted(after - before))
-    assert outcome == 'ok' or not (after - before), 'partial write before 409'
+    # m5 fix (W3/W4 round-4 review): a target that once deactivated this
+    # axis is genuinely EMPTY (no stored pack of its own on this axis) --
+    # a clone into it is not just "must not partially write", it must
+    # actually SUCCEED. The old `outcome == 'ok' or not (after - before)`
+    # let a clean 409 (no docs written but also nothing cloned) pass
+    # silently, masking the real N3a bug (a spurious `active_conflict`
+    # from treating 'off' as `expected_active=None`) instead of proving
+    # it is fixed.
+    assert outcome == 'ok', f'clone into a previously-deactivated target must succeed: {outcome}'

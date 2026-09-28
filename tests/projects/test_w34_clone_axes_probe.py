@@ -68,5 +68,9 @@ async def test_prompt_packs_plus_activations_axes_together() -> None:
             expected_active=None,
         )
     await _apply_clone(
-        client, target_record=target, source=source, axes=['prompt_packs', 'activations']
+        client,
+        target_record=target,
+        source=source,
+        axes=['prompt_packs', 'activations'],
+        target_activations=None,
     )

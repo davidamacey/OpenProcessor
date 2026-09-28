@@ -115,7 +115,11 @@ async def test_b2_target_activates_the_source_activated_body_not_current():
     source, target = _record('alpha'), _record('beta')
     await _seed(client, source, edit_after_activate=True)
     await _apply_clone(
-        client, target_record=target, source=source, axes=['prompt_packs', 'activations']
+        client,
+        target_record=target,
+        source=source,
+        axes=['prompt_packs', 'activations'],
+        target_activations=None,
     )
     with bind_project(target):
         idx = get_curation_config().configs_index

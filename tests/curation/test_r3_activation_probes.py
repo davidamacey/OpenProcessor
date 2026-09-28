@@ -1,4 +1,6 @@
-"""Round-3 reviewer probes (scratch copy only). Each asserts CORRECT behavior."""
+"""Round-3 reviewer probes, landed as permanent regression tests (round 4
+confirmed all fixed -- see docs/design/openprocessor_internal/
+w3_w4_review_2026-09-28.md). Each asserts CORRECT behavior."""
 
 from __future__ import annotations
 
@@ -143,12 +145,23 @@ def test_r3_r1_far_past_revision(app_client):
         c.put(f'{PREFIX}/my_pack', json={'expected_revision': 2, 'body': _body('R3')}).status_code
         == 200
     )
-    for req in ('my_pack@1', 'my_pack@9'):
-        try:
-            out = asyncio.run(resolve_run_prompt_pack(c.fake_os, req))
-            print(req, '->', out)
-        except HTTPException as exc:
-            print(req, '->', exc.status_code, exc.detail)
+    # m5 fix (W3/W4 round-4 review): this test used to be "record-only"
+    # (no assertion -- it just printed the outcome for a human to read).
+    # By now `my_pack` is at CURRENT revision 3, and the currently
+    # ACTIVE revision is 2 (rev 1 was superseded by activating rev 2
+    # over it). Per `resolve_run_prompt_pack`'s own contract, this
+    # process only resolves a per-run pin against its process-cached
+    # current doc plus the store's currently-activated-revision pin --
+    # NOT a full historical lookup. So rev 1 -- a real revision that
+    # once existed and was even once active, but is neither current nor
+    # currently-active anymore -- is exactly as unresolvable as the
+    # never-saved rev 9. Both must 422 with the same "not resolvable in
+    # this process" wording.
+    for far_past in ('my_pack@1', 'my_pack@9'):
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(resolve_run_prompt_pack(c.fake_os, far_past))
+        assert exc_info.value.status_code == 422
+        assert 'not resolvable in this process' in exc_info.value.detail['error']
     # record-only (no assert): scope question
 
 
@@ -224,10 +237,21 @@ def test_r3_rollback_transient_error_status(app_client, monkeypatch):
     )
     fake = c.fake_os
     orig_get = fake.get
+    # R4-1 fix means `pack_a@1`'s revision-copy doc is now fetched TWICE
+    # on this path: once by the shared activation gate (to validate the
+    # body before writing anything), and once more by
+    # `_resolve_active_body` inside `activate_and_apply` (to pin the
+    # exact body onto the write). Fail only the SECOND fetch, so the gate
+    # itself succeeds and the transient error is isolated to exactly the
+    # N4 code path this test targets (inside `activate_and_apply`, after
+    # the gate has already cleared).
+    calls = {'n': 0}
 
     async def flaky_get(*a, **kw):
         if str(kw.get('id', '')).endswith('pack_a@1'):
-            raise ConnectionError('transient')
+            calls['n'] += 1
+            if calls['n'] >= 2:
+                raise ConnectionError('transient')
         return await orig_get(*a, **kw)
 
     monkeypatch.setattr(fake, 'get', flaky_get)
@@ -237,13 +261,36 @@ def test_r3_rollback_transient_error_status(app_client, monkeypatch):
     )
     monkeypatch.setattr(fake, 'get', orig_get)
     act = c.get(f'{PREFIX}/active').json()
-    print('rollback under transient ->', r.status_code, r.text[:160], '| persisted active', act)
+    # m3 fix (W3/W4 round-4 review): the OLD assertion here read
+    # `GET /active`, which is served from the in-process `ConfigStore`
+    # snapshot -- stale in BOTH the pre-fix and post-fix worlds (this
+    # process never applied the failed write locally either way), so it
+    # stayed green even with N4's fix reverted (write-then-resolve
+    # restored). The only thing that actually distinguishes "aborted
+    # before commit" from "committed, then 500'd" is the STORED
+    # `activation:*` doc itself.
+    import asyncio
+
+    from src.config import get_curation_config
+    from src.services.config_store.index import get_activation
+
+    stored = asyncio.run(get_activation(fake, get_curation_config().configs_index, 'prompt_pack'))
+    print(
+        'rollback under transient ->',
+        r.status_code,
+        r.text[:160],
+        '| persisted active (stale snapshot)',
+        act,
+        '| stored activation doc',
+        stored,
+    )
     # N4 fix: resolving the pinned body before writing the activation
     # means a transient error aborts BEFORE anything commits -- the
-    # rollback must still be reporting pack_b (unchanged), not silently
-    # holding a half-committed pack_a activation the caller was told
-    # (via a 500) never happened.
-    assert act['active']['name'] == 'pack_b'
+    # STORED doc must still name pack_b (unchanged), not silently hold a
+    # half-committed pack_a activation the caller was told (via a 500)
+    # never happened.
+    assert stored is not None
+    assert stored.get('name') == 'pack_b'
 
 
 # ---- PUT /settings bridge: activation gate bypass? ---------------------------
