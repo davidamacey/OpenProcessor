@@ -155,6 +155,8 @@ tests/examples/test_bakeoff_license_plate_example.py # exercises the opt-in lice
 scripts/datasets/fetch_openimages_plates.py # G-05 public sample fetcher: fetches Open Images V7's own "Vehicle registration plate" class by that exact public display name; same public license_plate example domain this allowlist section already covers throughout
 docker-compose.yml:license[ _-]?plate # G-08 (fresh-start gaps batch B): comment naming the public license_plate.json worked-example path that ./examples is mounted for
 tests/test_compose_contract.py:license[ _-]?plate # G-08 (fresh-start gaps batch B): docstring naming the same public license_plate.json worked-example path the mount test is pinning
+tests/curation/test_profile_validation.py # W4: exercises the public example profile (EXAMPLE_LICENSE_PLATE_PROFILE) through validate_profile
+tests/curation/test_region_profiles_router.py # W4: exercises the public license_plate template (clone/activate) through the new /region_profiles* routes
 
 # ---------------------------------------------------------------------------
 # Scan C (private class vocabulary: sportbike/cruiserbike/dirtbike/harley/honda)

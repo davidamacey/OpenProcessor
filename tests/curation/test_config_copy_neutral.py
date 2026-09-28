@@ -71,3 +71,15 @@ def test_prompt_pack_schema_is_domain_neutral(app_client: TestClient) -> None:
     r = app_client.get('/curation/projects/default/prompt_packs/schema')
     assert r.status_code == 200, r.text
     _assert_no_leak(r.json())
+
+
+def test_region_profile_schema_is_domain_neutral(app_client: TestClient) -> None:
+    r = app_client.get('/curation/projects/default/region_profiles/schema')
+    assert r.status_code == 200, r.text
+    _assert_no_leak(r.json())
+
+
+def test_config_vocabulary_is_domain_neutral(app_client: TestClient) -> None:
+    r = app_client.get('/curation/projects/default/config/vocabulary')
+    assert r.status_code == 200, r.text
+    _assert_no_leak(r.json())

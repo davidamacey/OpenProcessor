@@ -8,6 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **W4 region-profile CRUD and vocabulary.** Full per-project region-profile
+  lifecycle mirroring W3's pack CRUD:
+  `src/services/config_store/{profiles,profile_validation}.py`,
+  `src/routers/curation/{_region_profile_models,region_profiles,
+  config_vocabulary}.py`, `src/services/curation/region_impact.py`.
+  Routes: `GET/POST /region_profiles`, `/schema`, `/validate`,
+  `/validate_segmenter_prompt`, `/test`, `/{name}`,
+  `/{name}/revisions[/{revision}]`, `/{name}/clone` (`from_project`
+  read-only, pinned by a test mirroring W3's), `PUT/DELETE /{name}`,
+  `/active`, `/active/impact`, `/{name}/activate`, `/active/rollback`,
+  `/deactivate`; `GET /config/vocabulary`.
+  `src/services/training/promoted_models.py` (moved off
+  `routers/curation/models.py` in the W3 pass) backs the new
+  `detector_model_not_shared` / `detector_model_other_project` /
+  `detector_model_classes_unmapped` sharing checks in
+  `profile_validation.py`, using `model_classes.py`'s by-name matching.
+  `region_impact.py` aggregates the items index by `region_profile` (+
+  revision) plus validated/pending counts for the activation-impact
+  response; per glue G2, `ActivationImpact` ships WITHOUT
+  `suggested_reprocess` (W10 had not merged when this wave was built --
+  whichever of W4/W10 merges second adds the field per the coordinator's
+  merge-order call). `regions_requeue.py` / `region_requeue.py` /
+  `reprocess.py` are untouched, per G2.
+  `pipeline_params.py`'s `DETECTION_PROFILE_REJECTED` reworded off
+  `OP_REGION_PROFILE` (E7) to name the config-store activation route.
+  Every new route registered in the leak-sweep, with its own
+  PREPARE-resets-to-revision-1 hook mirroring W3's.
 - **W3 prompt-pack CRUD.** Full per-project prompt-pack lifecycle on top
   of W2's config store: `src/services/config_store/{packs,pack_validation}.py`,
   `src/services/config_store/activation_view.py` (shared active-config

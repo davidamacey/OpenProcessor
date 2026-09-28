@@ -50,13 +50,18 @@ CLUSTER_SCOPED_SKIP: dict[str, object] = {
 }
 
 # detection_profile is NOT a per-run option: region detection runs in the
-# detection worker on OP_REGION_PROFILE and no auto-label stage uses it.
-# The param stays declared (hidden) only so an old client still sending it
-# gets a clear 422 instead of FastAPI silently ignoring an unknown param.
+# detection worker on the active region profile, and no auto-label stage
+# uses it. The param stays declared (hidden) only so an old client still
+# sending it gets a clear 422 instead of FastAPI silently ignoring an
+# unknown param.
+# E7 (any_domain_plan.md §1): reworded off OP_REGION_PROFILE (W2/W4 made
+# the active profile a config-store activation, not just an env var) to
+# name the real source of truth and how to change it.
 DETECTION_PROFILE_REJECTED = (
     'detection_profile is not a per-run auto_label option: no auto_label stage '
-    'runs region detection, and the detection worker uses the process region '
-    'profile (OP_REGION_PROFILE). Remove the parameter.'
+    'runs region detection, and region detection runs in the detection worker '
+    'on the active region profile (POST /region_profiles/{name}/activate). '
+    'Remove the parameter.'
 )
 
 PROMPT_PACK_DESC = (

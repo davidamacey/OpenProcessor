@@ -1,0 +1,696 @@
+"""``/region_profiles*`` + ``/config/vocabulary`` -- region-profile CRUD
+(W4, any_domain_plan.md §4/§7.3).
+
+Route-order note (§4.2, mirrors W3's §3.2): ``schema``, ``validate``,
+``validate_segmenter_prompt``, ``test``, ``active`` (+ its children) and
+``deactivate`` are declared before ``/{name}`` and its children.
+``config_vocabulary.py`` registers ``GET /config/vocabulary`` separately
+(its own side-effect import in ``__init__.py``).
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from src.routers.curation._common import OpenSearchDep, get_class_registry, router
+from src.routers.curation._config_common_models import ActiveRef, api_error
+from src.routers.curation._region_profile_models import (
+    RegionProfileActivateRequest,
+    RegionProfileBody,
+    RegionProfileCloneRequest,
+    RegionProfileCreateRequest,
+    RegionProfileDeactivateRequest,
+    RegionProfileDoc,
+    RegionProfileEffective,
+    RegionProfileList,
+    RegionProfileRevisionsResponse,
+    RegionProfileRevisionSummary,
+    RegionProfileRollbackRequest,
+    RegionProfileSaveRequest,
+    RegionProfileSummary,
+    RegionProfileTemplateSummary,
+    RegionProfileValidateRequest,
+    SegmenterPromptValidateRequest,
+)
+from src.services.config_store import ActiveConflictError, RevisionConflictError, get_config_store
+from src.services.config_store.activation_view import build_active_config_response
+from src.services.config_store.profile_validation import validate_profile
+from src.services.config_store.profiles import (
+    ProfileRecord,
+    activate_profile,
+    all_known_names,
+    build_record,
+    delete_profile,
+    get_revision_record,
+    list_revisions,
+    rollback_profile,
+    save_profile,
+)
+from src.services.curation.region_impact import compute_activation_impact
+
+
+def _registry_class_names() -> frozenset[str]:
+    reg = get_class_registry().load()
+    return frozenset(c.class_name for c in reg.classes if not c.deprecated)
+
+
+async def _segmenter_health_fn() -> tuple[str, str | None]:
+    import os
+
+    from src.routers.curation._models_segmenter import _segmenter_health
+
+    url = os.environ.get('OP_SEGMENTER_URL', '').strip()
+    if not url:
+        return 'unavailable', 'OP_SEGMENTER_URL is not configured'
+    first_url = url.split(',')[0].strip().rstrip('/')
+    return await _segmenter_health(first_url)
+
+
+def _effective(profile: Any) -> RegionProfileEffective:
+    legs = []
+    if profile.detector_model:
+        legs.append('detector')
+    if profile.segmenter_text_prompt:
+        legs.append('segmenter')
+    return RegionProfileEffective(
+        reads_text=profile.reads_text,
+        text_hint_active=profile.text_hint_active(
+            segmenter_enabled=bool(profile.segmenter_text_prompt)
+        ),
+        legs=legs,
+        segmenter_enabled=bool(profile.segmenter_text_prompt),
+    )
+
+
+def _decode_or_none(name: str, body: dict[str, Any]) -> Any:
+    from src.services.detection.profile_registry import region_profile_from_dict
+
+    try:
+        return region_profile_from_dict({**body, 'name': name}, source=name)
+    except ValueError:
+        return None
+
+
+def _to_doc(record: ProfileRecord, *, validation: Any = None) -> RegionProfileDoc:
+    profile = _decode_or_none(record.name, record.body)
+    return RegionProfileDoc(
+        name=record.name,
+        source=record.source,
+        read_only=record.read_only,
+        revision=record.revision,
+        etag=record.etag,
+        description=record.description,
+        body=RegionProfileBody(**record.body),
+        effective=_effective(profile)
+        if profile is not None
+        else RegionProfileEffective(
+            reads_text=False, text_hint_active=False, legs=[], segmenter_enabled=False
+        ),
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+        cloned_from=record.cloned_from,
+        active=record.active,
+        active_revision=record.active_revision,
+        validation=validation,
+    )
+
+
+def _to_summary(record: ProfileRecord) -> RegionProfileSummary:
+    profile = _decode_or_none(record.name, record.body)
+    return RegionProfileSummary(
+        name=record.name,
+        source=record.source,
+        read_only=record.read_only,
+        revision=record.revision,
+        etag=record.etag,
+        display_name=profile.display_name if profile else '',
+        display_name_singular=profile.display_name_singular if profile else '',
+        region_class_name=profile.region_class_name if profile else '',
+        text_reader=profile.text_reader if profile else 'none',
+        reads_text=profile.reads_text if profile else False,
+        detector_model=profile.detector_model if profile else '',
+        segmenter_text_prompt=profile.segmenter_text_prompt if profile else '',
+        parent_classes=sorted(profile.parent_classes) if profile else [],
+        max_regions_per_item=profile.max_regions_per_item if profile else 1,
+        active=record.active,
+        active_revision=record.active_revision,
+        updated_at=record.updated_at,
+    )
+
+
+def _template_names_only() -> list[str]:
+    from src.services.config_store.profiles import _template_names
+
+    return list(_template_names())
+
+
+# =============================================================================
+# GET /region_profiles/schema
+# =============================================================================
+
+
+@router.get('/region_profiles/schema')
+async def get_region_profile_schema() -> dict[str, Any]:
+    from dataclasses import fields as dc_fields
+
+    from src.config import DetectionProfile
+    from src.services.config_store.profile_validation import PROFILE_FIELD_RANGES
+
+    choice_fields: dict[str, tuple[str, dict[str, str] | None]] = {
+        'detector_model': ('detectors', {'id': '', 'label': 'No detector leg'}),
+        'segmenter_name': ('segmenters', None),
+        'ocr_pipeline_model': ('ocr_pipeline_models', {'id': '', 'label': 'No OCR pipeline'}),
+        'ocr_det_model': ('ocr_det_models', {'id': '', 'label': 'No OCR detector'}),
+        'ocr_rec_model': ('ocr_rec_models', {'id': '', 'label': 'No OCR recognizer'}),
+        'text_reader': ('text_reader_modes', None),
+    }
+    fields = []
+    for f in dc_fields(DetectionProfile):
+        if f.name == 'name':
+            continue
+        default = f.default if f.default is not None else None
+        choices_from, empty_choice = choice_fields.get(f.name, (None, None))
+        rng = PROFILE_FIELD_RANGES.get(f.name)
+        fields.append(
+            {
+                'field': f.name,
+                'label': f.name.replace('_', ' ').capitalize(),
+                'group': 'advanced',
+                'type': 'string',
+                'default': default if isinstance(default, str | int | float | bool) else None,
+                'min': rng[0] if rng else None,
+                'max': rng[1] if rng else None,
+                'enum': None,
+                'advanced': choices_from is None,
+                'applies_when': None,
+                'choices_from': choices_from,
+                'empty_choice': empty_choice,
+                'help': '',
+            }
+        )
+    groups = [
+        {'id': 'identity', 'label': 'Name and display'},
+        {'id': 'items', 'label': 'Which items'},
+        {'id': 'detector', 'label': 'Detector'},
+        {'id': 'segmenter', 'label': 'Segmenter'},
+        {'id': 'verify', 'label': 'Verification'},
+        {'id': 'text', 'label': 'Text reading'},
+        {'id': 'advanced', 'label': 'Advanced'},
+    ]
+    return {'fields': fields, 'groups': groups}
+
+
+# =============================================================================
+# POST /region_profiles/validate, /validate_segmenter_prompt
+# =============================================================================
+
+
+@router.post('/region_profiles/validate')
+async def validate_region_profile_route(
+    body: RegionProfileValidateRequest, opensearch: OpenSearchDep, for_activation: bool = False
+) -> Any:
+    store = get_config_store()
+    await store.ensure_fresh(opensearch)
+    report = await validate_profile(
+        body.name,
+        body.body.model_dump(),
+        existing_names=all_known_names(),
+        for_activation=for_activation,
+        segmenter_health=_segmenter_health_fn,
+        class_names=_registry_class_names(),
+        project_slug=_project_slug(),
+    )
+    return report.model_dump()
+
+
+@router.post('/region_profiles/validate_segmenter_prompt')
+async def validate_segmenter_prompt_route(body: SegmenterPromptValidateRequest) -> Any:
+    from src.routers.curation._config_common_models import ValidationReport
+    from src.services.config_store.profile_validation import _check_segmenter_prompt_text
+
+    issues = _check_segmenter_prompt_text(body.text_prompt, sole_leg=body.sole_leg)
+    errors = [i for i in issues if i.severity == 'error']
+    warnings = [i for i in issues if i.severity != 'error']
+    return ValidationReport(
+        ok=not errors, errors=errors, warnings=warnings, force_allowed=False
+    ).model_dump()
+
+
+def _project_slug() -> str | None:
+    from src.config import get_curation_config
+
+    try:
+        return get_curation_config().project_slug
+    except Exception:  # pragma: no cover - defensive; always bound in routes
+        return None
+
+
+# =============================================================================
+# POST /region_profiles/test
+# =============================================================================
+
+
+@router.post('/region_profiles/test')
+async def test_region_profile(body: RegionProfileValidateRequest, opensearch: OpenSearchDep) -> Any:
+    """Preview a draft/saved profile's effective legs and run its
+    validator. Scope note (documented deviation, mirrors W3's
+    ``/prompt_packs/test``): no live crop/segmenter/detector round-trip;
+    ``/prompt_packs/test`` already covers the VLM leg's prompt preview.
+    Never writes."""
+    store = get_config_store()
+    await store.ensure_fresh(opensearch)
+    profile = _decode_or_none(body.name or 'draft', body.body.model_dump())
+    report = await validate_profile(
+        None,
+        body.body.model_dump(),
+        get_repository_index=None,
+        segmenter_health=_segmenter_health_fn,
+        class_names=_registry_class_names(),
+        project_slug=_project_slug(),
+    )
+    return {
+        'effective': _effective(profile).model_dump() if profile is not None else None,
+        'validation': report.model_dump(),
+    }
+
+
+# =============================================================================
+# GET /region_profiles/active[/impact], rollback, deactivate
+# =============================================================================
+
+
+@router.get('/region_profiles/active')
+async def get_active_region_profile_route(opensearch: OpenSearchDep) -> Any:
+    return await build_active_config_response(opensearch, axis='detection_profile')
+
+
+@router.get('/region_profiles/active/impact')
+async def get_active_region_profile_impact(opensearch: OpenSearchDep) -> Any:
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    return (
+        await compute_activation_impact(opensearch, profile=get_active_region_profile())
+    ).model_dump()
+
+
+@router.post('/region_profiles/active/rollback')
+async def rollback_active_region_profile(
+    body: RegionProfileRollbackRequest, opensearch: OpenSearchDep
+) -> Any:
+    expected = body.expected_active.model_dump() if body.expected_active is not None else None
+    try:
+        await rollback_profile(opensearch, expected_active=expected)
+    except LookupError as exc:
+        raise api_error(
+            409, 'no_previous', 'there is no previous activation to roll back to'
+        ) from exc
+    except ActiveConflictError as exc:
+        raise api_error(
+            409,
+            'active_conflict',
+            'the active profile changed since you loaded it',
+            current=ActiveRef(**exc.current) if exc.current else None,
+        ) from exc
+    return await build_active_config_response(opensearch, axis='detection_profile')
+
+
+@router.post('/region_profiles/deactivate')
+async def deactivate_region_profile(
+    body: RegionProfileDeactivateRequest, opensearch: OpenSearchDep
+) -> Any:
+    expected = body.expected_active.model_dump() if body.expected_active is not None else None
+    try:
+        await activate_profile(opensearch, name=None, revision=None, expected_active=expected)
+    except ActiveConflictError as exc:
+        raise api_error(
+            409,
+            'active_conflict',
+            'the active profile changed since you loaded it',
+            current=ActiveRef(**exc.current) if exc.current else None,
+        ) from exc
+    return await build_active_config_response(opensearch, axis='detection_profile')
+
+
+# =============================================================================
+# GET/POST /region_profiles
+# =============================================================================
+
+
+@router.get('/region_profiles', response_model=RegionProfileList)
+async def list_region_profiles(
+    opensearch: OpenSearchDep, include_templates: bool = False
+) -> RegionProfileList:
+    store = get_config_store()
+    await store.ensure_fresh(opensearch)
+    names = all_known_names() - set(_template_names_only())
+    records = [build_record(name) for name in sorted(names)]
+    templates: list[RegionProfileTemplateSummary] = []
+    if include_templates:
+        for template_name in sorted(_template_names_only()):
+            rec = build_record(template_name)
+            body = rec.body if rec else {}
+            templates.append(
+                RegionProfileTemplateSummary(
+                    name=template_name,
+                    path=f'examples/region_profiles/{template_name}.json',
+                    display_name=body.get('display_name'),
+                    reads_text=body.get('text_reader', 'none') != 'none',
+                )
+            )
+    store2 = get_config_store()
+    active_name, active_revision = None, None
+    ref = store2.current.active_profile
+    if isinstance(ref, tuple):
+        active_name, active_revision = ref
+    return RegionProfileList(
+        profiles=[_to_summary(r) for r in records if r is not None],
+        templates=templates,
+        active=ActiveRef(name=active_name, revision=active_revision),
+        config_revision=store2.current.config_revision,
+        stale=store2.current.stale,
+    )
+
+
+@router.post('/region_profiles', response_model=RegionProfileDoc, status_code=201)
+async def create_region_profile(
+    body: RegionProfileCreateRequest, opensearch: OpenSearchDep
+) -> RegionProfileDoc:
+    store = get_config_store()
+    await store.ensure_fresh(opensearch)
+    existing = all_known_names()
+    report = await validate_profile(
+        body.name,
+        body.body.model_dump(),
+        existing_names=existing - {body.name},
+        segmenter_health=_segmenter_health_fn,
+        class_names=_registry_class_names(),
+        project_slug=_project_slug(),
+    )
+    name_issues = [
+        e for e in report.errors if e.code in ('profile_name_invalid', 'profile_name_reserved')
+    ]
+    if name_issues:
+        raise api_error(422, 'validation_failed', 'the profile name is not usable', report=report)
+    if body.name in existing:
+        raise api_error(409, 'name_conflict', f'{body.name!r} is already taken')
+    other_errors = [e for e in report.errors if e.code != 'name_conflict']
+    if other_errors:
+        raise api_error(
+            422, 'validation_failed', f'the profile has {len(other_errors)} error(s)', report=report
+        )
+    record = await save_profile(
+        opensearch,
+        name=body.name,
+        body=body.body.model_dump(),
+        expected_revision=None,
+        description=body.description,
+    )
+    return _to_doc(record, validation=report)
+
+
+# =============================================================================
+# GET /region_profiles/{name}[/revisions[/{revision}]]
+# =============================================================================
+
+
+@router.get('/region_profiles/{name}', response_model=RegionProfileDoc)
+async def get_region_profile_route(name: str, opensearch: OpenSearchDep) -> Any:
+    store = get_config_store()
+    await store.ensure_fresh(opensearch)
+    record = build_record(name)
+    if record is None:
+        raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
+    from fastapi.responses import ORJSONResponse
+
+    payload = _to_doc(record).model_dump()
+    return ORJSONResponse(content=payload, headers={'ETag': f'"{record.etag}"'})
+
+
+@router.get('/region_profiles/{name}/revisions', response_model=RegionProfileRevisionsResponse)
+async def list_region_profile_revisions(
+    name: str, opensearch: OpenSearchDep
+) -> RegionProfileRevisionsResponse:
+    revisions = await list_revisions(opensearch, name)
+    if revisions is None:
+        raise api_error(404, 'not_found', f'{name!r} is not a stored profile')
+    return RegionProfileRevisionsResponse(
+        name=name,
+        revisions=[
+            RegionProfileRevisionSummary(
+                revision=r.revision,
+                saved_at=r.saved_at,
+                cloned_from=r.cloned_from,
+                description=r.description,
+            )
+            for r in revisions
+        ],
+    )
+
+
+@router.get('/region_profiles/{name}/revisions/{revision}', response_model=RegionProfileDoc)
+async def get_region_profile_revision(
+    name: str, revision: int, opensearch: OpenSearchDep
+) -> RegionProfileDoc:
+    record = await get_revision_record(opensearch, name, revision)
+    if record is None:
+        raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
+    return _to_doc(record)
+
+
+# =============================================================================
+# Clone a profile into a new stored profile
+# =============================================================================
+
+
+async def _resolve_clone_source(
+    client: Any, *, name: str, revision: int | None, source: str | None
+) -> ProfileRecord:
+    if source == 'stored' and revision is not None:
+        record = await get_revision_record(client, name, revision)
+        if record is None:
+            raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
+        return record
+    if source is not None:
+        record = build_record(name, revision=revision)
+        if record is None or record.source != source:
+            raise api_error(404, 'not_found', f'{name!r} has no {source} source')
+        return record
+    if revision is not None:
+        record = await get_revision_record(client, name, revision)
+        if record is not None:
+            return record
+    record = build_record(name, revision=revision)
+    if record is None:
+        raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
+    return record
+
+
+@router.post('/region_profiles/{name}/clone', response_model=RegionProfileDoc, status_code=201)
+async def clone_region_profile(
+    name: str, body: RegionProfileCloneRequest, opensearch: OpenSearchDep
+) -> RegionProfileDoc:
+    from src.config import get_curation_config
+    from src.config.project_context import bind_project
+
+    target_slug = get_curation_config().project_slug
+
+    if body.from_project and body.from_project != target_slug:
+        from src.services.projects.lifecycle import _require_found, _resolve_existing
+
+        source_record = _require_found(
+            await _resolve_existing(body.from_project), body.from_project
+        )
+        if source_record.status not in ('active', 'archived'):
+            raise api_error(
+                409,
+                'clone_source_not_ready',
+                f"'{body.from_project}' is {source_record.status}; only an active or "
+                'archived project can be cloned from',
+                project=body.from_project,
+                project_status=source_record.status,
+            )
+        with bind_project(source_record, read_only=True):
+            source_store = get_config_store()
+            await source_store.ensure_fresh(opensearch)
+            source = await _resolve_clone_source(
+                opensearch, name=name, revision=body.revision, source=body.source
+            )
+    else:
+        store = get_config_store()
+        await store.ensure_fresh(opensearch)
+        source = await _resolve_clone_source(
+            opensearch, name=name, revision=body.revision, source=body.source
+        )
+
+    existing = all_known_names()
+    if body.new_name in existing:
+        raise api_error(409, 'name_conflict', f'{body.new_name!r} is already taken')
+
+    new_body = dict(source.body)
+    report = await validate_profile(
+        None,
+        new_body,
+        segmenter_health=_segmenter_health_fn,
+        class_names=_registry_class_names(),
+        project_slug=target_slug,
+    )
+    if not report.ok:
+        raise api_error(
+            422, 'validation_failed', 'the cloned profile has content errors', report=report
+        )
+
+    source_project = body.from_project or target_slug
+    cloned_from = (
+        f'{source_project}:{name}@{source.revision if source.revision is not None else "-"}'
+    )
+    record = await save_profile(
+        opensearch,
+        name=body.new_name,
+        body=new_body,
+        expected_revision=None,
+        description=body.description if body.description is not None else source.description,
+        cloned_from=cloned_from,
+    )
+    return _to_doc(record, validation=report)
+
+
+# =============================================================================
+# Save a new revision, or delete a stored profile
+# =============================================================================
+
+
+@router.put('/region_profiles/{name}', response_model=RegionProfileDoc)
+async def save_region_profile(
+    name: str, body: RegionProfileSaveRequest, opensearch: OpenSearchDep
+) -> RegionProfileDoc:
+    store = get_config_store()
+    await store.ensure_fresh(opensearch)
+    existing = build_record(name)
+    if existing is not None and existing.read_only:
+        raise api_error(403, 'read_only', f'{name!r} is read-only')
+
+    report = await validate_profile(
+        None,
+        body.body.model_dump(),
+        segmenter_health=_segmenter_health_fn,
+        class_names=_registry_class_names(),
+        project_slug=_project_slug(),
+    )
+    if not report.ok:
+        raise api_error(
+            422,
+            'validation_failed',
+            f'the profile has {len(report.errors)} error(s)',
+            report=report,
+        )
+
+    try:
+        record = await save_profile(
+            opensearch,
+            name=name,
+            body=body.body.model_dump(),
+            expected_revision=body.expected_revision,
+            description=body.description
+            if body.description is not None
+            else (existing.description if existing else ''),
+        )
+    except RevisionConflictError as exc:
+        raise api_error(
+            409,
+            'revision_conflict',
+            f'{name!r} changed since you loaded it',
+            current_revision=exc.current_revision,
+        ) from exc
+    return _to_doc(record, validation=report)
+
+
+@router.delete('/region_profiles/{name}', status_code=204)
+async def delete_region_profile_route(
+    name: str, expected_revision: int, opensearch: OpenSearchDep
+) -> None:
+    from fastapi import Response
+
+    store = get_config_store()
+    await store.ensure_fresh(opensearch)
+    record = build_record(name)
+    if record is None:
+        raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
+    if record.read_only:
+        raise api_error(403, 'read_only', f'{name!r} is read-only')
+    ref = store.current.active_profile
+    if isinstance(ref, tuple) and ref[0] == name:
+        raise api_error(409, 'in_use', f'{name!r} is the active profile')
+    try:
+        await delete_profile(opensearch, name=name, expected_revision=expected_revision)
+    except RevisionConflictError as exc:
+        raise api_error(
+            409,
+            'revision_conflict',
+            f'{name!r} changed since you loaded it',
+            current_revision=exc.current_revision,
+        ) from exc
+    return Response(status_code=204)  # type: ignore[return-value]
+
+
+# =============================================================================
+# Activate a profile as the default
+# =============================================================================
+
+
+@router.post('/region_profiles/{name}/activate')
+async def activate_region_profile_route(
+    name: str, body: RegionProfileActivateRequest, opensearch: OpenSearchDep
+) -> Any:
+    from src.services.config_store.profile_validation import BYPASSABLE_CODES
+    from src.services.labeling.vlm_prompts import active_prompt_pack
+
+    store = get_config_store()
+    await store.ensure_fresh(opensearch)
+    record = build_record(name, revision=body.revision)
+    if record is None:
+        raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
+    if record.read_only and record.source == 'template':
+        raise api_error(403, 'read_only', f'{name!r} is a template; clone it first')
+
+    report = await validate_profile(
+        None,
+        record.body,
+        for_activation=True,
+        segmenter_health=_segmenter_health_fn,
+        active_pack=active_prompt_pack(),
+        class_names=_registry_class_names(),
+        project_slug=_project_slug(),
+    )
+    blocking = [e for e in report.errors if not (body.force and e.code in BYPASSABLE_CODES)]
+    if blocking:
+        raise api_error(
+            422,
+            'validation_failed',
+            f'{name!r} has {len(blocking)} blocking error(s)',
+            report=report,
+        )
+
+    expected_active = (
+        body.expected_active.model_dump() if body.expected_active is not None else None
+    )
+    try:
+        await activate_profile(
+            opensearch, name=name, revision=record.revision, expected_active=expected_active
+        )
+    except ActiveConflictError as exc:
+        raise api_error(
+            409,
+            'active_conflict',
+            'the active profile changed since you loaded it',
+            current=ActiveRef(**exc.current) if exc.current else None,
+        ) from exc
+
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    response = await build_active_config_response(opensearch, axis='detection_profile')
+    impact = await compute_activation_impact(opensearch, profile=get_active_region_profile())
+    return {
+        **response.model_dump(),
+        'impact': impact.model_dump(),
+        'validation': report.model_dump(),
+    }

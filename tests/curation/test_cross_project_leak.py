@@ -77,6 +77,29 @@ def _prompt_pack_body() -> dict[str, Any]:
     return body
 
 
+def _region_profile_body() -> dict[str, Any]:
+    from dataclasses import asdict
+
+    from src.config import DetectionProfile
+
+    raw = asdict(DetectionProfile(name='p'))
+    raw.pop('name')
+    for key, value in raw.items():
+        if isinstance(value, frozenset):
+            raw[key] = sorted(value)
+        elif isinstance(value, tuple):
+            raw[key] = list(value)
+    # Text-free, segmenter-only: the leak sweep's Triton is dead by design
+    # (network disabled), so a detector leg or an OCR-needing text_reader
+    # would always 422 detector_model_not_found/ocr_model_not_found here.
+    raw['detector_model'] = ''
+    raw['text_reader'] = 'none'
+    raw['segmenter_text_prompt'] = 'test region'
+    raw['display_name'] = 'Regions'
+    raw['display_name_singular'] = 'Region'
+    return raw
+
+
 def route_params(slug: str) -> dict[str, str]:
     """Every path parameter a scoped route may carry, filled with ``slug``'s
     ids. A route with a parameter missing here fails ("unmapped route")."""
@@ -243,6 +266,30 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/prompt_packs/{name}/activate'): {
             'json': {'revision': None, 'expected_active': None, 'force': False}
         },
+        # W4: region-profile CRUD. Same PREPARE-resets-to-a-known-revision
+        # pattern as the pack routes above.
+        ('POST', '/region_profiles'): {
+            'json': {'name': f'{slug}-newprofile', 'body': _region_profile_body()}
+        },
+        ('POST', '/region_profiles/validate'): {
+            'json': {'name': None, 'body': _region_profile_body()}
+        },
+        ('POST', '/region_profiles/validate_segmenter_prompt'): {
+            'json': {'text_prompt': 'test region', 'sole_leg': True}
+        },
+        ('POST', '/region_profiles/test'): {'json': {'name': None, 'body': _region_profile_body()}},
+        ('POST', '/region_profiles/active/rollback'): {'json': {'expected_active': None}},
+        ('POST', '/region_profiles/deactivate'): {'json': {'expected_active': None}},
+        ('POST', '/region_profiles/{name}/clone'): {
+            'json': {'new_name': f'{slug}-profileclone', 'source': 'stored'}
+        },
+        ('PUT', '/region_profiles/{name}'): {
+            'json': {'expected_revision': 1, 'body': _region_profile_body()}
+        },
+        ('DELETE', '/region_profiles/{name}'): {'params': {'expected_revision': '1'}},
+        ('POST', '/region_profiles/{name}/activate'): {
+            'json': {'revision': None, 'expected_active': None, 'force': True}
+        },
     }
 
 
@@ -277,6 +324,9 @@ NO_WRITE: dict[tuple[str, str], str] = {
     ('POST', '/clone_settings'): 'mutates the shared project registry doc, not project data',
     ('POST', '/prompt_packs/validate'): 'dry-run report; never writes',
     ('POST', '/prompt_packs/test'): 'renders a prompt preview; never writes',
+    ('POST', '/region_profiles/validate'): 'dry-run report; never writes',
+    ('POST', '/region_profiles/validate_segmenter_prompt'): 'dry-run report; never writes',
+    ('POST', '/region_profiles/test'): 'renders an effective-legs preview; never writes',
 }
 
 # Routes whose ``{crop_id}`` is a seeded item other than ``-item-0001``,
@@ -333,6 +383,10 @@ UNSEEDED_WRITES: dict[tuple[str, str], str] = {
     ('POST', '/prompt_packs/active/rollback'): (
         'a fresh per-slug config store has no prior activation to roll back to '
         '(409 no_previous); rollback success is covered by test_prompt_packs_router.py'
+    ),
+    ('POST', '/region_profiles/active/rollback'): (
+        'a fresh per-slug config store has no prior activation to roll back to '
+        '(409 no_previous); rollback success is covered by test_region_profiles_router.py'
     ),
 }
 
@@ -444,6 +498,38 @@ def _stored_prompt_pack(env: Any, slug: str) -> None:
     reset_config_stores()
 
 
+def _stored_region_profile(env: Any, slug: str) -> None:
+    """(Re-)seed ``profile:<slug>-model`` at a known revision 1, with no
+    activation recorded -- mirrors ``_stored_prompt_pack``."""
+    from src.config.curation import IndexRole
+
+    index = env.records[slug].resources.indexes[IndexRole.CONFIGS]
+    name = f'{slug}-model'
+    now = '2026-01-01T00:00:00+00:00'
+    body = _region_profile_body()
+    docs = env.transport.store.setdefault(index, {})
+    doc = {
+        'doc_type': 'config',
+        'kind': 'region_profile',
+        'name': name,
+        'revision': 1,
+        'body': body,
+        'description': '',
+        'created_at': now,
+        'updated_at': now,
+        'updated_by': None,
+        'cloned_from': None,
+    }
+    docs[f'profile:{name}'] = doc
+    docs[f'profile:{name}@1'] = {**doc, 'doc_type': 'revision'}
+    meta = docs.setdefault('meta:config_revision', {'doc_type': 'meta', 'config_revision': 0})
+    meta['config_revision'] = int(meta.get('config_revision', 0)) + 1
+    docs.pop('activation:detection_profile', None)
+    from src.services.config_store.store import reset_config_stores
+
+    reset_config_stores()
+
+
 PREPARE: dict[tuple[str, str], Any] = {
     ('PUT', '/models/{model_name}/sharing'): _promoted_model,
     ('DELETE', '/models/{model_name}'): _promoted_model,
@@ -457,6 +543,10 @@ PREPARE: dict[tuple[str, str], Any] = {
     ('PUT', '/prompt_packs/{name}'): _stored_prompt_pack,
     ('DELETE', '/prompt_packs/{name}'): _stored_prompt_pack,
     ('POST', '/prompt_packs/{name}/activate'): _stored_prompt_pack,
+    ('POST', '/region_profiles/{name}/clone'): _stored_region_profile,
+    ('PUT', '/region_profiles/{name}'): _stored_region_profile,
+    ('DELETE', '/region_profiles/{name}'): _stored_region_profile,
+    ('POST', '/region_profiles/{name}/activate'): _stored_region_profile,
 }
 
 
@@ -1097,6 +1187,12 @@ def leak_env(
     monkeypatch.setenv('OP_SELECT_SYNC_MAX_OPS', '1')
     monkeypatch.setenv('OP_REGION_FIELD_EMBEDDING', 'pe_embedding')
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'fake_item_detector')
+    # W4: so a segmenter-only region-profile body (_region_profile_body())
+    # never trips no_candidate_source in the sweep -- the segmenter health
+    # probe itself still fails closed (network is disabled here), which is
+    # exactly the segmenter_unreachable warning/activation-error path
+    # those routes' bodies exercise (force=true on activate bypasses it).
+    monkeypatch.setenv('OP_SEGMENTER_URL', 'http://segmenter-disabled-in-leak-test:8000')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     monkeypatch.setattr(curation_opensearch, '_registries', {})
     monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', set())
