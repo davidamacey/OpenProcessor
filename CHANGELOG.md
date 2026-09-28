@@ -25,13 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (env `OP_REGION_MAX_BOXES_PER_WRITE`, default 500), served on
   `region_profile.limits.max_boxes_per_write` (`/health` and
   `/regions/vocabulary`).
-  **Not yet done** (see the handback report for the full list): the
-  worker pipeline rewrite (candidate selection, numbered VLM overlay,
-  verdict-to-storage), removal of the old scalar routes/fields, the
-  `_items_body` mapping additions for the new nested fields (explicitly
-  excluded from the mapping-coverage and wire tests this pass),
-  embeddings, and clustering. This is a foundational slice only, not
-  the full W8 wave.
+  The worker pipeline rewrite (candidate selection, numbered VLM
+  overlay, verdict-to-storage) landed in the later "W8 pipeline wiring"
+  entry below; removal of the old scalar routes/fields, embeddings, and
+  clustering remain open (W8c) — see the handback report.
 - **W8a multi-box region human edit routes.** New, additive routes
   alongside the existing single-scalar ones (legacy fields/routes NOT
   removed this pass -- the worker pipeline still writes them
@@ -94,15 +91,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-box verdicts onto a `list[RegionBox]` (every entry carries its own
   `box_id`, Cropwright C3/Q15), applying the sanity gate per box and the
   no-verdict retry/force-resolve split from the single-box cascade.
-  **Not done this pass:** these are pure, fully tested functions not yet
-  called from `runner.py`'s streaming stage consumers
-  (`stage_a_*`/`stage_b_combined`), which still build the single legacy-
-  scalar write end to end — the worker still never selects more than one
-  candidate per item. See the handback report for the full remaining
-  scope. `src/config/region_rejection.py` gains `REJECT_REASON_HUMAN`
+  **Superseded by the W8 pipeline-wiring pass below** — these primitives
+  are now the live worker's only code path; this bullet is kept for the
+  historical record of what W8b added standalone.
+  `src/config/region_rejection.py` gains `REJECT_REASON_HUMAN`
   (a human reviewer's per-box rejection is now a labelled catalog
   entry); `src/config/region_state.py` gains `BOX_STATE_ROUTES`, served
   as `box_state_routes` on `GET /regions/statuses`.
+- **W8 pipeline wiring: the multi-box primitives now drive the live
+  detection worker end to end.** `scripts/curation/worker/runner.py`'s
+  streaming stages (`stage_a_consumer`, `stage_a_sam_consumer`,
+  `stage_b_combined`) now select N candidates per item
+  (`select_region_candidates`, new `DetectionProfile` fields
+  `region_nms_iou`/`region_max_candidates`), render one numbered VLM
+  overlay per crop (`render_region_block`) instead of a single-box
+  prompt, and map the reply's per-box verdicts onto `RegionBox` entries
+  (`verdicts_to_boxes`) written via `boxes_write_fields` — every write
+  path (`stage_b_combined`, the segmenter high-confidence skip,
+  `accept_without_vlm`) now produces `region_boxes`/`region_count`/
+  `region_revision`/`region_box_seq`, not the legacy scalar fields.
+  `RegionDetector` gained `detect_multi`/`detect_batch_multi` (decode
+  every anchor above the confidence floor, not just top-1, capped to
+  300 before NMS); `SegmenterClient` gained `segment_multi` (the
+  segmenter's HTTP response already returned every candidate; `segment`
+  only ever kept the top one). `VlmLabeler.label_combined`/
+  `label_combined_batch` take `region_bboxes_norm: list[...]` (was a
+  single `region_bbox_norm`) and `VlmCombinedReply.region_boxes:
+  list[VlmBoxVerdict]` (was flat `region_bbox_correct`/`region_text`/
+  `region_confidence`); `vlm_prompts.py`'s built-in packs
+  (`GENERIC_ITEM_PACK`, `GENERIC_REGION_PACK`) and the
+  `examples/prompt_packs/vehicle_wheel.json` example were rewritten to
+  ask for the nested `region_boxes` shape the parser now requires (a
+  real gap from the W8b pass: the prompts still asked for the old flat
+  shape while the parser demanded the new one).
+  Deleted `scripts/curation/worker/combined.py` and
+  `cascade.py::_process_crop` (dead: the streaming pipeline never had a
+  legacy two-call cascade fallback; every candidate always went through
+  one combined VLM call). Their test coverage was ported onto the real
+  pipeline (`tests/curation/test_region_cascade_integrity.py`'s
+  `_drive_worker` harness) rather than deleted outright, including a
+  full re-port of `tests/curation/test_region_worker.py`'s per-routing-
+  row cascade tests; a few rows describing pre-W8 intra-pass fallback
+  behaviour (detector/verify reject -> immediately try the secondary
+  segmenter in the same pass) were replaced with tests asserting the
+  new, correct invariant instead: a combined-verify reject is terminal
+  (`verify_rejected`) for that pass, not a same-pass fallback trigger.
+  **Not done this pass** (see the handback report): deleting the legacy
+  scalar `RegionFields` routes/fields (W8c), per-box embeddings/
+  clustering/FP matching, undo-snapshot simplification to box-list-only,
+  review-queue/stats/export per-box row shapes, and segmenter service
+  `min_score`/candidate-cap config.
 - **W8: explicit OpenSearch mapping for `region_boxes` /
   `region_box_embeddings`.** `_items_body()` now maps the W8 nested list
   and its sibling per-box-embedding field explicitly (fixed element-key
