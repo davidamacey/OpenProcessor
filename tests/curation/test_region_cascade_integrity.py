@@ -134,14 +134,23 @@ class TestCombinedSingle:
         reply = await _labeler(_combined(region_text=echo)).label_combined(
             'c1', _jpeg(), class_names=CLASS_NAMES, region_bboxes_norm=[(0.2, 0.6, 0.5, 0.8)]
         )
-        # The echo-suppression heuristic lived in the pre-W8 flat parser;
+        # W8 M5 fix (pipeline-wiring review, 2026-09-27): restored --
         # box_verdicts' text cleaning (region_overlay._clean_text_reply)
-        # only strips sentinels, not item-answer echoes. The class side
-        # still resolves regardless.
+        # now suppresses an item-answer echo (the picked class name, make,
+        # model, or their join) the same way the pre-W8 flat parser's
+        # _clean_combined_region_text did. The class side still resolves
+        # regardless.
+        assert reply.region_boxes[0].text_reply is None
         assert reply.class_id == 1
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize('sentinel', [None, '', 'unknown', 'N/A', 'null'])
+    @pytest.mark.parametrize(
+        'sentinel',
+        # 'unreadable' / '-' restored (W8 M5 fix): the W8 rewrite's
+        # region_overlay._clean_text_reply only dropped 4 of the pre-W8
+        # flat parser's 7 sentinels.
+        [None, '', 'unknown', 'N/A', 'null', 'unreadable', '-'],
+    )
     async def test_no_text_is_null(self, sentinel: str | None) -> None:
         reply = await _labeler(_combined(region_text=sentinel)).label_combined(
             'c1', _jpeg(), class_names=CLASS_NAMES, region_bboxes_norm=[(0.2, 0.6, 0.5, 0.8)]
@@ -460,13 +469,23 @@ def _item(status: str = 'pending_detection') -> dict[str, Any]:
     }
 
 
+def _as_candidate_list(c: RegionCandidate | list[RegionCandidate] | None) -> list[RegionCandidate]:
+    """Normalize a ``_drive_worker`` leg input to a list (W8 M8: a test
+    can now feed 2+ raw candidates per leg, not just 0 or 1)."""
+    if c is None:
+        return []
+    if isinstance(c, list):
+        return c
+    return [c]
+
+
 async def _drive_worker(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     *,
     fake_os: _FakeOpenSearch,
-    primary: RegionCandidate | None,
-    segmenter: RegionCandidate | None,
+    primary: RegionCandidate | list[RegionCandidate] | None,
+    segmenter: RegionCandidate | list[RegionCandidate] | None,
     reply: VlmCombinedReply,
     visible: bool | None = True,
     combined_side_effect: Any = None,
@@ -485,7 +504,14 @@ async def _drive_worker(
     called as the n-th write is seen. ``class_group`` overrides the
     class -> group resolver (default: every class is group-less);
     ``profile_overrides`` re-registers the active profile with those
-    dataclass fields replaced (e.g. ``secondary_shape_groups``)."""
+    dataclass fields replaced (e.g. ``secondary_shape_groups``).
+
+    ``primary`` / ``segmenter`` each take a single :class:`RegionCandidate`,
+    ``None``, OR a ``list[RegionCandidate]`` (W8 M8) -- a list feeds N raw
+    candidates through that leg's ``detect_batch_multi`` / ``segment_multi``
+    in one pass, exercising the real multi-box selection/verify/write path
+    instead of the single-candidate shape every pre-M8 test used.
+    """
     handlers = _capture_signal_handler(monkeypatch)
     monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
     if profile_overrides:
@@ -498,10 +524,13 @@ async def _drive_worker(
     # read in-memory too, never against the unresolvable --opensearch host.
     install_static_project_registry(monkeypatch)
 
+    primary_list = _as_candidate_list(primary)
+    segmenter_list = _as_candidate_list(segmenter)
+
     primary_det = MagicMock()
     primary_det.confidence_floor = 0.0
-    primary_det.detect_batch = AsyncMock(return_value=[primary])
-    primary_det.detect_batch_multi = AsyncMock(return_value=[[primary] if primary else []])
+    primary_det.detect_batch = AsyncMock(return_value=[primary_list[0] if primary_list else None])
+    primary_det.detect_batch_multi = AsyncMock(return_value=[primary_list])
     monkeypatch.setattr(runner_mod, 'RegionDetector', MagicMock(return_value=primary_det))
     ocr = MagicMock()
     ocr.detect_regions = AsyncMock(return_value=[])
@@ -510,8 +539,8 @@ async def _drive_worker(
     monkeypatch.setattr(runner_mod, '_crop_jpeg_for_task', lambda *_a: _jpeg())
 
     seg = MagicMock(aclose=AsyncMock())
-    seg.segment = AsyncMock(return_value=segmenter)
-    seg.segment_multi = AsyncMock(return_value=[segmenter] if segmenter else [])
+    seg.segment = AsyncMock(return_value=segmenter_list[0] if segmenter_list else None)
+    seg.segment_multi = AsyncMock(return_value=segmenter_list)
     monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=seg))
 
     vlm = MagicMock(aclose=AsyncMock())
@@ -552,8 +581,23 @@ async def _drive_worker(
     )
 
     async def _stopper() -> None:
+        # W8 pipeline-review flaky-test fix (2026-09-27): this used to be
+        # a FIXED 500 x 10ms budget (5s), regardless of wall-clock time
+        # actually elapsed. Under load (e.g. full-suite xdist runs
+        # sharing CPU across workers) `asyncio.sleep(0.01)` can itself
+        # take longer than 10ms, so 500 iterations no longer guaranteed
+        # ~5s of real waiting -- a multi-retry scenario (this test needs
+        # 6 combined-VLM round trips across 2 write cycles) could run out
+        # of budget one retry short of the cap and stop the worker
+        # early, an observed ~1/12 failure rate standalone. That is a
+        # harness time-budget issue, not a pipeline logic bug (confirmed
+        # by re-running the same scenario with a generous budget below:
+        # 0/12). Deadline-based on the event loop's own monotonic clock,
+        # generously bounded well under the outer `wait_for` timeout, so
+        # CPU contention costs wall-clock slack instead of iterations.
         seen = 0
-        for _ in range(500):
+        deadline = asyncio.get_running_loop().time() + 18.0
+        while asyncio.get_running_loop().time() < deadline:
             await asyncio.sleep(0.01)
             while seen < len(fake_os.writes):
                 seen += 1
@@ -566,7 +610,7 @@ async def _drive_worker(
         handlers[0]()
 
     stopper = asyncio.create_task(_stopper())
-    rc = await asyncio.wait_for(runner_mod.run(args), timeout=20)
+    rc = await asyncio.wait_for(runner_mod.run(args), timeout=30)
     await stopper
     assert rc == 0
     return {'primary': primary_det, 'seg': seg, 'vlm': vlm, 'vlm_cls': vlm_cls}

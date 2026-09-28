@@ -413,6 +413,9 @@ class TestRejectionReasonVocabulary:
             )
         ]
         asyncio.run(accept_without_vlm(t, ocr=MagicMock(), profile=_profile()))
-        F = get_region_fields()
-        box = t.update_doc[F.boxes][0]
-        assert box['rejection_reason'] == f'{REJECT_REASON_SANITY_PREFIX}degenerate_zero_size'
+        # W8 B1/M1: the box list is stashed on `t.pending_boxes` (the
+        # writer merges + finalizes ids against the live doc at write
+        # time), not computed straight onto `t.update_doc` any more.
+        assert t.pending_boxes is not None
+        box = t.pending_boxes[0]
+        assert box.rejection_reason == f'{REJECT_REASON_SANITY_PREFIX}degenerate_zero_size'

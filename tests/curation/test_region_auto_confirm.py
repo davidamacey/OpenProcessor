@@ -31,6 +31,7 @@ from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
 from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch, _item
+from .test_region_text_worker import _drive
 
 
 if TYPE_CHECKING:
@@ -60,16 +61,15 @@ class TestWorkerWrites:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """W8: the combined-call accept path writes the box-list shape
-        (``region_boxes[i].state == 'accepted'``), not the legacy
-        item-level ``region_auto_confirmed`` / ``region_validated``
-        scalars this class used to assert on -- the box-list schema does
-        not yet carry an auto-confirm-vs-human-validated distinction per
-        box (W8c follow-up); every accepted box reads the same until
-        that lands. A human validating a box is still a distinct,
-        separate action from a machine accepting one -- see
-        ``test_region_review_tab_keeps_auto_confirmed_regions`` below,
-        which covers the legacy-scalar wire/query contract untouched by
-        this pass.
+        (``region_boxes[i].state == 'accepted'``) AND restores the
+        item-level ``region_verified``/``region_auto_confirmed``/
+        ``region_validated`` fields (W8 M2 fix, pipeline-wiring review
+        2026-09-27) -- these stopped being written when the box-list
+        rewrite landed, going blind every reader that still filters on
+        them (regions.py's ``verified`` filter, the training-candidate
+        cohorts, region_requeue.py). ``region_validated`` stays human-only
+        (unchanged, DQ-M1); ``region_auto_confirmed`` is the box-aware
+        rule: >=1 accepted box, VLM confidence 'high' here, so it fires.
         """
         fake = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         await _drive_worker(
@@ -89,6 +89,64 @@ class TestWorkerWrites:
         doc = fake.live['c1']
         assert doc[F.status] == 'detected'
         assert doc[F.boxes][0]['state'] == 'accepted'
+        # M2: item-level verification fields restored.
+        assert doc[F.verified] is True
+        assert doc[F.validated] is False
+        assert doc[F.auto_confirmed] is True
+        assert doc[F.verifier] is not None
+        assert doc[F.verifier_version] is not None
+        assert doc[F.verified_at] is not None
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures('reference_region_profile')
+    async def test_streaming_worker_low_confidence_accept_is_not_auto_confirmed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """M2 box-aware rule: an accepted box the VLM only rated 'medium'
+        confidence, off a detector score below the auto-confirm floor,
+        is verified (the VLM did answer) but NOT auto-confirmed."""
+        fake = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
+        await _drive_worker(
+            tmp_path,
+            monkeypatch,
+            fake_os=fake,
+            primary=RegionCandidate(bbox_norm=(0.3, 0.6, 0.6, 0.75), score=0.5, source='det'),
+            segmenter=None,
+            reply=VlmCombinedReply(
+                img_id='c1',
+                region_visible=True,
+                region_boxes=[VlmBoxVerdict(box=1, bbox_correct=True, confidence='medium')],
+            ),
+        )
+        doc = fake.live['c1']
+        assert doc[F.status] == 'detected'
+        assert doc[F.verified] is True
+        assert doc[F.auto_confirmed] is False
+        assert doc[F.validated] is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures('reference_region_profile')
+    async def test_streaming_worker_no_vlm_path_is_unverified_and_unconfirmed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """M2: the no-VLM-configured accept path (``accept_without_vlm``)
+        never calls the VLM -- verified/auto_confirmed must both stay
+        False, the same as the pre-W8 skip-verify write."""
+        fake = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
+        await _drive(
+            tmp_path,
+            monkeypatch,
+            fake_os=fake,
+            primary=RegionCandidate(bbox_norm=(0.3, 0.6, 0.6, 0.75), score=0.9, source='det'),
+            segmenter=None,
+            vlm_url='',
+        )
+        doc = fake.live['c1']
+        assert doc[F.status] == 'detected'
+        assert doc[F.boxes][0]['state'] == 'accepted'
+        assert doc[F.verified] is False
+        assert doc[F.auto_confirmed] is False
+        assert doc[F.validated] is False
 
 
 def test_auto_confirmed_region_is_on_the_wire_and_not_label_validated() -> None:

@@ -94,6 +94,44 @@ class TestTextFreeWrites:
         mocks['ocr'].read_region_lines.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_rejected_box_vlm_reading_is_also_dropped(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """W8 M6 fix (pipeline-wiring review, 2026-09-27): the text-free
+        leak fix only ever covered ACCEPTED boxes
+        (``_box_with_resolved_text`` runs on the per-box text-resolution
+        loop's accepted branch only). A REJECTED box's ``text`` came
+        straight from ``verdicts_to_boxes``'s raw ``verdict.text_reply``
+        with no profile gate at all -- proven here with the same VLM
+        text reading as the accepted-case test above, but with
+        ``bbox_correct=False`` (rejected) instead of ``True``."""
+        fake_os = _fake_os()
+        reply = VlmCombinedReply(
+            img_id='c1',
+            region_visible=True,
+            region_boxes=[
+                VlmBoxVerdict(box=1, bbox_correct=False, confidence='high', text_reply='ABC1234')
+            ],
+        )
+        await _drive(
+            tmp_path,
+            monkeypatch,
+            fake_os=fake_os,
+            primary=None,
+            segmenter=SEG_BOX,
+            vlm_url=VLM_URL,
+            reply=reply,
+            profile_overrides=TEXT_FREE,
+        )
+        F = get_region_fields()
+        doc = fake_os.live['c1']
+        assert doc[F.status] == 'verify_rejected'
+        box = doc[F.boxes][0]
+        assert box['state'] == 'rejected'
+        assert _text_keys(doc) == []
+        assert _box_text_values(box) == []
+
+    @pytest.mark.asyncio
     async def test_no_vlm_writes_box_without_ocr(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

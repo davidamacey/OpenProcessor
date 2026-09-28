@@ -15,6 +15,7 @@ from src.config.region_rejection import (
     REJECT_REASON_VERIFIER,
 )
 from src.config.region_state import RegionStatus
+from src.services.curation.region_boxes import new_box_placeholder
 from src.services.labeling.region_overlay import VlmBoxVerdict
 
 
@@ -38,12 +39,15 @@ def test_accepted_box_from_true_verdict() -> None:
     boxes, status, _extra = verdicts_to_boxes(
         [_cand()],
         [VlmBoxVerdict(box=1, bbox_correct=True, confidence='high')],
-        seq=0,
     )
     assert status == RegionStatus.DETECTED
     assert len(boxes) == 1
     assert boxes[0].state == 'accepted'
-    assert boxes[0].box_id == 'b1'
+    # W8 M1 fix: a fresh candidate gets a PLACEHOLDER id here -- a real
+    # ``b<N>`` id is only minted at write time, against the CURRENT
+    # stored ``region_box_seq`` (bulk_writer._merge / finalize_box_ids),
+    # never against a snapshot this pure function has no access to.
+    assert boxes[0].box_id == new_box_placeholder(0)
     assert boxes[0].confidence == 'high'
 
 
@@ -51,7 +55,6 @@ def test_rejected_box_from_false_verdict() -> None:
     boxes, status, _extra = verdicts_to_boxes(
         [_cand()],
         [VlmBoxVerdict(box=1, bbox_correct=False, confidence='low')],
-        seq=0,
     )
     assert status == RegionStatus.VERIFY_REJECTED
     assert boxes[0].state == 'rejected'
@@ -62,7 +65,6 @@ def test_no_verdict_box_rejected_with_no_verdict_reason() -> None:
     boxes, status, _extra = verdicts_to_boxes(
         [_cand()],
         [VlmBoxVerdict(box=1, bbox_correct=None, confidence=None)],
-        seq=0,
         force_resolve=True,
     )
     assert status == RegionStatus.VERIFY_REJECTED
@@ -75,7 +77,6 @@ def test_true_verdict_failing_sanity_gate_is_rejected_with_sanity_reason() -> No
     boxes, status, _extra = verdicts_to_boxes(
         [_cand(bbox=degenerate)],
         [VlmBoxVerdict(box=1, bbox_correct=True, confidence='high')],
-        seq=0,
     )
     assert status == RegionStatus.VERIFY_REJECTED
     assert (boxes[0].rejection_reason or '').startswith(REJECT_REASON_SANITY_PREFIX)
@@ -87,7 +88,6 @@ def test_no_verdict_at_all_returns_none_status_for_retry() -> None:
     boxes, status, extra = verdicts_to_boxes(
         [_cand()],
         [VlmBoxVerdict(box=1, bbox_correct=None, confidence=None)],
-        seq=0,
     )
     assert status is None
     assert extra.get('no_verdict') is True
@@ -100,11 +100,11 @@ def test_multi_box_mixed_verdicts() -> None:
         VlmBoxVerdict(box=1, bbox_correct=True, confidence='high'),
         VlmBoxVerdict(box=2, bbox_correct=False, confidence='low'),
     ]
-    boxes, status, _extra = verdicts_to_boxes(cands, verdicts, seq=0)
+    boxes, status, _extra = verdicts_to_boxes(cands, verdicts)
     assert status == RegionStatus.DETECTED
-    assert boxes[0].box_id == 'b1'
+    assert boxes[0].box_id == new_box_placeholder(0)
     assert boxes[0].state == 'accepted'
-    assert boxes[1].box_id == 'b2'
+    assert boxes[1].box_id == new_box_placeholder(1)
     assert boxes[1].state == 'rejected'
 
 
@@ -113,7 +113,6 @@ def test_stored_pending_verification_box_ids_preserved() -> None:
     boxes, status, _extra = verdicts_to_boxes(
         [cand],
         [VlmBoxVerdict(box=1, bbox_correct=True, confidence='high')],
-        seq=3,
     )
     assert status == RegionStatus.DETECTED
     assert boxes[0].box_id == 'b3'
@@ -127,5 +126,5 @@ def test_box_id_present_on_every_verify_result() -> None:
         VlmBoxVerdict(box=1, bbox_correct=True, confidence='high'),
         VlmBoxVerdict(box=2, bbox_correct=None, confidence=None),
     ]
-    boxes, _status, _extra = verdicts_to_boxes(cands, verdicts, seq=0, force_resolve=True)
+    boxes, _status, _extra = verdicts_to_boxes(cands, verdicts, force_resolve=True)
     assert all(b.box_id for b in boxes)

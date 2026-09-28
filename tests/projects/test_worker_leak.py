@@ -295,7 +295,7 @@ async def test_detection_worker_keeps_every_read_and_write_in_its_project(
             source='det',
         )
         boxes, status, _extra = verdicts_to_boxes(
-            [cand], reply.region_boxes, seq=0, item_bbox_norm=task.item_bbox_norm
+            [cand], reply.region_boxes, item_bbox_norm=task.item_bbox_norm
         )
         assert status is not None
         F = get_region_fields()
