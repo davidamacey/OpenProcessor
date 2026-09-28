@@ -187,14 +187,44 @@ async def update_curation_settings_route(
     # m1 fix (W3/W4 round-4 review): resolve + gate EVERY config-store axis
     # before writing ANY of them. The old loop activated axis 1, then
     # 422'd resolving axis 2, leaving axis 1's activation committed and
-    # the settings-doc write skipped -- a half-applied PUT. Prepare is
+    # the settings-doc write skipped -- a half-applied PUT. Resolve is
     # read-only (raises on any validation/gate failure); apply only runs
-    # once every axis has cleared prepare.
-    prepared = [
-        await _prepare_config_store_axis(axis, value, opensearch)
+    # once every axis has cleared resolve+gate.
+    #
+    # R5-1 fix (W3/W4 round-5 review): resolving axis 1's TARGET, then
+    # immediately gating axis 1 against axis 2's OLD stored value, then
+    # resolving+gating axis 2 the same way, let a combined PUT pair a
+    # multi-box-stripped pack with a multi-region profile in one request
+    # -- each half looked fine against the OTHER axis's PRE-request
+    # state, but the actual NEW pairing (both axes applied together) is
+    # invalid, exactly what a standalone `/activate` (even with `force`)
+    # still correctly 422s. Fix: resolve BOTH axes' target bodies first
+    # (no gate calls yet), THEN gate each axis using the OTHER axis's
+    # PENDING target from this same request -- not its stored value.
+    resolved = {
+        axis: await _resolve_config_store_axis(axis, value, opensearch)
         for axis, value in config_store_defaults.items()
-    ]
-    for plan in prepared:
+    }
+    combined = len(resolved) > 1
+    for axis, res in resolved.items():
+        if res.target_name is None:
+            continue
+        pending_sibling: Any = None
+        has_sibling = False
+        if combined:
+            other_axis = 'detection_profile' if axis == 'prompt_pack' else 'prompt_pack'
+            other = resolved.get(other_axis)
+            if other is not None:
+                has_sibling = True
+                pending_sibling = await _pending_sibling_for_gate(other_axis, other)
+        await _run_activation_gate(
+            axis,
+            res.target_name,
+            res.target_revision,
+            opensearch,
+            **({'pending_sibling': pending_sibling} if has_sibling else {}),
+        )
+    for plan in resolved.values():
         await _apply_config_store_axis(plan, opensearch)
 
     doc = await update_curation_settings(opensearch, settings_doc_defaults)
@@ -210,14 +240,17 @@ class _AxisActivationPlan(NamedTuple):
     expected_active: dict[str, Any] | None
 
 
-async def _prepare_config_store_axis(
+async def _resolve_config_store_axis(
     axis: str, value: str | None, opensearch: Any
 ) -> _AxisActivationPlan:
     """``PUT /settings {"defaults": {axis: value}}`` for a config-store
     axis: resolve ``value`` (or ``None``/``'off'``) against the live
-    registry and run the activation gate. Read-only -- writes nothing --
-    so every axis in a multi-axis PUT can be prepared (and any of them
-    can raise) before any axis is actually activated (m1 fix)."""
+    registry. Read-only -- writes nothing, and does NOT run the
+    activation gate (R5-1 fix, W3/W4 round-5 review: gating happens
+    after every axis in the request has been resolved, so a combined
+    PUT can gate each axis against the OTHER axis's PENDING target
+    instead of its stored one -- see the caller,
+    ``update_curation_settings_route``)."""
     from src.routers.curation._config_common_models import api_error
     from src.services.config_store import get_config_store
     from src.services.curation.strategy_defaults import _advertised_ids_for_axis
@@ -271,9 +304,6 @@ async def _prepare_config_store_axis(
         if stored is not None:
             target_revision = stored.revision
 
-    if target_name is not None:
-        await _run_activation_gate(axis, target_name, target_revision, opensearch)
-
     return _AxisActivationPlan(
         axis=axis,
         target_name=target_name,
@@ -282,10 +312,43 @@ async def _prepare_config_store_axis(
     )
 
 
+async def _pending_sibling_for_gate(other_axis: str, other: _AxisActivationPlan) -> Any:
+    """The value to pass as ``run_activation_gate``'s ``pending_sibling``
+    for a combined two-axis ``PUT /settings`` (R5-1 fix): the OTHER
+    axis's PENDING target from THIS SAME request, resolved to the same
+    shape the gate itself validates against for that axis (a
+    ``DetectionProfile`` for a pending profile target, a ``PromptPack``
+    for a pending pack target)."""
+    if other_axis == 'detection_profile':
+        if other.target_name is None:
+            return None
+        from src.services.config_store.profiles import build_record as build_profile_record
+        from src.services.detection.profile_registry import region_profile_from_dict
+
+        record = build_profile_record(other.target_name, revision=other.target_revision)
+        if record is None:
+            return None
+        return region_profile_from_dict(
+            {**record.body, 'name': other.target_name}, source='validate'
+        )
+    # other_axis == 'prompt_pack' -- a pack axis always resolves to SOME
+    # pack (env/file default when target_name is None, i.e. deactivated).
+    from src.services.labeling.vlm_prompts import PromptPack, resolve_prompt_pack
+
+    if other.target_name is None:
+        return resolve_prompt_pack()
+    from src.services.config_store.packs import build_record as build_pack_record
+
+    pack_record = build_pack_record(other.target_name, revision=other.target_revision)
+    if pack_record is None:
+        return resolve_prompt_pack()
+    return PromptPack.from_dict({**pack_record.body, 'name': other.target_name})
+
+
 async def _apply_config_store_axis(plan: _AxisActivationPlan, opensearch: Any) -> None:
-    """Write side of a prepared axis activation (see
-    :func:`_prepare_config_store_axis`). Only called once every axis in
-    the request has cleared prepare."""
+    """Write side of a resolved axis activation (see
+    :func:`_resolve_config_store_axis`). Only called once every axis in
+    the request has cleared resolve+gate."""
     from src.routers.curation._config_common_models import api_error
     from src.services.config_store import ActiveConflictError, get_config_store
     from src.services.config_store.store import activate_axis
@@ -309,8 +372,16 @@ async def _apply_config_store_axis(plan: _AxisActivationPlan, opensearch: Any) -
         ) from exc
 
 
+_NO_PENDING_OVERRIDE: Any = object()
+
+
 async def _run_activation_gate(
-    axis: str, target_name: str, target_revision: int | None, opensearch: Any
+    axis: str,
+    target_name: str,
+    target_revision: int | None,
+    opensearch: Any,
+    *,
+    pending_sibling: Any = _NO_PENDING_OVERRIDE,
 ) -> None:
     """N1 fix (W3/W4 round-3 review), now routed through the single
     shared gate (round-4 R4-1): the Cropwright default-pack dropdown
@@ -320,9 +391,19 @@ async def _run_activation_gate(
     revision that ``/activate`` correctly 422s (even with ``force: true``)
     goes live silently through this route instead. This bridge passes no
     ``force``, so it never bypasses -- any blocking error 422s.
+
+    ``pending_sibling`` (R5-1 fix): forwarded to
+    :func:`~src.services.config_store.activation_gate.run_activation_gate`
+    only when explicitly supplied (a combined two-axis PUT) -- see
+    :func:`_pending_sibling_for_gate`. Left as the default sentinel for a
+    single-axis PUT, so the gate falls back to its own stored-value
+    lookup, unchanged.
     """
     from src.services.config_store.activation_gate import run_activation_gate
 
+    kwargs: dict[str, Any] = {}
+    if pending_sibling is not _NO_PENDING_OVERRIDE:
+        kwargs['pending_sibling'] = pending_sibling
     await run_activation_gate(
-        cast('ConfigAxis', axis), target_name, target_revision, client=opensearch
+        cast('ConfigAxis', axis), target_name, target_revision, client=opensearch, **kwargs
     )

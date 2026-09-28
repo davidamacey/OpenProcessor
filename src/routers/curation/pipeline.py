@@ -107,6 +107,11 @@ async def pipeline_auto_label_start(
                 'cluster_id': cluster_id,
                 'prompt_pack': prompt_pack,
                 'prompt_pack_revision': prompt_pack_revision,
+                # R5-2 fix: always set, even for the omitted-pack default
+                # case -- `/start` already ran `resolve_run_prompt_pack`
+                # above for every shape of this request, so the job must
+                # never re-run it.
+                'prompt_pack_resolved': True,
             },
         )
     except RuntimeError as exc:
@@ -165,6 +170,15 @@ async def pipeline_auto_label(
     # the public schema: a direct `POST /pipeline/auto_label` caller has no
     # prior resolution to hand back, so it never sets this.
     prompt_pack_revision: Annotated[int | None, Query(include_in_schema=False)] = None,
+    # R5-2 fix (W3/W4 round-5 review, Blocker): whether `/start` already
+    # called `resolve_run_prompt_pack` for THIS request -- distinct from
+    # "the resolution pinned a revision" (`prompt_pack_revision is not
+    # None`), which `/start`'s truly-omitted-pack path never does on
+    # purpose (see below). A direct `POST /pipeline/auto_label` caller
+    # never sets this, so an explicit-but-unvalidated `prompt_pack` (e.g.
+    # an unknown name) still gets resolved-and-422'd here, same as
+    # before this fix.
+    prompt_pack_resolved: Annotated[bool, Query(include_in_schema=False)] = False,
     progress: Any = None,
 ) -> dict[str, Any]:
     """Run the full auto-labeling chain end-to-end:
@@ -187,17 +201,37 @@ async def pipeline_auto_label(
     from src.services.labeling.vlm_labeler import ItemCrop
 
     reject_detection_profile(detection_profile)
-    if prompt_pack_revision is None:
-        # No prior resolution handed in (a direct synchronous call, or a
-        # truly-omitted per-run pack that tracks the active pack
-        # dynamically) -- resolve/pin it now, same as before this fix.
+    if not prompt_pack_resolved:
+        # No prior resolution handed in -- a direct synchronous call
+        # (`prompt_pack_resolved` is never set for that route, even when
+        # the caller passes an explicit `prompt_pack` name). Resolve (and
+        # validate) it now, same as before this fix.
+        #
+        # R5-2 fix (W3/W4 round-5 review, Blocker): this used to key off
+        # `prompt_pack_revision is None` instead of a dedicated
+        # "already resolved" flag. `/start`'s truly-omitted-pack path
+        # (the Cropwright default) resolves at request time to
+        # `(active_name, None)` -- `None` there means "follow the active
+        # pack's PINNED body dynamically" (`_get_vlm_labeler`/
+        # `get_prompt_pack` redirect a bare active name with
+        # `revision=None` to the pinned body, B1 round-2), NOT "not yet
+        # resolved." Re-running `resolve_run_prompt_pack` on that
+        # already-resolved bare `active_name` here re-entered the N7
+        # "bare name -> latest saved revision" branch and silently
+        # pinned an un-activated draft -- the original round-1 B1 bug,
+        # reachable again via the no-pack default path since the job no
+        # longer crashes. `prompt_pack_resolved` is `/start`'s own
+        # explicit signal ("I already ran the resolver for this
+        # request"), set `True` unconditionally there (pinned, bare-name,
+        # AND omitted alike) -- so this branch only fires for a call that
+        # never went through `/start`'s resolver at all.
         prompt_pack, prompt_pack_revision = await resolve_run_prompt_pack(opensearch, prompt_pack)
-    # `/start` already resolved AND pinned this exact
-    # `(prompt_pack, prompt_pack_revision)` at request time when the
-    # branch above is skipped -- re-running `resolve_run_prompt_pack` on
-    # the bare name here would silently re-pin to whatever is CURRENTLY
-    # the latest saved revision (N7), discarding the request's pin. Use
-    # it as-is.
+    # `/start` already resolved this `(prompt_pack, prompt_pack_revision)`
+    # at request time when the branch above is skipped -- re-running
+    # `resolve_run_prompt_pack` on the bare name here would silently
+    # re-pin to whatever is CURRENTLY the latest saved revision (N7),
+    # discarding the request's resolution (an explicit pin, or the
+    # active-pack-follow `None` revision). Use it as-is.
     summary: dict[str, Any] = {
         'stages': {},
         'class_id': class_id,
