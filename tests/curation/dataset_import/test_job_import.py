@@ -15,12 +15,14 @@ from ingest_fakes import FakeOpenSearch
 
 from src.clients.curation_opensearch import ClassRegistry
 from src.services.curation.dataset_import.job import (
+    _image_id_for,
     import_dataset,
     materialize_created_classes,
     registry_class_views,
 )
 from src.services.curation.dataset_import.mapping import ClassMappingEntry, resolve_mapping
 from src.services.curation.dataset_import.yolo import scan_yolo
+from src.services.detection.geometry import crop_id as _crop_id
 
 
 def _write_image(path: Path) -> None:
@@ -123,3 +125,69 @@ async def test_create_action_materializes_a_real_class_id(tmp_path: Path) -> Non
     assert report.items_created == 2
     truck_docs = [d for d in fake_os.items.values() if d['class_name'] == 'truck']
     assert truck_docs[0]['class_id'] == 1
+
+
+@pytest.mark.asyncio
+async def test_reimport_never_overwrites_a_locked_human_label(tmp_path: Path) -> None:
+    """W10 M2 regression: a human-set label on an existing item must
+    survive a re-import that would try to relabel it, and the conflict
+    must be reported -- not silently overwritten with class_source still
+    reading 'human'."""
+    dataset_root = tmp_path / 'ds'
+    _make_dataset(dataset_root, names=['car', 'truck'])
+
+    registry = ClassRegistry(path=tmp_path / 'class_registry.json')
+    registry.add_class('car')
+    registry.add_class('truck')
+
+    scan = scan_yolo(dataset_root)
+    mapping_entries = [
+        ClassMappingEntry(dataset_class='car', action='map', class_id=0),
+        ClassMappingEntry(dataset_class='truck', action='map', class_id=1),
+    ]
+    resolved = resolve_mapping(
+        ['car', 'truck'], mapping_entries, registry_classes=registry_class_views(registry)
+    )
+    assert resolved.ok
+
+    # Pre-seed the items index as if a human had already labeled the
+    # 'car' box (0.3 0.3 0.2 0.2 -> bbox 0.2,0.2,0.4,0.4) as 'bus'.
+    image_id = _image_id_for(dataset_root / 'images/train/a.jpg')
+    car_bbox = (0.2, 0.2, 0.4, 0.4)
+    car_crop_id = _crop_id(image_id, list(car_bbox))
+    fake_os = FakeOpenSearch()
+    fake_os.items[car_crop_id] = {
+        'crop_id': car_crop_id,
+        'image_id': image_id,
+        'class_id': 99,
+        'class_name': 'bus',
+        'class_source': 'human',
+        'label_source': 'human',
+        'class_validated': True,
+        'import_ids': ['imp_prior'],
+    }
+
+    report = await import_dataset(
+        fake_os,
+        scan,
+        resolved,
+        import_id='imp_reimport',
+        images_index='op_curation_images',
+        items_index='op_curation_items',
+    )
+
+    # The human label survives untouched.
+    after = fake_os.items[car_crop_id]
+    assert after['class_id'] == 99
+    assert after['class_name'] == 'bus'
+    assert after['class_source'] == 'human'
+    assert after['import_ids'] == ['imp_prior']
+
+    # The conflict is reported, not silent.
+    assert report.items_locked_skipped == 1
+    assert any(car_crop_id in c for c in report.conflicts)
+
+    # The unlocked 'truck' box still imports normally.
+    assert report.items_created == 1
+    truck_docs = [d for d in fake_os.items.values() if d['class_name'] == 'truck']
+    assert len(truck_docs) == 1

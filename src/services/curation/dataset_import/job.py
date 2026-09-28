@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from PIL import Image
 
-from src.clients.occ import occ_update_one, occ_upsert_bulk
+from src.clients.occ import is_locked_box, is_locked_item, occ_update_one, occ_upsert_bulk
 from src.config.region_fields import get_region_fields
 from src.config.region_source import CANDIDATE_IMPORT
 from src.config.region_state import RegionStatus
@@ -41,7 +41,12 @@ from src.services.curation.class_label import ItemLabel
 from src.services.curation.dataset_import.mapping import RegistryClassView, ResolvedMapping
 from src.services.curation.dataset_import.regions import ParentCandidate, attach_region_boxes
 from src.services.curation.item_doc import DetectedItem, build_image_doc, build_item_doc
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields, derive_status
+from src.services.curation.region_boxes import (
+    RegionBox,
+    boxes_write_fields,
+    derive_status,
+    read_boxes,
+)
 from src.services.detection.geometry import crop_id as _crop_id
 
 
@@ -103,7 +108,55 @@ class DatasetImportReport:
     standalone_regions: int = 0
     unlabeled: int = 0
     negatives: int = 0
+    items_locked_skipped: int = 0
+    regions_locked_skipped: int = 0
     errors: list[str] = field(default_factory=list)
+    conflicts: list[str] = field(default_factory=list)
+
+
+async def _split_locked_items(
+    opensearch: AsyncOpenSearch,
+    item_docs: list[dict[str, Any]],
+    *,
+    items_index: str,
+    id_field: str = 'crop_id',
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Split ``item_docs`` into (writable, locked_ids) against the current
+    index state (W10 M2 fix).
+
+    A re-import over an item that already exists must never silently
+    overwrite a human-set or validated-import class the way the generic
+    ``_merge_preserving_human`` guard did (it only preserved provenance
+    *strings*, not the class values themselves). Any existing doc for
+    which :func:`is_locked_item` is true is dropped from the write set
+    entirely — the caller reports it as a conflict, not an overwrite.
+
+    For existing-but-unlocked docs, ``import_ids`` is merged (appended),
+    not replaced, so a second import doesn't erase the first import's id.
+    """
+    if not item_docs:
+        return item_docs, []
+    ids = [doc[id_field] for doc in item_docs]
+    resp = await opensearch.mget(body={'ids': ids}, index=items_index)
+    by_id = {d['_id']: d for d in (resp.get('docs') or [])}
+
+    allowed: list[dict[str, Any]] = []
+    locked_ids: list[str] = []
+    for doc in item_docs:
+        existing = by_id.get(doc[id_field])
+        found = bool(existing and existing.get('found'))
+        source = (existing or {}).get('_source') or {}
+        if found and is_locked_item(source):
+            locked_ids.append(doc[id_field])
+            continue
+        if found:
+            merged_ids = list(source.get('import_ids') or [])
+            for iid in doc.get('import_ids', []):
+                if iid not in merged_ids:
+                    merged_ids.append(iid)
+            doc['import_ids'] = merged_ids
+        allowed.append(doc)
+    return allowed, locked_ids
 
 
 async def import_dataset(
@@ -211,16 +264,26 @@ async def import_dataset(
             )
 
         if item_docs:
-            upsert = await occ_upsert_bulk(
-                opensearch,
-                item_docs,
-                index=items_index,
-                human_field_guards=['label_source', 'class_source'],
-                writer_id=f'import:{import_id}',
+            item_docs, locked_ids = await _split_locked_items(
+                opensearch, item_docs, items_index=items_index
             )
-            report.items_created += upsert['created']
-            report.items_updated += upsert['updated']
-            report.labels_written += len(item_docs)
+            for cid in locked_ids:
+                report.conflicts.append(
+                    f'{cid}: item is locked (human-set, validated import, or test_holdout); '
+                    'import skipped, class NOT overwritten'
+                )
+            report.items_locked_skipped += len(locked_ids)
+            if item_docs:
+                upsert = await occ_upsert_bulk(
+                    opensearch,
+                    item_docs,
+                    index=items_index,
+                    human_field_guards=['label_source', 'class_source'],
+                    writer_id=f'import:{import_id}',
+                )
+                report.items_created += upsert['created']
+                report.items_updated += upsert['updated']
+                report.labels_written += len(item_docs)
 
         if region_boxes_pending:
             attach_result = attach_region_boxes(
@@ -252,9 +315,21 @@ async def import_dataset(
                 fields[region_fields.verifier] = 'import'
                 fields[region_fields.verifier_version] = import_id
 
+                lock_state = {'locked': False}
+
                 def _region_merger(
-                    _current: dict[str, Any], _fields: dict[str, Any] = fields
+                    _current: dict[str, Any],
+                    _fields: dict[str, Any] = fields,
+                    _lock_state: dict[str, bool] = lock_state,
                 ) -> dict[str, Any]:
+                    # W10 M2 fix (companion bug): never overwrite a
+                    # locked item's box list (a human-owned or imported
+                    # box, or the item's class itself is locked).
+                    if is_locked_item(_current, region_fields) or any(
+                        is_locked_box(b) for b in read_boxes(_current, region_fields)
+                    ):
+                        _lock_state['locked'] = True
+                        return {}
                     return _fields
 
                 try:
@@ -265,7 +340,13 @@ async def import_dataset(
                         index=items_index,
                         writer_id=f'import:{import_id}',
                     )
-                    report.boxes_written += len(label_boxes)
+                    if lock_state['locked']:
+                        report.regions_locked_skipped += 1
+                        report.conflicts.append(
+                            f'{parent_key}: region boxes locked; import region write skipped'
+                        )
+                    else:
+                        report.boxes_written += len(label_boxes)
                 except Exception as exc:
                     report.errors.append(f'{parent_key}: region write failed: {exc}')
             report.standalone_regions += len(attach_result.standalone)
