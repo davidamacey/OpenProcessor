@@ -200,10 +200,39 @@ def human_status_box_write(
     (:data:`~src.config.region_rejection.REJECT_REASON_HUMAN`) on every
     box that transition just rejected -- the closest per-box equivalent of
     the old item-level ``region_rejection_reason`` PATCH field.
+
+    Pre-W8, confirming (or marking false-positive) a verifier-rejected
+    candidate promoted it via :func:`candidate_promotion` --
+    :func:`~src.services.curation.region_boxes.boxes_with_status` never
+    revives an already-``rejected`` box on its own (by design: a
+    whole-set confirm must not override a per-box decision that already
+    settled a box). A human CONFIRM is the one deliberate exception to
+    that rule -- it is explicitly reversing the earlier rejection -- so a
+    box list with nothing ``proposed``/``accepted`` to confirm has its
+    ``rejected`` box(es) reopened to ``proposed`` (reason cleared) right
+    before the transition. ``false_positive`` needs no such step:
+    :func:`~src.services.curation.region_boxes.boxes_with_status` already
+    force-sets every box (including a rejected one) to
+    ``false_positive``.
+
+    Also maintains the legacy per-item mirror fields
+    (``bbox_norm``/``score``/``detector``/``detector_version``/``source``/
+    ``bbox_frame``/``rejection_reason``, plus clearing the retired
+    ``candidate_*`` fields) that :func:`~src.services.curation.wire.
+    region_to_wire` still serves additively -- an accepted or
+    false_positive box is the new source of truth for them; anything else
+    clears them, mirroring the box list rather than going stale.
     """
     F = get_region_fields()
     status = RegionStatus(region_status)
     boxes = read_boxes(current, F)
+    if status == CONFIRM_STATUS and not any(b.state in ('proposed', 'accepted') for b in boxes):
+        boxes = [
+            dataclasses.replace(b, state='proposed', rejection_reason=None)
+            if b.state == 'rejected'
+            else b
+            for b in boxes
+        ]
     new_boxes = boxes_with_status(status.value, boxes)
     if rejection_reason is not None and status == RegionStatus.VERIFY_REJECTED:
         new_boxes = [
@@ -218,6 +247,24 @@ def human_status_box_write(
     # is reflected by derive_status's own precedence over the now-uniform
     # box list, so this only matters for that one case.
     doc[F.status] = derive_status(new_boxes, empty_status=status).value
+
+    rep = next(
+        (b for b in new_boxes if b.state in ('accepted', RegionStatus.FALSE_POSITIVE.value)), None
+    )
+    if rep is not None:
+        doc[F.bbox_norm] = list(rep.bbox_norm)
+        doc[F.score] = rep.score
+        doc[F.detector] = rep.detector
+        doc[F.detector_version] = rep.detector_version
+        doc[F.source] = rep.source
+        doc[F.bbox_frame] = 'source'
+    elif REGION_STATUS_INFO[status].clears_box:
+        doc[F.bbox_norm] = None
+        doc[F.score] = None
+    rejected_rep = next((b for b in new_boxes if b.state == 'rejected'), None)
+    doc[F.rejection_reason] = rejected_rep.rejection_reason if rejected_rep else None
+    doc.update(candidate_clear_fields())
+
     if current.get(F.status) == status.value:
         # Re-asserting the stored status (a bulk write over a mixed
         # selection) changes nothing derived from it beyond the box

@@ -63,6 +63,26 @@ def _rejected(crop_id: str, *, with_candidate: bool = True) -> dict[str, Any]:
                 F.candidate_source: 'detector',
             }
         )
+        # W8-cleanup: the same kept candidate, as a rejected region_boxes
+        # entry -- the box-list source of truth PATCH region_meta /
+        # POST batch_status now operate on. The item-level candidate_*
+        # fields above stay too (GET /regions still serves them as the
+        # additive legacy wire mirror -- see wire.py's region_to_wire).
+        doc[F.boxes] = [
+            {
+                'box_id': 'b1',
+                'bbox_norm': list(CANDIDATE),
+                'state': 'rejected',
+                'score': 0.81,
+                'detector': 'det_model',
+                'detector_version': '3',
+                'source': 'detector',
+                'rejection_reason': 'region_visible_elsewhere',
+                'bbox_correct': False,
+            }
+        ]
+    else:
+        doc[F.boxes] = []
     return doc
 
 
@@ -77,6 +97,9 @@ def fake_os() -> QueryFakeOpenSearch:
                     'crop_id': 'det',
                     'bbox_norm': [0.0, 0.0, 0.5, 0.5],
                     F.bbox_norm: [0.1, 0.1, 0.2, 0.2],
+                    F.boxes: [
+                        {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}
+                    ],
                     F.status: 'detected',
                     F.detected_at: '2026-09-24T04:00:00+00:00',
                 },
