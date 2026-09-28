@@ -56,6 +56,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Narrowed the `auto_promote.py` `class_validated: True` AST-gate
     allowlist (`test_class_label_single_writer.py`) to the specific
     `_merge_promote` function, not the whole file.
+- **W10 dataset-import R2 fix pass (second confirmation round).** A
+  follow-up review of the fix pass above found the region-box fix
+  introduced one new major (R2-M1) plus minors; all fixed:
+  - **R2-M1: a first validated import wrote zero region boxes**
+    (`job.py`): `_region_merger`'s lock check read `is_locked_class` off
+    the parent item's *current* OpenSearch state — which, on a first
+    import, is the `class_source: external_label` /
+    `class_validated: True` this same import just wrote to the parent
+    moments earlier via `class_label_fields`. Under the default
+    `label_trust='validated'`, every region box was therefore dropped
+    and reported as a false "region boxes locked" conflict against the
+    importer's own write (`boxes_written=0` on a fresh dataset).
+    `_region_merger` now decides the lock from pre-import state only:
+    whether the parent item was already in `_split_locked_items`'s
+    `locked_ids` (locked by something other than this import), plus any
+    already-locked existing region boxes — never `is_locked_class` on
+    the current doc. New regression test
+    `test_first_validated_import_writes_region_boxes`
+    (`test_job_import.py`) seeds fresh items with no prior human/
+    validated state and asserts `boxes_written` is nonzero.
+  - **Fixed the wrong-items-index test bug that let R2-M1 slip through**
+    (`test_job_import.py`): tests passed a hardcoded
+    `items_index='op_curation_items'` string instead of the bound
+    project's real `get_curation_config().items_index` — `FakeOpenSearch`
+    routes bulk/update writes by comparing against the real config value,
+    so a mismatched literal silently misrouted writes. All three existing
+    tests plus the new one now use `get_curation_config().images_index` /
+    `.items_index`.
+  - `import_labeled_dataset.py`'s labeled-import mode: the dead
+    `_relabel` method, `label_txt_path` posting branch, disagreement-
+    report generation, and their CLI flags (`--relabel-duplicates`,
+    `--label-source`, `--no-detect-mismatches`, `--no-verify-labels`,
+    `--skip-class-check`) are deleted, not just gated off — the guard
+    that fails loudly for non-`--images-only` invocations is the only
+    labeled-mode-related code left. The module docstring and `--help`
+    text now describe `--images-only` as the only working path instead
+    of still documenting the disabled labeled mode as if it worked.
+  - `main()` now skips `bind_script_project()` (which contacts
+    OpenSearch to resolve the project) when `--images-only` was not
+    passed, so the disabled-mode guard fails immediately/cheaply instead
+    of after an OpenSearch round-trip.
 
 ### Added
 - **W10 dataset import (partial): the lock rule, class-name mapping, and a
