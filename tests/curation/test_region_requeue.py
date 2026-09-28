@@ -29,6 +29,7 @@ import pytest
 from curation.query_fakes import QueryFakeOpenSearch, matches
 from src.config import CurationConfig, RegionStatus
 from src.config.region_fields import RegionFields, get_region_fields
+from src.config.region_rejection import REJECT_REASON_HUMAN
 from src.services.curation.region_requeue import (
     NONE_BUCKET,
     RequeueSelection,
@@ -189,6 +190,11 @@ async def test_breakdown_groups_by_detector_then_reason():
     assert by_det['det_b']['count'] == 1
     assert by_det[NONE_BUCKET]['count'] == 1  # f6: a box exists, no detector on it
     assert by_det[NONE_BUCKET]['reasons'] == [{'reason': NONE_BUCKET, 'count': 1}]
+    # W8c nit fix: f4 (no box at all) is invisible to the nested breakdown
+    # above, but IS counted here -- `total - no_box` (5 - 1 = 4) is
+    # exactly the item count with at least one box, restoring the
+    # pre-nested-query "(none)" bucket's information.
+    assert report['no_box'] == 1
 
 
 @pytest.mark.asyncio
@@ -234,6 +240,36 @@ async def test_clear_detection_drops_machine_boxes_but_keeps_a_human_ones():
 
 
 @pytest.mark.asyncio
+async def test_clear_detection_protects_a_human_reject_action_on_a_machine_box():
+    """W8c M3 fix: `source == 'human'` alone only protects a box a human
+    CREATED. A human's per-box REJECT action on a MACHINE-created box
+    (`PATCH .../regions/{box_id}`, `POST /regions/batch_box_state`) never
+    changes `source`/`detector` -- the only trace is the rejection reason
+    those routes now also stamp. This must survive `clear_detection` too,
+    not just a human-created box."""
+    fake = _fake()
+    fake.docs(ITEMS)['f1'][F.boxes].append(
+        # source/detector still the MACHINE's -- only the reason marks
+        # this as a human verdict, exactly what patch_crop_region_box /
+        # batch_set_region_box_state now write.
+        _box(
+            'b2',
+            state='rejected',
+            detector='det_a',
+            source='detector',
+            reason=REJECT_REASON_HUMAN,
+        )
+    )
+    fake.docs(ITEMS)['f1'][F.rejected_count] = 2
+    sel = RequeueSelection(FAILED, detectors=('det_a',), reasons=('aspect',))
+    await apply_requeue(fake, sel, clear_detection=True, config=CFG)
+
+    f1 = fake.docs(ITEMS)['f1']
+    assert _box_ids(f1) == ['b2'], 'the human-rejected machine box must survive clear_detection'
+    assert f1[F.boxes][0]['rejection_reason'] == REJECT_REASON_HUMAN
+
+
+@pytest.mark.asyncio
 async def test_clear_detection_is_a_noop_when_there_is_no_box_to_drop():
     fake = _fake()
     await apply_requeue(fake, RequeueSelection(FAILED), clear_detection=True, config=CFG)
@@ -249,9 +285,65 @@ async def test_pending_verification_target_needs_an_existing_box():
     await apply_requeue(fake, sel, config=CFG)
 
     assert _changed(fake) == {'r1', 'r3'}
-    assert fake.docs(ITEMS)['r1'][F.status] == RegionStatus.PENDING_VERIFICATION
+    r1 = fake.docs(ITEMS)['r1']
+    assert r1[F.status] == RegionStatus.PENDING_VERIFICATION
     # an earlier requeue's audit trail is preserved, not overwritten
     assert fake.docs(ITEMS)['r3'][F.status_legacy] == RegionStatus.NO_REGION_VISIBLE
+    # W8c M2 fix: the item's own box(es) were always `rejected` (a
+    # REQUEUEABLE_STATUSES item can never already carry a `proposed` box
+    # -- `derive_status` would report `pending_verification` instead).
+    # This requeue must re-propose them, or the worker's Path 1 has
+    # nothing to re-verify and silently runs a fresh detection instead.
+    box = r1[F.boxes][0]
+    assert box['state'] == 'proposed'
+    assert box['rejection_reason'] is None
+    assert box['bbox_norm'] == [0.2, 0.2, 0.4, 0.3]  # geometry untouched
+
+
+@pytest.mark.asyncio
+async def test_pending_verification_skips_item_whose_only_box_is_human_owned():
+    """W8c M2 fix: a human's rejected verdict is a verdict, not a failure
+    to re-propose -- an item with nothing else to re-verify must not move
+    to `pending_verification` (that would silently fall through to a
+    fresh detection pass instead, per the review's exact finding)."""
+    fake = _fake()
+    fake.docs(ITEMS)['r1'][F.boxes] = [
+        _box('b1', detector='human', source='human', reason=REJECT_REASON_HUMAN)
+    ]
+    # Snapshot AFTER the human-owned-box mutation above -- `_changed()`'s
+    # own baseline (`_corpus()`) predates it, so comparing against that
+    # would always show r1 as "changed" regardless of what `apply_requeue`
+    # does.
+    before_r1 = copy.deepcopy(fake.docs(ITEMS)['r1'])
+    sel = RequeueSelection(REJECTED, target=RegionStatus.PENDING_VERIFICATION)
+    totals = await apply_requeue(fake, sel, config=CFG)
+
+    # r1 is excluded (nothing to re-verify); r3 (non-human) still moves.
+    assert totals['updated'] == 1
+    r1 = fake.docs(ITEMS)['r1']
+    assert r1 == before_r1, 'an item with nothing to re-verify must be left untouched'
+    assert r1[F.status] == REJECTED  # untouched -- verify_rejected status stays
+    assert r1[F.boxes][0]['state'] == 'rejected'
+
+
+@pytest.mark.asyncio
+async def test_pending_verification_preserves_a_human_rejected_sibling():
+    """A mixed item (one non-human rejected box, one human-rejected box):
+    only the non-human box is re-proposed; the human's verdict survives
+    untouched."""
+    fake = _fake()
+    fake.docs(ITEMS)['r1'][F.boxes].append(
+        _box('b2', detector='human', source='human', reason=REJECT_REASON_HUMAN)
+    )
+    sel = RequeueSelection(REJECTED, target=RegionStatus.PENDING_VERIFICATION)
+    await apply_requeue(fake, sel, config=CFG)
+
+    r1 = fake.docs(ITEMS)['r1']
+    boxes_by_id = {b['box_id']: b for b in r1[F.boxes]}
+    assert boxes_by_id['b1']['state'] == 'proposed'
+    assert boxes_by_id['b2']['state'] == 'rejected'
+    assert boxes_by_id['b2']['rejection_reason'] == REJECT_REASON_HUMAN
+    assert r1[F.status] == RegionStatus.PENDING_VERIFICATION
 
 
 @pytest.mark.asyncio
@@ -377,9 +469,14 @@ def test_cli_defaults_to_dry_run(monkeypatch, capsys):
     fake = _fake()
     assert _run_cli(monkeypatch, ['--status', 'detection_failed'], fake) == 0
     out = capsys.readouterr().out
-    assert '5 regions selected' in out
+    # W8c nit fix: "items selected" (not "regions" -- the count is items,
+    # never boxes, and the per-detector/reason lines below it are boxes;
+    # conflating the two units in one label is exactly what confused the
+    # review).
+    assert '5 items selected' in out
     assert 'detector=det_a' in out
     assert 'reason=aspect' in out
+    assert '(no box at all)' in out  # f4
     assert _changed(fake) == set()
 
 
@@ -428,6 +525,7 @@ async def test_unseeded_selection_breakdown_counts_items_without_status():
     report = await requeue_breakdown(fake, RequeueSelection(None), config=CFG)
     assert report['total'] == 3
     assert report['status'] == NONE_BUCKET
+    assert report['no_box'] == 3  # none of u0-u2 carry a region_boxes element
 
 
 @pytest.mark.asyncio
@@ -456,7 +554,7 @@ async def test_unseeded_backfill_seeds_pending_detection_into_worker_queue():
 def test_cli_missing_status_dry_run_then_apply(monkeypatch, capsys):
     fake = QueryFakeOpenSearch({ITEMS: _unseeded_corpus()})
     assert _run_cli(monkeypatch, ['--missing-status'], fake) == 0
-    assert '3 regions selected' in capsys.readouterr().out
+    assert '3 items selected' in capsys.readouterr().out
     assert F.status not in fake.docs(ITEMS)['u0']
 
     assert _run_cli(monkeypatch, ['--missing-status', '--apply'], fake) == 0

@@ -92,11 +92,18 @@ logger = logging.getLogger('curation_requeue_regions')
 
 
 def _print_breakdown(report: dict) -> None:
-    print(f'\n{report["status"]} -> {report["target"]}: {report["total"]:,} regions selected\n')
+    print(f'\n{report["status"]} -> {report["target"]}: {report["total"]:,} items selected\n')
     for det in report['by_detector']:
         print(f'  detector={det["detector"]:<32} {det["count"]:>10,}')
         for r in det['reasons']:
             print(f'      reason={r["reason"]:<40} {r["count"]:>10,}')
+    # W8c nit fix: an item with zero `region_boxes` elements is invisible
+    # to the nested detector/reason breakdown above (there's no box to
+    # bucket it under) -- call it out explicitly instead of the cohort
+    # silently rendering as an empty breakdown with no by-detector line.
+    no_box = report.get('no_box', 0)
+    if no_box:
+        print(f'  {"(no box at all)":<41} {no_box:>10,}')
 
 
 async def _async_main(args: argparse.Namespace, sel: RequeueSelection) -> int:

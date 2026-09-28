@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 
 from curation.test_regions_router import _FakeRegionOS
 from src.config import get_region_fields
+from src.config.region_rejection import REJECT_REASON_HUMAN
 
 
 F = get_region_fields()
@@ -362,3 +363,99 @@ def test_batch_box_state_unknown_state_is_422(
     assert fake_os._docs['crop-1'][F.boxes][1]['state'] == 'proposed', (
         'unchanged, rejected up front'
     )
+
+
+# ---------------------------------------------------------------------------
+# W8c m4: an empty batch must still validate, never silently 200
+# ---------------------------------------------------------------------------
+
+
+def test_batch_regions_empty_crop_ids_still_validates_state(app_client: TestClient) -> None:
+    """Before the fix: `crop_ids: []` returned 200 before `_check_box_states`
+    ever ran, so a bogus `state` on the (unusable, since no crop_ids)
+    `boxes` list was silently accepted."""
+    resp = app_client.put(
+        '/curation/projects/default/crops/batch_regions',
+        json={'crop_ids': [], 'boxes': [{'box_id': None, 'state': 'bogus'}]},
+    )
+    assert resp.status_code == 422
+
+
+def test_batch_regions_empty_crop_ids_and_valid_payload_is_still_a_noop(
+    app_client: TestClient,
+) -> None:
+    resp = app_client.put(
+        '/curation/projects/default/crops/batch_regions',
+        json={'crop_ids': [], 'boxes': []},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
+
+
+def test_batch_box_state_empty_targets_still_validates_state(app_client: TestClient) -> None:
+    """Before the fix: `targets: []` returned 200 before `validate_box_state`
+    ever ran."""
+    resp = app_client.post(
+        '/curation/projects/default/regions/batch_box_state',
+        json={'targets': [], 'state': 'bogus'},
+    )
+    assert resp.status_code == 422
+
+
+def test_batch_box_state_empty_targets_and_valid_state_is_still_a_noop(
+    app_client: TestClient,
+) -> None:
+    resp = app_client.post(
+        '/curation/projects/default/regions/batch_box_state',
+        json={'targets': [], 'state': 'accepted'},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
+
+
+# ---------------------------------------------------------------------------
+# W8c M3: a human's per-box REJECT action on a machine box is stamped so
+# `region_boxes.is_human_owned` recognizes it later (clear_detection /
+# fresh-detection replace).
+# ---------------------------------------------------------------------------
+
+
+def test_patch_region_box_reject_stamps_human_rejection_reason(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    resp = app_client.patch(
+        '/curation/projects/default/crops/crop-1/regions/b1',
+        json={'state': 'rejected'},
+    )
+    assert resp.status_code == 200, resp.text
+    stored = {b['box_id']: b for b in fake_os._docs['crop-1'][F.boxes]}
+    assert stored['b1']['state'] == 'rejected'
+    assert stored['b1']['rejection_reason'] == REJECT_REASON_HUMAN
+    # source/detector are untouched -- the reason is the only trace.
+    assert stored['b1'].get('source') != 'human'
+
+
+def test_batch_box_state_reject_stamps_human_rejection_reason(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    resp = app_client.post(
+        '/curation/projects/default/regions/batch_box_state',
+        json={'targets': [{'crop_id': 'crop-1', 'box_id': 'b2'}], 'state': 'rejected'},
+    )
+    assert resp.status_code == 200, resp.text
+    stored = {b['box_id']: b for b in fake_os._docs['crop-1'][F.boxes]}
+    assert stored['b2']['state'] == 'rejected'
+    assert stored['b2']['rejection_reason'] == REJECT_REASON_HUMAN
+
+
+def test_put_regions_patching_existing_box_to_rejected_stamps_human_reason(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    resp = app_client.put(
+        '/curation/projects/default/crops/crop-1/regions',
+        json={'boxes': [{'box_id': 'b1', 'state': 'rejected'}, {'box_id': 'b2'}]},
+    )
+    assert resp.status_code == 200, resp.text
+    stored = {b['box_id']: b for b in fake_os._docs['crop-1'][F.boxes]}
+    assert stored['b1']['state'] == 'rejected'
+    assert stored['b1']['rejection_reason'] == REJECT_REASON_HUMAN

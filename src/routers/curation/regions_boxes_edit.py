@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.config import get_region_fields
 from src.config.curation import get_curation_config
+from src.config.region_rejection import REJECT_REASON_HUMAN
 from src.config.region_state import RegionStatus
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, _now_iso, router
 from src.routers.curation.regions_edit import _batch_write, _Recorder, _write_error
@@ -262,11 +263,15 @@ async def batch_set_crop_regions(
     have ``box_id: null`` (422 ``box_id_in_batch``): ids are per item. A
     ``text`` element on a text-free profile is 422 ``region_text_disabled``.
     """
-    if not payload.crop_ids:
-        return {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
+    # W8c m4 fix: validate BEFORE the empty-`crop_ids` early return -- an
+    # empty batch is trivially valid (0 items to write), but an invalid
+    # `state`/oversized/text-disabled payload must still 422 even when it
+    # would touch nothing, not silently short-circuit to 200.
     _too_many_boxes_check(len(payload.boxes))
     _check_text_allowed(payload.boxes, profile)
     _check_box_states('PUT /crops/batch_regions', payload.boxes)
+    if not payload.crop_ids:
+        return {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
 
     def _build(current: dict[str, Any]) -> dict[str, Any]:
         F = get_region_fields()
@@ -317,6 +322,15 @@ async def patch_crop_region_box(
         patch: dict[str, Any] = {}
         if payload.state is not None:
             patch['state'] = payload.state
+            if payload.state == 'rejected':
+                # W8c M3 fix: a human's per-box REJECT action on a
+                # machine-created box otherwise leaves no trace at all
+                # (source/detector stay the machine's) -- stamp the same
+                # reason `boxes_with_status`'s whole-set path uses so
+                # `region_boxes.is_human_owned` recognizes this box as
+                # human-owned and protects it from a later
+                # `clear_detection` requeue or fresh-detection replace.
+                patch['rejection_reason'] = REJECT_REASON_HUMAN
         if payload.text is not None:
             # Human-typed text is the ground truth; mark the source so the
             # text readers know not to overwrite it (same rule as the
@@ -347,12 +361,14 @@ async def batch_set_region_box_state(
     W8a). Flips only the named box on each targeted item -- never its
     siblings (contrast ``POST /regions/batch_status``, which flips every
     box of each item)."""
-    if not payload.targets:
-        return {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
+    # W8c m4 fix: validate BEFORE the empty-`targets` early return -- see
+    # `batch_set_crop_regions`'s matching fix above for why.
     try:
         validate_box_state('POST /regions/batch_box_state', payload.state)
     except RegionBoxWriteError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not payload.targets:
+        return {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
 
     by_crop: dict[str, list[str]] = {}
     for t in payload.targets:
@@ -369,9 +385,12 @@ async def batch_set_region_box_state(
             if missing:
                 msg = f'unknown box_id(s): {sorted(missing)!r}'
                 raise RegionBoxWriteError(msg)
+            box_patch: dict[str, Any] = {'state': payload.state}
+            if payload.state == 'rejected':
+                # W8c M3 fix -- see patch_crop_region_box's matching comment.
+                box_patch['rejection_reason'] = REJECT_REASON_HUMAN
             new_boxes = [
-                dataclasses.replace(b, state=payload.state) if b.box_id in box_ids else b
-                for b in boxes
+                dataclasses.replace(b, **box_patch) if b.box_id in box_ids else b for b in boxes
             ]
             doc = boxes_write_fields(new_boxes, current_src=current, F=F)
             doc[F.label_source] = 'human:batch_set_region_box_state'

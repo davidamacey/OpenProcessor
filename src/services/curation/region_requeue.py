@@ -18,11 +18,21 @@ This module is the one generic tool for that:
   OCC skip-on-conflict bulk writer, so a concurrent worker or human write
   always wins. The prior status is stashed in ``RegionFields.status_legacy``
   (first requeue only, so the original verdict survives repeated passes),
-  the rejection reason is cleared, and with ``clear_detection`` every
-  MACHINE-sourced box is dropped from ``region_boxes`` (never a human's —
-  W8c r1 fix) so the cascade starts fresh; the worker's own fresh-detection
-  write later merges its new candidates onto whatever this leaves behind
-  instead of replacing the list wholesale.
+  the rejection reason is cleared, and with ``clear_detection`` every box
+  a human hasn't touched (:func:`~src.services.curation.region_boxes.
+  is_human_owned` — created OR explicitly accepted/rejected/transcribed
+  via the W8a per-box edit routes, W8c M3 fix) is dropped from
+  ``region_boxes`` so the cascade starts fresh; the worker's own
+  fresh-detection write later replaces whatever machine-sourced boxes
+  this leaves behind with its new candidates, keeping any human-owned
+  ones (W8c M1 fix).
+  For ``target=pending_verification`` (re-verify only), each selected
+  item's own non-human ``rejected`` box(es) are first rewritten to
+  ``proposed`` (reason cleared) so the worker's Path 1 has something to
+  re-verify — an item that ends up with nothing to re-propose (e.g. its
+  only box is human-owned, or it has none at all) is left untouched
+  instead of moving to ``pending_verification`` with no re-verifiable
+  box (W8c M2 fix).
 
 The same tool also backfills items that carry **no** region status at all
 (``RequeueSelection(status=None)``): items ingested before ingest seeded
@@ -39,6 +49,7 @@ and the index through :class:`~src.config.curation.CurationConfig`.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -51,6 +62,7 @@ from src.services.curation.region_boxes import (
     box_query,
     boxes_write_fields,
     has_any_box_query,
+    is_human_owned,
     read_boxes,
 )
 
@@ -221,7 +233,30 @@ async def requeue_breakdown(
     fields: RegionFields | None = None,
     max_buckets: int = 50,
 ) -> dict[str, Any]:
-    """Count the selected cohort, grouped by detector then rejection reason."""
+    """Count the selected cohort, grouped by detector then rejection reason.
+
+    ``by_detector``/its nested ``reasons`` count BOXES, not items -- a
+    nested aggregation can only bucket elements of the ``region_boxes``
+    list, so an item with 2+ selected boxes (today only possible for a
+    multi-box deployment) is counted once per matching box, and their sum
+    can exceed ``total - no_box`` (item count). This is inherent to
+    box-level bucketing, not a bug: exact per-bucket item counts would
+    need a ``reverse_nested`` sub-aggregation, which isn't worth the
+    complexity for a dry-run report -- if an exact item count for one
+    detector/reason combination ever matters, query it directly instead
+    of assuming these buckets reconcile with ``total``.
+
+    ``total`` (item count, from the outer query) and ``no_box`` (also an
+    item count: how many of ``total`` carry no ``region_boxes`` element at
+    all) DO reconcile with each other -- ``total - no_box`` is exactly how
+    many selected items have at least one box. A nested aggregation has no
+    element to bucket a zero-box item under (not even
+    :data:`NONE_BUCKET`), so before this field existed a cohort of
+    entirely-boxless items (``no_region_box``/``no_region_visible``/
+    unseeded) rendered an empty ``by_detector`` breakdown with no
+    indication why (W8c nit fix; the pre-nested-query version showed an
+    explicit ``(none)`` bucket for this case).
+    """
     cfg = config or get_curation_config()
     F = fields or get_region_fields()
     body = {
@@ -230,10 +265,9 @@ async def requeue_breakdown(
         'query': requeue_query(sel, F),
         'aggs': {
             # W8c: detector/rejection_reason moved onto the per-box
-            # `region_boxes` list -- a nested agg over the box path. Buckets
-            # count BOXES, not items (an item with 2+ selected boxes is
-            # counted once per box); today's profiles default to 1 box per
-            # item, so this only diverges for multi-box deployments.
+            # `region_boxes` list -- a nested agg over the box path. See
+            # this function's docstring for why these buckets count BOXES,
+            # not items, and don't reconcile with `total`.
             'boxes': {
                 'nested': {'path': F.boxes},
                 'aggs': {
@@ -254,13 +288,19 @@ async def requeue_breakdown(
                         },
                     }
                 },
-            }
+            },
+            # W8c nit fix: a sibling, non-nested filter agg -- counts
+            # ITEMS (not boxes), so `total - no_box` is the exact item
+            # count that has at least one box, restoring the pre-port
+            # "no box at all" visibility a nested agg alone can't give.
+            'has_box': {'filter': has_any_box_query(F)},
         },
     }
     resp = await opensearch.search(index=cfg.items_index, body=body)
     total = int(((resp.get('hits') or {}).get('total') or {}).get('value', 0))
+    aggs = resp.get('aggregations') or {}
     detectors = []
-    boxes_agg = (resp.get('aggregations') or {}).get('boxes') or {}
+    boxes_agg = aggs.get('boxes') or {}
     for det in (boxes_agg.get('by_detector') or {}).get('buckets') or []:
         reasons = [
             {'reason': str(r['key']), 'count': int(r['doc_count'])}
@@ -269,10 +309,12 @@ async def requeue_breakdown(
         detectors.append(
             {'detector': str(det['key']), 'count': int(det['doc_count']), 'reasons': reasons}
         )
+    has_box_count = int((aggs.get('has_box') or {}).get('doc_count', 0))
     return {
         'status': sel.status.value if sel.status is not None else NONE_BUCKET,
         'target': sel.target.value,
         'total': total,
+        'no_box': max(total - has_box_count, 0),
         'by_detector': detectors,
     }
 
@@ -293,9 +335,11 @@ async def apply_requeue(
         opensearch: AsyncOpenSearch client.
         sel: The cohort to requeue.
         clear_detection: Null every detection/verify/text/embedding field
-            (:func:`detection_fields`) so the cascade starts from scratch.
-            Not allowed with a ``pending_verification`` target, which needs
-            the existing box.
+            (:func:`detection_fields`) AND drop every non-human-owned box
+            from ``region_boxes`` (see :func:`~src.services.curation.
+            region_boxes.is_human_owned`) so the cascade starts from
+            scratch. Not allowed with a ``pending_verification`` target,
+            which needs the existing box.
         config: Supplies ``items_index``.
         fields: RegionFields naming (defaults to the process-wide one).
         page_size: Items per ``search_after`` page / OCC bulk batch.
@@ -303,7 +347,10 @@ async def apply_requeue(
 
     Returns:
         ``{'updated', 'skipped', 'errors'}`` — ``skipped`` counts items a
-        concurrent writer changed first (their write wins).
+        concurrent writer changed first (their write wins); an item this
+        function decides has nothing to do (e.g. a ``pending_verification``
+        target with no re-proposable box, W8c M2) is silently excluded
+        from all three counts, same as any other no-op merge result.
     """
     if clear_detection and sel.target == RegionStatus.PENDING_VERIFICATION:
         raise ValueError('clear_detection would drop the box pending_verification needs')
@@ -317,6 +364,33 @@ async def apply_requeue(
         if current.get(F.status) != expected or current.get(F.validated) is True:
             return {}
         update: dict[str, Any] = dict.fromkeys(to_clear)
+        box_update: dict[str, Any] = {}
+        if sel.target == RegionStatus.PENDING_VERIFICATION:
+            # W8c M2 fix: every REQUEUEABLE_STATUSES item's box(es) are
+            # always `rejected` (never `proposed` -- if one were,
+            # `derive_status` would already report `pending_verification`,
+            # not one of these terminal statuses), so the worker's Path 1
+            # (re-verify a stored `proposed` box) has nothing to act on
+            # unless THIS requeue re-proposes them. Only non-human boxes
+            # are re-proposed -- a human's rejected verdict is a verdict,
+            # not a failure to re-try (`is_human_owned`, same rule
+            # `clear_detection` uses below).
+            stored = read_boxes(current, F)
+            reproposed = [
+                dataclasses.replace(b, state='proposed', rejection_reason=None)
+                if b.state == 'rejected' and not is_human_owned(b)
+                else b
+                for b in stored
+            ]
+            if not any(b.state == 'proposed' for b in reproposed):
+                # Nothing to re-verify (the only box(es) are human-owned,
+                # or there is no box at all) -- moving `region_status` to
+                # `pending_verification` here would silently fall through
+                # to a fresh detection pass instead (the worker's Path 1
+                # guard needs a stored `proposed` box). Leave the item
+                # untouched rather than write a mismatched state.
+                return {}
+            box_update = boxes_write_fields(reproposed, current_src=current, F=F)
         update[F.status] = sel.target.value
         if expected is not None:
             # Unseeded items have no prior verdict to stash or reason to clear.
@@ -324,17 +398,22 @@ async def apply_requeue(
             if current.get(F.status_legacy) is None:
                 update[F.status_legacy] = expected
         if clear_detection:
-            # W8c (r1 fix): drop this pass's MACHINE-sourced boxes so the
-            # cascade starts fresh, but never a human's -- the worker's own
-            # fresh-detection write later merges its new candidates onto
-            # whatever `region_boxes` this requeue leaves behind
-            # (`_ItemTask.pending_merge`, `merge_boxes_for_write`); wiping
-            # the whole list here would re-introduce the exact bug that
-            # fix closed, just one write earlier.
+            # W8c (r1 fix, scope corrected by M3): drop every box the
+            # human hasn't touched -- created OR explicitly
+            # accepted/rejected/transcribed via the W8a per-box edit
+            # routes (`is_human_owned`), never a human's -- so the
+            # cascade starts fresh. The worker's own fresh-detection
+            # write later replaces whatever machine-sourced `region_boxes`
+            # this requeue leaves behind with its new candidates, keeping
+            # any human-owned ones (`_ItemTask.pending_merge`,
+            # `bulk_writer._merge`'s `is_human_owned` branch, W8c M1);
+            # wiping the whole list here would re-introduce the exact bug
+            # that fix closed, just one write earlier.
             stored = read_boxes(current, F)
-            kept = [b for b in stored if b.source == 'human']
+            kept = [b for b in stored if is_human_owned(b)]
             if len(kept) != len(stored):
                 update.update(boxes_write_fields(kept, current_src=current, F=F))
+        update.update(box_update)
         update['updated_at'] = now
         return update
 
