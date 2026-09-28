@@ -60,7 +60,8 @@ from scripts.curation.worker.state import _crop_jpeg_from_disk
 from src.clients.pe_encoder import PEEncoder
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_curation_config, get_region_fields
-from src.services.curation.region_boxes import accepted, box_query, read_boxes
+from src.config.region_state import RegionStatus
+from src.services.curation.region_boxes import box_query, read_boxes
 from src.services.detection.region_embed import embed_region_crops
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project
@@ -83,23 +84,57 @@ logger = logging.getLogger('backfill_region_embeddings')
 
 
 def _selection_query() -> dict[str, Any]:
+    """Items still carrying a box worth embedding, that haven't been yet.
+
+    W8-cleanup M5 fix: ``state in ['accepted', 'false_positive']``, not
+    ``accepted`` alone. Pre-W8 selection was ``exists
+    region_bbox_norm``, and a false-positive item keeps its box (that's
+    the whole point of FP status -- it's a hard negative kept for
+    training/analysis), so FP items were always selected. The other
+    ported W8 readers (``regions.py``, ``regions_fp.py``, ``stats.py``)
+    all already treat FP the same way (``state in [accepted,
+    false_positive]``); this query silently narrowed to accepted-only
+    when it was ported, which starves ``build_region_fp_centroids``
+    (status=false_positive AND exists region_embedding) of its inputs --
+    the classic hard-negative case (VLM-rejected, human-marked-FP) never
+    gets embedded, since the worker's embed stage only runs at
+    DETECTED-write time.
+    """
     F = get_region_fields()
     return {
         'bool': {
-            'must': [box_query({'term': {f'{F.boxes}.{F.boxes_state}': 'accepted'}}, F)],
+            'must': [
+                box_query(
+                    {
+                        'terms': {
+                            f'{F.boxes}.{F.boxes_state}': [
+                                'accepted',
+                                RegionStatus.FALSE_POSITIVE.value,
+                            ],
+                        }
+                    },
+                    F,
+                )
+            ],
             'must_not': [{'exists': {'field': F.embedding}}],
         },
     }
 
 
 def _best_accepted_bbox(source: dict[str, Any], F: Any) -> list[float] | None:
-    """The highest-``score`` accepted box's ``bbox_norm``, or ``None``.
+    """The representative box's ``bbox_norm``, or ``None``.
 
     See the module docstring: an item-level embedding still needs exactly
     one representative crop even though ``region_boxes`` may hold several
-    accepted boxes.
+    boxes. Prefers the highest-``score`` accepted box; falls back to the
+    highest-``score`` false-positive box (M5) so an FP-only item -- which
+    has no accepted box at all -- still gets a representative crop for
+    the FP centroid store.
     """
-    candidates = accepted(read_boxes(source, F))
+    boxes = read_boxes(source, F)
+    candidates = [b for b in boxes if b.state == 'accepted']
+    if not candidates:
+        candidates = [b for b in boxes if b.state == RegionStatus.FALSE_POSITIVE.value]
     if not candidates:
         return None
     best = max(candidates, key=lambda b: b.score if b.score is not None else -1.0)
