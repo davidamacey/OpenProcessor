@@ -296,6 +296,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the legacy scalars this pass).
 
 ### Fixed
+- **W3+W4 prompt-pack/region-profile CRUD fix pass, round 4 (independent
+  Opus review, 2026-09-28): 1 blocker + 2 majors + 5 minors.** Fixes every
+  finding of the round-4 section appended to
+  `docs/design/openprocessor_internal/w3_w4_review_2026-09-28.md`:
+  - **Blocker (R4-1, rollback bypassed the activation gate — the 4th
+    round of "fixed the probed caller, missed a sibling"):** consolidated
+    the `for_activation` gate into ONE shared function,
+    `run_activation_gate` (new `src/services/config_store/
+    activation_gate.py`), and routed EVERY activation writer through it:
+    `POST /prompt_packs/{name}/activate`, `POST /region_profiles/{name}/
+    activate`, `PUT /settings` (the round-3 N1 fix, now delegating to the
+    shared function instead of its own copy), and — the previously
+    ungated path — `POST /prompt_packs/active/rollback` /
+    `POST /region_profiles/active/rollback` (wired into the shared
+    `rollback_axis` in `activation_apply.py`, so both axes' rollback get
+    it in one place). Rollback runs the gate with no `force`, mirroring
+    the settings bridge. A rollback target naming a revision that is no
+    longer the STORED CURRENT one (e.g. superseded by a later,
+    never-activated PUT) is still resolvable: the gate accepts an
+    optional OpenSearch client and falls back to the immutable
+    `<kind>:<name>@<rev>` revision-copy doc when the in-memory snapshot
+    only has the current revision. One test,
+    `test_r4_rollback_bypasses_multibox_gate`, plus the settings-bridge
+    N1 probes, now walk activate/settings/rollback on both axes with a
+    gate-failing revision.
+  - **Major (R4-2, `expected_active` shape bug, same class as round-3's
+    N3a but in `settings.py`):** `_activate_config_store_axis` (now split
+    into `_prepare_config_store_axis`/`_apply_config_store_axis`, see
+    m1 below) folded an explicit deactivation (`'off'`) into Python
+    `None` when building `expected_active` — but `index.activate`'s OCC
+    only treats `None` as "no doc has ever been written"; an explicit
+    deactivation stores a real `{'name': None, 'revision': None}` doc.
+    Every `PUT /settings` after one deactivation 409'd `active_conflict`
+    on both axes. Fixed to map `'off'` to the real doc shape.
+  - **Major (R4-3, predates this branch; `/pipeline/auto_label/start`
+    jobs crashed, and the pin was discarded):** `pipeline_auto_label`
+    (`routers/curation/pipeline.py`) now accepts a hidden
+    `prompt_pack_revision` param — `/start`'s background job trigger was
+    already putting it in the job args, and the function had no such
+    parameter, so every `/start` job raised `TypeError`. When the caller
+    supplies it (i.e. `/start` already resolved-and-pinned), the function
+    uses it as-is instead of re-running `resolve_run_prompt_pack` on the
+    bare name, which (after N7) would silently re-pin to the LATEST
+    saved revision instead of the one the request actually pinned.
+  - **Minor (m1, two-axis `PUT /settings` half-applies):** resolving +
+    gating both config-store axes now happens BEFORE either is activated
+    (`_prepare_config_store_axis` / `_apply_config_store_axis` split), so
+    a second axis's 422 can no longer leave the first axis's activation
+    committed.
+  - **Minor (m2, N3 name-collision check read a stale/cached target
+    store):** the activations-axis "target already has a stored config
+    under this name" check in `clone.py` now reads the specific doc
+    straight from the client instead of the 1s-TTL `ConfigStore`
+    snapshot, closing (most of) the narrow cross-worker race window.
+  - **Minor (m3, the landed N4 test was vacuous):**
+    `test_r3_rollback_transient_error_status` now asserts on the STORED
+    `activation:*` doc (`get_activation`) instead of `GET /active`'s
+    in-process snapshot, which was stale in both the pre-fix and
+    post-fix worlds and so passed either way.
+  - **Minor (m4, missing test coverage):** landed
+    `test_r4_n1_profile_settings_gate` (profile axis of the settings-
+    bridge gate), `test_r4_n5_profile_pinned_copy_missing` (profile side
+    of the pinned-copy fail-open fix), and
+    `test_r4_settings_reactivate_after_off` (on→off→on through
+    `PUT /settings`, both axes).
+  - **Minor (m5, test hygiene):** fixed stale "Round-3" docstrings on the
+    now-permanent round-3 probe files; gave
+    `test_r3_r1_far_past_revision` real assertions (both a
+    revision-that-once-existed-but-is-no-longer-current/active AND a
+    never-saved revision now assert the specific 422 wording, instead of
+    only printing the outcome); tightened
+    `test_r3_existing_target_previously_deactivated` to require success
+    (not "success or a clean 409"); made `_apply_clone`'s
+    `target_activations` parameter required (no more silent
+    "assume the target is empty" default a future caller could
+    reintroduce N3a through).
+  - Landed as permanent tests: `tests/curation/test_r4_probes.py`,
+    `tests/projects/test_r4_clone_probes.py`.
 - **W3+W4 prompt-pack/region-profile CRUD fix pass, round 3 (independent
   Opus review, 2026-09-28): 1 blocker + 2 majors + 4 minors + 1 nit.**
   Fixes every finding of the round-3 section appended to
