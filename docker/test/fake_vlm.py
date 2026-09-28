@@ -134,7 +134,28 @@ def _region_entry(index: int | None) -> dict[str, Any]:
     return entry
 
 
-def _reply_for(kind: str, n_images: int) -> str:
+# M7 fix (W8 pipeline-wiring review, 2026-09-27): the combined reply's
+# per-box verdicts are nested under `region_boxes` (W8.6's numbered-
+# overlay list shape), not flat `region_bbox_correct`/`region_text`/
+# `region_confidence` top-level keys -- the box_verdicts() parser raises
+# MultiRegionKeysMissingError on the old flat shape, which the pipeline
+# treats as a parse failure (retried to the no-verdict cap, then written
+# rejected). ``n_boxes`` is read off the prompt text itself (the numbered-
+# overlay sentence or the coordinate fallback both name the count),
+# defaulting to 1 for a prompt with no boxes offered at all.
+_OVERLAY_N_RE = re.compile(r'\(1 to (\d+)\)')
+_COORD_N_RE = re.compile(r'(\d+)=\[')
+
+
+def _n_region_boxes(text: str) -> int:
+    m = _OVERLAY_N_RE.search(text)
+    if m:
+        return int(m.group(1))
+    nums = [int(n) for n in _COORD_N_RE.findall(text)]
+    return max(nums) if nums else 1
+
+
+def _reply_for(kind: str, n_images: int, text: str = '') -> str:
     if kind == 'region_visible':
         results = [{'img': i, 'visible': _state['region_visible']} for i in range(1, n_images + 1)]
         return json.dumps({'results': results})
@@ -145,15 +166,22 @@ def _reply_for(kind: str, n_images: int) -> str:
     if kind in ('class_open', 'class_closed'):
         return json.dumps(_class_entries(n_images))
     if kind == 'combined':
+        n_boxes = _n_region_boxes(text)
         results = [
             {
                 'img': i,
                 'class_id': None,
                 'class_confidence': _state['class_confidence'],
                 'region_visible': _state['region_visible'],
-                'region_bbox_correct': None,
-                'region_text': None,
-                'region_confidence': None,
+                'region_boxes': [
+                    {
+                        'box': b,
+                        'region_bbox_correct': None,
+                        'region_text': None,
+                        'region_confidence': None,
+                    }
+                    for b in range(1, n_boxes + 1)
+                ],
             }
             for i in range(1, n_images + 1)
         ]
@@ -217,9 +245,10 @@ class Handler(BaseHTTPRequestHandler):
             payload = self._read_json()
             messages = payload.get('messages') or []
             n_images = max(1, _n_images(messages))
-            kind = _classify_prompt(_all_text(messages))
+            text = _all_text(messages)
+            kind = _classify_prompt(text)
             _count(kind)
-            content = _reply_for(kind, n_images)
+            content = _reply_for(kind, n_images, text)
             self._send(
                 200,
                 {
