@@ -8,6 +8,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W8-cleanup Items 1-2 review fix pass.** An independent review of the
+  items-1-2 port (see `docs/design/openprocessor_internal/
+  w8_cleanup_items1_2_review_2026-09-28.md`) found the default regions-tab
+  sort silently broken on any real W8-written index plus five majors; all
+  fixed:
+  - **Blocker: `review_sorts.py`'s `region_score` sort never matched what
+    the worker writes.** Nothing in the W8 worker writes `region_score`/
+    `region_candidate_score` (only dead code and human single-box paths
+    do), so every W8 item tied on `missing: '_last'` and fell back to the
+    `crop_id` tiebreak — a 0.95-score item could sort dead last behind a
+    0.2-score legacy row. Now sorts on the flat `region_max_score` (every
+    box writer maintains it via `boxes_write_fields`, covering a
+    rejected-only item's own score too, so no second sort key is needed).
+    Removed the `region_score`/`region_candidate_score` fixture
+    dual-writes in `test_review_locate.py` / `test_review_regions_rejected_router.py`
+    that hid this in production-shaped-looking tests.
+  - **Major: a `no_region_visible` reject with a reason dropped the
+    reason entirely**, and a reason-only PATCH updated the box but not
+    the item-level mirror the labeler reads as authoritative. Both fixed
+    in `human_status_box_write`.
+  - **Major: the legacy per-item mirror (`bbox_norm`/`score`/`detector`/
+    ...) went stale in three ways** — a `verify_rejected` write kept a
+    prior confirm's box/score, every writer other than
+    `human_status_box_write` (per-box PATCH, `PUT .../regions`,
+    `POST regions/batch_box_state`, requeue, the worker) never touched
+    it, and it mirrored the first accepted box instead of the
+    best-scoring one. Fixed by moving the mirror computation into
+    `region_boxes.boxes_write_fields` itself (every box writer routes
+    through it), always deriving from the highest-scoring
+    accepted-or-false_positive box (never a rejected one — `bbox_norm` is
+    an accepted region to every reader) with `rejection_reason` mirrored
+    from the highest-scoring rejected box independently.
+  - **Major: a whole-set CONFIRM reopened every rejected box**, including
+    ones a human rejected per-box or the sanity gate rejected — overriding
+    a human's own earlier verdict and turning degenerate sanity-rejected
+    geometry into an accepted training box. Now only reopens a box the
+    *verifier* rejected (`region_visible_elsewhere` / `verifier_no_verdict`);
+    a `detection_failed` item whose only box is sanity-rejected 422s
+    again, matching pre-W8.
+  - **Major: the `low_conf_correct` training cohort admitted a primary
+    box the verifier rejected**, as long as some other accepted box
+    existed on the item. Added the same same-box `state == 'accepted'`
+    nested filter `detector_blind_spots` already used.
+  - **Major: the region-embeddings backfill stopped selecting
+    false-positive items**, starving the FP centroid store
+    (`build_region_fp_centroids`) of its inputs — the classic
+    VLM-rejected/human-marked-FP hard negative was never embedded.
+    Selection now matches `state in [accepted, false_positive]` (like
+    every other ported W8 reader); the representative crop falls back to
+    the highest-scoring FP box when there's no accepted one.
+  - **Minor: `/stats/dataset`'s `region_detectors` agg counted boxes, not
+    crops** — an item with 2 accepted boxes from the same detector
+    counted twice. Added `reverse_nested` so a crop counts once
+    regardless of how many of its boxes match.
+  - **Guard test gaps:** `tests/test_no_legacy_region_scalars.py` was a
+    no-op for `export_single_class_rows.py`'s `f = self.fields` local
+    alias, and missed `get_region_fields().<attr>` inline calls and bare
+    wire-name string literals. Strengthened to catch all three (still
+    excluding a legitimate wire-name collision with a Pydantic model
+    field name in `regions_edit.py`).
 - **W8-cleanup Items 1-2: seven production files silently read retired
   item-level region scalars instead of `region_boxes`.** The current
   box-list worker only ever writes per-item `region_bbox_norm`/
