@@ -24,10 +24,17 @@ of re-deriving it.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 from src.config import get_region_fields
 from src.config.region_state import CONFIRM_STATUS, REGION_STATUS_INFO, RegionStatus
+from src.services.curation.region_boxes import (
+    boxes_with_status,
+    boxes_write_fields,
+    derive_status,
+    read_boxes,
+)
 from src.services.curation.wire import serialize_item
 from src.services.detection.cascade_detect import crop_norm_to_source_norm, region_provenance
 from src.services.detection.profile_registry import region_profile_or_neutral
@@ -172,6 +179,59 @@ def human_status_fields(region_status: str, current: dict[str, Any]) -> dict[str
     return doc
 
 
+def human_status_box_write(
+    region_status: str, current: dict[str, Any], *, rejection_reason: str | None = None
+) -> dict[str, Any]:
+    """W8-cleanup: the ``region_boxes``-based whole-set status write backing
+    ``PATCH /crops/{id}/region_meta`` and ``POST /regions/batch_status``.
+
+    Replaces :func:`human_status_fields` (which built the pre-W8 single
+    ``region_bbox_norm``/``region_score`` doc) for these two routes only --
+    ``PUT /crops/{id}/region`` and its batch form still build on the old
+    single-box shape via :func:`region_box_write` until they're removed
+    (see the W8-cleanup plan's Item 2/3).
+
+    Delegates the actual box-list transition to
+    :func:`~src.services.curation.region_boxes.boxes_with_status` (raises
+    :class:`~src.services.curation.region_boxes.RegionBoxWriteError` for
+    the same invariant violations ``human_status_fields`` used to raise
+    :class:`RegionWriteError` for -- confirming with no box to confirm).
+    ``rejection_reason`` overrides the default
+    (:data:`~src.config.region_rejection.REJECT_REASON_HUMAN`) on every
+    box that transition just rejected -- the closest per-box equivalent of
+    the old item-level ``region_rejection_reason`` PATCH field.
+    """
+    F = get_region_fields()
+    status = RegionStatus(region_status)
+    boxes = read_boxes(current, F)
+    new_boxes = boxes_with_status(status.value, boxes)
+    if rejection_reason is not None and status == RegionStatus.VERIFY_REJECTED:
+        new_boxes = [
+            dataclasses.replace(b, rejection_reason=rejection_reason)
+            if b.state == 'rejected'
+            else b
+            for b in new_boxes
+        ]
+    doc: dict[str, Any] = dict(boxes_write_fields(new_boxes, current_src=current))
+    # `empty_status=status`: only NO_REGION_VISIBLE ever leaves `new_boxes`
+    # empty (boxes_with_status returns `[]` for it) -- every other status
+    # is reflected by derive_status's own precedence over the now-uniform
+    # box list, so this only matters for that one case.
+    doc[F.status] = derive_status(new_boxes, empty_status=status).value
+    if current.get(F.status) == status.value:
+        # Re-asserting the stored status (a bulk write over a mixed
+        # selection) changes nothing derived from it beyond the box
+        # states above: verified and the region-cluster placement stay as
+        # stored. Confirming is the one exception -- it is an explicit
+        # verification.
+        if status == CONFIRM_STATUS:
+            doc[F.verified] = True
+    else:
+        doc[F.verified] = status == CONFIRM_STATUS
+        doc.update(fp_cluster_fields(status.value))
+    return doc
+
+
 def region_box_doc(
     region_bbox_norm: list[float] | None, *, label_source: str, now: str
 ) -> dict[str, Any]:
@@ -307,6 +367,7 @@ __all__ = [
     'candidate_clear_fields',
     'candidate_promotion',
     'fp_cluster_fields',
+    'human_status_box_write',
     'human_status_fields',
     'parent_to_source_bbox',
     'post_write_item',

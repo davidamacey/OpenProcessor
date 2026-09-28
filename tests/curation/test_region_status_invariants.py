@@ -43,11 +43,18 @@ def _boxed(crop_id: str) -> dict[str, Any]:
     return {
         'crop_id': crop_id,
         'bbox_norm': [0.0, 0.0, 0.5, 0.5],
-        F.bbox_norm: list(BOX),
-        F.score: 0.91,
+        # W8-cleanup: PATCH region_meta / POST batch_status now operate on
+        # region_boxes (boxes_with_status), not the retired item-level
+        # region_bbox_norm/region_score scalars -- an accepted box is what
+        # a DETECTED item actually carries under the box-list model.
+        F.boxes: [{'box_id': 'b1', 'bbox_norm': list(BOX), 'state': 'accepted', 'score': 0.91}],
         F.status: RegionStatus.DETECTED.value,
         F.verified: True,
     }
+
+
+def _box_states(doc: dict[str, Any]) -> list[str]:
+    return [b['state'] for b in doc.get(F.boxes) or []]
 
 
 @pytest.fixture
@@ -87,8 +94,7 @@ def test_batch_status_no_region_visible_clears_box(
     assert resp.status_code == 200, resp.text
     for cid in ('boxed-1', 'boxed-2'):
         doc = fake_os._docs[cid]
-        assert doc[F.bbox_norm] is None
-        assert doc[F.score] is None
+        assert doc[F.boxes] == []
         assert doc[F.verified] is False
 
 
@@ -101,8 +107,7 @@ def test_patch_meta_no_region_visible_clears_box(
     )
     assert resp.status_code == 200, resp.text
     doc = fake_os._docs['boxed-1']
-    assert doc[F.bbox_norm] is None
-    assert doc[F.score] is None
+    assert doc[F.boxes] == []
     assert doc[F.verified] is False
 
 
@@ -113,7 +118,8 @@ def test_false_positive_keeps_box(client: TestClient, fake_os: _FakeRegionOS) ->
     )
     assert resp.status_code == 200, resp.text
     doc = fake_os._docs['boxed-1']
-    assert doc[F.bbox_norm] == BOX
+    assert _box_states(doc) == ['false_positive']
+    assert doc[F.boxes][0]['bbox_norm'] == BOX
     assert doc[F.verified] is False
 
 
@@ -138,8 +144,10 @@ def test_batch_status_rejection_unsets_verified(client: TestClient, fake_os: _Fa
         json={'crop_ids': ['boxed-1'], 'region_status': 'verify_rejected', 'region_verified': True},
     )
     assert resp.status_code == 200, resp.text
-    assert fake_os._docs['boxed-1'][F.verified] is False
-    assert fake_os._docs['boxed-1'][F.bbox_norm] == BOX
+    doc = fake_os._docs['boxed-1']
+    assert doc[F.verified] is False
+    assert _box_states(doc) == ['rejected']
+    assert doc[F.boxes][0]['bbox_norm'] == BOX
 
 
 def test_patch_meta_detected_sets_verified(client: TestClient, fake_os: _FakeRegionOS) -> None:

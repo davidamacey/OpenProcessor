@@ -91,3 +91,111 @@ def test_training_candidates_request_body_carries_crop_id_tiebreaker() -> None:
     assert resp.status_code == 200, resp.text
     sort = fake.search.call_args.kwargs['body']['sort']
     assert sort[-1] == {'crop_id': {'order': 'asc'}}
+
+
+# ---------------------------------------------------------------------------
+# W8-cleanup: GET /regions and /regions/training_candidates now query the
+# region_boxes nested list, not the retired item-level region_bbox_norm /
+# region_detector / region_score scalars. These exercise the real match
+# semantics via QueryFakeOpenSearch (not a canned response), so a nested
+# box_query built with the wrong dotted-path field name would fail loudly.
+# ---------------------------------------------------------------------------
+
+
+def test_list_regions_default_filter_matches_accepted_box_only() -> None:
+    fake = QueryFakeOpenSearch(
+        {
+            ITEMS: {
+                'has-accepted': {
+                    'crop_id': 'has-accepted',
+                    F.boxes: [
+                        {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}
+                    ],
+                },
+                'proposed-only': {
+                    'crop_id': 'proposed-only',
+                    F.boxes: [
+                        {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'proposed'}
+                    ],
+                },
+                'no-boxes': {'crop_id': 'no-boxes'},
+            }
+        }
+    )
+    client = _client(fake)
+    resp = client.get('/curation/projects/default/regions', params={'page_size': 50})
+    assert resp.status_code == 200, resp.text
+    assert {i['crop_id'] for i in resp.json()['items']} == {'has-accepted'}
+
+
+def test_list_regions_detector_filter_matches_the_per_box_detector() -> None:
+    fake = QueryFakeOpenSearch(
+        {
+            ITEMS: {
+                'by-det-a': {
+                    'crop_id': 'by-det-a',
+                    F.boxes: [
+                        {
+                            'box_id': 'b1',
+                            'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+                            'state': 'accepted',
+                            'detector': 'det_a',
+                        }
+                    ],
+                },
+                'by-det-b': {
+                    'crop_id': 'by-det-b',
+                    F.boxes: [
+                        {
+                            'box_id': 'b1',
+                            'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+                            'state': 'accepted',
+                            'detector': 'det_b',
+                        }
+                    ],
+                },
+            }
+        }
+    )
+    client = _client(fake)
+    resp = client.get(
+        '/curation/projects/default/regions', params={'page_size': 50, 'detector': 'det_a'}
+    )
+    assert resp.status_code == 200, resp.text
+    assert {i['crop_id'] for i in resp.json()['items']} == {'by-det-a'}
+
+
+def test_training_candidates_false_positives_matches_the_kept_fp_box() -> None:
+    from src.config.region_state import RegionStatus
+
+    fake = QueryFakeOpenSearch(
+        {
+            ITEMS: {
+                'fp-item': {
+                    'crop_id': 'fp-item',
+                    F.status: RegionStatus.FALSE_POSITIVE.value,
+                    F.boxes: [
+                        {
+                            'box_id': 'b1',
+                            'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+                            'state': 'false_positive',
+                        }
+                    ],
+                },
+                'detected-item': {
+                    'crop_id': 'detected-item',
+                    F.status: RegionStatus.DETECTED.value,
+                    F.boxes: [
+                        {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}
+                    ],
+                },
+            }
+        }
+    )
+    client = _client(fake)
+    resp = client.get(
+        '/curation/projects/default/regions/training_candidates',
+        params={'mode': 'false_positives', 'page_size': 50},
+    )
+    assert resp.status_code == 200, resp.text
+    assert {i['crop_id'] for i in resp.json()['items']} == {'fp-item'}
