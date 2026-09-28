@@ -106,6 +106,9 @@ class _FakeProcessor:
         self.image_sizes: list[tuple[int, int]] = []
         self.device = 'cpu'
         self.model = _FakeModel(self.prompt_calls)
+        # W8c: mirrors the real Sam3Processor's plain instance attribute
+        # that ProcessorPool.acquire(min_score=...) sets/restores.
+        self.confidence_threshold: float | None = None
 
     def set_image(self, image: Image.Image) -> dict:
         self.image_sizes.append(image.size)
@@ -374,6 +377,8 @@ class TestWireSurface:
             'device': sam3_backend.device_name(),
             'loaded': True,
             'instances': 1,
+            'max_candidates': sam3_backend.MAX_CANDIDATES_CAP,
+            'default_min_score': sam3_backend.DEFAULT_CONFIDENCE_THRESHOLD,
         }
 
         previous = segmenter._pool
@@ -463,6 +468,83 @@ class TestCascadeWithTheShippedSegmenter:
         projected = crop_norm_to_source_norm(candidate.bbox_norm, (0.0, 0.0, 1.0, 1.0))
         assert projected == pytest.approx((0.40, 0.60, 0.60, 0.68))
         assert served.prompt_calls == [_PROMPT]
+
+
+# =============================================================================
+# W8c: min_score + the raised max_candidates ceiling
+# =============================================================================
+
+
+class TestMinScoreAndCandidateCap:
+    @pytest.mark.asyncio
+    async def test_min_score_filters_on_the_leased_processor_and_is_restored(self) -> None:
+        """The real ``Sam3Processor`` filters inside ``_forward_grounding``
+        via ``self.confidence_threshold``; ``_FakeProcessor`` doesn't, so
+        this wires that filter in to prove ``min_score`` actually reaches
+        the leased processor (``ProcessorPool.acquire``) rather than just
+        being accepted and ignored -- and that it's gone afterward, so it
+        never leaks onto the next caller's request."""
+        many = _FakeProcessor(
+            boxes=[[0.1, 0.1, 0.2, 0.2], [0.3, 0.3, 0.5, 0.4]],
+            scores=[0.3, 0.9],
+        )
+        base_forward = many._forward_grounding
+
+        def _thresholded_forward(state: dict) -> dict:
+            out = base_forward(state)
+            threshold = getattr(many, 'confidence_threshold', None)
+            if threshold is not None:
+                keep = [i for i, s in enumerate(out['scores']) if s >= threshold]
+                out['boxes'] = [out['boxes'][i] for i in keep]
+                out['scores'] = [out['scores'][i] for i in keep]
+            return out
+
+        many._forward_grounding = _thresholded_forward  # type: ignore[method-assign]
+        assert many.confidence_threshold is None
+
+        previous = segmenter._pool
+        segmenter._pool = sam3_backend.ProcessorPool([many])
+        try:
+            async with _asgi_client() as http:
+                resp = await http.post(
+                    '/segment',
+                    json={
+                        'crop_jpeg_b64': base64.b64encode(_make_jpeg()).decode('ascii'),
+                        'text_prompt': _PROMPT,
+                        'min_score': 0.5,
+                    },
+                )
+        finally:
+            segmenter._pool = previous
+
+        assert resp.status_code == 200
+        assert [c['score'] for c in resp.json()['candidates']] == [pytest.approx(0.9)]
+        # Restored to what it was before this call (never set) -- no
+        # per-instance state leaks onto the next caller.
+        assert many.confidence_threshold is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures('served')
+    async def test_max_candidates_at_the_cap_is_accepted_over_the_cap_is_422(self) -> None:
+        async with _asgi_client() as http:
+            ok = await http.post(
+                '/segment',
+                json={
+                    'crop_jpeg_b64': base64.b64encode(_make_jpeg()).decode('ascii'),
+                    'text_prompt': _PROMPT,
+                    'max_candidates': sam3_backend.MAX_CANDIDATES_CAP,
+                },
+            )
+            over = await http.post(
+                '/segment',
+                json={
+                    'crop_jpeg_b64': base64.b64encode(_make_jpeg()).decode('ascii'),
+                    'text_prompt': _PROMPT,
+                    'max_candidates': sam3_backend.MAX_CANDIDATES_CAP + 1,
+                },
+            )
+        assert ok.status_code == 200
+        assert over.status_code == 422
 
 
 # =============================================================================
