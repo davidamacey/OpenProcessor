@@ -882,6 +882,16 @@ async def run(args: argparse.Namespace) -> int:
                         # selected here) must be merged back at write
                         # time, never silently replaced.
                         t.pending_merge = True
+                        # W8c B1 fix (2026-09-28 re-review): this is the
+                        # ONE place that is a genuine Path-1 re-verify --
+                        # distinct from `pending_merge` alone, which every
+                        # fresh-detection pass below also sets (for its
+                        # own, different, keep-human/replace-machine
+                        # reason). `runner.py`'s not-visible branch reads
+                        # this to resolve the candidate as `rejected`
+                        # (keeping its stored id) instead of writing an
+                        # empty box list.
+                        t.reverify = True
                     else:
                         # The outer `if` guarantees this branch only runs
                         # when `proposed_stored` is empty, so the second
@@ -920,20 +930,38 @@ async def run(args: argparse.Namespace) -> int:
                     in_q.task_done()
                     continue
 
-                # W8c (r1 fix): every fresh-detection path below (Path 2 and
-                # Path 3, plus the text-hint re-pass they can fall into)
-                # merges its resolved boxes back onto whatever is currently
-                # stored instead of replacing the list wholesale. Reaching
-                # this line already proved `region_status` is a
-                # pending_detection alias (Path 1's block above always
-                # `continue`s), so this is a pure fresh-detection task.
-                # Requeuing a terminal item (e.g. `verify_rejected` ->
-                # `pending_detection`) intentionally leaves a human-sourced
-                # box in `region_boxes` (`region_requeue.apply_requeue`);
-                # without this, this pass's own candidates would silently
-                # discard it. A no-op for the common case (no stored boxes
-                # at all): `merge_boxes_for_write` already replaces
-                # wholesale when `stored` is empty.
+                # W8c (r1 fix, corrected 2026-09-28 re-review -- M2): every
+                # fresh-detection path below (Path 2 and Path 3, plus the
+                # text-hint re-pass they can fall into) keeps this item's
+                # human-owned stored boxes and replaces its machine-sourced
+                # ones with this pass's own findings (M1 fix --
+                # `bulk_writer._merge` branches on `pending_merge` +
+                # `reverify`, see `_ItemTask`'s docstrings). Requeuing a
+                # terminal item (e.g. `verify_rejected` -> `pending_detection`)
+                # intentionally leaves a human-sourced box in `region_boxes`
+                # (`region_requeue.apply_requeue`); without this, this
+                # pass's own candidates would silently discard it. A no-op
+                # for the common case (no stored boxes at all).
+                #
+                # CORRECTION (M2): reaching this line does NOT prove
+                # `region_status` is a `pending_detection` alias -- Path 1's
+                # `if` above only `continue`s when it found something to
+                # re-verify (`proposed_stored` or the legacy
+                # `detector_region_in_source` scalar); a `pending_verification`
+                # alias item with neither (which should no longer occur --
+                # `region_requeue.apply_requeue` now re-proposes a box
+                # before ever setting that target status, or skips the item
+                # entirely -- but stale/pre-fix data or a direct write can
+                # still produce one) falls through to here too and runs a
+                # fresh detection instead of a re-verify. Log it so that
+                # silent mismatch is at least visible.
+                if t.region_status in _PENDING_VERIFICATION_ALIASES:
+                    logger.warning(
+                        'region_pending_verification_fallthrough',
+                        crop_id=t.crop_id,
+                        detail='pending_verification item had no proposed/legacy candidate to '
+                        're-verify; running a fresh detection pass instead (M2)',
+                    )
                 t.pending_merge = True
 
                 # Path 2: pending + non-secondary-shape — try the
@@ -1604,11 +1632,13 @@ async def run(args: argparse.Namespace) -> int:
                             # regardless of any per-box verdict.
                             metrics['combined_no_region_visible'] += 1
                             t.detection_trace.append(f'{actor}:combined_no_region_visible')
-                            if t.pending_merge:
+                            if t.reverify:
                                 # R-B1 fix (2026-09-27 re-review, "fix-pass
-                                # confirmation"): this pass is RE-VERIFYING
-                                # stored `proposed` box(es) (Path 1). Writing
-                                # an empty box list here never touches their
+                                # confirmation"; keyed off `t.reverify`, not
+                                # `t.pending_merge`, since 2026-09-28 -- see
+                                # B1): this pass is RE-VERIFYING stored
+                                # `proposed` box(es) (Path 1). Writing an
+                                # empty box list here never touches their
                                 # stored ids -- `merge_boxes_for_write`
                                 # leaves any stored box absent from the new
                                 # list completely untouched -- so a human-
@@ -1647,9 +1677,16 @@ async def run(args: argparse.Namespace) -> int:
                                     empty_status=RegionStatus.NO_REGION_VISIBLE,
                                 )
                             else:
-                                # Fresh detection (no stored box to lose) --
-                                # unchanged from before: no box, terminal
-                                # no_region_visible.
+                                # Fresh detection (`t.reverify` False --
+                                # Path 2/3, or the legacy-scalar Path 1
+                                # fallback, neither of which is re-verifying
+                                # a stored box by id): no box, terminal
+                                # no_region_visible. `t.pending_merge` may
+                                # still be True here (a fresh-detection
+                                # pass keeping human-owned siblings, M1) --
+                                # that only affects which MACHINE boxes
+                                # `bulk_writer._merge` replaces, never this
+                                # branch's own empty result.
                                 visible_false_boxes = []
                                 visible_false_status = RegionStatus.NO_REGION_VISIBLE
                             t.update_doc = _box_list_doc(

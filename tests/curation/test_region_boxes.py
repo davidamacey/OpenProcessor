@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from src.config.region_fields import RegionFields
+from src.config.region_rejection import REJECT_REASON_HUMAN
 from src.config.region_state import RegionStatus
 from src.services.curation.region_boxes import (
     BOX_STATES,
@@ -28,6 +29,7 @@ from src.services.curation.region_boxes import (
     boxes_write_fields,
     derive_status,
     has_any_box_query,
+    is_human_owned,
     next_box_id,
     read_boxes,
 )
@@ -199,6 +201,68 @@ def test_apply_put_boxes_unknown_box_id_raises() -> None:
     current = _existing_two_boxes()
     with pytest.raises(RegionBoxWriteError):
         apply_put_boxes(current, [{'box_id': 'b99'}], frame='source')
+
+
+def test_apply_put_boxes_patching_existing_box_to_rejected_stamps_human_reason() -> None:
+    """W8c M3 fix: patching an EXISTING (machine-created) stored box to
+    `rejected` via PUT is a human verdict too -- stamp the same reason
+    `boxes_with_status`'s whole-set path uses so `is_human_owned`
+    recognizes it later."""
+    current = _existing_two_boxes()
+    requested: list[dict[str, Any]] = [
+        {'box_id': 'b1', 'state': 'rejected'},
+        {'box_id': 'b2'},
+    ]
+    result = apply_put_boxes(current, requested, frame='source')
+    assert result[0].state == 'rejected'
+    assert result[0].rejection_reason == REJECT_REASON_HUMAN
+    assert is_human_owned(result[0])
+
+
+# ---------------------------------------------------------------------------
+# is_human_owned (W8c M3)
+# ---------------------------------------------------------------------------
+
+
+def test_is_human_owned_true_for_human_created_box() -> None:
+    box = RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='accepted', source='human')
+    assert is_human_owned(box)
+
+
+def test_is_human_owned_true_for_human_rejection_reason_on_a_machine_box() -> None:
+    box = RegionBox(
+        box_id='b1',
+        bbox_norm=(0, 0, 1, 1),
+        state='rejected',
+        source='detector',
+        detector='some_model',
+        rejection_reason=REJECT_REASON_HUMAN,
+    )
+    assert is_human_owned(box)
+
+
+def test_is_human_owned_true_for_human_transcribed_text_on_a_machine_box() -> None:
+    box = RegionBox(
+        box_id='b1',
+        bbox_norm=(0, 0, 1, 1),
+        state='accepted',
+        source='detector',
+        detector='some_model',
+        text_source='human',
+    )
+    assert is_human_owned(box)
+
+
+def test_is_human_owned_false_for_an_untouched_machine_box() -> None:
+    box = RegionBox(
+        box_id='b1',
+        bbox_norm=(0, 0, 1, 1),
+        state='rejected',
+        source='detector',
+        detector='some_model',
+        rejection_reason='sanity_reject:aspect_ratio',
+    )
+    assert not is_human_owned(box)
 
 
 # ---------------------------------------------------------------------------

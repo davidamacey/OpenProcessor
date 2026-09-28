@@ -254,6 +254,29 @@ def merge_boxes_for_write(
     return merged
 
 
+def is_human_owned(box: RegionBox) -> bool:
+    """True if a human created this box OR explicitly acted on it (W8c M3).
+
+    ``source == 'human'`` alone only covers a box a human CREATED (``PUT
+    .../regions`` with ``box_id: null``). A human's per-box accept/reject
+    verdict on a MACHINE-created box, via ``PATCH .../regions/{box_id}``
+    or ``POST /regions/batch_box_state``, leaves ``source``/``detector``
+    exactly as they were -- the only trace is the stamp those write paths
+    now also set on that verdict (``rejection_reason=REJECT_REASON_HUMAN``
+    for a reject, matching :func:`boxes_with_status`'s whole-set path;
+    ``text_source='human'`` for a human-typed transcription). Both
+    :func:`~scripts.curation.worker.bulk_writer._merge` (fresh-detection
+    replace-machine/keep-human) and :func:`region_requeue.apply_requeue`
+    (``clear_detection``'s box drop) key their "never a human's" guarantee
+    off this, not the narrower ``source`` check alone.
+    """
+    return (
+        box.source == 'human'
+        or box.rejection_reason == REJECT_REASON_HUMAN
+        or box.text_source == 'human'
+    )
+
+
 def derive_status(boxes: Sequence[RegionBox], *, empty_status: RegionStatus) -> RegionStatus:
     """Item status from the box list, in W8.7's fixed precedence order."""
     if any(b.state == 'accepted' for b in boxes):
@@ -397,6 +420,13 @@ def apply_put_boxes(
             patch['bbox_norm'] = tuple(bbox)
         if 'state' in element and element['state'] is not None:
             patch['state'] = element['state']
+            if element['state'] == 'rejected':
+                # W8c M3: a human REJECTING a machine-created box via PUT
+                # (not just creating one) must also be recognized as
+                # human-owned (is_human_owned) -- source/detector stay
+                # whatever the machine wrote, so the reason is the only
+                # trace, matching boxes_with_status's whole-set path.
+                patch['rejection_reason'] = REJECT_REASON_HUMAN
         if 'text' in element and element['text'] is not None:
             patch['text'] = element['text']
         result.append(stored if not patch else _replace(stored, **patch))
@@ -469,6 +499,7 @@ __all__ = [
     'derive_status',
     'finalize_box_ids',
     'has_any_box_query',
+    'is_human_owned',
     'merge_boxes_for_write',
     'new_box_placeholder',
     'next_box_id',

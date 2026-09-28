@@ -11,11 +11,12 @@ box_seq 0) instead of the CURRENT stored values, so the write reset the
 revision backwards and reused ids the concurrent write had already
 claimed.
 
-W8c (r1 wipe-on-replace fix): a fresh-detection pass now also MERGES onto
-whatever is live at write time (``_ItemTask.pending_merge``), rather than
-replacing the box list wholesale -- so the concurrently-added box (``b7``)
-must survive alongside this pass's own freshly-detected box, not just
-avoid an id collision with it.
+W8c (r1 wipe-on-replace fix, semantics corrected by the 2026-09-28
+re-review's B1/M1 fix): a fresh-detection pass now keeps whatever
+HUMAN-owned box is live at write time (``region_boxes.is_human_owned``)
+instead of replacing the box list wholesale -- so the concurrently-added
+human box (``b7``) must survive alongside this pass's own freshly-detected
+box, not just avoid an id collision with it.
 """
 
 from __future__ import annotations
@@ -61,6 +62,16 @@ class TestConcurrentRevisionBumpDuringVlmCall:
                     'bbox_norm': [0.2, 0.2, 0.3, 0.3],
                     'state': 'accepted',
                     'score': 0.9,
+                    # W8c M1 fix (2026-09-28 re-review): a fresh-detection
+                    # pass now keeps only HUMAN-owned stored siblings
+                    # (region_boxes.is_human_owned) and replaces every
+                    # machine-sourced one -- a real concurrent PUT stamps
+                    # `source='human'` on a box it creates, so this probe
+                    # does too, to keep testing the real "survives a
+                    # concurrent human write" scenario instead of the
+                    # now-irrelevant "survives because it's unrecognized
+                    # as machine-owned" one.
+                    'source': 'human',
                 }
             ]
             fake_os.searchable = copy.deepcopy(fake_os.live)

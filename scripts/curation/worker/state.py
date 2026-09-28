@@ -194,15 +194,41 @@ class _ItemTask:
     pending_boxes: list[RegionBox] | None = None
     pending_empty_status: RegionStatus | None = None
     # W8 B1 fix: whether the write-time merge (bulk_writer._merge) should
-    # MERGE `pending_boxes` into the CURRENT stored list (preserving any
-    # sibling box this pass never touched) or REPLACE the stored list
-    # outright. Default False (replace) -- matches every pre-B1 write
-    # path's existing behaviour (a fresh detection pass, Path 2/3, starts
-    # the box list over). Only Path 1's re-verify of a stored `proposed`
-    # box (the real B1 fix target) sets this True: that pass never
-    # touched sibling boxes (already accepted/rejected/a second proposed
-    # box) and must not discard them.
+    # touch `pending_boxes` against the CURRENT stored list at all
+    # (preserving a sibling box this pass never itself decided) or
+    # REPLACE the stored list outright with exactly `pending_boxes`.
+    # Default False (replace) -- matches every pre-B1 write path's
+    # existing behaviour (e.g. `accept_without_vlm`'s DETECTION_FAILED
+    # sanity-reject branch, which owns the whole list it writes).
+    #
+    # True covers TWO distinct cases, disambiguated by `reverify` below
+    # (W8c B1/M1 fix, 2026-09-28 re-review): `reverify=True` is Path 1
+    # (re-verifying a stored `proposed` box) -- `bulk_writer._merge` calls
+    # `merge_boxes_for_write`, which keeps every stored sibling this pass
+    # never touched, by id. `reverify=False` is a FRESH detection pass
+    # (Path 2/3, or the text-hint re-pass they fall into) -- "merge" is
+    # the wrong semantic there: a fresh detection is a new answer to
+    # "where are the regions?", so `bulk_writer._merge` instead keeps
+    # only stored siblings a human owns (`region_boxes.is_human_owned`)
+    # and REPLACES every machine-sourced one with this pass's own
+    # `pending_boxes` -- otherwise a requeued item's stale rejected
+    # machine box would accumulate forever and keep overriding the new
+    # pass's derived status (M1).
     pending_merge: bool = False
+    # W8c B1 fix (2026-09-28 re-review): True ONLY for Path 1
+    # (`runner.py`'s pending-verification branch, re-verifying a stored
+    # `proposed` box). Read at the VLM `region_visible=False` branch
+    # (`runner.py`, combined-verify handling) to pick "resolve the
+    # re-verified candidate(s) as `rejected`, keeping their stored ids"
+    # instead of the fresh-detection "no box, terminal `no_region_visible`"
+    # branch. Before this flag existed, that decision was (incorrectly)
+    # keyed off `pending_merge` alone -- which every fresh-detection pass
+    # ALSO sets (see above) -- so a fresh item with no stored boxes at all
+    # that got `region_visible=False` was misrouted into the re-verify
+    # branch and wrote a phantom `rejected` box instead of the correct
+    # empty `no_region_visible` (B1, the dev/test stack's `fake_vlm`
+    # defaults to `region_visible=False`, so this was not an edge case).
+    reverify: bool = False
     # A FORCED final status that must win over whatever
     # ``derive_status(merged_boxes)`` would otherwise compute -- only
     # ``accept_without_vlm``'s sanity-gate-reject branch uses this
